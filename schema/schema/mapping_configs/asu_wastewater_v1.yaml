@@ -1,0 +1,25 @@
+source_format: asu_wastewater_v1
+target_class: WastewaterSample
+column_mappings:
+  "Sample ID":          sample_id
+  "Collection Date":    date_collected
+  "Pathogen":           organism_name
+  "Sequencer":          sequencing_platform
+  "Protocol":           sequencing_protocol
+  "WWTP Name":          wwtp_name
+  "Zip Code":           sample_location_zipcode
+  "County":             county_names
+  "Population Served":  population_served
+  "Sample Type":        sample_type
+  "Sample Matrix":      sample_matrix
+  "Flow Rate (MGD)":    flow_rate_mgd
+  "Concentration Method": concentration_method
+  "PCR Target":         pcr_target
+  "Sequencing Lab":     sequencing_lab
+
+file_detection:
+  files_column:      "FASTQ files"
+  prefix_column:     "FASTQ prefix"
+  separator:         ";"
+  auto_detect_pairs: true
+  allow_prefix_scan: true
