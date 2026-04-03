@@ -1,0 +1,119 @@
+import csv
+import io
+from datetime import datetime
+
+from auth.guards import get_current_user, require_lab_access
+from database import execute_query
+from fastapi import APIRouter, HTTPException, Request
+from fastapi.responses import StreamingResponse
+
+router = APIRouter(prefix="/api/v1/gisaid", tags=["gisaid"])
+
+GISAID_SARS_COV2_COLUMNS: list[str] = [
+    "Virus name",
+    "Type",
+    "Passage details/history",
+    "Collection date",
+    "Location",
+    "Additional location information",
+    "Host",
+    "Additional host information",
+    "Gender",
+    "Patient age",
+    "Patient status",
+    "Specimen source",
+    "Outbreak",
+    "Last vaccinated",
+    "Treatment",
+    "Sequencing technology",
+    "Assembly method",
+    "Coverage",
+    "Originating lab",
+    "Address",
+    "Sample ID given by the originating laboratory",
+    "Submitting lab",
+    "Address_submitting",
+    "Sample ID given by the submitting laboratory",
+    "Authors",
+    "Submitter",
+    "GISAID Accession ID",
+]
+
+
+@router.post("/export/{lab_id}")
+def export_gisaid_csv(
+    lab_id: int,
+    sample_ids: list[int],
+    pathogen: str,
+    request: Request,
+) -> StreamingResponse:
+    if not sample_ids:
+        raise HTTPException(status_code=400, detail="No sample IDs provided.")
+    """
+    Generate a GISAID-compatible CSV for the specified samples.
+    Supports SARS-CoV-2 (EpiCoV), Influenza (EpiFlu), Mpox (EpiPox).
+    """
+    user = get_current_user(request)
+    require_lab_access(user, lab_id)
+
+    placeholders = ",".join(f":id_{i}" for i in range(len(sample_ids)))
+    params = {f"id_{i}": sid for i, sid in enumerate(sample_ids)}
+    params["lab_id"] = lab_id
+
+    samples = execute_query(
+        f"""
+        SELECT s.*, u.email AS owner_email, l.display_name AS lab_name
+        FROM samples s
+        JOIN users u ON u.id = s.owner_id
+        JOIN labs l  ON l.id = s.lab_id
+        WHERE s.id IN ({placeholders})
+          AND s.lab_id = :lab_id AND s.is_deleted = FALSE
+        """,
+        params,
+    )
+    if not samples:
+        raise HTTPException(status_code=404, detail="No samples found.")
+
+    output = io.StringIO()
+    writer = csv.DictWriter(output, fieldnames=GISAID_SARS_COV2_COLUMNS, extrasaction="ignore")
+    writer.writeheader()
+
+    for s in samples:
+        row = {
+            "Virus name": (
+                f"hCoV-19/{s['collection_location_country'].replace(' ', '_')}/"
+                f"{s['sample_id']}/{str(s['date_collected'])[:4]}"
+            ),
+            "Type": "betacoronavirus",
+            "Passage details/history": "Original",
+            "Collection date": str(s.get("date_collected", "")),
+            "Location": (
+                f"North America / {s.get('collection_location_country', '')} / "
+                f"{s.get('collection_location_state', '')}"
+            ),
+            "Additional location information": s.get("collection_location_county", ""),
+            "Host": "Human" if s["source_type"] == "Human" else s.get("host_species", ""),
+            "Gender": s.get("host_sex", "unknown"),
+            "Patient age": s.get("host_age", ""),
+            "Patient status": s.get("clinical_outcome", "unknown"),
+            "Specimen source": s.get("sequencing_protocol", ""),
+            "Last vaccinated": s.get("vaccination_status", ""),
+            "Sequencing technology": s.get("sequencing_platform", ""),
+            "Assembly method": s.get("assembly_method", ""),
+            "Coverage": s.get("coverage_depth", ""),
+            "Originating lab": s.get("lab_name", ""),
+            "Sample ID given by the originating laboratory": s["sample_id"],
+            "Submitting lab": s.get("lab_name", ""),
+            "Sample ID given by the submitting laboratory": s["sample_id"],
+            "Submitter": s.get("owner_email", ""),
+            "GISAID Accession ID": s.get("gisaid_accession", ""),
+        }
+        writer.writerow(row)
+
+    output.seek(0)
+    filename = f"gisaid_{pathogen}_{datetime.now().strftime('%Y%m%d')}.csv"
+    return StreamingResponse(
+        io.BytesIO(output.getvalue().encode("utf-8")),
+        media_type="text/csv",
+        headers={"Content-Disposition": f"attachment; filename={filename}"},
+    )

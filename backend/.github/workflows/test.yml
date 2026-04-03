@@ -1,0 +1,58 @@
+name: Test & Lint
+
+on:
+  push:
+    branches: [main, development]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER:     jackpot
+          POSTGRES_PASSWORD: jackpot
+          POSTGRES_DB:       jackpot_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: uv sync --frozen
+
+      - name: Run pre-commit hooks
+        run: uv run pre-commit run --all-files
+
+      - name: Run Alembic migrations
+        env:
+          DATABASE_URL: postgresql://jackpot:jackpot@localhost:5432/jackpot_test
+        run: uv run alembic upgrade head
+
+      - name: Run tests
+        env:
+          DATABASE_URL: postgresql://jackpot:jackpot@localhost:5432/jackpot_test
+          ENV: local
+        run: uv run pytest --cov=backend --cov-report=xml
+
+      - name: Upload coverage
+        uses: codecov/codecov-action@v4
+        with:
+          file: coverage.xml
