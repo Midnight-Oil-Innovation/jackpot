@@ -157,7 +157,7 @@ CREATE TABLE IF NOT EXISTS lab_membership (
     user_id             INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     lab_id              INTEGER NOT NULL REFERENCES labs(id) ON DELETE CASCADE,
     permission_group_id INTEGER NOT NULL REFERENCES permission_groups(id),
-    is_lab_admin        BOOLEAN NOT NULL DEFAULT FALSE,
+    is_lab_director        BOOLEAN NOT NULL DEFAULT FALSE,
     granted_by_id       INTEGER REFERENCES users(id),
     granted_at          TIMESTAMPTZ DEFAULT NOW(),
     UNIQUE(user_id, lab_id)
@@ -729,7 +729,7 @@ INSERT INTO labs (organization_id, display_name, description, created_by_id)
 VALUES (1, 'Otero Lab', 'Local dev seed lab', 1)
 ON CONFLICT DO NOTHING;
 
-INSERT INTO lab_membership (user_id, lab_id, permission_group_id, is_lab_admin, granted_by_id)
+INSERT INTO lab_membership (user_id, lab_id, permission_group_id, is_lab_director, granted_by_id)
 SELECT 1, 1, pg.id, TRUE, 1
 FROM permission_groups pg WHERE pg.name = 'Lab Director'
 ON CONFLICT DO NOTHING;

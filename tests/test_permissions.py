@@ -37,7 +37,7 @@ def test_data_analyst_not_platform_admin():
 
 
 def test_lab_director_passes():
-    membership = {"lab_id": 5, "is_lab_admin": True, "permission_group_name": "Lab Director"}
+    membership = {"lab_id": 5, "is_lab_director": True, "permission_group_name": "Lab Director"}
     with patch("backend.auth.guards.get_user_lab_membership", return_value=membership):
         require_lab_director(make_user(uid=2), lab_id=5)
 
@@ -48,7 +48,11 @@ def test_platform_admin_bypasses_director_check():
 
 
 def test_lab_collaborator_not_director():
-    membership = {"lab_id": 5, "is_lab_admin": False, "permission_group_name": "Lab Collaborator"}
+    membership = {
+        "lab_id": 5,
+        "is_lab_director": False,
+        "permission_group_name": "Lab Collaborator",
+    }
     with patch("backend.auth.guards.get_user_lab_membership", return_value=membership):
         with pytest.raises(HTTPException) as exc:
             require_lab_director(make_user(uid=3), lab_id=5)
@@ -67,7 +71,7 @@ def test_lab_collaborator_not_director():
 def test_all_lab_roles_have_access(role):
     membership = {
         "lab_id": 5,
-        "is_lab_admin": role == "Lab Director",
+        "is_lab_director": role == "Lab Director",
         "permission_group_name": role,
     }
     with patch("backend.auth.guards.get_user_lab_membership", return_value=membership):

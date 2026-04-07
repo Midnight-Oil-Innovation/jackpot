@@ -543,7 +543,7 @@ def get_current_user(request: Request) -> dict:
 
 def get_user_lab_membership(user_id: int, lab_id: int) -> dict | None:
     rows = execute_query(
-        "SELECT lm.*, pg.name AS permission_group_name, lm.is_lab_admin "
+        "SELECT lm.*, pg.name AS permission_group_name, lm.is_lab_director "
         "FROM lab_membership lm "
         "JOIN permission_groups pg ON pg.id = lm.permission_group_id "
         "WHERE lm.user_id = :uid AND lm.lab_id = :lid LIMIT 1",
@@ -561,7 +561,7 @@ def require_lab_director(current_user: dict, lab_id: int) -> None:
     if current_user.get("is_platform_admin"):
         return
     m = get_user_lab_membership(current_user["id"], lab_id)
-    if not m or not m.get("is_lab_admin"):
+    if not m or not m.get("is_lab_director"):
         raise HTTPException(status_code=403, detail="Lab Director required.")
 
 
@@ -1831,7 +1831,7 @@ def test_data_analyst_not_platform_admin():
 
 
 def test_lab_director_passes():
-    membership = {"lab_id": 5, "is_lab_admin": True,
+    membership = {"lab_id": 5, "is_lab_director": True,
                   "permission_group_name": "Lab Director"}
     with patch("backend.auth.guards.get_user_lab_membership",
                return_value=membership):
@@ -1845,7 +1845,7 @@ def test_platform_admin_bypasses_director_check():
 
 
 def test_lab_collaborator_not_director():
-    membership = {"lab_id": 5, "is_lab_admin": False,
+    membership = {"lab_id": 5, "is_lab_director": False,
                   "permission_group_name": "Lab Collaborator"}
     with patch("backend.auth.guards.get_user_lab_membership",
                return_value=membership):
@@ -1858,7 +1858,7 @@ def test_lab_collaborator_not_director():
     "Lab Director", "Lab Collaborator", "Lab Reader", "Bioinformatics User",
 ])
 def test_all_lab_roles_have_access(role):
-    membership = {"lab_id": 5, "is_lab_admin": role == "Lab Director",
+    membership = {"lab_id": 5, "is_lab_director": role == "Lab Director",
                   "permission_group_name": role}
     with patch("backend.auth.guards.get_user_lab_membership",
                return_value=membership):
@@ -2207,7 +2207,7 @@ git add schema && git commit -m "chore: update schema submodule"
 ## APGAP Migration Compatibility
 - Organization → Lab → Project → User hierarchy is identical
 - PermissionGroups enum string values match APGAP exactly
-- is_lab_admin=TRUE on lab_membership = Lab Director
+- is_lab_director=TRUE on lab_membership = Lab Director
 - Projects preserve all Seqera fields (workspace_id, compute_env_id, credentials_id)
 - Migration script: scripts/migrate_from_apgap.py
 
