@@ -154,7 +154,7 @@ and change the env var:
 INSERT INTO users (email, name, is_platform_admin, is_active, organization_id)
 VALUES ('director@test.com', 'Lab Director', FALSE, TRUE, 1);
 
-INSERT INTO lab_membership (user_id, lab_id, permission_group_id, is_lab_admin)
+INSERT INTO lab_membership (user_id, lab_id, permission_group_id, is_lab_director)
 SELECT u.id, 1,
   (SELECT id FROM permission_groups WHERE name = 'Lab Director'),
   TRUE
@@ -217,7 +217,7 @@ uv run mypy backend/
 
 - Organization → Lab → Project → User hierarchy is identical
 - PermissionGroups enum string values match APGAP exactly
-- `is_lab_admin=TRUE` on `lab_membership` = Lab Director
+- `is_lab_director=TRUE` on `lab_membership` = Lab Director
 - Projects preserve all Seqera fields (`workspace_id`, `compute_env_id`, `credentials_id`)
 - Migration script: `scripts/migrate_from_apgap.py`
 
