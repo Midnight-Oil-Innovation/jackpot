@@ -1244,3 +1244,124 @@ Many bioinformatics containers are x86-only. GCP Batch VMs are x86 by
 default, avoiding ARM compatibility issues. Spot instances make this cheap
 for short test runs. Only use `PIPELINE_EXECUTOR=local` for pipelines
 verified to have ARM-compatible containers.
+
+---
+
+## GKE Autoscaling Architecture
+
+JACKPOT uses three separate GKE node pools, each tuned to its workload.
+Pipeline compute runs on GCP Batch entirely outside GKE — GKE only runs
+the lightweight Nextflow controller process. Never submit pipeline tasks
+as GKE pods.
+
+### Node pool summary
+
+| Pool | Workload | Machine type | Min nodes | Max nodes | Spot? |
+|---|---|---|---|---|---|
+| `api-pool` | FastAPI, Streamlit, Nextflow controllers | n2-standard-4 (4CPU/16GB) | 2 | 6 | No — always on |
+| `workspace-pool` | JupyterHub user pods | n2-standard-8 (8CPU/32GB) | 0 | 10 | No — user-interactive |
+| `scrubber-pool` | SRA Human Scrubber GKE Jobs | n2-highmem-4 (4CPU/32GB) | 0 | 20 | Yes — restartable |
+
+GCP Batch (not GKE) handles all Nextflow pipeline task compute. GKE only
+runs the Nextflow process itself (~2CPU/4GB) in the api-pool.
+
+### Autoscaling per workload
+
+**API and frontend (api-pool)**
+HPA based on CPU utilization — adds FastAPI/Streamlit pods across existing
+api-pool nodes when load increases. Min replicas=2 for availability.
+api-pool never scales to zero — always at least 2 nodes running.
+
+**Workspace pods (workspace-pool)**
+No pod-level autoscaling — each pod is personal to one researcher, sized
+by their chosen profile. Scaling unit is nodes: cluster autoscaler adds
+workspace-pool nodes as more pods are scheduled. Scale-to-zero when no
+workspaces active. Placeholder pod (low-priority pause container) keeps
+one node warm during business hours (8am–8pm AZ) via CronJob — prevents
+3–5 minute cold starts for the first researcher of the day.
+
+**Scrubber jobs (scrubber-pool)**
+GKE Jobs (not Deployments) — one Job per scrubber invocation. Scale-to-zero
+when no scrubbing in progress. Cluster autoscaler adds scrubber-pool nodes
+as Jobs are submitted. Spot/preemptible nodes — scrubber is restartable
+if preempted (sample stays IN_PROGRESS, job resubmitted).
+
+**Scrubber concurrency limit (critical for bulk uploads)**
+When a Globus deposit brings in 100 samples simultaneously, submitting 100
+GKE Jobs at once would spike cost unpredictably. Instead, a scrubber job
+queue in the database controls concurrency:
+
+- All pending scrubber jobs enter the queue as scrub_status=PENDING
+- `run_scrubber_queue_job()` in backend/jobs.py fires every minute
+- Checks how many scrubber jobs are currently IN_PROGRESS
+- If below the concurrency limit (default=10, configurable), promotes
+  the next PENDING samples to IN_PROGRESS and submits their GKE Jobs
+- Runs via APScheduler locally, Cloud Scheduler in production
+- Concurrency limit configurable via SCRUBBER_MAX_CONCURRENT env var
+
+### Workspace cold start mitigation
+
+Scale-to-zero means the first workspace launch after inactivity waits for
+node provisioning (~3–5 minutes without mitigation). Two mitigations:
+
+1. **Placeholder pod (CronJob)**: low-priority pause container keeps one
+   workspace-pool node warm 8am–8pm AZ time. Evicted when a real workspace
+   pod is scheduled. Defined in jackpot-iac as a Kubernetes CronJob.
+
+2. **Pre-cached node image**: workspace-pool uses a custom node image with
+   JupyterHub spawner container layers pre-cached. Reduces cold start from
+   3–5 minutes to ~60–90 seconds. Defined in jackpot-iac node pool config.
+
+### Cost controls
+
+- **Workspace idle timeout**: 1hr (Analyst), 2hr (Bioinformatician), longer
+  (Developer). Biggest single cost lever for JupyterHub.
+- **Pipeline spot instances**: google.batch.spot=true in all Nextflow configs.
+  ~90% cost saving. Safe because -resume recovers from preemptions.
+- **Scrubber spot nodes**: scrubber-pool is preemptible. Scrubber is
+  restartable — no data loss on preemption.
+- **Max workspace pods per user**: JupyterHub named_server max=2.
+- **GCP Budget alerts**: 50%/80%/100% of monthly budget. Defined in
+  jackpot-iac. Not a hard cap — visibility only.
+- **resourceLabels on all Batch jobs**: enables per-lab, per-pipeline cost
+  breakdown in GCP Billing console.
+- **90-day lifecycle rule on jackpot-work bucket**: deletes stale work dirs.
+
+### IaC components (jackpot-iac)
+
+All autoscaling configuration lives in jackpot-iac Terraform:
+- Three node pool definitions with cluster autoscaler config
+- HPA manifest for API and frontend deployments
+- Workspace placeholder pod CronJob (8am–8pm AZ)
+- Scrubber GKE Job template
+- GCP Budget alert policies
+- jackpot-work bucket with lifecycle rule
+
+### New env vars
+
+| Variable | Default | Description |
+|---|---|---|
+| `SCRUBBER_MAX_CONCURRENT` | `10` | Max simultaneous scrubber jobs |
+| `SCRUBBER_QUEUE_INTERVAL_SECONDS` | `60` | How often queue job fires |
+
+---
+
+## Critical Rules (continued)
+
+**30. Pipeline compute runs on GCP Batch, not GKE pods.**
+Never submit Nextflow tasks as GKE pod workloads. GKE runs only the
+Nextflow controller process (~2CPU/4GB) in the api-pool. All task compute
+is submitted to GCP Batch by Nextflow directly.
+
+**31. Bulk scrubber submissions use the queue — never submit all jobs at once.**
+When multiple samples arrive simultaneously (Globus batch, CSV upload),
+add all to the scrubber queue (scrub_status=PENDING). The
+`run_scrubber_queue_job()` background job controls concurrency via
+SCRUBBER_MAX_CONCURRENT. Never submit more than SCRUBBER_MAX_CONCURRENT
+scrubber GKE Jobs simultaneously.
+
+**32. Scrubber GKE Jobs run on the scrubber-pool using spot nodes.**
+The scrubber Job manifest must include nodeSelector for scrubber-pool and
+toleration for spot nodes. Scrubber is restartable — if a spot node is
+preempted, the sample stays IN_PROGRESS and the job is resubmitted by
+the queue job on its next cycle.
