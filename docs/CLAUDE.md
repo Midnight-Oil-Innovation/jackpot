@@ -1365,3 +1365,112 @@ The scrubber Job manifest must include nodeSelector for scrubber-pool and
 toleration for spot nodes. Scrubber is restartable — if a spot node is
 preempted, the sample stays IN_PROGRESS and the job is resubmitted by
 the queue job on its next cycle.
+
+---
+
+## Caching Architecture — Why Not Celery/Redis
+
+JACKPOT deliberately avoids Celery and Redis as a general-purpose task
+queue. Heavy compute is offloaded to GCP-native services (GCP Batch,
+GKE Jobs, Cloud Scheduler) rather than managed through a worker pool.
+This section documents what replaces each Celery/Redis use case and
+where Redis is legitimately used.
+
+### What replaces Celery/Redis
+
+| APGAP pattern | JACKPOT replacement | Why |
+|---|---|---|
+| Celery tasks for pipeline execution | GCP Batch + Nextflow | Nextflow manages its own worker VMs |
+| Celery tasks for scrubbing | GKE Jobs + scrubber queue in jobs.py | Container manages its own lifecycle |
+| Celery tasks for background jobs | APScheduler (local) / Cloud Scheduler (GKE) | Lightweight DB operations, no worker needed |
+| Celery tasks for email delivery | Cloud Tasks (when email is built) | GCP-native, no broker to manage |
+| Celery tasks for SRA downloads | GKE Jobs | Container manages its own lifecycle |
+| Redis as task broker | Not needed | No Celery |
+| Redis as result backend | Not needed | Results written directly to Cloud SQL |
+
+### Where Redis IS used — external search cache only
+
+Multi-pod GKE deployments have a per-pod in-memory cache problem: a query
+that ran on pod A is re-executed on pod B because each pod has its own
+cache. For external database search results (NCBI/ENA/GISAID — 30-minute
+cache) this causes unnecessary API calls to external services and
+inconsistent behavior.
+
+**Cloud Memorystore for Redis** (GCP managed Redis) is used as a shared
+cache across all API pod replicas, exclusively for external search results.
+Not used as a task broker, not used as a result backend, not used for
+sessions or any other purpose.
+
+### Cache abstraction (backend/cache.py)
+
+```python
+def get_cache() -> Cache:
+    """
+    Returns a cache instance based on SEARCH_CACHE_BACKEND env var.
+    'memory' → SimpleCache (dict, local dev, single pod)
+    'redis'  → RedisCache (Cloud Memorystore, GKE production)
+    """
+
+def cache_get(key: str) -> dict | None:
+    """Retrieve cached value. Returns None if not found or expired."""
+
+def cache_set(key: str, value: dict, ttl_seconds: int = 1800) -> None:
+    """Store value with TTL. Default 30 minutes for external search."""
+
+def cache_delete(key: str) -> None:
+    """Invalidate a cache entry."""
+```
+
+All external search result caching goes through `backend/cache.py`.
+Never use an in-memory dict directly in a router or service for shared
+cache. Never cache anything other than external search results in Redis —
+it is not a general-purpose cache layer.
+
+### New environment variables
+
+| Variable | Local dev | GCP production | Description |
+|---|---|---|---|
+| `SEARCH_CACHE_BACKEND` | `memory` | `redis` | Cache backend for external search results |
+| `REDIS_URL` | not set | `redis://10.x.x.x:6379` | Cloud Memorystore connection string |
+| `SEARCH_CACHE_TTL_SECONDS` | `1800` | `1800` | External search result TTL (default 30 min) |
+
+### IaC
+
+Cloud Memorystore for Redis defined in jackpot-iac Terraform:
+- Basic tier, 1GB capacity (external search results are small)
+- Same VPC as GKE cluster (private IP, no public endpoint)
+- No persistence needed (cache is ephemeral by design)
+
+### Cloud Tasks for future email delivery
+
+When email notifications are implemented, use **Cloud Tasks** rather than
+Celery. Cloud Tasks is GCP-native, requires no broker, and integrates
+directly with GKE endpoints:
+
+```
+create_notification() writes to notifications table (synchronous, Month 1)
+  ↓ (future — Month 3+)
+enqueue_email_task() creates a Cloud Tasks task pointing to
+  POST /api/v1/internal/send-email
+  → Cloud Tasks delivers with retry logic
+  → SendGrid/SES sends the email
+```
+
+Never introduce Celery. If a new async workload arises that doesn't fit
+APScheduler, GKE Jobs, or Cloud Tasks, discuss before implementing.
+
+---
+
+## Critical Rules (continued)
+
+**33. Never use per-pod in-memory caching for data shared across API replicas.**
+In multi-pod GKE deployments, per-pod dicts create cache inconsistency.
+Use `backend/cache.py` which routes to Redis (production) or a simple
+dict (local dev) based on SEARCH_CACHE_BACKEND. Only external search
+results are cached. Never add new cache categories without discussion.
+
+**34. No Celery. No Redis as a task broker or result backend.**
+JACKPOT uses GCP-native services for async work: GCP Batch (pipelines),
+GKE Jobs (scrubber, SRA downloads), Cloud Scheduler (background jobs),
+Cloud Tasks (future email). Redis is used only as a shared cache for
+external search results via backend/cache.py.
