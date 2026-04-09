@@ -81,6 +81,9 @@ omit = [
 ]
 
 [tool.ruff]
+exclude = [
+    "backend/models_generated.py",
+]
 line-length    = 100
 target-version = "py311"
 

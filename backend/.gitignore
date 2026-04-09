@@ -19,7 +19,6 @@ uv.lock.tmp
 .secrets.baseline.local
 .vscode/settings.json
 .idea/
-backend/models_generated.py
 db/bigquery_schema.sql
 docs/schema.md
 .DS_Store
