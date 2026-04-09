@@ -1474,3 +1474,144 @@ JACKPOT uses GCP-native services for async work: GCP Batch (pipelines),
 GKE Jobs (scrubber, SRA downloads), Cloud Scheduler (background jobs),
 Cloud Tasks (future email). Redis is used only as a shared cache for
 external search results via backend/cache.py.
+
+---
+
+## Disaster Recovery and Backup Architecture
+
+This section documents the backup strategy for every stateful component.
+Understanding this is important when writing migrations, storage operations,
+or anything that touches the database or GCS buckets.
+
+### Cloud SQL (operational database) — most critical
+
+Three layers of protection, all defined in jackpot-iac/terraform/cloudsql.tf:
+
+**Automated daily backups** — full backup once per day during 2–4am AZ
+maintenance window. Stored in GCS. 30-day retention. Costs a few dollars
+per month at JACKPOT's scale.
+
+**Point-in-time recovery (PITR)** — continuous transaction log shipping
+to GCS. Enables recovery to any second within the last 7 days. This is
+the most operationally useful feature. If a bad migration runs at 2pm,
+restore to 1:59pm. Always enabled. Flag: --enable-point-in-time-recovery.
+
+**Weekly SQL dump export** — Cloud Scheduler triggers a full SQL export
+to gs://jackpot-backups/ every Sunday night. Independent recovery path
+if Cloud SQL's built-in backup mechanism fails. jackpot-backups bucket
+has Object Lock (WORM) — exports cannot be deleted or modified before
+their 90-day retention expires. Protects against accidental deletion and
+satisfies public health audit requirements.
+
+**Cross-region replica** — deferred from prototype. Add when platform has
+real production users. Enables promotion to primary if us-central1 has
+an outage.
+
+### GCS buckets — per-bucket policy
+
+| Bucket | Versioning | Region | Object Lock | Notes |
+|---|---|---|---|---|
+| `jackpot-sequences` | Enabled | Standard | No | Irreplaceable raw FASTQs. Versioning allows recovery from accidental deletion. |
+| `jackpot-references` | Enabled | Standard | No | Reference genomes. Write-once in practice. |
+| `jackpot-results` | No | Standard | No | Pipeline outputs. Regenerable by re-running pipelines. |
+| `jackpot-staging` | No | Standard | No | Temporary — files move to sequences after scrubbing. |
+| `jackpot-work` | No | Standard | No | Nextflow work dirs. 90-day lifecycle rule. Versioning would fight lifecycle rule. |
+| `jackpot-backups` | No | Different region | Yes (WORM) | Weekly SQL exports. Object Lock prevents tampering. 90-day lifecycle. |
+
+**Never enable versioning on jackpot-work.** The combination of Nextflow
+work directories (many large files) and versioning would accumulate
+enormous storage costs and conflict with the 90-day lifecycle rule.
+
+### GKE workspace PVCs (JupyterHub user data)
+
+Each researcher's persistent volume claim contains notebooks, local data,
+and conda environments. Protected via GCP Compute Engine scheduled
+snapshots:
+
+- Daily snapshot of each active workspace PVC
+- 14-day snapshot retention
+- Defined in jackpot-iac/terraform/snapshots.tf
+- Idle PVCs (culled pods): snapshot on demand before deletion
+
+If a researcher accidentally deletes a notebook: restore from the previous
+day's PVC snapshot. Expected recovery time: 15 minutes.
+
+### GKE cluster state
+
+Not backed up separately — the git repository IS the backup. All cluster
+state (Deployments, ConfigMaps, Services, HPA configs, CronJobs) is
+defined in jackpot-iac Terraform and Kubernetes manifests. If the cluster
+is destroyed, `terraform apply` + `kubectl apply` rebuild it from scratch.
+Never configure cluster resources manually in the GCP console — always
+use IaC so the git history is the authoritative record.
+
+### Alembic migration history
+
+Backed up by git. If the database is restored from a backup, run
+`uv run alembic upgrade head` to bring the schema current. Never skip
+this step after a database restore.
+
+### Disaster recovery runbook (jackpot-iac/docs/disaster-recovery.md)
+
+Five documented scenarios:
+
+**Scenario 1 — Accidental row deletion (most common)**
+Recovery: PITR or restore specific rows from daily backup.
+GCS files: recover from object versioning on jackpot-sequences.
+Expected RTO: 30 minutes.
+
+**Scenario 2 — Bad Alembic migration corrupts data**
+Recovery: PITR to the timestamp immediately before the migration ran.
+After restore: fix the migration, test in dev, re-apply.
+Expected RTO: 1–2 hours.
+
+**Scenario 3 — Cloud SQL instance failure**
+Recovery: restore from automated daily backup to new Cloud SQL instance.
+Update DB_URL in GKE secrets. Redeploy API pods.
+Expected RTO: 2–4 hours.
+
+**Scenario 4 — Regional GCP outage (us-central1 unavailable)**
+Recovery: promote Cloud SQL replica to primary (when replica is enabled).
+Update DNS. Redeploy GKE cluster from jackpot-iac in backup region.
+Expected RTO: 4–8 hours. Not fully automated in prototype.
+
+**Scenario 5 — GCS bucket data loss**
+Recovery: restore from object versioning (jackpot-sequences, jackpot-references)
+or from weekly SQL export in jackpot-backups.
+Expected RTO: varies by data volume.
+
+### New IaC components (jackpot-iac/terraform/)
+
+| File | What it defines |
+|---|---|
+| `cloudsql.tf` | Daily backups, PITR, 30-day retention, weekly export scheduler |
+| `gcs.tf` | Versioning on sequences/references, Object Lock on backups, lifecycle rules |
+| `snapshots.tf` | GKE PVC daily snapshot schedule, 14-day retention |
+| `budgets.tf` | Already planned — budget alerts at 50%/80%/100% |
+
+---
+
+## Critical Rules (continued)
+
+**35. Never disable PITR on the Cloud SQL instance.**
+Point-in-time recovery is the primary defense against bad migrations.
+It must always be enabled. If a migration is about to run that you're
+uncertain about, note the current timestamp before running it so you
+know exactly where to restore to if needed.
+
+**36. After any database restore, always run `uv run alembic upgrade head`.**
+A restored database may be behind the current schema version. Never
+operate JACKPOT against a database that hasn't been brought to the current
+migration head after a restore. Check with `uv run alembic current`.
+
+**37. Never manually configure GCS bucket settings in the GCP console.**
+All bucket configuration (versioning, lifecycle rules, Object Lock,
+IAM) is defined in jackpot-iac/terraform/gcs.tf. Manual console changes
+will be overwritten on the next `terraform apply` and create drift between
+the IaC and the actual state. Make changes in Terraform, apply, commit.
+
+**38. Never enable versioning on jackpot-work bucket.**
+The Nextflow work directory bucket has a 90-day lifecycle rule that
+deletes stale task caches. Versioning would conflict with this rule and
+accumulate unbounded storage costs. jackpot-work is intentionally
+ephemeral — pipelines are restartable via -resume.
