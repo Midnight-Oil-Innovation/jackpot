@@ -137,26 +137,6 @@ Every router in `backend/routers/` starts as a 5-line stub returning
 entire file. After implementing, add the router import and
 `app.include_router()` call to `backend/main.py`.
 
-**16. `surveillance_relevant` is always computed by `compute_surveillance_relevant()` in `validator.py`**
-Never set directly by ingest endpoints without going through the validator.
-
-**17. `quality_status` is always set by `compute_quality_status()` — never hardcoded in routers.**
-
-**18. `scrub_status = 'SKIPPED'` is only set automatically by the validator (FASTA-only) or by the scrub override approval workflow.**
-Ingest endpoints must not set it directly.
-
-**19. One CSV row = one sample.**
-Files are associated via `file_detector.py` pairing logic, never by requiring per-file rows from the user.
-
-**20. `gen-pydantic` always requires two steps after running**
-(1) Use the `--pydantic-version 2` flag:
-    `uv run gen-pydantic --pydantic-version 2 schema/schema/jackpot_schema.yaml > backend/models_generated.py`
-(2) Apply the boolean keyword patch immediately after:
-    Replace `True = "True"` with `true = "True"` and
-    `False = "False"` with `false = "False"` in the generated file.
-Never run gen-pydantic without the --pydantic-version 2 flag or the patch step.
-`models_generated.py` is excluded from ruff linting (generated code — never edit manually). Always regenerate, never hand-edit.
-
 ---
 
 ## Local Dev Role Switching
@@ -174,7 +154,7 @@ and change the env var:
 INSERT INTO users (email, name, is_platform_admin, is_active, organization_id)
 VALUES ('director@test.com', 'Lab Director', FALSE, TRUE, 1);
 
-INSERT INTO lab_membership (user_id, lab_id, permission_group_id, is_lab_director)
+INSERT INTO lab_membership (user_id, lab_id, permission_group_id, is_lab_admin)
 SELECT u.id, 1,
   (SELECT id FROM permission_groups WHERE name = 'Lab Director'),
   TRUE
@@ -237,7 +217,7 @@ uv run mypy backend/
 
 - Organization → Lab → Project → User hierarchy is identical
 - PermissionGroups enum string values match APGAP exactly
-- `is_lab_director=TRUE` on `lab_membership` = Lab Director
+- `is_lab_admin=TRUE` on `lab_membership` = Lab Director
 - Projects preserve all Seqera fields (`workspace_id`, `compute_env_id`, `credentials_id`)
 - Migration script: `scripts/migrate_from_apgap.py`
 
@@ -275,3 +255,631 @@ Stub routers are excluded from coverage measurement in `pyproject.toml`
 mypy is NOT in pre-commit hooks — too noisy during early development.
 Run manually when needed: `uv run mypy backend/`
 Re-add to pre-commit once the codebase stabilises (Month 2+).
+
+---
+
+## API Response Conventions
+
+Every endpoint returns a consistent JSON envelope. Never invent a custom
+response shape in a router — use the helpers from `backend/responses.py`.
+
+### Success responses
+
+```python
+# Single resource
+{"success": true, "data": {...}}
+
+# Collection (paginated)
+{
+  "success": true,
+  "data": [...],
+  "pagination": {
+    "page": 1,
+    "per_page": 50,
+    "total": 847,
+    "pages": 17
+  }
+}
+
+# Action with no resource to return (e.g. DELETE, state change)
+{"success": true, "message": "Sample archived."}
+```
+
+### Error responses
+
+```python
+# Validation failure (422)
+{
+  "success": false,
+  "error": {
+    "code": "VALIDATION_ERROR",
+    "message": "Metadata validation failed.",
+    "detail": {
+      "errors": ["date_collected: future dates not accepted"],
+      "tier": 0,
+      "tier2_missing": ["collection_location_state"],
+      "tier3_missing": ["originating_lab", "submitting_lab"]
+    }
+  }
+}
+
+# Access denied (403)
+{
+  "success": false,
+  "error": {
+    "code": "ACCESS_DENIED",
+    "message": "You do not have access to this sample.",
+    "detail": {}
+  }
+}
+
+# Not found (404)
+{
+  "success": false,
+  "error": {
+    "code": "NOT_FOUND",
+    "message": "Sample AZ-2026-001 not found.",
+    "detail": {}
+  }
+}
+```
+
+### Standard error codes
+
+| Code | HTTP status | When to use |
+|---|---|---|
+| `VALIDATION_ERROR` | 422 | Metadata fails tier-aware validator |
+| `ACCESS_DENIED` | 403 | can_access_sample() or role check fails |
+| `NOT_FOUND` | 404 | Resource does not exist or not visible |
+| `CONFLICT` | 409 | Duplicate sample_id, duplicate access request |
+| `SCRUB_PENDING` | 409 | Files not yet available (scrub in progress) |
+| `SCRUB_APPROVAL_REQUIRED` | 409 | Skip requested, awaiting Lab Director approval |
+| `INTERNAL_ERROR` | 500 | Unexpected exception — log and return generic message |
+
+### Response helpers (backend/responses.py)
+
+```python
+from backend.responses import success, success_list, error
+
+# In a router:
+return success(data=sample_dict)
+return success_list(data=samples, page=1, per_page=50, total=847)
+return error("ACCESS_DENIED", "You do not have access to this sample.", status_code=403)
+```
+
+`backend/responses.py` must be created before the first router is implemented.
+It is the single place that constructs response envelopes. Routers never
+build dicts directly.
+
+---
+
+## Pagination Convention
+
+All list endpoints use the same query parameters and response shape.
+
+### Query parameters
+
+```
+GET /api/v1/samples/?page=1&per_page=50&sort_by=date_collected&sort_dir=desc
+```
+
+| Parameter | Type | Default | Max | Description |
+|---|---|---|---|---|
+| `page` | int | 1 | — | 1-indexed page number |
+| `per_page` | int | 50 | 200 | Items per page |
+| `sort_by` | str | `created_at` | — | Column to sort by |
+| `sort_dir` | str | `desc` | — | `asc` or `desc` |
+
+### Pagination helper (backend/pagination.py)
+
+`backend/pagination.py` already exists. Use it in every list endpoint:
+
+```python
+from backend.pagination import paginate
+
+results, total = paginate(
+    query=base_query,
+    page=page,
+    per_page=per_page,
+    sort_by=sort_by,
+    sort_dir=sort_dir
+)
+return success_list(data=results, page=page, per_page=per_page, total=total)
+```
+
+Never implement manual OFFSET/LIMIT in a router — always go through `paginate()`.
+
+The `select-all-N-results` bulk select feature uses a separate endpoint
+parameter `?select_all=true` which bypasses pagination and returns only
+IDs (not full records) for the entire result set, regardless of page.
+
+---
+
+## Audit Logging
+
+Every state-changing endpoint calls `log_audit()`. This is Critical Rule 4
+— this section defines the exact function signature and required usage.
+
+### Function signature (backend/audit.py)
+
+```python
+def log_audit(
+    action: str,           # Action constant from AuditActions — see below
+    actor_id: int | None,  # User ID performing the action. None = SYSTEM
+    resource_type: str,    # "sample", "lab", "org", "access_request", etc.
+    resource_id: str,      # String ID of the affected resource
+    before: dict | None,   # State before change (for updates). None for creates.
+    after: dict | None,    # State after change. None for deletes.
+    metadata: dict | None, # Extra context (reason, override_category, etc.)
+    db_conn,               # Active database connection
+) -> None:
+```
+
+### Action constants (backend/audit.py)
+
+```python
+class AuditActions:
+    # Samples
+    CREATE_SAMPLE            = "CREATE_SAMPLE"
+    UPDATE_SAMPLE            = "UPDATE_SAMPLE"
+    DELETE_SAMPLE            = "DELETE_SAMPLE"
+    ARCHIVE_SAMPLE           = "ARCHIVE_SAMPLE"
+    SOFT_DELETE_SAMPLE       = "SOFT_DELETE_SAMPLE"
+    HARD_DELETE_SAMPLE       = "HARD_DELETE_SAMPLE"
+
+    # Scrub override
+    REQUEST_SCRUB_SKIP       = "REQUEST_SCRUB_SKIP"
+    APPROVE_SCRUB_SKIP       = "APPROVE_SCRUB_SKIP"
+    DENY_SCRUB_SKIP          = "DENY_SCRUB_SKIP"
+    AUTO_DENY_SCRUB_SKIP     = "AUTO_DENY_SCRUB_SKIP"
+    SYSTEM_SKIP_SCRUB        = "SYSTEM_SKIP_SCRUB"
+
+    # Surveillance override
+    REQUEST_SURVEILLANCE_OVERRIDE = "REQUEST_SURVEILLANCE_OVERRIDE"
+    APPROVE_SURVEILLANCE_OVERRIDE = "APPROVE_SURVEILLANCE_OVERRIDE"
+    DENY_SURVEILLANCE_OVERRIDE    = "DENY_SURVEILLANCE_OVERRIDE"
+
+    # Access requests
+    CREATE_ACCESS_REQUEST    = "CREATE_ACCESS_REQUEST"
+    APPROVE_ACCESS_REQUEST   = "APPROVE_ACCESS_REQUEST"
+    DENY_ACCESS_REQUEST      = "DENY_ACCESS_REQUEST"
+    AUTO_APPROVE_ACCESS_REQUEST = "AUTO_APPROVE_ACCESS_REQUEST"
+    REVOKE_ACCESS            = "REVOKE_ACCESS"
+
+    # Deletion
+    REQUEST_DELETION         = "REQUEST_DELETION"
+    APPROVE_DELETION         = "APPROVE_DELETION"
+    DENY_DELETION            = "DENY_DELETION"
+    COMPLETE_DELETION        = "COMPLETE_DELETION"
+
+    # Org / Lab / User
+    CREATE_ORG               = "CREATE_ORG"
+    UPDATE_ORG               = "UPDATE_ORG"
+    CREATE_LAB               = "CREATE_LAB"
+    UPDATE_LAB               = "UPDATE_LAB"
+    ADD_LAB_MEMBER           = "ADD_LAB_MEMBER"
+    REMOVE_LAB_MEMBER        = "REMOVE_LAB_MEMBER"
+    CHANGE_MEMBER_ROLE       = "CHANGE_MEMBER_ROLE"
+```
+
+### Usage example
+
+```python
+from backend.audit import log_audit, AuditActions
+
+# In an ingest endpoint after writing the sample:
+log_audit(
+    action=AuditActions.CREATE_SAMPLE,
+    actor_id=current_user["id"],
+    resource_type="sample",
+    resource_id=str(new_sample_id),
+    before=None,
+    after=sample_dict,
+    metadata={"ingest_method": "gui", "tier": validation_result.tier},
+    db_conn=conn,
+)
+```
+
+The `audit_log` table must already exist (it is part of `db/init.sql`).
+`log_audit()` must be created in `backend/audit.py` before the first
+state-changing endpoint is written.
+
+---
+
+## Background Job Infrastructure
+
+Background jobs use **APScheduler** running inside the FastAPI process,
+started in `backend/main.py` on application startup. This is the correct
+pattern for the prototype — no separate GKE CronJob needed until Month 2+.
+
+### Setup (backend/main.py)
+
+```python
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
+from backend.jobs import run_access_request_job, run_scrub_override_job
+
+scheduler = AsyncIOScheduler()
+
+@app.on_event("startup")
+async def start_scheduler():
+    scheduler.add_job(run_scrub_override_job, "interval", hours=1,
+                      id="scrub_override_auto_deny")
+    scheduler.add_job(run_access_request_job, "interval", hours=1,
+                      id="access_request_auto_approve")
+    scheduler.start()
+
+@app.on_event("shutdown")
+async def stop_scheduler():
+    scheduler.shutdown()
+```
+
+### Job modules (backend/jobs.py)
+
+All background jobs live in `backend/jobs.py`. Each job is a standalone
+async function that opens its own database connection. Jobs are idempotent —
+running them twice produces the same result as running them once.
+
+```python
+async def run_scrub_override_job() -> None:
+    """
+    Auto-deny scrub override requests that have been pending for > 48 hours.
+    Conservative default: if Lab Director doesn't decide, scrubber runs.
+    """
+
+async def run_access_request_job() -> None:
+    """
+    Auto-approve access requests where auto_approve_after <= NOW().
+    Send 75-day warnings where auto_approve_after is within 15 days.
+    Send 7-day warnings where access_expires_at is within 7 days.
+    Expire approved grants where access_expires_at <= NOW().
+    Mark pending requests as moot where sample.sharing_level = 'PUBLIC'.
+    """
+```
+
+### Manual trigger endpoint (Platform Admin only)
+
+For local dev and testing, jobs can be triggered manually:
+
+```
+POST /api/v1/admin/jobs/{job_id}/run
+```
+
+This avoids waiting for the scheduler interval during development.
+
+---
+
+## Notification System
+
+Notifications are written to the `notifications` table synchronously
+within the same database transaction as the triggering action. They are
+NOT delivered via Pub/Sub or any async queue in the prototype.
+
+### Helper function (backend/notifications.py)
+
+```python
+def create_notification(
+    recipient_id: int,      # User ID to notify
+    event_type: str,        # NotificationEvents constant — see below
+    title: str,             # Short title shown in notification badge
+    body: str,              # Full notification text
+    resource_type: str,     # "sample", "access_request", "pipeline_run", etc.
+    resource_id: str,       # ID of the related resource
+    action_url: str | None, # Deep link into the JACKPOT UI
+    db_conn,
+) -> None:
+```
+
+### Notification events (backend/notifications.py)
+
+```python
+class NotificationEvents:
+    # Scrub override
+    SCRUB_SKIP_REQUESTED     = "SCRUB_SKIP_REQUESTED"
+    SCRUB_SKIP_APPROVED      = "SCRUB_SKIP_APPROVED"
+    SCRUB_SKIP_DENIED        = "SCRUB_SKIP_DENIED"
+    SCRUB_SKIP_AUTO_DENIED   = "SCRUB_SKIP_AUTO_DENIED"
+
+    # Access requests
+    ACCESS_REQUEST_SUBMITTED = "ACCESS_REQUEST_SUBMITTED"
+    ACCESS_REQUEST_APPROVED  = "ACCESS_REQUEST_APPROVED"
+    ACCESS_REQUEST_DENIED    = "ACCESS_REQUEST_DENIED"
+    ACCESS_AUTO_APPROVED     = "ACCESS_AUTO_APPROVED"
+    ACCESS_APPROVE_WARNING   = "ACCESS_APPROVE_WARNING"   # 75-day warning to owner
+    ACCESS_EXPIRING          = "ACCESS_EXPIRING"          # 7-day warning to requester
+
+    # Pipelines
+    PIPELINE_COMPLETE        = "PIPELINE_COMPLETE"
+    PIPELINE_FAILED          = "PIPELINE_FAILED"
+
+    # Ingest
+    GLOBUS_FILES_ARRIVED     = "GLOBUS_FILES_ARRIVED"
+    METADATA_COMPLETION_NEEDED = "METADATA_COMPLETION_NEEDED"
+    ERRONEOUS_UPLOAD_EXPIRING = "ERRONEOUS_UPLOAD_EXPIRING"
+
+    # Surveillance
+    SURVEILLANCE_OVERRIDE_REQUESTED = "SURVEILLANCE_OVERRIDE_REQUESTED"
+    SURVEILLANCE_OVERRIDE_DECIDED   = "SURVEILLANCE_OVERRIDE_DECIDED"
+```
+
+### Usage example
+
+```python
+from backend.notifications import create_notification, NotificationEvents
+
+# After a scrub skip request is submitted:
+create_notification(
+    recipient_id=lab_director_id,
+    event_type=NotificationEvents.SCRUB_SKIP_REQUESTED,
+    title="Scrub skip requested",
+    body=f"{requester_name} requested to skip the scrubber for sample {sample_id}. Reason: {reason}",
+    resource_type="sample_scrub_override_request",
+    resource_id=str(override_request_id),
+    action_url=f"/labs/{lab_id}/access-requests#scrub-{override_request_id}",
+    db_conn=conn,
+)
+```
+
+`backend/notifications.py` must be created before the first endpoint that
+triggers a notification (the ingest endpoint). Email delivery is deferred —
+the notifications table is the only delivery mechanism in Month 1.
+
+---
+
+## Storage Abstraction (MinIO local / GCS production)
+
+All file storage operations go through `backend/storage.py`. Routers never
+call boto3 or the GCS client directly.
+
+### Environment variables
+
+| Variable | Local dev value | Production value |
+|---|---|---|
+| `STORAGE_BACKEND` | `minio` | `gcs` |
+| `MINIO_ENDPOINT` | `http://minio:9000` | — |
+| `MINIO_ACCESS_KEY` | `minioadmin` | — |
+| `MINIO_SECRET_KEY` | `minioadmin` | — |
+| `GCS_PROJECT_ID` | — | `jackpot-prod` |
+| `SEQUENCES_BUCKET` | `jackpot-sequences` | `jackpot-sequences-prod` |
+| `STAGING_BUCKET` | `jackpot-staging` | `jackpot-staging-prod` |
+| `RESULTS_BUCKET` | `jackpot-results` | `jackpot-results-prod` |
+| `REFERENCES_BUCKET` | `jackpot-references` | `jackpot-references-prod` |
+
+### Storage helper functions (backend/storage.py)
+
+```python
+def stage_file(local_path: str, destination_key: str) -> str:
+    """Upload a file to the staging bucket. Returns the URI."""
+
+def move_to_sequences(staging_key: str, sequences_key: str) -> str:
+    """Move a scrubbed file from staging to the sequences bucket."""
+
+def generate_presigned_url(bucket: str, key: str, ttl_seconds: int = 3600) -> str:
+    """Generate a presigned download URL."""
+
+def generate_signed_upload_url(bucket: str, key: str, ttl_seconds: int = 14400) -> str:
+    """Generate a signed upload URL (4-hour default TTL)."""
+
+def delete_file(bucket: str, key: str) -> None:
+    """Delete a file from a bucket."""
+
+def file_exists(bucket: str, key: str) -> bool:
+    """Check if a file exists without downloading it."""
+```
+
+All functions are backend-agnostic — they read `STORAGE_BACKEND` at call
+time and route to either boto3 (MinIO) or the GCS client. Never check
+`STORAGE_BACKEND` in a router.
+
+---
+
+## Testing Patterns
+
+Use these patterns for all new tests. Do not invent new fixture approaches.
+
+### Standard fixtures (tests/conftest.py)
+
+```python
+# Database connection — uses testcontainers PostgreSQL
+@pytest.fixture
+def db_conn(postgres_container):
+    """Real PostgreSQL connection in a testcontainer."""
+
+# Pre-created test users for each role
+@pytest.fixture
+def platform_admin_user(db_conn) -> dict:
+    """Returns a Platform Admin user dict."""
+
+@pytest.fixture
+def lab_director_user(db_conn) -> dict:
+    """Returns a Lab Director user dict."""
+
+@pytest.fixture
+def lab_collaborator_user(db_conn) -> dict:
+    """Returns a Lab Collaborator user dict."""
+
+@pytest.fixture
+def bioinformatics_user(db_conn) -> dict:
+    """Returns a Bioinformatics User dict."""
+
+# Pre-created test resources
+@pytest.fixture
+def test_org(db_conn) -> dict:
+    """Returns a test Organization dict."""
+
+@pytest.fixture
+def test_lab(db_conn, test_org) -> dict:
+    """Returns a test Lab dict."""
+
+@pytest.fixture
+def test_project(db_conn, test_lab) -> dict:
+    """Returns a test Project dict."""
+
+@pytest.fixture
+def test_sample(db_conn, test_lab, test_project) -> dict:
+    """Returns a minimal valid sample dict (Tier 1, PRELIMINARY)."""
+
+# Storage mock — avoids real GCS/MinIO calls in tests
+@pytest.fixture(autouse=True)
+def mock_storage(monkeypatch):
+    """Patches backend.storage to use in-memory dict instead of real buckets."""
+```
+
+### FastAPI test client
+
+```python
+from fastapi.testclient import TestClient
+from backend.main import app
+
+client = TestClient(app)
+
+def test_create_sample(db_conn, test_lab, lab_collaborator_user):
+    response = client.post(
+        "/api/v1/ingest/upload",
+        headers={"Authorization": f"Bearer {lab_collaborator_user['token']}"},
+        data={"metadata": json.dumps({
+            "sample_id": "AZ-TEST-001",
+            "organism_name": "Salmonella enterica",
+            "source_type": "isolate",
+            "sector": "clinical",
+            ...
+        })},
+        files={"fastq_r1": ("test_R1.fastq.gz", b"fake_content", "application/gzip")}
+    )
+    assert response.status_code == 200
+    assert response.json()["success"] is True
+    assert response.json()["data"]["quality_status"] == "PRELIMINARY"
+```
+
+### Mocking surveillance_relevant computation in tests
+
+```python
+from unittest.mock import patch
+
+def test_ingest_sets_surveillance_true_for_reportable_organism(db_conn, ...):
+    with patch("backend.validator.get_reportable_organisms") as mock_reportable:
+        mock_reportable.return_value = {"Salmonella enterica"}
+        # ... rest of test
+```
+
+Never hit the real `reportable_organisms` table in unit tests — always mock
+`get_reportable_organisms()`. Integration tests that need the real table
+use the `db_conn` fixture with seed data loaded from the migration.
+
+---
+
+## Epiweek Computation
+
+MMWR epiweeks are computed from `date_collected` at ingest using the
+`epiweeks` Python package. This is Critical Rule 9 — this section defines
+the exact behavior.
+
+### Function (backend/epiweek.py)
+
+```python
+from epiweeks import Week, CDC
+from datetime import date
+
+def compute_epiweeks(
+    date_collected: date,
+    precision: str,        # "day" | "month" | "year"
+) -> dict:
+    """
+    Returns dict with mmwr_year, mmwr_week, iso_year, iso_week.
+    If precision is "year" or "month", all four values are None
+    (epiweek cannot be reliably computed without day precision).
+    """
+    if precision in ("year", "month"):
+        return {
+            "mmwr_year": None,
+            "mmwr_week": None,
+            "iso_year": None,
+            "iso_week": None,
+        }
+    w = Week.fromdate(date_collected, system="CDC")
+    iso = Week.fromdate(date_collected, system="ISO")
+    return {
+        "mmwr_year": w.year,
+        "mmwr_week": w.week,
+        "iso_year": iso.year,
+        "iso_week": iso.week,
+    }
+```
+
+Call `compute_epiweeks(date_collected, precision)` in the ingest endpoint
+immediately before writing the sample row. Write all four returned values
+to the database. Never compute epiweeks in the validator — the validator
+only determines precision. Never compute epiweeks in the router logic
+directly — always call `compute_epiweeks()`.
+
+---
+
+## Critical Rules (continued)
+
+**16. `surveillance_relevant` is always computed by `compute_surveillance_relevant()`
+in `validator.py`.**
+Never set this field directly in a router. The validator is the only
+place that reads from `reportable_organisms` and applies metagenomics
+target_organisms logic. Ingest endpoints call the validator and use the
+returned value.
+
+**17. `quality_status` is always set by `compute_quality_status()` —
+never hardcoded in routers.**
+The validator returns a `ValidationResult` with a `tier` integer (1, 2, or 3).
+`compute_quality_status(validation_result)` converts that to the string
+("PRELIMINARY", "ANALYZABLE", "SUBMITTABLE"). Routers call this function —
+they never write quality_status strings directly.
+
+**18. `scrub_status = 'SKIPPED'` is only set in two places:**
+(1) `validator.py` — FASTA-only auto-skip (no raw reads, approved_by=SYSTEM).
+(2) The scrub override approval workflow — after Lab Director approval.
+Ingest endpoints must not set scrub_status = SKIPPED directly under any
+other circumstance. SRA-imported samples are also auto-SKIPPED by the
+validator with skip_reason = 'sra_imported'.
+
+**19. One CSV row = one sample. Files are associated via `file_detector.py`
+pairing logic, never by requiring per-file rows from the user.**
+The `files` column in any CSV or metadata form is semicolon-delimited
+within a single cell: `AZ-001_R1.fastq.gz;AZ-001_R2.fastq.gz`.
+`file_detector.py` is called on the parsed file list for every ingest path.
+Never write file parsing or pairing logic in a router.
+
+**20. `gen-pydantic` requires two steps after every run:**
+(1) Always use the `--pydantic-version 2` flag:
+    `uv run gen-pydantic --pydantic-version 2 schema/schema/jackpot_schema.yaml > backend/models_generated.py`
+(2) Apply the boolean keyword patch immediately after generation:
+
+```python
+from pathlib import Path
+content = Path('backend/models_generated.py').read_text()
+content = content.replace('\n    True = "True"', '\n    true = "True"')
+content = content.replace('\n    False = "False"', '\n    false = "False"')
+Path('backend/models_generated.py').write_text(content)
+```
+
+`models_generated.py` is excluded from ruff linting (generated code).
+Never edit it manually — always regenerate then patch.
+
+**21. Sequencing lab → JACKPOT lab linkage uses `sequencing_lab_assignments`.**
+The `sequencing_labs` table (the registry of physical sequencing facilities)
+and the `labs` table (JACKPOT organizational units) are linked via a join
+table `sequencing_lab_assignments` (sequencing_lab_id, lab_id). A single
+sequencing facility may serve multiple JACKPOT labs. This join table is
+used by the Globus deposit-first workflow to identify which Lab Directors
+to notify when files arrive from a given sequencing facility.
+
+**22. Background jobs are implemented in `backend/jobs.py` using APScheduler.**
+Jobs are started in `backend/main.py` at application startup using
+`AsyncIOScheduler`. Jobs are idempotent — running twice = same result as
+running once. Every job can also be triggered manually via
+`POST /api/v1/admin/jobs/{job_id}/run` (Platform Admin only) for local dev.
+Never use `asyncio.create_task()` directly in routers for deferred work —
+always add a job to the scheduler.
+
+**23. All list endpoints use `backend/pagination.py` — never raw OFFSET/LIMIT.**
+See the Pagination Convention section. The `select-all-N-results` bulk
+select uses `?select_all=true` which returns IDs only, no pagination.
+
+**24. All responses use `backend/responses.py` helpers — never raw dicts.**
+See the API Response Conventions section. Every router imports `success`,
+`success_list`, and `error` from `backend/responses.py`. The response
+envelope shape is fixed — routers never construct it manually.
