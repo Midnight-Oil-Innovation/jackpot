@@ -10,8 +10,15 @@ and public health research. Successor to APGAP (ASU-RSE-Services).
 ## Tech Stack
 
 - Python 3.11, FastAPI, SQLAlchemy 2, Alembic, Pydantic v2
-- PostgreSQL (local dev) / BigQuery (production)
-- MinIO (local) / GCS (production) — same boto3 code, different endpoint
+- PostgreSQL (local dev) / Cloud SQL PostgreSQL (production) — operational
+  database for all transactional workloads. Alembic, SQLAlchemy, and all
+  queries work identically against both. Transition = connection string change.
+- BigQuery (production only) — separate analytical layer for surveillance
+  dashboards, turnaround reporting, and population-level queries. Populated
+  via ETL from Cloud SQL. The FastAPI API never queries BigQuery directly.
+  Not present in local dev. Month 3+ concern.
+- MinIO (local) / GCS (production) — same boto3 code via backend/storage.py,
+  different endpoint. Transition = STORAGE_BACKEND env var change.
 - LinkML v4.1 schema: `schema/schema/jackpot_schema.yaml` (git submodule)
 - Authentication: Google OAuth 2.0 + JWT httponly cookies (mock in local dev)
 - Environment management: uv — never use pip directly
@@ -82,7 +89,8 @@ Never edit `db/init.sql` directly in production.
 Command: `uv run alembic revision --autogenerate -m "description"`
 
 **3. Regenerate Python models after any schema change.**
-Command: `uv run gen-pydantic schema/schema/jackpot_schema.yaml > backend/models_generated.py`
+Command: `uv run gen-pydantic --pydantic-version 2 schema/schema/jackpot_schema.yaml > backend/models_generated.py`
+Then apply the boolean keyword patch — see Critical Rule 20.
 Note the doubled path — `schema/schema/` — explained in the directory structure section above.
 
 **4. Every state-changing endpoint calls `log_audit()`.**
@@ -190,7 +198,8 @@ psql postgresql://jackpot:jackpot@localhost:5432/jackpot_db
 psql postgresql://jackpot:jackpot@localhost:5432/jackpot_db -c "\dt"
 
 # Schema
-uv run gen-pydantic schema/schema/jackpot_schema.yaml > backend/models_generated.py
+uv run gen-pydantic --pydantic-version 2 schema/schema/jackpot_schema.yaml > backend/models_generated.py
+# Then apply boolean keyword patch — see Critical Rule 20
 uv run gen-json-schema schema/schema/jackpot_schema.yaml > schema/schema/jackpot_schema.json
 python3 -c "import yaml; yaml.safe_load(open('schema/schema/jackpot_schema.yaml'))"
 
@@ -213,7 +222,90 @@ uv run mypy backend/
 
 ---
 
-## APGAP Migration Compatibility
+## GCP Production Architecture
+
+The local dev stack and the GCP production stack are deliberately parallel
+but not identical. Several components have no local equivalent and several
+env vars control which backend is active. Understand this mapping before
+implementing any component that touches infrastructure.
+
+### Environment variables that control backend selection
+
+| Variable | Local dev value | GCP production value | Effect |
+|---|---|---|---|
+| `ENV` | `local` | `gcp` | Master switch — changes OAuth, storage, DB |
+| `STORAGE_BACKEND` | `minio` | `gcs` | Routes backend/storage.py to MinIO or GCS |
+| `SCHEDULER_ENABLED` | `true` | `false` | APScheduler runs locally; Cloud Scheduler takes over in GKE |
+| `PIPELINE_EXECUTOR` | `local` | `gcp_batch` | Nextflow runs locally or submits to GCP Batch |
+| `WORKSPACE_ENABLED` | `false` | `true` | JupyterHub launch endpoint active only in GKE |
+
+### Component-by-component mapping
+
+| Component | Local dev | GCP production | Transition complexity |
+|---|---|---|---|
+| Object storage | MinIO via boto3 | GCS via boto3 | STORAGE_BACKEND env var — genuinely simple |
+| Operational DB | PostgreSQL in Docker | Cloud SQL PostgreSQL | Connection string — genuinely simple |
+| Analytics layer | Not present | BigQuery (ETL from Cloud SQL) | Separate ETL pipeline — Month 3+ |
+| Background jobs | APScheduler in-process | Cloud Scheduler → HTTP endpoint | SCHEDULER_ENABLED env var |
+| Pipeline execution | Nextflow local/Docker | GCP Batch via Nextflow config | PIPELINE_EXECUTOR env var |
+| Authentication | Mock user (MOCK_USER_EMAIL) | Google OAuth | ENV=gcp flag — already implemented |
+| Workspace | Not present | JupyterHub on GKE | GCP-only — WORKSPACE_ENABLED env var |
+| Globus endpoint | MinIO staging | GCS staging collection | Storage backend env var |
+| API server | uvicorn local | GKE deployment | jackpot-iac Terraform |
+| Notifications | Cloud SQL table | Cloud SQL table | No change |
+| Audit log | Cloud SQL table | Cloud SQL table | No change |
+| Pipeline telemetry | Cloud SQL table | Cloud SQL table | No change |
+
+### Why Cloud SQL, not BigQuery, for the operational database
+
+BigQuery is an analytical warehouse. It does not support:
+- Row-level locking (required by access request approval workflow)
+- Foreign key constraints (required by referential integrity model)
+- ACID transactions across multiple tables (required by audit log pattern)
+- Efficient row-level UPDATEs and DELETEs (required by status updates,
+  deletion lifecycle, scrub_status changes)
+- SERIAL PRIMARY KEY autoincrement
+- Alembic migrations
+
+Cloud SQL PostgreSQL supports all of the above and is what the FastAPI
+API uses in production. BigQuery is a separate analytical layer populated
+by a periodic ETL job from Cloud SQL — it is never queried by the API
+directly.
+
+### Background job production pattern
+
+APScheduler runs inside the FastAPI process in local dev. In GKE production
+SCHEDULER_ENABLED=false disables APScheduler, and Cloud Scheduler fires
+HTTP requests to the job trigger endpoint on each schedule:
+
+```
+Cloud Scheduler (cron) → POST /api/v1/admin/jobs/{job_id}/run → job executes once
+```
+
+This avoids the multi-pod race condition where N replicas each run the
+same job N times simultaneously. The job logic itself does not change —
+only who triggers it. Cloud Scheduler is defined in jackpot-iac Terraform.
+
+### Pipeline execution production pattern
+
+In local dev, PIPELINE_EXECUTOR=local shells out to `nextflow run` directly.
+In GCP production, PIPELINE_EXECUTOR=gcp_batch submits to GCP Batch via
+a Nextflow config file that specifies the GCP Batch executor. The launch
+endpoint constructs the appropriate submission based on this env var. The
+Nextflow -weblog callback to POST /api/v1/pipelines/events works identically
+in both environments — it's an HTTP call from wherever Nextflow runs.
+
+### What has no local dev equivalent
+
+These features simply do not exist in local dev. Their endpoints return a
+meaningful error when WORKSPACE_ENABLED=false or equivalent:
+
+- JupyterHub workspace (WORKSPACE_ENABLED=false returns 503)
+- Globus endpoint registration (handled by jackpot-iac, not the API)
+- Cloud Scheduler job triggers (use manual trigger endpoint in dev)
+- BigQuery analytics queries (not implemented in dev)
+
+---
 
 - Organization → Lab → Project → User hierarchy is identical
 - PermissionGroups enum string values match APGAP exactly
@@ -883,3 +975,272 @@ select uses `?select_all=true` which returns IDs only, no pagination.
 See the API Response Conventions section. Every router imports `success`,
 `success_list`, and `error` from `backend/responses.py`. The response
 envelope shape is fixed — routers never construct it manually.
+
+---
+
+## Local Development Stack — What Runs Where
+
+JACKPOT uses a **hybrid local dev stack**. Docker Compose is the primary
+environment for all Month 1 and Month 2 backend/frontend work. Minikube
+is added specifically for JupyterHub workspace testing in Month 2.
+Never migrate the full stack to minikube.
+
+### Docker Compose (primary — always running)
+
+```
+jackpot-backend   FastAPI API          localhost:8000
+jackpot-frontend  Streamlit UI         localhost:8501
+postgres          PostgreSQL           localhost:5432
+minio             Object storage       localhost:9000 (API), 9001 (console)
+```
+
+Start/stop:
+```bash
+docker compose up -d          # start all services
+docker compose up -d api      # restart API only (preserves DB data)
+docker compose down           # stop (preserves volumes)
+docker compose down -v        # stop and delete all data volumes
+```
+
+### Minikube (Month 2 only — JupyterHub workspace)
+
+Minikube runs JupyterHub only. The FastAPI backend stays in Docker Compose.
+JupyterHub pods reach the API via `minikube tunnel`.
+
+```bash
+# One-time setup (Month 2)
+minikube start --driver=docker --cpus=4 --memory=4096
+minikube addons enable ingress
+minikube addons enable gcp-auth   # for GCS and GCP IAM simulation
+
+# Deploy JupyterHub
+helm repo add jupyterhub https://hub.jupyter.org/helm-chart/
+helm upgrade --install jhub jupyterhub/jupyterhub -f jackpot-iac/jupyterhub/values.yaml
+
+# Open tunnel so JupyterHub pods reach Docker Compose API
+minikube tunnel   # keep running in a separate terminal
+```
+
+### Apple Silicon (M1/M2/M3) container note
+
+Many bioinformatics tool containers are x86-only. When using
+`PIPELINE_EXECUTOR=local` on Apple Silicon, add `--platform linux/amd64`
+to the Nextflow process config. When using `PIPELINE_EXECUTOR=gcp_batch`,
+GCP Batch VMs are x86 by default — no platform flag needed. Prefer
+`gcp_batch` for pipeline testing even during development to avoid ARM
+compatibility issues. GCP Batch spot instances are cheap for short test
+runs.
+
+---
+
+## Nextflow Pipeline Execution
+
+JACKPOT's pipeline launch endpoint submits Nextflow jobs to either a local
+executor or GCP Batch depending on `PIPELINE_EXECUTOR`. This section
+defines the config format, per-run isolation model, and callback pattern
+that all pipeline work must follow.
+
+### PIPELINE_EXECUTOR values
+
+| Value | When used | How Nextflow runs |
+|---|---|---|
+| `local` | Local dev, small test runs | `nextflow run` on the API server directly |
+| `gcp_batch` | Production and pipeline dev testing | Submits tasks to GCP Batch; Mac is controller |
+
+### Local dev with gcp_batch (recommended for pipeline work)
+
+Your Mac is the Nextflow controller. Tasks run on GCP Batch VMs.
+Prerequisites (one-time):
+
+```bash
+# Install Nextflow (requires Java 17)
+brew install openjdk@17
+curl -s https://get.nextflow.io | bash
+chmod +x nextflow && sudo mv nextflow /usr/local/bin/
+
+# Authenticate with GCP
+gcloud auth login
+gcloud auth application-default login
+
+# Enable required APIs
+gcloud services enable batch.googleapis.com compute.googleapis.com
+
+# Create the JACKPOT work bucket (one-time, done in jackpot-iac)
+gcloud storage buckets create gs://jackpot-work-dev --location=us-central1
+```
+
+### Per-run GCS work directory
+
+Every pipeline run gets an isolated GCS work directory. This is stored in
+`pipeline_runs.work_dir` and is required for `-resume` to work correctly.
+Two runs must never share a `workDir` prefix or their task caches collide.
+
+```
+gs://jackpot-work/{run_id}/work/
+```
+
+The JACKPOT launch endpoint passes `run_id` as a Nextflow parameter.
+The Nextflow config uses it to set `workDir`.
+
+### JACKPOT Nextflow config template
+
+The launch endpoint generates this config file per run. It is written to
+a temp file and passed via `-c jackpot_run.config`. Never hardcode run IDs
+or URLs in a static config file.
+
+```groovy
+// Generated by JACKPOT POST /api/v1/pipelines/launch
+// Run ID: ${run_id} | Pipeline: ${pipeline_name} ${pipeline_version}
+
+process {
+    executor = "${pipeline_executor}"   // local or google-batch
+    errorStrategy = 'retry'
+    maxRetries = 2
+}
+
+google {
+    project = "${gcp_project_id}"
+    location = "${gcp_region}"
+    batch.spot = true                   // spot instances — ~90% cost saving
+    batch.bootDiskSize = 50.GB
+    resourceLabels = [
+        'jackpot_run_id': "${run_id}",
+        'jackpot_lab':    "${lab_slug}",
+        'jackpot_pipeline': "${pipeline_name}"
+    ]
+}
+
+workDir = "gs://jackpot-work/${run_id}/work"
+
+params {
+    jackpot_run_id    = "${run_id}"
+    jackpot_api_url   = "${jackpot_api_url}"
+    jackpot_weblog_url = "${jackpot_api_url}/api/v1/pipelines/events"
+    jackpot_results_url = "${jackpot_api_url}/api/v1/pipelines/${run_id}/results"
+    jackpot_token     = "${pipeline_token}"
+}
+```
+
+### Nextflow launch command (from the API)
+
+```bash
+nextflow run ${pipeline_uri} \
+    -revision ${pipeline_version} \
+    -profile ${pipeline_profile} \
+    -c jackpot_run.config \
+    -resume \
+    -weblog ${jackpot_weblog_url}
+```
+
+### Weblog callback in gcp_batch mode
+
+When `PIPELINE_EXECUTOR=gcp_batch`, Nextflow runs on GCP Batch VMs.
+The `-weblog` callback URL must be publicly reachable from those VMs.
+
+- **Production**: use the deployed API URL (`https://api.jackpot.adhs.az.gov`)
+- **Local dev testing with gcp_batch**: use `ngrok` or `cloudflared tunnel`
+  to expose the local API temporarily:
+
+```bash
+# In a separate terminal — expose local API to internet for weblog callbacks
+cloudflared tunnel --url http://localhost:8000
+
+# Use the generated https://xxx.trycloudflare.com URL as jackpot_api_url
+# in your local .env when testing gcp_batch mode
+```
+
+Never commit a cloudflared or ngrok URL. It is a temporary dev-only override.
+
+### Result registration callback
+
+After a pipeline completes, its final process calls the result registration
+endpoint via `curl`. This is added as a `publishDir` + `exec` step in the
+JACKPOT-specific pipeline wrapper, not in the upstream nf-core pipeline itself:
+
+```bash
+curl -s -X POST "${params.jackpot_results_url}" \
+    -H "Authorization: Bearer ${params.jackpot_token}" \
+    -H "Content-Type: application/json" \
+    -d "{\"status\": \"complete\", \"run_id\": \"${params.jackpot_run_id}\"}"
+```
+
+### resourceLabels and cost tracking
+
+Every GCP Batch job spawned by a JACKPOT pipeline run is tagged with
+`jackpot_run_id`, `jackpot_lab`, and `jackpot_pipeline` via `resourceLabels`.
+These labels appear in GCP Billing and feed JACKPOT's billing dashboard
+(`GET /api/v1/billing/`) which aggregates cost by lab and pipeline.
+Always include `resourceLabels` in the generated config — never omit it.
+
+### GCS work bucket lifecycle rule
+
+The `jackpot-work` bucket has a lifecycle rule (defined in jackpot-iac)
+that deletes objects older than 90 days. This prevents stale work directories
+from accumulating. The lifecycle rule is applied at bucket creation — never
+delete work directories manually as this breaks `-resume` for in-flight runs.
+
+### Minimal test pipeline (verify GCP Batch connectivity)
+
+Before implementing the full launch endpoint, verify GCP Batch connectivity
+with this minimal pipeline. Run it from `scripts/test_batch.nf`:
+
+```groovy
+nextflow.enable.dsl=2
+
+process verifyBatchNode {
+    input:
+    val x
+
+    output:
+    stdout
+
+    script:
+    """
+    echo "JACKPOT GCP Batch test: processing ${x} on \$(hostname)"
+    echo "Weblog URL: ${params.jackpot_weblog_url}"
+    curl -s -o /dev/null -w "%{http_code}" -X POST "${params.jackpot_weblog_url}" \
+        -H "Content-Type: application/json" \
+        -d '{"event": "process_completed", "runName": "test_run"}'
+    """
+}
+
+workflow {
+    Channel.of('Alpha', 'Beta', 'Gamma') | verifyBatchNode | view
+}
+```
+
+Run with:
+```bash
+nextflow run scripts/test_batch.nf \
+    -c jackpot_run.config \
+    -weblog http://localhost:8000/api/v1/pipelines/events
+```
+
+---
+
+## Critical Rules (continued)
+
+**25. Every pipeline run gets an isolated GCS work directory.**
+Format: `gs://jackpot-work/{run_id}/work/`. Never share workDir between runs.
+The run_id is always passed as a Nextflow parameter by the launch endpoint.
+Stored in `pipeline_runs.work_dir` for `-resume` support.
+
+**26. The Nextflow config is always generated per-run by the launch endpoint.**
+Never use a static `nextflow.config` for JACKPOT pipeline runs. The launch
+endpoint templates the config with run_id, API URL, weblog URL, result URL,
+and pipeline token. Written to a temp file and passed via `-c jackpot_run.config`.
+
+**27. `resourceLabels` must be included in every generated Nextflow config.**
+Labels `jackpot_run_id`, `jackpot_lab`, `jackpot_pipeline` are required for
+GCP Billing cost attribution and the JACKPOT billing dashboard. Never omit.
+
+**28. Minikube is for JupyterHub only. Docker Compose is the primary dev environment.**
+Do not run jackpot-backend, postgres, or minio in minikube. JupyterHub pods
+reach the Docker Compose API via `minikube tunnel`. This separation mirrors
+the production topology where JupyterHub and the API are separate services.
+
+**29. On Apple Silicon, use `PIPELINE_EXECUTOR=gcp_batch` for pipeline testing.**
+Many bioinformatics containers are x86-only. GCP Batch VMs are x86 by
+default, avoiding ARM compatibility issues. Spot instances make this cheap
+for short test runs. Only use `PIPELINE_EXECUTOR=local` for pipelines
+verified to have ARM-compatible containers.
