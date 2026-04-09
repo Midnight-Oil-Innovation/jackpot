@@ -137,6 +137,26 @@ Every router in `backend/routers/` starts as a 5-line stub returning
 entire file. After implementing, add the router import and
 `app.include_router()` call to `backend/main.py`.
 
+**16. `surveillance_relevant` is always computed by `compute_surveillance_relevant()` in `validator.py`**
+Never set directly by ingest endpoints without going through the validator.
+
+**17. `quality_status` is always set by `compute_quality_status()` — never hardcoded in routers.**
+
+**18. `scrub_status = 'SKIPPED'` is only set automatically by the validator (FASTA-only) or by the scrub override approval workflow.**
+Ingest endpoints must not set it directly.
+
+**19. One CSV row = one sample.**
+Files are associated via `file_detector.py` pairing logic, never by requiring per-file rows from the user.
+
+**20. `gen-pydantic` always requires two steps after running**
+(1) Use the `--pydantic-version 2` flag:
+    `uv run gen-pydantic --pydantic-version 2 schema/schema/jackpot_schema.yaml > backend/models_generated.py`
+(2) Apply the boolean keyword patch immediately after:
+    Replace `True = "True"` with `true = "True"` and
+    `False = "False"` with `false = "False"` in the generated file.
+Never run gen-pydantic without the --pydantic-version 2 flag or the patch step.
+`models_generated.py` is excluded from ruff linting (generated code — never edit manually). Always regenerate, never hand-edit.
+
 ---
 
 ## Local Dev Role Switching
