@@ -1690,3 +1690,162 @@ When the signal arrives: build React + shadcn/ui + TanStack Query in
 admin/power users, React for the polished researcher-facing UI. Retire
 Streamlit when React covers all the same ground. The FastAPI backend
 requires zero changes — it is already frontend-agnostic.
+
+---
+
+## LLM Support Assistant Architecture
+
+JACKPOT includes a context-aware LLM support assistant for site orientation,
+how-to guidance, and support topics. This section documents the architecture,
+implementation pattern, and constraints that all assistant-related code must
+follow.
+
+### Core pattern: RAG, not fine-tuning
+
+The assistant uses Retrieval-Augmented Generation (RAG). The LLM is never
+fine-tuned on JACKPOT data — documentation is the retrieval source, not
+baked into model weights. This means the assistant stays current as
+documentation changes without retraining, and answers are grounded in
+authoritative sources rather than model hallucination.
+
+### Two implementation levels
+
+**Level 1 — Documentation RAG (Year 2, early)**
+Covers orientation and how-to questions. Static knowledge base of chunked
+JACKPOT documentation stored in a vector database. No access to live data.
+
+```
+User question
+  ↓
+Embed query → retrieve top-k chunks from docs vector DB
+  ↓
+LLM prompt: system context + retrieved chunks + user question
+  ↓
+Grounded response with source citations
+```
+
+**Level 2 — Tool-augmented RAG (Year 2, later)**
+Covers data-specific support questions ("why is my sample stuck?").
+The LLM is given access to a curated set of read-only JACKPOT API
+endpoints as tools. Requires the same access control as the API —
+the assistant can only call endpoints the logged-in user is authorized
+to call. Never give the assistant write access.
+
+```
+User: "Why is sample AZ-2026-001 stuck?"
+  ↓
+LLM decides: data question → call sample lookup tool
+  ↓
+Tool call: GET /api/v1/samples/AZ-2026-001 (as the logged-in user)
+  ↓
+Response grounded in live data, not guesswork
+```
+
+### Chat API endpoint
+
+```
+POST /api/v1/assistant/chat
+{
+  "message": "How do I request a scrub skip?",
+  "context": {
+    "current_page": "/projects/42/samples",
+    "user_role": "Lab Collaborator",
+    "lab_id": 7
+  }
+}
+```
+
+The `context` block is injected by the frontend automatically — the user
+never fills it in. It allows the assistant to give role-appropriate answers.
+A Lab Director asking "how do I approve a scrub skip?" gets a different
+answer than a Lab Collaborator asking the same question.
+
+### Knowledge base (RAG source documents)
+
+Start with existing markdown documentation. Chunk, embed, and store in
+the vector database whenever docs are updated (Cloud Scheduler job or
+triggered on doc deployment):
+
+- JACKPOT user guide (to be written, Month 1-2)
+- Pipeline descriptions and parameter guides
+- Metadata tier explanations and DataHarmonizer template docs
+- Governance policy summaries (scrub skip, access requests, deletion)
+- Role and permission descriptions
+- FAQ
+
+CLAUDE.md is a developer guide — do not include it in the user-facing
+knowledge base.
+
+### Model choice
+
+**Default: Anthropic API (claude-haiku-4-5)**
+Cheapest, fastest, sufficient for documentation Q&A. No new vendor
+relationship — uses the same Anthropic API as the rest of the platform.
+env var: ASSISTANT_MODEL=claude-haiku-4-5
+
+**Alternative: Local model via Ollama (if data sensitivity required)**
+If users are likely to paste sample IDs or clinical details into the chat,
+a local model that never sends data to a third-party API is worth
+considering. Llama 3.1 8B or Mistral 7B on a GKE GPU node. Set
+ASSISTANT_BACKEND=ollama, OLLAMA_ENDPOINT=http://ollama-service:11434.
+
+### Hallucination controls — mandatory
+
+These constraints must be in every system prompt for the assistant:
+
+1. **Grounded responses only** — answer only from retrieved context, never
+   from general LLM knowledge about bioinformatics. If no relevant context
+   is found, say "I don't have documentation on that — please contact
+   support or check the user guide."
+
+2. **Source citations** — every answer must cite which document section
+   it came from. Enables users to verify answers and helps identify docs
+   that need improvement.
+
+3. **Explicit capability boundary** — the assistant answers questions about
+   JACKPOT features and workflows only. It does not answer clinical
+   interpretation questions, give advice about specific pathogens, comment
+   on surveillance findings, or interpret pipeline results clinically.
+
+4. **Role-scoped tool access** — in Level 2, the assistant inherits the
+   logged-in user's permissions. It cannot retrieve data the user cannot
+   see. Tool calls are authenticated with the user's session token, not
+   a privileged service account.
+
+### UI placement
+
+Slide-out help panel accessible from every page via a "Help" button in
+the navigation bar. Opens without leaving the current page. In Streamlit:
+custom sidebar component or `st.expander`. In React: standard side drawer.
+Never a full-page navigation — the assistant is a support tool, not a
+primary feature.
+
+### New environment variables
+
+| Variable | Default | Description |
+|---|---|---|
+| `ASSISTANT_ENABLED` | `false` | Feature flag — disabled until Year 2 |
+| `ASSISTANT_BACKEND` | `anthropic` | `anthropic` or `ollama` |
+| `ASSISTANT_MODEL` | `claude-haiku-4-5` | Model name |
+| `OLLAMA_ENDPOINT` | not set | Ollama service URL if backend=ollama |
+| `ASSISTANT_VECTOR_DB` | `pgvector` | Vector store: `pgvector` or `chroma` |
+| `ASSISTANT_MAX_CHUNKS` | `5` | Max retrieved chunks per query |
+| `ASSISTANT_CACHE_TTL` | `3600` | Response cache TTL in seconds |
+
+### Vector database choice
+
+**pgvector (default)** — PostgreSQL extension for vector similarity search.
+Runs in the existing Cloud SQL instance. No new infrastructure needed for
+Level 1. Add the `pgvector` extension via Alembic migration when the
+assistant is implemented.
+
+**Chroma or Weaviate** — dedicated vector databases with richer retrieval
+features. Overkill for a documentation-only knowledge base at JACKPOT's
+scale. Consider if the knowledge base grows beyond ~1,000 documents.
+
+### Real-world precedent
+
+The PRIDE database at EBI built a directly comparable chatbot for their
+proteomics data repository — same use case (documentation Q&A + dataset
+search), same RAG architecture, published in Proteomics (2024).
+Reference: https://www.ebi.ac.uk/pride/chatbot/
