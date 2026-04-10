@@ -24,7 +24,7 @@ htmlcov/
 .mypy_cache/
 
 # Secrets baseline
-.secrets.baseline
+#.secrets.baseline
 
 # Local config (never commit real credentials)
 # ~/.jackpot/config.toml is in the user's home dir, not this repo
