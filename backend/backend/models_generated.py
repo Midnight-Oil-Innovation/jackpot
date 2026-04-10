@@ -14,7 +14,7 @@ else:
 
 
 metamodel_version = "None"
-version = "4.3"
+version = "4.4"
 
 class ConfiguredBaseModel(BaseModel):
     model_config = ConfigDict(
@@ -374,8 +374,10 @@ class SharingLevelEnum(str, Enum):
     PRIVATE = "PRIVATE"
     # All members of the owning Lab
     LAB = "LAB"
-    # Metadata visible to all; files require access request
+    # Metadata visible to all authenticated users; files require an access request
     DISCOVERABLE = "DISCOVERABLE"
+    # Data available to any researcher who registers and agrees to the data use agreement (DUA). More open than DISCOVERABLE (no per-request approval), more controlled than PUBLIC (requires identity verification and DUA acceptance). Compatible with GA4GH Passport-controlled access. Appropriate for: multi-institution data sharing agreements, CDC/WHO federated surveillance networks, international genomics consortia. Access gate: authenticated user + accepted DUA. No Lab Director approval required per-request, but terms must be accepted once.
+    REGISTERED_ACCESS = "REGISTERED_ACCESS"
     # Metadata and files open to all authenticated users
     PUBLIC = "PUBLIC"
 
@@ -922,7 +924,127 @@ class ReadDirectionEnum(str, Enum):
 
     R1 = "R1"
     # Reverse read. Detected from: _R2, _2, _reads_2, _reverse naming conventions (case-insensitive).
+
     R2 = "R2"
+
+
+
+class AgeRangeEnum(str, Enum):
+    """
+    Age expressed as a decade bracket for privacy-preserving surveillance reporting. Populated automatically from host_age at ingest. Standard CDC/NNDSS/ArboNET age grouping.
+    """
+    # Infant — less than 12 months
+    LESS_THAN_SIGN_1_year = "< 1 year"
+    # Toddler/preschool
+    number_1_4_years = "1-4 years"
+    # School age
+    number_5_14_years = "5-14 years"
+    # Young adult
+    number_15_24_years = "15-24 years"
+
+    number_25_34_years = "25-34 years"
+
+    number_35_44_years = "35-44 years"
+
+    number_45_54_years = "45-54 years"
+
+    number_55_64_years = "55-64 years"
+
+    number_65_74_years = "65-74 years"
+
+    number_75_84_years = "75-84 years"
+    # Oldest old — highest risk for many pathogens
+    number_85PLUS_SIGN_years = "85+ years"
+
+    unknown = "unknown"
+
+
+
+class CollectionMethodEnum(str, Enum):
+    """
+    Method used to collect the biological specimen. Standard PHA4GE and NCBI BioSample field. Required for Tier 2 and above.
+    """
+    # NP swab — gold standard for respiratory pathogens
+    nasopharyngeal_swab = "nasopharyngeal_swab"
+    # Anterior nares / mid-turbinate swab
+    nasal_swab = "nasal_swab"
+    # Throat swab
+    oropharyngeal_swab = "oropharyngeal_swab"
+    # Saliva collection — lower sensitivity than NP for some pathogens
+    saliva = "saliva"
+    # BAL fluid — lower respiratory tract
+    bronchoalveolar_lavage = "bronchoalveolar_lavage"
+    # Standard for TB and other lower respiratory pathogens
+    induced_sputum = "induced_sputum"
+    # Used for TB in children who cannot produce sputum
+    gastric_aspirate = "gastric_aspirate"
+    # Venipuncture blood draw
+    blood = "blood"
+    # Serum separated from whole blood
+    serum = "serum"
+    # Cerebrospinal fluid — lumbar puncture
+    csf = "csf"
+    # Urine culture or PCR
+    urine = "urine"
+    # Stool sample — GI pathogens, polio surveillance
+    stool = "stool"
+    # Alternative to stool for GI pathogens
+    rectal_swab = "rectal_swab"
+    # Swab of lesion — mpox, herpes, other dermotropic pathogens
+    skin_lesion_swab = "skin_lesion_swab"
+    # Fluid from skin vesicle — mpox, varicella
+    vesicle_fluid = "vesicle_fluid"
+    # Wound or abscess swab
+    wound_swab = "wound_swab"
+    # Tissue biopsy — post-mortem or surgical
+    tissue_biopsy = "tissue_biopsy"
+    # Non-clinical environmental surface swab
+    environmental_swab = "environmental_swab"
+    # Collection method not listed — describe in comments
+    other = "other"
+
+
+
+class PangoQCStatusEnum(str, Enum):
+    """
+    Pangolin lineage assignment QC status. Surveillance decisions should not be made on 'fail' or 'ambiguous' calls without manual review.
+    """
+    # High confidence lineage assignment
+    pass_qc = "pass_qc"
+    # Low confidence — do not use for surveillance without review
+    fail_qc = "fail"
+    # Multiple equally valid lineage calls — pango_conflict > 0
+    ambiguous = "ambiguous"
+    # Pangolin not yet run or not applicable (non-SARS-CoV-2)
+    not_run = "not_run"
+
+
+
+class MLSTConfidenceEnum(str, Enum):
+    """
+    Confidence level of the MLST sequence type assignment. Distinguishes confident surveillance-grade calls from uncertain ones.
+    """
+    # All alleles matched exactly — high confidence ST call
+    perfect = "perfect"
+    # All alleles matched but one or more may be novel alleles
+    good = "good"
+    # One or more alleles missing or novel — uncertain ST
+    low = "low"
+    # Insufficient data for MLST — not applicable or failed
+    unknown = "unknown"
+
+
+
+class OutbreakStatusEnum(str, Enum):
+
+    # Investigation ongoing — new cases still being identified
+    active = "active"
+    # No new cases for ≥2 incubation periods — pending formal closure
+    contained = "contained"
+    # Formally closed — investigation_close_date populated
+    closed = "closed"
+    # Cluster resolved; enhanced surveillance continues
+    surveillance_only = "surveillance_only"
 
 
 
@@ -1063,6 +1185,8 @@ class Sample(ConfiguredBaseModel):
     genome_completeness: Optional[float] = Field(None, description="""Percentage of reference genome covered (0–100)""")
     pango_lineage: Optional[str] = Field(None, description="""Pangolin lineage designation, e.g. JN.1, BA.2.86""")
     pango_lineage_version: Optional[str] = Field(None, description="""Pangolin software version used for assignment""")
+    pango_qc_status: Optional[PangoQCStatusEnum] = Field(None, description="""Pangolin QC status for the lineage call. A 'fail' or 'ambiguous' status means the lineage designation is uncertain and should not drive surveillance decisions without manual review. WHO and CDC both require confidence indicators in genomic surveillance reporting. Populated automatically from Pangolin output at pipeline completion.""")
+    pango_conflict: Optional[float] = Field(None, description="""Pangolin conflict score (0.0–1.0). Values >0.0 indicate ambiguity between two or more lineage calls. High conflict (>0.5) indicates the assignment is unreliable. Stored for downstream filtering — surveillance dashboards should suppress or flag high-conflict calls.""")
     nextstrain_clade: Optional[str] = Field(None, description="""Nextstrain clade designation, e.g. 24A""")
     nextclade_qc_score: Optional[float] = Field(None, description="""Nextclade QC score (0–100; higher is better quality)""")
     nextclade_version: Optional[str] = Field(None, description="""Nextclade software version""")
@@ -1070,6 +1194,7 @@ class Sample(ConfiguredBaseModel):
     vadr_alerts: Optional[List[str]] = Field(default_factory=list, description="""VADR alert codes, e.g. CDS_HAS_STOP_CODON""")
     mlst_scheme: Optional[str] = Field(None, description="""MLST scheme, e.g. 'senterica', 'campylobacter'""")
     mlst_sequence_type: Optional[str] = Field(None, description="""MLST sequence type, e.g. ST131""")
+    mlst_confidence: Optional[MLSTConfidenceEnum] = Field(None, description="""Confidence level of the MLST sequence type assignment. Perfect = all alleles matched exactly. Good = all alleles matched but some may be novel. Low = one or more alleles missing or novel. Unknown = insufficient data. Surveillance reports should distinguish confident from uncertain ST assignments — a novel allele can indicate a genuinely new strain or a sequencing artefact.""")
     amrfinder_genes: Optional[List[str]] = Field(default_factory=list, description="""AMR genes detected by NCBI AMRFinder""")
     card_aro_terms: Optional[List[str]] = Field(default_factory=list, description="""CARD Antibiotic Resistance Ontology terms detected""")
     loinc_code: Optional[str] = Field(None, description="""LOINC code for the lab test performed. e.g. 94500-6 (SARS-CoV-2 RNA, PCR, NP swab)
@@ -1129,6 +1254,11 @@ class HumanSample(Sample):
 """)
     underlying_conditions: Optional[List[str]] = Field(default_factory=list, description="""Relevant comorbidities, e.g. diabetes, immunocompromised, chronic lung disease, obesity.
 """)
+    date_of_symptom_onset: Optional[date] = Field(None, description="""Date the patient first experienced symptoms of the disease. Standard field on WHO case investigation forms, NNDSS reports, and ArboNET surveillance. Distinct from date_collected (when the sample was taken). The lag between these dates drives incubation period estimates and time-to-detection metrics. ISO 8601 format. Optional — not all cases are symptomatic (asymptomatic cases may have no onset date).""")
+    travel_history_country: Optional[List[str]] = Field(default_factory=list, description="""Countries visited by the patient in the 14 days before symptom onset or sample collection (whichever is earlier). NCBI BioSample standard field. WHO situation reports routinely distinguish travel-linked from locally-acquired cases for internationally relevant pathogens (MPOX, Ebola, cholera, H5N1, MERS-CoV). Free text — INSDC country names preferred but not enforced here. Multiple values permitted (multiple countries in travel history).""")
+    travel_history_days: Optional[int] = Field(None, description="""Days since return from travel when sample was collected. Used alongside travel_history_country to calculate exposure window. Integer. Optional — only populated when travel_history_country is provided.""")
+    host_age_range: Optional[AgeRangeEnum] = Field(None, description="""Age of the human host expressed as a decade bracket for privacy-preserving public surveillance reporting. NNDSS, ArboNET, and CDC public surveillance datasets use age brackets rather than exact ages. host_age (exact integer) is retained for internal analysis; host_age_range is the shareable tier. Populated automatically from host_age at ingest. Reviewers and external users see age range; Lab Directors and above see both.""")
+    collection_method: Optional[CollectionMethodEnum] = Field(None, description="""Method used to collect the specimen. Different collection methods for the same biospecimen type have different sensitivity profiles (e.g. nasopharyngeal swab vs. saliva vs. mid-turbinate swab for SARS-CoV-2; induced sputum vs. BAL fluid vs. gastric aspirate for TB). Standard PHA4GE and NCBI BioSample field. Required for Tier 2 (ANALYZABLE) and above. Maps to NCBI collection_method attribute.""")
     sample_id: str = Field(..., description="""Unique alphanumeric identifier for this sample. Must not already be in use in the system. APGAP: 'Sample ID'. Validation: alphanumeric, unique. Portal mints persistent URI at ingest: https://data.jackpot.health/samples/{sample_id}
 """)
     jackpot_uri: Optional[str] = Field(None, description="""Persistent URI minted at ingest for FAIR Findability (F1). Format: https://data.jackpot.health/samples/{sample_id} Stable before NCBI/GISAID accessions are assigned.
@@ -1230,6 +1360,8 @@ class HumanSample(Sample):
     genome_completeness: Optional[float] = Field(None, description="""Percentage of reference genome covered (0–100)""")
     pango_lineage: Optional[str] = Field(None, description="""Pangolin lineage designation, e.g. JN.1, BA.2.86""")
     pango_lineage_version: Optional[str] = Field(None, description="""Pangolin software version used for assignment""")
+    pango_qc_status: Optional[PangoQCStatusEnum] = Field(None, description="""Pangolin QC status for the lineage call. A 'fail' or 'ambiguous' status means the lineage designation is uncertain and should not drive surveillance decisions without manual review. WHO and CDC both require confidence indicators in genomic surveillance reporting. Populated automatically from Pangolin output at pipeline completion.""")
+    pango_conflict: Optional[float] = Field(None, description="""Pangolin conflict score (0.0–1.0). Values >0.0 indicate ambiguity between two or more lineage calls. High conflict (>0.5) indicates the assignment is unreliable. Stored for downstream filtering — surveillance dashboards should suppress or flag high-conflict calls.""")
     nextstrain_clade: Optional[str] = Field(None, description="""Nextstrain clade designation, e.g. 24A""")
     nextclade_qc_score: Optional[float] = Field(None, description="""Nextclade QC score (0–100; higher is better quality)""")
     nextclade_version: Optional[str] = Field(None, description="""Nextclade software version""")
@@ -1237,6 +1369,7 @@ class HumanSample(Sample):
     vadr_alerts: Optional[List[str]] = Field(default_factory=list, description="""VADR alert codes, e.g. CDS_HAS_STOP_CODON""")
     mlst_scheme: Optional[str] = Field(None, description="""MLST scheme, e.g. 'senterica', 'campylobacter'""")
     mlst_sequence_type: Optional[str] = Field(None, description="""MLST sequence type, e.g. ST131""")
+    mlst_confidence: Optional[MLSTConfidenceEnum] = Field(None, description="""Confidence level of the MLST sequence type assignment. Perfect = all alleles matched exactly. Good = all alleles matched but some may be novel. Low = one or more alleles missing or novel. Unknown = insufficient data. Surveillance reports should distinguish confident from uncertain ST assignments — a novel allele can indicate a genuinely new strain or a sequencing artefact.""")
     amrfinder_genes: Optional[List[str]] = Field(default_factory=list, description="""AMR genes detected by NCBI AMRFinder""")
     card_aro_terms: Optional[List[str]] = Field(default_factory=list, description="""CARD Antibiotic Resistance Ontology terms detected""")
     loinc_code: Optional[str] = Field(None, description="""LOINC code for the lab test performed. e.g. 94500-6 (SARS-CoV-2 RNA, PCR, NP swab)
@@ -1280,6 +1413,7 @@ class WildlifeSample(Sample):
     host_disease: List[str] = Field(default_factory=list)
     isolation_source: Optional[str] = Field(None, description="""Auto-derived from host species + biospecimen type""")
     isolate: Optional[str] = Field(None)
+    travel_origin_region: Optional[str] = Field(None, description="""For migratory or translocated wildlife — the geographic region of origin or most recent stopover before the animal was sampled. Equivalent to travel_history for humans. Particularly relevant for migratory bird HPAI (H5N1) surveillance where flyway routes determine exposure risk. Free text. Examples: 'Atlantic Flyway', 'East Asia Pacific Flyway', 'Mongolia', 'Central Valley CA'.""")
     sample_id: str = Field(..., description="""Unique alphanumeric identifier for this sample. Must not already be in use in the system. APGAP: 'Sample ID'. Validation: alphanumeric, unique. Portal mints persistent URI at ingest: https://data.jackpot.health/samples/{sample_id}
 """)
     jackpot_uri: Optional[str] = Field(None, description="""Persistent URI minted at ingest for FAIR Findability (F1). Format: https://data.jackpot.health/samples/{sample_id} Stable before NCBI/GISAID accessions are assigned.
@@ -1379,6 +1513,8 @@ class WildlifeSample(Sample):
     genome_completeness: Optional[float] = Field(None, description="""Percentage of reference genome covered (0–100)""")
     pango_lineage: Optional[str] = Field(None, description="""Pangolin lineage designation, e.g. JN.1, BA.2.86""")
     pango_lineage_version: Optional[str] = Field(None, description="""Pangolin software version used for assignment""")
+    pango_qc_status: Optional[PangoQCStatusEnum] = Field(None, description="""Pangolin QC status for the lineage call. A 'fail' or 'ambiguous' status means the lineage designation is uncertain and should not drive surveillance decisions without manual review. WHO and CDC both require confidence indicators in genomic surveillance reporting. Populated automatically from Pangolin output at pipeline completion.""")
+    pango_conflict: Optional[float] = Field(None, description="""Pangolin conflict score (0.0–1.0). Values >0.0 indicate ambiguity between two or more lineage calls. High conflict (>0.5) indicates the assignment is unreliable. Stored for downstream filtering — surveillance dashboards should suppress or flag high-conflict calls.""")
     nextstrain_clade: Optional[str] = Field(None, description="""Nextstrain clade designation, e.g. 24A""")
     nextclade_qc_score: Optional[float] = Field(None, description="""Nextclade QC score (0–100; higher is better quality)""")
     nextclade_version: Optional[str] = Field(None, description="""Nextclade software version""")
@@ -1386,6 +1522,7 @@ class WildlifeSample(Sample):
     vadr_alerts: Optional[List[str]] = Field(default_factory=list, description="""VADR alert codes, e.g. CDS_HAS_STOP_CODON""")
     mlst_scheme: Optional[str] = Field(None, description="""MLST scheme, e.g. 'senterica', 'campylobacter'""")
     mlst_sequence_type: Optional[str] = Field(None, description="""MLST sequence type, e.g. ST131""")
+    mlst_confidence: Optional[MLSTConfidenceEnum] = Field(None, description="""Confidence level of the MLST sequence type assignment. Perfect = all alleles matched exactly. Good = all alleles matched but some may be novel. Low = one or more alleles missing or novel. Unknown = insufficient data. Surveillance reports should distinguish confident from uncertain ST assignments — a novel allele can indicate a genuinely new strain or a sequencing artefact.""")
     amrfinder_genes: Optional[List[str]] = Field(default_factory=list, description="""AMR genes detected by NCBI AMRFinder""")
     card_aro_terms: Optional[List[str]] = Field(default_factory=list, description="""CARD Antibiotic Resistance Ontology terms detected""")
     loinc_code: Optional[str] = Field(None, description="""LOINC code for the lab test performed. e.g. 94500-6 (SARS-CoV-2 RNA, PCR, NP swab)
@@ -1532,6 +1669,8 @@ class CompanionAnimalSample(Sample):
     genome_completeness: Optional[float] = Field(None, description="""Percentage of reference genome covered (0–100)""")
     pango_lineage: Optional[str] = Field(None, description="""Pangolin lineage designation, e.g. JN.1, BA.2.86""")
     pango_lineage_version: Optional[str] = Field(None, description="""Pangolin software version used for assignment""")
+    pango_qc_status: Optional[PangoQCStatusEnum] = Field(None, description="""Pangolin QC status for the lineage call. A 'fail' or 'ambiguous' status means the lineage designation is uncertain and should not drive surveillance decisions without manual review. WHO and CDC both require confidence indicators in genomic surveillance reporting. Populated automatically from Pangolin output at pipeline completion.""")
+    pango_conflict: Optional[float] = Field(None, description="""Pangolin conflict score (0.0–1.0). Values >0.0 indicate ambiguity between two or more lineage calls. High conflict (>0.5) indicates the assignment is unreliable. Stored for downstream filtering — surveillance dashboards should suppress or flag high-conflict calls.""")
     nextstrain_clade: Optional[str] = Field(None, description="""Nextstrain clade designation, e.g. 24A""")
     nextclade_qc_score: Optional[float] = Field(None, description="""Nextclade QC score (0–100; higher is better quality)""")
     nextclade_version: Optional[str] = Field(None, description="""Nextclade software version""")
@@ -1539,6 +1678,7 @@ class CompanionAnimalSample(Sample):
     vadr_alerts: Optional[List[str]] = Field(default_factory=list, description="""VADR alert codes, e.g. CDS_HAS_STOP_CODON""")
     mlst_scheme: Optional[str] = Field(None, description="""MLST scheme, e.g. 'senterica', 'campylobacter'""")
     mlst_sequence_type: Optional[str] = Field(None, description="""MLST sequence type, e.g. ST131""")
+    mlst_confidence: Optional[MLSTConfidenceEnum] = Field(None, description="""Confidence level of the MLST sequence type assignment. Perfect = all alleles matched exactly. Good = all alleles matched but some may be novel. Low = one or more alleles missing or novel. Unknown = insufficient data. Surveillance reports should distinguish confident from uncertain ST assignments — a novel allele can indicate a genuinely new strain or a sequencing artefact.""")
     amrfinder_genes: Optional[List[str]] = Field(default_factory=list, description="""AMR genes detected by NCBI AMRFinder""")
     card_aro_terms: Optional[List[str]] = Field(default_factory=list, description="""CARD Antibiotic Resistance Ontology terms detected""")
     loinc_code: Optional[str] = Field(None, description="""LOINC code for the lab test performed. e.g. 94500-6 (SARS-CoV-2 RNA, PCR, NP swab)
@@ -1685,6 +1825,8 @@ class LivestockSample(Sample):
     genome_completeness: Optional[float] = Field(None, description="""Percentage of reference genome covered (0–100)""")
     pango_lineage: Optional[str] = Field(None, description="""Pangolin lineage designation, e.g. JN.1, BA.2.86""")
     pango_lineage_version: Optional[str] = Field(None, description="""Pangolin software version used for assignment""")
+    pango_qc_status: Optional[PangoQCStatusEnum] = Field(None, description="""Pangolin QC status for the lineage call. A 'fail' or 'ambiguous' status means the lineage designation is uncertain and should not drive surveillance decisions without manual review. WHO and CDC both require confidence indicators in genomic surveillance reporting. Populated automatically from Pangolin output at pipeline completion.""")
+    pango_conflict: Optional[float] = Field(None, description="""Pangolin conflict score (0.0–1.0). Values >0.0 indicate ambiguity between two or more lineage calls. High conflict (>0.5) indicates the assignment is unreliable. Stored for downstream filtering — surveillance dashboards should suppress or flag high-conflict calls.""")
     nextstrain_clade: Optional[str] = Field(None, description="""Nextstrain clade designation, e.g. 24A""")
     nextclade_qc_score: Optional[float] = Field(None, description="""Nextclade QC score (0–100; higher is better quality)""")
     nextclade_version: Optional[str] = Field(None, description="""Nextclade software version""")
@@ -1692,6 +1834,7 @@ class LivestockSample(Sample):
     vadr_alerts: Optional[List[str]] = Field(default_factory=list, description="""VADR alert codes, e.g. CDS_HAS_STOP_CODON""")
     mlst_scheme: Optional[str] = Field(None, description="""MLST scheme, e.g. 'senterica', 'campylobacter'""")
     mlst_sequence_type: Optional[str] = Field(None, description="""MLST sequence type, e.g. ST131""")
+    mlst_confidence: Optional[MLSTConfidenceEnum] = Field(None, description="""Confidence level of the MLST sequence type assignment. Perfect = all alleles matched exactly. Good = all alleles matched but some may be novel. Low = one or more alleles missing or novel. Unknown = insufficient data. Surveillance reports should distinguish confident from uncertain ST assignments — a novel allele can indicate a genuinely new strain or a sequencing artefact.""")
     amrfinder_genes: Optional[List[str]] = Field(default_factory=list, description="""AMR genes detected by NCBI AMRFinder""")
     card_aro_terms: Optional[List[str]] = Field(default_factory=list, description="""CARD Antibiotic Resistance Ontology terms detected""")
     loinc_code: Optional[str] = Field(None, description="""LOINC code for the lab test performed. e.g. 94500-6 (SARS-CoV-2 RNA, PCR, NP swab)
@@ -1833,6 +1976,8 @@ class VectorSample(Sample):
     genome_completeness: Optional[float] = Field(None, description="""Percentage of reference genome covered (0–100)""")
     pango_lineage: Optional[str] = Field(None, description="""Pangolin lineage designation, e.g. JN.1, BA.2.86""")
     pango_lineage_version: Optional[str] = Field(None, description="""Pangolin software version used for assignment""")
+    pango_qc_status: Optional[PangoQCStatusEnum] = Field(None, description="""Pangolin QC status for the lineage call. A 'fail' or 'ambiguous' status means the lineage designation is uncertain and should not drive surveillance decisions without manual review. WHO and CDC both require confidence indicators in genomic surveillance reporting. Populated automatically from Pangolin output at pipeline completion.""")
+    pango_conflict: Optional[float] = Field(None, description="""Pangolin conflict score (0.0–1.0). Values >0.0 indicate ambiguity between two or more lineage calls. High conflict (>0.5) indicates the assignment is unreliable. Stored for downstream filtering — surveillance dashboards should suppress or flag high-conflict calls.""")
     nextstrain_clade: Optional[str] = Field(None, description="""Nextstrain clade designation, e.g. 24A""")
     nextclade_qc_score: Optional[float] = Field(None, description="""Nextclade QC score (0–100; higher is better quality)""")
     nextclade_version: Optional[str] = Field(None, description="""Nextclade software version""")
@@ -1840,6 +1985,7 @@ class VectorSample(Sample):
     vadr_alerts: Optional[List[str]] = Field(default_factory=list, description="""VADR alert codes, e.g. CDS_HAS_STOP_CODON""")
     mlst_scheme: Optional[str] = Field(None, description="""MLST scheme, e.g. 'senterica', 'campylobacter'""")
     mlst_sequence_type: Optional[str] = Field(None, description="""MLST sequence type, e.g. ST131""")
+    mlst_confidence: Optional[MLSTConfidenceEnum] = Field(None, description="""Confidence level of the MLST sequence type assignment. Perfect = all alleles matched exactly. Good = all alleles matched but some may be novel. Low = one or more alleles missing or novel. Unknown = insufficient data. Surveillance reports should distinguish confident from uncertain ST assignments — a novel allele can indicate a genuinely new strain or a sequencing artefact.""")
     amrfinder_genes: Optional[List[str]] = Field(default_factory=list, description="""AMR genes detected by NCBI AMRFinder""")
     card_aro_terms: Optional[List[str]] = Field(default_factory=list, description="""CARD Antibiotic Resistance Ontology terms detected""")
     loinc_code: Optional[str] = Field(None, description="""LOINC code for the lab test performed. e.g. 94500-6 (SARS-CoV-2 RNA, PCR, NP swab)
@@ -1977,6 +2123,8 @@ class EnvironmentalSample(Sample):
     genome_completeness: Optional[float] = Field(None, description="""Percentage of reference genome covered (0–100)""")
     pango_lineage: Optional[str] = Field(None, description="""Pangolin lineage designation, e.g. JN.1, BA.2.86""")
     pango_lineage_version: Optional[str] = Field(None, description="""Pangolin software version used for assignment""")
+    pango_qc_status: Optional[PangoQCStatusEnum] = Field(None, description="""Pangolin QC status for the lineage call. A 'fail' or 'ambiguous' status means the lineage designation is uncertain and should not drive surveillance decisions without manual review. WHO and CDC both require confidence indicators in genomic surveillance reporting. Populated automatically from Pangolin output at pipeline completion.""")
+    pango_conflict: Optional[float] = Field(None, description="""Pangolin conflict score (0.0–1.0). Values >0.0 indicate ambiguity between two or more lineage calls. High conflict (>0.5) indicates the assignment is unreliable. Stored for downstream filtering — surveillance dashboards should suppress or flag high-conflict calls.""")
     nextstrain_clade: Optional[str] = Field(None, description="""Nextstrain clade designation, e.g. 24A""")
     nextclade_qc_score: Optional[float] = Field(None, description="""Nextclade QC score (0–100; higher is better quality)""")
     nextclade_version: Optional[str] = Field(None, description="""Nextclade software version""")
@@ -1984,6 +2132,7 @@ class EnvironmentalSample(Sample):
     vadr_alerts: Optional[List[str]] = Field(default_factory=list, description="""VADR alert codes, e.g. CDS_HAS_STOP_CODON""")
     mlst_scheme: Optional[str] = Field(None, description="""MLST scheme, e.g. 'senterica', 'campylobacter'""")
     mlst_sequence_type: Optional[str] = Field(None, description="""MLST sequence type, e.g. ST131""")
+    mlst_confidence: Optional[MLSTConfidenceEnum] = Field(None, description="""Confidence level of the MLST sequence type assignment. Perfect = all alleles matched exactly. Good = all alleles matched but some may be novel. Low = one or more alleles missing or novel. Unknown = insufficient data. Surveillance reports should distinguish confident from uncertain ST assignments — a novel allele can indicate a genuinely new strain or a sequencing artefact.""")
     amrfinder_genes: Optional[List[str]] = Field(default_factory=list, description="""AMR genes detected by NCBI AMRFinder""")
     card_aro_terms: Optional[List[str]] = Field(default_factory=list, description="""CARD Antibiotic Resistance Ontology terms detected""")
     loinc_code: Optional[str] = Field(None, description="""LOINC code for the lab test performed. e.g. 94500-6 (SARS-CoV-2 RNA, PCR, NP swab)
@@ -2022,6 +2171,7 @@ class WastewaterSample(EnvironmentalSample):
     """
     wwtp_name: Optional[str] = Field(None, description="""APGAP: 'Location (sample_location_specify)'. NWSS: sample_location. Wastewater facility name or upstream sewer location. Examples: 'South Tempe Water Reclamation Facility', 'undisclosed sewer line upstream of 5th Ave'.
 """)
+    nwss_sewershed_id: Optional[str] = Field(None, description="""CDC NWSS-assigned identifier for this wastewater sampling site. Links JACKPOT wastewater data to CDC's authoritative sewershed geometry layer (catchment area polygon, population denominator, WWTP capacity). Enables unambiguous matching when JACKPOT data is reported to CDC NWSS. Format: integer or NWSS site code. Reference: https://www.cdc.gov/nwss/reporting.html Optional — not all sites are registered in NWSS at time of sample collection, but should be populated at Tier 2 and above.""")
     sample_location_zipcode: Optional[str] = Field(None, description="""US ZIP code of wastewater sampling location (5-digit)""")
     county_names: Optional[List[str]] = Field(default_factory=list, description="""APGAP: 'Service area (county_names)'. NWSS: county_names. Counties served by this sampling site, by name or FIPS code. System cross-maps name ↔ FIPS. Multiple entries permitted. Examples: 'Maricopa County', '04013', 'Coconino'.
 """)
@@ -2154,6 +2304,8 @@ class WastewaterSample(EnvironmentalSample):
     genome_completeness: Optional[float] = Field(None, description="""Percentage of reference genome covered (0–100)""")
     pango_lineage: Optional[str] = Field(None, description="""Pangolin lineage designation, e.g. JN.1, BA.2.86""")
     pango_lineage_version: Optional[str] = Field(None, description="""Pangolin software version used for assignment""")
+    pango_qc_status: Optional[PangoQCStatusEnum] = Field(None, description="""Pangolin QC status for the lineage call. A 'fail' or 'ambiguous' status means the lineage designation is uncertain and should not drive surveillance decisions without manual review. WHO and CDC both require confidence indicators in genomic surveillance reporting. Populated automatically from Pangolin output at pipeline completion.""")
+    pango_conflict: Optional[float] = Field(None, description="""Pangolin conflict score (0.0–1.0). Values >0.0 indicate ambiguity between two or more lineage calls. High conflict (>0.5) indicates the assignment is unreliable. Stored for downstream filtering — surveillance dashboards should suppress or flag high-conflict calls.""")
     nextstrain_clade: Optional[str] = Field(None, description="""Nextstrain clade designation, e.g. 24A""")
     nextclade_qc_score: Optional[float] = Field(None, description="""Nextclade QC score (0–100; higher is better quality)""")
     nextclade_version: Optional[str] = Field(None, description="""Nextclade software version""")
@@ -2161,6 +2313,7 @@ class WastewaterSample(EnvironmentalSample):
     vadr_alerts: Optional[List[str]] = Field(default_factory=list, description="""VADR alert codes, e.g. CDS_HAS_STOP_CODON""")
     mlst_scheme: Optional[str] = Field(None, description="""MLST scheme, e.g. 'senterica', 'campylobacter'""")
     mlst_sequence_type: Optional[str] = Field(None, description="""MLST sequence type, e.g. ST131""")
+    mlst_confidence: Optional[MLSTConfidenceEnum] = Field(None, description="""Confidence level of the MLST sequence type assignment. Perfect = all alleles matched exactly. Good = all alleles matched but some may be novel. Low = one or more alleles missing or novel. Unknown = insufficient data. Surveillance reports should distinguish confident from uncertain ST assignments — a novel allele can indicate a genuinely new strain or a sequencing artefact.""")
     amrfinder_genes: Optional[List[str]] = Field(default_factory=list, description="""AMR genes detected by NCBI AMRFinder""")
     card_aro_terms: Optional[List[str]] = Field(default_factory=list, description="""CARD Antibiotic Resistance Ontology terms detected""")
     loinc_code: Optional[str] = Field(None, description="""LOINC code for the lab test performed. e.g. 94500-6 (SARS-CoV-2 RNA, PCR, NP swab)
@@ -2308,6 +2461,8 @@ class WaterSample(EnvironmentalSample):
     genome_completeness: Optional[float] = Field(None, description="""Percentage of reference genome covered (0–100)""")
     pango_lineage: Optional[str] = Field(None, description="""Pangolin lineage designation, e.g. JN.1, BA.2.86""")
     pango_lineage_version: Optional[str] = Field(None, description="""Pangolin software version used for assignment""")
+    pango_qc_status: Optional[PangoQCStatusEnum] = Field(None, description="""Pangolin QC status for the lineage call. A 'fail' or 'ambiguous' status means the lineage designation is uncertain and should not drive surveillance decisions without manual review. WHO and CDC both require confidence indicators in genomic surveillance reporting. Populated automatically from Pangolin output at pipeline completion.""")
+    pango_conflict: Optional[float] = Field(None, description="""Pangolin conflict score (0.0–1.0). Values >0.0 indicate ambiguity between two or more lineage calls. High conflict (>0.5) indicates the assignment is unreliable. Stored for downstream filtering — surveillance dashboards should suppress or flag high-conflict calls.""")
     nextstrain_clade: Optional[str] = Field(None, description="""Nextstrain clade designation, e.g. 24A""")
     nextclade_qc_score: Optional[float] = Field(None, description="""Nextclade QC score (0–100; higher is better quality)""")
     nextclade_version: Optional[str] = Field(None, description="""Nextclade software version""")
@@ -2315,6 +2470,7 @@ class WaterSample(EnvironmentalSample):
     vadr_alerts: Optional[List[str]] = Field(default_factory=list, description="""VADR alert codes, e.g. CDS_HAS_STOP_CODON""")
     mlst_scheme: Optional[str] = Field(None, description="""MLST scheme, e.g. 'senterica', 'campylobacter'""")
     mlst_sequence_type: Optional[str] = Field(None, description="""MLST sequence type, e.g. ST131""")
+    mlst_confidence: Optional[MLSTConfidenceEnum] = Field(None, description="""Confidence level of the MLST sequence type assignment. Perfect = all alleles matched exactly. Good = all alleles matched but some may be novel. Low = one or more alleles missing or novel. Unknown = insufficient data. Surveillance reports should distinguish confident from uncertain ST assignments — a novel allele can indicate a genuinely new strain or a sequencing artefact.""")
     amrfinder_genes: Optional[List[str]] = Field(default_factory=list, description="""AMR genes detected by NCBI AMRFinder""")
     card_aro_terms: Optional[List[str]] = Field(default_factory=list, description="""CARD Antibiotic Resistance Ontology terms detected""")
     loinc_code: Optional[str] = Field(None, description="""LOINC code for the lab test performed. e.g. 94500-6 (SARS-CoV-2 RNA, PCR, NP swab)
@@ -2460,6 +2616,8 @@ class AirSample(EnvironmentalSample):
     genome_completeness: Optional[float] = Field(None, description="""Percentage of reference genome covered (0–100)""")
     pango_lineage: Optional[str] = Field(None, description="""Pangolin lineage designation, e.g. JN.1, BA.2.86""")
     pango_lineage_version: Optional[str] = Field(None, description="""Pangolin software version used for assignment""")
+    pango_qc_status: Optional[PangoQCStatusEnum] = Field(None, description="""Pangolin QC status for the lineage call. A 'fail' or 'ambiguous' status means the lineage designation is uncertain and should not drive surveillance decisions without manual review. WHO and CDC both require confidence indicators in genomic surveillance reporting. Populated automatically from Pangolin output at pipeline completion.""")
+    pango_conflict: Optional[float] = Field(None, description="""Pangolin conflict score (0.0–1.0). Values >0.0 indicate ambiguity between two or more lineage calls. High conflict (>0.5) indicates the assignment is unreliable. Stored for downstream filtering — surveillance dashboards should suppress or flag high-conflict calls.""")
     nextstrain_clade: Optional[str] = Field(None, description="""Nextstrain clade designation, e.g. 24A""")
     nextclade_qc_score: Optional[float] = Field(None, description="""Nextclade QC score (0–100; higher is better quality)""")
     nextclade_version: Optional[str] = Field(None, description="""Nextclade software version""")
@@ -2467,6 +2625,7 @@ class AirSample(EnvironmentalSample):
     vadr_alerts: Optional[List[str]] = Field(default_factory=list, description="""VADR alert codes, e.g. CDS_HAS_STOP_CODON""")
     mlst_scheme: Optional[str] = Field(None, description="""MLST scheme, e.g. 'senterica', 'campylobacter'""")
     mlst_sequence_type: Optional[str] = Field(None, description="""MLST sequence type, e.g. ST131""")
+    mlst_confidence: Optional[MLSTConfidenceEnum] = Field(None, description="""Confidence level of the MLST sequence type assignment. Perfect = all alleles matched exactly. Good = all alleles matched but some may be novel. Low = one or more alleles missing or novel. Unknown = insufficient data. Surveillance reports should distinguish confident from uncertain ST assignments — a novel allele can indicate a genuinely new strain or a sequencing artefact.""")
     amrfinder_genes: Optional[List[str]] = Field(default_factory=list, description="""AMR genes detected by NCBI AMRFinder""")
     card_aro_terms: Optional[List[str]] = Field(default_factory=list, description="""CARD Antibiotic Resistance Ontology terms detected""")
     loinc_code: Optional[str] = Field(None, description="""LOINC code for the lab test performed. e.g. 94500-6 (SARS-CoV-2 RNA, PCR, NP swab)
@@ -2619,6 +2778,8 @@ class SoilSample(EnvironmentalSample):
     genome_completeness: Optional[float] = Field(None, description="""Percentage of reference genome covered (0–100)""")
     pango_lineage: Optional[str] = Field(None, description="""Pangolin lineage designation, e.g. JN.1, BA.2.86""")
     pango_lineage_version: Optional[str] = Field(None, description="""Pangolin software version used for assignment""")
+    pango_qc_status: Optional[PangoQCStatusEnum] = Field(None, description="""Pangolin QC status for the lineage call. A 'fail' or 'ambiguous' status means the lineage designation is uncertain and should not drive surveillance decisions without manual review. WHO and CDC both require confidence indicators in genomic surveillance reporting. Populated automatically from Pangolin output at pipeline completion.""")
+    pango_conflict: Optional[float] = Field(None, description="""Pangolin conflict score (0.0–1.0). Values >0.0 indicate ambiguity between two or more lineage calls. High conflict (>0.5) indicates the assignment is unreliable. Stored for downstream filtering — surveillance dashboards should suppress or flag high-conflict calls.""")
     nextstrain_clade: Optional[str] = Field(None, description="""Nextstrain clade designation, e.g. 24A""")
     nextclade_qc_score: Optional[float] = Field(None, description="""Nextclade QC score (0–100; higher is better quality)""")
     nextclade_version: Optional[str] = Field(None, description="""Nextclade software version""")
@@ -2626,6 +2787,7 @@ class SoilSample(EnvironmentalSample):
     vadr_alerts: Optional[List[str]] = Field(default_factory=list, description="""VADR alert codes, e.g. CDS_HAS_STOP_CODON""")
     mlst_scheme: Optional[str] = Field(None, description="""MLST scheme, e.g. 'senterica', 'campylobacter'""")
     mlst_sequence_type: Optional[str] = Field(None, description="""MLST sequence type, e.g. ST131""")
+    mlst_confidence: Optional[MLSTConfidenceEnum] = Field(None, description="""Confidence level of the MLST sequence type assignment. Perfect = all alleles matched exactly. Good = all alleles matched but some may be novel. Low = one or more alleles missing or novel. Unknown = insufficient data. Surveillance reports should distinguish confident from uncertain ST assignments — a novel allele can indicate a genuinely new strain or a sequencing artefact.""")
     amrfinder_genes: Optional[List[str]] = Field(default_factory=list, description="""AMR genes detected by NCBI AMRFinder""")
     card_aro_terms: Optional[List[str]] = Field(default_factory=list, description="""CARD Antibiotic Resistance Ontology terms detected""")
     loinc_code: Optional[str] = Field(None, description="""LOINC code for the lab test performed. e.g. 94500-6 (SARS-CoV-2 RNA, PCR, NP swab)
@@ -2788,6 +2950,8 @@ class SurfaceSample(EnvironmentalSample):
     genome_completeness: Optional[float] = Field(None, description="""Percentage of reference genome covered (0–100)""")
     pango_lineage: Optional[str] = Field(None, description="""Pangolin lineage designation, e.g. JN.1, BA.2.86""")
     pango_lineage_version: Optional[str] = Field(None, description="""Pangolin software version used for assignment""")
+    pango_qc_status: Optional[PangoQCStatusEnum] = Field(None, description="""Pangolin QC status for the lineage call. A 'fail' or 'ambiguous' status means the lineage designation is uncertain and should not drive surveillance decisions without manual review. WHO and CDC both require confidence indicators in genomic surveillance reporting. Populated automatically from Pangolin output at pipeline completion.""")
+    pango_conflict: Optional[float] = Field(None, description="""Pangolin conflict score (0.0–1.0). Values >0.0 indicate ambiguity between two or more lineage calls. High conflict (>0.5) indicates the assignment is unreliable. Stored for downstream filtering — surveillance dashboards should suppress or flag high-conflict calls.""")
     nextstrain_clade: Optional[str] = Field(None, description="""Nextstrain clade designation, e.g. 24A""")
     nextclade_qc_score: Optional[float] = Field(None, description="""Nextclade QC score (0–100; higher is better quality)""")
     nextclade_version: Optional[str] = Field(None, description="""Nextclade software version""")
@@ -2795,6 +2959,7 @@ class SurfaceSample(EnvironmentalSample):
     vadr_alerts: Optional[List[str]] = Field(default_factory=list, description="""VADR alert codes, e.g. CDS_HAS_STOP_CODON""")
     mlst_scheme: Optional[str] = Field(None, description="""MLST scheme, e.g. 'senterica', 'campylobacter'""")
     mlst_sequence_type: Optional[str] = Field(None, description="""MLST sequence type, e.g. ST131""")
+    mlst_confidence: Optional[MLSTConfidenceEnum] = Field(None, description="""Confidence level of the MLST sequence type assignment. Perfect = all alleles matched exactly. Good = all alleles matched but some may be novel. Low = one or more alleles missing or novel. Unknown = insufficient data. Surveillance reports should distinguish confident from uncertain ST assignments — a novel allele can indicate a genuinely new strain or a sequencing artefact.""")
     amrfinder_genes: Optional[List[str]] = Field(default_factory=list, description="""AMR genes detected by NCBI AMRFinder""")
     card_aro_terms: Optional[List[str]] = Field(default_factory=list, description="""CARD Antibiotic Resistance Ontology terms detected""")
     loinc_code: Optional[str] = Field(None, description="""LOINC code for the lab test performed. e.g. 94500-6 (SARS-CoV-2 RNA, PCR, NP swab)
@@ -2941,6 +3106,8 @@ class FoodSample(EnvironmentalSample):
     genome_completeness: Optional[float] = Field(None, description="""Percentage of reference genome covered (0–100)""")
     pango_lineage: Optional[str] = Field(None, description="""Pangolin lineage designation, e.g. JN.1, BA.2.86""")
     pango_lineage_version: Optional[str] = Field(None, description="""Pangolin software version used for assignment""")
+    pango_qc_status: Optional[PangoQCStatusEnum] = Field(None, description="""Pangolin QC status for the lineage call. A 'fail' or 'ambiguous' status means the lineage designation is uncertain and should not drive surveillance decisions without manual review. WHO and CDC both require confidence indicators in genomic surveillance reporting. Populated automatically from Pangolin output at pipeline completion.""")
+    pango_conflict: Optional[float] = Field(None, description="""Pangolin conflict score (0.0–1.0). Values >0.0 indicate ambiguity between two or more lineage calls. High conflict (>0.5) indicates the assignment is unreliable. Stored for downstream filtering — surveillance dashboards should suppress or flag high-conflict calls.""")
     nextstrain_clade: Optional[str] = Field(None, description="""Nextstrain clade designation, e.g. 24A""")
     nextclade_qc_score: Optional[float] = Field(None, description="""Nextclade QC score (0–100; higher is better quality)""")
     nextclade_version: Optional[str] = Field(None, description="""Nextclade software version""")
@@ -2948,6 +3115,7 @@ class FoodSample(EnvironmentalSample):
     vadr_alerts: Optional[List[str]] = Field(default_factory=list, description="""VADR alert codes, e.g. CDS_HAS_STOP_CODON""")
     mlst_scheme: Optional[str] = Field(None, description="""MLST scheme, e.g. 'senterica', 'campylobacter'""")
     mlst_sequence_type: Optional[str] = Field(None, description="""MLST sequence type, e.g. ST131""")
+    mlst_confidence: Optional[MLSTConfidenceEnum] = Field(None, description="""Confidence level of the MLST sequence type assignment. Perfect = all alleles matched exactly. Good = all alleles matched but some may be novel. Low = one or more alleles missing or novel. Unknown = insufficient data. Surveillance reports should distinguish confident from uncertain ST assignments — a novel allele can indicate a genuinely new strain or a sequencing artefact.""")
     amrfinder_genes: Optional[List[str]] = Field(default_factory=list, description="""AMR genes detected by NCBI AMRFinder""")
     card_aro_terms: Optional[List[str]] = Field(default_factory=list, description="""CARD Antibiotic Resistance Ontology terms detected""")
     loinc_code: Optional[str] = Field(None, description="""LOINC code for the lab test performed. e.g. 94500-6 (SARS-CoV-2 RNA, PCR, NP swab)
@@ -3095,6 +3263,8 @@ class ProduceAgSample(EnvironmentalSample):
     genome_completeness: Optional[float] = Field(None, description="""Percentage of reference genome covered (0–100)""")
     pango_lineage: Optional[str] = Field(None, description="""Pangolin lineage designation, e.g. JN.1, BA.2.86""")
     pango_lineage_version: Optional[str] = Field(None, description="""Pangolin software version used for assignment""")
+    pango_qc_status: Optional[PangoQCStatusEnum] = Field(None, description="""Pangolin QC status for the lineage call. A 'fail' or 'ambiguous' status means the lineage designation is uncertain and should not drive surveillance decisions without manual review. WHO and CDC both require confidence indicators in genomic surveillance reporting. Populated automatically from Pangolin output at pipeline completion.""")
+    pango_conflict: Optional[float] = Field(None, description="""Pangolin conflict score (0.0–1.0). Values >0.0 indicate ambiguity between two or more lineage calls. High conflict (>0.5) indicates the assignment is unreliable. Stored for downstream filtering — surveillance dashboards should suppress or flag high-conflict calls.""")
     nextstrain_clade: Optional[str] = Field(None, description="""Nextstrain clade designation, e.g. 24A""")
     nextclade_qc_score: Optional[float] = Field(None, description="""Nextclade QC score (0–100; higher is better quality)""")
     nextclade_version: Optional[str] = Field(None, description="""Nextclade software version""")
@@ -3102,6 +3272,7 @@ class ProduceAgSample(EnvironmentalSample):
     vadr_alerts: Optional[List[str]] = Field(default_factory=list, description="""VADR alert codes, e.g. CDS_HAS_STOP_CODON""")
     mlst_scheme: Optional[str] = Field(None, description="""MLST scheme, e.g. 'senterica', 'campylobacter'""")
     mlst_sequence_type: Optional[str] = Field(None, description="""MLST sequence type, e.g. ST131""")
+    mlst_confidence: Optional[MLSTConfidenceEnum] = Field(None, description="""Confidence level of the MLST sequence type assignment. Perfect = all alleles matched exactly. Good = all alleles matched but some may be novel. Low = one or more alleles missing or novel. Unknown = insufficient data. Surveillance reports should distinguish confident from uncertain ST assignments — a novel allele can indicate a genuinely new strain or a sequencing artefact.""")
     amrfinder_genes: Optional[List[str]] = Field(default_factory=list, description="""AMR genes detected by NCBI AMRFinder""")
     card_aro_terms: Optional[List[str]] = Field(default_factory=list, description="""CARD Antibiotic Resistance Ontology terms detected""")
     loinc_code: Optional[str] = Field(None, description="""LOINC code for the lab test performed. e.g. 94500-6 (SARS-CoV-2 RNA, PCR, NP swab)
@@ -3142,6 +3313,25 @@ class SampleAssociation(ConfiguredBaseModel):
     target_sample_id: str = Field(...)
     association_type: Optional[SampleAssociationTypeEnum] = Field(None)
     notes: Optional[str] = Field(None, description="""Free text notes about the association""")
+
+
+
+class OutbreakInvestigation(ConfiguredBaseModel):
+    """
+    A named public health outbreak or cluster investigation. First-class entity that samples link to via outbreak_investigation_id FK in the samples table. Enables querying \"all samples from Outbreak AZ-Salmonella-2026-001\", cross-sector investigation tracking (human + food + environmental samples in the same investigation), and CDC/WHO situation report generation without requiring aggregation from case_type = outbreak on individual sample records.
+Maps to: CDC NNDSS OutbreakNumber, WHO Situation Report investigation ID.
+    """
+    outbreak_id: str = Field(..., description="""Unique identifier for this investigation. Platform-minted on creation. Format: {STATE}-{PATHOGEN_CODE}-{YEAR}-{SEQUENTIAL}, e.g. AZ-SALM-2026-001, AZ-SARS2-2026-042.""")
+    outbreak_name: str = Field(..., description="""Human-readable name for the investigation. e.g. 'Maricopa County Salmonella Typhimurium Cluster 2026'.""")
+    investigation_status: OutbreakStatusEnum = Field(..., description="""Current status of the investigation.""")
+    pathogen: OrganismNameEnum = Field(..., description="""Primary pathogen under investigation.""")
+    investigation_start_date: date = Field(..., description="""Date the investigation was formally opened.""")
+    investigation_close_date: Optional[date] = Field(None, description="""Date the investigation was formally closed. NULL if ongoing.""")
+    reporting_jurisdiction: str = Field(..., description="""Primary public health jurisdiction responsible for this investigation. e.g. 'ADHS', 'Maricopa County DHS', 'CDC', 'WHO PAHO'.""")
+    sectors_involved: Optional[List[SectorEnum]] = Field(default_factory=list, description="""One Health sectors represented in this investigation. A foodborne outbreak may involve clinical, agricultural, and food samples under the same investigation.""")
+    case_count: Optional[int] = Field(None, description="""Current confirmed case count. Updated as investigation progresses.""")
+    nndss_outbreak_number: Optional[str] = Field(None, description="""CDC NNDSS OutbreakNumber if this investigation has been reported to NNDSS. Links JACKPOT investigation to national outbreak tracking.""")
+    notes: Optional[str] = Field(None, description="""Free text investigation notes. Not displayed in catalog.""")
 
 
 
@@ -3225,5 +3415,6 @@ SurfaceSample.model_rebuild()
 FoodSample.model_rebuild()
 ProduceAgSample.model_rebuild()
 SampleAssociation.model_rebuild()
+OutbreakInvestigation.model_rebuild()
 PipelineProvenance.model_rebuild()
 SampleFile.model_rebuild()
