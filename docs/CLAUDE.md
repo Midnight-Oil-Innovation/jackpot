@@ -938,15 +938,25 @@ Never write file parsing or pairing logic in a router.
 **20. `gen-pydantic` requires two steps after every run:**
 (1) Always use the `--pydantic-version 2` flag:
     `uv run gen-pydantic --pydantic-version 2 schema/schema/jackpot_schema.yaml > backend/models_generated.py`
-(2) Apply the boolean keyword patch immediately after generation:
+(2) Apply the boolean keyword patch AND trailing newline fix immediately after:
 
 ```python
 from pathlib import Path
 content = Path('backend/models_generated.py').read_text()
-content = content.replace('\n    True = "True"', '\n    true = "True"')
+# Boolean keyword patch — gen-pydantic emits True/False as enum member names
+# which are Python keywords and cause SyntaxError on import
+content = content.replace('\n    True = "True"',   '\n    true = "True"')
 content = content.replace('\n    False = "False"', '\n    false = "False"')
+# Trailing newline — pre-commit end-of-file-fixer requires it
+content = content.rstrip('\n') + '\n'
 Path('backend/models_generated.py').write_text(content)
+print('Patched.')
 ```
+
+Both fixes are applied automatically by `schema_update.py`. When running
+manually, always apply both in the same step — never commit
+`models_generated.py` without the patch applied or the pre-commit hooks
+will modify the file and block the commit.
 
 `models_generated.py` is excluded from ruff linting (generated code).
 Never edit it manually — always regenerate then patch.
