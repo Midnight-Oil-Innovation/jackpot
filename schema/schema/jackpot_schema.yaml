@@ -24,7 +24,7 @@ description: >
     - NMDC schema conventions
     - FAIR: JSON-LD serializable via gen-jsonld
 
-version: "4.2"
+version: "4.3"
 
 prefixes:
   linkml:  https://w3id.org/linkml/
@@ -264,19 +264,49 @@ classes:
       collection_location_country:
         slot_uri: genepio:0001181
         required: true
-        description: "Country of sample collection"
+        description: >-
+          Country of sample collection. Free text — no controlled vocabulary
+          enforced at Tier 1 or Tier 2. At Tier 3 (SUBMITTABLE), must match
+          an INSDC-approved country name for BioSample submission via TOSTADAS
+          (e.g. "USA" not "United States", "United Kingdom" not "UK").
+          INSDC country list: https://www.insdc.org/submitting-standards/country-qualifier-vocabulary/
+          portal_to_tostadas.py validates against the INSDC list before
+          constructing the geo_loc_name field (format: Country:State:City).
 
       collection_location_state:
         slot_uri: genepio:0001182
-        description: "US state or equivalent administrative region"
+        description: >-
+          Sub-national administrative region of sample collection. Accepts
+          any equivalent administrative division regardless of country:
+          US state, Canadian province, Mexican estado, Australian state,
+          Brazilian estado, UK county/nation, German Bundesland, Japanese
+          prefecture, etc. Free text — not a controlled vocabulary since
+          administrative divisions vary by country. Used in NCBI BioSample
+          geo_loc_name construction (Country:State:City).
 
       collection_location_county:
-        description: "County or equivalent sub-state region"
+        description: >-
+          County, district, or equivalent sub-state administrative region of
+          sample collection. US county, UK district, French département,
+          Australian local government area, etc. Free text. Optional — not
+          all countries use a county-level administrative division.
 
       collection_location_zipcode:
-        description: >
-          APGAP: 'Zip code'. US ZIP code of collection location.
-          Validation: 5-digit numeric format.
+        description: >-
+          Postal code of collection location. Format varies by country and
+          is not validated — free text. Examples: US ZIP (85004), UK postcode
+          (SW1A 1AA), Canadian postal code (A1A 1A1), Australian postcode (2000),
+          German Postleitzahl (10115). Optional — many countries do not use
+          postal codes, and postal codes are not used in NCBI BioSample
+          geo_loc_name construction.
+
+      collection_location_city:
+        description: >-
+          City, town, municipality, or village of sample collection. Free text.
+          Used in NCBI BioSample geo_loc_name construction alongside
+          collection_location_country and collection_location_state:
+          format is "Country:State:City" (e.g. "USA:Arizona:Phoenix").
+          Optional — omitted from geo_loc_name if not provided.
 
       geo_lat:
         range: float
