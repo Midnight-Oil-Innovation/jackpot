@@ -2617,7 +2617,7 @@ enums:
       Pangolin lineage assignment QC status. Surveillance decisions should
       not be made on 'fail' or 'ambiguous' calls without manual review.
     permissible_values:
-      pass:
+      pass_qc:
         description: "High confidence lineage assignment"
       fail:
         description: "Low confidence — do not use for surveillance without review"

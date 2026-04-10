@@ -3758,7 +3758,7 @@
         "PangoQCStatusEnum": {
             "description": "Pangolin lineage assignment QC status. Surveillance decisions should not be made on 'fail' or 'ambiguous' calls without manual review.",
             "enum": [
-                "pass",
+                "pass_qc",
                 "fail",
                 "ambiguous",
                 "not_run"
