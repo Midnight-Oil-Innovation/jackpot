@@ -1625,3 +1625,68 @@ The Nextflow work directory bucket has a 90-day lifecycle rule that
 deletes stale task caches. Versioning would conflict with this rule and
 accumulate unbounded storage costs. jackpot-work is intentionally
 ephemeral — pipelines are restartable via -resume.
+
+---
+
+## Frontend Architecture — Streamlit Now, React Later
+
+JACKPOT's frontend runs on **Streamlit** for the prototype (Month 1–2).
+This is the right choice for a solo Python developer on a 3-month timeline.
+However, Streamlit has known limitations that will matter at production
+scale. Understanding this informs how to structure the Streamlit code now
+so that a future migration is as painless as possible.
+
+### Why Streamlit works for the prototype
+
+- No JavaScript/HTML/CSS required — iterate on UI in Python
+- Fast gap between idea and working screen
+- Backend and UI can be developed in the same session
+
+### When Streamlit starts to hurt
+
+The signal to begin the React migration is when any of these are true:
+- Writing more `st.components.v1.html()` than `st.dataframe()`
+- Multi-step ingest workflows feel fragile due to `st.session_state` complexity
+- Pipeline monitoring real-time updates feel choppy with polling
+- Notification badges across sessions require external pub/sub
+- Bulk select and complex table interactions require injected HTML
+
+### How to structure Streamlit code for future migration
+
+Keep `jackpot-frontend` organized so each Streamlit page maps 1:1 to a
+future React route. This makes migration surgical rather than a rewrite.
+
+```
+jackpot-frontend/
+├── app.py                  # Entry point — navigation only
+├── pages/
+│   ├── dashboard.py        # → /dashboard
+│   ├── samples.py          # → /samples
+│   ├── sample_detail.py    # → /samples/:id
+│   ├── pipelines.py        # → /pipelines
+│   ├── pipeline_detail.py  # → /pipelines/:id
+│   ├── search.py           # → /search
+│   ├── projects.py         # → /projects
+│   ├── project_detail.py   # → /projects/:id
+│   ├── lab.py              # → /labs/:id
+│   └── platform_admin.py   # → /admin
+└── components/
+    ├── sample_table.py     # Reusable sample list with bulk select
+    ├── pipeline_status.py  # Pipeline run status widget
+    ├── metadata_form.py    # Tier-aware metadata input form
+    ├── scrub_badge.py      # Scrub status indicator
+    └── notifications.py    # Notification badge and drawer
+```
+
+Never put business logic in Streamlit pages — all logic belongs in the
+FastAPI backend. Streamlit pages are thin display layers that call the
+API and render responses. This constraint makes the React migration
+straightforward: replace the display layer, keep everything else.
+
+### Migration path (Year 2)
+
+When the signal arrives: build React + shadcn/ui + TanStack Query in
+`jackpot-frontend`. Run Streamlit and React in parallel — Streamlit for
+admin/power users, React for the polished researcher-facing UI. Retire
+Streamlit when React covers all the same ground. The FastAPI backend
+requires zero changes — it is already frontend-agnostic.
