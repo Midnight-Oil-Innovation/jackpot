@@ -43,12 +43,12 @@ Usage:
 import argparse
 import sys
 from pathlib import Path
-import yaml
 
+import yaml
 
 # ── Paths ──────────────────────────────────────────────────────────────────
 
-DEFAULT_INPUT  = Path("schema/jackpot_schema.yaml")
+DEFAULT_INPUT = Path("schema/jackpot_schema.yaml")
 DEFAULT_OUTPUT = Path("schema/jackpot_schema.yaml")
 
 
@@ -485,6 +485,7 @@ ENUM_INSERT_ANCHOR = "  # ── Sharing and Access"
 
 # ── Helpers ────────────────────────────────────────────────────────────────
 
+
 def validate_yaml(text: str, path: str) -> bool:
     """Return True if text parses as valid YAML."""
     try:
@@ -513,9 +514,11 @@ def apply_changes(content: str) -> tuple[str, list[str]]:
         BASEAMPLE_INSERT_ANCHOR,
         NEW_BASEAMPLE_FIELDS + BASEAMPLE_INSERT_ANCHOR,
     )
-    applied.append("Inserted new BaseSample fields (case_id, sector, "
-                   "surveillance_relevant, quality_status, read_type, "
-                   "assembly_type, provenance, turnaround, etc.)")
+    applied.append(
+        "Inserted new BaseSample fields (case_id, sector, "
+        "surveillance_relevant, quality_status, read_type, "
+        "assembly_type, provenance, turnaround, etc.)"
+    )
 
     # ── 2. Remove case_id from HumanSample ─────────────────────────────────
     if HUMANSAMPLE_CASEID_START not in content:
@@ -537,41 +540,44 @@ def apply_changes(content: str) -> tuple[str, list[str]]:
         ENUM_INSERT_ANCHOR,
         NEW_ENUMS + ENUM_INSERT_ANCHOR,
     )
-    applied.append("Inserted new enums: CaseTypeEnum, SectorEnum, "
-                   "SurveillanceOverrideCategoryEnum, QualityStatusEnum, "
-                   "DatePrecisionEnum, ReadTypeEnum, AssemblyTypeEnum, "
-                   "DataUseTermsEnum")
+    applied.append(
+        "Inserted new enums: CaseTypeEnum, SectorEnum, "
+        "SurveillanceOverrideCategoryEnum, QualityStatusEnum, "
+        "DatePrecisionEnum, ReadTypeEnum, AssemblyTypeEnum, "
+        "DataUseTermsEnum"
+    )
 
     # ── 4. Update schema version in header ─────────────────────────────────
-    old_version = "version: \"4.1\""
-    new_version = "version: \"4.2\""
+    old_version = 'version: "4.1"'
+    new_version = 'version: "4.2"'
     if old_version in content:
         content = content.replace(old_version, new_version, 1)
         applied.append("Updated schema version: 4.1 → 4.2")
     else:
-        applied.append("WARNING: version string '4.1' not found — "
-                       "schema version not updated")
+        applied.append("WARNING: version string '4.1' not found — " "schema version not updated")
 
     return content, applied
 
 
 # ── Main ───────────────────────────────────────────────────────────────────
 
+
 def main() -> None:
-    parser = argparse.ArgumentParser(
-        description="Update JACKPOT schema from v4.1 to v4.2"
+    parser = argparse.ArgumentParser(description="Update JACKPOT schema from v4.1 to v4.2")
+    parser.add_argument(
+        "--input",
+        type=Path,
+        default=DEFAULT_INPUT,
+        help=f"Input schema YAML (default: {DEFAULT_INPUT})",
     )
     parser.add_argument(
-        "--input", type=Path, default=DEFAULT_INPUT,
-        help=f"Input schema YAML (default: {DEFAULT_INPUT})"
+        "--output",
+        type=Path,
+        default=DEFAULT_OUTPUT,
+        help="Output schema YAML (default: same as input)",
     )
     parser.add_argument(
-        "--output", type=Path, default=DEFAULT_OUTPUT,
-        help=f"Output schema YAML (default: same as input)"
-    )
-    parser.add_argument(
-        "--dry-run", action="store_true",
-        help="Print what would change without writing the file"
+        "--dry-run", action="store_true", help="Print what would change without writing the file"
     )
     args = parser.parse_args()
 
@@ -580,7 +586,7 @@ def main() -> None:
         print("Run this script from the jackpot-schema repo root, or pass --input.")
         sys.exit(1)
 
-    print(f"\nJACKPOT Schema Updater — v4.1 → v4.2")
+    print("\nJACKPOT Schema Updater — v4.1 → v4.2")
     print(f"Input:  {args.input.resolve()}")
     print(f"Output: {args.output.resolve()}")
     if args.dry_run:
@@ -618,7 +624,7 @@ def main() -> None:
 
     # Count lines
     orig_lines = original.count("\n")
-    new_lines  = modified.count("\n")
+    new_lines = modified.count("\n")
     print(f"\nLine count: {orig_lines} → {new_lines} (+{new_lines - orig_lines})")
 
     if args.dry_run:
@@ -630,18 +636,22 @@ def main() -> None:
     print(f"\nWritten: {args.output.resolve()}")
     print("\nNext steps:")
     print("  1. Review the diff:  git diff schema/jackpot_schema.yaml")
-    print("  2. Validate YAML:    python3 -c \"import yaml; "
-          "yaml.safe_load(open('schema/jackpot_schema.yaml'))\"")
+    print(
+        '  2. Validate YAML:    python3 -c "import yaml; '
+        "yaml.safe_load(open('schema/jackpot_schema.yaml'))\""
+    )
     print("  3. Regenerate models (from jackpot-backend/):")
-    print("       uv run gen-pydantic schema/schema/jackpot_schema.yaml "
-          "> backend/models_generated.py")
-    print("       uv run gen-json-schema schema/schema/jackpot_schema.yaml "
-          "> schema/schema/jackpot_schema.json")
+    print(
+        "       uv run gen-pydantic schema/schema/jackpot_schema.yaml "
+        "> backend/models_generated.py"
+    )
+    print(
+        "       uv run gen-json-schema schema/schema/jackpot_schema.yaml "
+        "> schema/schema/jackpot_schema.json"
+    )
     print("  4. Create Alembic migration:")
-    print("       uv run alembic revision -m "
-          "\"schema_v4_2_case_sector_surveillance_quality\"")
-    print("  5. Commit jackpot-schema, then update submodule pointer "
-          "in jackpot-backend")
+    print("       uv run alembic revision -m " '"schema_v4_2_case_sector_surveillance_quality"')
+    print("  5. Commit jackpot-schema, then update submodule pointer " "in jackpot-backend")
 
 
 if __name__ == "__main__":

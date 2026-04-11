@@ -32,10 +32,10 @@ Usage:
 import argparse
 import sys
 from pathlib import Path
+
 import yaml
 
-
-DEFAULT_INPUT  = Path("schema/jackpot_schema.yaml")
+DEFAULT_INPUT = Path("schema/jackpot_schema.yaml")
 DEFAULT_OUTPUT = Path("schema/jackpot_schema.yaml")
 
 
@@ -166,8 +166,10 @@ def apply_changes(content: str) -> tuple[str, list[str]]:
             "The schema may have changed. Check the anchor string."
         )
     content = content.replace(OLD_COUNTRY, NEW_COUNTRY)
-    applied.append("Updated collection_location_country — INSDC requirement "
-                   "for Tier 3 / TOSTADAS, geo_loc_name construction noted")
+    applied.append(
+        "Updated collection_location_country — INSDC requirement "
+        "for Tier 3 / TOSTADAS, geo_loc_name construction noted"
+    )
 
     # 2. collection_location_state
     if OLD_STATE not in content:
@@ -176,8 +178,10 @@ def apply_changes(content: str) -> tuple[str, list[str]]:
             "The schema may have changed. Check the anchor string."
         )
     content = content.replace(OLD_STATE, NEW_STATE)
-    applied.append("Updated collection_location_state — removed US-centric "
-                   "framing, now accepts any sub-national administrative division")
+    applied.append(
+        "Updated collection_location_state — removed US-centric "
+        "framing, now accepts any sub-national administrative division"
+    )
 
     # 3. collection_location_county
     if OLD_COUNTY not in content:
@@ -186,8 +190,9 @@ def apply_changes(content: str) -> tuple[str, list[str]]:
             "The schema may have changed. Check the anchor string."
         )
     content = content.replace(OLD_COUNTY, NEW_COUNTY)
-    applied.append("Updated collection_location_county — internationally neutral, "
-                   "explicitly optional")
+    applied.append(
+        "Updated collection_location_county — internationally neutral, " "explicitly optional"
+    )
 
     # 4. collection_location_zipcode
     if OLD_ZIPCODE not in content:
@@ -196,8 +201,10 @@ def apply_changes(content: str) -> tuple[str, list[str]]:
             "The schema may have changed. Check the anchor string."
         )
     content = content.replace(OLD_ZIPCODE, NEW_ZIPCODE)
-    applied.append("Updated collection_location_zipcode — removed US ZIP-only "
-                   "framing and 5-digit numeric validation, now free text international")
+    applied.append(
+        "Updated collection_location_zipcode — removed US ZIP-only "
+        "framing and 5-digit numeric validation, now free text international"
+    )
 
     # 5. Insert collection_location_city before geo_lat
     if CITY_INSERT_ANCHOR not in content:
@@ -206,8 +213,10 @@ def apply_changes(content: str) -> tuple[str, list[str]]:
             "The schema may have changed. Check the anchor string."
         )
     content = content.replace(CITY_INSERT_ANCHOR, NEW_CITY_PLUS_ANCHOR)
-    applied.append("Added collection_location_city — new field for NCBI "
-                   "geo_loc_name construction (Country:State:City)")
+    applied.append(
+        "Added collection_location_city — new field for NCBI "
+        "geo_loc_name construction (Country:State:City)"
+    )
 
     # 6. Update schema version
     old_version = 'version: "4.2"'
@@ -216,27 +225,27 @@ def apply_changes(content: str) -> tuple[str, list[str]]:
         content = content.replace(old_version, new_version, 1)
         applied.append("Updated schema version: 4.2 → 4.3")
     else:
-        applied.append("WARNING: version string '4.2' not found — "
-                       "schema version not updated")
+        applied.append("WARNING: version string '4.2' not found — " "schema version not updated")
 
     return content, applied
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(
-        description="Update JACKPOT schema from v4.2 to v4.3"
+    parser = argparse.ArgumentParser(description="Update JACKPOT schema from v4.2 to v4.3")
+    parser.add_argument(
+        "--input",
+        type=Path,
+        default=DEFAULT_INPUT,
+        help=f"Input schema YAML (default: {DEFAULT_INPUT})",
     )
     parser.add_argument(
-        "--input", type=Path, default=DEFAULT_INPUT,
-        help=f"Input schema YAML (default: {DEFAULT_INPUT})"
+        "--output",
+        type=Path,
+        default=DEFAULT_OUTPUT,
+        help="Output schema YAML (default: same as input)",
     )
     parser.add_argument(
-        "--output", type=Path, default=DEFAULT_OUTPUT,
-        help=f"Output schema YAML (default: same as input)"
-    )
-    parser.add_argument(
-        "--dry-run", action="store_true",
-        help="Print what would change without writing the file"
+        "--dry-run", action="store_true", help="Print what would change without writing the file"
     )
     args = parser.parse_args()
 
@@ -245,7 +254,7 @@ def main() -> None:
         print("Run this script from the jackpot-schema repo root, or pass --input.")
         sys.exit(1)
 
-    print(f"\nJACKPOT Schema Updater — v4.2 → v4.3")
+    print("\nJACKPOT Schema Updater — v4.2 → v4.3")
     print(f"Input:  {args.input.resolve()}")
     print(f"Output: {args.output.resolve()}")
     if args.dry_run:
@@ -279,7 +288,7 @@ def main() -> None:
     print("  OK")
 
     orig_lines = original.count("\n")
-    new_lines  = modified.count("\n")
+    new_lines = modified.count("\n")
     print(f"\nLine count: {orig_lines} → {new_lines} ({new_lines - orig_lines:+d})")
 
     if args.dry_run:
@@ -290,20 +299,25 @@ def main() -> None:
     print(f"\nWritten: {args.output.resolve()}")
     print("\nNext steps:")
     print("  1. Review the diff:  git diff schema/jackpot_schema.yaml")
-    print("  2. Validate YAML:    python3 -c \"import yaml; "
-          "yaml.safe_load(open('schema/jackpot_schema.yaml')); print('OK')\"")
+    print(
+        '  2. Validate YAML:    python3 -c "import yaml; '
+        "yaml.safe_load(open('schema/jackpot_schema.yaml')); print('OK')\""
+    )
     print("  3. Regenerate models (from jackpot-backend/):")
-    print("       uv run gen-pydantic --pydantic-version 2 "
-          "schema/schema/jackpot_schema.yaml > backend/models_generated.py")
+    print(
+        "       uv run gen-pydantic --pydantic-version 2 "
+        "schema/schema/jackpot_schema.yaml > backend/models_generated.py"
+    )
     print("       # Apply boolean keyword patch (Critical Rule 20)")
-    print("       uv run gen-json-schema schema/schema/jackpot_schema.yaml "
-          "> schema/schema/jackpot_schema.json")
+    print(
+        "       uv run gen-json-schema schema/schema/jackpot_schema.yaml "
+        "> schema/schema/jackpot_schema.json"
+    )
     print("  4. Update portal_to_tostadas.py — add collection_location_city")
     print("     to geo_loc_name construction logic")
     print("  5. Update validator.py — add INSDC country name soft warning")
     print("     at Tier 2 and hard requirement at Tier 3")
-    print("  6. Commit jackpot-schema, then update submodule pointer "
-          "in jackpot-backend")
+    print("  6. Commit jackpot-schema, then update submodule pointer " "in jackpot-backend")
 
 
 if __name__ == "__main__":

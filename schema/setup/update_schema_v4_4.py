@@ -71,10 +71,10 @@ from __future__ import annotations
 import argparse
 import sys
 from pathlib import Path
+
 import yaml
 
-
-DEFAULT_INPUT  = Path("schema/jackpot_schema.yaml")
+DEFAULT_INPUT = Path("schema/jackpot_schema.yaml")
 DEFAULT_OUTPUT = Path("schema/jackpot_schema.yaml")
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -686,10 +686,11 @@ def main() -> None:
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=__doc__,
     )
-    parser.add_argument("--input",   type=Path, default=DEFAULT_INPUT)
-    parser.add_argument("--output",  type=Path, default=DEFAULT_OUTPUT)
-    parser.add_argument("--dry-run", action="store_true",
-                        help="Show what would change without writing")
+    parser.add_argument("--input", type=Path, default=DEFAULT_INPUT)
+    parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT)
+    parser.add_argument(
+        "--dry-run", action="store_true", help="Show what would change without writing"
+    )
     args = parser.parse_args()
 
     if not args.input.exists():
@@ -697,7 +698,7 @@ def main() -> None:
         print("Run from the jackpot-schema repo root, or pass --input.")
         sys.exit(1)
 
-    print(f"\nJACKPOT Schema Updater — v4.3 → v4.4")
+    print("\nJACKPOT Schema Updater — v4.3 → v4.4")
     print(f"Input:  {args.input.resolve()}")
     print(f"Output: {args.output.resolve()}")
     if args.dry_run:
@@ -731,7 +732,7 @@ def main() -> None:
     print("  OK")
 
     orig_lines = original.count("\n")
-    new_lines  = modified.count("\n")
+    new_lines = modified.count("\n")
     print(f"\nLine count: {orig_lines} → {new_lines} ({new_lines - orig_lines:+d})")
 
     if args.dry_run:
@@ -742,13 +743,17 @@ def main() -> None:
     print(f"\nWritten: {args.output.resolve()}")
     print("\nNext steps:")
     print("  1. Review: git diff schema/jackpot_schema.yaml")
-    print("  2. Validate: python3 -c \"import yaml; "
-          "yaml.safe_load(open('schema/jackpot_schema.yaml')); print('OK')\"")
+    print(
+        '  2. Validate: python3 -c "import yaml; '
+        "yaml.safe_load(open('schema/jackpot_schema.yaml')); print('OK')\""
+    )
     print("  3. Run schema_update.py from the workspace root:")
     print("     python3 ~/ASU/jackpot/schema_update.py \\")
     print("         --version 4.4 \\")
-    print("         --message \"WHO/CDC alignment — symptom onset, travel history, "
-          "outbreak entity, registered access\" \\")
+    print(
+        '         --message "WHO/CDC alignment — symptom onset, travel history, '
+        'outbreak entity, registered access" \\'
+    )
     print("         --skip-script")
     print("\n  New Alembic migration will need:")
     print("    - date_of_symptom_onset, travel_history_country[], travel_history_days")
