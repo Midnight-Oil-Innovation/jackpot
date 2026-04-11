@@ -28,28 +28,54 @@ def _get_client():
     )
 
 
-def upload_fileobj(fileobj, bucket: str, key: str) -> str:
-    _get_client().upload_fileobj(fileobj, bucket, key)
-    return f"{'s3' if settings.storage_endpoint else 'gs'}://{bucket}/{key}"
+def stage_file(fileobj, destination_key: str) -> str:
+    """Upload a file to the staging bucket. Returns the URI."""
+    bucket = settings.storage_bucket_staging
+    _get_client().upload_fileobj(fileobj, bucket, destination_key)
+    prefix = "s3" if settings.storage_endpoint else "gs"
+    return f"{prefix}://{bucket}/{destination_key}"
 
 
-def generate_presigned_url(bucket: str, key: str, expires: int = 3600) -> str:
+def move_to_sequences(staging_key: str, sequences_key: str) -> str:
+    """Move a scrubbed file from staging to the sequences bucket."""
+    client = _get_client()
+    src_bucket = settings.storage_bucket_staging
+    dst_bucket = settings.storage_bucket_sequences
+    client.copy_object(
+        CopySource={"Bucket": src_bucket, "Key": staging_key},
+        Bucket=dst_bucket,
+        Key=sequences_key,
+    )
+    client.delete_object(Bucket=src_bucket, Key=staging_key)
+    prefix = "s3" if settings.storage_endpoint else "gs"
+    return f"{prefix}://{dst_bucket}/{sequences_key}"
+
+
+def generate_presigned_url(bucket: str, key: str, ttl_seconds: int = 3600) -> str:
+    """Generate a presigned download URL."""
     return _get_client().generate_presigned_url(
         "get_object",
         Params={"Bucket": bucket, "Key": key},
-        ExpiresIn=expires,
+        ExpiresIn=ttl_seconds,
     )
 
 
-def generate_presigned_upload_url(bucket: str, key: str, expires: int = 86400) -> str:
+def generate_signed_upload_url(bucket: str, key: str, ttl_seconds: int = 14400) -> str:
+    """Generate a signed upload URL (4-hour default TTL)."""
     return _get_client().generate_presigned_url(
         "put_object",
         Params={"Bucket": bucket, "Key": key},
-        ExpiresIn=expires,
+        ExpiresIn=ttl_seconds,
     )
 
 
-def object_exists(bucket: str, key: str) -> bool:
+def delete_file(bucket: str, key: str) -> None:
+    """Delete a file from a bucket."""
+    _get_client().delete_object(Bucket=bucket, Key=key)
+
+
+def file_exists(bucket: str, key: str) -> bool:
+    """Check if a file exists without downloading it."""
     try:
         _get_client().head_object(Bucket=bucket, Key=key)
         return True

@@ -20,6 +20,7 @@ BASE_REQUIRED = [
     "sample_id",
     "organism_name",
     "source_type",
+    "sector",
     "date_collected",
     "collection_location_country",
     "sequencing_platform",

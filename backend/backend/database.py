@@ -56,6 +56,10 @@ def execute_query(query: str, params: dict | None = None) -> list[dict]:
         return []
 
 
-def execute_write(query: str, params: dict | None = None) -> None:
+def execute_write(query: str, params: dict | None = None) -> list[dict]:
     with get_db() as db:
-        db.execute(text(query), params or {})
+        result = db.execute(text(query), params or {})
+        if result.returns_rows:
+            cols = result.keys()
+            return [dict(zip(cols, row, strict=False)) for row in result.fetchall()]
+        return []

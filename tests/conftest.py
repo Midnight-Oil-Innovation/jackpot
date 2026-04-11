@@ -81,6 +81,7 @@ def valid_human_sample():
         "collection_facility": "Mayo Clinic Phoenix",
         "purpose_for_collection": ["clinical"],
         "sharing_level": "PRIVATE",
+        "sector": "clinical",
         "scrub_status": "PENDING",
         "pii_scan_status": "PENDING",
         "ingest_method": "gui",

@@ -1849,3 +1849,18 @@ The PRIDE database at EBI built a directly comparable chatbot for their
 proteomics data repository — same use case (documentation Q&A + dataset
 search), same RAG architecture, published in Proteomics (2024).
 Reference: https://www.ebi.ac.uk/pride/chatbot/
+
+## jackpot-cli (SDK)
+
+jackpot-cli is a separate repo containing the Python SDK and CLI for the
+JACKPOT API. It lives at `~/ASU/jackpot/jackpot-cli`. The SDK's
+`JACKPOTClient` expects:
+
+- Success: `{"success": true, "data": ...}` — unwrapped automatically
+- Error: `{"success": false, "error": {"code": ..., "message": ..., "detail": ...}}`
+- Pagination: `{"success": true, "data": [...], "pagination": {...}}`
+
+Every router endpoint you implement will be called by the CLI. Verify
+the response shape matches before considering an endpoint complete.
+Priority endpoints for CLI usability: `ingest/upload` → `samples/` list
+and get → `pipelines/` list and launch.
