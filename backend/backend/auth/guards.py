@@ -4,14 +4,9 @@ from jose import jwt
 from backend.config import get_settings
 from backend.database import execute_query
 
-settings = get_settings()
-
 
 def get_current_user(request: Request) -> dict:
-    """
-    Local dev (ENV=local): returns the mock user from settings.mock_user_email.
-    Production: validates JWT access cookie.
-    """
+    settings = get_settings()
     if settings.env == "local":
         rows = execute_query(
             "SELECT * FROM users WHERE email = :e AND is_active = TRUE LIMIT 1",

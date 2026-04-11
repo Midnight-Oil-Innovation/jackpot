@@ -73,7 +73,7 @@ def valid_human_sample():
         "collection_location_country": "United States",
         "collection_location_state": "Arizona",
         "sequencing_platform": "Illumina",
-        "sequencing_lab": "Otero Lab",
+        "sequencing_lab": "Otero Outpost",
         "type_of_experiment": "WGS",
         "library_preparation_method": "ARTIC",
         "nucleic_acid_extraction_method": ["QIAamp DSP Viral RNA"],

@@ -5,10 +5,9 @@ from botocore.client import Config as BotoConfig
 
 from backend.config import get_settings
 
-settings = get_settings()
-
 
 def _get_client():
+    settings = get_settings()
     if settings.storage_endpoint:
         return boto3.client(
             "s3",
@@ -29,7 +28,7 @@ def _get_client():
 
 
 def stage_file(fileobj, destination_key: str) -> str:
-    """Upload a file to the staging bucket. Returns the URI."""
+    settings = get_settings()
     bucket = settings.storage_bucket_staging
     _get_client().upload_fileobj(fileobj, bucket, destination_key)
     prefix = "s3" if settings.storage_endpoint else "gs"
@@ -37,7 +36,7 @@ def stage_file(fileobj, destination_key: str) -> str:
 
 
 def move_to_sequences(staging_key: str, sequences_key: str) -> str:
-    """Move a scrubbed file from staging to the sequences bucket."""
+    settings = get_settings()
     client = _get_client()
     src_bucket = settings.storage_bucket_staging
     dst_bucket = settings.storage_bucket_sequences

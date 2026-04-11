@@ -90,6 +90,18 @@ VALID_EXPERIMENT_TYPES = {
 }
 VALID_VADR_STATUSES = {"PASS", "FAIL", "SKIP", "PENDING"}
 
+VALID_SECTORS = {
+    "clinical",
+    "wastewater",
+    "wildlife",
+    "livestock",
+    "companion_animal",
+    "vector",
+    "environmental",
+    "food",
+    "research",
+}
+
 
 @dataclass
 class ValidationResult:
@@ -116,6 +128,16 @@ def validate_sample(data: dict) -> ValidationResult:
             errors.append(f"Missing required field: {field_name}")
 
     # ── Enum validation ───────────────────────────────────────────────────
+    source_type = data.get("source_type", "")
+    if source_type and source_type not in VALID_SOURCE_TYPES:
+        errors.append(
+            f"Invalid source_type '{source_type}'. Must be one of: {sorted(VALID_SOURCE_TYPES)}"
+        )
+
+    sector = data.get("sector", "")
+    if sector and sector not in VALID_SECTORS:
+        errors.append(f"Invalid sector '{sector}'. Must be one of: {sorted(VALID_SECTORS)}")
+
     source_type = data.get("source_type", "")
     if source_type and source_type not in VALID_SOURCE_TYPES:
         errors.append(

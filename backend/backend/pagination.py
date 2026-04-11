@@ -13,6 +13,25 @@ class PaginatedResponse(BaseModel, Generic[T]):
     has_more: bool
 
 
+# Columns that may be used in ORDER BY clauses.
+# Add new sortable columns here as routers are implemented.
+ALLOWED_SORT_COLUMNS = {
+    "created_at",
+    "updated_at",
+    "date_collected",
+    "date_sequenced",
+    "sample_id",
+    "organism_name",
+    "quality_status",
+    "sharing_level",
+    "sector",
+    "source_type",
+    "display_name",
+    "name",
+    "email",
+}
+
+
 def paginate(
     query: str,
     params: dict | None,
@@ -25,12 +44,17 @@ def paginate(
     Execute a paginated query. Returns (results, total_count).
     query must be a SELECT without ORDER BY, LIMIT, or OFFSET — this
     function adds them. A COUNT(*) subquery is run first for the total.
+    sort_by is validated against ALLOWED_SORT_COLUMNS to prevent SQL injection.
     """
     from backend.database import execute_query
 
-    allowed_dirs = {"asc", "desc"}
-    if sort_dir.lower() not in allowed_dirs:
+    # Validate sort direction
+    if sort_dir.lower() not in {"asc", "desc"}:
         sort_dir = "desc"
+
+    # Validate sort column — fall back to created_at if not in whitelist
+    if sort_by not in ALLOWED_SORT_COLUMNS:
+        sort_by = "created_at"
 
     offset = (page - 1) * per_page
 

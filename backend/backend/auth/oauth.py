@@ -7,7 +7,6 @@ from jose import jwt
 from backend.config import get_settings
 from backend.database import execute_query
 
-settings = get_settings()
 GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token"
 ACCESS_TOKEN_TTL = timedelta(minutes=15)
 REFRESH_TOKEN_TTL = timedelta(days=7)
@@ -15,6 +14,7 @@ REFRESH_TOKEN_TTL = timedelta(days=7)
 
 async def exchange_google_code(code: str, redirect_uri: str) -> dict[str, str]:
     """Exchange Google auth code for user email and name."""
+    settings = get_settings()
     async with httpx.AsyncClient() as client:
         resp = await client.post(
             GOOGLE_TOKEN_URL,
@@ -33,6 +33,7 @@ async def exchange_google_code(code: str, redirect_uri: str) -> dict[str, str]:
 
 
 def issue_access_token(user_id: int, email: str) -> str:
+    settings = get_settings()
     return jwt.encode(
         {
             "sub": str(user_id),
@@ -46,6 +47,7 @@ def issue_access_token(user_id: int, email: str) -> str:
 
 
 def issue_refresh_token(user_id: int, email: str) -> str:
+    settings = get_settings()
     return jwt.encode(
         {
             "sub": str(user_id),

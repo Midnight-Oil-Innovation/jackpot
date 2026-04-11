@@ -15,7 +15,6 @@ class Settings(BaseSettings):
     storage_bucket_datasets: str = "jackpot-datasets"
     storage_bucket_submissions: str = "jackpot-submissions"
     gcp_project_id: str = ""
-    bigquery_dataset: str = "jackpot_db"
     secret_key: str = "dev-secret-key-change-in-prod"
     mock_user_email: str = "gotero@linuxprophet.com"
     google_oauth_client_id: str = ""
