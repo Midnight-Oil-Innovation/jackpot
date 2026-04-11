@@ -272,7 +272,8 @@ NEW_SHARING_ENUM = """\
       LAB:
         description: \"All members of the owning Lab\"
       DISCOVERABLE:
-        description: \"Metadata visible to all authenticated users; files require an access request\"
+        description: \"Metadata visible to all authenticated users; \
+        files require an access request\"
       REGISTERED_ACCESS:
         description: >-
           Data available to any researcher who registers and agrees to the

@@ -477,7 +477,12 @@ NEW_ENUMS = """\
 BASEAMPLE_INSERT_ANCHOR = "      # ── Cross-sample Linkage"
 
 # case_id removal anchor in HumanSample
-HUMANSAMPLE_CASEID_START = "      case_id:\n        description: >\n          Generic public health case identifier for non-ADHS sources\n          (e.g. CDC NEDSS case ID, county health department ID).\n"
+HUMANSAMPLE_CASEID_START = (
+    "      case_id:\n"
+    "        description: >\n"
+    "          Generic public health case identifier for non-ADHS sources\n"
+    "          (e.g. CDC NEDSS case ID, county health department ID).\n"
+)
 
 # New enums go just before the SharingLevelEnum section
 ENUM_INSERT_ANCHOR = "  # ── Sharing and Access"
