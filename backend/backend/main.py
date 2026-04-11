@@ -1,7 +1,9 @@
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from backend.config import get_settings
+from backend.jobs import run_access_request_job, run_scrubber_queue_job
 from backend.logging_config import configure_logging
 from backend.middleware import RequestIDMiddleware
 from backend.routers import gisaid, samples
@@ -28,16 +30,33 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Add router imports here as each is implemented:
-# from routers import auth, samples, ingest, labs, projects, users, ...
-# for r in [auth, samples, ...]:
-#     app.include_router(r.router, prefix="/api/v1")
+scheduler = AsyncIOScheduler()
 
 
 @app.on_event("startup")
 def startup() -> None:
     configure_logging()
     get_settings().validate_for_production()
+    if get_settings().scheduler_enabled:
+        scheduler.add_job(
+            run_scrubber_queue_job,
+            "interval",
+            hours=1,
+            id="scrub_override_auto_deny",
+        )
+        scheduler.add_job(
+            run_access_request_job,
+            "interval",
+            hours=1,
+            id="access_request_auto_approve",
+        )
+        scheduler.start()
+
+
+@app.on_event("shutdown")
+def shutdown() -> None:
+    if scheduler.running:
+        scheduler.shutdown()
 
 
 @app.get("/health")

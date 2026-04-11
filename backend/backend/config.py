@@ -24,6 +24,7 @@ class Settings(BaseSettings):
     adhs_organization_name: str = "ADHS"
     ncbi_api_key: str = ""
     jackpot_api_token: str = ""
+    scheduler_enabled: bool = True
 
     class Config:
         env_file = ".env.local"
