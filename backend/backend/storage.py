@@ -2,7 +2,8 @@ import os
 
 import boto3
 from botocore.client import Config as BotoConfig
-from config import get_settings
+
+from backend.config import get_settings
 
 settings = get_settings()
 

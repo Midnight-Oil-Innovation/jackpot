@@ -1,8 +1,9 @@
 from contextlib import contextmanager
 
-from config import get_settings
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import Session, sessionmaker
+
+from backend.config import get_settings
 
 _engine = None
 _session_local = None

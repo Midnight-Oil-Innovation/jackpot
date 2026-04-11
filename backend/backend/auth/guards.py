@@ -1,7 +1,8 @@
-from config import get_settings
-from database import execute_query
 from fastapi import HTTPException, Request
 from jose import jwt
+
+from backend.config import get_settings
+from backend.database import execute_query
 
 settings = get_settings()
 

@@ -1,10 +1,11 @@
 from datetime import UTC, datetime, timedelta
 
 import httpx
-from config import get_settings
-from database import execute_query
 from fastapi import HTTPException
 from jose import jwt
+
+from backend.config import get_settings
+from backend.database import execute_query
 
 settings = get_settings()
 GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token"

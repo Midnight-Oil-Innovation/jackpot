@@ -2,10 +2,11 @@ import csv
 import io
 from datetime import datetime
 
-from auth.guards import get_current_user, require_lab_access
-from database import execute_query
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import StreamingResponse
+
+from backend.auth.guards import get_current_user, require_lab_access
+from backend.database import execute_query
 
 router = APIRouter(prefix="/api/v1/gisaid", tags=["gisaid"])
 

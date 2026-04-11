@@ -1,5 +1,6 @@
-from auth.guards import get_current_user
 from fastapi import Request
+
+from backend.auth.guards import get_current_user
 
 
 def current_user(request: Request) -> dict:

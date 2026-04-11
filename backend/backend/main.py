@@ -1,9 +1,10 @@
-from config import get_settings
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from logging_config import configure_logging
-from middleware import RequestIDMiddleware
-from routers import gisaid, samples
+
+from backend.config import get_settings
+from backend.logging_config import configure_logging
+from backend.middleware import RequestIDMiddleware
+from backend.routers import gisaid, samples
 
 app = FastAPI(
     title="JACKPOT API",
@@ -41,4 +42,4 @@ def startup() -> None:
 
 @app.get("/health")
 def health() -> dict:
-    return {"status": "ok", "version": "4.0.0", "project": "JACKPOT"}
+    return {"status": "ok", "version": "5.0.0", "project": "JACKPOT"}

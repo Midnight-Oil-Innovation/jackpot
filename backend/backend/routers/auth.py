@@ -1,12 +1,13 @@
-from auth.oauth import (
+from fastapi import APIRouter, HTTPException, Request, Response
+
+from backend.auth.oauth import (
     check_domain_whitelist,
     exchange_google_code,
     get_user_by_email,
     issue_access_token,
     issue_refresh_token,
 )
-from config import get_settings
-from fastapi import APIRouter, HTTPException, Request, Response
+from backend.config import get_settings
 
 router = APIRouter(prefix="/api/v1/auth", tags=["auth"])
 settings = get_settings()

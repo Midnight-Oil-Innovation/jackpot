@@ -1,7 +1,7 @@
 import json
 import logging
 
-from database import execute_write
+from backend.database import execute_write
 
 logger = logging.getLogger(__name__)
 
