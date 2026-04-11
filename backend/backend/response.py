@@ -5,6 +5,10 @@ def success(data: dict | list) -> dict:
     return {"success": True, "data": data}
 
 
+def success_message(message: str) -> dict:
+    return {"success": True, "message": message}
+
+
 def success_list(data: list, page: int, per_page: int, total: int) -> dict:
     return {
         "success": True,
