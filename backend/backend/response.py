@@ -18,11 +18,20 @@ def success_list(data: list, page: int, per_page: int, total: int) -> dict:
     }
 
 
-def error(code: str, message: str, detail: dict | None = None, status_code: int = 400):
+def error(
+    code: str,
+    message: str,
+    detail: dict | None = None,
+    status_code: int = 400,
+) -> JSONResponse:
     return JSONResponse(
         status_code=status_code,
         content={
             "success": False,
-            "error": {"code": code, "message": message, "detail": detail or {}},
+            "error": {
+                "code": code,
+                "message": message,
+                "detail": detail or {},
+            },
         },
     )

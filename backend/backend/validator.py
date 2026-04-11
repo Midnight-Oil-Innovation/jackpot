@@ -243,3 +243,66 @@ def validate_sample(data: dict) -> ValidationResult:
         errors=errors,
         warnings=warnings,
     )
+
+
+def compute_quality_status(data: dict, validation_result: ValidationResult) -> str:
+    """
+    Compute the quality tier string from a validated sample dict.
+    Called at ingest after validate_sample() — never called directly in routers.
+
+    Tier 1 — PRELIMINARY: minimum viable metadata, immediately ingestible.
+    Tier 2 — ANALYZABLE: date to month precision, geographic fields present.
+    Tier 3 — SUBMITTABLE: all NCBI BioSample / GISAID fields present.
+    """
+    if not validation_result.valid:
+        return "PRELIMINARY"
+
+    # Tier 3 — all submission fields present
+    tier3_fields = [
+        "originating_lab",
+        "submitting_lab",
+        "collection_location_state",
+        "collection_location_county",
+        "host_age",
+        "host_sex",
+    ]
+    if all(data.get(f) for f in tier3_fields):
+        return "SUBMITTABLE"
+
+    # Tier 2 — date to at least month precision and geographic fields
+    tier2_fields = [
+        "collection_location_state",
+    ]
+    precision = data.get("date_collected_precision", "day")
+    if precision != "year" and all(data.get(f) for f in tier2_fields):
+        return "ANALYZABLE"
+
+    return "PRELIMINARY"
+
+
+def compute_surveillance_relevant(
+    organism_name: str,
+    target_organisms: list[str] | None,
+    reportable_organisms: set[str],
+) -> bool:
+    """
+    Compute surveillance_relevant from organism name and reportable set.
+    Called at ingest — never called directly in routers.
+
+    Rules:
+    - If organism_name is in reportable_organisms → True
+    - If organism_name is 'metagenome' and any target_organism is
+      reportable → True
+    - If organism_name is 'metagenome' and target_organisms is empty
+      → True (conservative default for untargeted metagenomics)
+    - Otherwise → False
+    """
+    if organism_name in reportable_organisms:
+        return True
+
+    if organism_name == "metagenome":
+        if not target_organisms:
+            return True  # conservative default
+        return any(t in reportable_organisms for t in target_organisms)
+
+    return False

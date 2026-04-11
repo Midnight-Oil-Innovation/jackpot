@@ -13,7 +13,7 @@ app = FastAPI(
         "Standards: GenEpiO, NCBI BioSample, PHA4GE, MIxS, GA4GH DUO, "
         "LOINC, SNOMED CT, MMWR epiweek."
     ),
-    version="4.0.0",
+    version="5.0.0",
 )
 
 app.include_router(gisaid.router)
