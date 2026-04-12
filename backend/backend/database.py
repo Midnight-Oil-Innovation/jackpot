@@ -79,3 +79,18 @@ def execute_write(
             cols = result.keys()
             return [dict(zip(cols, row, strict=False)) for row in result.fetchall()]
         return []
+
+
+def get_db_dep():
+    """
+    FastAPI dependency injector for database sessions.
+    Use with Depends() in router function signatures.
+
+    Example:
+        @router.post("/")
+        def create_org(payload: OrgCreate, db=Depends(get_db_dep)):
+            row = execute_write("INSERT INTO ...", params, conn=db)
+            log_audit(..., db_conn=db)
+    """
+    with get_db() as session:
+        yield session

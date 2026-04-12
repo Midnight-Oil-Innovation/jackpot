@@ -19,7 +19,7 @@ and public health research. Successor to APGAP (ASU-RSE-Services).
   Not present in local dev. Month 3+ concern.
 - MinIO (local) / GCS (production) — same boto3 code via backend/storage.py,
   different endpoint. Transition = STORAGE_BACKEND env var change.
-- LinkML v4.1 schema: `schema/schema/jackpot_schema.yaml` (git submodule)
+- LinkML v4.4 schema: `schema/schema/jackpot_schema.yaml` (git submodule)
 - Authentication: Google OAuth 2.0 + JWT httponly cookies (mock in local dev)
 - Environment management: uv — never use pip directly
 - Tests: pytest + testcontainers (real PostgreSQL container in tests)
@@ -32,13 +32,25 @@ and public health research. Successor to APGAP (ASU-RSE-Services).
 ~/ASU/jackpot/               ← workspace folder (not a git repo)
 └── jackpot-backend/         ← git repository (this repo)
     ├── backend/             ← Python source code — imported as `backend`
-    │   ├── main.py          App entrypoint — add router imports here
-    │   ├── config.py        Settings class; ENV=local or gcp
-    │   ├── permissions.py   PermissionGroups enum — DO NOT rename values
-    │   ├── database.py      Lazy engine; execute_query / execute_write / reset_engine
-    │   ├── validator.py     LinkML-based metadata validator — gate on all ingest paths
-    │   ├── harmonizer.py    CSV column mapper using mapping_config YAMLs
-    │   ├── file_detector.py NGS file pairing and extension detection — only place for this logic
+    │   ├── main.py              App entrypoint — add router imports here; starts APScheduler
+    │   ├── config.py            Settings class; ENV=local or gcp
+    │   ├── permissions.py       PermissionGroups enum — DO NOT rename values
+    │   ├── database.py          Lazy engine; execute_query / execute_write / reset_engine
+    │   ├── validator.py         LinkML-based metadata validator — gate on all ingest paths
+    │   ├── harmonizer.py        CSV column mapper using mapping_config YAMLs
+    │   ├── file_detector.py     NGS file pairing and extension detection — only place for this logic
+    │   ├── audit.py             log_audit() function + AuditActions constants
+    │   ├── notifications.py     create_notification() + NotificationEvents constants
+    │   ├── storage.py           All GCS/MinIO operations — routers never call boto3 directly
+    │   ├── responses.py         success() / success_list() / error() envelope helpers
+    │   ├── pagination.py        paginate() helper — all list endpoints use this
+    │   ├── epiweek.py           compute_epiweeks() — MMWR + ISO week from collection date
+    │   ├── middleware.py        RequestIDMiddleware — UUID injected on every request
+    │   ├── logging_config.py    JSON structured logging formatter
+    │   ├── cache.py             cache_get/set — routes to Redis (prod) or memory (local)
+    │   ├── jobs.py              APScheduler job functions — run_scrubber_queue_job() etc.
+    │   ├── pipeline_config.py   Per-run Nextflow config generator (Month 2)
+    │   ├── models_generated.py  LinkML-generated Pydantic models — never edit manually
     │   ├── auth/
     │   │   ├── guards.py        get_current_user, require_platform_admin, require_lab_access
     │   │   ├── dependencies.py  FastAPI dependency injection wrapper
@@ -61,13 +73,18 @@ and public health research. Successor to APGAP (ASU-RSE-Services).
 inside the submodule repo. So the full path from the repo root is always
 `schema/schema/jackpot_schema.yaml` — the doubling is intentional.
 
+**Pre-requisite files — must exist before first router session:**
+`backend/responses.py` and `backend/notifications.py` must be created
+before implementing any router. See API Response Conventions and
+Notification System sections for their exact interfaces.
+
 ---
 
 ## Current Baseline
 
 - **95 tests passing, 0 failed, 63.96% coverage**
 - CI threshold: 60% — do not let coverage fall below this
-- Health check: `curl http://localhost:8000/health` → `{"status":"ok","version":"4.0.0","project":"JACKPOT"}`
+- Health check: `curl http://localhost:8000/health` → `{"status":"ok","version":"5.0.0","project":"JACKPOT"}`
 - All 27 database tables loaded in PostgreSQL
 - Both `development` and `main` are at the same commit
 
@@ -77,7 +94,7 @@ numbers are stable or improved.
 
 ---
 
-## Critical Rules — Read Before Making Any Change
+## Critical Rules — Read Every Rule Before Making Any Change
 
 **1. PermissionGroups enum values are sacred.**
 Values MUST match `asu_apgap/utils/permissions.py` exactly.
@@ -145,6 +162,217 @@ Every router in `backend/routers/` starts as a 5-line stub returning
 entire file. After implementing, add the router import and
 `app.include_router()` call to `backend/main.py`.
 
+**16. `surveillance_relevant` is always computed by `compute_surveillance_relevant()`
+in `validator.py`.**
+Never set this field directly in a router. The validator is the only
+place that reads from `reportable_organisms` and applies metagenomics
+target_organisms logic. Ingest endpoints call the validator and use the
+returned value.
+
+**17. `quality_status` is always set by `compute_quality_status()` —
+never hardcoded in routers.**
+The validator returns a `ValidationResult` with a `tier` integer (1, 2, or 3).
+`compute_quality_status(validation_result)` converts that to the string
+("PRELIMINARY", "ANALYZABLE", "SUBMITTABLE"). Routers call this function —
+they never write quality_status strings directly.
+
+**18. `scrub_status = 'SKIPPED'` is only set in two places:**
+(1) `validator.py` — FASTA-only auto-skip (no raw reads, approved_by=SYSTEM).
+(2) The scrub override approval workflow — after Lab Director approval.
+Ingest endpoints must not set scrub_status = SKIPPED directly under any
+other circumstance. SRA-imported samples are also auto-SKIPPED by the
+validator with skip_reason = 'sra_imported'.
+
+**19. One CSV row = one sample. Files are associated via `file_detector.py`
+pairing logic, never by requiring per-file rows from the user.**
+The `files` column in any CSV or metadata form is semicolon-delimited
+within a single cell: `AZ-001_R1.fastq.gz;AZ-001_R2.fastq.gz`.
+`file_detector.py` is called on the parsed file list for every ingest path.
+Never write file parsing or pairing logic in a router.
+
+**20. `gen-pydantic` requires two steps after every run:**
+(1) Always use the `--pydantic-version 2` flag:
+    `uv run gen-pydantic --pydantic-version 2 schema/schema/jackpot_schema.yaml > backend/models_generated.py`
+(2) Apply the boolean keyword patch AND trailing newline fix immediately after:
+
+```python
+from pathlib import Path
+content = Path('backend/models_generated.py').read_text()
+# Boolean keyword patch — gen-pydantic emits True/False as enum member names
+# which are Python keywords and cause SyntaxError on import
+content = content.replace('\n    True = "True"',   '\n    true = "True"')
+content = content.replace('\n    False = "False"', '\n    false = "False"')
+# Trailing newline — pre-commit end-of-file-fixer requires it
+content = content.rstrip('\n') + '\n'
+Path('backend/models_generated.py').write_text(content)
+print('Patched.')
+```
+
+Both fixes are applied automatically by `schema_update.py`. When running
+manually, always apply both in the same step — never commit
+`models_generated.py` without the patch applied or the pre-commit hooks
+will modify the file and block the commit.
+
+`models_generated.py` is excluded from ruff linting (generated code).
+Never edit it manually — always regenerate then patch.
+
+**21. Sequencing lab → JACKPOT lab linkage uses `sequencing_lab_assignments`.**
+The `sequencing_labs` table (the registry of physical sequencing facilities)
+and the `labs` table (JACKPOT organizational units) are linked via a join
+table `sequencing_lab_assignments` (sequencing_lab_id, lab_id). A single
+sequencing facility may serve multiple JACKPOT labs. This join table is
+used by the Globus deposit-first workflow to identify which Lab Directors
+to notify when files arrive from a given sequencing facility.
+
+**22. Background jobs are implemented in `backend/jobs.py` using APScheduler.**
+Jobs are started in `backend/main.py` at application startup using
+`AsyncIOScheduler`. Jobs are idempotent — running twice = same result as
+running once. Every job can also be triggered manually via
+`POST /api/v1/admin/jobs/{job_id}/run` (Platform Admin only) for local dev.
+Never use `asyncio.create_task()` directly in routers for deferred work —
+always add a job to the scheduler.
+
+**23. All list endpoints use `backend/pagination.py` — never raw OFFSET/LIMIT.**
+See the Pagination Convention section. The `select-all-N-results` bulk
+select uses `?select_all=true` which returns IDs only, no pagination.
+
+**24. All responses use `backend/responses.py` helpers — never raw dicts.**
+See the API Response Conventions section. Every router imports `success`,
+`success_list`, and `error` from `backend/responses.py`. The response
+envelope shape is fixed — routers never construct it manually.
+
+**25. Every pipeline run gets an isolated GCS work directory.**
+Format: `gs://jackpot-work/{run_id}/work/`. Never share workDir between runs.
+The run_id is always passed as a Nextflow parameter by the launch endpoint.
+Stored in `pipeline_runs.work_dir` for `-resume` support.
+
+**26. The Nextflow config is always generated per-run by the launch endpoint.**
+Never use a static `nextflow.config` for JACKPOT pipeline runs. The launch
+endpoint templates the config with run_id, API URL, weblog URL, result URL,
+and pipeline token. Written to a temp file and passed via `-c jackpot_run.config`.
+
+**27. `resourceLabels` must be included in every generated Nextflow config.**
+Labels `jackpot_run_id`, `jackpot_lab`, `jackpot_pipeline` are required for
+GCP Billing cost attribution and the JACKPOT billing dashboard. Never omit.
+
+**28. Minikube is for JupyterHub only. Docker Compose is the primary dev environment.**
+Do not run jackpot-backend, postgres, or minio in minikube. JupyterHub pods
+reach the Docker Compose API via `minikube tunnel`. This separation mirrors
+the production topology where JupyterHub and the API are separate services.
+
+**29. On Apple Silicon, use `PIPELINE_EXECUTOR=gcp_batch` for pipeline testing.**
+Many bioinformatics containers are x86-only. GCP Batch VMs are x86 by
+default, avoiding ARM compatibility issues. Spot instances make this cheap
+for short test runs. Only use `PIPELINE_EXECUTOR=local` for pipelines
+verified to have ARM-compatible containers.
+
+**30. Pipeline compute runs on GCP Batch, not GKE pods.**
+Never submit Nextflow tasks as GKE pod workloads. GKE runs only the
+Nextflow controller process (~2CPU/4GB) in the api-pool. All task compute
+is submitted to GCP Batch by Nextflow directly.
+
+**31. Bulk scrubber submissions use the queue — never submit all jobs at once.**
+When multiple samples arrive simultaneously (Globus batch, CSV upload),
+add all to the scrubber queue (scrub_status=PENDING). The
+`run_scrubber_queue_job()` background job controls concurrency via
+SCRUBBER_MAX_CONCURRENT. Never submit more than SCRUBBER_MAX_CONCURRENT
+scrubber GKE Jobs simultaneously.
+
+**32. Scrubber GKE Jobs run on the scrubber-pool using spot nodes.**
+The scrubber Job manifest must include nodeSelector for scrubber-pool and
+toleration for spot nodes. Scrubber is restartable — if a spot node is
+preempted, the sample stays IN_PROGRESS and the job is resubmitted by
+the queue job on its next cycle.
+
+**33. Never use per-pod in-memory caching for data shared across API replicas.**
+In multi-pod GKE deployments, per-pod dicts create cache inconsistency.
+Use `backend/cache.py` which routes to Redis (production) or a simple
+dict (local dev) based on SEARCH_CACHE_BACKEND. Only external search
+results are cached. Never add new cache categories without discussion.
+
+**34. No Celery. No Redis as a task broker or result backend.**
+JACKPOT uses GCP-native services for async work: GCP Batch (pipelines),
+GKE Jobs (scrubber, SRA downloads), Cloud Scheduler (background jobs),
+Cloud Tasks (future email). Redis is used only as a shared cache for
+external search results via backend/cache.py.
+
+**35. Never disable PITR on the Cloud SQL instance.**
+Point-in-time recovery is the primary defense against bad migrations.
+It must always be enabled. If a migration is about to run that you're
+uncertain about, note the current timestamp before running it so you
+know exactly where to restore to if needed.
+
+**36. After any database restore, always run `uv run alembic upgrade head`.**
+A restored database may be behind the current schema version. Never
+operate JACKPOT against a database that hasn't been brought to the current
+migration head after a restore. Check with `uv run alembic current`.
+
+**37. Never manually configure GCS bucket settings in the GCP console.**
+All bucket configuration (versioning, lifecycle rules, Object Lock,
+IAM) is defined in jackpot-iac/terraform/gcs.tf. Manual console changes
+will be overwritten on the next `terraform apply` and create drift between
+the IaC and the actual state. Make changes in Terraform, apply, commit.
+
+**38. Never enable versioning on jackpot-work bucket.**
+The Nextflow work directory bucket has a 90-day lifecycle rule that
+deletes stale task caches. Versioning would conflict with this rule and
+accumulate unbounded storage costs. jackpot-work is intentionally
+ephemeral — pipelines are restartable via -resume.
+
+**39. All PATCH endpoints use `model_dump(exclude_none=True)` for partial updates.**
+Build a dict of only the supplied fields using Pydantic's model_dump with
+exclude_none=True. Construct the UPDATE statement dynamically from that dict.
+Never UPDATE all columns unconditionally — only update what was supplied.
+Example pattern:
+```python
+updates = payload.model_dump(exclude_none=True)
+if not updates:
+    raise HTTPException(status_code=400, detail="No fields to update.")
+set_clause = ", ".join(f"{k} = :{k}" for k in updates)
+updates["id"] = resource_id
+row = execute_write(f"UPDATE table SET {set_clause} WHERE id = :id RETURNING *", updates, conn)
+```
+
+**40. All INSERT and UPDATE statements use RETURNING to get back the row.**
+Never do a separate SELECT after a write. Use PostgreSQL's RETURNING clause
+in execute_write() calls to return the created or updated row directly.
+Always use `RETURNING *` unless only specific columns are needed.
+Example: `INSERT INTO samples (...) VALUES (...) RETURNING *`
+This applies to every router — never write a row and then SELECT it back.
+
+**41. Routers use `get_db_dep()` with `Depends()` for database access.**
+Import `get_db_dep` from `backend.database` and `Depends` from `fastapi`.
+Pass the session as `conn` to `execute_write()`, `log_audit()`, and
+`create_notification()` so all writes share one transaction — if any
+write fails, all roll back together.
+```python
+from fastapi import APIRouter, Depends
+from backend.database import execute_query, execute_write, get_db_dep
+from backend.audit import log_audit, AuditActions
+from backend.responses import success, error
+
+router = APIRouter(prefix="/api/v1/organizations", tags=["organizations"])
+
+@router.post("/", status_code=201)
+def create_org(payload: OrgCreate, db=Depends(get_db_dep)):
+    row = execute_write(
+        "INSERT INTO organizations (display_name) VALUES (:name) RETURNING *",
+        {"name": payload.display_name},
+        conn=db,
+    )
+    log_audit(
+        action=AuditActions.CREATE_ORG,
+        actor_id=current_user["id"],
+        resource_type="organization",
+        resource_id=str(row[0]["id"]),
+        before=None,
+        after=row[0],
+        metadata=None,
+        db_conn=db,
+    )
+    return success(data=row[0], status_code=201)
+```
+
 ---
 
 ## Local Dev Role Switching
@@ -162,7 +390,7 @@ and change the env var:
 INSERT INTO users (email, name, is_platform_admin, is_active, organization_id)
 VALUES ('director@test.com', 'Lab Director', FALSE, TRUE, 1);
 
-INSERT INTO lab_membership (user_id, lab_id, permission_group_id, is_lab_admin)
+INSERT INTO lab_membership (user_id, lab_id, permission_group_id, is_lab_director)
 SELECT u.id, 1,
   (SELECT id FROM permission_groups WHERE name = 'Lab Director'),
   TRUE
@@ -307,9 +535,11 @@ meaningful error when WORKSPACE_ENABLED=false or equivalent:
 
 ---
 
+## APGAP Compatibility
+
 - Organization → Lab → Project → User hierarchy is identical
 - PermissionGroups enum string values match APGAP exactly
-- `is_lab_admin=TRUE` on `lab_membership` = Lab Director
+- `is_lab_director=TRUE` on `lab_membership` = Lab Director
 - Projects preserve all Seqera fields (`workspace_id`, `compute_env_id`, `credentials_id`)
 - Migration script: `scripts/migrate_from_apgap.py`
 
@@ -588,13 +818,13 @@ pattern for the prototype — no separate GKE CronJob needed until Month 2+.
 
 ```python
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
-from backend.jobs import run_access_request_job, run_scrub_override_job
+from backend.jobs import run_access_request_job, run_scrubber_queue_job
 
 scheduler = AsyncIOScheduler()
 
 @app.on_event("startup")
 async def start_scheduler():
-    scheduler.add_job(run_scrub_override_job, "interval", hours=1,
+    scheduler.add_job(run_scrubber_queue_job, "interval", hours=1,
                       id="scrub_override_auto_deny")
     scheduler.add_job(run_access_request_job, "interval", hours=1,
                       id="access_request_auto_approve")
@@ -612,7 +842,7 @@ async function that opens its own database connection. Jobs are idempotent —
 running them twice produces the same result as running them once.
 
 ```python
-async def run_scrub_override_job() -> None:
+async def run_scrubber_queue_job() -> None:
     """
     Auto-deny scrub override requests that have been pending for > 48 hours.
     Conservative default: if Lab Director doesn't decide, scrubber runs.
@@ -905,89 +1135,6 @@ directly — always call `compute_epiweeks()`.
 
 ---
 
-## Critical Rules (continued)
-
-**16. `surveillance_relevant` is always computed by `compute_surveillance_relevant()`
-in `validator.py`.**
-Never set this field directly in a router. The validator is the only
-place that reads from `reportable_organisms` and applies metagenomics
-target_organisms logic. Ingest endpoints call the validator and use the
-returned value.
-
-**17. `quality_status` is always set by `compute_quality_status()` —
-never hardcoded in routers.**
-The validator returns a `ValidationResult` with a `tier` integer (1, 2, or 3).
-`compute_quality_status(validation_result)` converts that to the string
-("PRELIMINARY", "ANALYZABLE", "SUBMITTABLE"). Routers call this function —
-they never write quality_status strings directly.
-
-**18. `scrub_status = 'SKIPPED'` is only set in two places:**
-(1) `validator.py` — FASTA-only auto-skip (no raw reads, approved_by=SYSTEM).
-(2) The scrub override approval workflow — after Lab Director approval.
-Ingest endpoints must not set scrub_status = SKIPPED directly under any
-other circumstance. SRA-imported samples are also auto-SKIPPED by the
-validator with skip_reason = 'sra_imported'.
-
-**19. One CSV row = one sample. Files are associated via `file_detector.py`
-pairing logic, never by requiring per-file rows from the user.**
-The `files` column in any CSV or metadata form is semicolon-delimited
-within a single cell: `AZ-001_R1.fastq.gz;AZ-001_R2.fastq.gz`.
-`file_detector.py` is called on the parsed file list for every ingest path.
-Never write file parsing or pairing logic in a router.
-
-**20. `gen-pydantic` requires two steps after every run:**
-(1) Always use the `--pydantic-version 2` flag:
-    `uv run gen-pydantic --pydantic-version 2 schema/schema/jackpot_schema.yaml > backend/models_generated.py`
-(2) Apply the boolean keyword patch AND trailing newline fix immediately after:
-
-```python
-from pathlib import Path
-content = Path('backend/models_generated.py').read_text()
-# Boolean keyword patch — gen-pydantic emits True/False as enum member names
-# which are Python keywords and cause SyntaxError on import
-content = content.replace('\n    True = "True"',   '\n    true = "True"')
-content = content.replace('\n    False = "False"', '\n    false = "False"')
-# Trailing newline — pre-commit end-of-file-fixer requires it
-content = content.rstrip('\n') + '\n'
-Path('backend/models_generated.py').write_text(content)
-print('Patched.')
-```
-
-Both fixes are applied automatically by `schema_update.py`. When running
-manually, always apply both in the same step — never commit
-`models_generated.py` without the patch applied or the pre-commit hooks
-will modify the file and block the commit.
-
-`models_generated.py` is excluded from ruff linting (generated code).
-Never edit it manually — always regenerate then patch.
-
-**21. Sequencing lab → JACKPOT lab linkage uses `sequencing_lab_assignments`.**
-The `sequencing_labs` table (the registry of physical sequencing facilities)
-and the `labs` table (JACKPOT organizational units) are linked via a join
-table `sequencing_lab_assignments` (sequencing_lab_id, lab_id). A single
-sequencing facility may serve multiple JACKPOT labs. This join table is
-used by the Globus deposit-first workflow to identify which Lab Directors
-to notify when files arrive from a given sequencing facility.
-
-**22. Background jobs are implemented in `backend/jobs.py` using APScheduler.**
-Jobs are started in `backend/main.py` at application startup using
-`AsyncIOScheduler`. Jobs are idempotent — running twice = same result as
-running once. Every job can also be triggered manually via
-`POST /api/v1/admin/jobs/{job_id}/run` (Platform Admin only) for local dev.
-Never use `asyncio.create_task()` directly in routers for deferred work —
-always add a job to the scheduler.
-
-**23. All list endpoints use `backend/pagination.py` — never raw OFFSET/LIMIT.**
-See the Pagination Convention section. The `select-all-N-results` bulk
-select uses `?select_all=true` which returns IDs only, no pagination.
-
-**24. All responses use `backend/responses.py` helpers — never raw dicts.**
-See the API Response Conventions section. Every router imports `success`,
-`success_list`, and `error` from `backend/responses.py`. The response
-envelope shape is fixed — routers never construct it manually.
-
----
-
 ## Local Development Stack — What Runs Where
 
 JACKPOT uses a **hybrid local dev stack**. Docker Compose is the primary
@@ -1228,35 +1375,6 @@ nextflow run scripts/test_batch.nf \
 
 ---
 
-## Critical Rules (continued)
-
-**25. Every pipeline run gets an isolated GCS work directory.**
-Format: `gs://jackpot-work/{run_id}/work/`. Never share workDir between runs.
-The run_id is always passed as a Nextflow parameter by the launch endpoint.
-Stored in `pipeline_runs.work_dir` for `-resume` support.
-
-**26. The Nextflow config is always generated per-run by the launch endpoint.**
-Never use a static `nextflow.config` for JACKPOT pipeline runs. The launch
-endpoint templates the config with run_id, API URL, weblog URL, result URL,
-and pipeline token. Written to a temp file and passed via `-c jackpot_run.config`.
-
-**27. `resourceLabels` must be included in every generated Nextflow config.**
-Labels `jackpot_run_id`, `jackpot_lab`, `jackpot_pipeline` are required for
-GCP Billing cost attribution and the JACKPOT billing dashboard. Never omit.
-
-**28. Minikube is for JupyterHub only. Docker Compose is the primary dev environment.**
-Do not run jackpot-backend, postgres, or minio in minikube. JupyterHub pods
-reach the Docker Compose API via `minikube tunnel`. This separation mirrors
-the production topology where JupyterHub and the API are separate services.
-
-**29. On Apple Silicon, use `PIPELINE_EXECUTOR=gcp_batch` for pipeline testing.**
-Many bioinformatics containers are x86-only. GCP Batch VMs are x86 by
-default, avoiding ARM compatibility issues. Spot instances make this cheap
-for short test runs. Only use `PIPELINE_EXECUTOR=local` for pipelines
-verified to have ARM-compatible containers.
-
----
-
 ## GKE Autoscaling Architecture
 
 JACKPOT uses three separate GKE node pools, each tuned to its workload.
@@ -1356,28 +1474,6 @@ All autoscaling configuration lives in jackpot-iac Terraform:
 
 ---
 
-## Critical Rules (continued)
-
-**30. Pipeline compute runs on GCP Batch, not GKE pods.**
-Never submit Nextflow tasks as GKE pod workloads. GKE runs only the
-Nextflow controller process (~2CPU/4GB) in the api-pool. All task compute
-is submitted to GCP Batch by Nextflow directly.
-
-**31. Bulk scrubber submissions use the queue — never submit all jobs at once.**
-When multiple samples arrive simultaneously (Globus batch, CSV upload),
-add all to the scrubber queue (scrub_status=PENDING). The
-`run_scrubber_queue_job()` background job controls concurrency via
-SCRUBBER_MAX_CONCURRENT. Never submit more than SCRUBBER_MAX_CONCURRENT
-scrubber GKE Jobs simultaneously.
-
-**32. Scrubber GKE Jobs run on the scrubber-pool using spot nodes.**
-The scrubber Job manifest must include nodeSelector for scrubber-pool and
-toleration for spot nodes. Scrubber is restartable — if a spot node is
-preempted, the sample stays IN_PROGRESS and the job is resubmitted by
-the queue job on its next cycle.
-
----
-
 ## Caching Architecture — Why Not Celery/Redis
 
 JACKPOT deliberately avoids Celery and Redis as a general-purpose task
@@ -1468,22 +1564,6 @@ enqueue_email_task() creates a Cloud Tasks task pointing to
 
 Never introduce Celery. If a new async workload arises that doesn't fit
 APScheduler, GKE Jobs, or Cloud Tasks, discuss before implementing.
-
----
-
-## Critical Rules (continued)
-
-**33. Never use per-pod in-memory caching for data shared across API replicas.**
-In multi-pod GKE deployments, per-pod dicts create cache inconsistency.
-Use `backend/cache.py` which routes to Redis (production) or a simple
-dict (local dev) based on SEARCH_CACHE_BACKEND. Only external search
-results are cached. Never add new cache categories without discussion.
-
-**34. No Celery. No Redis as a task broker or result backend.**
-JACKPOT uses GCP-native services for async work: GCP Batch (pipelines),
-GKE Jobs (scrubber, SRA downloads), Cloud Scheduler (background jobs),
-Cloud Tasks (future email). Redis is used only as a shared cache for
-external search results via backend/cache.py.
 
 ---
 
@@ -1598,33 +1678,6 @@ Expected RTO: varies by data volume.
 | `gcs.tf` | Versioning on sequences/references, Object Lock on backups, lifecycle rules |
 | `snapshots.tf` | GKE PVC daily snapshot schedule, 14-day retention |
 | `budgets.tf` | Already planned — budget alerts at 50%/80%/100% |
-
----
-
-## Critical Rules (continued)
-
-**35. Never disable PITR on the Cloud SQL instance.**
-Point-in-time recovery is the primary defense against bad migrations.
-It must always be enabled. If a migration is about to run that you're
-uncertain about, note the current timestamp before running it so you
-know exactly where to restore to if needed.
-
-**36. After any database restore, always run `uv run alembic upgrade head`.**
-A restored database may be behind the current schema version. Never
-operate JACKPOT against a database that hasn't been brought to the current
-migration head after a restore. Check with `uv run alembic current`.
-
-**37. Never manually configure GCS bucket settings in the GCP console.**
-All bucket configuration (versioning, lifecycle rules, Object Lock,
-IAM) is defined in jackpot-iac/terraform/gcs.tf. Manual console changes
-will be overwritten on the next `terraform apply` and create drift between
-the IaC and the actual state. Make changes in Terraform, apply, commit.
-
-**38. Never enable versioning on jackpot-work bucket.**
-The Nextflow work directory bucket has a 90-day lifecycle rule that
-deletes stale task caches. Versioning would conflict with this rule and
-accumulate unbounded storage costs. jackpot-work is intentionally
-ephemeral — pipelines are restartable via -resume.
 
 ---
 
@@ -1778,16 +1831,16 @@ knowledge base.
 
 ### Model choice
 
-**Default: Anthropic API (claude-haiku-4-5)**
+**Default: Anthropic API (claude-haiku-4-5-20251001)**
 Cheapest, fastest, sufficient for documentation Q&A. No new vendor
 relationship — uses the same Anthropic API as the rest of the platform.
-env var: ASSISTANT_MODEL=claude-haiku-4-5
+env var: `ASSISTANT_MODEL=claude-haiku-4-5-20251001`
 
 **Alternative: Local model via Ollama (if data sensitivity required)**
 If users are likely to paste sample IDs or clinical details into the chat,
 a local model that never sends data to a third-party API is worth
 considering. Llama 3.1 8B or Mistral 7B on a GKE GPU node. Set
-ASSISTANT_BACKEND=ollama, OLLAMA_ENDPOINT=http://ollama-service:11434.
+`ASSISTANT_BACKEND=ollama`, `OLLAMA_ENDPOINT=http://ollama-service:11434`.
 
 ### Hallucination controls — mandatory
 
@@ -1826,7 +1879,7 @@ primary feature.
 |---|---|---|
 | `ASSISTANT_ENABLED` | `false` | Feature flag — disabled until Year 2 |
 | `ASSISTANT_BACKEND` | `anthropic` | `anthropic` or `ollama` |
-| `ASSISTANT_MODEL` | `claude-haiku-4-5` | Model name |
+| `ASSISTANT_MODEL` | `claude-haiku-4-5-20251001` | Model name — use full string |
 | `OLLAMA_ENDPOINT` | not set | Ollama service URL if backend=ollama |
 | `ASSISTANT_VECTOR_DB` | `pgvector` | Vector store: `pgvector` or `chroma` |
 | `ASSISTANT_MAX_CHUNKS` | `5` | Max retrieved chunks per query |
@@ -1849,18 +1902,3 @@ The PRIDE database at EBI built a directly comparable chatbot for their
 proteomics data repository — same use case (documentation Q&A + dataset
 search), same RAG architecture, published in Proteomics (2024).
 Reference: https://www.ebi.ac.uk/pride/chatbot/
-
-## jackpot-cli (SDK)
-
-jackpot-cli is a separate repo containing the Python SDK and CLI for the
-JACKPOT API. It lives at `~/ASU/jackpot/jackpot-cli`. The SDK's
-`JACKPOTClient` expects:
-
-- Success: `{"success": true, "data": ...}` — unwrapped automatically
-- Error: `{"success": false, "error": {"code": ..., "message": ..., "detail": ...}}`
-- Pagination: `{"success": true, "data": [...], "pagination": {...}}`
-
-Every router endpoint you implement will be called by the CLI. Verify
-the response shape matches before considering an endpoint complete.
-Priority endpoints for CLI usability: `ingest/upload` → `samples/` list
-and get → `pipelines/` list and launch.
