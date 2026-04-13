@@ -6,7 +6,29 @@ from backend.config import get_settings
 from backend.jobs import run_access_request_job, run_scrubber_queue_job
 from backend.logging_config import configure_logging
 from backend.middleware import RequestIDMiddleware
-from backend.routers import gisaid, samples
+from backend.routers import (
+    archive_requests,
+    auth,
+    billing,
+    dataharmonizer,
+    dataset_access,
+    datasets,
+    domain_whitelist,
+    gisaid,
+    ingest,
+    labs,
+    ncbi_submissions,
+    notifications,
+    organizations,
+    pipelines,
+    projects,
+    sample_access,
+    samples,
+    saved_searches,
+    sequencing_labs,
+    tokens,
+    users,
+)
 from backend.version import __version__
 
 app = FastAPI(
@@ -19,8 +41,27 @@ app = FastAPI(
     version=__version__,
 )
 
+app.include_router(archive_requests.router)
+app.include_router(auth.router)
+app.include_router(billing.router)
+app.include_router(dataharmonizer.router)
+app.include_router(dataset_access.router)
+app.include_router(datasets.router)
+app.include_router(domain_whitelist.router)
 app.include_router(gisaid.router)
+app.include_router(ingest.router)
+app.include_router(labs.router)
+app.include_router(ncbi_submissions.router)
+app.include_router(notifications.router)
+app.include_router(organizations.router)
+app.include_router(pipelines.router)
+app.include_router(projects.router)
+app.include_router(sample_access.router)
 app.include_router(samples.router)
+app.include_router(saved_searches.router)
+app.include_router(sequencing_labs.router)
+app.include_router(tokens.router)
+app.include_router(users.router)
 
 app.add_middleware(RequestIDMiddleware)
 app.add_middleware(

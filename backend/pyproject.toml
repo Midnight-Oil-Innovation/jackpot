@@ -60,7 +60,7 @@ omit = [
     "backend/audit.py",
     "backend/notifications.py",
     "backend/pagination.py",
-    "backend/response.py",
+    "backend/responses.py",
     "backend/routers/archive_requests.py",
     "backend/routers/auth.py",
     "backend/routers/billing.py",

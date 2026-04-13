@@ -138,12 +138,6 @@ def validate_sample(data: dict) -> ValidationResult:
     if sector and sector not in VALID_SECTORS:
         errors.append(f"Invalid sector '{sector}'. Must be one of: {sorted(VALID_SECTORS)}")
 
-    source_type = data.get("source_type", "")
-    if source_type and source_type not in VALID_SOURCE_TYPES:
-        errors.append(
-            f"Invalid source_type '{source_type}'. Must be one of: {sorted(VALID_SOURCE_TYPES)}"
-        )
-
     platform = data.get("sequencing_platform", "")
     if platform and platform not in VALID_PLATFORMS:
         errors.append(
@@ -157,8 +151,8 @@ def validate_sample(data: dict) -> ValidationResult:
             f"Must be one of: {sorted(VALID_EXPERIMENT_TYPES)}"
         )
 
-    sharing = data.get("sharing_level", "")
-    if sharing not in VALID_SHARING_LEVELS:
+    sharing = data.get("sharing_level")
+    if sharing is not None and sharing not in VALID_SHARING_LEVELS:
         errors.append(
             f"Invalid sharing_level '{sharing}'. Must be one of: {sorted(VALID_SHARING_LEVELS)}"
         )

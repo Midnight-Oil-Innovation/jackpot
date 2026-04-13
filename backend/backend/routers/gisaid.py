@@ -48,12 +48,12 @@ def export_gisaid_csv(
     pathogen: str,
     request: Request,
 ) -> StreamingResponse:
-    if not sample_ids:
-        raise HTTPException(status_code=400, detail="No sample IDs provided.")
     """
     Generate a GISAID-compatible CSV for the specified samples.
     Supports SARS-CoV-2 (EpiCoV), Influenza (EpiFlu), Mpox (EpiPox).
     """
+    if not sample_ids:
+        raise HTTPException(status_code=400, detail="No sample IDs provided.")
     user = get_current_user(request)
     require_lab_access(user, lab_id)
 
@@ -82,7 +82,7 @@ def export_gisaid_csv(
     for s in samples:
         row = {
             "Virus name": (
-                f"hCoV-19/{s['collection_location_country'].replace(' ', '_')}/"
+                f"hCoV-19/{s.get('collection_location_country', '').replace(' ', '_')}/"
                 f"{s['sample_id']}/{str(s['date_collected'])[:4]}"
             ),
             "Type": "betacoronavirus",
