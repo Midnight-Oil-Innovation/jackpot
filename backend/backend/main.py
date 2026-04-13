@@ -1,8 +1,11 @@
+from contextlib import asynccontextmanager
+
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from backend.config import get_settings
+from backend.database import execute_query
 from backend.jobs import run_access_request_job, run_scrubber_queue_job
 from backend.logging_config import configure_logging
 from backend.middleware import RequestIDMiddleware
@@ -31,6 +34,32 @@ from backend.routers import (
 )
 from backend.version import __version__
 
+scheduler = AsyncIOScheduler()
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    configure_logging()
+    get_settings().validate_for_production()
+    if get_settings().scheduler_enabled:
+        scheduler.add_job(
+            run_scrubber_queue_job,
+            "interval",
+            hours=1,
+            id="scrub_override_auto_deny",
+        )
+        scheduler.add_job(
+            run_access_request_job,
+            "interval",
+            hours=1,
+            id="access_request_auto_approve",
+        )
+        scheduler.start()
+    yield
+    if scheduler.running:
+        scheduler.shutdown()
+
+
 app = FastAPI(
     title="JACKPOT API",
     description=(
@@ -39,6 +68,7 @@ app = FastAPI(
         "LOINC, SNOMED CT, MMWR epiweek."
     ),
     version=__version__,
+    lifespan=lifespan,
 )
 
 app.include_router(archive_requests.router)
@@ -72,35 +102,12 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-scheduler = AsyncIOScheduler()
-
-
-@app.on_event("startup")
-def startup() -> None:
-    configure_logging()
-    get_settings().validate_for_production()
-    if get_settings().scheduler_enabled:
-        scheduler.add_job(
-            run_scrubber_queue_job,
-            "interval",
-            hours=1,
-            id="scrub_override_auto_deny",
-        )
-        scheduler.add_job(
-            run_access_request_job,
-            "interval",
-            hours=1,
-            id="access_request_auto_approve",
-        )
-        scheduler.start()
-
-
-@app.on_event("shutdown")
-def shutdown() -> None:
-    if scheduler.running:
-        scheduler.shutdown()
-
 
 @app.get("/health")
 def health() -> dict:
-    return {"status": "ok", "version": __version__, "project": "JACKPOT"}
+    try:
+        execute_query("SELECT 1")
+        db_status = "connected"
+    except Exception:
+        db_status = "unavailable"
+    return {"status": "ok", "version": __version__, "project": "JACKPOT", "database": db_status}
