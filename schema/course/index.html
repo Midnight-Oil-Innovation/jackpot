@@ -1,0 +1,1209 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>JACKPOT: How a Pathogen Genomics Platform Works</title>
+
+  <!-- Google Fonts: Bricolage Grotesque · DM Sans · JetBrains Mono -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,600;12..96,700;12..96,800&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400;1,9..40,500&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+
+  <link rel="stylesheet" href="styles.css">
+
+  <style>
+    :root {
+      --color-accent:       #2A7B9B;
+      --color-accent-hover: #1F6280;
+      --color-accent-light: #E4F2F7;
+      --color-accent-muted: #5A9DB8;
+    }
+  </style>
+
+  <script src="main.js" defer></script>
+</head>
+<body>
+
+  <nav class="nav" id="nav">
+    <div class="progress-bar" id="progress-bar" role="progressbar" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100"></div>
+    <div class="nav-inner">
+      <span class="nav-title">JACKPOT: How a Pathogen Genomics Platform Works</span>
+      <div class="nav-dots" id="nav-dots" role="tablist">
+        <button class="nav-dot" data-target="module-1" data-tooltip="Meet JACKPOT" role="tab" aria-label="Module 1: Meet JACKPOT"></button>
+        <button class="nav-dot" data-target="module-2" data-tooltip="The Schema Blueprint" role="tab" aria-label="Module 2: The Schema Blueprint"></button>
+        <button class="nav-dot" data-target="module-3" data-tooltip="One Health" role="tab" aria-label="Module 3: One Health"></button>
+        <button class="nav-dot" data-target="module-4" data-tooltip="From Spreadsheet to Science" role="tab" aria-label="Module 4: From Spreadsheet to Science"></button>
+        <button class="nav-dot" data-target="module-5" data-tooltip="Data Governance" role="tab" aria-label="Module 5: Data Governance"></button>
+      </div>
+    </div>
+  </nav>
+
+  <main id="main">
+    <!-- modules/*.html content is assembled here by build.sh -->
+<section class="module" id="module-1" style="background: var(--color-bg);">
+  <div class="module-content">
+
+    <!-- SCREEN 1: Hero -->
+    <div class="screen animate-in">
+      <div class="module-number">01</div>
+      <h1 class="module-title">Meet JACKPOT</h1>
+      <p class="module-subtitle">What happens from the moment a swab is collected to the moment a public health alert goes out — and the software that makes it possible.</p>
+
+      <div class="callout callout-info" style="margin-top: var(--space-8);">
+        <strong>JACKPOT</strong> stands for <em>Joint ASU/ADHS Center for Pathogen Genomics and One-Health Tracking</em>. It's a platform built at Arizona State University in partnership with the Arizona Department of Health Services to track infectious disease outbreaks using genomic sequencing.
+      </div>
+
+      <div class="pattern-cards" style="margin-top: var(--space-8);">
+        <div class="pattern-card">
+          <div class="pattern-card-icon">🦠</div>
+          <h4>What it tracks</h4>
+          <p>Viruses, bacteria, and other pathogens — from COVID-19 and flu to Salmonella and Valley fever</p>
+        </div>
+        <div class="pattern-card">
+          <div class="pattern-card-icon">🧬</div>
+          <h4>How it works</h4>
+          <p>By reading the <span class="tooltip" data-tip="The complete genetic code of a pathogen — like reading its entire instruction manual">genome</span> of each pathogen, it can tell whether two cases are related or coincidental</p>
+        </div>
+        <div class="pattern-card">
+          <div class="pattern-card-icon">🏥</div>
+          <h4>Who uses it</h4>
+          <p>Public health officials, academic researchers, and epidemiologists tracking disease spread across Arizona and beyond</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- SCREEN 2: The journey of a sample -->
+    <div class="screen animate-in">
+      <h2 class="screen-title">Imagine: A Patient Walks Into a Clinic</h2>
+      <p>A nurse takes a nasal swab. That swab kicks off a journey through labs, computers, and databases — eventually informing whether Arizona is seeing a new outbreak. Here's that journey:</p>
+
+      <div class="flow-animation" data-steps='[
+        {"highlight":"flow-actor-1","label":"A nurse collects a swab from a patient in Phoenix"},
+        {"highlight":"flow-actor-2","label":"The clinical lab runs a PCR test — positive for Influenza A","packet":true,"from":"actor-1","to":"actor-2"},
+        {"highlight":"flow-actor-3","label":"The sample goes to a sequencing lab to read its full genome","packet":true,"from":"actor-2","to":"actor-3"},
+        {"highlight":"flow-actor-4","label":"A researcher uploads the data to JACKPOT via a spreadsheet","packet":true,"from":"actor-3","to":"actor-4"},
+        {"highlight":"flow-actor-5","label":"JACKPOT runs automated pipelines: lineage assignment, QC checks","packet":true,"from":"actor-4","to":"actor-5"},
+        {"highlight":"flow-actor-5","label":"ADHS sees: H3N2 clade, 3 identical genomes in Maricopa County this week — possible cluster"}
+      ]'>
+        <div class="flow-actors">
+          <div class="flow-actor" id="flow-actor-1">
+            <div class="flow-actor-icon">🏥</div>
+            <span>Clinic</span>
+          </div>
+          <div class="flow-actor" id="flow-actor-2">
+            <div class="flow-actor-icon">🔬</div>
+            <span>Clinical Lab</span>
+          </div>
+          <div class="flow-actor" id="flow-actor-3">
+            <div class="flow-actor-icon">🧬</div>
+            <span>Sequencing Lab</span>
+          </div>
+          <div class="flow-actor" id="flow-actor-4">
+            <div class="flow-actor-icon">💻</div>
+            <span>JACKPOT Portal</span>
+          </div>
+          <div class="flow-actor" id="flow-actor-5">
+            <div class="flow-actor-icon">📊</div>
+            <span>ADHS Dashboard</span>
+          </div>
+        </div>
+
+        <div class="flow-packet" id="flow-packet"></div>
+        <div class="flow-step-label" id="flow-label">Click "Next Step" to trace a sample's journey</div>
+
+        <div class="flow-controls">
+          <button class="btn flow-next-btn">Next Step</button>
+          <button class="btn flow-reset-btn">Restart</button>
+          <span class="flow-progress"></span>
+        </div>
+      </div>
+    </div>
+
+    <!-- SCREEN 3: Why genomics? -->
+    <div class="screen animate-in">
+      <h2 class="screen-title">Why Sequence the Genome at All?</h2>
+
+      <p>Traditional lab tests tell you <em>what</em> pathogen is present. Genomic sequencing tells you <em>which exact version</em> — and that difference is huge for outbreak detection.</p>
+
+      <div class="callout callout-highlight" style="margin: var(--space-6) 0;">
+        <strong>The postal code analogy:</strong> Knowing someone has COVID is like knowing they live in "Arizona." Knowing their <span class="tooltip" data-tip="A named variant of a virus, identified by specific mutations in its genome — like BA.2.86 or JN.1 for SARS-CoV-2">lineage</span> is like knowing their exact street address. It lets you trace who infected whom.
+      </div>
+
+      <div class="step-cards">
+        <div class="step-card">
+          <div class="step-number">1</div>
+          <div class="step-content">
+            <h4>Cluster Detection</h4>
+            <p>When two patients have genomes that differ by only 1–2 mutations, they likely share a transmission chain. JACKPOT makes this comparison automatic.</p>
+          </div>
+        </div>
+        <div class="step-card">
+          <div class="step-number">2</div>
+          <div class="step-content">
+            <h4>Variant Tracking</h4>
+            <p>Which new variants are circulating in Arizona? When did they arrive? Is this a local spread or travel-imported? The genome answers all of these.</p>
+          </div>
+        </div>
+        <div class="step-card">
+          <div class="step-number">3</div>
+          <div class="step-content">
+            <h4>National Reporting</h4>
+            <p>JACKPOT formats genomic data for <span class="tooltip" data-tip="National Center for Biotechnology Information — the US government database that archives all genomic sequence data publicly">NCBI</span>, <span class="tooltip" data-tip="Global Initiative on Sharing All Influenza Data — an international database for flu, COVID, and pox genomes">GISAID</span>, and CDC — so Arizona data feeds into the global picture.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- SCREEN 4: What is this codebase? -->
+    <div class="screen animate-in">
+      <h2 class="screen-title">This Repository: The Data Blueprint</h2>
+      <p>The <code>jackpot-schema</code> repository doesn't run the platform — it <em>defines the shape of data</em> that the platform stores and shares. Think of it like an architect's floor plan for a building.</p>
+
+      <div class="arch-diagram">
+        <div class="arch-zone" style="border-color: var(--color-accent);">
+          <h4 class="arch-zone-label" style="color: var(--color-accent);">jackpot-schema repo</h4>
+          <div class="arch-component" data-desc="The master schema file — defines every field, type, and rule for all sample data. Written in LinkML (a language for describing data structures). ~700 lines." onclick="showArchDesc(this)">
+            <div class="arch-icon">📐</div>
+            <span>jackpot_schema.yaml</span>
+          </div>
+          <div class="arch-component" data-desc="Mapping configs — tell the platform how to translate incoming spreadsheets (from different labs) into the standard schema fields. One config per lab type." onclick="showArchDesc(this)">
+            <div class="arch-icon">🗺️</div>
+            <span>mapping_configs/</span>
+          </div>
+          <div class="arch-component" data-desc="Update scripts — Python scripts that safely evolve the schema from one version to the next (e.g. v4.3 → v4.4), applying changes as code rather than manual edits." onclick="showArchDesc(this)">
+            <div class="arch-icon">🔧</div>
+            <span>setup/update_schema_*.py</span>
+          </div>
+        </div>
+        <div class="arch-description" id="arch-desc">Click any component to learn what it does →</div>
+      </div>
+
+      <div class="callout callout-tip" style="margin-top: var(--space-8);">
+        <strong>Aha!</strong> A "schema" is the contract that all data in the system must follow. It's like a form with required fields — you can't submit a sample without filling in the pathogen name, collection date, and sequencing method. The schema enforces this.
+      </div>
+    </div>
+
+  </div>
+</section>
+<section class="module" id="module-2" style="background: var(--color-bg-warm);">
+  <div class="module-content">
+
+    <!-- SCREEN 1: What is a schema? -->
+    <div class="screen animate-in">
+      <div class="module-number">02</div>
+      <h1 class="module-title">The Schema Blueprint</h1>
+      <p class="module-subtitle">Every sample stored in JACKPOT must follow a strict set of rules. This module is about those rules — what they are, why they exist, and how they're written.</p>
+
+      <div class="callout callout-highlight" style="margin-top: var(--space-8);">
+        <strong>The passport analogy:</strong> A passport is a schema. It has required fields (name, birthdate, nationality), optional fields (middle name), and controlled values (country codes). If you leave a required field blank, the passport is invalid. JACKPOT's schema works the same way for pathogen data.
+      </div>
+
+      <div class="pattern-cards" style="margin-top: var(--space-8);">
+        <div class="pattern-card">
+          <div class="pattern-card-icon">✅</div>
+          <h4>Required fields</h4>
+          <p>Fields every sample must have — like <code>sample_id</code>, <code>organism_name</code>, <code>date_collected</code></p>
+        </div>
+        <div class="pattern-card">
+          <div class="pattern-card-icon">📋</div>
+          <h4>Controlled vocabularies</h4>
+          <p>Fields that only accept specific values — like <code>sequencing_platform</code> (Illumina, Nanopore, etc.)</p>
+        </div>
+        <div class="pattern-card">
+          <div class="pattern-card-icon">🔗</div>
+          <h4>Linked standards</h4>
+          <p>Each field maps to a global standard — NCBI BioSample, WHO, CDC — so data can be shared automatically</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- SCREEN 2: The class hierarchy -->
+    <div class="screen animate-in">
+      <h2 class="screen-title">The Cast of Characters</h2>
+      <p>The schema is organized as a <span class="tooltip" data-tip="A family-tree structure where child items inherit properties from parent items — like how all dogs are animals but not all animals are dogs">class hierarchy</span>. Think of it like a family tree where each child inherits everything from its parent, then adds its own special traits.</p>
+
+      <div class="flow-animation" data-steps='[
+        {"highlight":"flow-actor-1","label":"Organization: the top-level institution — e.g., Arizona State University or ADHS"},
+        {"highlight":"flow-actor-2","label":"Lab: a research group within the org — e.g., the Biodesign Institute genomics lab","packet":true,"from":"actor-1","to":"actor-2"},
+        {"highlight":"flow-actor-3","label":"Project: a specific surveillance effort — e.g., Arizona COVID Wastewater Surveillance 2026","packet":true,"from":"actor-2","to":"actor-3"},
+        {"highlight":"flow-actor-4","label":"Sample: a single sequenced specimen — always belongs to a lab and project","packet":true,"from":"actor-3","to":"actor-4"},
+        {"highlight":"flow-actor-5","label":"HumanSample (or WildlifeSample, WastewaterSample...): a specialized version with extra fields","packet":true,"from":"actor-4","to":"actor-5"}
+      ]'>
+        <div class="flow-actors">
+          <div class="flow-actor" id="flow-actor-1">
+            <div class="flow-actor-icon">🏛️</div>
+            <span>Organization</span>
+          </div>
+          <div class="flow-actor" id="flow-actor-2">
+            <div class="flow-actor-icon">🔬</div>
+            <span>Lab</span>
+          </div>
+          <div class="flow-actor" id="flow-actor-3">
+            <div class="flow-actor-icon">📁</div>
+            <span>Project</span>
+          </div>
+          <div class="flow-actor" id="flow-actor-4">
+            <div class="flow-actor-icon">🧫</div>
+            <span>Sample</span>
+          </div>
+          <div class="flow-actor" id="flow-actor-5">
+            <div class="flow-actor-icon">🧬</div>
+            <span>Subclass</span>
+          </div>
+        </div>
+
+        <div class="flow-packet" id="flow-packet"></div>
+        <div class="flow-step-label" id="flow-label">Click "Next Step" to trace the hierarchy</div>
+
+        <div class="flow-controls">
+          <button class="btn flow-next-btn">Next Step</button>
+          <button class="btn flow-reset-btn">Restart</button>
+          <span class="flow-progress"></span>
+        </div>
+      </div>
+
+      <div class="callout callout-info" style="margin-top: var(--space-6);">
+        <strong>Why this structure matters for you:</strong> When you ask an AI to "add a field to human samples," you need to know to say "HumanSample subclass" — not just "the sample." The hierarchy is the vocabulary.
+      </div>
+    </div>
+
+    <!-- SCREEN 3: What inheritance looks like in code -->
+    <div class="screen animate-in">
+      <h2 class="screen-title">Inheritance in Action</h2>
+      <p>Here's exactly how a <span class="tooltip" data-tip="A subclass is a more specific version of a class — it has all the same fields as its parent, plus additional ones specific to its type">subclass</span> is defined in the real schema file. <code>HumanSample</code> says <code>is_a: Sample</code> — meaning it gets all of Sample's ~60 fields for free, then adds its own.</p>
+
+      <div class="translation-block animate-in">
+        <div class="translation-code">
+          <span class="translation-label">CODE</span>
+          <pre><code>
+<span class="code-line"><span class="code-property">HumanSample</span>:</span>
+<span class="code-line">  <span class="code-keyword">is_a</span>: Sample</span>
+<span class="code-line">  <span class="code-keyword">description</span>: &gt;</span>
+<span class="code-line">    Clinical or surveillance sample</span>
+<span class="code-line">    from a human host.</span>
+<span class="code-line">  <span class="code-keyword">attributes</span>:</span>
+<span class="code-line">    <span class="code-property">adhs_medsis_id</span>:</span>
+<span class="code-line">      <span class="code-keyword">required</span>: <span class="code-keyword">true</span></span>
+<span class="code-line">    <span class="code-property">host_age</span>:</span>
+<span class="code-line">      <span class="code-keyword">range</span>: integer</span>
+<span class="code-line">    <span class="code-property">clinical_outcome</span>:</span>
+<span class="code-line">      <span class="code-keyword">description</span>: &gt;</span>
+<span class="code-line">        e.g. hospitalized, ICU, deceased</span>
+          </code></pre>
+        </div>
+        <div class="translation-english">
+          <span class="translation-label">PLAIN ENGLISH</span>
+          <div class="translation-lines">
+            <p class="tl"><strong>HumanSample:</strong> — here is the name of this class, like a new tab in a form</p>
+            <p class="tl"><strong>is_a: Sample</strong> — this inherits everything from the base Sample class. All 60+ base fields come along automatically.</p>
+            <p class="tl"><strong>description:</strong> — a human-readable note about what this class is for</p>
+            <p class="tl"><strong>attributes:</strong> — the extra fields that ONLY HumanSample has</p>
+            <p class="tl"><strong>adhs_medsis_id</strong> — required: true means this field MUST be filled in. It links to the Arizona disease reporting system.</p>
+            <p class="tl"><strong>host_age: range: integer</strong> — age must be a whole number, not text like "forty"</p>
+            <p class="tl"><strong>clinical_outcome</strong> — how the patient fared: hospitalized, ICU, outpatient, etc.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- SCREEN 4: Ontology anchoring -->
+    <div class="screen animate-in">
+      <h2 class="screen-title">Why Every Field Has a Global Address</h2>
+      <p>Notice this in the schema: <code>slot_uri: ncbi:host_age</code>. That's an <span class="tooltip" data-tip="A globally unique identifier for a concept — like a universal part number. Instead of each system calling it 'patient_age' or 'age_years', everyone uses the same URI so computers can match them automatically">ontology URI</span>. It means JACKPOT's <code>host_age</code> field is the same thing as NCBI's <code>host_age</code> field — universally.</p>
+
+      <div class="callout callout-highlight" style="margin: var(--space-6) 0;">
+        <strong>The shipping container analogy:</strong> Before standardized shipping containers, every port had different equipment. Now one container fits any ship, truck, or crane worldwide. Ontology URIs are shipping container standards for data — a field with <code>genepio:0001181</code> is recognized by any FAIR-compatible system anywhere on Earth.
+      </div>
+
+      <div class="pattern-cards">
+        <div class="pattern-card">
+          <div class="pattern-card-icon">🔗</div>
+          <h4>NCBI BioSample</h4>
+          <p><code>ncbi:host_age</code>, <code>ncbi:organism</code> — the US government genomics database standard</p>
+        </div>
+        <div class="pattern-card">
+          <div class="pattern-card-icon">🌐</div>
+          <h4>GenEpiO / MIxS</h4>
+          <p><code>genepio:0001181</code> — the epidemiology ontology used by WHO, GISAID, and PHA4GE</p>
+        </div>
+        <div class="pattern-card">
+          <div class="pattern-card-icon">🏥</div>
+          <h4>SNOMED / LOINC</h4>
+          <p>Clinical coding systems — so JACKPOT data can link to electronic health records</p>
+        </div>
+      </div>
+
+      <div class="callout callout-tip" style="margin-top: var(--space-6);">
+        <strong>Aha!</strong> <span class="tooltip" data-tip="Findable, Accessible, Interoperable, Reusable — the four principles of good scientific data management">FAIR data principles</span> require that fields have stable global identifiers. Without ontology anchoring, data from different institutions can never be automatically combined — you'd have to manually map "collection_date" to "date_collected" to "col_dt" by hand.
+      </div>
+    </div>
+
+    <!-- SCREEN 5: Chat showing schema validation -->
+    <div class="screen animate-in">
+      <h2 class="screen-title">What Happens When a Field Is Wrong</h2>
+      <p>The schema doesn't just describe data — it enforces it. Here's what a conversation between the ingest system and a researcher might look like when validation catches a problem:</p>
+
+      <div class="chat-window" id="chat-module2">
+        <div class="chat-messages">
+          <div class="chat-message" data-msg="0" data-sender="researcher" style="display:none">
+            <div class="chat-avatar" style="background: var(--color-actor-4)">R</div>
+            <div class="chat-bubble">
+              <span class="chat-sender" style="color: var(--color-actor-4)">Researcher</span>
+              <p>I just uploaded my flu samples spreadsheet. The sequencing platform column says "Illumina NextSeq500".</p>
+            </div>
+          </div>
+          <div class="chat-message" data-msg="1" data-sender="jackpot" style="display:none">
+            <div class="chat-avatar" style="background: var(--color-actor-2)">J</div>
+            <div class="chat-bubble">
+              <span class="chat-sender" style="color: var(--color-actor-2)">JACKPOT Validator</span>
+              <p>⚠️ Validation error on row 3: "Illumina NextSeq500" is not in the allowed values for <code>sequencing_platform</code>.</p>
+            </div>
+          </div>
+          <div class="chat-message" data-msg="2" data-sender="researcher" style="display:none">
+            <div class="chat-avatar" style="background: var(--color-actor-4)">R</div>
+            <div class="chat-bubble">
+              <span class="chat-sender" style="color: var(--color-actor-4)">Researcher</span>
+              <p>But that's what the instrument is called! What should I put?</p>
+            </div>
+          </div>
+          <div class="chat-message" data-msg="3" data-sender="jackpot" style="display:none">
+            <div class="chat-avatar" style="background: var(--color-actor-2)">J</div>
+            <div class="chat-bubble">
+              <span class="chat-sender" style="color: var(--color-actor-2)">JACKPOT Validator</span>
+              <p>The controlled vocabulary requires "Illumina NextSeq 2000" (with a space and the correct model number). This ensures your data can be matched to NCBI BioSample records automatically.</p>
+            </div>
+          </div>
+          <div class="chat-message" data-msg="4" data-sender="researcher" style="display:none">
+            <div class="chat-avatar" style="background: var(--color-actor-4)">R</div>
+            <div class="chat-bubble">
+              <span class="chat-sender" style="color: var(--color-actor-4)">Researcher</span>
+              <p>Got it — so the exact spelling has to match the schema's allowed list, not what I normally write.</p>
+            </div>
+          </div>
+          <div class="chat-message" data-msg="5" data-sender="jackpot" style="display:none">
+            <div class="chat-avatar" style="background: var(--color-actor-2)">J</div>
+            <div class="chat-bubble">
+              <span class="chat-sender" style="color: var(--color-actor-2)">JACKPOT Validator</span>
+              <p>Exactly. The schema's <span class="tooltip" data-tip="A list of the only values that are allowed for a particular field — nothing outside the list is accepted">SequencingPlatformEnum</span> is the single source of truth. When everyone uses the same exact term, data from 50 different labs can be automatically aggregated.</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="chat-typing" id="chat-typing" style="display:none">
+          <div class="chat-avatar" id="chat-module2-typing-avatar" style="background: var(--color-actor-2)">J</div>
+          <div class="chat-typing-dots">
+            <span class="typing-dot"></span>
+            <span class="typing-dot"></span>
+            <span class="typing-dot"></span>
+          </div>
+        </div>
+
+        <div class="chat-controls">
+          <button class="btn chat-next-btn">Next Message</button>
+          <button class="btn chat-all-btn">Play All</button>
+          <button class="btn chat-reset-btn">Replay</button>
+          <span class="chat-progress"></span>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</section>
+<section class="module" id="module-3" style="background: var(--color-bg);">
+  <div class="module-content">
+
+    <!-- SCREEN 1: One Health intro -->
+    <div class="screen animate-in">
+      <div class="module-number">03</div>
+      <h1 class="module-title">One Health</h1>
+      <p class="module-subtitle">70% of emerging infectious diseases come from animals. JACKPOT doesn't just track human cases — it tracks the whole ecosystem.</p>
+
+      <div class="callout callout-highlight" style="margin-top: var(--space-8);">
+        <strong>The watershed analogy:</strong> A river's health depends on everything upstream — soil runoff, wildlife, farms. You can't understand a river by only measuring it at one point. One Health treats human, animal, and environmental disease surveillance as a single interconnected system, not three separate problems.
+      </div>
+
+      <div class="pattern-cards" style="margin-top: var(--space-8);">
+        <div class="pattern-card" style="border-top: 3px solid var(--color-actor-1);">
+          <div class="pattern-card-icon">👤</div>
+          <h4 style="color: var(--color-actor-1);">Human Sector</h4>
+          <p>Clinical samples from patients — the traditional disease surveillance system</p>
+        </div>
+        <div class="pattern-card" style="border-top: 3px solid var(--color-actor-2);">
+          <div class="pattern-card-icon">🦅</div>
+          <h4 style="color: var(--color-actor-2);">Animal Sector</h4>
+          <p>Wildlife, companion animals, livestock, and vectors like mosquitoes and ticks</p>
+        </div>
+        <div class="pattern-card" style="border-top: 3px solid var(--color-actor-5);">
+          <div class="pattern-card-icon">🌊</div>
+          <h4 style="color: var(--color-actor-5);">Environmental Sector</h4>
+          <p>Wastewater, water, air, soil, food — pathogens leave traces before anyone gets sick</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- SCREEN 2: Human samples -->
+    <div class="screen animate-in">
+      <h2 class="screen-title">Human Samples: The Clinical Record</h2>
+      <p>A <code>HumanSample</code> is the most data-rich sample type. It inherits all base fields, then adds everything epidemiologists need to understand the patient behind the pathogen.</p>
+
+      <div class="translation-block animate-in">
+        <div class="translation-code">
+          <span class="translation-label">CODE</span>
+          <pre><code>
+<span class="code-line"><span class="code-property">adhs_medsis_id</span>:</span>
+<span class="code-line">  <span class="code-keyword">required</span>: <span class="code-keyword">true</span></span>
+<span class="code-line"></span>
+<span class="code-line"><span class="code-property">host_age</span>:</span>
+<span class="code-line">  <span class="code-keyword">range</span>: integer</span>
+<span class="code-line"></span>
+<span class="code-line"><span class="code-property">host_age_range</span>:</span>
+<span class="code-line">  <span class="code-keyword">range</span>: AgeRangeEnum</span>
+<span class="code-line">  <span class="code-keyword">description</span>: &gt;-</span>
+<span class="code-line">    Decade bracket for privacy-preserving</span>
+<span class="code-line">    public surveillance reporting.</span>
+<span class="code-line"></span>
+<span class="code-line"><span class="code-property">date_of_symptom_onset</span>:</span>
+<span class="code-line">  <span class="code-keyword">range</span>: date</span>
+<span class="code-line"></span>
+<span class="code-line"><span class="code-property">travel_history_country</span>:</span>
+<span class="code-line">  <span class="code-keyword">multivalued</span>: <span class="code-keyword">true</span></span>
+          </code></pre>
+        </div>
+        <div class="translation-english">
+          <span class="translation-label">PLAIN ENGLISH</span>
+          <div class="translation-lines">
+            <p class="tl"><strong>adhs_medsis_id</strong> — required link to Arizona's disease reporting system. Every human sample must have one (or an exemption code). This connects the genome to the public health case record.</p>
+            <p class="tl"><strong>host_age: integer</strong> — the patient's exact age, stored internally for research analysis</p>
+            <p class="tl"><strong>host_age_range: AgeRangeEnum</strong> — the same age as a decade bracket (e.g. "25-34 years"). This version is shared publicly to protect privacy — exact age is considered <span class="tooltip" data-tip="Personally Identifiable Information — data that could identify a specific individual, like exact age combined with disease, location, and date">PII</span>.</p>
+            <p class="tl"><strong>date_of_symptom_onset</strong> — when symptoms started. The gap between this and collection date tells epidemiologists how fast the disease progresses.</p>
+            <p class="tl"><strong>travel_history_country: multivalued: true</strong> — countries visited in the 14 days before illness. Multiple countries are allowed (a list). Crucial for distinguishing local outbreaks from imported cases.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- SCREEN 3: Animal samples -->
+    <div class="screen animate-in">
+      <h2 class="screen-title">Animal Samples: Four Distinct Subclasses</h2>
+      <p>JACKPOT has four specialized animal sample types, each with fields tuned to their surveillance context. The schema encodes real epidemiological knowledge about what matters for each species type.</p>
+
+      <div class="step-cards">
+        <div class="step-card">
+          <div class="step-number" style="background: var(--color-actor-2);">🦎</div>
+          <div class="step-content">
+            <h4>WildlifeSample</h4>
+            <p>Wild animals — bats, birds, deer, coyotes. Has <code>travel_origin_region</code> for migratory species (equivalent to travel history for humans). Critical for HPAI <span class="tooltip" data-tip="Highly Pathogenic Avian Influenza — the bird flu strains that can spread to humans, like H5N1">H5N1</span> tracking via flyways.</p>
+          </div>
+        </div>
+        <div class="step-card">
+          <div class="step-number" style="background: var(--color-actor-3);">🐕</div>
+          <div class="step-content">
+            <h4>CompanionAnimalSample</h4>
+            <p>Pets — dogs, cats. Has <code>symptomatic</code> (was the animal sick?) and <code>vaccine_status_against_pathogen</code>. Pets are the bridge species between wildlife and humans in many spillover events.</p>
+          </div>
+        </div>
+        <div class="step-card">
+          <div class="step-number" style="background: var(--color-actor-4);">🐄</div>
+          <div class="step-content">
+            <h4>LivestockSample</h4>
+            <p>Farm animals — poultry, pigs, cattle. Has <code>antibiotic_use</code> (tracking <span class="tooltip" data-tip="Antimicrobial Resistance — when bacteria evolve to survive antibiotic treatment, a major global health threat">AMR</span> sources) and <code>distribution_scale</code> (local vs. national supply chain).</p>
+          </div>
+        </div>
+        <div class="step-card">
+          <div class="step-number" style="background: var(--color-actor-1);">🦟</div>
+          <div class="step-content">
+            <h4>VectorSample</h4>
+            <p>Disease-carrying arthropods — mosquitoes, ticks. Has <code>vector_species</code> and <code>vector_host_species</code> (what animal was the vector feeding on?). Essential for West Nile, Zika, Rocky Mountain spotted fever.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- SCREEN 4: Wastewater -->
+    <div class="screen animate-in">
+      <h2 class="screen-title">Wastewater: The Early Warning System</h2>
+      <p>Before a single person reports symptoms, the pathogen is already in the sewage. Wastewater surveillance is the most powerful early-warning tool in modern public health — it can detect an outbreak 4–7 days before clinical cases appear.</p>
+
+      <div class="callout callout-highlight" style="margin: var(--space-6) 0;">
+        <strong>The smoke detector analogy:</strong> Clinical surveillance is like smelling smoke after the fire has started. Wastewater surveillance is like a smoke detector — it catches the signal before anyone's in danger.
+      </div>
+
+      <div class="translation-block animate-in">
+        <div class="translation-code">
+          <span class="translation-label">CODE</span>
+          <pre><code>
+<span class="code-line"><span class="code-property">WastewaterSample</span>:</span>
+<span class="code-line">  <span class="code-keyword">is_a</span>: EnvironmentalSample</span>
+<span class="code-line">  <span class="code-keyword">attributes</span>:</span>
+<span class="code-line">    <span class="code-property">wwtp_name</span>:</span>
+<span class="code-line">      <span class="code-keyword">description</span>: &gt;</span>
+<span class="code-line">        Wastewater facility name.</span>
+<span class="code-line">        e.g. &apos;South Tempe Water</span>
+<span class="code-line">        Reclamation Facility&apos;</span>
+<span class="code-line">    <span class="code-property">nwss_sewershed_id</span>:</span>
+<span class="code-line">      <span class="code-keyword">description</span>: &gt;-</span>
+<span class="code-line">        CDC NWSS-assigned identifier</span>
+<span class="code-line">        for this sampling site.</span>
+<span class="code-line">    <span class="code-property">population_served</span>:</span>
+<span class="code-line">      <span class="code-keyword">range</span>: integer</span>
+          </code></pre>
+        </div>
+        <div class="translation-english">
+          <span class="translation-label">PLAIN ENGLISH</span>
+          <div class="translation-lines">
+            <p class="tl"><strong>WastewaterSample is_a: EnvironmentalSample</strong> — inherits from the environmental base class (which itself inherits from Sample). Two levels of inheritance.</p>
+            <p class="tl"><strong>wwtp_name</strong> — which treatment facility the sample came from. This is the physical location anchor for the data.</p>
+            <p class="tl"><strong>nwss_sewershed_id</strong> — the CDC&apos;s <span class="tooltip" data-tip="National Wastewater Surveillance System — the CDC program that aggregates wastewater pathogen data from thousands of sampling sites across the US">NWSS</span> assigns a unique ID to every wastewater monitoring site in the US. By storing this ID, JACKPOT&apos;s Arizona data feeds directly into the national CDC surveillance database without manual matching.</p>
+            <p class="tl"><strong>population_served: integer</strong> — how many people&apos;s waste passes through this facility. Crucial for calculating prevalence rates (signal strength ÷ population = estimated infection rate).</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- SCREEN 5: Cross-sector linking -->
+    <div class="screen animate-in">
+      <h2 class="screen-title">When Sectors Converge: Outbreak Investigations</h2>
+      <p>The real power of One Health is linking samples <em>across</em> sectors. A Salmonella outbreak might have human cases, a contaminated food source, and an implicated poultry farm — all tracked together.</p>
+
+      <div class="chat-window" id="chat-module3">
+        <div class="chat-messages">
+          <div class="chat-message" data-msg="0" data-sender="human" style="display:none">
+            <div class="chat-avatar" style="background: var(--color-actor-1)">H</div>
+            <div class="chat-bubble">
+              <span class="chat-sender" style="color: var(--color-actor-1)">HumanSample AZ-2026-1234</span>
+              <p>Salmonella Typhimurium, ST34. Patient hospitalized. Collection: Maricopa County, March 12.</p>
+            </div>
+          </div>
+          <div class="chat-message" data-msg="1" data-sender="food" style="display:none">
+            <div class="chat-avatar" style="background: var(--color-actor-4)">F</div>
+            <div class="chat-bubble">
+              <span class="chat-sender" style="color: var(--color-actor-4)">FoodProductSample AZ-2026-5567</span>
+              <p>Salmonella Typhimurium recovered from ground beef at Tempe distribution center. Same ST34 lineage.</p>
+            </div>
+          </div>
+          <div class="chat-message" data-msg="2" data-sender="outbreak" style="display:none">
+            <div class="chat-avatar" style="background: var(--color-actor-2)">O</div>
+            <div class="chat-bubble">
+              <span class="chat-sender" style="color: var(--color-actor-2)">OutbreakInvestigation AZ-SALM-2026-001</span>
+              <p>Linking both samples under investigation "Maricopa County Salmonella Typhimurium Cluster 2026". Sectors: clinical + food product. Reporting jurisdiction: ADHS.</p>
+            </div>
+          </div>
+          <div class="chat-message" data-msg="3" data-sender="livestock" style="display:none">
+            <div class="chat-avatar" style="background: var(--color-actor-5)">L</div>
+            <div class="chat-bubble">
+              <span class="chat-sender" style="color: var(--color-actor-5)">LivestockSample AZ-2026-7789</span>
+              <p>Same ST34 recovered from cattle at Pinal County feedlot. Adding to outbreak AZ-SALM-2026-001. Now 3 sectors: clinical + food + livestock.</p>
+            </div>
+          </div>
+          <div class="chat-message" data-msg="4" data-sender="outbreak" style="display:none">
+            <div class="chat-avatar" style="background: var(--color-actor-2)">O</div>
+            <div class="chat-bubble">
+              <span class="chat-sender" style="color: var(--color-actor-2)">OutbreakInvestigation AZ-SALM-2026-001</span>
+              <p>Case count: 12. Source identified: Pinal County feedlot → Tempe distribution → Maricopa patients. Situation report sent to CDC NNDSS. Status: contained.</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="chat-typing" id="chat-typing" style="display:none">
+          <div class="chat-avatar" id="chat-module3-typing-avatar" style="background: var(--color-actor-2)">O</div>
+          <div class="chat-typing-dots">
+            <span class="typing-dot"></span>
+            <span class="typing-dot"></span>
+            <span class="typing-dot"></span>
+          </div>
+        </div>
+
+        <div class="chat-controls">
+          <button class="btn chat-next-btn">Next Message</button>
+          <button class="btn chat-all-btn">Play All</button>
+          <button class="btn chat-reset-btn">Replay</button>
+          <span class="chat-progress"></span>
+        </div>
+      </div>
+
+      <div class="callout callout-tip" style="margin-top: var(--space-6);">
+        <strong>Aha!</strong> The <code>OutbreakInvestigation</code> class (added in v4.4) is what makes this query possible: "Show me all samples linked to AZ-SALM-2026-001." Without it, you&apos;d have to search for <code>case_type = outbreak</code> across thousands of samples and manually piece together the picture.
+      </div>
+    </div>
+
+    <!-- SCREEN 6: Quiz -->
+    <div class="screen animate-in">
+      <h2 class="screen-title">Check Your Understanding</h2>
+
+      <div class="quiz-container" id="quiz-module3">
+
+        <div class="quiz-question-block"
+             data-correct="option-c"
+             data-explanation-right="Exactly — wastewater surveillance detects pathogen signal before people report symptoms, giving public health officials days of early warning to prepare."
+             data-explanation-wrong="Not quite. Clinical samples come from sick people who have already sought care. Wastewater catches the signal much earlier, even from asymptomatic people.">
+          <h3 class="quiz-question">A new respiratory pathogen starts spreading in Tucson. Which JACKPOT sample type would most likely detect it first?</h3>
+          <div class="quiz-options">
+            <button class="quiz-option" data-value="option-a" onclick="selectOption(this)">
+              <div class="quiz-option-radio"></div>
+              <span>HumanSample — from hospitalized patients</span>
+            </button>
+            <button class="quiz-option" data-value="option-b" onclick="selectOption(this)">
+              <div class="quiz-option-radio"></div>
+              <span>WildlifeSample — from local bats</span>
+            </button>
+            <button class="quiz-option" data-value="option-c" onclick="selectOption(this)">
+              <div class="quiz-option-radio"></div>
+              <span>WastewaterSample — from Tucson treatment facilities</span>
+            </button>
+            <button class="quiz-option" data-value="option-d" onclick="selectOption(this)">
+              <div class="quiz-option-radio"></div>
+              <span>VectorSample — from local mosquitoes</span>
+            </button>
+          </div>
+          <div class="quiz-feedback"></div>
+        </div>
+
+        <div class="quiz-question-block"
+             data-correct="option-b"
+             data-explanation-right="Right — travel_origin_region tracks where a migratory animal came from, which is the wildlife equivalent of a human travel history. Flyways are the migration routes."
+             data-explanation-wrong="Think about which field is specifically designed for migratory animals and tracks where they came from before arriving at the sampling location.">
+          <h3 class="quiz-question">You want to understand whether a bird carrying H5N1 in Arizona migrated from a high-risk region. Which field in WildlifeSample captures this?</h3>
+          <div class="quiz-options">
+            <button class="quiz-option" data-value="option-a" onclick="selectOption(this)">
+              <div class="quiz-option-radio"></div>
+              <span>collection_location_state — where the bird was caught</span>
+            </button>
+            <button class="quiz-option" data-value="option-b" onclick="selectOption(this)">
+              <div class="quiz-option-radio"></div>
+              <span>travel_origin_region — migration source (e.g., "East Asia Pacific Flyway")</span>
+            </button>
+            <button class="quiz-option" data-value="option-c" onclick="selectOption(this)">
+              <div class="quiz-option-radio"></div>
+              <span>host_disease — what disease the bird had</span>
+            </button>
+          </div>
+          <div class="quiz-feedback"></div>
+        </div>
+
+        <div class="quiz-question-block"
+             data-correct="option-c"
+             data-explanation-right="Correct — OutbreakInvestigation is the cross-sector glue. Without it, you can only query individual sample records. The outbreak entity lets you ask questions about the whole investigation at once."
+             data-explanation-wrong="Individual sample fields like case_id help link samples, but OutbreakInvestigation is the dedicated entity for tracking multi-sector investigations as a unified object.">
+          <h3 class="quiz-question">An epidemiologist wants to run a report: "all samples — human, food, and environmental — linked to the 2026 Salmonella cluster." What makes this query possible in JACKPOT?</h3>
+          <div class="quiz-options">
+            <button class="quiz-option" data-value="option-a" onclick="selectOption(this)">
+              <div class="quiz-option-radio"></div>
+              <span>The case_id field on each Sample</span>
+            </button>
+            <button class="quiz-option" data-value="option-b" onclick="selectOption(this)">
+              <div class="quiz-option-radio"></div>
+              <span>The sector field (filtering by sector = clinical, food, environmental)</span>
+            </button>
+            <button class="quiz-option" data-value="option-c" onclick="selectOption(this)">
+              <div class="quiz-option-radio"></div>
+              <span>The OutbreakInvestigation class with an outbreak_id FK on each sample</span>
+            </button>
+          </div>
+          <div class="quiz-feedback"></div>
+        </div>
+
+        <button class="quiz-check-btn" onclick="checkQuiz('quiz-module3')">Check Answers</button>
+        <button class="quiz-reset-btn" onclick="resetQuiz('quiz-module3')">Try Again</button>
+      </div>
+    </div>
+
+  </div>
+</section>
+<section class="module" id="module-4" style="background: var(--color-bg-warm);">
+  <div class="module-content">
+
+    <!-- SCREEN 1: Intro -->
+    <div class="screen animate-in">
+      <div class="module-number">04</div>
+      <h1 class="module-title">From Spreadsheet to Science</h1>
+      <p class="module-subtitle">Labs don't think in JSON. They think in Excel. JACKPOT bridges the gap — turning messy real-world spreadsheets into clean, standards-compliant genomic data.</p>
+
+      <div class="callout callout-highlight" style="margin-top: var(--space-8);">
+        <strong>The customs translator analogy:</strong> When goods cross a border, a customs broker translates the shipper's paperwork into the official format the government requires. The goods don't change — only the paperwork format. JACKPOT's mapping configs are customs brokers for genomic data.
+      </div>
+
+      <div class="step-cards" style="margin-top: var(--space-8);">
+        <div class="step-card">
+          <div class="step-number">1</div>
+          <div class="step-content">
+            <h4>Lab uploads a spreadsheet</h4>
+            <p>Each lab has its own column names. "Sample ID" might be "Specimen No." at one lab and "ID" at another.</p>
+          </div>
+        </div>
+        <div class="step-card">
+          <div class="step-number">2</div>
+          <div class="step-content">
+            <h4>Mapping config translates it</h4>
+            <p>A YAML config file says: "the column called 'Collection Date' maps to the schema field <code>date_collected</code>"</p>
+          </div>
+        </div>
+        <div class="step-card">
+          <div class="step-number">3</div>
+          <div class="step-content">
+            <h4>Schema validates the result</h4>
+            <p>Required fields must be present. Controlled vocabularies must match. Dates must be in the right format.</p>
+          </div>
+        </div>
+        <div class="step-card">
+          <div class="step-number">4</div>
+          <div class="step-content">
+            <h4>Data enters the platform</h4>
+            <p>The cleaned, validated record is stored and immediately available for pipeline runs and analysis.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- SCREEN 2: Mapping config translation -->
+    <div class="screen animate-in">
+      <h2 class="screen-title">What a Mapping Config Looks Like</h2>
+      <p>Here's the actual mapping config for ASU's human sample spreadsheets. It's the bridge between a lab's custom column names and JACKPOT's standardized schema fields.</p>
+
+      <div class="translation-block animate-in">
+        <div class="translation-code">
+          <span class="translation-label">CODE</span>
+          <pre><code>
+<span class="code-line"><span class="code-property">source_format</span>: asu_human_v1</span>
+<span class="code-line"><span class="code-property">target_class</span>: HumanSample</span>
+<span class="code-line"><span class="code-property">column_mappings</span>:</span>
+<span class="code-line">  <span class="code-string">"Sample ID"</span>: sample_id</span>
+<span class="code-line">  <span class="code-string">"Collection Date"</span>: date_collected</span>
+<span class="code-line">  <span class="code-string">"Pathogen"</span>: organism_name</span>
+<span class="code-line">  <span class="code-string">"Age"</span>: host_age</span>
+<span class="code-line">  <span class="code-string">"MEDSIS ID"</span>: adhs_medsis_id</span>
+<span class="code-line"><span class="code-property">file_detection</span>:</span>
+<span class="code-line">  <span class="code-property">files_column</span>: <span class="code-string">"FASTQ files"</span></span>
+<span class="code-line">  <span class="code-property">separator</span>: <span class="code-string">";"</span></span>
+<span class="code-line">  <span class="code-property">auto_detect_pairs</span>: <span class="code-keyword">true</span></span>
+          </code></pre>
+        </div>
+        <div class="translation-english">
+          <span class="translation-label">PLAIN ENGLISH</span>
+          <div class="translation-lines">
+            <p class="tl"><strong>source_format: asu_human_v1</strong> — this config applies specifically to ASU's human sample spreadsheet format (version 1)</p>
+            <p class="tl"><strong>target_class: HumanSample</strong> — incoming rows should be validated against the HumanSample schema class</p>
+            <p class="tl"><strong>column_mappings</strong> — the translation dictionary. The left side is the spreadsheet column header; the right side is the schema field name.</p>
+            <p class="tl"><strong>"Sample ID": sample_id</strong> — wherever the spreadsheet says "Sample ID", use that value for the schema&apos;s sample_id field</p>
+            <p class="tl"><strong>"MEDSIS ID": adhs_medsis_id</strong> — the lab calls it "MEDSIS ID", the schema calls it "adhs_medsis_id". The mapping bridges the gap.</p>
+            <p class="tl"><strong>file_detection: auto_detect_pairs: true</strong> — the <span class="tooltip" data-tip="FASTQ files contain raw sequencing reads — the actual A, T, C, G sequences read by the sequencer. Paired-end sequencing produces two files per sample (R1 and R2).">FASTQ</span> files are listed semicolon-separated in one column; auto-detect finds the paired R1+R2 files automatically.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- SCREEN 3: Quality tiers -->
+    <div class="screen animate-in">
+      <h2 class="screen-title">The Three Quality Tiers</h2>
+      <p>Not all data is equally complete. JACKPOT uses a <span class="tooltip" data-tip="A graduated system where data gains capabilities as it meets higher quality standards — like leveling up in a game">tiered quality system</span> so partial data can still be used immediately, while more complete data unlocks advanced features.</p>
+
+      <div class="pattern-cards">
+        <div class="pattern-card" style="border-top: 4px solid var(--color-accent-muted);">
+          <div class="pattern-card-icon">🌱</div>
+          <h4>Tier 1: PRELIMINARY</h4>
+          <p>Minimum viable data — enough to ingest and run pipelines. The sample is in the system immediately and available for analysis.</p>
+          <p style="font-size: var(--text-sm); color: var(--color-text-secondary); margin-top: var(--space-2);">Required: sample_id, organism, date_collected, sequencing platform</p>
+        </div>
+        <div class="pattern-card" style="border-top: 4px solid var(--color-accent);">
+          <div class="pattern-card-icon">📊</div>
+          <h4>Tier 2: ANALYZABLE</h4>
+          <p>Enough metadata for time-series charts and geographic maps. This is the tier public health dashboards require.</p>
+          <p style="font-size: var(--text-sm); color: var(--color-text-secondary); margin-top: var(--space-2);">Also requires: collection location, host info, purpose for collection</p>
+        </div>
+        <div class="pattern-card" style="border-top: 4px solid var(--color-success);">
+          <div class="pattern-card-icon">🏆</div>
+          <h4>Tier 3: SUBMITTABLE</h4>
+          <p>Meets the full requirements of NCBI, GISAID, and CDC NWSS. The platform can automatically submit this sample to national databases.</p>
+          <p style="font-size: var(--text-sm); color: var(--color-text-secondary); margin-top: var(--space-2);">Also requires: INSDC-compliant location names, VADR validation, complete lineage</p>
+        </div>
+      </div>
+
+      <div class="callout callout-tip" style="margin-top: var(--space-6);">
+        <strong>Aha!</strong> Tiered quality is a practical solution to a real problem: labs want to upload data quickly, but regulatory databases demand perfection. By separating "ingestible" from "submittable," JACKPOT lets data flow in immediately while flagging what needs to be fixed for external reporting.
+      </div>
+    </div>
+
+    <!-- SCREEN 4: What happens at ingest -->
+    <div class="screen animate-in">
+      <h2 class="screen-title">What JACKPOT Computes Automatically at Ingest</h2>
+      <p>When a sample arrives, JACKPOT doesn't just store what was uploaded. It computes several fields automatically to enrich the data:</p>
+
+      <div class="flow-animation" data-steps='[
+        {"highlight":"flow-actor-1","label":"Spreadsheet arrives via portal — mapping config identifies column names"},
+        {"highlight":"flow-actor-2","label":"Schema validation runs — required fields checked, controlled values verified","packet":true,"from":"actor-1","to":"actor-2"},
+        {"highlight":"flow-actor-3","label":"MMWR epiweek computed from date_collected — standard CDC epidemiological week number","packet":true,"from":"actor-2","to":"actor-3"},
+        {"highlight":"flow-actor-3","label":"surveillance_relevant computed — is this organism on the ADHS reportable diseases list?"},
+        {"highlight":"flow-actor-4","label":"JACKPOT URI minted — a permanent global address for this sample","packet":true,"from":"actor-3","to":"actor-4"},
+        {"highlight":"flow-actor-5","label":"FASTQ files located in staging bucket — convenience URIs populated","packet":true,"from":"actor-4","to":"actor-5"},
+        {"highlight":"flow-actor-5","label":"Sample is PRELIMINARY tier — immediately available for pipeline runs"}
+      ]'>
+        <div class="flow-actors">
+          <div class="flow-actor" id="flow-actor-1">
+            <div class="flow-actor-icon">📥</div>
+            <span>Upload</span>
+          </div>
+          <div class="flow-actor" id="flow-actor-2">
+            <div class="flow-actor-icon">✅</div>
+            <span>Validate</span>
+          </div>
+          <div class="flow-actor" id="flow-actor-3">
+            <div class="flow-actor-icon">⚙️</div>
+            <span>Compute</span>
+          </div>
+          <div class="flow-actor" id="flow-actor-4">
+            <div class="flow-actor-icon">🔑</div>
+            <span>Mint URI</span>
+          </div>
+          <div class="flow-actor" id="flow-actor-5">
+            <div class="flow-actor-icon">🗄️</div>
+            <span>Store</span>
+          </div>
+        </div>
+
+        <div class="flow-packet" id="flow-packet"></div>
+        <div class="flow-step-label" id="flow-label">Click "Next Step" to watch ingest happen</div>
+
+        <div class="flow-controls">
+          <button class="btn flow-next-btn">Next Step</button>
+          <button class="btn flow-reset-btn">Restart</button>
+          <span class="flow-progress"></span>
+        </div>
+      </div>
+    </div>
+
+    <!-- SCREEN 5: External submissions -->
+    <div class="screen animate-in">
+      <h2 class="screen-title">Submitting to the World: NCBI, GISAID, and CDC</h2>
+      <p>When a sample reaches Tier 3 (SUBMITTABLE), JACKPOT can automatically format and submit it to national and international genomic databases. Each destination has different requirements — the schema is designed to satisfy all of them.</p>
+
+      <div class="pattern-cards">
+        <div class="pattern-card" style="border-left: 4px solid var(--color-actor-2);">
+          <div class="pattern-card-icon">🏛️</div>
+          <h4>NCBI BioSample / SRA / GenBank</h4>
+          <p>The US National Library of Medicine. All published genomic research must deposit sequences here. JACKPOT uses <span class="tooltip" data-tip="A CDC tool that automates NCBI submissions — generating the required metadata files and submitting via the NCBI API">TOSTADAS</span> to submit. Sequences get permanent accession numbers (e.g., SAMN12345678).</p>
+        </div>
+        <div class="pattern-card" style="border-left: 4px solid var(--color-actor-5);">
+          <div class="pattern-card-icon">🌍</div>
+          <h4>GISAID</h4>
+          <p>The global database for respiratory viruses — COVID, flu, RSV. Every SARS-CoV-2 variant name you heard during the pandemic (Alpha, Delta, Omicron) was named based on GISAID data. Arizona sequences become part of global variant tracking.</p>
+        </div>
+        <div class="pattern-card" style="border-left: 4px solid var(--color-actor-3);">
+          <div class="pattern-card-icon">💧</div>
+          <h4>CDC NWSS</h4>
+          <p>The National Wastewater Surveillance System. Wastewater samples with a valid <code>nwss_sewershed_id</code> feed into the CDC&apos;s national wastewater dashboard — the one public health officials monitor nationally.</p>
+        </div>
+      </div>
+
+      <div class="callout callout-info" style="margin-top: var(--space-6);">
+        <strong>Why this matters for steering AI:</strong> When you ask an AI to "add a field that's required for NCBI submission," it needs to know which tier that is and what NCBI specifically requires. Knowing the SUBMITTABLE tier and NCBI BioSample standard helps you give precise instructions instead of vague ones.
+      </div>
+    </div>
+
+  </div>
+</section>
+<section class="module" id="module-5" style="background: var(--color-bg);">
+  <div class="module-content">
+
+    <!-- SCREEN 1: Intro -->
+    <div class="screen animate-in">
+      <div class="module-number">05</div>
+      <h1 class="module-title">Data Governance</h1>
+      <p class="module-subtitle">Genomic data is powerful — and sensitive. JACKPOT has a layered system of access control, surveillance oversight, and schema versioning to keep data both useful and protected.</p>
+
+      <div class="callout callout-highlight" style="margin-top: var(--space-8);">
+        <strong>The archive room analogy:</strong> A research library has public reading rooms (anyone can access), restricted stacks (researchers with credentials), closed archives (special permission required), and a rare books vault (director approval only). JACKPOT&apos;s sharing levels work the same way — each level has different access rules.
+      </div>
+
+      <div class="pattern-cards" style="margin-top: var(--space-8);">
+        <div class="pattern-card">
+          <div class="pattern-card-icon">🔒</div>
+          <h4>Access Control</h4>
+          <p>Five sharing levels from PRIVATE to PUBLIC, with a new REGISTERED_ACCESS tier for federated research networks</p>
+        </div>
+        <div class="pattern-card">
+          <div class="pattern-card-icon">🏛️</div>
+          <h4>Surveillance Oversight</h4>
+          <p>ADHS has automatic visibility into reportable disease samples — but with a governance board override process</p>
+        </div>
+        <div class="pattern-card">
+          <div class="pattern-card-icon">📜</div>
+          <h4>Schema Evolution</h4>
+          <p>The schema evolves through versioned Python scripts — changes are code, not manual edits, so they&apos;re reproducible and auditable</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- SCREEN 2: Sharing levels -->
+    <div class="screen animate-in">
+      <h2 class="screen-title">The Five Sharing Levels</h2>
+      <p>Every sample in JACKPOT has a <code>sharing_level</code> that controls who can see it. Here are the five levels, from most to least restricted:</p>
+
+      <div class="translation-block animate-in">
+        <div class="translation-code">
+          <span class="translation-label">CODE</span>
+          <pre><code>
+<span class="code-line"><span class="code-property">SharingLevelEnum</span>:</span>
+<span class="code-line">  <span class="code-keyword">permissible_values</span>:</span>
+<span class="code-line">    <span class="code-property">PRIVATE</span>:</span>
+<span class="code-line">      description: <span class="code-string">"Owner and Lab Director only"</span></span>
+<span class="code-line">    <span class="code-property">LAB</span>:</span>
+<span class="code-line">      description: <span class="code-string">"All members of the owning Lab"</span></span>
+<span class="code-line">    <span class="code-property">DISCOVERABLE</span>:</span>
+<span class="code-line">      description: <span class="code-string">"Metadata visible; files need request"</span></span>
+<span class="code-line">    <span class="code-property">REGISTERED_ACCESS</span>:</span>
+<span class="code-line">      description: &gt;-</span>
+<span class="code-line">        Available to any researcher who</span>
+<span class="code-line">        registers and accepts the DUA.</span>
+<span class="code-line">    <span class="code-property">PUBLIC</span>:</span>
+<span class="code-line">      description: <span class="code-string">"Open to all authenticated users"</span></span>
+          </code></pre>
+        </div>
+        <div class="translation-english">
+          <span class="translation-label">PLAIN ENGLISH</span>
+          <div class="translation-lines">
+            <p class="tl"><strong>SharingLevelEnum</strong> — this is a controlled vocabulary (an <span class="tooltip" data-tip="A named list of allowed values for a field — like a dropdown menu that only accepts specific options">enum</span>) that lists all allowed values for the sharing_level field</p>
+            <p class="tl"><strong>PRIVATE</strong> — only the researcher who uploaded it and their Lab Director can see it. Default for sensitive or preliminary data.</p>
+            <p class="tl"><strong>LAB</strong> — visible to everyone in the same lab. Good for collaborative internal work.</p>
+            <p class="tl"><strong>DISCOVERABLE</strong> — other researchers can see the metadata (what pathogen, where, when) but must request access to the actual sequence files.</p>
+            <p class="tl"><strong>REGISTERED_ACCESS</strong> — any vetted researcher who signs the <span class="tooltip" data-tip="Data Use Agreement — a legal contract specifying how data may and may not be used, by whom, and for what purpose">DUA</span> gets instant access, no per-request approval needed. Added in v4.4 for <span class="tooltip" data-tip="GA4GH is the Global Alliance for Genomics and Health — an international consortium that sets standards for sharing genomic data across institutions and countries">GA4GH</span> federated sharing.</p>
+            <p class="tl"><strong>PUBLIC</strong> — completely open to all authenticated platform users. Used for published, openly shared datasets.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- SCREEN 3: Surveillance relevance -->
+    <div class="screen animate-in">
+      <h2 class="screen-title">The Surveillance Override System</h2>
+      <p>JACKPOT automatically grants ADHS visibility into samples involving reportable pathogens. But labs can request overrides — with governance board review for privacy-sensitive changes.</p>
+
+      <div class="chat-window" id="chat-module5">
+        <div class="chat-messages">
+          <div class="chat-message" data-msg="0" data-sender="ingest" style="display:none">
+            <div class="chat-avatar" style="background: var(--color-actor-2)">I</div>
+            <div class="chat-bubble">
+              <span class="chat-sender" style="color: var(--color-actor-2)">Ingest Engine</span>
+              <p>Sample AZ-2026-0987 ingested. Organism: Salmonella enterica. Checking reportable organisms list...</p>
+            </div>
+          </div>
+          <div class="chat-message" data-msg="1" data-sender="ingest" style="display:none">
+            <div class="chat-avatar" style="background: var(--color-actor-2)">I</div>
+            <div class="chat-bubble">
+              <span class="chat-sender" style="color: var(--color-actor-2)">Ingest Engine</span>
+              <p>Salmonella is a reportable pathogen in Arizona. Setting <code>surveillance_relevant = TRUE</code> automatically. ADHS will have oversight access.</p>
+            </div>
+          </div>
+          <div class="chat-message" data-msg="2" data-sender="lab" style="display:none">
+            <div class="chat-avatar" style="background: var(--color-actor-4)">L</div>
+            <div class="chat-bubble">
+              <span class="chat-sender" style="color: var(--color-actor-4)">Lab Director</span>
+              <p>This sample is from a federally-funded research study under a separate IRB. We need to request a surveillance override.</p>
+            </div>
+          </div>
+          <div class="chat-message" data-msg="3" data-sender="system" style="display:none">
+            <div class="chat-avatar" style="background: var(--color-actor-3)">S</div>
+            <div class="chat-bubble">
+              <span class="chat-sender" style="color: var(--color-actor-3)">Governance Board System</span>
+              <p>Override request submitted. <code>surveillance_relevant_override = TRUE</code>, <code>surveillance_override_pending = TRUE</code>. Sample stays visible to ADHS until the board approves. Override category: research_exemption.</p>
+            </div>
+          </div>
+          <div class="chat-message" data-msg="4" data-sender="board" style="display:none">
+            <div class="chat-avatar" style="background: var(--color-actor-5)">B</div>
+            <div class="chat-bubble">
+              <span class="chat-sender" style="color: var(--color-actor-5)">Governance Board Member</span>
+              <p>Override approved. IRB documentation verified. Setting <code>surveillance_relevant = FALSE</code>, <code>surveillance_override_pending = FALSE</code>. Audit logged.</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="chat-typing" id="chat-typing" style="display:none">
+          <div class="chat-avatar" id="chat-module5-typing-avatar" style="background: var(--color-actor-2)">I</div>
+          <div class="chat-typing-dots">
+            <span class="typing-dot"></span>
+            <span class="typing-dot"></span>
+            <span class="typing-dot"></span>
+          </div>
+        </div>
+
+        <div class="chat-controls">
+          <button class="btn chat-next-btn">Next Message</button>
+          <button class="btn chat-all-btn">Play All</button>
+          <button class="btn chat-reset-btn">Replay</button>
+          <span class="chat-progress"></span>
+        </div>
+      </div>
+
+      <div class="callout callout-tip" style="margin-top: var(--space-6);">
+        <strong>Aha!</strong> Notice that <code>surveillance_relevant</code> stays TRUE until the board <em>approves</em> the override — never the reverse. This is a "fail-safe open" design: public health oversight is the default. Labs must justify removing it, not justify adding it.
+      </div>
+    </div>
+
+    <!-- SCREEN 4: Schema evolution -->
+    <div class="screen animate-in">
+      <h2 class="screen-title">How the Schema Evolves: Migrations as Code</h2>
+      <p>Every version of the schema gets a dedicated Python script that applies changes. Here&apos;s how the v4.4 update script works — it&apos;s a great example of how software changes safely over time.</p>
+
+      <div class="translation-block animate-in">
+        <div class="translation-code">
+          <span class="translation-label">CODE</span>
+          <pre><code>
+<span class="code-line"><span class="code-comment"># From update_schema_v4_4.py</span></span>
+<span class="code-line"></span>
+<span class="code-line">CHANGES = [</span>
+<span class="code-line">  (</span>
+<span class="code-line">    <span class="code-string">"HumanSample — date_of_symptom_onset,</span></span>
+<span class="code-line"><span class="code-string">     travel history, age range"</span>,</span>
+<span class="code-line">    OLD_VACCINATION,</span>
+<span class="code-line">    NEW_VACCINATION,</span>
+<span class="code-line">  ),</span>
+<span class="code-line">  ...</span>
+<span class="code-line">]</span>
+<span class="code-line"></span>
+<span class="code-line"><span class="code-keyword">def</span> <span class="code-function">apply_changes</span>(content):</span>
+<span class="code-line">  <span class="code-keyword">for</span> description, old, new <span class="code-keyword">in</span> CHANGES:</span>
+<span class="code-line">    <span class="code-keyword">if</span> old <span class="code-keyword">not in</span> content:</span>
+<span class="code-line">      <span class="code-keyword">raise</span> ValueError(<span class="code-string">"Anchor not found"</span>)</span>
+<span class="code-line">    content = content.replace(old, new)</span>
+          </code></pre>
+        </div>
+        <div class="translation-english">
+          <span class="translation-label">PLAIN ENGLISH</span>
+          <div class="translation-lines">
+            <p class="tl"><strong>CHANGES = [...]</strong> — a list of all the changes this script will make. Each entry has a description, the old text to find, and the new text to replace it with.</p>
+            <p class="tl"><strong>apply_changes(content)</strong> — a <span class="tooltip" data-tip="A reusable block of code that takes input, does something with it, and returns a result — like a machine: put something in, get something out">function</span> that reads the current schema file and applies every change in the list.</p>
+            <p class="tl"><strong>if old not in content: raise ValueError</strong> — if the text to replace no longer exists, the script refuses to run and explains why. This prevents silent failures.</p>
+            <p class="tl"><strong>content.replace(old, new)</strong> — surgically replaces just the old section with the new one, leaving everything else intact.</p>
+            <p class="tl"><strong>Why this approach:</strong> By writing changes as code, every modification is version-controlled, can be run again on any machine, and has a clear record of what changed and why — unlike manually editing a YAML file.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- SCREEN 5: v4.4 changes in context -->
+    <div class="screen animate-in">
+      <h2 class="screen-title">What Changed in v4.4 and Why</h2>
+      <p>Schema v4.4 was driven by <span class="tooltip" data-tip="The World Health Organization and Centers for Disease Control — the international and US national public health agencies that set reporting standards">WHO/CDC</span> alignment requirements. Each addition solves a real surveillance gap:</p>
+
+      <div class="step-cards">
+        <div class="step-card">
+          <div class="step-number">1</div>
+          <div class="step-content">
+            <h4>date_of_symptom_onset</h4>
+            <p>Standard on every WHO case investigation form but absent from most genomics platforms. The gap between symptom onset and sample collection reveals how fast a disease spreads.</p>
+          </div>
+        </div>
+        <div class="step-card">
+          <div class="step-number">2</div>
+          <div class="step-content">
+            <h4>travel_history_country</h4>
+            <p>WHO situation reports always distinguish travel-linked from locally-acquired cases. Without this field, JACKPOT couldn&apos;t answer "did this outbreak start locally or arrive from abroad?"</p>
+          </div>
+        </div>
+        <div class="step-card">
+          <div class="step-number">3</div>
+          <div class="step-content">
+            <h4>OutbreakInvestigation class</h4>
+            <p>Previously, "outbreak" was just a tag on individual samples. Now it&apos;s a first-class entity — you can query all samples belonging to a named outbreak, across all sectors, in one call.</p>
+          </div>
+        </div>
+        <div class="step-card">
+          <div class="step-number">4</div>
+          <div class="step-content">
+            <h4>REGISTERED_ACCESS sharing level</h4>
+            <p>Required for CDC/WHO federated data sharing. Allows researchers at partner institutions to access data under a signed agreement without per-request approval — critical for international genomic surveillance networks.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- SCREEN 6: Final quiz -->
+    <div class="screen animate-in">
+      <h2 class="screen-title">Final Challenge</h2>
+
+      <div class="quiz-container" id="quiz-module5">
+
+        <div class="quiz-question-block"
+             data-correct="option-b"
+             data-explanation-right="Exactly — REGISTERED_ACCESS is specifically designed for this: researchers at partner institutions sign a DUA once and get access without per-request approval, enabling federated data sharing between institutions."
+             data-explanation-wrong="Think about which sharing level was explicitly designed for federated research networks where researchers need access without per-sample approval, but data isn't fully public.">
+          <h3 class="quiz-question">A researcher at a partner university in Mexico needs access to Arizona SARS-CoV-2 genomic data for a joint CDC project. They shouldn't need Lab Director approval for every sample, but data shouldn't be fully public. Which sharing level is right?</h3>
+          <div class="quiz-options">
+            <button class="quiz-option" data-value="option-a" onclick="selectOption(this)">
+              <div class="quiz-option-radio"></div>
+              <span>PUBLIC — just make it open to everyone</span>
+            </button>
+            <button class="quiz-option" data-value="option-b" onclick="selectOption(this)">
+              <div class="quiz-option-radio"></div>
+              <span>REGISTERED_ACCESS — sign a DUA, get automatic access</span>
+            </button>
+            <button class="quiz-option" data-value="option-c" onclick="selectOption(this)">
+              <div class="quiz-option-radio"></div>
+              <span>DISCOVERABLE — they can see metadata but need to request files each time</span>
+            </button>
+            <button class="quiz-option" data-value="option-d" onclick="selectOption(this)">
+              <div class="quiz-option-radio"></div>
+              <span>LAB — add them to the owning lab</span>
+            </button>
+          </div>
+          <div class="quiz-feedback"></div>
+        </div>
+
+        <div class="quiz-question-block"
+             data-correct="option-c"
+             data-explanation-right="Right — the schema migration script explicitly checks that old text exists before replacing it, raising an error if the anchor is not found. This prevents silent corruption of the schema file."
+             data-explanation-wrong="Look at the apply_changes function — there is a specific safety check that stops the script from making any changes if a problem is detected. What does it check for?">
+          <h3 class="quiz-question">You try to run the v4.4 update script on a manually-edited schema file where someone already changed some text. What happens?</h3>
+          <div class="quiz-options">
+            <button class="quiz-option" data-value="option-a" onclick="selectOption(this)">
+              <div class="quiz-option-radio"></div>
+              <span>The script overwrites the manual changes silently</span>
+            </button>
+            <button class="quiz-option" data-value="option-b" onclick="selectOption(this)">
+              <div class="quiz-option-radio"></div>
+              <span>The script applies all other changes and skips the conflicting one</span>
+            </button>
+            <button class="quiz-option" data-value="option-c" onclick="selectOption(this)">
+              <div class="quiz-option-radio"></div>
+              <span>The script raises a ValueError and refuses to modify the file at all</span>
+            </button>
+          </div>
+          <div class="quiz-feedback"></div>
+        </div>
+
+        <div class="quiz-question-block"
+             data-correct="option-a"
+             data-explanation-right="Exactly — surveillance_relevant stays TRUE (ADHS keeps oversight) until the governance board explicitly approves the change. The system defaults to public health visibility, not privacy. Labs must justify removing oversight."
+             data-explanation-wrong="Think about which direction fails safely. When a researcher requests to remove ADHS oversight, what does the system do while waiting for board approval?">
+          <h3 class="quiz-question">A lab submits a request to remove ADHS surveillance access from a sample (setting surveillance_relevant from TRUE to FALSE). While the governance board review is pending, what is the access state?</h3>
+          <div class="quiz-options">
+            <button class="quiz-option" data-value="option-a" onclick="selectOption(this)">
+              <div class="quiz-option-radio"></div>
+              <span>ADHS still has oversight access — it stays TRUE until approved</span>
+            </button>
+            <button class="quiz-option" data-value="option-b" onclick="selectOption(this)">
+              <div class="quiz-option-radio"></div>
+              <span>ADHS access is temporarily suspended pending review</span>
+            </button>
+            <button class="quiz-option" data-value="option-c" onclick="selectOption(this)">
+              <div class="quiz-option-radio"></div>
+              <span>Access is determined by the lab director, not the governance board</span>
+            </button>
+          </div>
+          <div class="quiz-feedback"></div>
+        </div>
+
+        <button class="quiz-check-btn" onclick="checkQuiz('quiz-module5')">Check Answers</button>
+        <button class="quiz-reset-btn" onclick="resetQuiz('quiz-module5')">Try Again</button>
+      </div>
+
+      <div class="callout callout-info" style="margin-top: var(--space-10);">
+        <strong>You just learned how JACKPOT works.</strong> From a nasal swab to a CDC outbreak report — the schema is the backbone that makes it all possible: defining what data is collected, enforcing standards, enabling cross-sector analysis, and governing who sees what. Every field, every enum, every class in that YAML file represents a decision about how to protect public health while respecting researcher privacy.
+      </div>
+    </div>
+
+  </div>
+</section>
+  </main>
+
+</body>
+</html>

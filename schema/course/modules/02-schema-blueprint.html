@@ -1,0 +1,224 @@
+<section class="module" id="module-2" style="background: var(--color-bg-warm);">
+  <div class="module-content">
+
+    <!-- SCREEN 1: What is a schema? -->
+    <div class="screen animate-in">
+      <div class="module-number">02</div>
+      <h1 class="module-title">The Schema Blueprint</h1>
+      <p class="module-subtitle">Every sample stored in JACKPOT must follow a strict set of rules. This module is about those rules — what they are, why they exist, and how they're written.</p>
+
+      <div class="callout callout-highlight" style="margin-top: var(--space-8);">
+        <strong>The passport analogy:</strong> A passport is a schema. It has required fields (name, birthdate, nationality), optional fields (middle name), and controlled values (country codes). If you leave a required field blank, the passport is invalid. JACKPOT's schema works the same way for pathogen data.
+      </div>
+
+      <div class="pattern-cards" style="margin-top: var(--space-8);">
+        <div class="pattern-card">
+          <div class="pattern-card-icon">✅</div>
+          <h4>Required fields</h4>
+          <p>Fields every sample must have — like <code>sample_id</code>, <code>organism_name</code>, <code>date_collected</code></p>
+        </div>
+        <div class="pattern-card">
+          <div class="pattern-card-icon">📋</div>
+          <h4>Controlled vocabularies</h4>
+          <p>Fields that only accept specific values — like <code>sequencing_platform</code> (Illumina, Nanopore, etc.)</p>
+        </div>
+        <div class="pattern-card">
+          <div class="pattern-card-icon">🔗</div>
+          <h4>Linked standards</h4>
+          <p>Each field maps to a global standard — NCBI BioSample, WHO, CDC — so data can be shared automatically</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- SCREEN 2: The class hierarchy -->
+    <div class="screen animate-in">
+      <h2 class="screen-title">The Cast of Characters</h2>
+      <p>The schema is organized as a <span class="tooltip" data-tip="A family-tree structure where child items inherit properties from parent items — like how all dogs are animals but not all animals are dogs">class hierarchy</span>. Think of it like a family tree where each child inherits everything from its parent, then adds its own special traits.</p>
+
+      <div class="flow-animation" data-steps='[
+        {"highlight":"flow-actor-1","label":"Organization: the top-level institution — e.g., Arizona State University or ADHS"},
+        {"highlight":"flow-actor-2","label":"Lab: a research group within the org — e.g., the Biodesign Institute genomics lab","packet":true,"from":"actor-1","to":"actor-2"},
+        {"highlight":"flow-actor-3","label":"Project: a specific surveillance effort — e.g., Arizona COVID Wastewater Surveillance 2026","packet":true,"from":"actor-2","to":"actor-3"},
+        {"highlight":"flow-actor-4","label":"Sample: a single sequenced specimen — always belongs to a lab and project","packet":true,"from":"actor-3","to":"actor-4"},
+        {"highlight":"flow-actor-5","label":"HumanSample (or WildlifeSample, WastewaterSample...): a specialized version with extra fields","packet":true,"from":"actor-4","to":"actor-5"}
+      ]'>
+        <div class="flow-actors">
+          <div class="flow-actor" id="flow-actor-1">
+            <div class="flow-actor-icon">🏛️</div>
+            <span>Organization</span>
+          </div>
+          <div class="flow-actor" id="flow-actor-2">
+            <div class="flow-actor-icon">🔬</div>
+            <span>Lab</span>
+          </div>
+          <div class="flow-actor" id="flow-actor-3">
+            <div class="flow-actor-icon">📁</div>
+            <span>Project</span>
+          </div>
+          <div class="flow-actor" id="flow-actor-4">
+            <div class="flow-actor-icon">🧫</div>
+            <span>Sample</span>
+          </div>
+          <div class="flow-actor" id="flow-actor-5">
+            <div class="flow-actor-icon">🧬</div>
+            <span>Subclass</span>
+          </div>
+        </div>
+
+        <div class="flow-packet" id="flow-packet"></div>
+        <div class="flow-step-label" id="flow-label">Click "Next Step" to trace the hierarchy</div>
+
+        <div class="flow-controls">
+          <button class="btn flow-next-btn">Next Step</button>
+          <button class="btn flow-reset-btn">Restart</button>
+          <span class="flow-progress"></span>
+        </div>
+      </div>
+
+      <div class="callout callout-info" style="margin-top: var(--space-6);">
+        <strong>Why this structure matters for you:</strong> When you ask an AI to "add a field to human samples," you need to know to say "HumanSample subclass" — not just "the sample." The hierarchy is the vocabulary.
+      </div>
+    </div>
+
+    <!-- SCREEN 3: What inheritance looks like in code -->
+    <div class="screen animate-in">
+      <h2 class="screen-title">Inheritance in Action</h2>
+      <p>Here's exactly how a <span class="tooltip" data-tip="A subclass is a more specific version of a class — it has all the same fields as its parent, plus additional ones specific to its type">subclass</span> is defined in the real schema file. <code>HumanSample</code> says <code>is_a: Sample</code> — meaning it gets all of Sample's ~60 fields for free, then adds its own.</p>
+
+      <div class="translation-block animate-in">
+        <div class="translation-code">
+          <span class="translation-label">CODE</span>
+          <pre><code>
+<span class="code-line"><span class="code-property">HumanSample</span>:</span>
+<span class="code-line">  <span class="code-keyword">is_a</span>: Sample</span>
+<span class="code-line">  <span class="code-keyword">description</span>: &gt;</span>
+<span class="code-line">    Clinical or surveillance sample</span>
+<span class="code-line">    from a human host.</span>
+<span class="code-line">  <span class="code-keyword">attributes</span>:</span>
+<span class="code-line">    <span class="code-property">adhs_medsis_id</span>:</span>
+<span class="code-line">      <span class="code-keyword">required</span>: <span class="code-keyword">true</span></span>
+<span class="code-line">    <span class="code-property">host_age</span>:</span>
+<span class="code-line">      <span class="code-keyword">range</span>: integer</span>
+<span class="code-line">    <span class="code-property">clinical_outcome</span>:</span>
+<span class="code-line">      <span class="code-keyword">description</span>: &gt;</span>
+<span class="code-line">        e.g. hospitalized, ICU, deceased</span>
+          </code></pre>
+        </div>
+        <div class="translation-english">
+          <span class="translation-label">PLAIN ENGLISH</span>
+          <div class="translation-lines">
+            <p class="tl"><strong>HumanSample:</strong> — here is the name of this class, like a new tab in a form</p>
+            <p class="tl"><strong>is_a: Sample</strong> — this inherits everything from the base Sample class. All 60+ base fields come along automatically.</p>
+            <p class="tl"><strong>description:</strong> — a human-readable note about what this class is for</p>
+            <p class="tl"><strong>attributes:</strong> — the extra fields that ONLY HumanSample has</p>
+            <p class="tl"><strong>adhs_medsis_id</strong> — required: true means this field MUST be filled in. It links to the Arizona disease reporting system.</p>
+            <p class="tl"><strong>host_age: range: integer</strong> — age must be a whole number, not text like "forty"</p>
+            <p class="tl"><strong>clinical_outcome</strong> — how the patient fared: hospitalized, ICU, outpatient, etc.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- SCREEN 4: Ontology anchoring -->
+    <div class="screen animate-in">
+      <h2 class="screen-title">Why Every Field Has a Global Address</h2>
+      <p>Notice this in the schema: <code>slot_uri: ncbi:host_age</code>. That's an <span class="tooltip" data-tip="A globally unique identifier for a concept — like a universal part number. Instead of each system calling it 'patient_age' or 'age_years', everyone uses the same URI so computers can match them automatically">ontology URI</span>. It means JACKPOT's <code>host_age</code> field is the same thing as NCBI's <code>host_age</code> field — universally.</p>
+
+      <div class="callout callout-highlight" style="margin: var(--space-6) 0;">
+        <strong>The shipping container analogy:</strong> Before standardized shipping containers, every port had different equipment. Now one container fits any ship, truck, or crane worldwide. Ontology URIs are shipping container standards for data — a field with <code>genepio:0001181</code> is recognized by any FAIR-compatible system anywhere on Earth.
+      </div>
+
+      <div class="pattern-cards">
+        <div class="pattern-card">
+          <div class="pattern-card-icon">🔗</div>
+          <h4>NCBI BioSample</h4>
+          <p><code>ncbi:host_age</code>, <code>ncbi:organism</code> — the US government genomics database standard</p>
+        </div>
+        <div class="pattern-card">
+          <div class="pattern-card-icon">🌐</div>
+          <h4>GenEpiO / MIxS</h4>
+          <p><code>genepio:0001181</code> — the epidemiology ontology used by WHO, GISAID, and PHA4GE</p>
+        </div>
+        <div class="pattern-card">
+          <div class="pattern-card-icon">🏥</div>
+          <h4>SNOMED / LOINC</h4>
+          <p>Clinical coding systems — so JACKPOT data can link to electronic health records</p>
+        </div>
+      </div>
+
+      <div class="callout callout-tip" style="margin-top: var(--space-6);">
+        <strong>Aha!</strong> <span class="tooltip" data-tip="Findable, Accessible, Interoperable, Reusable — the four principles of good scientific data management">FAIR data principles</span> require that fields have stable global identifiers. Without ontology anchoring, data from different institutions can never be automatically combined — you'd have to manually map "collection_date" to "date_collected" to "col_dt" by hand.
+      </div>
+    </div>
+
+    <!-- SCREEN 5: Chat showing schema validation -->
+    <div class="screen animate-in">
+      <h2 class="screen-title">What Happens When a Field Is Wrong</h2>
+      <p>The schema doesn't just describe data — it enforces it. Here's what a conversation between the ingest system and a researcher might look like when validation catches a problem:</p>
+
+      <div class="chat-window" id="chat-module2">
+        <div class="chat-messages">
+          <div class="chat-message" data-msg="0" data-sender="researcher" style="display:none">
+            <div class="chat-avatar" style="background: var(--color-actor-4)">R</div>
+            <div class="chat-bubble">
+              <span class="chat-sender" style="color: var(--color-actor-4)">Researcher</span>
+              <p>I just uploaded my flu samples spreadsheet. The sequencing platform column says "Illumina NextSeq500".</p>
+            </div>
+          </div>
+          <div class="chat-message" data-msg="1" data-sender="jackpot" style="display:none">
+            <div class="chat-avatar" style="background: var(--color-actor-2)">J</div>
+            <div class="chat-bubble">
+              <span class="chat-sender" style="color: var(--color-actor-2)">JACKPOT Validator</span>
+              <p>⚠️ Validation error on row 3: "Illumina NextSeq500" is not in the allowed values for <code>sequencing_platform</code>.</p>
+            </div>
+          </div>
+          <div class="chat-message" data-msg="2" data-sender="researcher" style="display:none">
+            <div class="chat-avatar" style="background: var(--color-actor-4)">R</div>
+            <div class="chat-bubble">
+              <span class="chat-sender" style="color: var(--color-actor-4)">Researcher</span>
+              <p>But that's what the instrument is called! What should I put?</p>
+            </div>
+          </div>
+          <div class="chat-message" data-msg="3" data-sender="jackpot" style="display:none">
+            <div class="chat-avatar" style="background: var(--color-actor-2)">J</div>
+            <div class="chat-bubble">
+              <span class="chat-sender" style="color: var(--color-actor-2)">JACKPOT Validator</span>
+              <p>The controlled vocabulary requires "Illumina NextSeq 2000" (with a space and the correct model number). This ensures your data can be matched to NCBI BioSample records automatically.</p>
+            </div>
+          </div>
+          <div class="chat-message" data-msg="4" data-sender="researcher" style="display:none">
+            <div class="chat-avatar" style="background: var(--color-actor-4)">R</div>
+            <div class="chat-bubble">
+              <span class="chat-sender" style="color: var(--color-actor-4)">Researcher</span>
+              <p>Got it — so the exact spelling has to match the schema's allowed list, not what I normally write.</p>
+            </div>
+          </div>
+          <div class="chat-message" data-msg="5" data-sender="jackpot" style="display:none">
+            <div class="chat-avatar" style="background: var(--color-actor-2)">J</div>
+            <div class="chat-bubble">
+              <span class="chat-sender" style="color: var(--color-actor-2)">JACKPOT Validator</span>
+              <p>Exactly. The schema's <span class="tooltip" data-tip="A list of the only values that are allowed for a particular field — nothing outside the list is accepted">SequencingPlatformEnum</span> is the single source of truth. When everyone uses the same exact term, data from 50 different labs can be automatically aggregated.</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="chat-typing" id="chat-typing" style="display:none">
+          <div class="chat-avatar" id="chat-module2-typing-avatar" style="background: var(--color-actor-2)">J</div>
+          <div class="chat-typing-dots">
+            <span class="typing-dot"></span>
+            <span class="typing-dot"></span>
+            <span class="typing-dot"></span>
+          </div>
+        </div>
+
+        <div class="chat-controls">
+          <button class="btn chat-next-btn">Next Message</button>
+          <button class="btn chat-all-btn">Play All</button>
+          <button class="btn chat-reset-btn">Replay</button>
+          <span class="chat-progress"></span>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</section>

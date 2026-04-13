@@ -1,0 +1,302 @@
+<section class="module" id="module-5" style="background: var(--color-bg);">
+  <div class="module-content">
+
+    <!-- SCREEN 1: Intro -->
+    <div class="screen animate-in">
+      <div class="module-number">05</div>
+      <h1 class="module-title">Data Governance</h1>
+      <p class="module-subtitle">Genomic data is powerful — and sensitive. JACKPOT has a layered system of access control, surveillance oversight, and schema versioning to keep data both useful and protected.</p>
+
+      <div class="callout callout-highlight" style="margin-top: var(--space-8);">
+        <strong>The archive room analogy:</strong> A research library has public reading rooms (anyone can access), restricted stacks (researchers with credentials), closed archives (special permission required), and a rare books vault (director approval only). JACKPOT&apos;s sharing levels work the same way — each level has different access rules.
+      </div>
+
+      <div class="pattern-cards" style="margin-top: var(--space-8);">
+        <div class="pattern-card">
+          <div class="pattern-card-icon">🔒</div>
+          <h4>Access Control</h4>
+          <p>Five sharing levels from PRIVATE to PUBLIC, with a new REGISTERED_ACCESS tier for federated research networks</p>
+        </div>
+        <div class="pattern-card">
+          <div class="pattern-card-icon">🏛️</div>
+          <h4>Surveillance Oversight</h4>
+          <p>ADHS has automatic visibility into reportable disease samples — but with a governance board override process</p>
+        </div>
+        <div class="pattern-card">
+          <div class="pattern-card-icon">📜</div>
+          <h4>Schema Evolution</h4>
+          <p>The schema evolves through versioned Python scripts — changes are code, not manual edits, so they&apos;re reproducible and auditable</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- SCREEN 2: Sharing levels -->
+    <div class="screen animate-in">
+      <h2 class="screen-title">The Five Sharing Levels</h2>
+      <p>Every sample in JACKPOT has a <code>sharing_level</code> that controls who can see it. Here are the five levels, from most to least restricted:</p>
+
+      <div class="translation-block animate-in">
+        <div class="translation-code">
+          <span class="translation-label">CODE</span>
+          <pre><code>
+<span class="code-line"><span class="code-property">SharingLevelEnum</span>:</span>
+<span class="code-line">  <span class="code-keyword">permissible_values</span>:</span>
+<span class="code-line">    <span class="code-property">PRIVATE</span>:</span>
+<span class="code-line">      description: <span class="code-string">"Owner and Lab Director only"</span></span>
+<span class="code-line">    <span class="code-property">LAB</span>:</span>
+<span class="code-line">      description: <span class="code-string">"All members of the owning Lab"</span></span>
+<span class="code-line">    <span class="code-property">DISCOVERABLE</span>:</span>
+<span class="code-line">      description: <span class="code-string">"Metadata visible; files need request"</span></span>
+<span class="code-line">    <span class="code-property">REGISTERED_ACCESS</span>:</span>
+<span class="code-line">      description: &gt;-</span>
+<span class="code-line">        Available to any researcher who</span>
+<span class="code-line">        registers and accepts the DUA.</span>
+<span class="code-line">    <span class="code-property">PUBLIC</span>:</span>
+<span class="code-line">      description: <span class="code-string">"Open to all authenticated users"</span></span>
+          </code></pre>
+        </div>
+        <div class="translation-english">
+          <span class="translation-label">PLAIN ENGLISH</span>
+          <div class="translation-lines">
+            <p class="tl"><strong>SharingLevelEnum</strong> — this is a controlled vocabulary (an <span class="tooltip" data-tip="A named list of allowed values for a field — like a dropdown menu that only accepts specific options">enum</span>) that lists all allowed values for the sharing_level field</p>
+            <p class="tl"><strong>PRIVATE</strong> — only the researcher who uploaded it and their Lab Director can see it. Default for sensitive or preliminary data.</p>
+            <p class="tl"><strong>LAB</strong> — visible to everyone in the same lab. Good for collaborative internal work.</p>
+            <p class="tl"><strong>DISCOVERABLE</strong> — other researchers can see the metadata (what pathogen, where, when) but must request access to the actual sequence files.</p>
+            <p class="tl"><strong>REGISTERED_ACCESS</strong> — any vetted researcher who signs the <span class="tooltip" data-tip="Data Use Agreement — a legal contract specifying how data may and may not be used, by whom, and for what purpose">DUA</span> gets instant access, no per-request approval needed. Added in v4.4 for <span class="tooltip" data-tip="GA4GH is the Global Alliance for Genomics and Health — an international consortium that sets standards for sharing genomic data across institutions and countries">GA4GH</span> federated sharing.</p>
+            <p class="tl"><strong>PUBLIC</strong> — completely open to all authenticated platform users. Used for published, openly shared datasets.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- SCREEN 3: Surveillance relevance -->
+    <div class="screen animate-in">
+      <h2 class="screen-title">The Surveillance Override System</h2>
+      <p>JACKPOT automatically grants ADHS visibility into samples involving reportable pathogens. But labs can request overrides — with governance board review for privacy-sensitive changes.</p>
+
+      <div class="chat-window" id="chat-module5">
+        <div class="chat-messages">
+          <div class="chat-message" data-msg="0" data-sender="ingest" style="display:none">
+            <div class="chat-avatar" style="background: var(--color-actor-2)">I</div>
+            <div class="chat-bubble">
+              <span class="chat-sender" style="color: var(--color-actor-2)">Ingest Engine</span>
+              <p>Sample AZ-2026-0987 ingested. Organism: Salmonella enterica. Checking reportable organisms list...</p>
+            </div>
+          </div>
+          <div class="chat-message" data-msg="1" data-sender="ingest" style="display:none">
+            <div class="chat-avatar" style="background: var(--color-actor-2)">I</div>
+            <div class="chat-bubble">
+              <span class="chat-sender" style="color: var(--color-actor-2)">Ingest Engine</span>
+              <p>Salmonella is a reportable pathogen in Arizona. Setting <code>surveillance_relevant = TRUE</code> automatically. ADHS will have oversight access.</p>
+            </div>
+          </div>
+          <div class="chat-message" data-msg="2" data-sender="lab" style="display:none">
+            <div class="chat-avatar" style="background: var(--color-actor-4)">L</div>
+            <div class="chat-bubble">
+              <span class="chat-sender" style="color: var(--color-actor-4)">Lab Director</span>
+              <p>This sample is from a federally-funded research study under a separate IRB. We need to request a surveillance override.</p>
+            </div>
+          </div>
+          <div class="chat-message" data-msg="3" data-sender="system" style="display:none">
+            <div class="chat-avatar" style="background: var(--color-actor-3)">S</div>
+            <div class="chat-bubble">
+              <span class="chat-sender" style="color: var(--color-actor-3)">Governance Board System</span>
+              <p>Override request submitted. <code>surveillance_relevant_override = TRUE</code>, <code>surveillance_override_pending = TRUE</code>. Sample stays visible to ADHS until the board approves. Override category: research_exemption.</p>
+            </div>
+          </div>
+          <div class="chat-message" data-msg="4" data-sender="board" style="display:none">
+            <div class="chat-avatar" style="background: var(--color-actor-5)">B</div>
+            <div class="chat-bubble">
+              <span class="chat-sender" style="color: var(--color-actor-5)">Governance Board Member</span>
+              <p>Override approved. IRB documentation verified. Setting <code>surveillance_relevant = FALSE</code>, <code>surveillance_override_pending = FALSE</code>. Audit logged.</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="chat-typing" id="chat-typing" style="display:none">
+          <div class="chat-avatar" id="chat-module5-typing-avatar" style="background: var(--color-actor-2)">I</div>
+          <div class="chat-typing-dots">
+            <span class="typing-dot"></span>
+            <span class="typing-dot"></span>
+            <span class="typing-dot"></span>
+          </div>
+        </div>
+
+        <div class="chat-controls">
+          <button class="btn chat-next-btn">Next Message</button>
+          <button class="btn chat-all-btn">Play All</button>
+          <button class="btn chat-reset-btn">Replay</button>
+          <span class="chat-progress"></span>
+        </div>
+      </div>
+
+      <div class="callout callout-tip" style="margin-top: var(--space-6);">
+        <strong>Aha!</strong> Notice that <code>surveillance_relevant</code> stays TRUE until the board <em>approves</em> the override — never the reverse. This is a "fail-safe open" design: public health oversight is the default. Labs must justify removing it, not justify adding it.
+      </div>
+    </div>
+
+    <!-- SCREEN 4: Schema evolution -->
+    <div class="screen animate-in">
+      <h2 class="screen-title">How the Schema Evolves: Migrations as Code</h2>
+      <p>Every version of the schema gets a dedicated Python script that applies changes. Here&apos;s how the v4.4 update script works — it&apos;s a great example of how software changes safely over time.</p>
+
+      <div class="translation-block animate-in">
+        <div class="translation-code">
+          <span class="translation-label">CODE</span>
+          <pre><code>
+<span class="code-line"><span class="code-comment"># From update_schema_v4_4.py</span></span>
+<span class="code-line"></span>
+<span class="code-line">CHANGES = [</span>
+<span class="code-line">  (</span>
+<span class="code-line">    <span class="code-string">"HumanSample — date_of_symptom_onset,</span></span>
+<span class="code-line"><span class="code-string">     travel history, age range"</span>,</span>
+<span class="code-line">    OLD_VACCINATION,</span>
+<span class="code-line">    NEW_VACCINATION,</span>
+<span class="code-line">  ),</span>
+<span class="code-line">  ...</span>
+<span class="code-line">]</span>
+<span class="code-line"></span>
+<span class="code-line"><span class="code-keyword">def</span> <span class="code-function">apply_changes</span>(content):</span>
+<span class="code-line">  <span class="code-keyword">for</span> description, old, new <span class="code-keyword">in</span> CHANGES:</span>
+<span class="code-line">    <span class="code-keyword">if</span> old <span class="code-keyword">not in</span> content:</span>
+<span class="code-line">      <span class="code-keyword">raise</span> ValueError(<span class="code-string">"Anchor not found"</span>)</span>
+<span class="code-line">    content = content.replace(old, new)</span>
+          </code></pre>
+        </div>
+        <div class="translation-english">
+          <span class="translation-label">PLAIN ENGLISH</span>
+          <div class="translation-lines">
+            <p class="tl"><strong>CHANGES = [...]</strong> — a list of all the changes this script will make. Each entry has a description, the old text to find, and the new text to replace it with.</p>
+            <p class="tl"><strong>apply_changes(content)</strong> — a <span class="tooltip" data-tip="A reusable block of code that takes input, does something with it, and returns a result — like a machine: put something in, get something out">function</span> that reads the current schema file and applies every change in the list.</p>
+            <p class="tl"><strong>if old not in content: raise ValueError</strong> — if the text to replace no longer exists, the script refuses to run and explains why. This prevents silent failures.</p>
+            <p class="tl"><strong>content.replace(old, new)</strong> — surgically replaces just the old section with the new one, leaving everything else intact.</p>
+            <p class="tl"><strong>Why this approach:</strong> By writing changes as code, every modification is version-controlled, can be run again on any machine, and has a clear record of what changed and why — unlike manually editing a YAML file.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- SCREEN 5: v4.4 changes in context -->
+    <div class="screen animate-in">
+      <h2 class="screen-title">What Changed in v4.4 and Why</h2>
+      <p>Schema v4.4 was driven by <span class="tooltip" data-tip="The World Health Organization and Centers for Disease Control — the international and US national public health agencies that set reporting standards">WHO/CDC</span> alignment requirements. Each addition solves a real surveillance gap:</p>
+
+      <div class="step-cards">
+        <div class="step-card">
+          <div class="step-number">1</div>
+          <div class="step-content">
+            <h4>date_of_symptom_onset</h4>
+            <p>Standard on every WHO case investigation form but absent from most genomics platforms. The gap between symptom onset and sample collection reveals how fast a disease spreads.</p>
+          </div>
+        </div>
+        <div class="step-card">
+          <div class="step-number">2</div>
+          <div class="step-content">
+            <h4>travel_history_country</h4>
+            <p>WHO situation reports always distinguish travel-linked from locally-acquired cases. Without this field, JACKPOT couldn&apos;t answer "did this outbreak start locally or arrive from abroad?"</p>
+          </div>
+        </div>
+        <div class="step-card">
+          <div class="step-number">3</div>
+          <div class="step-content">
+            <h4>OutbreakInvestigation class</h4>
+            <p>Previously, "outbreak" was just a tag on individual samples. Now it&apos;s a first-class entity — you can query all samples belonging to a named outbreak, across all sectors, in one call.</p>
+          </div>
+        </div>
+        <div class="step-card">
+          <div class="step-number">4</div>
+          <div class="step-content">
+            <h4>REGISTERED_ACCESS sharing level</h4>
+            <p>Required for CDC/WHO federated data sharing. Allows researchers at partner institutions to access data under a signed agreement without per-request approval — critical for international genomic surveillance networks.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- SCREEN 6: Final quiz -->
+    <div class="screen animate-in">
+      <h2 class="screen-title">Final Challenge</h2>
+
+      <div class="quiz-container" id="quiz-module5">
+
+        <div class="quiz-question-block"
+             data-correct="option-b"
+             data-explanation-right="Exactly — REGISTERED_ACCESS is specifically designed for this: researchers at partner institutions sign a DUA once and get access without per-request approval, enabling federated data sharing between institutions."
+             data-explanation-wrong="Think about which sharing level was explicitly designed for federated research networks where researchers need access without per-sample approval, but data isn't fully public.">
+          <h3 class="quiz-question">A researcher at a partner university in Mexico needs access to Arizona SARS-CoV-2 genomic data for a joint CDC project. They shouldn't need Lab Director approval for every sample, but data shouldn't be fully public. Which sharing level is right?</h3>
+          <div class="quiz-options">
+            <button class="quiz-option" data-value="option-a" onclick="selectOption(this)">
+              <div class="quiz-option-radio"></div>
+              <span>PUBLIC — just make it open to everyone</span>
+            </button>
+            <button class="quiz-option" data-value="option-b" onclick="selectOption(this)">
+              <div class="quiz-option-radio"></div>
+              <span>REGISTERED_ACCESS — sign a DUA, get automatic access</span>
+            </button>
+            <button class="quiz-option" data-value="option-c" onclick="selectOption(this)">
+              <div class="quiz-option-radio"></div>
+              <span>DISCOVERABLE — they can see metadata but need to request files each time</span>
+            </button>
+            <button class="quiz-option" data-value="option-d" onclick="selectOption(this)">
+              <div class="quiz-option-radio"></div>
+              <span>LAB — add them to the owning lab</span>
+            </button>
+          </div>
+          <div class="quiz-feedback"></div>
+        </div>
+
+        <div class="quiz-question-block"
+             data-correct="option-c"
+             data-explanation-right="Right — the schema migration script explicitly checks that old text exists before replacing it, raising an error if the anchor is not found. This prevents silent corruption of the schema file."
+             data-explanation-wrong="Look at the apply_changes function — there is a specific safety check that stops the script from making any changes if a problem is detected. What does it check for?">
+          <h3 class="quiz-question">You try to run the v4.4 update script on a manually-edited schema file where someone already changed some text. What happens?</h3>
+          <div class="quiz-options">
+            <button class="quiz-option" data-value="option-a" onclick="selectOption(this)">
+              <div class="quiz-option-radio"></div>
+              <span>The script overwrites the manual changes silently</span>
+            </button>
+            <button class="quiz-option" data-value="option-b" onclick="selectOption(this)">
+              <div class="quiz-option-radio"></div>
+              <span>The script applies all other changes and skips the conflicting one</span>
+            </button>
+            <button class="quiz-option" data-value="option-c" onclick="selectOption(this)">
+              <div class="quiz-option-radio"></div>
+              <span>The script raises a ValueError and refuses to modify the file at all</span>
+            </button>
+          </div>
+          <div class="quiz-feedback"></div>
+        </div>
+
+        <div class="quiz-question-block"
+             data-correct="option-a"
+             data-explanation-right="Exactly — surveillance_relevant stays TRUE (ADHS keeps oversight) until the governance board explicitly approves the change. The system defaults to public health visibility, not privacy. Labs must justify removing oversight."
+             data-explanation-wrong="Think about which direction fails safely. When a researcher requests to remove ADHS oversight, what does the system do while waiting for board approval?">
+          <h3 class="quiz-question">A lab submits a request to remove ADHS surveillance access from a sample (setting surveillance_relevant from TRUE to FALSE). While the governance board review is pending, what is the access state?</h3>
+          <div class="quiz-options">
+            <button class="quiz-option" data-value="option-a" onclick="selectOption(this)">
+              <div class="quiz-option-radio"></div>
+              <span>ADHS still has oversight access — it stays TRUE until approved</span>
+            </button>
+            <button class="quiz-option" data-value="option-b" onclick="selectOption(this)">
+              <div class="quiz-option-radio"></div>
+              <span>ADHS access is temporarily suspended pending review</span>
+            </button>
+            <button class="quiz-option" data-value="option-c" onclick="selectOption(this)">
+              <div class="quiz-option-radio"></div>
+              <span>Access is determined by the lab director, not the governance board</span>
+            </button>
+          </div>
+          <div class="quiz-feedback"></div>
+        </div>
+
+        <button class="quiz-check-btn" onclick="checkQuiz('quiz-module5')">Check Answers</button>
+        <button class="quiz-reset-btn" onclick="resetQuiz('quiz-module5')">Try Again</button>
+      </div>
+
+      <div class="callout callout-info" style="margin-top: var(--space-10);">
+        <strong>You just learned how JACKPOT works.</strong> From a nasal swab to a CDC outbreak report — the schema is the backbone that makes it all possible: defining what data is collected, enforcing standards, enabling cross-sector analysis, and governing who sees what. Every field, every enum, every class in that YAML file represents a decision about how to protect public health while respecting researcher privacy.
+      </div>
+    </div>
+
+  </div>
+</section>
