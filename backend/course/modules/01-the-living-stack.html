@@ -1,0 +1,422 @@
+<section class="module" id="module-1" style="background: var(--color-bg)">
+
+  <!-- ═══════════════════════════════════════════════════════════════
+       SCREEN 1 — Hook + Metaphor
+  ═══════════════════════════════════════════════════════════════ -->
+  <div class="module-screen">
+    <div class="module-number">01</div>
+    <h1 class="module-title">The Living Stack</h1>
+    <p class="module-subtitle">When you open the JACKPOT portal and log in, four separate programs wake up to serve you — and they all run inside tiny isolated <span class="tooltip" data-tip="A container is a lightweight, isolated box that runs one program with everything it needs — its own file system, its own libraries, its own runtime. Think of it like a sealed lunchbox: everything needed for that meal is inside, and it never messes with other lunchboxes.">containers</span> on your computer.</p>
+
+    <div class="callout callout-accent">
+      <div class="callout-icon">🗞️</div>
+      <div class="callout-content">
+        <strong class="callout-title">The Newsroom Metaphor</strong>
+        <p>Think of JACKPOT like a newsroom. The <strong>wire desk</strong> (database) stores all the facts. The <strong>photo desk</strong> (file storage) holds the images and raw files. The <strong>reporters</strong> (API) gather, verify, and write every story. The <strong>editor's screen</strong> (Streamlit UI) is what the reader sees. Each desk does one thing — together, they publish the story.</p>
+      </div>
+    </div>
+
+    <div class="pattern-cards">
+      <div class="pattern-card" style="border-top: 3px solid #3B82F6">
+        <div class="pattern-icon" style="background: #3B82F6">🗄️</div>
+        <h4 class="pattern-title">PostgreSQL</h4>
+        <p class="pattern-desc">The wire desk. Every sample record, user, lab, and audit log lives here. Pure facts, perfectly organized.</p>
+      </div>
+      <div class="pattern-card" style="border-top: 3px solid #10B981">
+        <div class="pattern-icon" style="background: #10B981">🗂️</div>
+        <h4 class="pattern-title">MinIO Storage</h4>
+        <p class="pattern-desc">The photo desk. Genome files — FASTQ, FASTA, assembled sequences — all stored like a local Google Drive.</p>
+      </div>
+      <div class="pattern-card" style="border-top: 3px solid var(--color-accent)">
+        <div class="pattern-icon" style="background: var(--color-accent)">⚙️</div>
+        <h4 class="pattern-title">FastAPI</h4>
+        <p class="pattern-desc">The reporters. All business logic lives here: data validation, permission checks, query execution.</p>
+      </div>
+      <div class="pattern-card" style="border-top: 3px solid #8B5CF6">
+        <div class="pattern-icon" style="background: #8B5CF6">🖥️</div>
+        <h4 class="pattern-title">Streamlit UI</h4>
+        <p class="pattern-desc">The editor&rsquo;s screen. Forms, tables, charts — everything the researcher sees and clicks.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════════════════
+       SCREEN 2 — Architecture Diagram (clickable)
+  ═══════════════════════════════════════════════════════════════ -->
+  <div class="module-screen">
+    <h2 class="section-title">The Four Services at a Glance</h2>
+    <p class="section-intro">Each service has exactly one job. Click any box to learn what it owns — and what it deliberately <em>doesn&rsquo;t</em> do.</p>
+
+    <div class="arch-diagram">
+      <div class="arch-zone" style="grid-template-columns: repeat(2, 1fr); display: grid; gap: var(--space-4); padding: var(--space-4);">
+
+        <div class="arch-component"
+             data-desc="PostgreSQL stores all metadata — sample records, users, labs, audit logs. It runs on port 5432. It does NOT store genome files — those live in MinIO. It is the single source of truth for structured data."
+             onclick="showArchDesc(this)"
+             style="border-top: 4px solid #3B82F6">
+          <div class="arch-icon">🗄️</div>
+          <span>PostgreSQL</span>
+          <small style="display:block; color: var(--color-text-muted); font-size: var(--text-xs); margin-top: 4px">port 5432</small>
+        </div>
+
+        <div class="arch-component"
+             data-desc="MinIO stores genome files — FASTQ, FASTA, assembled genomes. It acts like Google Cloud Storage running locally. It runs on ports 9000 (API) and 9001 (browser console). It does NOT store metadata like sample names or user accounts."
+             onclick="showArchDesc(this)"
+             style="border-top: 4px solid #10B981">
+          <div class="arch-icon">🗂️</div>
+          <span>MinIO Storage</span>
+          <small style="display:block; color: var(--color-text-muted); font-size: var(--text-xs); margin-top: 4px">port 9000</small>
+        </div>
+
+        <div class="arch-component"
+             data-desc="The FastAPI API is where all business logic lives. It validates data, enforces permissions, runs database queries, and coordinates file uploads and downloads. It runs on port 8000. Nothing gets into the database or storage without passing through here first."
+             onclick="showArchDesc(this)"
+             style="border-top: 4px solid var(--color-accent)">
+          <div class="arch-icon">⚙️</div>
+          <span>FastAPI API</span>
+          <small style="display:block; color: var(--color-text-muted); font-size: var(--text-xs); margin-top: 4px">port 8000</small>
+        </div>
+
+        <div class="arch-component"
+             data-desc="The Streamlit UI is the researcher dashboard — forms, tables, and charts. It calls the FastAPI API for all data. It does NOT talk to PostgreSQL or MinIO directly. It runs on port 8501. It is purely a display and input layer."
+             onclick="showArchDesc(this)"
+             style="border-top: 4px solid #8B5CF6">
+          <div class="arch-icon">🖥️</div>
+          <span>Streamlit UI</span>
+          <small style="display:block; color: var(--color-text-muted); font-size: var(--text-xs); margin-top: 4px">port 8501</small>
+        </div>
+
+      </div>
+      <div class="arch-description" id="arch-desc">Click any service box to learn what it owns — and what it deliberately does not do.</div>
+    </div>
+
+    <div class="callout callout-info">
+      <div class="callout-icon">💡</div>
+      <div class="callout-content">
+        <strong class="callout-title">Why does each service get its own <span class="tooltip" data-tip="A port is a numbered door on a computer through which one specific program listens for incoming connections. Port 5432 is PostgreSQL&apos;s door; port 8000 is the API&apos;s door. When software connects to the database, it knocks on door 5432 specifically.">port</span>?</strong>
+        <p>Your computer has 65,535 numbered doors (<span class="tooltip" data-tip="A port is a numbered address that lets your computer run many programs at once, each listening on its own number. When two programs need to communicate, one sends a message to the other&apos;s port number — like calling a specific extension at a company.">ports</span>). Each service claims one. That way, four programs can all run simultaneously without stepping on each other.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════════════════
+       SCREEN 3 — docker-compose.yml Code↔English Translation
+  ═══════════════════════════════════════════════════════════════ -->
+  <div class="module-screen">
+    <h2 class="section-title">Reading <code>docker-compose.yml</code></h2>
+    <p class="section-intro">One file tells <span class="tooltip" data-tip="Docker is software that runs containers — isolated, self-contained environments for individual programs. You write a recipe (docker-compose.yml) and Docker follows it, spinning up every service your app needs with one command.">Docker</span> how to start the entire stack. Here it is alongside plain English.</p>
+
+    <div class="translation-block animate-in">
+      <div class="translation-code">
+        <span class="translation-label">CODE</span>
+        <pre><code>
+<span class="code-line"><span class="code-keyword">services</span>:</span>
+<span class="code-line"></span>
+<span class="code-line">  <span class="code-keyword">postgres</span>:</span>
+<span class="code-line">    <span class="code-property">image</span>: <span class="code-string">postgres:16</span></span>
+<span class="code-line">    <span class="code-property">container_name</span>: <span class="code-string">jackpot_postgres</span></span>
+<span class="code-line">    <span class="code-property">environment</span>:</span>
+<span class="code-line">      <span class="code-property">POSTGRES_USER</span>:     <span class="code-string">jackpot</span></span>
+<span class="code-line">      <span class="code-property">POSTGRES_PASSWORD</span>: <span class="code-string">jackpot</span></span>
+<span class="code-line">      <span class="code-property">POSTGRES_DB</span>:       <span class="code-string">jackpot_db</span></span>
+<span class="code-line">    <span class="code-property">ports</span>:</span>
+<span class="code-line">      - <span class="code-string">"5432:5432"</span></span>
+<span class="code-line">    <span class="code-property">volumes</span>:</span>
+<span class="code-line">      - <span class="code-string">./db/init.sql:/docker-entrypoint-initdb.d/init.sql</span></span>
+<span class="code-line"></span>
+<span class="code-line">  <span class="code-keyword">minio</span>:</span>
+<span class="code-line">    <span class="code-property">image</span>: <span class="code-string">minio/minio:latest</span></span>
+<span class="code-line">    <span class="code-property">container_name</span>: <span class="code-string">jackpot_minio</span></span>
+<span class="code-line">    <span class="code-property">command</span>: <span class="code-string">server /data --console-address ":9001"</span></span>
+<span class="code-line">    <span class="code-property">ports</span>:</span>
+<span class="code-line">      - <span class="code-string">"9000:9000"</span></span>
+<span class="code-line">      - <span class="code-string">"9001:9001"</span></span>
+<span class="code-line"></span>
+<span class="code-line">  <span class="code-keyword">api</span>:</span>
+<span class="code-line">    <span class="code-property">container_name</span>: <span class="code-string">jackpot_api</span></span>
+<span class="code-line">    <span class="code-property">ports</span>:</span>
+<span class="code-line">      - <span class="code-string">"8000:8000"</span></span>
+<span class="code-line">    <span class="code-property">depends_on</span>:</span>
+<span class="code-line">      <span class="code-property">postgres</span>:</span>
+<span class="code-line">        <span class="code-property">condition</span>: <span class="code-string">service_healthy</span></span>
+<span class="code-line">    <span class="code-property">command</span>: <span class="code-string">/opt/venv/bin/uvicorn backend.main:app</span></span>
+<span class="code-line">      <span class="code-string">--host 0.0.0.0 --port 8000 --reload</span></span>
+<span class="code-line"></span>
+<span class="code-line">  <span class="code-keyword">ui</span>:</span>
+<span class="code-line">    <span class="code-property">container_name</span>: <span class="code-string">jackpot_ui</span></span>
+<span class="code-line">    <span class="code-property">ports</span>:</span>
+<span class="code-line">      - <span class="code-string">"8501:8501"</span></span>
+<span class="code-line">    <span class="code-property">depends_on</span>:</span>
+<span class="code-line">      - <span class="code-string">api</span></span>
+<span class="code-line">    <span class="code-property">command</span>: <span class="code-string">/opt/venv/bin/streamlit run app.py</span></span>
+        </code></pre>
+      </div>
+      <div class="translation-english">
+        <span class="translation-label">PLAIN ENGLISH</span>
+        <div class="translation-lines">
+          <p class="tl"><strong>services:</strong> — Here are all the programs that make up JACKPOT. Docker will start each one as its own isolated <span class="tooltip" data-tip="A container is a sealed, self-contained environment for one program. It has its own file system and libraries, but shares the underlying operating system with other containers. Starting a container is like opening a sealed jar — everything it needs is already inside.">container</span>.</p>
+          <p class="tl"><strong>postgres / image: postgres:16</strong> — Use the official PostgreSQL version 16 database. Docker downloads it automatically if it is not already on your machine.</p>
+          <p class="tl"><strong>environment / POSTGRES_USER &amp; PASSWORD &amp; DB</strong> — Set startup configuration via <span class="tooltip" data-tip="Environment variables are named settings passed into a program when it starts — like Post-it notes attached to the container before it runs. They let you configure the same program differently in dev vs. production without changing any code.">environment variables</span>. The database will create a user named &ldquo;jackpot&rdquo; with password &ldquo;jackpot&rdquo; and a database called &ldquo;jackpot_db.&rdquo;</p>
+          <p class="tl"><strong>ports: &ldquo;5432:5432&rdquo;</strong> — Open door 5432 on your laptop and connect it to door 5432 inside the container. Format is <em>your-machine:inside-container</em>.</p>
+          <p class="tl"><strong>volumes: ./db/init.sql</strong> — When PostgreSQL starts for the first time, run this SQL file to create all the tables. A <span class="tooltip" data-tip="A volume is a link between a folder on your real computer and a folder inside a container. Files written inside the container appear on your real machine, and vice versa. This means your data survives even when the container stops.">volume</span> makes a file from your computer visible inside the container.</p>
+          <p class="tl"><strong>minio / command: server /data --console-address &ldquo;:9001&rdquo;</strong> — Start MinIO&rsquo;s file server and also open its browser-based admin dashboard on port 9001.</p>
+          <p class="tl"><strong>api / depends_on: postgres / condition: service_healthy</strong> — Do not start the API until PostgreSQL has fully started and passed its <span class="tooltip" data-tip="A health check is a periodic test a service runs on itself to confirm it is ready to accept requests. For a database, this usually means running a tiny query like SELECT 1 and checking it succeeds.">health check</span>. No point starting reporters before the wire desk opens.</p>
+          <p class="tl"><strong>command: uvicorn backend.main:app --reload</strong> — Start the API using <span class="tooltip" data-tip="Uvicorn is a fast web server for Python. It listens for HTTP requests and hands them to your FastAPI app. The --reload flag means it automatically restarts whenever you save a code change — essential during development.">uvicorn</span>, a high-performance Python web server. The <code>--reload</code> flag means it restarts automatically when you change code.</p>
+          <p class="tl"><strong>ui / depends_on: api</strong> — Start <span class="tooltip" data-tip="Streamlit is a Python library that turns Python scripts into interactive web dashboards. Write Python, get a web app — no HTML or JavaScript needed.">Streamlit</span> only after the API is running. The UI has nothing to show until the API is ready to answer its questions.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════════════════
+       SCREEN 4 — Data Flow Animation
+  ═══════════════════════════════════════════════════════════════ -->
+  <div class="module-screen">
+    <h2 class="section-title">One Login, Five Actors</h2>
+    <p class="section-intro">Every page load travels through all four <span class="tooltip" data-tip="In software architecture, a service is one focused program with a single responsibility. Services communicate with each other over a network, even when they run on the same machine. JACKPOT has four services: UI, API, database, and file storage.">services</span>. Step through the animation to see exactly who does what.</p>
+
+    <div class="flow-animation" data-steps='[
+      {"highlight":"flow-actor-1","label":"You type the JACKPOT URL into your browser. The browser does not know anything yet."},
+      {"highlight":"flow-actor-2","label":"The browser loads the Streamlit dashboard at port 8501. Streamlit renders the login form.","packet":true,"from":"actor-1","to":"actor-2"},
+      {"highlight":"flow-actor-3","label":"Streamlit calls the FastAPI API at port 8000 to verify your credentials. The UI never touches the database directly.","packet":true,"from":"actor-2","to":"actor-3"},
+      {"highlight":"flow-actor-4","label":"The API queries PostgreSQL at port 5432 to check your username and password hash.","packet":true,"from":"actor-3","to":"actor-4"},
+      {"highlight":"flow-actor-5","label":"The API asks MinIO at port 9000 to confirm your storage buckets exist and are accessible.","packet":true,"from":"actor-3","to":"actor-5"},
+      {"highlight":"flow-actor-3","label":"PostgreSQL and MinIO both respond to the API with the all-clear.","packet":true,"from":"actor-4","to":"actor-3"},
+      {"highlight":"flow-actor-2","label":"The API returns your session token and dashboard data to Streamlit.","packet":true,"from":"actor-3","to":"actor-2"},
+      {"highlight":"flow-actor-1","label":"Streamlit re-renders the full dashboard in your browser. You are logged in. Four services, one smooth experience.","packet":true,"from":"actor-2","to":"actor-1"}
+    ]'>
+      <div class="flow-actors">
+        <div class="flow-actor" id="flow-actor-1">
+          <div class="flow-actor-icon">🌐</div>
+          <span>Browser</span>
+        </div>
+        <div class="flow-actor" id="flow-actor-2">
+          <div class="flow-actor-icon">🖥️</div>
+          <span>Streamlit UI<br><small>:8501</small></span>
+        </div>
+        <div class="flow-actor" id="flow-actor-3">
+          <div class="flow-actor-icon">⚙️</div>
+          <span>FastAPI API<br><small>:8000</small></span>
+        </div>
+        <div class="flow-actor" id="flow-actor-4">
+          <div class="flow-actor-icon">🗄️</div>
+          <span>PostgreSQL<br><small>:5432</small></span>
+        </div>
+        <div class="flow-actor" id="flow-actor-5">
+          <div class="flow-actor-icon">🗂️</div>
+          <span>MinIO<br><small>:9000</small></span>
+        </div>
+      </div>
+
+      <div class="flow-packet" id="flow-packet"></div>
+      <div class="flow-step-label" id="flow-label">Click &ldquo;Next Step&rdquo; to trace a login through all four services</div>
+
+      <div class="flow-controls">
+        <button class="btn flow-next-btn">Next Step</button>
+        <button class="btn flow-reset-btn">Restart</button>
+        <span class="flow-progress"></span>
+      </div>
+    </div>
+
+    <div class="callout callout-accent">
+      <div class="callout-icon">💡</div>
+      <div class="callout-content">
+        <strong class="callout-title">The Key Insight</strong>
+        <p>The Streamlit UI <strong>never</strong> talks to PostgreSQL or MinIO directly. Everything goes through the API. This means all rules, permissions, and validation live in exactly one place — the API layer.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════════════════
+       SCREEN 5 — Health Check + Config Snippet, then Quiz
+  ═══════════════════════════════════════════════════════════════ -->
+  <div class="module-screen">
+    <h2 class="section-title">How the API Knows Everyone Is Home</h2>
+    <p class="section-intro">Before the API accepts any traffic, it checks whether the database is reachable. This is the <code>/health</code> endpoint from <code>backend/main.py</code>.</p>
+
+    <div class="translation-block animate-in">
+      <div class="translation-code">
+        <span class="translation-label">CODE</span>
+        <pre><code>
+<span class="code-line"><span class="code-decorator">@app.get</span>(<span class="code-string">"/health"</span>)</span>
+<span class="code-line"><span class="code-keyword">def</span> <span class="code-function">health</span>() -&gt; <span class="code-keyword">dict</span>:</span>
+<span class="code-line">    <span class="code-keyword">try</span>:</span>
+<span class="code-line">        <span class="code-function">execute_query</span>(<span class="code-string">"SELECT 1"</span>)</span>
+<span class="code-line">        db_status = <span class="code-string">"connected"</span></span>
+<span class="code-line">    <span class="code-keyword">except</span> Exception:</span>
+<span class="code-line">        db_status = <span class="code-string">"unavailable"</span></span>
+<span class="code-line">    <span class="code-keyword">return</span> {</span>
+<span class="code-line">        <span class="code-string">"status"</span>: <span class="code-string">"ok"</span>,</span>
+<span class="code-line">        <span class="code-string">"version"</span>: __version__,</span>
+<span class="code-line">        <span class="code-string">"project"</span>: <span class="code-string">"JACKPOT"</span>,</span>
+<span class="code-line">        <span class="code-string">"database"</span>: db_status</span>
+<span class="code-line">    }</span>
+        </code></pre>
+      </div>
+      <div class="translation-english">
+        <span class="translation-label">PLAIN ENGLISH</span>
+        <div class="translation-lines">
+          <p class="tl"><strong>@app.get(&ldquo;/health&rdquo;)</strong> — Register this function as the handler for <code>GET /health</code>. Any browser or monitoring tool can hit <code>localhost:8000/health</code> to ask &ldquo;is JACKPOT alive?&rdquo;</p>
+          <p class="tl"><strong>execute_query(&ldquo;SELECT 1&rdquo;)</strong> — Run the simplest possible database query — just return the number 1. If the database is reachable, this succeeds instantly. If not, it throws an error.</p>
+          <p class="tl"><strong>try / except Exception</strong> — If the query fails for any reason, catch the error gracefully instead of crashing. Set <code>db_status</code> to &ldquo;unavailable&rdquo; so the caller knows what is wrong.</p>
+          <p class="tl"><strong>return {...}</strong> — Send back a small <span class="tooltip" data-tip="JSON (JavaScript Object Notation) is a text format for structured data — like a Python dictionary but readable by any programming language. Curly braces hold key-value pairs. APIs use JSON to send data between services.">JSON</span> object with the app version, project name, and database status. Monitoring tools read this to decide whether to send you an alert.</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="callout callout-info">
+      <div class="callout-icon">🔧</div>
+      <div class="callout-content">
+        <strong class="callout-title">Practical tip: visit <code>localhost:8000/health</code></strong>
+        <p>While the stack is running, open that URL in your browser. You will see live JSON showing whether the database is connected. It is the fastest way to confirm all four services started correctly.</p>
+      </div>
+    </div>
+
+    <h2 class="section-title" style="margin-top: var(--space-12)">How the Stack Knows Its Own Address</h2>
+    <p class="section-intro">The <code>Settings</code> class in <code>backend/config.py</code> is where every service address, secret, and toggle lives. These values come from <span class="tooltip" data-tip="Environment variables are named settings passed to a program when it starts, without being baked into the code. In JACKPOT, a file called .env.local holds local dev values. In production on GCP, the same variables are set securely in the cloud.">environment variables</span> so the same code works locally and in production.</p>
+
+    <div class="translation-block animate-in">
+      <div class="translation-code">
+        <span class="translation-label">CODE</span>
+        <pre><code>
+<span class="code-line"><span class="code-keyword">class</span> <span class="code-function">Settings</span>(BaseSettings):</span>
+<span class="code-line">    env: <span class="code-keyword">str</span> = <span class="code-string">"local"</span></span>
+<span class="code-line">    database_url: <span class="code-keyword">str</span> = <span class="code-string">"postgresql://jackpot:jackpot@localhost:5432/jackpot_db"</span></span>
+<span class="code-line">    storage_endpoint: <span class="code-keyword">str</span> | <span class="code-keyword">None</span> = <span class="code-keyword">None</span></span>
+<span class="code-line">    storage_bucket_sequences: <span class="code-keyword">str</span> = <span class="code-string">"jackpot-sequences"</span></span>
+<span class="code-line">    storage_bucket_raw: <span class="code-keyword">str</span> = <span class="code-string">"jackpot-raw"</span></span>
+<span class="code-line">    storage_bucket_staging: <span class="code-keyword">str</span> = <span class="code-string">"jackpot-staging"</span></span>
+<span class="code-line">    secret_key: <span class="code-keyword">str</span> = <span class="code-string">"dev-secret-key-change-in-prod"</span></span>
+<span class="code-line">    scheduler_enabled: <span class="code-keyword">bool</span> = <span class="code-keyword">True</span></span>
+<span class="code-line"></span>
+<span class="code-line">    <span class="code-keyword">class</span> <span class="code-function">Config</span>:</span>
+<span class="code-line">        env_file = <span class="code-string">".env.local"</span></span>
+<span class="code-line"></span>
+<span class="code-line">    <span class="code-keyword">def</span> <span class="code-function">validate_for_production</span>(self) -&gt; <span class="code-keyword">None</span>:</span>
+<span class="code-line">        <span class="code-keyword">if</span> self.env == <span class="code-string">"gcp"</span>:</span>
+<span class="code-line">            <span class="code-keyword">if</span> self.secret_key == <span class="code-string">"dev-secret-key-change-in-prod"</span>:</span>
+<span class="code-line">                <span class="code-keyword">raise</span> RuntimeError(<span class="code-string">"SECRET_KEY is still the default dev value."</span>)</span>
+<span class="code-line"></span>
+<span class="code-line"><span class="code-decorator">@lru_cache</span></span>
+<span class="code-line"><span class="code-keyword">def</span> <span class="code-function">get_settings</span>() -&gt; Settings:</span>
+<span class="code-line">    <span class="code-keyword">return</span> <span class="code-function">Settings</span>()</span>
+        </code></pre>
+      </div>
+      <div class="translation-english">
+        <span class="translation-label">PLAIN ENGLISH</span>
+        <div class="translation-lines">
+          <p class="tl"><strong>class Settings(BaseSettings)</strong> — A configuration object that reads its values from environment variables automatically. If a variable is not set, it falls back to the default shown here.</p>
+          <p class="tl"><strong>database_url</strong> — The full address for connecting to PostgreSQL, including username, password, host, port, and database name. Locally this points to the Docker container.</p>
+          <p class="tl"><strong>storage_bucket_sequences / raw / staging</strong> — The three MinIO <span class="tooltip" data-tip="A bucket is a named folder inside an object storage service like MinIO or Google Cloud Storage. JACKPOT uses separate buckets for different file types — finished sequences, raw uploads, and staging files waiting to be processed.">buckets</span> where JACKPOT puts different kinds of genome files.</p>
+          <p class="tl"><strong>secret_key</strong> — Used to sign login tokens. The default value is intentionally labeled &ldquo;change-in-prod.&rdquo; The <code>validate_for_production</code> method throws a hard error if you forget.</p>
+          <p class="tl"><strong>class Config / env_file</strong> — Load environment variables from a file called <code>.env.local</code> on startup. This file is never committed to git — it holds your local secrets.</p>
+          <p class="tl"><strong>@lru_cache / get_settings()</strong> — <span class="tooltip" data-tip="lru_cache is a Python decorator that memoizes (remembers) the return value of a function so it only runs once, no matter how many times it is called. LRU stands for Least Recently Used. Here it means Settings() is read from disk exactly once at startup, not on every request.">lru_cache</span> means the Settings object is created once and reused forever. No repeated file reads. Efficient and safe.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════════════════
+       SCREEN 6 — Quiz
+  ═══════════════════════════════════════════════════════════════ -->
+  <div class="module-screen">
+    <h2 class="section-title">Test Your Mental Model</h2>
+    <p class="section-intro">These questions test whether you can use your new map of the stack — not just recall facts. Think before you click.</p>
+
+    <div class="quiz-container" id="quiz-module1">
+
+      <!-- Q1 -->
+      <div class="quiz-question-block"
+           data-correct="option-b"
+           data-explanation-right="Exactly. The API is the gatekeeper for all business logic — listing samples, filtering them, checking permissions. The UI only shows what the API gives it, so if something is wrong with what is being returned, the API is where to look."
+           data-explanation-wrong="Not quite. Remember: the UI only displays what the API sends it, the database just stores rows, and MinIO only holds genome files. Business logic for listing samples lives in the API layer.">
+        <h3 class="quiz-question">A researcher says: &ldquo;I uploaded my samples but the list is not showing up in the dashboard.&rdquo; Which service would you look at first?</h3>
+        <div class="quiz-options">
+          <button class="quiz-option" data-value="option-a" onclick="selectOption(this)">
+            <div class="quiz-option-radio"></div>
+            <span>The Streamlit UI — it controls what the researcher sees on screen</span>
+          </button>
+          <button class="quiz-option" data-value="option-b" onclick="selectOption(this)">
+            <div class="quiz-option-radio"></div>
+            <span>The FastAPI API — it handles the business logic for listing and returning samples</span>
+          </button>
+          <button class="quiz-option" data-value="option-c" onclick="selectOption(this)">
+            <div class="quiz-option-radio"></div>
+            <span>PostgreSQL — the database stores the sample records</span>
+          </button>
+          <button class="quiz-option" data-value="option-d" onclick="selectOption(this)">
+            <div class="quiz-option-radio"></div>
+            <span>MinIO storage — the file store holds the uploaded genome files</span>
+          </button>
+        </div>
+        <div class="quiz-feedback"></div>
+      </div>
+
+      <!-- Q2 -->
+      <div class="quiz-question-block"
+           data-correct="option-c"
+           data-explanation-right="Correct. MinIO (or Google Cloud Storage in production) is the service that actually holds the genome file bytes and streams them to downloaders. The API coordinates the request but the heavy lifting is MinIO sending the file."
+           data-explanation-wrong="Think about where the actual file bytes live. PostgreSQL holds metadata (names, dates, IDs) but not binary files. The API routes the request and checks permissions, but it hands off to MinIO for the actual bytes. The UI just shows a download button.">
+        <h3 class="quiz-question">Genome files are downloading slowly. Which service actually sends the file bytes to the researcher&rsquo;s browser?</h3>
+        <div class="quiz-options">
+          <button class="quiz-option" data-value="option-a" onclick="selectOption(this)">
+            <div class="quiz-option-radio"></div>
+            <span>PostgreSQL — it stores all the data for JACKPOT</span>
+          </button>
+          <button class="quiz-option" data-value="option-b" onclick="selectOption(this)">
+            <div class="quiz-option-radio"></div>
+            <span>The FastAPI API — it handles all requests coming into JACKPOT</span>
+          </button>
+          <button class="quiz-option" data-value="option-c" onclick="selectOption(this)">
+            <div class="quiz-option-radio"></div>
+            <span>MinIO storage — it stores and streams the actual genome files</span>
+          </button>
+          <button class="quiz-option" data-value="option-d" onclick="selectOption(this)">
+            <div class="quiz-option-radio"></div>
+            <span>The Streamlit UI — it renders the download interface for the researcher</span>
+          </button>
+        </div>
+        <div class="quiz-feedback"></div>
+      </div>
+
+      <!-- Q3 -->
+      <div class="quiz-question-block"
+           data-correct="option-c"
+           data-explanation-right="Yes. All business rules — required fields, data validation, sequencing date checks — live in the API. The UI can show a helpful warning, but the real enforcement runs server-side before anything reaches the database. When you ask AI to add this rule, tell it to look in the FastAPI API layer."
+           data-explanation-wrong="docker-compose.yml only says which programs to run, not what rules they enforce. UI validation is cosmetic and can be bypassed. PostgreSQL constraints are a secondary defense, but the API validator runs first and is where the rule belongs in JACKPOT architecture.">
+        <h3 class="quiz-question">You want to add a new rule: every sample must have a sequencing date before it can be saved. Where in the codebase does this rule get enforced?</h3>
+        <div class="quiz-options">
+          <button class="quiz-option" data-value="option-a" onclick="selectOption(this)">
+            <div class="quiz-option-radio"></div>
+            <span>docker-compose.yml — that file configures everything about the app</span>
+          </button>
+          <button class="quiz-option" data-value="option-b" onclick="selectOption(this)">
+            <div class="quiz-option-radio"></div>
+            <span>The Streamlit UI — it shows the form the researcher fills in</span>
+          </button>
+          <button class="quiz-option" data-value="option-c" onclick="selectOption(this)">
+            <div class="quiz-option-radio"></div>
+            <span>The FastAPI API — all business rules and validation logic live here</span>
+          </button>
+          <button class="quiz-option" data-value="option-d" onclick="selectOption(this)">
+            <div class="quiz-option-radio"></div>
+            <span>PostgreSQL — the database can enforce constraints on its columns</span>
+          </button>
+        </div>
+        <div class="quiz-feedback"></div>
+      </div>
+
+      <button class="quiz-check-btn" onclick="checkQuiz('quiz-module1')">Check Answers</button>
+      <button class="quiz-reset-btn" onclick="resetQuiz('quiz-module1')">Try Again</button>
+    </div>
+
+    <div class="callout callout-accent" style="margin-top: var(--space-10)">
+      <div class="callout-icon">🎯</div>
+      <div class="callout-content">
+        <strong class="callout-title">Why This Matters When Talking to AI</strong>
+        <p>When something breaks, naming the right service turns a vague prompt into a surgical one. &ldquo;Fix the login bug&rdquo; is a guess. &ldquo;The <code>/auth/login</code> endpoint in the FastAPI container is returning 500 — check the database connection logic&rdquo; is a diagnosis. That precision comes from knowing the stack.</p>
+      </div>
+    </div>
+  </div>
+
+</section>

@@ -1,0 +1,495 @@
+<section class="module" id="module-2" style="background: var(--color-bg-warm, #F5F0E8);">
+
+  <!-- ── SCREEN 1: Hook + Metaphor ─────────────────────────────── -->
+  <div class="module-screen">
+    <div class="module-header animate-in">
+      <span class="module-number" style="color: var(--color-accent);">02</span>
+      <h2 class="module-title">The API Blueprint</h2>
+      <p class="module-subtitle">How JACKPOT turns 20 URL paths into organized, maintainable code</p>
+    </div>
+
+    <div class="two-col animate-in" style="align-items: center; gap: var(--space-10);">
+      <div>
+        <p class="lead-text">The JACKPOT
+          <span class="term" data-definition="An API (Application Programming Interface) is the set of URLs your frontend uses to talk to the backend. Think of it as the menu at a restaurant — it lists everything you can order and how to ask for it.">API</span>
+          has over 20 different URL paths — one for samples, one for
+          <span class="term" data-definition="Authentication (auth) is the process of verifying who you are — like showing your ID at the door. In JACKPOT, the auth system checks your token before letting you access data.">auth</span>,
+          one for GISAID export, and more.
+        </p>
+        <p>How does one Python file keep all of that organized without becoming chaos?</p>
+      </div>
+
+      <!-- 311 Metaphor Visual -->
+      <div class="callout callout-accent animate-in" style="max-width: 480px;">
+        <div class="callout-icon">📞</div>
+        <div class="callout-content">
+          <strong class="callout-title">Think: City 311 Service</strong>
+          <p>One phone number — but when you call, you get routed to the exact department for your problem. Roads. Permits. Sanitation. Each department handles its own stuff.</p>
+          <p style="margin-top: var(--space-3);"><strong>In JACKPOT:</strong> <code>main.py</code> is the switchboard. Each <span class="term" data-definition="A router in FastAPI is a file that groups related URL endpoints together. Think of it as a department in a building — the samples router handles everything about samples, the auth router handles everything about login.">router</span> is a department that owns its slice of URLs.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Flow: Request → Switchboard → Department -->
+    <div class="flow-steps animate-in" style="margin-top: var(--space-10);">
+      <div class="flow-step" style="border-top: 3px solid var(--color-actor-1);">
+        <div class="flow-step-num" style="background: var(--color-actor-1);">1</div>
+        <p><strong>Browser</strong><br>GET /api/v1/samples</p>
+      </div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step" style="border-top: 3px solid var(--color-accent);">
+        <div class="flow-step-num" style="background: var(--color-accent);">2</div>
+        <p><strong>main.py</strong><br>The switchboard</p>
+      </div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step" style="border-top: 3px solid var(--color-actor-4);">
+        <div class="flow-step-num" style="background: var(--color-actor-4);">3</div>
+        <p><strong>samples router</strong><br>The right department</p>
+      </div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step" style="border-top: 3px solid var(--color-actor-5);">
+        <div class="flow-step-num" style="background: var(--color-actor-5);">4</div>
+        <p><strong>Handler function</strong><br>Actually does the work</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── SCREEN 2: The Switchboard — main.py ────────────────────── -->
+  <div class="module-screen">
+    <h3 class="screen-title animate-in">The Switchboard: <code>main.py</code></h3>
+    <p class="screen-subtitle animate-in">This file does one job — wire everything together. It doesn&apos;t contain any business logic itself.</p>
+
+    <div class="translation-block animate-in">
+      <div class="translation-code">
+        <span class="translation-label">CODE — backend/main.py</span>
+        <pre><code>
+<span class="code-line"><span class="code-keyword">from</span> fastapi <span class="code-keyword">import</span> <span class="code-function">FastAPI</span></span>
+<span class="code-line"><span class="code-keyword">from</span> fastapi.middleware.cors <span class="code-keyword">import</span> CORSMiddleware</span>
+<span class="code-line"><span class="code-keyword">from</span> backend.routers <span class="code-keyword">import</span> (</span>
+<span class="code-line">    auth, billing, gisaid, ingest, labs,</span>
+<span class="code-line">    ncbi_submissions, organizations, pipelines,</span>
+<span class="code-line">    projects, samples, users,</span>
+<span class="code-line">)</span>
+<span class="code-line"></span>
+<span class="code-line">app = <span class="code-function">FastAPI</span>(</span>
+<span class="code-line">    title=<span class="code-string">"JACKPOT API"</span>,</span>
+<span class="code-line">    description=<span class="code-string">"JACKPOT pathogen genomics platform."</span>,</span>
+<span class="code-line">    version=__version__,</span>
+<span class="code-line">    lifespan=lifespan,</span>
+<span class="code-line">)</span>
+<span class="code-line"></span>
+<span class="code-line">app.<span class="code-function">include_router</span>(samples.router)</span>
+<span class="code-line">app.<span class="code-function">include_router</span>(auth.router)</span>
+<span class="code-line">app.<span class="code-function">include_router</span>(gisaid.router)</span>
+<span class="code-line"></span>
+<span class="code-line">app.<span class="code-function">add_middleware</span>(RequestIDMiddleware)</span>
+<span class="code-line">app.<span class="code-function">add_middleware</span>(</span>
+<span class="code-line">    CORSMiddleware,</span>
+<span class="code-line">    allow_origins=[<span class="code-string">"http://localhost:8501"</span>, <span class="code-string">"http://localhost:4200"</span>],</span>
+<span class="code-line">    allow_credentials=<span class="code-keyword">True</span>,</span>
+<span class="code-line">    allow_methods=[<span class="code-string">"*"</span>],</span>
+<span class="code-line">    allow_headers=[<span class="code-string">"*"</span>],</span>
+<span class="code-line">)</span>
+        </code></pre>
+      </div>
+      <div class="translation-english">
+        <span class="translation-label">PLAIN ENGLISH</span>
+        <div class="translation-lines">
+          <p class="tl">Import the
+            <span class="term" data-definition="FastAPI is the Python framework that powers the JACKPOT backend. It automatically turns your Python functions into URL endpoints and generates interactive documentation.">FastAPI</span>
+            framework that runs the whole API.</p>
+          <p class="tl">Import the
+            <span class="term" data-definition="CORS (Cross-Origin Resource Sharing) is a browser security rule that blocks a web page from making requests to a different domain unless that domain says it is okay. Without CORS config, the Streamlit frontend would be blocked from calling the API.">CORS</span>
+            middleware that manages which websites can talk to our API.</p>
+          <p class="tl">Import all the router modules — each one is a separate file that handles a group of related URLs.</p>
+          <p class="tl" style="margin-top: var(--space-4);">Create the application. Give it a name, description, and version number — these show up in the auto-generated docs at <code>/docs</code>.</p>
+          <p class="tl" style="margin-top: var(--space-4);">Register each router with the app — this is what makes the samples, auth, and gisaid URLs actually work. Without this line, those routes don&apos;t exist.</p>
+          <p class="tl" style="margin-top: var(--space-4);">Add
+            <span class="term" data-definition="Middleware is software that sits between the incoming request and your handler function. Every single request passes through all middleware layers before reaching its destination — like airport security before your gate.">middleware</span>
+            layers. Every request runs through these before hitting any router. The first adds a unique ID to each request; the second checks whether the requesting website is on the allowed list.</p>
+          <p class="tl">Only requests from the Streamlit app (port 8501) or the Angular frontend (port 4200) are allowed.</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="callout callout-accent animate-in">
+      <div class="callout-icon">💡</div>
+      <div class="callout-content">
+        <strong class="callout-title">Key Insight: main.py is just wiring</strong>
+        <p>When you ask AI to add a new feature, <strong>never say "put it in main.py."</strong> That file is reserved for wiring — it only registers things. All logic belongs in a router file. This pattern is called <em>separation of concerns</em> — each file has exactly one job.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── SCREEN 3: The Router Map ─────────────────────────────── -->
+  <div class="module-screen">
+    <h3 class="screen-title animate-in">The Router Map</h3>
+    <p class="screen-subtitle animate-in">JACKPOT has 20+ routers grouped into five domains. This is the map you need when telling AI where to add code.</p>
+
+    <div class="pattern-cards animate-in" style="grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));">
+      <div class="pattern-card" style="border-top: 3px solid var(--color-actor-1);">
+        <div class="pattern-icon" style="background: var(--color-actor-1); font-size: 1.5rem; width: 44px; height: 44px; border-radius: 8px; display: flex; align-items: center; justify-content: center; margin-bottom: var(--space-3);">🔑</div>
+        <h4 class="pattern-title">Identity</h4>
+        <p class="pattern-desc">Who you are and whether you can log in.</p>
+        <div style="margin-top: var(--space-3); display: flex; flex-wrap: wrap; gap: var(--space-2);">
+          <code style="font-size: 0.72rem; background: var(--color-bg-code); color: #CBA6F7; padding: 2px 6px; border-radius: 4px;">auth</code>
+          <code style="font-size: 0.72rem; background: var(--color-bg-code); color: #CBA6F7; padding: 2px 6px; border-radius: 4px;">users</code>
+          <code style="font-size: 0.72rem; background: var(--color-bg-code); color: #CBA6F7; padding: 2px 6px; border-radius: 4px;">tokens</code>
+        </div>
+      </div>
+
+      <div class="pattern-card" style="border-top: 3px solid var(--color-actor-2);">
+        <div class="pattern-icon" style="background: var(--color-actor-2); font-size: 1.5rem; width: 44px; height: 44px; border-radius: 8px; display: flex; align-items: center; justify-content: center; margin-bottom: var(--space-3);">🏛️</div>
+        <h4 class="pattern-title">Organization</h4>
+        <p class="pattern-desc">Who your org is, which labs you run, which projects you own.</p>
+        <div style="margin-top: var(--space-3); display: flex; flex-wrap: wrap; gap: var(--space-2);">
+          <code style="font-size: 0.72rem; background: var(--color-bg-code); color: #CBA6F7; padding: 2px 6px; border-radius: 4px;">organizations</code>
+          <code style="font-size: 0.72rem; background: var(--color-bg-code); color: #CBA6F7; padding: 2px 6px; border-radius: 4px;">labs</code>
+          <code style="font-size: 0.72rem; background: var(--color-bg-code); color: #CBA6F7; padding: 2px 6px; border-radius: 4px;">projects</code>
+        </div>
+      </div>
+
+      <div class="pattern-card" style="border-top: 3px solid var(--color-actor-5);">
+        <div class="pattern-icon" style="background: var(--color-actor-5); font-size: 1.5rem; width: 44px; height: 44px; border-radius: 8px; display: flex; align-items: center; justify-content: center; margin-bottom: var(--space-3);">🧫</div>
+        <h4 class="pattern-title">Samples</h4>
+        <p class="pattern-desc">The core domain — creating, listing, and archiving pathogen samples.</p>
+        <div style="margin-top: var(--space-3); display: flex; flex-wrap: wrap; gap: var(--space-2);">
+          <code style="font-size: 0.72rem; background: var(--color-bg-code); color: #CBA6F7; padding: 2px 6px; border-radius: 4px;">samples</code>
+          <code style="font-size: 0.72rem; background: var(--color-bg-code); color: #CBA6F7; padding: 2px 6px; border-radius: 4px;">ingest</code>
+          <code style="font-size: 0.72rem; background: var(--color-bg-code); color: #CBA6F7; padding: 2px 6px; border-radius: 4px;">sample_access</code>
+          <code style="font-size: 0.72rem; background: var(--color-bg-code); color: #CBA6F7; padding: 2px 6px; border-radius: 4px;">archive_requests</code>
+        </div>
+      </div>
+
+      <div class="pattern-card" style="border-top: 3px solid var(--color-actor-4);">
+        <div class="pattern-icon" style="background: var(--color-actor-4); font-size: 1.5rem; width: 44px; height: 44px; border-radius: 8px; display: flex; align-items: center; justify-content: center; margin-bottom: var(--space-3);">📤</div>
+        <h4 class="pattern-title">Submissions</h4>
+        <p class="pattern-desc">Exporting data to public repositories like GISAID and NCBI.</p>
+        <div style="margin-top: var(--space-3); display: flex; flex-wrap: wrap; gap: var(--space-2);">
+          <code style="font-size: 0.72rem; background: var(--color-bg-code); color: #CBA6F7; padding: 2px 6px; border-radius: 4px;">gisaid</code>
+          <code style="font-size: 0.72rem; background: var(--color-bg-code); color: #CBA6F7; padding: 2px 6px; border-radius: 4px;">ncbi_submissions</code>
+          <code style="font-size: 0.72rem; background: var(--color-bg-code); color: #CBA6F7; padding: 2px 6px; border-radius: 4px;">dataharmonizer</code>
+          <code style="font-size: 0.72rem; background: var(--color-bg-code); color: #CBA6F7; padding: 2px 6px; border-radius: 4px;">datasets</code>
+          <code style="font-size: 0.72rem; background: var(--color-bg-code); color: #CBA6F7; padding: 2px 6px; border-radius: 4px;">dataset_access</code>
+        </div>
+      </div>
+
+      <div class="pattern-card" style="border-top: 3px solid var(--color-text-muted);">
+        <div class="pattern-icon" style="background: #6B7280; font-size: 1.5rem; width: 44px; height: 44px; border-radius: 8px; display: flex; align-items: center; justify-content: center; margin-bottom: var(--space-3);">⚙️</div>
+        <h4 class="pattern-title">Platform Admin</h4>
+        <p class="pattern-desc">Behind-the-scenes plumbing — billing, notifications, search, pipelines.</p>
+        <div style="margin-top: var(--space-3); display: flex; flex-wrap: wrap; gap: var(--space-2);">
+          <code style="font-size: 0.72rem; background: var(--color-bg-code); color: #CBA6F7; padding: 2px 6px; border-radius: 4px;">billing</code>
+          <code style="font-size: 0.72rem; background: var(--color-bg-code); color: #CBA6F7; padding: 2px 6px; border-radius: 4px;">domain_whitelist</code>
+          <code style="font-size: 0.72rem; background: var(--color-bg-code); color: #CBA6F7; padding: 2px 6px; border-radius: 4px;">notifications</code>
+          <code style="font-size: 0.72rem; background: var(--color-bg-code); color: #CBA6F7; padding: 2px 6px; border-radius: 4px;">saved_searches</code>
+          <code style="font-size: 0.72rem; background: var(--color-bg-code); color: #CBA6F7; padding: 2px 6px; border-radius: 4px;">pipelines</code>
+        </div>
+      </div>
+    </div>
+
+    <div class="callout callout-info animate-in" style="margin-top: var(--space-8);">
+      <div class="callout-icon">🗺️</div>
+      <div class="callout-content">
+        <strong class="callout-title">How to use this map with AI</strong>
+        <p>Instead of "add an endpoint that returns wastewater samples," say: <strong>"Add a GET
+          <span class="term" data-definition="An endpoint is a specific URL in the API that does one thing — like /samples/list or /auth/login. Each endpoint responds to a specific HTTP verb (GET, POST, etc.) and accepts specific inputs.">endpoint</span>
+          to the samples router in backend/routers/samples.py that returns all wastewater samples."</strong> That gives AI exactly the right file and the right context.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── SCREEN 4: Reading a Route + Middleware ─────────────────── -->
+  <div class="module-screen">
+    <h3 class="screen-title animate-in">Anatomy of a Route</h3>
+    <p class="screen-subtitle animate-in">Every
+      <span class="term" data-definition="A route (or endpoint) is a Python function decorated with @router.get, @router.post, etc. The decorator tells FastAPI: when someone hits this URL with this HTTP verb, run this function.">route</span>
+      follows the same recipe. Here&apos;s the GISAID export endpoint — one of the more interesting ones.</p>
+
+    <div class="translation-block animate-in">
+      <div class="translation-code">
+        <span class="translation-label">CODE — backend/routers/gisaid.py</span>
+        <pre><code>
+<span class="code-line">@router.<span class="code-function">post</span>(<span class="code-string">"/export/{lab_id}"</span>)</span>
+<span class="code-line"><span class="code-keyword">def</span> <span class="code-function">export_gisaid_csv</span>(</span>
+<span class="code-line">    lab_id: <span class="code-keyword">int</span>,</span>
+<span class="code-line">    sample_ids: list[<span class="code-keyword">int</span>],</span>
+<span class="code-line">    pathogen: <span class="code-keyword">str</span>,</span>
+<span class="code-line">    request: Request,</span>
+<span class="code-line">) -> StreamingResponse:</span>
+<span class="code-line">    <span class="code-string">"""Generate a GISAID-compatible CSV for the specified samples."""</span></span>
+<span class="code-line">    <span class="code-keyword">if not</span> sample_ids:</span>
+<span class="code-line">        <span class="code-keyword">raise</span> <span class="code-function">HTTPException</span>(status_code=<span class="code-number">400</span>, detail=<span class="code-string">"No sample IDs provided."</span>)</span>
+<span class="code-line">    user = <span class="code-function">get_current_user</span>(request)</span>
+<span class="code-line">    <span class="code-function">require_lab_access</span>(user, lab_id)</span>
+        </code></pre>
+      </div>
+      <div class="translation-english">
+        <span class="translation-label">PLAIN ENGLISH</span>
+        <div class="translation-lines">
+          <p class="tl"><strong>@router.post("/export/{lab_id}")</strong> — This is a
+            <span class="term" data-definition="An HTTP verb describes the type of action you want to perform. GET = fetch data. POST = send new data or trigger an action. PUT = update existing data. DELETE = remove data.">POST</span>
+            endpoint. The <code>{lab_id}</code> in curly braces is a
+            <span class="term" data-definition="A path parameter is a variable embedded in the URL itself — like /export/42 where 42 is the lab_id. FastAPI automatically extracts it and passes it to your function as a typed variable.">path parameter</span>
+            — it gets pulled out of the URL automatically.</p>
+          <p class="tl"><strong>lab_id: int</strong> — FastAPI sees this matches the URL parameter and fills it in. The colon means &quot;this must be a whole number.&quot;</p>
+          <p class="tl"><strong>sample_ids: list[int]</strong> — These come from the request body — a list of sample IDs the caller wants exported. FastAPI reads the JSON body and validates it automatically.</p>
+          <p class="tl"><strong>request: Request</strong> — This is
+            <span class="term" data-definition="Dependency injection is when FastAPI automatically provides objects your function needs, instead of you creating them yourself. Declaring Request as a parameter tells FastAPI: pass the full request object here — I need it.">dependency injection</span>
+            — FastAPI sees the type hint and automatically passes the incoming request object so we can read headers and the logged-in user.</p>
+          <p class="tl"><strong>-&gt; StreamingResponse</strong> — The return type. A
+            <span class="term" data-definition="A StreamingResponse sends data in chunks instead of all at once — perfect for large CSV files. The browser starts receiving data immediately rather than waiting for the whole file to be built in memory.">StreamingResponse</span>
+            streams the CSV file back to the browser instead of loading the whole thing into memory first.</p>
+          <p class="tl"><strong>raise HTTPException(400)</strong> — If no sample IDs were provided, immediately return an error. The 400 status code means &quot;bad request — you sent invalid input.&quot;</p>
+          <p class="tl"><strong>require_lab_access</strong> — Check that the logged-in user actually has permission to access this lab. If not, this raises a 403 error automatically.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Middleware Translation -->
+    <h3 class="screen-title animate-in" style="margin-top: var(--space-12);">The Middleware Layer: Stamping Every Request</h3>
+    <p class="screen-subtitle animate-in">Before any router sees a request, two
+      <span class="term" data-definition="Middleware is code that runs for every single request, before it reaches your router. Think of it like the front-desk security check at an office building — everyone passes through it, no matter which floor they are going to.">middleware</span>
+      layers process it. Here&apos;s the one that stamps each request with a unique ID.</p>
+
+    <div class="translation-block animate-in">
+      <div class="translation-code">
+        <span class="translation-label">CODE — backend/middleware.py</span>
+        <pre><code>
+<span class="code-line"><span class="code-keyword">import</span> uuid</span>
+<span class="code-line"><span class="code-keyword">from</span> fastapi <span class="code-keyword">import</span> Request</span>
+<span class="code-line"><span class="code-keyword">from</span> starlette.middleware.base <span class="code-keyword">import</span> BaseHTTPMiddleware</span>
+<span class="code-line"></span>
+<span class="code-line"><span class="code-keyword">class</span> <span class="code-function">RequestIDMiddleware</span>(BaseHTTPMiddleware):</span>
+<span class="code-line">    <span class="code-keyword">async def</span> <span class="code-function">dispatch</span>(<span class="code-keyword">self</span>, request: Request, call_next):</span>
+<span class="code-line">        request_id = <span class="code-keyword">str</span>(<span class="code-function">uuid</span>.<span class="code-function">uuid4</span>())</span>
+<span class="code-line">        request.state.request_id = request_id</span>
+<span class="code-line">        response = <span class="code-keyword">await</span> <span class="code-function">call_next</span>(request)</span>
+<span class="code-line">        response.headers[<span class="code-string">"X-Request-ID"</span>] = request_id</span>
+<span class="code-line">        <span class="code-keyword">return</span> response</span>
+        </code></pre>
+      </div>
+      <div class="translation-english">
+        <span class="translation-label">PLAIN ENGLISH</span>
+        <div class="translation-lines">
+          <p class="tl"><strong>import uuid</strong> — Pull in the library for generating universally unique IDs — random identifiers guaranteed to never repeat across the planet.</p>
+          <p class="tl"><strong>class RequestIDMiddleware</strong> — Define a middleware class. Every incoming
+            <span class="term" data-definition="An HTTP request is the message a browser or app sends to the server asking for something. It includes a URL, a verb (GET/POST), headers with metadata, and optionally a body with data.">HTTP request</span>
+            will run through this code.</p>
+          <p class="tl"><strong>async def dispatch</strong> — This method runs for every single request, no exceptions. It receives the request before any router touches it.</p>
+          <p class="tl"><strong>uuid.uuid4()</strong> — Generate a brand new
+            <span class="term" data-definition="A UUID (Universally Unique Identifier) is a 128-bit random number formatted like a3f2-91bc-... It is statistically guaranteed to be unique — you could generate trillions and never get a duplicate.">UUID</span>
+            — a random string like <code>a3f2-91bc-7e14-...</code> — unique to this exact request.</p>
+          <p class="tl"><strong>request.state.request_id = request_id</strong> — Attach the ID to the request object so every handler function and log line downstream can reference it.</p>
+          <p class="tl"><strong>await call_next(request)</strong> — Pass the (now-stamped) request along to the next layer — the CORS check, then the router. We wait for the full response to come back.</p>
+          <p class="tl"><strong>response.headers["X-Request-ID"]</strong> — Stamp the same ID onto the response headers. When a user reports a bug, support can look up this exact
+            <span class="term" data-definition="A request ID is a unique identifier stamped on every API request. It acts like a tracking number — if something goes wrong, support can search the server logs for that ID and see every log line from that exact request.">request ID</span>
+            in the server logs and see every log line from that request.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── SCREEN 5: Group Chat Animation ────────────────────────── -->
+  <div class="module-screen">
+    <h3 class="screen-title animate-in">One Request&apos;s Journey</h3>
+    <p class="screen-subtitle animate-in">Watch what actually happens when the Streamlit frontend calls <code>GET /api/v1/samples</code>. Every layer speaks.</p>
+
+    <div class="chat-window animate-in" id="chat-module2">
+      <div class="chat-messages">
+
+        <div class="chat-message" data-msg="0" data-sender="browser" style="display:none">
+          <div class="chat-avatar" style="background: var(--color-actor-1)">B</div>
+          <div class="chat-bubble">
+            <span class="chat-sender" style="color: var(--color-actor-1)">Browser</span>
+            <p>GET /api/v1/samples — give me the samples list</p>
+          </div>
+        </div>
+
+        <div class="chat-message" data-msg="1" data-sender="requestid" style="display:none">
+          <div class="chat-avatar" style="background: var(--color-actor-2)">R</div>
+          <div class="chat-bubble">
+            <span class="chat-sender" style="color: var(--color-actor-2)">RequestID Middleware</span>
+            <p>Stamping this request with ID: a3f2-91bc-... and passing it through</p>
+          </div>
+        </div>
+
+        <div class="chat-message" data-msg="2" data-sender="cors" style="display:none">
+          <div class="chat-avatar" style="background: var(--color-actor-3)">C</div>
+          <div class="chat-bubble">
+            <span class="chat-sender" style="color: var(--color-actor-3)">CORS Middleware</span>
+            <p>Origin http://localhost:8501 is on the allowed list. Passing through.</p>
+          </div>
+        </div>
+
+        <div class="chat-message" data-msg="3" data-sender="router" style="display:none">
+          <div class="chat-avatar" style="background: var(--color-actor-4)">Rt</div>
+          <div class="chat-bubble">
+            <span class="chat-sender" style="color: var(--color-actor-4)">Router (samples)</span>
+            <p>URL matches /api/v1/samples. Routing to list_samples handler.</p>
+          </div>
+        </div>
+
+        <div class="chat-message" data-msg="4" data-sender="handler" style="display:none">
+          <div class="chat-avatar" style="background: var(--color-actor-5)">H</div>
+          <div class="chat-bubble">
+            <span class="chat-sender" style="color: var(--color-actor-5)">Handler Function</span>
+            <p>Running the query... got 42 results.</p>
+          </div>
+        </div>
+
+        <div class="chat-message" data-msg="5" data-sender="database" style="display:none">
+          <div class="chat-avatar" style="background: var(--color-actor-5)">DB</div>
+          <div class="chat-bubble">
+            <span class="chat-sender" style="color: var(--color-actor-5)">Database</span>
+            <p>Here are your 42 rows.</p>
+          </div>
+        </div>
+
+        <div class="chat-message" data-msg="6" data-sender="handler" style="display:none">
+          <div class="chat-avatar" style="background: var(--color-actor-5)">H</div>
+          <div class="chat-bubble">
+            <span class="chat-sender" style="color: var(--color-actor-5)">Handler Function</span>
+            <p>Sending response back with X-Request-ID: a3f2-91bc-... in headers</p>
+          </div>
+        </div>
+
+        <div class="chat-message" data-msg="7" data-sender="browser" style="display:none">
+          <div class="chat-avatar" style="background: var(--color-actor-1)">B</div>
+          <div class="chat-bubble">
+            <span class="chat-sender" style="color: var(--color-actor-1)">Browser</span>
+            <p>Got 42 samples. Request ID a3f2 in the response headers for debugging.</p>
+          </div>
+        </div>
+
+      </div>
+
+      <div class="chat-typing" id="chat-typing" style="display:none">
+        <div class="chat-avatar" id="chat-module2-typing-avatar">?</div>
+        <div class="chat-typing-dots">
+          <span class="typing-dot"></span>
+          <span class="typing-dot"></span>
+          <span class="typing-dot"></span>
+        </div>
+      </div>
+
+      <div class="chat-controls">
+        <button class="btn chat-next-btn">Next Message</button>
+        <button class="btn chat-all-btn">Play All</button>
+        <button class="btn chat-reset-btn">Replay</button>
+        <span class="chat-progress"></span>
+      </div>
+    </div>
+
+    <div class="callout callout-info animate-in" style="margin-top: var(--space-8);">
+      <div class="callout-icon">🔍</div>
+      <div class="callout-content">
+        <strong class="callout-title">Real-world debugging tip</strong>
+        <p>When a user reports an error in production, ask them to open their browser DevTools (F12), go to the Network tab, find the failing request, and copy the <code>X-Request-ID</code> response header. That ID lets you find every log line from that exact request in the server logs — like a tracking number for your bug.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── SCREEN 6: Quiz ─────────────────────────────────────────── -->
+  <div class="module-screen">
+    <h3 class="screen-title animate-in">Check Your Understanding</h3>
+    <p class="screen-subtitle animate-in">Three scenarios. Apply what you just learned — no definitions, just thinking.</p>
+
+    <div class="quiz-container animate-in" id="quiz-module2">
+
+      <!-- Q1 -->
+      <div class="quiz-question-block"
+           data-correct="option-b"
+           data-explanation-right="Exactly! RequestIDMiddleware runs before every single request — it generates a fresh UUID and stamps it onto both the request and the response headers. Support can search logs by that ID."
+           data-explanation-wrong="Not quite. The request ID is not stored in the database or generated by the browser. Think about what runs before every request touches a router...">
+        <h3 class="quiz-question">A user reports an error. Support asks for the request ID. Where does that ID come from?</h3>
+        <div class="quiz-options">
+          <button class="quiz-option" data-value="option-a" onclick="selectOption(this)">
+            <div class="quiz-option-radio"></div>
+            <span>They have to look it up in the database</span>
+          </button>
+          <button class="quiz-option" data-value="option-b" onclick="selectOption(this)">
+            <div class="quiz-option-radio"></div>
+            <span>RequestIDMiddleware generates a UUID for every single request</span>
+          </button>
+          <button class="quiz-option" data-value="option-c" onclick="selectOption(this)">
+            <div class="quiz-option-radio"></div>
+            <span>The user&apos;s browser generates it</span>
+          </button>
+          <button class="quiz-option" data-value="option-d" onclick="selectOption(this)">
+            <div class="quiz-option-radio"></div>
+            <span>It comes from Google OAuth</span>
+          </button>
+        </div>
+        <div class="quiz-feedback"></div>
+      </div>
+
+      <!-- Q2 -->
+      <div class="quiz-question-block"
+           data-correct="option-b"
+           data-explanation-right="Exactly right. Samples are the domain, so the samples router owns this. You would add a new GET route to backend/routers/samples.py — that is the right department for this request."
+           data-explanation-wrong="Not quite. main.py is just the switchboard — adding logic there violates the separation of concerns. database.py handles connections, not routes. docker-compose.yml is infrastructure config. The samples router is the right home for anything that reads or exports sample data.">
+        <h3 class="quiz-question">You want to add a feature: download all samples as a CSV file. Where in the codebase should the new code go?</h3>
+        <div class="quiz-options">
+          <button class="quiz-option" data-value="option-a" onclick="selectOption(this)">
+            <div class="quiz-option-radio"></div>
+            <span>backend/main.py</span>
+          </button>
+          <button class="quiz-option" data-value="option-b" onclick="selectOption(this)">
+            <div class="quiz-option-radio"></div>
+            <span>backend/routers/samples.py</span>
+          </button>
+          <button class="quiz-option" data-value="option-c" onclick="selectOption(this)">
+            <div class="quiz-option-radio"></div>
+            <span>backend/database.py</span>
+          </button>
+          <button class="quiz-option" data-value="option-d" onclick="selectOption(this)">
+            <div class="quiz-option-radio"></div>
+            <span>docker-compose.yml</span>
+          </button>
+        </div>
+        <div class="quiz-feedback"></div>
+      </div>
+
+      <!-- Q3 -->
+      <div class="quiz-question-block"
+           data-correct="option-c"
+           data-explanation-right="Correct! CORSMiddleware is registered in main.py with an explicit list of allowed origins — localhost:8501 and localhost:4200. If you need to add a new frontend domain, that is the exact line to update."
+           data-explanation-wrong="Not quite. auth.py handles login flows, not cross-origin policy. middleware.py handles the request ID stamp, not CORS. docker-compose.yml is infrastructure — CORS is an API-level decision made in main.py where all middleware is registered.">
+        <h3 class="quiz-question">The frontend at localhost:4200 is getting CORS errors. Where is this configured?</h3>
+        <div class="quiz-options">
+          <button class="quiz-option" data-value="option-a" onclick="selectOption(this)">
+            <div class="quiz-option-radio"></div>
+            <span>backend/routers/auth.py</span>
+          </button>
+          <button class="quiz-option" data-value="option-b" onclick="selectOption(this)">
+            <div class="quiz-option-radio"></div>
+            <span>backend/middleware.py</span>
+          </button>
+          <button class="quiz-option" data-value="option-c" onclick="selectOption(this)">
+            <div class="quiz-option-radio"></div>
+            <span>backend/main.py</span>
+          </button>
+          <button class="quiz-option" data-value="option-d" onclick="selectOption(this)">
+            <div class="quiz-option-radio"></div>
+            <span>docker-compose.yml</span>
+          </button>
+        </div>
+        <div class="quiz-feedback"></div>
+      </div>
+
+      <button class="quiz-check-btn" onclick="checkQuiz('quiz-module2')">Check Answers</button>
+      <button class="quiz-reset-btn" onclick="resetQuiz('quiz-module2')">Try Again</button>
+    </div>
+
+    <!-- Module summary / takeaway -->
+    <div class="callout callout-accent animate-in" style="margin-top: var(--space-10);">
+      <div class="callout-icon">🎯</div>
+      <div class="callout-content">
+        <strong class="callout-title">Module 2 in one sentence</strong>
+        <p><code>main.py</code> is the switchboard. Each router is a department. Middleware runs before everything. When in doubt about where new code belongs, find the router that owns that domain — and put it there.</p>
+      </div>
+    </div>
+  </div>
+
+</section>

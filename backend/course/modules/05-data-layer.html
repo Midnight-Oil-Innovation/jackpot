@@ -1,0 +1,543 @@
+<section class="module" id="module-5" style="background: var(--color-bg)">
+
+  <!-- ============================================================
+       SCREEN 1 — Hero: Two Systems, One Purpose
+       ============================================================ -->
+  <div class="module-screen" id="m5-s1">
+    <div class="module-header">
+      <span class="module-number" style="color: #D94F30">05</span>
+      <h2 class="module-title">The Data Layer</h2>
+      <p class="module-subtitle">
+        When a sample is validated and accepted, it needs to be stored in two completely different
+        places &mdash; its metadata goes into a database, and its genome files go into
+        <span class="term" data-definition="A system for storing large files (like genome sequences) by key, without folder hierarchy — cheap, scalable, and optimized for large blobs rather than small records.">object storage</span>.
+        Why two systems instead of one?
+      </p>
+    </div>
+
+    <!-- Hospital metaphor card -->
+    <div class="callout callout-accent" style="max-width:780px; margin: 0 auto var(--space-8); border-left-color: #D94F30;">
+      <div class="callout-icon">🏥</div>
+      <div class="callout-content">
+        <p class="callout-title">The hospital records metaphor</p>
+        <p>
+          Think of a hospital records department. <strong>Patient charts</strong> live in filing
+          cabinets (PostgreSQL) &mdash; structured rows with dates, diagnoses, and names that staff
+          can search and cross-reference in seconds. <strong>X-ray films and MRI scans</strong> live
+          in a separate archive room (object storage) &mdash; large files that need cheap bulk
+          storage, not fast lookups. The two rooms exist because they solve fundamentally
+          different problems.
+        </p>
+        <p style="margin-bottom:0">
+          JACKPOT works exactly the same way: <strong>PostgreSQL</strong> holds every piece of
+          structured metadata (who submitted it, which lab, what status), and
+          <strong>MinIO / Google Cloud Storage</strong> holds the raw FASTQ and FASTA genome
+          files that can be gigabytes each.
+        </p>
+      </div>
+    </div>
+
+    <!-- Two-column split -->
+    <div style="display:grid; grid-template-columns:1fr 1fr; gap:var(--space-6); max-width:780px; margin: 0 auto var(--space-8);">
+      <div class="feature-card" style="border-top: 4px solid #D94F30;">
+        <div class="feature-card-icon" style="font-size:2rem;">🗄️</div>
+        <h3 class="feature-card-title">PostgreSQL</h3>
+        <p class="feature-card-desc"><em>Structured metadata</em></p>
+        <p class="feature-card-desc">
+          Sample records, user accounts, lab memberships, audit logs. Great at searching,
+          filtering, and joining rows. Fast for small structured records.
+        </p>
+      </div>
+      <div class="feature-card" style="border-top: 4px solid #6BAF8D;">
+        <div class="feature-card-icon" style="font-size:2rem;">🪣</div>
+        <h3 class="feature-card-title">Object Storage</h3>
+        <p class="feature-card-desc"><em>Large genome files</em></p>
+        <p class="feature-card-desc">
+          FASTQ, FASTA, and submission package files. Cheap per gigabyte, scales to petabytes,
+          accessed by key rather than SQL query.
+        </p>
+      </div>
+    </div>
+
+    <!-- Why should I care callout -->
+    <div class="callout callout-warning" style="max-width:780px; margin: 0 auto;">
+      <div class="callout-icon">&#9888;</div>
+      <div class="callout-content">
+        <p class="callout-title">Why this matters when debugging</p>
+        <p style="margin-bottom:0">
+          When a genome file is &ldquo;not showing up in the dashboard,&rdquo; the problem could
+          live in <em>either</em> place: the metadata row might be missing from PostgreSQL, or the
+          actual file might be in the wrong bucket. Two different systems means two different places
+          to look &mdash; knowing which is which cuts debugging time in half.
+        </p>
+      </div>
+    </div>
+  </div>
+
+
+  <!-- ============================================================
+       SCREEN 2 — Code Translation: get_db context manager
+       ============================================================ -->
+  <div class="module-screen" id="m5-s2">
+    <h2 class="screen-title">How JACKPOT Talks to PostgreSQL</h2>
+    <p class="screen-intro">
+      Every database call in JACKPOT flows through the same
+      <span class="term" data-definition="A Python pattern (the 'with' statement) that guarantees cleanup code runs even if an error occurs — the database connection always closes, no matter what.">context manager</span>:
+      <code>get_db()</code>. Understanding this one function explains how every query in the
+      system gets a connection, commits work, handles errors, and cleans up.
+    </p>
+
+    <div class="translation-block" style="max-width:940px; margin:0 auto;">
+      <div class="translation-code">
+        <span class="translation-label">CODE &mdash; backend/database.py (lines 36&ndash;56)</span>
+        <pre><code><span class="code-line"><span class="kw">@contextmanager</span></span>
+<span class="code-line"><span class="kw">def</span> <span class="fn">get_db</span>():</span>
+<span class="code-line">    _, session_local = <span class="fn">_get_engine</span>()</span>
+<span class="code-line">    db: <span class="tp">Session</span> = <span class="fn">session_local</span>()</span>
+<span class="code-line">    <span class="kw">try</span>:</span>
+<span class="code-line">        <span class="kw">yield</span> db</span>
+<span class="code-line">        db.<span class="fn">commit</span>()</span>
+<span class="code-line">    <span class="kw">except</span> <span class="tp">Exception</span>:</span>
+<span class="code-line">        db.<span class="fn">rollback</span>()</span>
+<span class="code-line">        <span class="kw">raise</span></span>
+<span class="code-line">    <span class="kw">finally</span>:</span>
+<span class="code-line">        db.<span class="fn">close</span>()</span>
+<span class="code-line"></span>
+<span class="code-line"></span>
+<span class="code-line"><span class="kw">def</span> <span class="fn">execute_query</span>(query: <span class="tp">str</span>, params: <span class="tp">dict</span> | <span class="kw">None</span> = <span class="kw">None</span>) -> <span class="tp">list</span>[<span class="tp">dict</span>]:</span>
+<span class="code-line">    <span class="kw">with</span> <span class="fn">get_db</span>() <span class="kw">as</span> db:</span>
+<span class="code-line">        result = db.<span class="fn">execute</span>(<span class="fn">text</span>(query), params <span class="kw">or</span> {})</span>
+<span class="code-line">        <span class="kw">if</span> result.returns_rows:</span>
+<span class="code-line">            cols = result.<span class="fn">keys</span>()</span>
+<span class="code-line">            <span class="kw">return</span> [<span class="fn">dict</span>(<span class="fn">zip</span>(cols, row, strict=<span class="kw">False</span>)) <span class="kw">for</span> row <span class="kw">in</span> result.<span class="fn">fetchall</span>()]</span>
+<span class="code-line">        <span class="kw">return</span> []</span>
+</code></pre>
+      </div>
+      <div class="translation-prose">
+        <span class="translation-label" style="position:relative;top:auto;right:auto;display:block;margin-bottom:var(--space-4);">PLAIN ENGLISH</span>
+        <ol class="translation-steps">
+          <li data-line="1">
+            <strong>@contextmanager</strong> &mdash; This decorator turns the function into a
+            <span class="term" data-definition="A Python pattern (the 'with' statement) that guarantees cleanup code runs even if an error occurs — the database connection always closes, no matter what.">context manager</span>
+            usable with <code>with get_db() as db:</code>. It also enables
+            <span class="term" data-definition="A set of pre-opened database connections kept ready for reuse — like having several phone lines open instead of dialing a new one for every call.">connection pooling</span>:
+            connections are borrowed from a pool and returned, not opened fresh every time.
+          </li>
+          <li data-line="2">
+            <strong>session_local()</strong> &mdash; Borrows one connection from the SQLAlchemy
+            pool and wraps it in a Session object that tracks pending changes.
+          </li>
+          <li data-line="3">
+            <strong>yield db</strong> &mdash; Hands the connection to the caller. All the
+            caller&rsquo;s code runs here. The function is &ldquo;paused&rdquo; at this line until
+            the <code>with</code> block exits.
+          </li>
+          <li data-line="4">
+            <strong>db.commit()</strong> &mdash; If the caller&rsquo;s code completed without
+            raising an exception, all changes made in this
+            <span class="term" data-definition="A group of database operations that succeed or fail together — if any step fails, all changes are rolled back as if nothing happened.">transaction</span>
+            are committed permanently to the database.
+          </li>
+          <li data-line="5">
+            <strong>except / db.rollback()</strong> &mdash; If anything raises an exception,
+            <span class="term" data-definition="Undoing all database changes made within a transaction when something goes wrong — like hitting Ctrl+Z on the entire operation.">rollback</span>
+            undoes every change made so far in this transaction.
+            The exception is then re-raised so the caller still sees the error.
+          </li>
+          <li data-line="6">
+            <strong>finally: db.close()</strong> &mdash; This block <em>always</em> runs,
+            whether the code succeeded or failed. The connection is returned to the pool so the
+            next request can reuse it. Without this, connections would leak.
+          </li>
+          <li data-line="7">
+            <strong>execute_query</strong> &mdash; A convenience wrapper. It opens a connection
+            via <code>get_db()</code>, runs the SQL, and converts each result row into a plain
+            Python dict so callers never touch raw database cursor objects.
+          </li>
+        </ol>
+      </div>
+    </div>
+
+    <div class="callout callout-info" style="max-width:940px; margin: var(--space-6) auto 0;">
+      <div class="callout-icon">&#9432;</div>
+      <div class="callout-content">
+        <strong>ACID guarantee</strong> &mdash; The try/yield/except/finally pattern enforces
+        <span class="term" data-definition="Four guarantees all good databases make: Atomicity (all or nothing), Consistency (data stays valid), Isolation (transactions do not interfere), Durability (committed data survives crashes).">ACID</span>
+        behaviour. Either the entire batch of work commits, or none of it does. Partial writes that
+        leave the database in an inconsistent state are not possible through this path.
+      </div>
+    </div>
+  </div>
+
+
+  <!-- ============================================================
+       SCREEN 3 — Code Translation: log_audit
+       ============================================================ -->
+  <div class="module-screen" id="m5-s3">
+    <h2 class="screen-title">The Audit Log &mdash; An Immutable Paper Trail</h2>
+    <p class="screen-intro">
+      Every time a sample is created, updated, or deleted, JACKPOT writes a record to the
+      <code>audit_log</code> table. This is not optional &mdash; it is a
+      <span class="term" data-definition="Clinical Laboratory Improvement Amendments — US regulations for clinical labs that require, among other things, immutable audit trails for all data changes.">CLIA</span>
+      compliance requirement. The <code>log_audit</code> function is designed so that a logging
+      failure can <em>never</em> roll back the main operation that triggered it.
+    </p>
+
+    <div class="translation-block" style="max-width:940px; margin:0 auto;">
+      <div class="translation-code">
+        <span class="translation-label">CODE &mdash; backend/audit.py (lines 53&ndash;89)</span>
+        <pre><code><span class="code-line"><span class="kw">def</span> <span class="fn">log_audit</span>(</span>
+<span class="code-line">    action: <span class="tp">str</span>,</span>
+<span class="code-line">    actor_id: <span class="tp">int</span> | <span class="kw">None</span>,</span>
+<span class="code-line">    resource_type: <span class="tp">str</span>,</span>
+<span class="code-line">    resource_id: <span class="tp">str</span>,</span>
+<span class="code-line">    before: <span class="tp">dict</span> | <span class="kw">None</span>,</span>
+<span class="code-line">    after: <span class="tp">dict</span> | <span class="kw">None</span>,</span>
+<span class="code-line">    metadata: <span class="tp">dict</span> | <span class="kw">None</span>,</span>
+<span class="code-line">    db_conn,</span>
+<span class="code-line">) -> <span class="kw">None</span>:</span>
+<span class="code-line">    <span class="cm">"""Write immutable audit record. Failures are logged, never raised."""</span></span>
+<span class="code-line">    <span class="kw">try</span>:</span>
+<span class="code-line">        <span class="fn">execute_write</span>(</span>
+<span class="code-line">            <span class="str">"""</span></span>
+<span class="code-line">            <span class="str">INSERT INTO audit_log</span></span>
+<span class="code-line">            <span class="str">    (action, actor_id, resource_type, resource_id,</span></span>
+<span class="code-line">            <span class="str">     before_state, after_state, metadata)</span></span>
+<span class="code-line">            <span class="str">VALUES</span></span>
+<span class="code-line">            <span class="str">    (:action, :actor_id, :resource_type, :resource_id,</span></span>
+<span class="code-line">            <span class="str">     :before::jsonb, :after::jsonb, :metadata::jsonb)</span></span>
+<span class="code-line">            <span class="str">"""</span>,</span>
+<span class="code-line">            ...,</span>
+<span class="code-line">        )</span>
+<span class="code-line">    <span class="kw">except</span> <span class="tp">Exception</span> <span class="kw">as</span> exc:</span>
+<span class="code-line">        logger.<span class="fn">error</span>(<span class="str">"Audit log write failed"</span>, exc_info=exc, ...)</span>
+</code></pre>
+      </div>
+      <div class="translation-prose">
+        <span class="translation-label" style="position:relative;top:auto;right:auto;display:block;margin-bottom:var(--space-4);">PLAIN ENGLISH</span>
+        <ol class="translation-steps">
+          <li data-line="1">
+            <strong>What is an audit log?</strong> &mdash; A record of every meaningful action
+            taken on data: who did it, what resource was affected, what it looked like before, and
+            what it looks like after. Think of it as a security camera that cannot be turned off.
+          </li>
+          <li data-line="2">
+            <strong>before / after dicts</strong> &mdash; The snapshot of the record before the
+            change and after it. A compliance auditor can replay exactly what happened to any
+            sample at any point in time.
+          </li>
+          <li data-line="3">
+            <strong>::jsonb casts</strong> &mdash; PostgreSQL stores before/after states as
+            <span class="term" data-definition="A PostgreSQL column type that stores JSON as compressed binary — faster to query than plain text JSON.">JSONB</span>,
+            a compressed binary format. This makes querying audit history with SQL fast and
+            efficient, even for complex nested state objects.
+          </li>
+          <li data-line="4">
+            <strong>try / except &mdash; failures are swallowed</strong> &mdash; If the audit
+            INSERT fails (network blip, disk full), the exception is caught and logged to the
+            application log, but it is <em>never re-raised</em>. This is deliberate: an audit
+            notification failure must never roll back a sample write. The sample data is more
+            important than the notification.
+          </li>
+          <li data-line="5">
+            <strong>Append-only by convention</strong> &mdash;
+            <span class="term" data-definition="Clinical Laboratory Improvement Amendments — US regulations for clinical labs that require, among other things, immutable audit trails for all data changes.">CLIA</span>
+            regulations require that audit records cannot be altered or deleted. The table has no
+            UPDATE or DELETE paths in the codebase &mdash; rows are only ever INSERTed. This is
+            enforced by policy, not a database constraint, which is why the comment in
+            <code>init.sql</code> reads: &ldquo;CLIA-aware &mdash; append-only; never UPDATE or
+            DELETE rows here.&rdquo;
+          </li>
+        </ol>
+      </div>
+    </div>
+
+    <!-- Audit log table schema callout -->
+    <div class="callout callout-info" style="max-width:940px; margin: var(--space-6) auto 0;">
+      <div class="callout-icon">&#9432;</div>
+      <div class="callout-content">
+        <strong>The audit_log table uses
+          <span class="term" data-definition="A PostgreSQL type that auto-increments a 64-bit integer — like a ticket number that counts up automatically.">BIGSERIAL</span>
+          for its primary key</strong> &mdash;
+        a 64-bit auto-incrementing integer. A regular 32-bit serial tops out at ~2 billion rows.
+        A busy genomics platform writing audit records for every sample operation can exhaust that
+        quickly. BIGSERIAL holds over 9 quintillion rows.
+      </div>
+    </div>
+  </div>
+
+
+  <!-- ============================================================
+       SCREEN 4 — Data Flow Animation: Sample Ingest
+       ============================================================ -->
+  <div class="module-screen" id="m5-s4">
+    <h2 class="screen-title">Tracing a Sample Ingest</h2>
+    <p class="screen-intro">
+      When a validated sample is accepted, metadata and file storage happen in a specific order.
+      Click <strong>Next Step</strong> to follow the data through both systems.
+    </p>
+
+    <div class="flow-animation" style="max-width:900px; margin:0 auto;"
+      data-steps='[
+        {"highlight":"flow-actor-1","label":"Step 1 of 9 — Sample metadata is validated and ready. The ingest handler prepares to write to both systems."},
+        {"highlight":"flow-actor-2","label":"Step 2 of 9 — execute_write is called with the sample metadata. A database connection is opened from the pool.","packet":true,"from":"actor-1","to":"actor-2"},
+        {"highlight":"flow-actor-2","label":"Step 3 of 9 — A database transaction is opened. All following writes will be part of this same atomic unit."},
+        {"highlight":"flow-actor-3","label":"Step 4 of 9 — INSERT INTO samples runs inside the open transaction. The row exists in PostgreSQL but is not visible yet.","packet":true,"from":"actor-2","to":"actor-3"},
+        {"highlight":"flow-actor-3","label":"Step 5 of 9 — log_audit runs an INSERT INTO audit_log in the same transaction, recording the creation event with before and after state."},
+        {"highlight":"flow-actor-2","label":"Step 6 of 9 — COMMIT is sent. Both the sample row and the audit row become visible atomically. Either both succeed or neither does.","packet":true,"from":"actor-3","to":"actor-2"},
+        {"highlight":"flow-actor-4","label":"Step 7 of 9 — The FASTQ genome file is uploaded to the staging bucket via the storage client.","packet":true,"from":"actor-4","to":"actor-5"},
+        {"highlight":"flow-actor-6","label":"Step 8 of 9 — MinIO or GCS receives the file and stores it. The storage client returns a gs:// or s3:// URI.","packet":true,"from":"actor-5","to":"actor-6"},
+        {"highlight":"flow-actor-3","label":"Step 9 of 9 — The URI is written back into the samples.fastq_r1_uri column in PostgreSQL. The sample record is now complete.","packet":true,"from":"actor-6","to":"actor-3"}
+      ]'>
+      <div class="flow-actors">
+        <div class="flow-actor" id="flow-actor-1">
+          <div class="flow-actor-icon">&#10003;</div>
+          <span>Validated Sample</span>
+        </div>
+        <div class="flow-actor" id="flow-actor-2">
+          <div class="flow-actor-icon">W</div>
+          <span>execute_write</span>
+        </div>
+        <div class="flow-actor" id="flow-actor-3">
+          <div class="flow-actor-icon">&#128451;</div>
+          <span>PostgreSQL</span>
+        </div>
+        <div class="flow-actor" id="flow-actor-4">
+          <div class="flow-actor-icon">&#128190;</div>
+          <span>File Upload</span>
+        </div>
+        <div class="flow-actor" id="flow-actor-5">
+          <div class="flow-actor-icon">S</div>
+          <span>Storage Client</span>
+        </div>
+        <div class="flow-actor" id="flow-actor-6">
+          <div class="flow-actor-icon">&#129695;</div>
+          <span>MinIO / GCS</span>
+        </div>
+      </div>
+
+      <div class="flow-packet" id="flow-packet"></div>
+      <div class="flow-step-label" id="flow-label">Click &ldquo;Next Step&rdquo; to begin</div>
+
+      <div class="flow-controls">
+        <button class="btn flow-next-btn">Next Step</button>
+        <button class="btn flow-reset-btn">Restart</button>
+        <span class="flow-progress"></span>
+      </div>
+    </div>
+
+    <div style="display:grid; grid-template-columns:1fr 1fr; gap:var(--space-6); max-width:900px; margin: var(--space-8) auto 0;">
+      <div class="callout callout-accent" style="border-left-color: #D94F30;">
+        <div class="callout-icon">&#128260;</div>
+        <div class="callout-content">
+          <strong>Why does the DB write happen first?</strong><br>
+          PostgreSQL writes are fast and transactional. File uploads can be slow and are not
+          transactional. Writing metadata first means there is always a record of intent, even if
+          the file upload later fails. The upload can be retried; a missing metadata row would be
+          invisible.
+        </div>
+      </div>
+      <div class="callout callout-info">
+        <div class="callout-icon">&#9432;</div>
+        <div class="callout-content">
+          <strong>Local dev vs production</strong><br>
+          In local development, the storage client talks to
+          <strong>MinIO</strong>, an S3-compatible server running in Docker. In production it
+          talks to <strong>Google Cloud Storage</strong>. The same boto3 client is used in both
+          cases &mdash; boto3 can speak to GCS via HMAC keys, so no code changes are needed.
+        </div>
+      </div>
+    </div>
+  </div>
+
+
+  <!-- ============================================================
+       SCREEN 5 — Architecture Diagram: Five Storage Buckets
+       ============================================================ -->
+  <div class="module-screen" id="m5-s5">
+    <h2 class="screen-title">Five Buckets, Five Purposes</h2>
+    <p class="screen-intro">
+      Object storage is organised into five named buckets, each with a distinct role in the
+      sample lifecycle. A file can pass through several buckets on its way to permanent storage.
+      Click any bucket to learn what it holds.
+    </p>
+
+    <div class="pattern-cards" style="max-width:900px; margin:0 auto var(--space-6);">
+
+      <div class="pattern-card" onclick="showArchDesc(this)"
+        data-desc="Holds original uploaded files exactly as the submitter sent them, before any PII scrubbing. This bucket has a 30-day lifecycle policy — files are automatically deleted after 30 days. It is a temporary intake tray, not permanent storage. If a scrubbed file needs to be re-derived from the original, this is where to look — but only within that 30-day window."
+        style="border-top: 3px solid var(--color-actor-1)">
+        <div class="pattern-icon" style="background: var(--color-actor-1)">&#128194;</div>
+        <h4 class="pattern-title">jackpot-raw</h4>
+        <p class="pattern-desc">Pre-scrub originals &middot; 30-day lifecycle</p>
+      </div>
+
+      <div class="pattern-card" onclick="showArchDesc(this)"
+        data-desc="Files land here while ingest is in progress — after the initial upload but before the sample record is fully committed and the file is moved to its permanent bucket. Think of it as a holding pen. If ingest fails partway through, orphaned files may appear here. Files in this bucket are not considered finalized."
+        style="border-top: 3px solid var(--color-actor-2)">
+        <div class="pattern-icon" style="background: var(--color-actor-2)">&#8987;</div>
+        <h4 class="pattern-title">jackpot-staging</h4>
+        <p class="pattern-desc">In-transit during ingest &middot; temporary</p>
+      </div>
+
+      <div class="pattern-card" onclick="showArchDesc(this)"
+        data-desc="The permanent home for every scrubbed, approved genome file. FASTQ and FASTA files live here after passing validation and PII removal. There is no lifecycle policy — these files are kept indefinitely. A presigned URL pointing into this bucket is what researchers download when they access a sample. If a file URI in the database starts with gs://jackpot-sequences/ or s3://jackpot-sequences/, that file is in its final resting place."
+        style="border-top: 3px solid var(--color-actor-3)">
+        <div class="pattern-icon" style="background: var(--color-actor-3)">&#128190;</div>
+        <h4 class="pattern-title">jackpot-sequences</h4>
+        <p class="pattern-desc">Scrubbed, approved files &middot; permanent</p>
+      </div>
+
+      <div class="pattern-card" onclick="showArchDesc(this)"
+        data-desc="Stores exported analytical datasets assembled for researchers — multi-sample aggregations, filtered subsets, or format-converted files prepared for downstream analysis. These are derived products, not original submissions. Researchers with dataset access receive presigned URLs pointing into this bucket."
+        style="border-top: 3px solid var(--color-actor-4)">
+        <div class="pattern-icon" style="background: var(--color-actor-4)">&#128202;</div>
+        <h4 class="pattern-title">jackpot-datasets</h4>
+        <p class="pattern-desc">Analytical exports for researchers</p>
+      </div>
+
+      <div class="pattern-card" onclick="showArchDesc(this)"
+        data-desc="Holds formatted submission packages destined for NCBI (GenBank, SRA) or GISAID. These are not raw files — they are carefully structured archives that comply with each repository's submission format requirements. Once a submission is sent, the package is retained here for audit and resubmission purposes."
+        style="border-top: 3px solid var(--color-actor-5)">
+        <div class="pattern-icon" style="background: var(--color-actor-5)">&#128228;</div>
+        <h4 class="pattern-title">jackpot-submissions</h4>
+        <p class="pattern-desc">NCBI / GISAID packages</p>
+      </div>
+
+    </div>
+
+    <div class="arch-description" id="arch-desc"
+      style="max-width:900px; margin:0 auto; padding: var(--space-4) var(--space-6); background:#fff; border: 1px solid #E2DDD6; border-radius:8px; min-height:70px; color: var(--color-text-muted); font-style:italic;">
+      Click any bucket to learn what it stores
+    </div>
+
+    <div class="callout callout-warning" style="max-width:900px; margin: var(--space-6) auto 0;">
+      <div class="callout-icon">&#9888;</div>
+      <div class="callout-content">
+        <strong>Debugging tip &mdash; wrong bucket is a real bug</strong><br>
+        If a sample shows a URI like <code>gs://jackpot-raw/...</code> in the database
+        <em>permanently</em>, that is a bug: the raw bucket deletes files after 30 days.
+        Permanent files should live in <code>jackpot-sequences</code>. Likewise, a file stuck in
+        <code>jackpot-staging</code> indefinitely means an ingest step never completed.
+      </div>
+    </div>
+
+    <!-- Presigned URL mini explainer -->
+    <div class="callout callout-info" style="max-width:900px; margin: var(--space-6) auto 0;">
+      <div class="callout-icon">&#9432;</div>
+      <div class="callout-content">
+        <strong>How researchers download files without direct bucket access</strong><br>
+        JACKPOT never exposes bucket credentials to end users. Instead, the API generates a
+        <span class="term" data-definition="A temporary download link that expires after a set time — like a time-limited guest pass to a specific file in the storage bucket.">presigned URL</span>
+        with a 1-hour TTL. The researcher clicks the link, downloads the file directly from the
+        bucket over HTTPS, and the link expires automatically. The
+        <code>generate_presigned_url()</code> function in <code>storage.py</code> handles this.
+      </div>
+    </div>
+  </div>
+
+
+  <!-- ============================================================
+       SCREEN 6 — Quiz
+       ============================================================ -->
+  <div class="module-screen" id="m5-s6">
+    <h2 class="screen-title">Check Your Understanding</h2>
+    <p class="screen-intro">
+      Three questions covering the database layer, audit log, and object storage.
+      Select the best answer for each.
+    </p>
+
+    <div class="quiz-container" style="max-width:780px; margin:0 auto;">
+
+      <!-- Question 1 -->
+      <div class="quiz-question" data-question="1">
+        <p class="quiz-prompt">
+          A researcher deleted a sample. Compliance needs to prove who deleted it and when.
+          Where does that record live?
+        </p>
+        <div class="quiz-options">
+          <button class="quiz-option" onclick="checkAnswer(this, true)">
+            A) The <code>audit_log</code> table &mdash; append-only, never deleted.
+          </button>
+          <button class="quiz-option" onclick="checkAnswer(this, false)">
+            B) The <code>samples</code> table &mdash; deleted rows are logged by PostgreSQL.
+          </button>
+          <button class="quiz-option" onclick="checkAnswer(this, false)">
+            C) The <code>jackpot-raw</code> bucket &mdash; files are archived on delete.
+          </button>
+          <button class="quiz-option" onclick="checkAnswer(this, false)">
+            D) The <code>notifications</code> table &mdash; a deletion event is always fired.
+          </button>
+        </div>
+        <div class="quiz-feedback"></div>
+      </div>
+
+      <!-- Question 2 -->
+      <div class="quiz-question" data-question="2">
+        <p class="quiz-prompt">
+          A genome file URI starts with <code>gs://jackpot-raw/...</code>. Is this the permanent
+          location?
+        </p>
+        <div class="quiz-options">
+          <button class="quiz-option" onclick="checkAnswer(this, true)">
+            A) No &mdash; <code>jackpot-raw</code> files are deleted after 30 days; permanent
+            files live in <code>jackpot-sequences</code>.
+          </button>
+          <button class="quiz-option" onclick="checkAnswer(this, false)">
+            B) Yes &mdash; <code>gs://</code> means Google Cloud Storage, which is permanent.
+          </button>
+          <button class="quiz-option" onclick="checkAnswer(this, false)">
+            C) No &mdash; permanent files use <code>s3://</code> URIs.
+          </button>
+          <button class="quiz-option" onclick="checkAnswer(this, false)">
+            D) Yes, if the file has been validated.
+          </button>
+        </div>
+        <div class="quiz-feedback"></div>
+      </div>
+
+      <!-- Question 3 -->
+      <div class="quiz-question" data-question="3">
+        <p class="quiz-prompt">
+          <code>execute_write</code> is called with <code>conn=None</code> vs
+          <code>conn=db</code>. What is the difference?
+        </p>
+        <div class="quiz-options">
+          <button class="quiz-option" onclick="checkAnswer(this, true)">
+            A) <code>conn=None</code> auto-commits its own transaction;
+            <code>conn=db</code> participates in the caller transaction so both writes commit
+            or roll back together.
+          </button>
+          <button class="quiz-option" onclick="checkAnswer(this, false)">
+            B) <code>conn=None</code> uses a read-only connection;
+            <code>conn=db</code> allows writes.
+          </button>
+          <button class="quiz-option" onclick="checkAnswer(this, false)">
+            C) <code>conn=None</code> is faster; <code>conn=db</code> is safer.
+          </button>
+          <button class="quiz-option" onclick="checkAnswer(this, false)">
+            D) There is no difference &mdash; both auto-commit.
+          </button>
+        </div>
+        <div class="quiz-feedback"></div>
+      </div>
+
+    </div>
+  </div>
+
+</section>
+
+<script>
+  // Architecture bucket description reveal
+  function showArchDesc(card) {
+    var desc = document.getElementById('arch-desc');
+    if (!desc) return;
+    desc.style.fontStyle = 'normal';
+    desc.style.color = 'var(--color-text)';
+    desc.textContent = card.getAttribute('data-desc');
+    // highlight selected card
+    var cards = card.parentElement.querySelectorAll('.pattern-card');
+    cards.forEach(function(c) { c.classList.remove('pattern-card--active'); });
+    card.classList.add('pattern-card--active');
+  }
+</script>

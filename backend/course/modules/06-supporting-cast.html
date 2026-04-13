@@ -1,0 +1,548 @@
+<section class="module" id="module-6" style="background: var(--color-bg-warm)">
+
+  <!-- ============================================================
+       SCREEN 1 — Hook + The Stage Crew Metaphor
+       ============================================================ -->
+  <div class="module-screen" id="m6-s1">
+    <div class="module-header">
+      <span class="module-number">06</span>
+      <h2 class="module-title">The Supporting Cast</h2>
+      <p class="module-subtitle">
+        The API has 20 routers, but some of the most interesting work happens outside of any
+        request — on a timer, in response to events, or when a researcher clicks
+        <strong>"Export to GISAID."</strong>
+      </p>
+    </div>
+
+    <div class="callout callout-accent" style="max-width:780px; margin: 0 auto var(--space-8);">
+      <div class="callout-icon">🎭</div>
+      <div class="callout-content">
+        <strong class="callout-title">The Stage Production Metaphor</strong>
+        <p>Think of the API routers as the actors on stage. But a production needs more than actors.
+        The <strong>file detector</strong> is the prop master who knows where every piece of equipment lives
+        by its label convention. The <strong><span class="term" data-definition="A task that runs on a schedule, outside of any web request — like a cron job that runs every hour to check for overdue approvals.">background jobs</span></strong>
+        are the cleanup crew who work after the curtain falls. <strong>Notifications</strong> are the stage
+        manager paging actors. <strong>NCBI/GISAID export</strong> is the press kit department — reformatting
+        content for outside audiences without touching the original.</p>
+      </div>
+    </div>
+
+    <div class="pattern-cards">
+      <div class="pattern-card" style="border-top: 3px solid #D94F30">
+        <div class="pattern-icon" style="background: #D94F30">🗂️</div>
+        <h4 class="pattern-title">File Detector</h4>
+        <p class="pattern-desc">Recognizes
+          <span class="term" data-definition="A sequencing technique that reads both ends of a DNA fragment, producing two files: R1 (forward reads) and R2 (reverse reads).">paired-end sequencing</span>
+          files using
+          <span class="term" data-definition="Regular expression — a pattern written in a special syntax that matches text. Used here to recognize different FASTQ filename conventions.">regex</span>
+          patterns. Normalizes four naming conventions into a single R1/R2 pair.</p>
+      </div>
+      <div class="pattern-card" style="border-top: 3px solid #3B82F6">
+        <div class="pattern-icon" style="background: #3B82F6">⏱️</div>
+        <h4 class="pattern-title">Background Jobs</h4>
+        <p class="pattern-desc">APScheduler runs tasks every hour: auto-deny stale scrub overrides, auto-approve access requests, send expiry warnings. None of this requires a web request.</p>
+      </div>
+      <div class="pattern-card" style="border-top: 3px solid #10B981">
+        <div class="pattern-icon" style="background: #10B981">🔔</div>
+        <h4 class="pattern-title">Notifications</h4>
+        <p class="pattern-desc">A
+          <span class="term" data-definition="A pattern where you trigger an operation and do not wait for it to succeed — you move on regardless. Failures are logged but never propagate.">fire-and-forget</span>
+          write into the notifications table. Failures are swallowed so they never break the triggering action.</p>
+      </div>
+      <div class="pattern-card" style="border-top: 3px solid #8B5CF6">
+        <div class="pattern-icon" style="background: #8B5CF6">📤</div>
+        <h4 class="pattern-title">NCBI Export</h4>
+        <p class="pattern-desc">The <code>portal_to_tostadas.py</code> script reformats JACKPOT fields into
+          <span class="term" data-definition="The CDC pipeline tool that JACKPOT exports to for NCBI submission. The portal_to_tostadas.py script formats data in the TOSTADAS input format.">TOSTADAS</span>
+          input format for
+          <span class="term" data-definition="NCBI BioSample — a database of biological source material. Each sample in JACKPOT can have a corresponding BioSample record when submitted to NCBI.">BioSample</span>
+          submission — without touching the source data.</p>
+      </div>
+    </div>
+
+    <div class="callout callout-info" style="max-width:780px; margin: var(--space-6) auto 0;">
+      <strong>Why should I care?</strong>
+      When a researcher says <em>"I never got notified when my pipeline finished,"</em> you need to know
+      that notifications are a separate system — and failures there are intentionally swallowed.
+      When <em>"auto-approve is not working,"</em> you look at background jobs, not the API routers.
+    </div>
+  </div>
+
+
+  <!-- ============================================================
+       SCREEN 2 — Code Translation: File Detector (PAIRED_PATTERNS)
+       ============================================================ -->
+  <div class="module-screen" id="m6-s2">
+    <h2 class="screen-title">The Prop Master: File Detector</h2>
+    <p class="screen-intro" style="max-width:700px; margin: 0 auto var(--space-6);">
+      Labs name their
+      <span class="term" data-definition="The standard file format for raw sequencing data — contains the DNA sequence plus quality scores for each base.">FASTQ</span>
+      files inconsistently. One lab writes <code>sample_R1.fastq.gz</code>; another writes
+      <code>sample_forward.fastq.gz</code>; another writes <code>sample_L001_R1_001.fastq.gz</code>.
+      The file detector handles all of them with four
+      <span class="term" data-definition="Regular expression — a pattern written in a special syntax that matches text. Used here to recognize different FASTQ filename conventions.">regex</span>
+      patterns and a normalization map.
+    </p>
+
+    <div class="translation-block" style="max-width:960px; margin:0 auto var(--space-8);">
+      <div class="translation-code">
+        <pre><code><span class="cm"># backend/file_detector.py — lines 46-68</span>
+
+<span class="tp">PAIRED_PATTERNS</span>: <span class="tp">list</span>[<span class="tp">re.Pattern</span>] = [
+    <span class="fn">re.compile</span>(
+        <span class="str">rf"^(?P&lt;prefix&gt;.+?)_(?P&lt;lane&gt;L\d+)_(?P&lt;dir&gt;R[12])(?:_\d+)?{FASTQ_EXT}$"</span>,
+        <span class="tp">re.IGNORECASE</span>
+    ),
+    <span class="fn">re.compile</span>(<span class="str">rf"^(?P&lt;prefix&gt;.+?)_(?P&lt;dir&gt;R[12])(?:_\d+)?{FASTQ_EXT}$"</span>),
+    <span class="fn">re.compile</span>(<span class="str">rf"^(?P&lt;prefix&gt;.+?)_(?P&lt;dir&gt;[12]){FASTQ_EXT}$"</span>),
+    <span class="fn">re.compile</span>(<span class="str">rf"^(?P&lt;prefix&gt;.+?)_(?P&lt;dir&gt;forward|reverse){FASTQ_EXT}$"</span>,
+               <span class="tp">re.IGNORECASE</span>),
+]
+
+<span class="tp">DIRECTION_MAP</span>: <span class="tp">dict</span>[<span class="tp">str</span>, <span class="tp">str</span>] = {
+    <span class="str">"r1"</span>: <span class="str">"R1"</span>, <span class="str">"1"</span>: <span class="str">"R1"</span>, <span class="str">"forward"</span>: <span class="str">"R1"</span>,
+    <span class="str">"r2"</span>: <span class="str">"R2"</span>, <span class="str">"2"</span>: <span class="str">"R2"</span>, <span class="str">"reverse"</span>: <span class="str">"R2"</span>,
+}</code></pre>
+      </div>
+      <div class="translation-prose">
+        <ol class="translation-steps">
+          <li data-line="1"><strong>Pattern 1 — Lane-based naming</strong>
+            Matches filenames like <code>sample_L001_R1_001.fastq.gz</code>.
+            The <code>(?P&lt;lane&gt;L\d+)</code> group captures the lane number.
+            This is the most common Illumina convention for multi-lane runs.</li>
+          <li data-line="2"><strong>Pattern 2 — Simple R1/R2</strong>
+            Matches <code>sample_R1.fastq.gz</code> or <code>sample_R2_001.fastq.gz</code>.
+            No lane group — just prefix, direction, optional trailing number, and extension.</li>
+          <li data-line="3"><strong>Pattern 3 — Numeric direction</strong>
+            Matches <code>sample_1.fastq.gz</code> or <code>sample_2.fastq.gz</code>.
+            Some older tools drop the R prefix entirely.</li>
+          <li data-line="4"><strong>Pattern 4 — Word-based direction</strong>
+            Matches <code>sample_forward.fastq.gz</code> and <code>sample_reverse.fastq.gz</code>.
+            Case-insensitive so <code>Forward</code> and <code>FORWARD</code> also match.</li>
+          <li data-line="5"><strong>DIRECTION_MAP normalizes everything</strong>
+            After any pattern matches, the captured <code>dir</code> group (which could be
+            <code>"r1"</code>, <code>"1"</code>, <code>"forward"</code>, etc.) is passed through
+            DIRECTION_MAP to become a canonical <span class="term" data-definition="The two read files from paired-end sequencing. R1 contains forward reads; R2 contains reverse reads. Both are needed for most analysis pipelines.">R1/R2</span>
+            string. This is why all four conventions produce the same output.</li>
+        </ol>
+      </div>
+    </div>
+
+    <div class="callout callout-warning" style="max-width:780px; margin: 0 auto;">
+      <strong>If none of the four patterns match, the file is treated as unpaired.</strong>
+      It is not silently discarded — it is recorded as a standalone file. The detector only pairs
+      files it can confidently identify; everything else is kept but not linked.
+    </div>
+  </div>
+
+
+  <!-- ============================================================
+       SCREEN 3 — Code Translation: Notifications (fire-and-forget)
+                  + Background Jobs Scheduler wiring
+       ============================================================ -->
+  <div class="module-screen" id="m6-s3">
+    <h2 class="screen-title">Notifications and Background Jobs</h2>
+    <p class="screen-intro" style="max-width:700px; margin: 0 auto var(--space-6);">
+      Two systems run outside the normal request-response cycle: a
+      <span class="term" data-definition="A pattern where you trigger an operation and do not wait for it to succeed — you move on regardless. Failures are logged but never propagate.">fire-and-forget</span>
+      notification writer and an hourly
+      <span class="term" data-definition="APScheduler — a library that manages background jobs, running them on intervals (every hour) or at specific times.">scheduler</span>
+      that handles the work no researcher is waiting for.
+    </p>
+
+    <div class="translation-block" style="max-width:960px; margin:0 auto var(--space-8);">
+      <div class="translation-code">
+        <pre><code><span class="cm"># backend/notifications.py — lines 37-77</span>
+
+<span class="kw">def</span> <span class="fn">create_notification</span>(
+    recipient_id: <span class="tp">int</span>,
+    event_type: <span class="tp">str</span>,
+    title: <span class="tp">str</span>,
+    body: <span class="tp">str</span>,
+    resource_type: <span class="tp">str</span>,
+    resource_id: <span class="tp">str</span>,
+    action_url: <span class="tp">str</span> | <span class="kw">None</span>,
+    db_conn,
+) -&gt; <span class="kw">None</span>:
+    <span class="str">"""
+    Write a notification record synchronously within the
+    caller's transaction. Failures are logged and swallowed —
+    a notification failure must never roll back the triggering
+    action.
+    """</span>
+    <span class="kw">try</span>:
+        <span class="fn">execute_write</span>(
+            <span class="str">"INSERT INTO notifications ..."</span>,
+            {...},
+        )
+    <span class="kw">except</span> <span class="tp">Exception</span> <span class="kw">as</span> exc:
+        logger.<span class="fn">error</span>(<span class="str">"Notification write failed"</span>,
+                     exc_info=exc, ...)</code></pre>
+      </div>
+      <div class="translation-prose">
+        <ol class="translation-steps">
+          <li data-line="1"><strong>Synchronous — not async</strong>
+            The function is a plain <code>def</code>, not <code>async def</code>. It runs inside
+            the caller's database connection and transaction. If a pipeline completion is being
+            committed, the notification INSERT happens in that same commit.</li>
+          <li data-line="2"><strong>Why swallow exceptions?</strong>
+            The <code>try/except</code> catches every possible failure — network blip, constraint
+            violation, full disk. The exception is logged so engineers can investigate, but it is
+            never re-raised. This is the
+            <span class="term" data-definition="A pattern where you trigger an operation and do not wait for it to succeed — you move on regardless. Failures are logged but never propagate.">fire-and-forget</span>
+            contract: the notification is best-effort, not guaranteed.</li>
+          <li data-line="3"><strong>The triggering action always wins</strong>
+            If the notification write fails, the sample ingest, pipeline record, or access approval
+            still succeeds. The researcher loses a bell icon — not their data.</li>
+          <li data-line="4"><strong>When is it called?</strong>
+            Any router or background job that completes a meaningful action calls
+            <code>create_notification</code>: pipeline finishes, access request approved, Globus
+            files arrive, scrub override auto-denied.</li>
+        </ol>
+      </div>
+    </div>
+
+    <div class="callout callout-info" style="max-width:780px; margin: 0 auto var(--space-6);">
+      <strong>Background jobs wiring —
+        <span class="term" data-definition="The FastAPI startup/shutdown hook — code in the lifespan function runs once when the server starts (scheduler.start()) and once when it stops (scheduler.shutdown()).">lifespan context manager</span>
+      </strong>
+      The scheduler is started once when FastAPI boots and stopped when it shuts down.
+      Two jobs run every hour: <code>scrub_override_auto_deny</code> and
+      <code>access_request_auto_approve</code>. The scheduler only starts if
+      <code>scheduler_enabled</code> is <code>true</code> in settings — so it is off
+      in unit tests and can be disabled in staging.
+    </div>
+
+    <div class="callout callout-warning" style="max-width:780px; margin: 0 auto;">
+      <strong>Both background job functions are stubs today.</strong>
+      They log <code>"not yet implemented"</code> and return. The scheduler wiring, the job IDs,
+      and the docstrings that describe the intended behavior are all in place — only the database
+      queries are pending. When debugging "auto-approve is not working," start by checking
+      whether the scheduler started (<code>scheduler_enabled</code> in settings) before looking
+      at the job logic.
+    </div>
+  </div>
+
+
+  <!-- ============================================================
+       SCREEN 4 — Group Chat Animation
+       ============================================================ -->
+  <div class="module-screen" id="m6-s4">
+    <h2 class="screen-title">The Supporting Cast in Action</h2>
+    <p class="screen-intro" style="max-width:700px; margin: 0 auto var(--space-6);">
+      Step through two scenarios: a pipeline completion that triggers a notification, and an
+      overnight
+      <span class="term" data-definition="A task that runs on a schedule, outside of any web request — like a cron job that runs every hour to check for overdue approvals.">background job</span>
+      that auto-denies a stale scrub override request.
+    </p>
+
+    <div class="chat-window" id="chat-supporting" style="max-width:760px; margin:0 auto;">
+      <div class="chat-messages">
+
+        <!-- Scenario A label -->
+        <div class="chat-message" data-msg="0" data-sender="scenario-label" style="display:none">
+          <div class="chat-avatar" style="background: #888; font-size:0.7rem">—</div>
+          <div class="chat-bubble">
+            <span class="chat-sender" style="color:#888">Scenario A</span>
+            <p>Pipeline completes for a sample. Watch how the notification flows.</p>
+          </div>
+        </div>
+
+        <div class="chat-message" data-msg="1" data-sender="pipeline" style="display:none">
+          <div class="chat-avatar" style="background: var(--color-actor-1)">P</div>
+          <div class="chat-bubble">
+            <span class="chat-sender" style="color: var(--color-actor-1)">Pipeline Event</span>
+            <p>Pipeline for sample JAK-2024-001234 just finished. Writing result to the database now.</p>
+          </div>
+        </div>
+
+        <div class="chat-message" data-msg="2" data-sender="notifications" style="display:none">
+          <div class="chat-avatar" style="background: var(--color-actor-2)">N</div>
+          <div class="chat-bubble">
+            <span class="chat-sender" style="color: var(--color-actor-2)">Notifications Service</span>
+            <p>Got it. Writing notification record to the notifications table... done. INSERT succeeded.</p>
+          </div>
+        </div>
+
+        <div class="chat-message" data-msg="3" data-sender="inbox" style="display:none">
+          <div class="chat-avatar" style="background: var(--color-actor-3)">I</div>
+          <div class="chat-bubble">
+            <span class="chat-sender" style="color: var(--color-actor-3)">User Inbox</span>
+            <p>New notification: Pipeline complete for JAK-2024-001234. The researcher will see this on next page load.</p>
+          </div>
+        </div>
+
+        <div class="chat-message" data-msg="4" data-sender="notifications" style="display:none">
+          <div class="chat-avatar" style="background: var(--color-actor-2)">N</div>
+          <div class="chat-bubble">
+            <span class="chat-sender" style="color: var(--color-actor-2)">Notifications Service</span>
+            <p>Important: if that INSERT had failed, the pipeline result would still be saved. The notification failure is caught and logged — it never rolls back the main action.</p>
+          </div>
+        </div>
+
+        <!-- Scenario B label -->
+        <div class="chat-message" data-msg="5" data-sender="scenario-label" style="display:none">
+          <div class="chat-avatar" style="background: #888; font-size:0.7rem">—</div>
+          <div class="chat-bubble">
+            <span class="chat-sender" style="color:#888">Scenario B</span>
+            <p>It is 2 AM. The hourly scheduler fires. A scrub override has been pending too long.</p>
+          </div>
+        </div>
+
+        <div class="chat-message" data-msg="6" data-sender="scheduler" style="display:none">
+          <div class="chat-avatar" style="background: var(--color-actor-4)">S</div>
+          <div class="chat-bubble">
+            <span class="chat-sender" style="color: var(--color-actor-4)">Background Job Scheduler</span>
+            <p>It is 2 AM. Running access request job and scrubber queue job on the hourly interval...</p>
+          </div>
+        </div>
+
+        <div class="chat-message" data-msg="7" data-sender="scheduler" style="display:none">
+          <div class="chat-avatar" style="background: var(--color-actor-4)">S</div>
+          <div class="chat-bubble">
+            <span class="chat-sender" style="color: var(--color-actor-4)">Background Job Scheduler</span>
+            <p>Found a scrub override request pending for 50 hours. Auto-denying — the Lab Director missed the 48-hour window. Conservative default: scrubber runs.</p>
+          </div>
+        </div>
+
+        <div class="chat-message" data-msg="8" data-sender="notifications" style="display:none">
+          <div class="chat-avatar" style="background: var(--color-actor-2)">N</div>
+          <div class="chat-bubble">
+            <span class="chat-sender" style="color: var(--color-actor-2)">Notifications Service</span>
+            <p>Sending Lab Director a notification: scrub override was auto-denied due to 48-hour timeout expiry.</p>
+          </div>
+        </div>
+
+        <div class="chat-message" data-msg="9" data-sender="scrubber" style="display:none">
+          <div class="chat-avatar" style="background: var(--color-actor-5)">Sc</div>
+          <div class="chat-bubble">
+            <span class="chat-sender" style="color: var(--color-actor-5)">Scrubber</span>
+            <p>Override denied. Running sequence scrub as originally scheduled. PHI fields will be removed from the record.</p>
+          </div>
+        </div>
+
+      </div>
+
+      <div class="chat-typing" style="display:none">
+        <div class="chat-avatar" id="chat-supporting-typing-avatar">?</div>
+        <div class="chat-typing-dots">
+          <span class="typing-dot"></span>
+          <span class="typing-dot"></span>
+          <span class="typing-dot"></span>
+        </div>
+      </div>
+
+      <div class="chat-controls">
+        <button class="btn chat-next-btn">Next Message</button>
+        <button class="btn chat-all-btn">Play All</button>
+        <button class="btn chat-reset-btn">Replay</button>
+        <span class="chat-progress"></span>
+      </div>
+    </div>
+  </div>
+
+
+  <!-- ============================================================
+       SCREEN 5 — NCBI Export + Drag-and-Drop Quiz
+       ============================================================ -->
+  <div class="module-screen" id="m6-s5">
+    <h2 class="screen-title">The Press Kit: NCBI Export</h2>
+    <p class="screen-intro" style="max-width:700px; margin: 0 auto var(--space-6);">
+      When a batch of samples needs to go to NCBI, the portal fields have different names than
+      the
+      <span class="term" data-definition="NCBI BioSample — a database of biological source material. Each sample in JACKPOT can have a corresponding BioSample record when submitted to NCBI.">BioSample</span>
+      attributes NCBI expects. The
+      <span class="term" data-definition="The CDC pipeline tool that JACKPOT exports to for NCBI submission. The portal_to_tostadas.py script formats data in the TOSTADAS input format.">TOSTADAS</span>
+      export script does the translation — without modifying the source record.
+    </p>
+
+    <div class="translation-block" style="max-width:960px; margin:0 auto var(--space-8);">
+      <div class="translation-code">
+        <pre><code><span class="cm"># scripts/portal_to_tostadas.py — lines 18-68</span>
+
+<span class="tp">BIOSAMPLE_FIELD_MAP</span>: <span class="tp">dict</span>[<span class="tp">str</span>, <span class="tp">str</span>] = {
+    <span class="str">"organism_name"</span>:              <span class="str">"organism"</span>,
+    <span class="str">"date_collected"</span>:             <span class="str">"collection_date"</span>,
+    <span class="str">"collection_location_country"</span>: <span class="str">"geo_loc_name"</span>,
+    <span class="str">"host_species"</span>:               <span class="str">"host"</span>,
+    <span class="str">"host_age"</span>:                   <span class="str">"host_age"</span>,
+    <span class="str">"sequencing_platform"</span>:        <span class="str">"sequencing_platform"</span>,
+    <span class="str">"pango_lineage"</span>:              <span class="str">"lineage"</span>,
+}
+
+<span class="kw">def</span> <span class="fn">convert_sample</span>(sample: <span class="tp">dict</span>) -&gt; <span class="tp">dict</span>:
+    biosample: <span class="tp">dict</span> = {}
+    <span class="kw">for</span> portal_field, ncbi_attr <span class="kw">in</span> <span class="tp">BIOSAMPLE_FIELD_MAP</span>.<span class="fn">items</span>():
+        val = sample.<span class="fn">get</span>(portal_field)
+        <span class="kw">if</span> val:
+            biosample[ncbi_attr] = <span class="fn">str</span>(val)
+    country = sample.<span class="fn">get</span>(<span class="str">"collection_location_country"</span>, <span class="str">""</span>)
+    state   = sample.<span class="fn">get</span>(<span class="str">"collection_location_state"</span>, <span class="str">""</span>)
+    biosample[<span class="str">"geo_loc_name"</span>] = <span class="str">f"{country}: {state}"</span> <span class="kw">if</span> state <span class="kw">else</span> country
+    biosample[<span class="str">"package"</span>] = <span class="tp">SOURCE_TYPE_PACKAGE</span>.<span class="fn">get</span>(
+        sample.<span class="fn">get</span>(<span class="str">"source_type"</span>, <span class="str">""</span>), <span class="str">"Generic.1.0"</span>
+    )
+    <span class="kw">return</span> {
+        <span class="str">"sample_name"</span>:    sample[<span class="str">"sample_id"</span>],
+        <span class="str">"bioproject"</span>:     sample.<span class="fn">get</span>(<span class="str">"bioproject_accession"</span>, <span class="str">""</span>),
+        <span class="str">"biosample_attrs"</span>: biosample,
+        <span class="str">"fastq_r1"</span>:       sample[<span class="str">"fastq_r1_uri"</span>],
+    }</code></pre>
+      </div>
+      <div class="translation-prose">
+        <ol class="translation-steps">
+          <li data-line="1"><strong>BIOSAMPLE_FIELD_MAP is the dictionary</strong>
+            Each entry maps a JACKPOT portal field name (left) to its NCBI BioSample attribute name
+            (right). <code>"organism_name"</code> becomes <code>"organism"</code>;
+            <code>"date_collected"</code> becomes <code>"collection_date"</code>. The source record
+            is never touched.</li>
+          <li data-line="2"><strong>convert_sample loops the map</strong>
+            For each portal field in the map, it reads the value from the sample dict. If a value
+            is present, it is written to the biosample dict under the NCBI attribute name, cast to
+            a string.</li>
+          <li data-line="3"><strong>Location gets special treatment</strong>
+            NCBI expects <code>geo_loc_name</code> in <code>"Country: State"</code> format.
+            The script assembles this from two separate portal fields after the main loop runs.</li>
+          <li data-line="4"><strong>Package is looked up from source_type</strong>
+            NCBI BioSample submissions require a package identifier (e.g. <code>SARS-CoV-2.cl.1.0</code>).
+            <code>SOURCE_TYPE_PACKAGE</code> maps JACKPOT source types to the correct package;
+            unknown types fall back to <code>"Generic.1.0"</code>.</li>
+          <li data-line="5"><strong>Output is a TOSTADAS row, not a JACKPOT record</strong>
+            The returned dict has the shape TOSTADAS expects: <code>sample_name</code>,
+            <code>bioproject</code>, <code>biosample_attrs</code>, <code>fastq_r1</code>. This
+            is handed directly to the TOSTADAS submission pipeline.</li>
+        </ol>
+      </div>
+    </div>
+
+    <!-- Drag-and-Drop: Background Jobs -->
+    <div class="dnd-container" id="dnd-jobs" style="max-width:780px; margin:0 auto var(--space-8);">
+      <h4>Match background jobs to their trigger condition:</h4>
+      <div class="dnd-chips">
+        <div class="dnd-chip" draggable="true" data-answer="scrub">run_scrubber_queue_job</div>
+        <div class="dnd-chip" draggable="true" data-answer="access">run_access_request_job</div>
+      </div>
+      <div class="dnd-zones">
+        <div class="dnd-zone" data-correct="scrub">
+          <p class="dnd-zone-label">Scrub override pending more than 48 hours</p>
+          <div class="dnd-zone-target">Drop here</div>
+        </div>
+        <div class="dnd-zone" data-correct="access">
+          <p class="dnd-zone-label">auto_approve_after date has passed</p>
+          <div class="dnd-zone-target">Drop here</div>
+        </div>
+      </div>
+      <button class="btn" onclick="checkDnD('dnd-jobs')">Check Matches</button>
+      <button class="btn" onclick="resetDnD('dnd-jobs')">Reset</button>
+    </div>
+
+    <!-- Drag-and-Drop: Notification Events -->
+    <div class="dnd-container" id="dnd-notifications" style="max-width:780px; margin:0 auto;">
+      <h4>Match notification events to what triggers them:</h4>
+      <div class="dnd-chips">
+        <div class="dnd-chip" draggable="true" data-answer="pipeline-done">PIPELINE_COMPLETE</div>
+        <div class="dnd-chip" draggable="true" data-answer="access-approved">ACCESS_REQUEST_APPROVED</div>
+        <div class="dnd-chip" draggable="true" data-answer="globus-arrived">GLOBUS_FILES_ARRIVED</div>
+      </div>
+      <div class="dnd-zones">
+        <div class="dnd-zone" data-correct="pipeline-done">
+          <p class="dnd-zone-label">A sequencing pipeline finishes running</p>
+          <div class="dnd-zone-target">Drop here</div>
+        </div>
+        <div class="dnd-zone" data-correct="access-approved">
+          <p class="dnd-zone-label">A Lab Director grants access to a researcher</p>
+          <div class="dnd-zone-target">Drop here</div>
+        </div>
+        <div class="dnd-zone" data-correct="globus-arrived">
+          <p class="dnd-zone-label">New genome files land in the Globus transfer bucket</p>
+          <div class="dnd-zone-target">Drop here</div>
+        </div>
+      </div>
+      <button class="btn" onclick="checkDnD('dnd-notifications')">Check Matches</button>
+      <button class="btn" onclick="resetDnD('dnd-notifications')">Reset</button>
+    </div>
+  </div>
+
+
+  <!-- ============================================================
+       SCREEN 6 — Quiz + Final Callout
+       ============================================================ -->
+  <div class="module-screen" id="m6-s6">
+    <h2 class="screen-title">Check Your Understanding</h2>
+    <p class="screen-intro" style="max-width:700px; margin: 0 auto var(--space-6);">
+      Three questions covering the supporting cast — file detection, notifications, and NCBI export.
+    </p>
+
+    <div class="quiz-container" style="max-width:760px; margin:0 auto var(--space-8);">
+
+      <div class="quiz-question" data-question="1">
+        <p class="quiz-prompt">A researcher uploads files named <code>sample_forward.fastq.gz</code> and <code>sample_reverse.fastq.gz</code>. Will the file detector pair them as R1/R2?</p>
+        <div class="quiz-options">
+          <button class="quiz-option" onclick="checkAnswer(this, true)">
+            A) Yes — <code>forward</code> maps to R1 and <code>reverse</code> maps to R2 via DIRECTION_MAP.
+          </button>
+          <button class="quiz-option" onclick="checkAnswer(this, false)">
+            B) No — only R1/R2 naming is supported.
+          </button>
+          <button class="quiz-option" onclick="checkAnswer(this, false)">
+            C) Yes, but only if they are in the same upload batch.
+          </button>
+          <button class="quiz-option" onclick="checkAnswer(this, false)">
+            D) No — <code>forward</code> and <code>reverse</code> must be uppercase.
+          </button>
+        </div>
+        <div class="quiz-feedback"></div>
+      </div>
+
+      <div class="quiz-question" data-question="2">
+        <p class="quiz-prompt">A notification write fails inside <code>create_notification</code>. Does the sample ingest also fail?</p>
+        <div class="quiz-options">
+          <button class="quiz-option" onclick="checkAnswer(this, true)">
+            A) No — the exception is caught and logged; the notification failure is intentionally swallowed.
+          </button>
+          <button class="quiz-option" onclick="checkAnswer(this, false)">
+            B) Yes — all writes in the same transaction roll back together.
+          </button>
+          <button class="quiz-option" onclick="checkAnswer(this, false)">
+            C) It depends on whether <code>db_conn</code> was passed to <code>create_notification</code>.
+          </button>
+          <button class="quiz-option" onclick="checkAnswer(this, false)">
+            D) Yes — notification failures always propagate up.
+          </button>
+        </div>
+        <div class="quiz-feedback"></div>
+      </div>
+
+      <div class="quiz-question" data-question="3">
+        <p class="quiz-prompt">A batch of samples needs to be submitted to NCBI. The script maps <code>organism_name</code> to what NCBI BioSample field?</p>
+        <div class="quiz-options">
+          <button class="quiz-option" onclick="checkAnswer(this, true)">
+            A) <code>organism</code> — matching NCBI BioSample attribute names.
+          </button>
+          <button class="quiz-option" onclick="checkAnswer(this, false)">
+            B) <code>organism_name</code> — the field is passed through unchanged.
+          </button>
+          <button class="quiz-option" onclick="checkAnswer(this, false)">
+            C) <code>scientific_name</code> — the NCBI standard term.
+          </button>
+          <button class="quiz-option" onclick="checkAnswer(this, false)">
+            D) <code>taxon</code> — the BioSample taxonomy field.
+          </button>
+        </div>
+        <div class="quiz-feedback"></div>
+      </div>
+
+    </div>
+
+    <!-- Final module callout -->
+    <div class="callout callout-accent" style="max-width:780px; margin: 0 auto var(--space-8);">
+      <div class="callout-icon">🎓</div>
+      <div class="callout-content">
+        <strong class="callout-title">You now understand the whole backend</strong>
+        <p>You have traced a sample from raw CSV upload through harmonization, validation, quality tiering, and database storage. You understand how auth works, how the API is organized, how data lands in PostgreSQL and object storage, and how background jobs and notifications keep everything running between requests. That is the complete picture.</p>
+      </div>
+    </div>
+
+  </div>
+
+</section>

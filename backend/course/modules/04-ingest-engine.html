@@ -1,0 +1,414 @@
+<section class="module" id="module-4" style="background: var(--color-bg-warm)">
+
+  <!-- ============================================================
+       SCREEN 1 — Hook + Airport Metaphor
+       ============================================================ -->
+  <div class="module-screen" id="m4-s1">
+    <div class="module-header">
+      <span class="module-number">04</span>
+      <h2 class="module-title">The Ingest Engine</h2>
+      <p class="module-subtitle">
+        A researcher uploads a spreadsheet from their lab. That spreadsheet might call the same field
+        <strong>"Sample ID"</strong> or <strong>"Specimen No."</strong> or just <strong>"ID"</strong>
+        depending on which lab made it. How does JACKPOT understand all of them?
+      </p>
+    </div>
+
+    <div class="callout callout-accent" style="max-width:780px; margin: 0 auto var(--space-8);">
+      <strong>The Airport Baggage Metaphor</strong><br>
+      Your bag goes through <strong>X-ray</strong> (the
+      <span class="term" data-definition="The translation layer that converts lab-specific column names into the standard JACKPOT schema field names.">harmonizer</span>
+      translates labels), then <strong>security check</strong> (the
+      <span class="term" data-definition="The gatekeeper that checks data against rules — required fields, valid enums, date formats. Errors block ingest; warnings do not.">validator</span>
+      enforces rules), then <strong>customs declaration</strong> (the
+      <span class="term" data-definition="A label (PRELIMINARY, ANALYZABLE, or SUBMITTABLE) assigned to each sample based on how complete its metadata is.">quality tier</span>
+      is assigned), and finally gets a <strong>baggage tag</strong> with a tracking number (a JACKPOT
+      <span class="term" data-definition="Uniform Resource Identifier — a unique string that permanently identifies a record, like a digital tracking number.">URI</span>
+      is minted) before reaching the carousel (the database).
+    </div>
+
+    <div class="pattern-cards">
+      <div class="pattern-card" style="border-top: 3px solid #D94F30">
+        <div class="pattern-icon" style="background: #D94F30">🔤</div>
+        <h4 class="pattern-title">Harmonizer</h4>
+        <p class="pattern-desc">Translates lab-specific column names into JACKPOT schema field names. Drops empty values silently. Warns on unknowns.</p>
+      </div>
+      <div class="pattern-card" style="border-top: 3px solid #3B82F6">
+        <div class="pattern-icon" style="background: #3B82F6">✅</div>
+        <h4 class="pattern-title">Validator</h4>
+        <p class="pattern-desc">Checks required fields, valid enums, and date formats. Errors block
+          <span class="term" data-definition="The process of accepting, validating, and storing data submitted by a lab — from raw spreadsheet to database record.">ingest</span>;
+          warnings pass through.</p>
+      </div>
+      <div class="pattern-card" style="border-top: 3px solid #10B981">
+        <div class="pattern-icon" style="background: #10B981">📅</div>
+        <h4 class="pattern-title">Epiweek Engine</h4>
+        <p class="pattern-desc">Computes
+          <span class="term" data-definition="The CDC's epidemiological week numbering system — used by public health agencies to track disease trends over time.">MMWR epiweek</span>
+          and ISO week from <code>date_collected</code>. Returns nulls when precision is too coarse.</p>
+      </div>
+      <div class="pattern-card" style="border-top: 3px solid #8B5CF6">
+        <div class="pattern-icon" style="background: #8B5CF6">🏷️</div>
+        <h4 class="pattern-title">URI Minter</h4>
+        <p class="pattern-desc">Assigns a permanent JACKPOT identifier to every accepted record — the baggage tag that follows the sample forever.</p>
+      </div>
+    </div>
+
+    <div class="callout callout-info" style="max-width:780px; margin: var(--space-6) auto 0;">
+      <strong>Why should I care?</strong>
+      When a batch upload fails, the error message names one of these steps. Knowing "harmonizer warning"
+      vs. "validator error" vs. "quality tier PRELIMINARY" tells you exactly what to fix — and which
+      part of the codebase to ask an AI about.
+    </div>
+  </div>
+
+
+  <!-- ============================================================
+       SCREEN 2 — Flow Animation: the full pipeline
+       ============================================================ -->
+  <div class="module-screen" id="m4-s2">
+    <h2 class="screen-title">The Pipeline in Motion</h2>
+    <p class="screen-intro" style="max-width:700px; margin: 0 auto var(--space-6);">
+      Every row from a submitted CSV travels through six stations before it is stored. Step through
+      the pipeline below to see exactly what happens — and where it can stop.
+    </p>
+
+    <div class="flow-animation" style="max-width:860px; margin:0 auto;"
+      data-steps='[
+        {"highlight":"flow-actor-1","label":"A raw CSV arrives. Column names are whatever the submitting lab chose — they may not match the JACKPOT schema at all."},
+        {"packet":true,"from":"flow-actor-1","to":"flow-actor-2","label":"The CSV rows are handed to the Harmonizer for column-name translation."},
+        {"highlight":"flow-actor-2","label":"The Harmonizer maps each column name to its JACKPOT schema equivalent. Unknown columns pass through with a warning. Empty cells are silently dropped."},
+        {"packet":true,"from":"flow-actor-2","to":"flow-actor-3","label":"Harmonized rows move to the Validator for rule enforcement."},
+        {"highlight":"flow-actor-3","label":"The Validator checks required fields, valid enum values, and ISO 8601 date formats. Errors block ingest entirely. Warnings are recorded but do not stop the row."},
+        {"packet":true,"from":"flow-actor-3","to":"flow-actor-4","label":"Rows that pass validation move to the Epiweek Engine."},
+        {"highlight":"flow-actor-4","label":"The Epiweek Engine computes MMWR and ISO week numbers from date_collected. If precision is year or month, week fields are set to null."},
+        {"packet":true,"from":"flow-actor-4","to":"flow-actor-5","label":"Enriched rows move to the URI Minter where the quality tier is also assigned."},
+        {"highlight":"flow-actor-5","label":"The quality tier (PRELIMINARY, ANALYZABLE, or SUBMITTABLE) is computed. Then a permanent JACKPOT URI is minted for the record."},
+        {"packet":true,"from":"flow-actor-5","to":"flow-actor-6","label":"The fully enriched, identified record is written to the database."},
+        {"highlight":"flow-actor-6","label":"The record is now in PostgreSQL. It is queryable, exportable, and permanently identified by its JACKPOT URI."}
+      ]'>
+      <div class="flow-actors">
+        <div class="flow-actor" id="flow-actor-1">
+          <div class="flow-actor-icon">📄</div>
+          <span>CSV Upload</span>
+        </div>
+        <div class="flow-actor" id="flow-actor-2">
+          <div class="flow-actor-icon">🔤</div>
+          <span>Harmonizer</span>
+        </div>
+        <div class="flow-actor" id="flow-actor-3">
+          <div class="flow-actor-icon">✅</div>
+          <span>Validator</span>
+        </div>
+        <div class="flow-actor" id="flow-actor-4">
+          <div class="flow-actor-icon">📅</div>
+          <span>Epiweek Engine</span>
+        </div>
+        <div class="flow-actor" id="flow-actor-5">
+          <div class="flow-actor-icon">🏷️</div>
+          <span>URI Minter</span>
+        </div>
+        <div class="flow-actor" id="flow-actor-6">
+          <div class="flow-actor-icon">🗄️</div>
+          <span>Database</span>
+        </div>
+      </div>
+      <div class="flow-packet" id="flow-packet"></div>
+      <div class="flow-step-label" id="flow-label">Click "Next Step" to begin</div>
+      <div class="flow-controls">
+        <button class="btn flow-next-btn">Next Step</button>
+        <button class="btn flow-reset-btn">Restart</button>
+        <span class="flow-progress"></span>
+      </div>
+    </div>
+
+    <div class="callout callout-warning" style="max-width:780px; margin: var(--space-6) auto 0;">
+      <strong>Validation errors are not bugs — they are features.</strong>
+      A validator error means JACKPOT caught a data problem <em>before</em> it poisoned the database.
+      The error message tells you the exact field and rule that failed.
+    </div>
+  </div>
+
+
+  <!-- ============================================================
+       SCREEN 3 — Code Translation: harmonize_row
+       ============================================================ -->
+  <div class="module-screen" id="m4-s3">
+    <h2 class="screen-title">How the Harmonizer Translates a Row</h2>
+    <p class="screen-intro" style="max-width:700px; margin: 0 auto var(--space-6);">
+      The core of the harmonizer is a single function. It loops over every key-value pair in a raw
+      CSV row and renames keys according to a mapping file — like a bilingual dictionary.
+    </p>
+
+    <div class="translation-block" style="max-width:920px; margin:0 auto var(--space-8);">
+      <div class="translation-code">
+        <pre><code><span class="kw">def</span> <span class="fn">harmonize_row</span>(raw: <span class="tp">dict</span>[<span class="tp">str</span>, <span class="tp">Any</span>], mapping: <span class="tp">dict</span>) -&gt; <span class="tp">dict</span>[<span class="tp">str</span>, <span class="tp">Any</span>]:
+    column_map: <span class="tp">dict</span>[<span class="tp">str</span>, <span class="tp">str</span>] = mapping.<span class="fn">get</span>(<span class="str">"column_mappings"</span>, {})
+    result: <span class="tp">dict</span>[<span class="tp">str</span>, <span class="tp">Any</span>] = {}
+
+    <span class="kw">for</span> raw_key, value <span class="kw">in</span> raw.<span class="fn">items</span>():
+        <span class="kw">if</span> value <span class="kw">is</span> <span class="kw">None</span> <span class="kw">or</span> (<span class="fn">isinstance</span>(value, <span class="tp">str</span>) <span class="kw">and not</span> value.<span class="fn">strip</span>()):
+            <span class="kw">continue</span>
+        schema_key = column_map.<span class="fn">get</span>(raw_key, raw_key)
+        result[schema_key] = value.<span class="fn">strip</span>() <span class="kw">if</span> <span class="fn">isinstance</span>(value, <span class="tp">str</span>) <span class="kw">else</span> value
+
+    <span class="kw">return</span> result</code></pre>
+      </div>
+      <div class="translation-prose">
+        <ol class="translation-steps">
+          <li data-line="1"><strong>Function signature</strong> — Takes the raw row (a dict of whatever column names the lab used) and the loaded mapping file (which contains the translation dictionary).</li>
+          <li data-line="2"><strong>Extract the column map</strong> — Pulls the <code>"column_mappings"</code> sub-dict from the mapping file. Example entry: <code>"Specimen No." → "sample_id"</code>. If the mapping file is empty, defaults to an empty dict (pass-through mode).</li>
+          <li data-line="5-6"><strong>Skip blank values</strong> — If a cell is <code>None</code> or a blank string, the row is silently skipped with <code>continue</code>. This is why an empty "FASTQ location" cell does not cause a missing-field error — it simply never enters the result dict.</li>
+          <li data-line="7"><strong>Translate the key</strong> — <code>column_map.get(raw_key, raw_key)</code> tries to find a translation. If <code>"Specimen No."</code> is in the map, it becomes <code>"sample_id"</code>. If the key is not in the map, it passes through unchanged.</li>
+          <li data-line="8"><strong>Trim whitespace</strong> — String values are stripped of leading and trailing spaces. Non-string values (numbers, dates) are stored as-is.</li>
+        </ol>
+      </div>
+    </div>
+
+    <div class="callout callout-info" style="max-width:780px; margin: 0 auto var(--space-6);">
+      <strong>What about <code>harmonize_csv</code>?</strong>
+      The outer function <code>harmonize_csv</code> loops over all rows and calls <code>harmonize_row</code> on each. It also scans the <em>first</em> row for columns not in the mapping and appends a warning string if any are found — that warning does not block ingest, it just tells you the mapping file might be incomplete.
+    </div>
+
+    <div class="callout callout-accent" style="max-width:780px; margin: 0 auto;">
+      <strong>Key insight:</strong>
+      The harmonizer is <em>pure translation</em> — it never decides whether a value is valid. That job belongs to the validator. Keeping these concerns separate means you can test each independently.
+    </div>
+  </div>
+
+
+  <!-- ============================================================
+       SCREEN 4 — Code Translation: compute_quality_status
+       ============================================================ -->
+  <div class="module-screen" id="m4-s4">
+    <h2 class="screen-title">How Quality Tiers Are Decided</h2>
+    <p class="screen-intro" style="max-width:700px; margin: 0 auto var(--space-6);">
+      After validation, every accepted record receives one of three quality labels. The decision tree
+      is a simple waterfall — each tier requires everything the tier below it requires, plus more.
+    </p>
+
+    <div class="translation-block" style="max-width:920px; margin:0 auto var(--space-8);">
+      <div class="translation-code">
+        <pre><code><span class="kw">def</span> <span class="fn">compute_quality_status</span>(data: <span class="tp">dict</span>, validation_result: <span class="tp">ValidationResult</span>) -&gt; <span class="tp">str</span>:
+    <span class="kw">if not</span> validation_result.valid:
+        <span class="kw">return</span> <span class="str">"PRELIMINARY"</span>
+
+    tier3_fields = [
+        <span class="str">"originating_lab"</span>, <span class="str">"submitting_lab"</span>,
+        <span class="str">"collection_location_state"</span>, <span class="str">"collection_location_county"</span>,
+        <span class="str">"host_age"</span>, <span class="str">"host_sex"</span>,
+    ]
+    <span class="kw">if</span> <span class="fn">all</span>(data.<span class="fn">get</span>(f) <span class="kw">for</span> f <span class="kw">in</span> tier3_fields):
+        <span class="kw">return</span> <span class="str">"SUBMITTABLE"</span>
+
+    tier2_fields = [<span class="str">"collection_location_state"</span>]
+    precision = data.<span class="fn">get</span>(<span class="str">"date_collected_precision"</span>, <span class="str">"day"</span>)
+    <span class="kw">if</span> precision != <span class="str">"year"</span> <span class="kw">and</span> <span class="fn">all</span>(data.<span class="fn">get</span>(f) <span class="kw">for</span> f <span class="kw">in</span> tier2_fields):
+        <span class="kw">return</span> <span class="str">"ANALYZABLE"</span>
+
+    <span class="kw">return</span> <span class="str">"PRELIMINARY"</span></code></pre>
+      </div>
+      <div class="translation-prose">
+        <ol class="translation-steps">
+          <li data-line="2-3"><strong>PRELIMINARY (automatic)</strong> — If the validator found any errors, the record is immediately labelled PRELIMINARY. It is stored, but flagged as incomplete. No further tier checks run.</li>
+          <li data-line="5-10"><strong>SUBMITTABLE (tier 3)</strong> — Checked first among passing records. Requires all six fields: both lab names, state <em>and</em> county, plus host age and sex. If every field is present, the record is SUBMITTABLE — ready for external submission (e.g. GISAID).</li>
+          <li data-line="12-15"><strong>ANALYZABLE (tier 2)</strong> — Requires state-level location and date precision of at least "month" (not just "year"). ANALYZABLE records appear in time-series charts and geographic maps on the dashboard.</li>
+          <li data-line="17"><strong>PRELIMINARY (fallback)</strong> — If neither tier 3 nor tier 2 requirements are met, the record falls back to PRELIMINARY. It is stored and accessible, but excluded from aggregate analyses.</li>
+        </ol>
+      </div>
+    </div>
+
+    <div class="pattern-cards" style="max-width:780px; margin:0 auto;">
+      <div class="pattern-card" style="border-top: 3px solid #EF4444">
+        <div class="pattern-icon" style="background: #EF4444">🔴</div>
+        <h4 class="pattern-title">PRELIMINARY</h4>
+        <p class="pattern-desc">Invalid record, or missing state location, or date precision is "year" only. Stored but excluded from analysis.</p>
+      </div>
+      <div class="pattern-card" style="border-top: 3px solid #F59E0B">
+        <div class="pattern-icon" style="background: #F59E0B">🟡</div>
+        <h4 class="pattern-title">ANALYZABLE</h4>
+        <p class="pattern-desc">Has state location and day/month-precision date. Appears in dashboard charts and maps.</p>
+      </div>
+      <div class="pattern-card" style="border-top: 3px solid #10B981">
+        <div class="pattern-icon" style="background: #10B981">🟢</div>
+        <h4 class="pattern-title">SUBMITTABLE</h4>
+        <p class="pattern-desc">Has all 6 tier-3 fields: both lab names, state + county, host age + sex. Ready for external submission.</p>
+      </div>
+    </div>
+  </div>
+
+
+  <!-- ============================================================
+       SCREEN 5 — Group Chat: errors vs. warnings in action
+       ============================================================ -->
+  <div class="module-screen" id="m4-s5">
+    <h2 class="screen-title">Errors vs. Warnings: A Worked Example</h2>
+    <p class="screen-intro" style="max-width:700px; margin: 0 auto var(--space-6);">
+      A row comes in with <strong>"Specimen No."</strong> as its ID column, a missing
+      <code>date_sequenced</code>, and present state/county fields. Watch how each stage
+      responds — and where the row stops.
+    </p>
+
+    <div class="chat-window" id="chat-ingest" style="max-width:700px; margin:0 auto var(--space-8);">
+      <div class="chat-messages">
+
+        <div class="chat-message" data-msg="0" data-sender="harmonizer" style="display:none">
+          <div class="chat-avatar" style="background: var(--color-actor-2)">H</div>
+          <div class="chat-bubble">
+            <span class="chat-sender" style="color: var(--color-actor-2)">Harmonizer</span>
+            <p>Incoming row. I see the column "Specimen No." — that is in my mapping file. I will rename it to <code>sample_id</code>. No problem there.</p>
+          </div>
+        </div>
+
+        <div class="chat-message" data-msg="1" data-sender="harmonizer" style="display:none">
+          <div class="chat-avatar" style="background: var(--color-actor-2)">H</div>
+          <div class="chat-bubble">
+            <span class="chat-sender" style="color: var(--color-actor-2)">Harmonizer</span>
+            <p>I also notice a column called "Lab Internal Ref" — that is not in my mapping. I will pass it through unchanged and add a <strong>warning</strong>: "Unknown columns not in mapping: ['Lab Internal Ref']. They will be passed through unchanged."</p>
+          </div>
+        </div>
+
+        <div class="chat-message" data-msg="2" data-sender="harmonizer" style="display:none">
+          <div class="chat-avatar" style="background: var(--color-actor-2)">H</div>
+          <div class="chat-bubble">
+            <span class="chat-sender" style="color: var(--color-actor-2)">Harmonizer</span>
+            <p>Harmonization complete. Passing the row to the Validator — warnings are attached but the row is not blocked.</p>
+          </div>
+        </div>
+
+        <div class="chat-message" data-msg="3" data-sender="validator" style="display:none">
+          <div class="chat-avatar" style="background: var(--color-actor-3)">V</div>
+          <div class="chat-bubble">
+            <span class="chat-sender" style="color: var(--color-actor-3)">Validator</span>
+            <p>Received the row. Checking required fields... <code>sample_id</code> present, <code>organism_name</code> present, <code>source_type</code> present...</p>
+          </div>
+        </div>
+
+        <div class="chat-message" data-msg="4" data-sender="validator" style="display:none">
+          <div class="chat-avatar" style="background: var(--color-actor-3)">V</div>
+          <div class="chat-bubble">
+            <span class="chat-sender" style="color: var(--color-actor-3)">Validator</span>
+            <p>Wait — <code>date_sequenced</code> is missing and it is a required field. Recording <strong>error</strong>: "Missing required field: date_sequenced".</p>
+          </div>
+        </div>
+
+        <div class="chat-message" data-msg="5" data-sender="validator" style="display:none">
+          <div class="chat-avatar" style="background: var(--color-actor-3)">V</div>
+          <div class="chat-bubble">
+            <span class="chat-sender" style="color: var(--color-actor-3)">Validator</span>
+            <p>Validation result: <code>valid=False</code>, errors=["Missing required field: date_sequenced"]. This row is <strong>blocked</strong>. I am returning a PRELIMINARY status and halting the pipeline for this row.</p>
+          </div>
+        </div>
+
+        <div class="chat-message" data-msg="6" data-sender="quality-engine" style="display:none">
+          <div class="chat-avatar" style="background: var(--color-actor-4)">Q</div>
+          <div class="chat-bubble">
+            <span class="chat-sender" style="color: var(--color-actor-4)">Quality Engine</span>
+            <p>I received the validation result. Since <code>valid=False</code>, I immediately return <strong>PRELIMINARY</strong> — I do not even check the tier fields. The row is stored as-is with the error attached so the submitter can see exactly what to fix.</p>
+          </div>
+        </div>
+
+        <div class="chat-message" data-msg="7" data-sender="harmonizer" style="display:none">
+          <div class="chat-avatar" style="background: var(--color-actor-2)">H</div>
+          <div class="chat-bubble">
+            <span class="chat-sender" style="color: var(--color-actor-2)">Harmonizer</span>
+            <p>To summarise: my <strong>warning</strong> about "Lab Internal Ref" did not block the row. The Validator's <strong>error</strong> about <code>date_sequenced</code> did. That is the key distinction — warnings are informational, errors are blockers.</p>
+          </div>
+        </div>
+
+      </div>
+      <div class="chat-typing" style="display:none">
+        <div class="chat-avatar" id="chat-ingest-typing-avatar">?</div>
+        <div class="chat-typing-dots">
+          <span class="typing-dot"></span>
+          <span class="typing-dot"></span>
+          <span class="typing-dot"></span>
+        </div>
+      </div>
+      <div class="chat-controls">
+        <button class="btn chat-next-btn">Next Message</button>
+        <button class="btn chat-all-btn">Play All</button>
+        <button class="btn chat-reset-btn">Replay</button>
+        <span class="chat-progress"></span>
+      </div>
+    </div>
+
+    <div class="callout callout-info" style="max-width:780px; margin: 0 auto;">
+      <strong>Epiweek and
+        <span class="term" data-definition="A boolean flag indicating whether this sample is relevant to public health disease monitoring.">surveillance_relevant</span>
+        enrichment</strong> only run on rows where <code>valid=True</code>. The
+        <span class="term" data-definition="A sample containing genetic material from multiple organisms, rather than a single pathogen.">metagenome</span>
+        special case: if <code>organism_name == "metagenome"</code> and no target organisms are listed,
+        <code>surveillance_relevant</code> defaults to <code>True</code> as a conservative public
+        health default.
+    </div>
+  </div>
+
+
+  <!-- ============================================================
+       SCREEN 6 — Quiz
+       ============================================================ -->
+  <div class="module-screen" id="m4-s6">
+    <h2 class="screen-title">Check Your Understanding</h2>
+    <p class="screen-intro" style="max-width:700px; margin: 0 auto var(--space-6);">
+      Three quick questions. Each one tests a concept that comes up when diagnosing real upload failures.
+    </p>
+
+    <div class="quiz-container" style="max-width:720px; margin:0 auto;">
+
+      <!-- Question 1 -->
+      <div class="quiz-question" data-question="1">
+        <p class="quiz-prompt">A researcher uploads a CSV where the "FASTQ files" column is empty for every row. The samples still ingest successfully. How is that possible?</p>
+        <div class="quiz-options">
+          <button class="quiz-option" onclick="checkAnswer(this, true)">A) FASTQ file location is optional at ingest — it is not in BASE_REQUIRED and can be added later.</button>
+          <button class="quiz-option" onclick="checkAnswer(this, false)">B) The harmonizer fills in a default placeholder value for missing file fields.</button>
+          <button class="quiz-option" onclick="checkAnswer(this, false)">C) The validator ignores all file-related fields regardless of their content.</button>
+          <button class="quiz-option" onclick="checkAnswer(this, false)">D) The ingest pipeline retries with a blank URI when file fields are missing.</button>
+        </div>
+        <div class="quiz-feedback">
+          <p class="quiz-feedback-correct">Correct! FASTQ file location is not listed in <code>BASE_REQUIRED</code>. The harmonizer also silently drops empty cells before the validator even sees them — so an empty FASTQ column never triggers a missing-field error.</p>
+          <p class="quiz-feedback-incorrect">Not quite. The key is that FASTQ location is simply not a required field in <code>BASE_REQUIRED</code>. The harmonizer also drops empty cells silently, so the validator never sees them as missing.</p>
+        </div>
+      </div>
+
+      <!-- Question 2 -->
+      <div class="quiz-question" data-question="2">
+        <p class="quiz-prompt">A sample is marked ANALYZABLE. What does that unlock that PRELIMINARY does not?</p>
+        <div class="quiz-options">
+          <button class="quiz-option" onclick="checkAnswer(this, false)">A) Export to GISAID — ANALYZABLE records meet the minimum submission requirements.</button>
+          <button class="quiz-option" onclick="checkAnswer(this, true)">B) Time-series charts and geographic maps on the dashboard.</button>
+          <button class="quiz-option" onclick="checkAnswer(this, false)">C) Automatic sequence quality scrubbing and contamination filtering.</button>
+          <button class="quiz-option" onclick="checkAnswer(this, false)">D) Read access for Lab Readers who would otherwise be blocked.</button>
+        </div>
+        <div class="quiz-feedback">
+          <p class="quiz-feedback-correct">Correct! ANALYZABLE means the record has state-level location and sufficient date precision, which is the minimum needed for time-series and geographic aggregation on the dashboard. SUBMITTABLE is required for external submission like GISAID.</p>
+          <p class="quiz-feedback-incorrect">Not quite. ANALYZABLE unlocks aggregate analytics — time-series and maps — because the record has a state location and a precise enough date. GISAID export requires the higher SUBMITTABLE tier.</p>
+        </div>
+      </div>
+
+      <!-- Question 3 -->
+      <div class="quiz-question" data-question="3">
+        <p class="quiz-prompt">The validator returns <code>errors=[]</code> but <code>warnings=["date_collected is more than 5 years in the past"]</code>. Does the sample ingest?</p>
+        <div class="quiz-options">
+          <button class="quiz-option" onclick="checkAnswer(this, true)">A) Yes — warnings do not block ingest. Only errors do.</button>
+          <button class="quiz-option" onclick="checkAnswer(this, false)">B) No — any warning in the validation result halts the pipeline for that row.</button>
+          <button class="quiz-option" onclick="checkAnswer(this, false)">C) It depends on the quality tier assigned to the record.</button>
+          <button class="quiz-option" onclick="checkAnswer(this, false)">D) Yes, but it is automatically flagged for manual review before being stored.</button>
+        </div>
+        <div class="quiz-feedback">
+          <p class="quiz-feedback-correct">Correct! <code>ValidationResult.valid</code> is <code>True</code> when <code>errors</code> is empty — warnings do not affect it. The warning is attached to the record for the submitter to review, but the pipeline continues normally.</p>
+          <p class="quiz-feedback-incorrect">Not quite. The <code>valid</code> flag is set by <code>len(errors) == 0</code>. Warnings are stored alongside the record but never block ingest. The row will proceed through the pipeline and receive a quality tier assignment.</p>
+        </div>
+      </div>
+
+    </div>
+
+    <div class="callout callout-accent" style="max-width:720px; margin: var(--space-8) auto 0;">
+      <strong>You now know the ingest pipeline end-to-end.</strong>
+      When something goes wrong with a batch upload, you can trace the failure to a specific step —
+      and know whether the fix lives in the mapping file (harmonizer), the submitted data (validator),
+      or the completeness of metadata fields (quality tier).
+    </div>
+  </div>
+
+</section>
