@@ -37,6 +37,8 @@ and public health research. Successor to APGAP (ASU-RSE-Services).
     │   ├── permissions.py       PermissionGroups enum — DO NOT rename values
     │   ├── database.py          Lazy engine; execute_query / execute_write / reset_engine
     │   ├── validator.py         LinkML-based metadata validator — gate on all ingest paths
+    │   ├── template_generator.py  Schema-driven CSV template generator (source_type × tier)
+    │   ├── dlp_scanner.py         Cloud DLP metadata PII scanner — all free-text fields
     │   ├── harmonizer.py        CSV column mapper using mapping_config YAMLs
     │   ├── file_detector.py     NGS file pairing and extension detection — only place for this logic
     │   ├── audit.py             log_audit() function + AuditActions constants
@@ -82,7 +84,7 @@ Notification System sections for their exact interfaces.
 
 ## Current Baseline
 
-- **95 tests passing, 0 failed, 63.96% coverage**
+- **275 tests passing, 0 failed, 75.62% coverage**
 - CI threshold: 60% — do not let coverage fall below this
 - Health check: `curl http://localhost:8000/health` → `{"status":"ok","version":"5.0.0","project":"JACKPOT"}`
 - All 27 database tables loaded in PostgreSQL
@@ -175,6 +177,15 @@ The validator returns a `ValidationResult` with a `tier` integer (1, 2, or 3).
 `compute_quality_status(validation_result)` converts that to the string
 ("PRELIMINARY", "ANALYZABLE", "SUBMITTABLE"). Routers call this function —
 they never write quality_status strings directly.
+
+**Tier logic (corrected Session 3):**
+- SUBMITTABLE gates on field presence only — no date precision constraint.
+  NCBI BioSample and GISAID both accept YYYY, YYYY-MM, and YYYY-MM-DD.
+- ANALYZABLE requires month-or-better date precision for time-series.
+- Tiers are partially orthogonal: a sample can be SUBMITTABLE but not
+  ANALYZABLE (year-only date with all other fields present).
+- host_age and host_sex are conditional on source_type == "Human".
+  Non-human source types can reach SUBMITTABLE without them.
 
 **18. `scrub_status = 'SKIPPED'` is only set in two places:**
 (1) `validator.py` — FASTA-only auto-skip (no raw reads, approved_by=SYSTEM).
@@ -340,6 +351,24 @@ Always use `RETURNING *` unless only specific columns are needed.
 Example: `INSERT INTO samples (...) VALUES (...) RETURNING *`
 This applies to every router — never write a row and then SELECT it back.
 
+**42. Templates are generated artifacts — never hand-maintained.**
+CSV/XLSX templates are generated from the LinkML JSON Schema by
+`backend/template_generator.py`. Templates are produced along two axes:
+source_type (12 types) × tier (PRELIMINARY/ANALYZABLE/SUBMITTABLE), with
+an optional metagenomics overlay. The template endpoints are public (no
+auth required). Never create template files manually in the repository.
+If a field is missing from a template, fix the schema — the generator
+will pick it up automatically.
+
+**43. DLP metadata scan runs on all free-text fields before DB commit.**
+`backend/dlp_scanner.py` scans every string field not backed by an enum
+for PII (names, emails, SSNs, MRNs, phone numbers) via GCP Cloud DLP API.
+`pii_scan_status` works like `scrub_status`: FLAGGED samples are stored
+but blocked from queries, pipelines, and export until a Lab Director
+overrides or the submitter fixes the flagged fields. In local dev,
+`DLP_ENABLED=false` (default) bypasses the scan and returns CLEAN.
+Exception: `pi_name` is excluded from the PERSON_NAME check because
+it is expected to contain a name.
 **41. Routers use `get_db_dep()` with `Depends()` for database access.**
 Import `get_db_dep` from `backend.database` and `Depends` from `fastapi`.
 Pass the session as `conn` to `execute_write()`, `log_audit()`, and
@@ -422,8 +451,8 @@ uv run pytest -x                          # stop on first failure
 # Database
 uv run alembic upgrade head
 uv run alembic revision --autogenerate -m "add_new_column"
-psql postgresql://jackpot:jackpot@localhost:5432/jackpot_db
-psql postgresql://jackpot:jackpot@localhost:5432/jackpot_db -c "\dt"
+psql postgresql://jackpot:jackpot@localhost:5432/jackpot_db  # pragma: allowlist secret
+psql postgresql://jackpot:jackpot@localhost:5432/jackpot_db -c "\dt"  # pragma: allowlist secret
 
 # Schema
 uv run gen-pydantic --pydantic-version 2 schema/schema/jackpot_schema.yaml > backend/models_generated.py
