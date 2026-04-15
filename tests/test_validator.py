@@ -4,7 +4,7 @@ import pytest
 from hypothesis import given
 from hypothesis import strategies as st
 
-from backend.validator import validate_sample
+from backend.validator import ValidationResult, compute_quality_status, validate_sample
 
 
 def test_valid_human_sample_passes(valid_human_sample):
@@ -99,3 +99,167 @@ def test_any_organism_name_never_crashes(organism_name):
     result = validate_sample({"organism_name": organism_name, "source_type": "Human"})
     assert isinstance(result.valid, bool)
     assert isinstance(result.errors, list)
+
+
+"""
+ADDITIONAL test cases for compute_quality_status() tier logic.
+
+Add these tests to the EXISTING tests/test_validator.py file.
+Paste at the bottom of the file, after the existing test functions.
+
+These tests verify:
+1. Year-only dates can reach SUBMITTABLE (NCBI/GISAID accept year-only)
+2. SUBMITTABLE checks field presence, not date precision
+3. ANALYZABLE still requires month-or-better date precision
+4. host_age/host_sex only required for HumanSample at SUBMITTABLE
+"""
+
+
+# ── Helper ────────────────────────────────────────────────────────────────
+
+
+def _valid_result() -> ValidationResult:
+    """A passing validation result (no errors)."""
+    return ValidationResult(valid=True, errors=[], warnings=[])
+
+
+def _invalid_result() -> ValidationResult:
+    """A failing validation result."""
+    return ValidationResult(valid=False, errors=["missing required field"], warnings=[])
+
+
+def _full_human_data(**overrides) -> dict:
+    """A sample dict with all SUBMITTABLE fields populated for HumanSample."""
+    data = {
+        "source_type": "Human",
+        "originating_lab": "Banner Health Clinical Lab",
+        "submitting_lab": "ASU Biodesign CLAS",
+        "collection_location_state": "Arizona",
+        "collection_location_county": "Maricopa",
+        "host_age": 45,
+        "host_sex": "Male",
+        "date_collected_precision": "day",
+    }
+    data.update(overrides)
+    return data
+
+
+def _full_wastewater_data(**overrides) -> dict:
+    """A sample dict with all SUBMITTABLE fields for WastewaterSample."""
+    data = {
+        "source_type": "Wastewater",
+        "originating_lab": "Tempe WWTP Lab",
+        "submitting_lab": "ASU Biodesign CLAS",
+        "collection_location_state": "Arizona",
+        "collection_location_county": "Maricopa",
+        "date_collected_precision": "day",
+    }
+    data.update(overrides)
+    return data
+
+
+# ── SUBMITTABLE tier tests ────────────────────────────────────────────────
+
+
+class TestComputeQualityStatusSubmittable:
+    def test_full_human_data_is_submittable(self):
+        result = compute_quality_status(_full_human_data(), _valid_result())
+        assert result == "SUBMITTABLE"
+
+    def test_year_only_human_still_submittable(self):
+        """NCBI and GISAID accept year-only collection dates."""
+        data = _full_human_data(date_collected_precision="year")
+        result = compute_quality_status(data, _valid_result())
+        assert result == "SUBMITTABLE"
+
+    def test_month_only_human_still_submittable(self):
+        data = _full_human_data(date_collected_precision="month")
+        result = compute_quality_status(data, _valid_result())
+        assert result == "SUBMITTABLE"
+
+    def test_wastewater_submittable_without_host_age_sex(self):
+        """Non-human source types don't need host_age or host_sex."""
+        result = compute_quality_status(_full_wastewater_data(), _valid_result())
+        assert result == "SUBMITTABLE"
+
+    def test_wastewater_year_only_still_submittable(self):
+        data = _full_wastewater_data(date_collected_precision="year")
+        result = compute_quality_status(data, _valid_result())
+        assert result == "SUBMITTABLE"
+
+    def test_missing_originating_lab_not_submittable(self):
+        data = _full_human_data()
+        del data["originating_lab"]
+        result = compute_quality_status(data, _valid_result())
+        assert result != "SUBMITTABLE"
+
+    def test_missing_county_not_submittable(self):
+        data = _full_human_data()
+        del data["collection_location_county"]
+        result = compute_quality_status(data, _valid_result())
+        assert result != "SUBMITTABLE"
+
+    def test_human_missing_host_age_not_submittable(self):
+        data = _full_human_data()
+        del data["host_age"]
+        result = compute_quality_status(data, _valid_result())
+        assert result != "SUBMITTABLE"
+
+    def test_human_missing_host_sex_not_submittable(self):
+        data = _full_human_data()
+        del data["host_sex"]
+        result = compute_quality_status(data, _valid_result())
+        assert result != "SUBMITTABLE"
+
+
+# ── ANALYZABLE tier tests ─────────────────────────────────────────────────
+
+
+class TestComputeQualityStatusAnalyzable:
+    def test_state_plus_month_is_analyzable(self):
+        data = {
+            "collection_location_state": "Arizona",
+            "date_collected_precision": "month",
+        }
+        result = compute_quality_status(data, _valid_result())
+        assert result == "ANALYZABLE"
+
+    def test_state_plus_day_is_analyzable(self):
+        data = {
+            "collection_location_state": "Arizona",
+            "date_collected_precision": "day",
+        }
+        result = compute_quality_status(data, _valid_result())
+        assert result == "ANALYZABLE"
+
+    def test_state_plus_year_is_preliminary_not_analyzable(self):
+        """Year-only precision blocks ANALYZABLE — time-series needs month+."""
+        data = {
+            "collection_location_state": "Arizona",
+            "date_collected_precision": "year",
+        }
+        result = compute_quality_status(data, _valid_result())
+        assert result == "PRELIMINARY"
+
+    def test_no_state_is_preliminary(self):
+        data = {"date_collected_precision": "day"}
+        result = compute_quality_status(data, _valid_result())
+        assert result == "PRELIMINARY"
+
+
+# ── PRELIMINARY tier tests ────────────────────────────────────────────────
+
+
+class TestComputeQualityStatusPreliminary:
+    def test_invalid_validation_is_always_preliminary(self):
+        result = compute_quality_status(_full_human_data(), _invalid_result())
+        assert result == "PRELIMINARY"
+
+    def test_empty_data_is_preliminary(self):
+        result = compute_quality_status({}, _valid_result())
+        assert result == "PRELIMINARY"
+
+    def test_year_only_no_state_is_preliminary(self):
+        data = {"date_collected_precision": "year"}
+        result = compute_quality_status(data, _valid_result())
+        assert result == "PRELIMINARY"

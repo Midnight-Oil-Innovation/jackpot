@@ -29,6 +29,7 @@ from backend.routers import (
     samples,
     saved_searches,
     sequencing_labs,
+    templates,
     tokens,
     users,
 )
@@ -92,6 +93,7 @@ app.include_router(saved_searches.router)
 app.include_router(sequencing_labs.router)
 app.include_router(tokens.router)
 app.include_router(users.router)
+app.include_router(templates.router)
 
 app.add_middleware(RequestIDMiddleware)
 app.add_middleware(

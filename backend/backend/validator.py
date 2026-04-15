@@ -263,33 +263,43 @@ def validate_sample(data: dict) -> ValidationResult:
 
 def compute_quality_status(data: dict, validation_result: ValidationResult) -> str:
     """
-    Compute the quality tier string from a validated sample dict.
+    Compute the quality tier from a validated sample dict.
     Called at ingest after validate_sample() — never called directly in routers.
 
-    Tier 1 — PRELIMINARY: minimum viable metadata, immediately ingestible.
-    Tier 2 — ANALYZABLE: date to month precision, geographic fields present.
-    Tier 3 — SUBMITTABLE: all NCBI BioSample / GISAID fields present.
+    Tier priority: SUBMITTABLE > ANALYZABLE > PRELIMINARY.
+
+    SUBMITTABLE is checked first because it has no date precision constraint —
+    NCBI BioSample and GISAID both accept year-only, month-only, and
+    day-precision collection dates. SUBMITTABLE gates on field presence only.
+
+    ANALYZABLE requires month-or-better date precision for time-series
+    analytics and MMWR epiweek computation.
+
+    A sample can be SUBMITTABLE but not ANALYZABLE (e.g., year-only date
+    with all other fields present). This is by design.
     """
     if not validation_result.valid:
         return "PRELIMINARY"
 
-    # Tier 3 — all submission fields present
+    # Tier 3 — SUBMITTABLE: all submission fields present, any date precision
     tier3_fields = [
         "originating_lab",
         "submitting_lab",
         "collection_location_state",
         "collection_location_county",
-        "host_age",
-        "host_sex",
     ]
+    # host_age and host_sex only required for HumanSample
+    if data.get("source_type") == "Human":
+        tier3_fields.extend(["host_age", "host_sex"])
+
     if all(data.get(f) for f in tier3_fields):
         return "SUBMITTABLE"
 
-    # Tier 2 — date to at least month precision and geographic fields
+    # Tier 2 — ANALYZABLE: date precision + geographic fields
+    precision = data.get("date_collected_precision", "day")
     tier2_fields = [
         "collection_location_state",
     ]
-    precision = data.get("date_collected_precision", "day")
     if precision != "year" and all(data.get(f) for f in tier2_fields):
         return "ANALYZABLE"
 
