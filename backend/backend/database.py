@@ -47,7 +47,13 @@ def get_db():
         db.close()
 
 
-def execute_query(query: str, params: dict | None = None) -> list[dict]:
+def execute_query(query: str, params: dict | None = None, conn=None) -> list[dict]:
+    if conn is not None:
+        result = conn.execute(text(query), params or {})
+        if result.returns_rows:
+            cols = result.keys()
+            return [dict(zip(cols, row, strict=False)) for row in result.fetchall()]
+        return []
     with get_db() as db:
         result = db.execute(text(query), params or {})
         if result.returns_rows:
