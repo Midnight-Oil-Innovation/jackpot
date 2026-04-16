@@ -33,6 +33,7 @@ and public health research. Successor to APGAP (ASU-RSE-Services).
 - **Never lower the coverage threshold** — if a new file pulls coverage below 60%, add tests first
 - **Never mark a task done** without `uv run pytest` showing it pass
 - **Never write placeholder code** — every function must be fully implemented
+- **Always use `uv run python` / `uv run python3`** — never bare `python` or `python3`; the shell aliases do not apply in Claude Code sessions
 - When blocked on intent: check `spec.md`, then the relevant section of this file,
   then log the question to `docs/review_log.md` and continue with the next unblocked task
 - For non-trivial architectural changes: write the plan to `docs/review_log.md` and
