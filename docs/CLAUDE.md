@@ -42,6 +42,10 @@ and public health research. Successor to APGAP (ASU-RSE-Services).
 ### Commit Convention
 
 Use the `gac` alias for every commit: `gac "type: description"`
+NEVER use `git commit -m` directly — always `gac`.
+If pre-commit hooks modify files and the commit fails, just run `gac` again.
+The alias runs ruff fix + format before staging, so auto-fixed files are
+always included in the same commit.
 Valid types: `feat`, `fix`, `test`, `chore`, `refactor`
 Examples: `gac "feat: organizations router — CRUD endpoints + tests"`
           `gac "fix: conftest alembic migration in test DB setup"`
