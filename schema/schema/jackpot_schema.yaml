@@ -1052,6 +1052,22 @@ classes:
         range: VectorBiospecimenTypeEnum
         required: true
 
+      pool_size_min:
+        range: integer
+        description: >
+          Minimum number of individual arthropods in this pool.
+          For an exact count, set pool_size_min = pool_size_max.
+          Required when biospecimen_type = pooled_homogenate.
+          Used for Minimum Infection Rate (MIR) calculations.
+          CDC standard pool size is <= 50 arthropods.
+
+      pool_size_max:
+        range: integer
+        description: >
+          Maximum number of individual arthropods in this pool.
+          For an exact count, set pool_size_min = pool_size_max.
+          Required when biospecimen_type = pooled_homogenate.
+
 # ════════════════════════════════════════════════════════════════════════════
 # ENVIRONMENTAL SAMPLE SUBCLASSES
 # ════════════════════════════════════════════════════════════════════════════
@@ -2367,7 +2383,8 @@ enums:
 
   VectorBiospecimenTypeEnum:
     permissible_values:
-      homogenized:                { description: "Whole arthropod homogenate" }
+      homogenized:                { description: "Whole arthropod homogenate — single specimen" }
+      pooled_homogenate:          { description: "Multiple arthropods homogenized together as a surveillance pool (e.g. mosquito pool). Record number of individuals in pool_size_min/pool_size_max." }
       non_destructive_extraction: { description: "Saliva/excreta without destroying specimen" }
       other:                      {}
 
