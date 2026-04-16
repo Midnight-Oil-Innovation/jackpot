@@ -118,24 +118,46 @@ These tests verify:
 # ── Helper ────────────────────────────────────────────────────────────────
 
 
-def _valid_result() -> ValidationResult:
-    """A passing validation result (no errors)."""
-    return ValidationResult(valid=True, errors=[], warnings=[])
+def _run(data: dict) -> str:
+    """Run validate_sample on data and return the quality status string."""
+    return compute_quality_status(validate_sample(data))
 
 
 def _invalid_result() -> ValidationResult:
-    """A failing validation result."""
+    """A failing validation result (errors present)."""
     return ValidationResult(valid=False, errors=["missing required field"], warnings=[])
 
 
 def _full_human_data(**overrides) -> dict:
-    """A sample dict with all SUBMITTABLE fields populated for HumanSample."""
+    """A sample dict with all Tier 1 + Tier 2 + Tier 3 fields for HumanSample."""
     data = {
+        # Tier 1 — BASE_REQUIRED
+        "sample_id": "AZ-TEST-001",
+        "organism_name": "Salmonella enterica",
         "source_type": "Human",
+        "date_collected": "2024-06-15",
+        "collection_location_country": "United States",
+        "sequencing_platform": "Illumina",
+        "type_of_experiment": "WGS",
+        # Tier 1 — SOURCE_REQUIRED (Human)
+        "adhs_medsis_id": "AZ-MEDSIS-12345",
+        "biospecimen_type": "blood",
+        "reason_for_collection": ["clinical"],
+        "host_disease": ["salmonellosis"],
+        # Tier 2 — TIER2_REQUIRED
+        "sequencing_lab": "Sonora Quest Laboratories",
+        "collection_facility": "Banner University Medical Center",
+        "library_preparation_method": "Nextera XT",
+        "nucleic_acid_extraction_method": ["QIAamp"],
+        "date_sequenced": "2024-06-20",
+        "collection_location_state": "Arizona",
+        # Tier 3 — TIER3_REQUIRED
         "originating_lab": "Banner Health Clinical Lab",
         "submitting_lab": "ASU Biodesign CLAS",
-        "collection_location_state": "Arizona",
         "collection_location_county": "Maricopa",
+        "purpose_for_collection": ["clinical"],
+        "sequencing_protocol": "https://www.protocols.io/view/nextera-xt",
+        # Tier 3 — TIER3_REQUIRED_HUMAN
         "host_age": 45,
         "host_sex": "Male",
         "date_collected_precision": "day",
@@ -145,13 +167,36 @@ def _full_human_data(**overrides) -> dict:
 
 
 def _full_wastewater_data(**overrides) -> dict:
-    """A sample dict with all SUBMITTABLE fields for WastewaterSample."""
+    """A sample dict with all Tier 1 + Tier 2 + Tier 3 fields for WastewaterSample."""
     data = {
+        # Tier 1 — BASE_REQUIRED
+        "sample_id": "AZ-WW-001",
+        "organism_name": "metagenome",
         "source_type": "Wastewater",
+        "date_collected": "2024-06-15",
+        "collection_location_country": "United States",
+        "sequencing_platform": "Illumina",
+        "type_of_experiment": "shotgun_DNA_sequencing",
+        # Tier 1 — SOURCE_REQUIRED (Wastewater)
+        "population_served": 250000,
+        "sample_type": "grab",
+        "sample_matrix": "raw_wastewater",
+        "pretreatment": ["none"],
+        "concentration_method": "ultracentrifugation",
+        "flow_rate_mgd": 42.5,
+        # Tier 2 — TIER2_REQUIRED
+        "sequencing_lab": "ASU Biodesign CLAS",
+        "collection_facility": "South Tempe Water Reclamation Facility",
+        "library_preparation_method": "Nextera XT",
+        "nucleic_acid_extraction_method": ["QIAamp PowerWater"],
+        "date_sequenced": "2024-06-20",
+        "collection_location_state": "Arizona",
+        # Tier 3 — TIER3_REQUIRED
         "originating_lab": "Tempe WWTP Lab",
         "submitting_lab": "ASU Biodesign CLAS",
-        "collection_location_state": "Arizona",
         "collection_location_county": "Maricopa",
+        "purpose_for_collection": ["surveillance"],
+        "sequencing_protocol": "https://www.protocols.io/view/nwss-ww",
         "date_collected_precision": "day",
     }
     data.update(overrides)
@@ -163,52 +208,52 @@ def _full_wastewater_data(**overrides) -> dict:
 
 class TestComputeQualityStatusSubmittable:
     def test_full_human_data_is_submittable(self):
-        result = compute_quality_status(_full_human_data(), _valid_result())
+        result = _run(_full_human_data())
         assert result == "SUBMITTABLE"
 
     def test_year_only_human_still_submittable(self):
         """NCBI and GISAID accept year-only collection dates."""
         data = _full_human_data(date_collected_precision="year")
-        result = compute_quality_status(data, _valid_result())
+        result = _run(data)
         assert result == "SUBMITTABLE"
 
     def test_month_only_human_still_submittable(self):
         data = _full_human_data(date_collected_precision="month")
-        result = compute_quality_status(data, _valid_result())
+        result = _run(data)
         assert result == "SUBMITTABLE"
 
     def test_wastewater_submittable_without_host_age_sex(self):
         """Non-human source types don't need host_age or host_sex."""
-        result = compute_quality_status(_full_wastewater_data(), _valid_result())
+        result = _run(_full_wastewater_data())
         assert result == "SUBMITTABLE"
 
     def test_wastewater_year_only_still_submittable(self):
         data = _full_wastewater_data(date_collected_precision="year")
-        result = compute_quality_status(data, _valid_result())
+        result = _run(data)
         assert result == "SUBMITTABLE"
 
     def test_missing_originating_lab_not_submittable(self):
         data = _full_human_data()
         del data["originating_lab"]
-        result = compute_quality_status(data, _valid_result())
+        result = _run(data)
         assert result != "SUBMITTABLE"
 
     def test_missing_county_not_submittable(self):
         data = _full_human_data()
         del data["collection_location_county"]
-        result = compute_quality_status(data, _valid_result())
+        result = _run(data)
         assert result != "SUBMITTABLE"
 
     def test_human_missing_host_age_not_submittable(self):
         data = _full_human_data()
         del data["host_age"]
-        result = compute_quality_status(data, _valid_result())
+        result = _run(data)
         assert result != "SUBMITTABLE"
 
     def test_human_missing_host_sex_not_submittable(self):
         data = _full_human_data()
         del data["host_sex"]
-        result = compute_quality_status(data, _valid_result())
+        result = _run(data)
         assert result != "SUBMITTABLE"
 
 
@@ -216,34 +261,40 @@ class TestComputeQualityStatusSubmittable:
 
 
 class TestComputeQualityStatusAnalyzable:
+    def _tier2_human(self, **overrides) -> dict:
+        """Full Tier 1 + Tier 2 human sample — missing Tier 3 fields."""
+        data = _full_human_data()
+        # Remove Tier 3 fields so we land at ANALYZABLE not SUBMITTABLE
+        for f in [
+            "originating_lab",
+            "submitting_lab",
+            "collection_location_county",
+            "purpose_for_collection",
+            "sequencing_protocol",
+            "host_age",
+            "host_sex",
+        ]:
+            data.pop(f, None)
+        data.update(overrides)
+        return data
+
     def test_state_plus_month_is_analyzable(self):
-        data = {
-            "collection_location_state": "Arizona",
-            "date_collected_precision": "month",
-        }
-        result = compute_quality_status(data, _valid_result())
+        result = _run(self._tier2_human(date_collected_precision="month"))
         assert result == "ANALYZABLE"
 
     def test_state_plus_day_is_analyzable(self):
-        data = {
-            "collection_location_state": "Arizona",
-            "date_collected_precision": "day",
-        }
-        result = compute_quality_status(data, _valid_result())
+        result = _run(self._tier2_human(date_collected_precision="day"))
         assert result == "ANALYZABLE"
 
     def test_state_plus_year_is_preliminary_not_analyzable(self):
         """Year-only precision blocks ANALYZABLE — time-series needs month+."""
-        data = {
-            "collection_location_state": "Arizona",
-            "date_collected_precision": "year",
-        }
-        result = compute_quality_status(data, _valid_result())
+        result = _run(self._tier2_human(date_collected_precision="year"))
         assert result == "PRELIMINARY"
 
     def test_no_state_is_preliminary(self):
-        data = {"date_collected_precision": "day"}
-        result = compute_quality_status(data, _valid_result())
+        data = self._tier2_human()
+        data.pop("collection_location_state", None)
+        result = _run(data)
         assert result == "PRELIMINARY"
 
 
@@ -252,14 +303,14 @@ class TestComputeQualityStatusAnalyzable:
 
 class TestComputeQualityStatusPreliminary:
     def test_invalid_validation_is_always_preliminary(self):
-        result = compute_quality_status(_full_human_data(), _invalid_result())
+        result = compute_quality_status(_invalid_result())
         assert result == "PRELIMINARY"
 
     def test_empty_data_is_preliminary(self):
-        result = compute_quality_status({}, _valid_result())
+        result = _run({})
         assert result == "PRELIMINARY"
 
     def test_year_only_no_state_is_preliminary(self):
         data = {"date_collected_precision": "year"}
-        result = compute_quality_status(data, _valid_result())
+        result = _run(data)
         assert result == "PRELIMINARY"

@@ -1,4 +1,17 @@
 """
+Rewrites backend/validator.py with these fixes:
+1. Split BASE_REQUIRED into BASE_REQUIRED (Tier 1), TIER2_REQUIRED, TIER3_REQUIRED
+2. Remove sector from BASE_REQUIRED — auto-derived from source_type at ingest
+3. Expand ValidationResult with tier, sector, tier2_missing, tier3_missing
+4. Update compute_quality_status() signature to take only ValidationResult
+5. Align VALID_SECTORS with schema SectorEnum
+6. Fix docstring (v4.1 → v4.4)
+"""
+
+from pathlib import Path
+
+NEW_CONTENT = '''\
+"""
 JACKPOT LinkML validator.
 
 Validates sample metadata dicts against jackpot_schema v4.4.
@@ -77,18 +90,18 @@ TIER3_REQUIRED_HUMAN = [
 # sector = "research" for non-surveillance samples. If a researcher supplies
 # a valid sector it overrides the auto-derived value.
 SECTOR_FROM_SOURCE_TYPE: dict[str, str] = {
-    "Human": "clinical",
-    "Wildlife": "wildlife",
+    "Human":           "clinical",
+    "Wildlife":        "wildlife",
     "CompanionAnimal": "veterinary",
-    "Livestock": "veterinary",
-    "Vector": "vector",
-    "Wastewater": "wastewater",
-    "Water": "environmental",
-    "Air": "environmental",
-    "Soil": "environmental",
-    "Surface": "environmental",
-    "Food": "agricultural",
-    "ProduceAg": "agricultural",
+    "Livestock":       "veterinary",
+    "Vector":          "vector",
+    "Wastewater":      "wastewater",
+    "Water":           "environmental",
+    "Air":             "environmental",
+    "Soil":            "environmental",
+    "Surface":         "environmental",
+    "Food":            "agricultural",
+    "ProduceAg":       "agricultural",
 }
 
 # ── Source-type-specific Tier 1 required fields ───────────────────────────
@@ -161,8 +174,8 @@ VALID_SECTORS = {
 @dataclass
 class ValidationResult:
     valid: bool
-    tier: int = 1  # 1=PRELIMINARY  2=ANALYZABLE  3=SUBMITTABLE
-    sector: str = ""  # derived or supplied sector value
+    tier: int = 1                               # 1=PRELIMINARY  2=ANALYZABLE  3=SUBMITTABLE
+    sector: str = ""                            # derived or supplied sector value
     errors: list[str] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
     tier2_missing: list[str] = field(default_factory=list)
@@ -175,7 +188,9 @@ def _is_absent(val: object) -> bool:
         return True
     if isinstance(val, str) and not val.strip():
         return True
-    return bool(isinstance(val, list) and not val)
+    if isinstance(val, list) and not val:
+        return True
+    return False
 
 
 def validate_sample(data: dict) -> ValidationResult:
@@ -208,7 +223,8 @@ def validate_sample(data: dict) -> ValidationResult:
     if supplied_sector:
         if supplied_sector not in VALID_SECTORS:
             errors.append(
-                f"Invalid sector '{supplied_sector}'. Must be one of: {sorted(VALID_SECTORS)}"
+                f"Invalid sector \'{supplied_sector}\'. "
+                f"Must be one of: {sorted(VALID_SECTORS)}"
             )
         sector = supplied_sector
     else:
@@ -217,32 +233,35 @@ def validate_sample(data: dict) -> ValidationResult:
     # ── Enum validation ───────────────────────────────────────────────────
     if source_type and source_type not in VALID_SOURCE_TYPES:
         errors.append(
-            f"Invalid source_type '{source_type}'. Must be one of: {sorted(VALID_SOURCE_TYPES)}"
+            f"Invalid source_type \'{source_type}\'. "
+            f"Must be one of: {sorted(VALID_SOURCE_TYPES)}"
         )
 
     platform = data.get("sequencing_platform", "")
     if platform and platform not in VALID_PLATFORMS:
         errors.append(
-            f"Invalid sequencing_platform '{platform}'. Must be one of: {sorted(VALID_PLATFORMS)}"
+            f"Invalid sequencing_platform \'{platform}\'. "
+            f"Must be one of: {sorted(VALID_PLATFORMS)}"
         )
 
     exp_type = data.get("type_of_experiment", "")
     if exp_type and exp_type not in VALID_EXPERIMENT_TYPES:
         errors.append(
-            f"Invalid type_of_experiment '{exp_type}'. "
+            f"Invalid type_of_experiment \'{exp_type}\'. "
             f"Must be one of: {sorted(VALID_EXPERIMENT_TYPES)}"
         )
 
     sharing = data.get("sharing_level")
     if sharing is not None and sharing not in VALID_SHARING_LEVELS:
         errors.append(
-            f"Invalid sharing_level '{sharing}'. Must be one of: {sorted(VALID_SHARING_LEVELS)}"
+            f"Invalid sharing_level \'{sharing}\'. "
+            f"Must be one of: {sorted(VALID_SHARING_LEVELS)}"
         )
 
     vadr = data.get("vadr_status", "")
     if vadr and vadr not in VALID_VADR_STATUSES:
         errors.append(
-            f"Invalid vadr_status '{vadr}'. Must be one of: {sorted(VALID_VADR_STATUSES)}"
+            f"Invalid vadr_status \'{vadr}\'. Must be one of: {sorted(VALID_VADR_STATUSES)}"
         )
 
     # ── Date validation ───────────────────────────────────────────────────
@@ -263,13 +282,17 @@ def validate_sample(data: dict) -> ValidationResult:
                     "please verify this is correct."
                 )
         except ValueError:
-            errors.append(f"date_collected '{raw_date}' is not a valid ISO 8601 date (YYYY-MM-DD).")
+            errors.append(
+                f"date_collected \'{raw_date}\' is not a valid ISO 8601 date (YYYY-MM-DD)."
+            )
 
     raw_seq_date = data.get("date_sequenced")
     if raw_seq_date and raw_date:
         try:
             seq_date = (
-                date.fromisoformat(raw_seq_date) if isinstance(raw_seq_date, str) else raw_seq_date
+                date.fromisoformat(raw_seq_date)
+                if isinstance(raw_seq_date, str)
+                else raw_seq_date
             )
             if not isinstance(seq_date, date):
                 raise ValueError
@@ -279,13 +302,17 @@ def validate_sample(data: dict) -> ValidationResult:
             if seq_date < coll:
                 errors.append("date_sequenced cannot be before date_collected.")
         except ValueError:
-            errors.append(f"date_sequenced '{raw_seq_date}' is not a valid ISO 8601 date.")
+            errors.append(
+                f"date_sequenced \'{raw_seq_date}\' is not a valid ISO 8601 date."
+            )
 
     # ── Tier 1: source-type-specific required fields ───────────────────────
     if source_type in SOURCE_REQUIRED:
         for field_name in SOURCE_REQUIRED[source_type]:
             if _is_absent(data.get(field_name)):
-                errors.append(f"Missing required field for {source_type} samples: {field_name}")
+                errors.append(
+                    f"Missing required field for {source_type} samples: {field_name}"
+                )
 
     # ── Numeric range checks ──────────────────────────────────────────────
     numeric_ranges: dict[str, tuple[float, float]] = {
@@ -313,16 +340,18 @@ def validate_sample(data: dict) -> ValidationResult:
                             f"{field_name}={fval} is outside expected range [{lo}, {hi}]."
                         )
             except (TypeError, ValueError):
-                errors.append(f"{field_name} must be numeric, got '{val}'.")
+                errors.append(f"{field_name} must be numeric, got \'{val}\'.")
 
     # ── URI scheme check ──────────────────────────────────────────────────
     for uri_field in ("fastq_r1_uri", "fastq_r2_uri", "consensus_fasta_uri"):
         uri = data.get(uri_field)
         if uri and not (
-            uri.startswith("gs://") or uri.startswith("s3://") or uri.startswith("drs://")
+            uri.startswith("gs://")
+            or uri.startswith("s3://")
+            or uri.startswith("drs://")
         ):
             warnings.append(
-                f"{uri_field} '{uri}' does not use a recognised URI scheme "
+                f"{uri_field} \'{uri}\' does not use a recognised URI scheme "
                 "(expected gs://, s3://, or drs://)."
             )
 
@@ -343,7 +372,7 @@ def validate_sample(data: dict) -> ValidationResult:
     for field_name in RECOMMENDED:
         if _is_absent(data.get(field_name)):
             warnings.append(
-                f"Recommended field '{field_name}' is missing. "
+                f"Recommended field \'{field_name}\' is missing. "
                 "Consider providing it for better data quality."
             )
 
@@ -410,9 +439,9 @@ def compute_surveillance_relevant(
 
     Rules:
     - If organism_name is in reportable_organisms → True
-    - If organism_name is 'metagenome' and any target_organism is
+    - If organism_name is \'metagenome\' and any target_organism is
       reportable → True
-    - If organism_name is 'metagenome' and target_organisms is empty
+    - If organism_name is \'metagenome\' and target_organisms is empty
       → True (conservative default for untargeted metagenomics)
     - Otherwise → False
     """
@@ -425,3 +454,9 @@ def compute_surveillance_relevant(
         return any(t in reportable_organisms for t in target_organisms)
 
     return False
+'''
+
+p = Path("backend/validator.py")
+assert p.exists(), f"ERROR: {p} not found — run from jackpot-backend/"
+p.write_text(NEW_CONTENT)
+print(f"Written: {p} ({len(NEW_CONTENT.splitlines())} lines)")
