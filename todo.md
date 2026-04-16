@@ -1,7 +1,7 @@
 # JACKPOT — To-Do List
 
 **Last updated:** 2026-04-16
-**Baseline:** 316 tests passing, 76.63% coverage
+**Baseline:** 316 tests passing, 76.63% coverage — all P0 fixes complete — all P0 fixes complete
 **Active sprint:** Month 1 — Core Router Implementation
 
 Instructions for Claude Code: Work through items in order. Check off each item
@@ -14,57 +14,57 @@ blocker in `docs/review_log.md` and move to the next unblocked item.
 
 These must be completed before any router session. They are blocking bugs.
 
-- [ ] **P0-1: Fix `tests/conftest.py` — missing Alembic migrations**
+- [x] **P0-1: Fix `tests/conftest.py` — missing Alembic migrations**
   - Add `alembic upgrade head` to the `initialize_test_db` fixture in `tests/conftest.py`
   - Verify: `uv run pytest tests/test_validator.py -v` passes (was failing due to missing columns)
 
-- [ ] **P0-2: Fix `routers/auth.py` — module-level `settings = get_settings()`**
+- [x] **P0-2: Fix `routers/auth.py` — module-level `settings = get_settings()`**
   - Move `settings` instantiation inside function scope (match pattern in `guards.py`, `oauth.py`, `storage.py`)
   - Verify: `uv run pytest -x -v` completes without test isolation failure
 
-- [ ] **P0-3: Fix "Otero Lab" stale reference in test fixtures**
+- [x] **P0-3: Fix "Otero Lab" stale reference in test fixtures**
   - Run: `grep -n "Otero" tests/conftest.py tests/test_samples_api.py`
   - Fix all stale occurrences in `valid_human_sample` fixture
   - Verify: `uv run pytest tests/test_samples_api.py -v` passes
 
-- [ ] **P0-4: Add JWT refresh endpoint to `routers/auth.py`**
+- [x] **P0-4: Add JWT refresh endpoint to `routers/auth.py`**
   - Implement `POST /api/v1/auth/refresh` using existing `issue_refresh_token()` infrastructure
   - Access tokens are 15 min; refresh tokens are 7 days
   - Verify: `uv run pytest tests/ -k "refresh" -v` passes
 
-- [ ] **P0-5: Fix `contextlib.suppress(Exception)` in test DB setup**
+- [x] **P0-5: Fix `contextlib.suppress(Exception)` in test DB setup**
   - Replace bare exception suppression in `tests/conftest.py` with specific SQL error handling
   - Schema load errors must surface, not be silently swallowed
   - Verify: intentionally break `db/init.sql` temporarily and confirm test fails visibly
 
-- [ ] **P0-6: Run full test suite and confirm baseline is stable**
+- [x] **P0-6: Run full test suite and confirm baseline is stable**
   - Run: `uv run pytest`
   - Expected: ≥275 tests passing, 0 failed, ≥60% coverage
   - Commit: `gac "fix: pre-session baseline fixes — conftest migrations, auth settings, fixtures"`
 
-- [ ] **P0-7: Fix `log_audit()` — forward `db_conn` to `execute_write()`**
+- [x] **P0-7: Fix `log_audit()` — forward `db_conn` to `execute_write()`**
   - Add `conn=db_conn` to the `execute_write()` call in `backend/audit.py`
   - Without this, audit writes are in separate transactions — CLIA compliance gap
   - Verify: write a test that rolls back a business write and confirms no orphan audit row
 
-- [ ] **P0-8: Fix `create_notification()` — forward `db_conn` to `execute_write()`**
+- [x] **P0-8: Fix `create_notification()` — forward `db_conn` to `execute_write()`**
   - Add `conn=db_conn` to the `execute_write()` call in `backend/notifications.py`
   - Same transactional cohesion issue as audit
 
-- [ ] **P0-9: Fix `execute_query()` — add `conn=` parameter**
+- [x] **P0-9: Fix `execute_query()` — add `conn=` parameter**
   - `backend/routers/pipelines.py` calls `execute_query(..., conn=conn)` but
     `execute_query()` doesn't accept `conn=` — will crash on workflow.complete events
   - Add `conn=None` parameter matching `execute_write()` pattern
 
-- [ ] **P0-10: Fix JWT type claim validation in `guards.py`**
+- [x] **P0-10: Fix JWT type claim validation in `guards.py`**
   - After `jwt.decode()`, check `payload.get("type") == "access"`
   - Without this, 7-day refresh tokens are accepted as 15-min access tokens
 
-- [ ] **P0-11: Fix health endpoint — return 503 when DB unavailable**
+- [x] **P0-11: Fix health endpoint — return 503 when DB unavailable**
   - Change to `return JSONResponse(status_code=503, content={...})` when `db_status == "unavailable"`
   - GKE readiness probes need a non-200 to stop routing traffic to broken pods
 
-- [ ] **P0-12: Fix APScheduler job intervals and IDs in `main.py`**
+- [x] **P0-12: Fix APScheduler job intervals and IDs in `main.py`**
   - Scrubber queue: `hours=1` → `seconds=60` (architecture doc says every 60s)
   - Access request: `hours=1` → `hours=24` or cron (architecture doc says nightly)
   - Fix job IDs: `scrub_override_auto_deny` → `scrubber_queue`; `access_request_auto_approve` → `access_request_expiry`
@@ -74,12 +74,12 @@ These must be completed before any router session. They are blocking bugs.
   - Tier 1 minimum should only require: sample_id, organism_name, source_type, sector, date_collected, collection_location_country
   - Move sequencing_lab, collection_facility, library_preparation_method, sequencing_protocol, purpose_for_collection to Tier 2 warnings
 
-- [ ] **P0-14: Add `Isolate` source type to validator**
+- [x] **P0-14: Add `Isolate` source type to validator**
   - Add `"Isolate": []` to `SOURCE_REQUIRED` dict (no source-specific required fields)
 
 - [x] **P0-15: Fix validator docstring — v4.1 → v4.4**
 
-- [ ] **P0-16: Make CORS origins configurable**
+- [x] **P0-16: Make CORS origins configurable**
   - Add `cors_origins: list[str]` to Settings class with default `["http://localhost:8501", "http://localhost:4200"]`
   - Use `settings.cors_origins` in `main.py` CORSMiddleware config
 ---

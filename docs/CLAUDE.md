@@ -14,7 +14,7 @@ and public health research. Successor to APGAP (ASU-RSE-Services).
 1. Read `spec.md` — understand the goals and constraints for the current sprint
 2. Read `todo.md` — find the next unchecked task
 3. Re-read this file (`docs/CLAUDE.md`) — all 43+ Critical Rules apply at all times
-4. Confirm the baseline is stable: `uv run pytest` — ≥275 tests passing, ≥60% coverage
+4. Confirm the baseline is stable: `uv run pytest` — ≥316 tests passing, ≥60% coverage
 
 ### Work Loop
 
@@ -130,7 +130,7 @@ Notification System sections for their exact interfaces.
 
 ## Current Baseline
 
-- **275 tests passing, 0 failed, 75.62% coverage**
+- **316 tests passing, 0 failed, 76.63% coverage**
 - CI threshold: 60% — do not let coverage fall below this
 - Health check: `curl http://localhost:8000/health` → `{"status":"ok","version":"5.0.0","project":"JACKPOT"}`
 - All 27 database tables loaded in PostgreSQL
@@ -499,7 +499,7 @@ uv run pytest -x                          # stop on first failure
 
 # Database
 uv run alembic upgrade head
-uv run alembic revision --autogenerate -m "add_new_column"
+uv run alembic revision -m "add_new_column"  # no --autogenerate — JACKPOT uses raw SQL
 psql postgresql://jackpot:jackpot@localhost:5432/jackpot_db  # pragma: allowlist secret
 psql postgresql://jackpot:jackpot@localhost:5432/jackpot_db -c "\dt"  # pragma: allowlist secret
 
