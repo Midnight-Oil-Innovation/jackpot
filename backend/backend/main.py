@@ -3,6 +3,7 @@ from contextlib import asynccontextmanager
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 
 from backend.config import get_settings
 from backend.database import execute_query
@@ -112,4 +113,14 @@ def health() -> dict:
         db_status = "connected"
     except Exception:
         db_status = "unavailable"
+    if db_status == "unavailable":
+        return JSONResponse(
+            status_code=503,
+            content={
+                "status": "unavailable",
+                "version": __version__,
+                "project": "JACKPOT",
+                "database": db_status,
+            },
+        )
     return {"status": "ok", "version": __version__, "project": "JACKPOT", "database": db_status}
