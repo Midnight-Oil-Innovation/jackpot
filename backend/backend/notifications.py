@@ -68,6 +68,7 @@ def create_notification(
                 "resource_id": resource_id,
                 "action_url": action_url,
             },
+            conn=db_conn,
         )
     except Exception as exc:
         logger.error(
