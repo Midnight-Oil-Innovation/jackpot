@@ -18,16 +18,36 @@ depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:
-    op.alter_column(
-        "lab_membership",
-        "is_lab_admin",
-        new_column_name="is_lab_director",
-    )
+    # Idempotent: only rename if is_lab_admin still exists.
+    # init.sql already uses is_lab_director, so a fresh DB won't need this.
+    op.execute("""
+        DO $$
+        BEGIN
+            IF EXISTS (
+                SELECT 1 FROM information_schema.columns
+                WHERE table_name = 'lab_membership'
+                AND column_name = 'is_lab_admin'
+            ) THEN
+                ALTER TABLE lab_membership
+                RENAME COLUMN is_lab_admin TO is_lab_director;
+            END IF;
+        END
+        $$;
+    """)
 
 
 def downgrade() -> None:
-    op.alter_column(
-        "lab_membership",
-        "is_lab_director",
-        new_column_name="is_lab_admin",
-    )
+    op.execute("""
+        DO $$
+        BEGIN
+            IF EXISTS (
+                SELECT 1 FROM information_schema.columns
+                WHERE table_name = 'lab_membership'
+                AND column_name = 'is_lab_director'
+            ) THEN
+                ALTER TABLE lab_membership
+                RENAME COLUMN is_lab_director TO is_lab_admin;
+            END IF;
+        END
+        $$;
+    """)

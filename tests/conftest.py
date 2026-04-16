@@ -1,5 +1,3 @@
-import contextlib
-
 import pytest
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
@@ -28,12 +26,25 @@ def initialize_test_db(test_db_url):
     with open("db/init.sql") as f:
         sql = f.read()
     with engine.connect() as conn:
-        for stmt in sql.split(";"):
-            s = stmt.strip()
-            if s:
-                with contextlib.suppress(Exception):
-                    conn.execute(text(s))
+        conn.execute(text(sql))
         conn.commit()
+
+    # Apply all Alembic migrations so the test DB has every column
+    # added since db/init.sql was written (sector, quality_status, etc.)
+    import os
+    import subprocess
+
+    env = os.environ.copy()
+    env["DATABASE_URL"] = test_db_url
+    result = subprocess.run(
+        ["uv", "run", "alembic", "upgrade", "head"],
+        env=env,
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode != 0:
+        raise RuntimeError("Alembic upgrade failed: " + result.stdout + result.stderr)
+
     yield
     engine.dispose()
 
