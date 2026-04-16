@@ -36,6 +36,9 @@ def get_current_user(request: Request) -> dict:
     except jwt.InvalidTokenError as exc:
         raise HTTPException(status_code=401, detail="Invalid token.") from exc
 
+    if payload.get("type") != "access":
+        raise HTTPException(status_code=401, detail="Invalid token type.")
+
     rows = execute_query(
         "SELECT id, email, name, is_platform_admin, is_data_analyst, "
         "is_active, organization_id FROM users "
