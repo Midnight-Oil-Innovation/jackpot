@@ -902,10 +902,10 @@ scheduler = AsyncIOScheduler()
 
 @app.on_event("startup")
 async def start_scheduler():
-    scheduler.add_job(run_scrubber_queue_job, "interval", hours=1,
-                      id="scrub_override_auto_deny")
-    scheduler.add_job(run_access_request_job, "interval", hours=1,
-                      id="access_request_auto_approve")
+    scheduler.add_job(run_scrubber_queue_job, "interval", seconds=60,
+                      id="scrubber_queue")
+    scheduler.add_job(run_access_request_job, "cron", hour=2, minute=0,
+                      id="access_request_expiry")
     scheduler.start()
 
 @app.on_event("shutdown")
