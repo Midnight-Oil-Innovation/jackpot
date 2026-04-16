@@ -1,7 +1,7 @@
 # JACKPOT — To-Do List
 
-**Last updated:** 2026-04-15
-**Baseline:** 275 tests passing, 75.62% coverage
+**Last updated:** 2026-04-16
+**Baseline:** 316 tests passing, 76.63% coverage
 **Active sprint:** Month 1 — Core Router Implementation
 
 Instructions for Claude Code: Work through items in order. Check off each item
@@ -69,7 +69,7 @@ These must be completed before any router session. They are blocking bugs.
   - Access request: `hours=1` → `hours=24` or cron (architecture doc says nightly)
   - Fix job IDs: `scrub_override_auto_deny` → `scrubber_queue`; `access_request_auto_approve` → `access_request_expiry`
 
-- [ ] **P0-13: Fix validator BASE_REQUIRED — split into tier-specific lists**
+- [x] **P0-13: Fix validator BASE_REQUIRED — split into tier-specific lists**
   - Current BASE_REQUIRED hard-rejects samples missing Tier 2/3 fields
   - Tier 1 minimum should only require: sample_id, organism_name, source_type, sector, date_collected, collection_location_country
   - Move sequencing_lab, collection_facility, library_preparation_method, sequencing_protocol, purpose_for_collection to Tier 2 warnings
@@ -77,7 +77,7 @@ These must be completed before any router session. They are blocking bugs.
 - [ ] **P0-14: Add `Isolate` source type to validator**
   - Add `"Isolate": []` to `SOURCE_REQUIRED` dict (no source-specific required fields)
 
-- [ ] **P0-15: Fix validator docstring — v4.1 → v4.4**
+- [x] **P0-15: Fix validator docstring — v4.1 → v4.4**
 
 - [ ] **P0-16: Make CORS origins configurable**
   - Add `cors_origins: list[str]` to Settings class with default `["http://localhost:8501", "http://localhost:4200"]`
@@ -428,6 +428,7 @@ Tracked here for completeness. Not in scope for Month 1.
 - [ ] US-states controlled vocabulary for `collection_location_state`
 - [ ] Rate limiting on public endpoints
 - [ ] CORS restriction from dev wildcard to specific origins
+- [ ] Re-enable detect-secrets in `.pre-commit-config.yaml` before first GCP deployment
 
 ---
 
