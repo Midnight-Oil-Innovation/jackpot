@@ -25,6 +25,7 @@ class Settings(BaseSettings):
     ncbi_api_key: str = ""
     jackpot_api_token: str = ""
     scheduler_enabled: bool = True
+    cors_origins: list[str] = ["http://localhost:8501", "http://localhost:4200"]
 
     class Config:
         env_file = ".env.local"
