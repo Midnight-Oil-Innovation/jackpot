@@ -112,6 +112,7 @@ SOURCE_REQUIRED: dict[str, list[str]] = {
     "Surface": ["indoor_space", "indoor_surface", "surface_material"],
     "Food": ["food_location_type", "food_product_type"],
     "ProduceAg": ["plant_species", "produce_water_source", "near_animal_agriculture"],
+    "Isolate": [],  # No source-type-specific required fields
 }
 
 # Recommended (non-required) fields that produce warnings when absent
