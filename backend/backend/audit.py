@@ -80,6 +80,7 @@ def log_audit(
                 "after": json.dumps(after) if after else None,
                 "metadata": json.dumps(metadata) if metadata else None,
             },
+            conn=db_conn,
         )
     except Exception as exc:
         logger.error(
