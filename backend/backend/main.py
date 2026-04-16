@@ -47,14 +47,15 @@ async def lifespan(app: FastAPI):
         scheduler.add_job(
             run_scrubber_queue_job,
             "interval",
-            hours=1,
-            id="scrub_override_auto_deny",
+            seconds=60,
+            id="scrubber_queue",
         )
         scheduler.add_job(
             run_access_request_job,
-            "interval",
-            hours=1,
-            id="access_request_auto_approve",
+            "cron",
+            hour=2,
+            minute=0,
+            id="access_request_expiry",
         )
         scheduler.start()
     yield
