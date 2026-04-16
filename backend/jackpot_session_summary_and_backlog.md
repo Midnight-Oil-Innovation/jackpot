@@ -2774,3 +2774,100 @@ methods/headers), SEC-2 (rate limiting), DEPLOY-1 (staging gate), DEPLOY-2
 **todo.md:** P0-13 (validator tier split) and P0-15 (docstring) complete
 **Pending P0 items before first Claude Code session:** P0-1 through P0-12,
 P0-14 (Isolate source type), P0-16 (CORS origins configurable)
+
+---
+
+# Session 7 — 2026-04-16
+
+## What we covered
+
+Completed all remaining Phase 0 pre-session fixes. JACKPOT backend is now
+fully ready for Claude Code autonomous router implementation sessions.
+
+---
+
+## Topics discussed
+
+### 67. All Phase 0 pre-session fixes completed
+
+The following P0 fixes were implemented and tested in sequence, with the
+full test suite passing after each fix:
+
+**P0-1: conftest.py — Alembic migrations in test DB setup**
+Added `uv run alembic upgrade head` to `initialize_test_db` fixture after
+loading `db/init.sql`. Also made the first Alembic migration idempotent —
+`a7fd1fcccb77_rename_is_lab_admin_to_is_lab_director.py` used a raw
+`ALTER TABLE RENAME COLUMN` that failed on fresh databases where `init.sql`
+already uses `is_lab_director`. Fixed with a PostgreSQL DO block that checks
+column existence before renaming.
+
+**P0-2: routers/auth.py — module-level settings**
+Moved `settings = get_settings()` from module level into `google_login()`
+function scope, matching the pattern already established in `guards.py`,
+`oauth.py`, and `storage.py`.
+
+**P0-3: Stale "Otero Lab" fixture reference**
+Already fixed in a prior session — `grep` confirmed only "Otero Outpost"
+(a valid seeded sequencing lab) remains. No action needed.
+
+**P0-4: JWT refresh endpoint**
+Implemented `POST /api/v1/auth/refresh` in `routers/auth.py`. Reads the
+`refresh` httponly cookie, validates the JWT and checks `type == "refresh"`,
+issues a new 15-minute access token cookie. Without this, users were logged
+out every 15 minutes with no renewal path.
+
+**P0-5: contextlib.suppress in test DB setup**
+Replaced bare `contextlib.suppress(Exception)` with structured error
+handling that surfaces real SQL failures while silently ignoring expected
+harmless errors (duplicate objects, already exists).
+
+**P0-6: Baseline confirmed**
+316 tests passing, 76.63% coverage — above the 60% CI threshold.
+
+**P0-7: audit.py — forward db_conn to execute_write()**
+Added `conn=db_conn` to `execute_write()` call in `log_audit()`. Without
+this, audit writes ran in separate auto-committed transactions, creating
+a CLIA compliance gap where business write rollbacks left orphan audit rows.
+
+**P0-8: notifications.py — forward db_conn to execute_write()**
+Same fix as P0-7 applied to `create_notification()`.
+
+**P0-9: execute_query() — add conn= parameter**
+Added `conn=None` parameter to `execute_query()` matching the existing
+`execute_write()` pattern. Required by `routers/pipelines.py` which calls
+`execute_query(..., conn=conn)` — would have crashed on pipeline events.
+
+**P0-10: JWT type claim validation in guards.py**
+Added `payload.get("type") != "access"` check after `jwt.decode()` in
+`get_current_user()`. Without this, 7-day refresh tokens were accepted as
+15-minute access tokens — a security gap.
+
+**P0-11: Health endpoint returns 503 when DB unavailable**
+Changed health endpoint to return `JSONResponse(status_code=503)` when the
+database is unreachable. GKE readiness probes require non-200 to stop
+routing traffic to unhealthy pods.
+
+**P0-12: APScheduler job intervals and IDs**
+Fixed scrubber queue: `hours=1` → `seconds=60` (runs every minute per
+architecture doc). Fixed access request job: `hours=1` → `cron(hour=2)`
+(nightly at 2am). Fixed job IDs: `scrub_override_auto_deny` →
+`scrubber_queue`; `access_request_auto_approve` → `access_request_expiry`.
+
+**P0-14: Isolate source type added to validator**
+Added `"Isolate": []` to `SOURCE_REQUIRED` in `backend/validator.py`.
+No source-type-specific required fields — uses only BASE_REQUIRED.
+
+**P0-16: CORS origins configurable**
+Added `cors_origins: list[str]` field to `Settings` class in `config.py`
+with default `["http://localhost:8501", "http://localhost:4200"]`. Updated
+`main.py` to use `get_settings().cors_origins` instead of hardcoded list.
+
+---
+
+## State at end of Session 7
+
+**Tests:** 316 passed, 0 failed, 76.63% coverage
+**All P0 items:** Complete — 16/16 done
+**Ready for Claude Code:** Yes — all pre-session blockers resolved
+**Next:** Launch Claude Code, work through todo.md Phase 0 final check
+then Phase 1 (Session A: organizations router)
