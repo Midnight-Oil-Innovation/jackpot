@@ -147,7 +147,10 @@ DO NOT rename: `"Platform Admin"`, `"Lab Director"`, `"Lab Collaborator"`,
 
 **2. All database schema changes go through Alembic.**
 Never edit `db/init.sql` directly in production.
-Command: `uv run alembic revision --autogenerate -m "description"`
+JACKPOT uses raw SQL, not SQLAlchemy ORM models, so `--autogenerate` will
+fail with "no MetaData object". Always use the manual form instead:
+Command: `uv run alembic revision -m "description"` (no --autogenerate)
+Then hand-write the `upgrade()` and `downgrade()` functions in the generated file.
 
 **3. Regenerate Python models after any schema change.**
 Command: `uv run gen-pydantic --pydantic-version 2 schema/schema/jackpot_schema.yaml > backend/models_generated.py`

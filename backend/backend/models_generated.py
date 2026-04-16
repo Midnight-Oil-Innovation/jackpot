@@ -651,8 +651,10 @@ class AntibioticUseEnum(str, Enum):
 
 class VectorBiospecimenTypeEnum(str, Enum):
 
-    # Whole arthropod homogenate
+    # Whole arthropod homogenate — single specimen
     homogenized = "homogenized"
+    # Multiple arthropods homogenized together as a surveillance pool (e.g. mosquito pool). Record number of individuals in pool_size_min/pool_size_max.
+    pooled_homogenate = "pooled_homogenate"
     # Saliva/excreta without destroying specimen
     non_destructive_extraction = "non_destructive_extraction"
 
@@ -1012,7 +1014,7 @@ class PangoQCStatusEnum(str, Enum):
     # High confidence lineage assignment
     pass_qc = "pass_qc"
     # Low confidence — do not use for surveillance without review
-    fail_qc = "fail"
+    fail = "fail"
     # Multiple equally valid lineage calls — pango_conflict > 0
     ambiguous = "ambiguous"
     # Pangolin not yet run or not applicable (non-SARS-CoV-2)
@@ -1875,6 +1877,10 @@ class VectorSample(Sample):
 """)
     vector_host_species: Optional[str] = Field(None, description="""Host animal the vector was collected from, if known""")
     biospecimen_type: VectorBiospecimenTypeEnum = Field(...)
+    pool_size_min: Optional[int] = Field(None, description="""Minimum number of individual arthropods in this pool. For an exact count, set pool_size_min = pool_size_max. Required when biospecimen_type = pooled_homogenate. Used for Minimum Infection Rate (MIR) calculations. CDC standard pool size is <= 50 arthropods.
+""")
+    pool_size_max: Optional[int] = Field(None, description="""Maximum number of individual arthropods in this pool. For an exact count, set pool_size_min = pool_size_max. Required when biospecimen_type = pooled_homogenate.
+""")
     sample_id: str = Field(..., description="""Unique alphanumeric identifier for this sample. Must not already be in use in the system. APGAP: 'Sample ID'. Validation: alphanumeric, unique. Portal mints persistent URI at ingest: https://data.jackpot.health/samples/{sample_id}
 """)
     jackpot_uri: Optional[str] = Field(None, description="""Persistent URI minted at ingest for FAIR Findability (F1). Format: https://data.jackpot.health/samples/{sample_id} Stable before NCBI/GISAID accessions are assigned.
