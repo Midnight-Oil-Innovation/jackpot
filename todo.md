@@ -402,3 +402,9 @@ Check: has coverage stayed above 60%?
 Check: are there any TODO comments or placeholder code left in place?
 Log findings to docs/review_log.md and resolve before continuing.
 ```
+
+- [ ] **SEC-1: Tighten CORS methods/headers in `backend/main.py`** — replace `allow_methods=["*"]` with `["GET","POST","PATCH","DELETE","OPTIONS"]` and restrict `allow_headers` to the actually needed set
+- [ ] **SEC-2: Add rate limiting** — `slowapi` on auth endpoints (`/api/v1/auth/login`, `/api/v1/auth/callback`) and ingest endpoints before GCP deployment
+
+- [ ] **DEPLOY-1: Document staging→production gate** — add a required manual approval step in `.github/workflows/` before production deploy
+- [ ] **DEPLOY-2: Test backup restore** — run a full PITR restore drill to a separate Cloud SQL instance before going live with real data
