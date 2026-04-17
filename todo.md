@@ -456,3 +456,432 @@ Log findings to docs/review_log.md and resolve before continuing.
 
 - [ ] **DEPLOY-1: Document staging→production gate** — add a required manual approval step in `.github/workflows/` before production deploy
 - [ ] **DEPLOY-2: Test backup restore** — run a full PITR restore drill to a separate Cloud SQL instance before going live with real data
+
+## Phase 11 — Session I: jackpot-nf plugin scaffolding + result registration endpoint
+
+- [ ] **I-1: Create new `jackpot-nf` repo**
+
+  - Location: `~/ASU/jackpot/jackpot-nf`
+
+  - Structure:
+
+    ```
+    jackpot-nf/
+    ├── plugins/nf-jackpot/       # Nextflow plugin — generic weblog/workdir
+    ├── pipelines/                # Per-pipeline wrapper directories (populated in Sessions J-M)
+    ├── shared/
+    │   ├── jackpot_register_client.py
+    │   ├── hamronization_normalizer.py
+    │   └── schemas/              # Pydantic result payloads
+    ├── tests/
+    │   └── fixtures/             # Real pipeline outputs per pipeline
+    ├── pyproject.toml
+    └── README.md
+    ```
+
+  - Add to `jackpot-backend` as git submodule at `nf/`
+
+  - Verify: `git submodule status` shows jackpot-nf
+
+- [ ] **I-2: Implement `jackpot_register_client.py`**
+
+  - Shared HTTP client used by all parsers to POST results back to JACKPOT
+  - Reads `JACKPOT_API_URL`, `JACKPOT_RUN_ID`, `JACKPOT_PIPELINE_TOKEN` from env
+  - Single method: `register_result(result_type: str, payload: dict) -> dict`
+  - Retries on 5xx with exponential backoff (max 3 attempts)
+  - Raises `RegistrationError` on 4xx or persistent 5xx
+
+- [ ] **I-3: Define Pydantic result schemas in `shared/schemas/`**
+
+  - One schema per result table: `AMRResult`, `TypingResult`, `PangolinResult`, `NextcladeResult`, `TBTypingResult`, `AssemblyQC`, `MAGQC`, `TaxonomicProfile`, `WastewaterLineageAbundance`
+  - Each schema mirrors the corresponding DB table exactly
+  - Shared with `backend/models_generated.py` via schema import
+
+- [ ] **I-4: Implement `POST /api/v1/pipelines/{run_id}/results/{result_type}`**
+
+  - Router: `backend/routers/pipelines.py`
+  - Auth: `pipeline_token` from header must match `pipeline_runs.pipeline_token`
+  - Validates payload against result_type's Pydantic schema
+  - Writes to correct typed table in same transaction as pipeline_results metrics update
+  - Returns `{"status": "registered", "result_id": N}`
+
+- [ ] **I-5: Implement `hamronization_normalizer.py`**
+
+  - Wrapper around hAMRonization tool (pip install hAMRonization)
+  - Input: raw AMR output file + tool name (amrfinderplus / resfinder / rgi)
+  - Output: list of AMRResult objects in canonical format
+  - Used by bactopia, Grandeur, and pathogensurveillance parsers
+
+- [ ] **I-6: Write `tests/test_pipelines_registration_api.py`**
+
+  - Valid registration → 201, result in DB
+  - Wrong pipeline_token → 401
+  - Invalid payload schema → 422 with specific field errors
+  - Duplicate registration → 409 or idempotent update (decide via spec)
+  - Test fixture: mock pipeline_runs row with valid pipeline_token
+
+- [ ] **I-7: Run tests and commit**
+
+  - `uv run pytest tests/test_pipelines_registration_api.py -v`
+  - `uv run pytest --cov=backend --cov-fail-under=60`
+  - `gac "feat: jackpot-nf scaffolding + result registration endpoint"`
+
+---
+
+## Phase 12 — Session J: Viral pipeline parsers (Cecret, viralrecon, walkercreek)
+
+- [ ] **J-1: Cecret parser** (`jackpot-nf/pipelines/cecret/parsers/`)
+  - `pangolin.py`: parse `pangolin/lineage_report.csv` → PangolinResult per sample
+  - `nextclade.py`: parse `nextclade/nextclade.tsv` → NextcladeResult per sample
+  - `freyja.py`: parse `freyja/aggregated-freyja.tsv` → WastewaterLineageAbundance
+  - `consensus.py`: register `consensus/*.consensus.fa` → sample_files (FASTA)
+  - Wrapper: `jackpot_wrapper.nf` — calls Cecret, then runs parsers, then calls register_client
+  - Supports Cecret version range 3.6–3.66 (current)
+
+- [ ] **J-2: viralrecon parser** (`jackpot-nf/pipelines/viralrecon/parsers/`)
+  - `consensus.py`: register `*.consensus.fa` per sample
+  - `pangolin.py`: parse pangolin output (shares Cecret's parser via `shared/`)
+  - `nextclade.py`: parse nextclade output (shares Cecret's parser)
+  - `variants.py`: parse iVar variant calls → pipeline_results.metrics
+  - Wastewater mode: also populate WastewaterLineageAbundance
+
+- [ ] **J-3: walkercreek parser** (`jackpot-nf/pipelines/walkercreek/parsers/`)
+  - `irma.py`: parse IRMA flu/RSV output → TypingResult (subtype, clade)
+  - `consensus.py`: register per-segment consensus FASTAs
+  - Handles both Illumina and Nanopore output structures
+
+- [ ] **J-4: Test fixtures for viral parsers**
+  - Small real outputs from Cecret (SARS-CoV-2, MPX), viralrecon (wastewater), walkercreek (flu)
+  - Store in `tests/fixtures/cecret/`, `tests/fixtures/viralrecon/`, `tests/fixtures/walkercreek/`
+  - Each fixture is a minimal output directory that covers all parsed file types
+
+- [ ] **J-5: Unit tests per parser**
+  - Each parser has `tests/test_{parser}.py`
+  - Parses fixture → emits expected list of result payloads
+  - Schema validation passes
+  - Edge cases: empty file, malformed file, missing expected field
+
+- [ ] **J-6: Run tests and commit in jackpot-nf**
+  - `cd jackpot-nf && uv run pytest`
+  - Commit in jackpot-nf repo
+  - Update submodule pointer in jackpot-backend
+  - `gac "feat: viral pipeline parsers — Cecret, viralrecon, walkercreek"`
+
+---
+
+## Phase 13 — Session K: Bacterial isolate parsers (bactopia, Grandeur, mycosnp, tb-profiler)
+
+- [ ] **K-1: bactopia parser**
+  - `amr.py`: parse AMRFinderPlus TSV → hAMRonization-normalized AMRResult
+  - `mlst.py`: parse MLST output → TypingResult
+  - `assembly.py`: register assembly FASTA + parse QUAST metrics → AssemblyQC
+  - `annotation.py`: register Bakta/Prokka GFF to sample_files
+
+- [ ] **K-2: Grandeur parser**
+  - `amr.py`: parse AMRFinderPlus output (shares bactopia normalizer)
+  - `mlst.py`: parse MLST (shares bactopia parser)
+  - `kraken2.py`: parse Kraken2 species ID → TaxonomicProfile (single-organism isolate)
+  - `blast.py`: parse BLAST against local DB → pipeline_results.metrics
+
+- [ ] **K-3: mycosnp-nf parser**
+  - `snippy.py`: parse variant calls → pipeline_results.metrics
+  - `tree.py`: register SNP tree Newick to sample_files
+  - `typing.py`: fungal MLST when available → TypingResult
+
+- [ ] **K-4: tb-profiler parser**
+  - `lineage.py`: parse lineage JSON → TBTypingResult (lineage, spoligotype)
+  - `drug_resistance.py`: parse DR calls → TBTypingResult.who_drug_susceptibility JSONB
+  - Populates tb_typing_results table specifically
+
+- [ ] **K-5: Test fixtures + unit tests**
+  - Real outputs from each of the four pipelines
+  - One fixture per parser at minimum
+
+- [ ] **K-6: Run tests and commit**
+
+---
+
+## Phase 14 — Session L: Metagenomic parsers (nf-core/mag, nf-core/taxprofiler)
+
+- [ ] **L-1: nf-core/mag parser**
+  - `checkm2.py`: parse CheckM2 output → MAGQC per MAG bin (completeness, contamination, strain heterogeneity, bin size)
+  - `gtdbtk.py`: parse GTDB-Tk taxonomy → TaxonomicProfile
+  - `bin_registry.py`: register each MAG bin as assembly file linked to sample
+  - Critical: handle one-sample-to-many-MAGs relationship (sample_associations with type=mag_bin)
+
+- [ ] **L-2: nf-core/taxprofiler parser**
+  - `kraken2.py`: parse Kraken2 report → TaxonomicProfile (ranked list of taxa with abundance)
+  - `bracken.py`: parse Bracken abundance estimates → TaxonomicProfile
+  - `diamond.py`: parse DIAMOND protein profile (when present) → pipeline_results.metrics
+  - Reuses Grandeur's kraken2 parser where possible
+
+- [ ] **L-3: Test fixtures + unit tests**
+
+- [ ] **L-4: Run tests and commit**
+
+---
+
+## Phase 15 — Session M: Pathogensurveillance parser + AMR/typing shared parsers
+
+- [ ] **M-1: nf-core/pathogensurveillance parser** (version 1.1.0 pinned)
+  - `identification.py`: parse sendsketch output → TaxonomicProfile + identified organism
+  - `amr.py`: parse AMR results (shares bactopia normalizer)
+  - `mlst.py`: parse MLST results (shares bactopia parser)
+  - `phylogeny.py`: register SNP tree + core gene tree + BUSCO tree to sample_files
+  - `variants.py`: parse graphtyper VCF → pipeline_results.metrics (variant count, filtered count)
+  - `report.py`: register the interactive HTML report to sample_files (served via presigned URL)
+
+- [ ] **M-2: Shared AMR normalization validator**
+  - Test that AMR results from bactopia, Grandeur, and pathogensurveillance produce comparable canonical AMRResult output
+  - Catches divergence when underlying tools update output formats
+
+- [ ] **M-3: Parser version matrix**
+  - Document in `jackpot-nf/README.md`: which parser version supports which pipeline version range
+  - Add `parser_version` column to `pipeline_catalog` table (schema migration)
+  - Wrapper validates pipeline version at run start, warns if outside supported range
+
+- [ ] **M-4: End-to-end integration test**
+  - Not a unit test — a full workflow test that simulates running all 11 wrapped pipelines against fixtures
+  - Verifies each parser produces valid result payloads
+  - Skipped in CI by default (slow), run manually before tagging releases
+
+- [ ] **M-5: Run tests and commit**
+
+---
+
+## Phase 16 — Session N: pipelines router (launch, monitor, resume, BYOP skeleton)
+
+- [ ] **N-1: Implement `POST /api/v1/pipelines/launch`**
+  - Request body: `{pipeline_id, sample_ids, parameters, project_id}`
+  - Compatibility check: `compute_pipeline_compatibility()` returns soft_warnings + hard_blocks
+  - Hard block returns 422 with detailed reason
+  - Soft warning returns 202 with warnings list, caller must confirm with `?override=true`
+  - Generates per-run config with `pipeline_config.py` (work_dir, weblog URL, pipeline_token, resourceLabels)
+  - Submits to GCP Batch via Nextflow launcher
+  - Writes pipeline_runs row with status=QUEUED, returns `{run_id, status}`
+  - Logs CREATE_PIPELINE_RUN audit
+
+- [ ] **N-2: Implement `POST /api/v1/pipelines/events`**
+  - No auth — run_id in path acts as bearer (but cross-check pipeline_token header per audit SEC-4)
+  - Receives raw Nextflow weblog JSON
+  - Writes to pipeline_events (raw) and updates pipeline_tasks (parsed)
+  - Updates pipeline_runs.status on workflow-level events (started/completed/failed)
+
+- [ ] **N-3: Implement `GET /api/v1/pipelines/{run_id}`**
+  - Returns full run detail + last 20 events + task summary
+  - Access control: lab member or Platform Admin
+  - 403 if user has no access to the owning lab
+
+- [ ] **N-4: Implement `GET /api/v1/pipelines/{run_id}/tasks`** and `GET /api/v1/pipelines/{run_id}/events`
+  - Paginated
+  - Same access control
+
+- [ ] **N-5: Implement `POST /api/v1/pipelines/{run_id}/resume`**
+  - Requires previous run to be in FAILED state
+  - New pipeline_runs row created with new run_id
+  - pipeline_restarts row links new_run_id ↔ previous_run_id
+  - Reuses same work_dir for Nextflow -resume
+  - Logs RESUME_PIPELINE_RUN audit
+
+- [ ] **N-6: Implement BYOP registration skeleton `POST /api/v1/pipelines/custom`**
+  - Accepts GitHub/GitLab URL + revision + parameter schema
+  - Validates schema JSON shape only (no actual Nextflow fetch in Month 2 — that's Month 3)
+  - Writes to project_pipelines with status=UNVERIFIED
+  - Returns 202 with message "BYOP registered pending verification (Month 3 feature)"
+
+- [ ] **N-7: Implement pipeline promotion `POST /api/v1/pipelines/{id}/promote`**
+  - project → lab: requires Lab Director
+  - lab → zoo: requires Platform Admin
+  - Logged with source tier, target tier, promoter user_id
+
+- [ ] **N-8: Write `tests/test_pipelines_router_api.py`**
+  - Launch with valid sample_ids → 201 + run_id
+  - Launch with hard_block → 422
+  - Launch with soft_warning → 202, then ?override=true → 201
+  - Events callback with valid run_id → 200, row written
+  - Get run detail → 200 with tasks + events
+  - Resume FAILED run → new run_id, restart row created
+  - Resume non-FAILED run → 400
+  - BYOP registration returns 202 (not full implementation)
+  - Promote project→lab as Lab Collaborator → 403
+  - Promote project→lab as Lab Director → 200
+
+- [ ] **N-9: Run tests and commit**
+  - `gac "feat: pipelines router — launch, monitor, resume, BYOP skeleton"`
+
+---
+
+## Phase 17 — Session O: sample_access router
+
+- [ ] **O-1: Implement `POST /api/v1/sample_access/requests`**
+  - Request body: `{sample_id, justification, requested_duration_days}`
+  - Sample must be DISCOVERABLE (not PRIVATE/LAB — those require Lab Director to change sharing_level)
+  - Creates row in sample_access_requests with status=PENDING, auto_approve_after=NOW+7d
+  - Notifies Lab Director of owning lab
+  - Returns 201 with request_id
+
+- [ ] **O-2: Implement `GET /api/v1/sample_access/requests`**
+  - Filters: `?status=`, `?lab_id=` (owning lab), `?requester_id=`
+  - Lab Director sees pending requests for their labs
+  - Platform Admin sees all
+  - Requester sees their own
+
+- [ ] **O-3: Implement `POST /api/v1/sample_access/requests/{id}/approve`**
+  - Lab Director or Platform Admin only
+  - Sets status=APPROVED, access_expires_at = NOW + requested_duration_days
+  - Creates access grant in sample_access_grants table
+  - Notifies requester
+
+- [ ] **O-4: Implement `POST /api/v1/sample_access/requests/{id}/deny`**
+  - Lab Director or Platform Admin only
+  - Sets status=DENIED, optional denial_reason
+  - Notifies requester
+
+- [ ] **O-5: Update `can_access_sample()` in guards.py**
+  - Add check: user has active grant in sample_access_grants for this sample
+  - Grant must not be expired (access_expires_at > NOW)
+
+- [ ] **O-6: Background job: access request expiry**
+  - Already in main.py scheduler — wire up logic in `run_access_request_job()` in `backend/jobs.py`
+  - Auto-approve at auto_approve_after
+  - Send 75-day warning at auto_approve_after - 15 days
+  - Send 7-day expiry warning before access_expires_at
+  - Expire grants where access_expires_at <= NOW
+
+- [ ] **O-7: Write `tests/test_sample_access_router_api.py`**
+  - Request access to DISCOVERABLE sample → 201
+  - Request access to PRIVATE sample → 403
+  - Approve as Lab Director → grant created, can_access_sample() returns True
+  - Deny as Lab Director → status DENIED
+  - Auto-approve past auto_approve_after via scheduler → status AUTO_APPROVED
+  - Expired grant → can_access_sample() returns False
+
+- [ ] **O-8: Run tests and commit**
+
+---
+
+## Phase 18 — Session P: Streamlit researcher pages
+
+- [ ] **P-1: `frontend/pages/dashboard.py`** — personal dashboard
+  - Recent samples (last 10), pending access requests, active pipeline runs
+  - Tier badges, quality_status indicators
+  - Uses `GET /api/v1/samples/?owner=me`, `/sample_access/requests?requester_id=me`, `/pipelines/?user_id=me`
+
+- [ ] **P-2: `frontend/pages/search.py`** — sample search
+  - Full filter sidebar: organism, source_type, sector, quality_status, sharing_level, lab, project, date range
+  - Bulk select with select-all-N, persistent selection across filter changes
+  - Split action bar: export / launch pipeline / add to dataset / request access
+  - Tier badges on each result row
+  - External database search toggle (JACKPOT samples vs external — uses `/api/v1/external-search/` when implemented; placeholder message for Month 2)
+
+- [ ] **P-3: `frontend/pages/upload.py`** — ingest UI
+  - Drag-and-drop file upload + metadata form
+  - Live tier indicator as fields are completed
+  - Scrubber skip request button with justification
+  - Multi-file support: shows paired R1/R2 detection, lane grouping
+  - Calls `POST /api/v1/ingest/upload`
+
+- [ ] **P-4: `frontend/pages/data_entry.py`** — guided metadata entry
+  - Used for completing pending Globus-imported samples and editing existing samples
+  - Pre-filled form from sample record
+  - Post-submission edit warning for NCBI/GISAID-submitted samples (per backlog topic 57)
+  - Auto-save draft every 30s
+  - Calls `PATCH /api/v1/samples/{id}`
+
+- [ ] **P-5: `frontend/pages/my_samples.py`** — user's samples
+  - Table of samples where current user is owner/submitting_lab_member
+  - Tier badges, scrub_status icons, quick edit link
+  - Filters: only mine / my lab / my project
+
+- [ ] **P-6: `frontend/pages/datasets.py`** — analytical datasets
+  - List user's accessible datasets
+  - Create new dataset from selection (flows back from search page)
+  - Export: CSV / BCO / sample manifest
+  - Microreact integration stub
+
+- [ ] **P-7: `frontend/pages/access_requests.py`** — access request management
+  - Tabs: my requests (as requester) / incoming (as Lab Director)
+  - Approve/deny UI with grant duration selector
+  - Request history with status timeline
+
+- [ ] **P-8: `frontend/pages/notifications.py`** — notification inbox
+  - List with read/unread filter
+  - Mark all read button
+  - Click notification → navigate to action_url
+  - Calls `GET /api/v1/notifications/` (router deferred to Month 3, use placeholder)
+
+- [ ] **P-9: `frontend/pages/pipelines.py`** — pipeline launch + monitor
+  - Launch dialog: pipeline selector, parameter form auto-generated from nextflow_schema.json
+  - Compatibility check badges (soft warnings overridable, hard blocks explained)
+  - Four-tab monitoring view: Overview / Tasks / Events / Files
+  - Resume button for FAILED runs
+  - MultiQC iframe for completed runs
+
+- [ ] **P-10: Write `tests/test_streamlit_pages.py`**
+  - Smoke tests: each page imports cleanly, renders without errors
+  - Mock API responses, verify page reacts correctly
+  - No full end-to-end UI tests in Month 2 (Playwright deferred to Month 3)
+
+- [ ] **P-11: Run tests and commit**
+
+---
+
+## Phase 19 — Session Q: GCP staging environment (IaC + deploy)
+
+- [ ] **Q-1: jackpot-iac Terraform for staging**
+  - `jackpot-iac/terraform/staging/`
+  - Cloud SQL instance (smallest tier, daily backups, PITR 7 days)
+  - GKE cluster with 3 node pools (api-pool min=1, workspace-pool min=0, scrubber-pool min=0)
+  - GCS buckets: jackpot-staging-raw, jackpot-staging-sequences, jackpot-staging-work, jackpot-staging-results, jackpot-staging-datasets, jackpot-staging-submissions, jackpot-staging-backups
+  - All lifecycle rules configured per architecture doc
+  - resourceLabels on all resources: `env=staging`, `project=jackpot`
+
+- [ ] **Q-2: Secrets Manager entries**
+  - SECRET_KEY, Google OAuth client/secret, NCBI API key, GISAID credentials
+  - All generated fresh, not reused from local dev
+
+- [ ] **Q-3: Cloud Deploy or GitHub Actions deployment pipeline**
+  - Trigger: push to `staging` branch
+  - Steps: build image → push to Artifact Registry → helm upgrade api/scrubber/nextflow deployments → run `alembic upgrade head` against Cloud SQL
+  - Staging uses separate Docker image tags from production
+
+- [ ] **Q-4: Deploy jackpot-backend to staging**
+  - Alembic migrations run against Cloud SQL
+  - Seed data loaded (orgs, labs, sequencing_labs, reportable_organisms, pipeline_catalog)
+  - Health check returns 200 from staging endpoint
+
+- [ ] **Q-5: End-to-end pipeline test on staging**
+  - Run Cecret against a SARS-CoV-2 test sample through full stack
+  - Verify: sample uploaded → staged → scrubbed → pipeline launched → events received → results registered → pangolin_results/nextclade_results tables populated
+  - Document in `docs/staging_e2e_test.md`
+
+- [ ] **Q-6: Staging smoke test suite**
+  - `scripts/staging_smoke_test.sh` — hits all endpoints, verifies auth, runs one pipeline
+  - Run after every staging deploy
+  - Red/green dashboard
+
+- [ ] **Q-7: Document staging access**
+  - `docs/staging_access.md` — how to reach staging, who has access, how to redeploy
+  - Add staging URLs to `.env.staging` template
+
+- [ ] **Q-8: Commit and tag**
+  - `gac "feat: GCP staging environment — IaC + deployment + E2E verified"`
+  - `git tag -a month-2-complete -m "Month 2 complete: pipelines + parsers + sample_access + Streamlit + GCP staging"`
+
+---
+
+## Phase 20 — Month 3 Stretch Goals (Tracked, Not Scheduled)
+
+- [ ] Streamlit admin pages: `lab_director.py`, `platform_admin.py`, `archive_requests.py`, `billing.py`
+- [ ] JupyterHub workspace with all three profiles (Analyst, Bioinformatician, Developer)
+- [ ] BYOP wire-up: fetch nextflow_schema.json from registered repo, validate, enable launching
+- [ ] GCP production deployment
+- [ ] `ncbi_submissions` router (TOSTADAS integration)
+- [ ] `datasets` router (table exists, router stub)
+- [ ] `archive_requests` router
+- [ ] `saved_searches` router
+- [ ] `notifications` router (full)
+- [ ] Remaining parsers if any pipelines were deferred
+- [ ] External database search (`/api/v1/external-search/` — NCBI, ENA, GISAID proxy)
+- [ ] Re-enable detect-secrets in pre-commit
+- [ ] Playwright end-to-end UI tests
