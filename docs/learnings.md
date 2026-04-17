@@ -1135,3 +1135,121 @@ tests/test_pipelines_router_api.py            NEW — 29 tests (launch, events, 
 ```
 
 Test delta: **486 → 515 passing tests** (+29); coverage 87.16% (≥60% threshold).
+
+---
+
+## Session O — sample_access router (2026-04-17)
+
+### What shipped
+
+- Four endpoints under `/api/v1/sample-access/`: `POST /requests`,
+  `GET /requests`, `POST /requests/{id}/approve`, `POST /requests/{id}/deny`.
+- `sample_access_grants` table: durable "read-unlock" artefact with
+  `revoked` + `access_expires_at`, separated from the
+  `sample_access_requests` conversation row.
+- `can_access_sample()` / `visibility_sql_clause()` now honour
+  unrevoked, unexpired grants **and** legacy `APPROVED` requests — no
+  behaviour change for any existing sample endpoint.
+- `run_access_request_job()` fully implemented: auto-approve at day 7,
+  75-day-style warning 15 days before auto-approve, 7-day expiry
+  warning, grant expiration, and "moot on sample-went-PUBLIC".
+
+### Design: request row vs. grant row
+
+The request row is the **conversation** — who asked, why, pending vs.
+decided, who decided. The grant row is the **privilege** — who can read
+what, until when. Splitting them means `can_access_sample()` answers in
+one indexed lookup instead of re-deriving expiry from approval
+timestamps. Revoking a grant does not rewrite history — the
+`sample_access_requests` row stays `APPROVED`, the grant flips
+`revoked=TRUE`, and the request transitions to `EXPIRED` only when the
+backing grant is reclaimed by the expiry job. Audit stays clean.
+
+### Backward-compat trick for `can_access_sample()`
+
+Existing `tests/test_samples_router_api.py` inserts directly into
+`sample_access_requests` with `status='APPROVED'` and no grant row. To
+keep that fixture working without touching the test, the helper does
+**both** in a single UNION ALL:
+
+```sql
+SELECT 1 FROM sample_access_grants
+WHERE requester_id = :uid AND sample_id = :sid
+  AND revoked = FALSE
+  AND (access_expires_at IS NULL OR access_expires_at > NOW())
+UNION ALL
+SELECT 1 FROM sample_access_requests
+WHERE requester_id = :uid AND sample_id = :sid
+  AND status = 'APPROVED'
+LIMIT 1
+```
+
+Because `_expire_grants()` also flips the linked request to `EXPIRED`,
+the legacy fallback is self-healing: an APPROVED request *in the table*
+is necessarily still active, so the OR doesn't leak stale access.
+
+### Idempotency in the background job
+
+All five sweep buckets run inside a single `with get_db() as db`
+transaction — if any bucket raises, none commit, so a retry doesn't
+double-fire warnings or half-expire grants. The approve-warning gate
+uses `last_warning_sent_at IS NULL` (a one-shot), while the expiry
+warning uses `last_warning_sent_at < access_expires_at - INTERVAL '7 days'`
+so the column can be safely reused for the second warning without
+losing the first-notification semantics.
+
+### Pagination whitelist
+
+`sample_access_requests` uses `requested_at`, not `created_at`, as its
+timestamp column. The paginate() helper validates `sort_by` against a
+central allow-list in `backend/pagination.py` — had to extend
+`ALLOWED_SORT_COLUMNS` with `requested_at`, `approved_at`, `denied_at`,
+`access_expires_at`, `status`. The router also translates the API's
+default `sort_by=created_at` → `requested_at` so callers using the
+generic default don't silently fall back to the whitelist's fallback.
+
+### Test-fixture cleanup FK ordering
+
+Five FK directions had to be handled before a user row can be deleted:
+
+1. `lab_membership`, `project_membership` — direct DELETE.
+2. `sample_access_requests.reviewed_by_id / approved_by_id / denied_by_id`
+   — UPDATE ... = NULL (the request row lives on past the user).
+3. `sample_access_grants.requester_id / granted_by_id` — DELETE.
+4. `sample_access_requests.requester_id / owner_id` — DELETE (grants
+   already gone).
+5. `samples.owner_id` — for any sample the user happens to own, cascade
+   the above two tables, then DELETE the sample, then DELETE the user.
+
+The new `_cleanup_users()` helper encodes all five in one place so every
+test can call it symmetrically in setup and teardown.
+
+### Backend delta
+
+```
+backend/routers/sample_access.py              full rewrite (~500 lines, 4 endpoints)
+backend/permissions.py                        _has_approved_access_request honours
+                                                grants table + legacy APPROVED requests;
+                                                visibility_sql_clause gains grants EXISTS
+backend/jobs.py                               run_access_request_job implemented
+                                                with 5 idempotent helpers
+backend/audit.py                              + EXPIRE_ACCESS_GRANT, MOOT_ACCESS_REQUEST
+backend/pagination.py                         ALLOWED_SORT_COLUMNS += requested_at,
+                                                approved_at, denied_at,
+                                                access_expires_at, status
+db/migrations/versions/dc1d08fa8c41_*.py      NEW — +9 cols on sample_access_requests
+                                                (justification, requested_duration_days,
+                                                 auto_approve_after, access_expires_at,
+                                                 approved_by_id/_at, denied_by_id/_at,
+                                                 last_warning_sent_at);
+                                                NEW table sample_access_grants;
+                                                5 supporting indexes
+tests/test_sample_access_router_api.py        NEW — 22 tests across create/list/
+                                                approve/deny/can_access/job-sweep
+pyproject.toml                                drop sample_access.py from coverage omit
+```
+
+Test delta: **515 → 537 passing tests** (+22); coverage 87.63%
+(backend/routers/sample_access.py at 91%). All existing sample endpoint
+tests continued to pass unchanged — the can_access_sample update was
+purely additive.

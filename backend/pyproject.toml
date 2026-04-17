@@ -69,7 +69,6 @@ omit = [
     "backend/routers/ncbi_submissions.py",
     "backend/routers/notifications.py",
     "backend/routers/pipelines.py",
-    "backend/routers/sample_access.py",
     "backend/routers/saved_searches.py",
     "tests/*",
     "scripts/*",

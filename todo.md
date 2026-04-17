@@ -713,42 +713,42 @@ Log findings to docs/review_log.md and resolve before continuing.
 
 ## Phase 17 — Session O: sample_access router
 
-- [ ] **O-1: Implement `POST /api/v1/sample_access/requests`**
+- [x] **O-1: Implement `POST /api/v1/sample_access/requests`**
   - Request body: `{sample_id, justification, requested_duration_days}`
   - Sample must be DISCOVERABLE (not PRIVATE/LAB — those require Lab Director to change sharing_level)
   - Creates row in sample_access_requests with status=PENDING, auto_approve_after=NOW+7d
   - Notifies Lab Director of owning lab
   - Returns 201 with request_id
 
-- [ ] **O-2: Implement `GET /api/v1/sample_access/requests`**
+- [x] **O-2: Implement `GET /api/v1/sample_access/requests`**
   - Filters: `?status=`, `?lab_id=` (owning lab), `?requester_id=`
   - Lab Director sees pending requests for their labs
   - Platform Admin sees all
   - Requester sees their own
 
-- [ ] **O-3: Implement `POST /api/v1/sample_access/requests/{id}/approve`**
+- [x] **O-3: Implement `POST /api/v1/sample_access/requests/{id}/approve`**
   - Lab Director or Platform Admin only
   - Sets status=APPROVED, access_expires_at = NOW + requested_duration_days
   - Creates access grant in sample_access_grants table
   - Notifies requester
 
-- [ ] **O-4: Implement `POST /api/v1/sample_access/requests/{id}/deny`**
+- [x] **O-4: Implement `POST /api/v1/sample_access/requests/{id}/deny`**
   - Lab Director or Platform Admin only
   - Sets status=DENIED, optional denial_reason
   - Notifies requester
 
-- [ ] **O-5: Update `can_access_sample()` in guards.py**
+- [x] **O-5: Update `can_access_sample()` in guards.py**
   - Add check: user has active grant in sample_access_grants for this sample
   - Grant must not be expired (access_expires_at > NOW)
 
-- [ ] **O-6: Background job: access request expiry**
+- [x] **O-6: Background job: access request expiry**
   - Already in main.py scheduler — wire up logic in `run_access_request_job()` in `backend/jobs.py`
   - Auto-approve at auto_approve_after
   - Send 75-day warning at auto_approve_after - 15 days
   - Send 7-day expiry warning before access_expires_at
   - Expire grants where access_expires_at <= NOW
 
-- [ ] **O-7: Write `tests/test_sample_access_router_api.py`**
+- [x] **O-7: Write `tests/test_sample_access_router_api.py`**
   - Request access to DISCOVERABLE sample → 201
   - Request access to PRIVATE sample → 403
   - Approve as Lab Director → grant created, can_access_sample() returns True
@@ -756,7 +756,7 @@ Log findings to docs/review_log.md and resolve before continuing.
   - Auto-approve past auto_approve_after via scheduler → status AUTO_APPROVED
   - Expired grant → can_access_sample() returns False
 
-- [ ] **O-8: Run tests and commit**
+- [x] **O-8: Run tests and commit**
 
 ---
 

@@ -47,9 +47,32 @@ def _is_project_member(user_id: int, project_id: int, conn) -> bool:
 
 
 def _has_approved_access_request(user_id: int, sample_id: int, conn) -> bool:
+    """True iff the user holds an active access path to this sample.
+
+    Two paths are honoured:
+
+    * ``sample_access_grants`` row that is not revoked and either has no
+      ``access_expires_at`` or whose expiry is in the future. This is the
+      durable artefact created by the approve endpoint and the canonical
+      source of truth for time-bounded access.
+    * ``sample_access_requests`` with ``status = 'APPROVED'``. Kept as a
+      fallback so any pre-grants-table data (and existing test fixtures
+      that insert directly into the requests table) continues to grant
+      access without behaviour change. The expiry job transitions
+      requests to ``EXPIRED`` when their grant lapses, so an APPROVED
+      request still in the table is necessarily still active.
+    """
     rows = execute_query(
-        "SELECT 1 FROM sample_access_requests "
-        "WHERE requester_id = :uid AND sample_id = :sid AND status = 'APPROVED' LIMIT 1",
+        """
+        SELECT 1 FROM sample_access_grants
+        WHERE requester_id = :uid AND sample_id = :sid
+          AND revoked = FALSE
+          AND (access_expires_at IS NULL OR access_expires_at > NOW())
+        UNION ALL
+        SELECT 1 FROM sample_access_requests
+        WHERE requester_id = :uid AND sample_id = :sid AND status = 'APPROVED'
+        LIMIT 1
+        """,
         {"uid": user_id, "sid": sample_id},
         conn=conn,
     )
@@ -115,6 +138,10 @@ def visibility_sql_clause(user: dict) -> tuple[str, dict]:
         "EXISTS (SELECT 1 FROM sample_access_requests sar "
         "WHERE sar.requester_id = :uid AND sar.sample_id = s.id "
         "AND sar.status = 'APPROVED')",
+        "EXISTS (SELECT 1 FROM sample_access_grants sag "
+        "WHERE sag.requester_id = :uid AND sag.sample_id = s.id "
+        "AND sag.revoked = FALSE "
+        "AND (sag.access_expires_at IS NULL OR sag.access_expires_at > NOW()))",
     ]
     if user.get("is_data_analyst"):
         clauses.append("s.surveillance_relevant = TRUE")

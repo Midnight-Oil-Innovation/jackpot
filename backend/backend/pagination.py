@@ -20,6 +20,10 @@ ALLOWED_SORT_COLUMNS = {
     "updated_at",
     "ingest_timestamp",
     "received_at",
+    "requested_at",
+    "approved_at",
+    "denied_at",
+    "access_expires_at",
     "date_collected",
     "date_sequenced",
     "sample_id",
@@ -31,6 +35,7 @@ ALLOWED_SORT_COLUMNS = {
     "display_name",
     "name",
     "email",
+    "status",
 }
 
 
