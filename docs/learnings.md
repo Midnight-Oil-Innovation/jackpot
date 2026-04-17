@@ -597,3 +597,117 @@ client ─► POST /api/v1/dataharmonizer/validate
    return {total_rows, valid_rows, results: [{row, sample_id, valid,
            tier, sector, errors, warnings, tier2_missing, tier3_missing}]}
 ```
+
+---
+
+## Session J: viral pipeline parsers (Cecret / viralrecon / walkercreek) — 2026-04-17
+
+**What was built:** Pipeline-level parsers in the `jackpot-nf` submodule for
+three viral pipelines — Cecret (SARS-CoV-2 isolate + wastewater),
+viralrecon (SARS-CoV-2 multi-caller), and walkercreek (Influenza/RSV) —
+plus a shared parser layer, 44 new pytest cases, and fixture trees for
+each pipeline. Backend baseline: 486 tests passing, 86.99% coverage
+(+9 tests, stable coverage). Submodule at `nf/` bumped to commit
+`2a098b0`; backend commit `6aeee66`.
+
+**Key decisions:**
+- **Sibling top-level packages** (`shared/` and `pipelines/` both at the
+  `nf/` root): `pyproject.toml` only packages `shared`, and `pipelines/`
+  is imported by tests via a `sys.path.insert` shim. Relative imports
+  like `from ....shared.parsers import ...` fail because the two trees
+  have no common Python package parent — everything uses **absolute
+  imports** (`from shared.parsers import ...`). This is the only
+  import style that works inside both the live Nextflow wrapper and
+  the pytest harness.
+- **Two result shapes, not one.** `ParsedResult` carries typed rows
+  destined for a `/results/{result_type}` endpoint; `FileArtifact`
+  describes a FASTA/BAM/etc. that will be POSTed to the
+  `sample_files` table. Mixing them into one schema would have forced
+  `sample_files` into `RESULT_SCHEMAS` and bent the result-registration
+  contract. Kept separate.
+- **Shared Pangolin/Nextclade parsers** under `shared/parsers/` rather
+  than duplicating between Cecret and viralrecon. Both pipelines emit
+  the same TSV/CSV structures; the only difference is which subdirectory
+  the file lives in. Pipeline-level parsers just orchestrate where to
+  look.
+- **Freyja parser explodes one row per (sample, lineage)** with
+  `ABUNDANCE_FLOOR=1e-6` to drop numerical-noise lineages. Avoids
+  downstream dashboards showing "0.000000001 AY.4" as if it were a
+  real detection.
+- **iVar variants uses a sentinel result_type `"pipeline_metrics"`.**
+  Not in `RESULT_SCHEMAS` — documented inline in the parser. It's a
+  summary record (total / pass / fail variants), not a per-variant
+  table; inventing a schema for this would be premature.
+- **walkercreek consensus dual layout** (Illumina: nested
+  `consensus/<sample>/<SEGMENT>.fa`; Nanopore: flat
+  `consensus/<sample>_<SEGMENT>.fa`) handled by a single `rglob` +
+  `path.parent` check. File subtype is `segment_HA` / `segment_NA`
+  rather than plain `"consensus"` so downstream consumers can select
+  a specific segment without re-parsing.
+- **IRMA default_scheme derivation**: when typing_summary.tsv omits
+  `scheme`, derive from `subtype` prefix (H1N1pdm09→h1n1, H3N2→h3n2,
+  B→flub, RSV-*→rsv, else irma). Keeps WalkerCreek's historical output
+  compatible with the modern scheme-aware table.
+- **`SUPPORTED_PIPELINE_VERSIONS`** declared per pipeline so the
+  register client can reject unknown versions at boundary. Cecret 3.6
+  –3.66 enumerated; viralrecon 2.4.0–2.6.0; walkercreek 1.0.x–1.1.x.
+
+**Watch out for:**
+- **Submodule commit + pointer bump is two commits.** Fixing a parser
+  bug requires: (1) commit in `nf/`, (2) `git add nf && gac` in the
+  backend to bump the submodule SHA. Forgetting step 2 leaves CI
+  using the old parser. Always verify `git status` in the backend
+  shows `modified: nf (new commits)` after submodule work.
+- **`uv run pytest` from the backend does not exercise the submodule
+  tests.** The submodule has its own `pyproject.toml` and must be
+  tested separately with `cd nf && uv run pytest`. The backend's 486
+  tests do not cover the 79 submodule tests. Both must pass before
+  claiming the session is done.
+- **Fixture malformedness bites late.** An initial nextclade fixture had
+  `qc.overallScore="bad"` (string in a float column) due to a miscount
+  of tab characters — parse failure only surfaced in the test run, not
+  at fixture-write time. Pattern going forward: keep fixtures minimal
+  and move edge-case payloads inline via `tmp_path` in the tests that
+  need them.
+- **Freyja aggregated TSV leading blank column.** The first column
+  header is empty (`\t` then `lineages\t...`); the row key is the
+  filename (e.g. `AZ-WW-001.freyja.tsv`). Parsers must read the leading
+  unnamed column to recover `sample_id` via filename stripping.
+  Missing this yields silently-empty results.
+- **Ruff auto-fix can reorder imports.** After a fixture cleanup pass,
+  `uv run ruff check --fix` moved `noqa: E402` comments that pytest's
+  `sys.path.insert` shim requires. Re-run tests after every
+  ruff-format / ruff-check-fix cycle.
+
+**ASCII diagram:**
+
+```
+nf/                       ← jackpot-nf submodule
+├── shared/parsers/       ← reusable: types, pangolin, nextclade
+│   ├── types.py          RunMetadata, ParsedResult, FileArtifact
+│   ├── pangolin.py       lineage_report.csv → ParsedResult[pangolin_results]
+│   └── nextclade.py      nextclade.tsv → ParsedResult[nextclade_results]
+│
+├── pipelines/
+│   ├── cecret/parsers/
+│   │   ├── __init__.py       orchestrates shared pangolin + nextclade
+│   │   ├── freyja.py         aggregated-freyja.tsv → wastewater rows
+│   │   └── consensus.py      consensus/*.consensus.fa → FileArtifact
+│   ├── viralrecon/parsers/
+│   │   ├── __init__.py       reuses shared; locates per-subdir files
+│   │   ├── variants.py       ivar TSV → pipeline_metrics (total/pass/fail)
+│   │   ├── freyja.py         re-export of cecret.freyja
+│   │   └── consensus.py      consensus/{bcftools,ivar}/*.fa → FileArtifact
+│   └── walkercreek/parsers/
+│       ├── __init__.py       IRMA + consensus orchestrator
+│       ├── irma.py           typing_summary.tsv → typing_results
+│       └── consensus.py      dual-layout consensus → FileArtifact(segment_*)
+│
+└── tests/
+    ├── fixtures/{cecret,viralrecon,walkercreek}/...
+    ├── test_cecret_parsers.py        21 tests
+    ├── test_viralrecon_parsers.py    10 tests
+    └── test_walkercreek_parsers.py   13 tests
+
+Backend commit 6aeee66 bumps nf pointer to submodule commit 2a098b0.
+```
