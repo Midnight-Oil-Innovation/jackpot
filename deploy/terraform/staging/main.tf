@@ -67,7 +67,8 @@ module "iam" {
   project_id               = var.project_id
   environment              = var.environment
   buckets                  = module.buckets.all_buckets
-  artifact_repository_name = module.artifact_registry.repository_name
+  region                 = var.region
+  artifact_repository_id = module.artifact_registry.repository_id
 }
 
 module "secrets" {

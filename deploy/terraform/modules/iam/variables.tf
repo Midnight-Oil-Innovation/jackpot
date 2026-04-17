@@ -13,8 +13,13 @@ variable "buckets" {
   type        = map(string)
 }
 
-variable "artifact_repository_name" {
-  description = "Full Artifact Registry repository resource name."
+variable "region" {
+  description = "GCP region where the Artifact Registry repository lives."
+  type        = string
+}
+
+variable "artifact_repository_id" {
+  description = "Short ID of the Artifact Registry repository (e.g. 'jackpot')."
   type        = string
 }
 

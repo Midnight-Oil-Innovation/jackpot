@@ -141,24 +141,24 @@ resource "google_storage_bucket_iam_member" "scrubber_write" {
 # ── Artifact Registry read access (pull images at node startup) ──────────────
 resource "google_artifact_registry_repository_iam_member" "api_reader" {
   project    = var.project_id
-  location   = split("/", var.artifact_repository_name)[3]
-  repository = split("/", var.artifact_repository_name)[5]
+  location   = var.region
+  repository = var.artifact_repository_id
   role       = "roles/artifactregistry.reader"
   member     = "serviceAccount:${google_service_account.api.email}"
 }
 
 resource "google_artifact_registry_repository_iam_member" "nextflow_reader" {
   project    = var.project_id
-  location   = split("/", var.artifact_repository_name)[3]
-  repository = split("/", var.artifact_repository_name)[5]
+  location   = var.region
+  repository = var.artifact_repository_id
   role       = "roles/artifactregistry.reader"
   member     = "serviceAccount:${google_service_account.nextflow.email}"
 }
 
 resource "google_artifact_registry_repository_iam_member" "scrubber_reader" {
   project    = var.project_id
-  location   = split("/", var.artifact_repository_name)[3]
-  repository = split("/", var.artifact_repository_name)[5]
+  location   = var.region
+  repository = var.artifact_repository_id
   role       = "roles/artifactregistry.reader"
   member     = "serviceAccount:${google_service_account.scrubber.email}"
 }
