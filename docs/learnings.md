@@ -1331,3 +1331,115 @@ tests/test_streamlit_pages.py                 NEW — 12 smoke tests
 ```
 
 Test delta: **537 → 549 passing tests** (+12); coverage 87.56%. The 9 pages load cleanly, react to the stub API without exceptions, and the ApiClient/envelope/badge units pass their isolated tests. Full end-to-end (Playwright) is Month 3 per spec.md line 702 — not blocking for Month 2 sign-off.
+
+---
+
+## Session Q: GCP staging IaC (jackpot-iac) — 2026-04-16
+
+**What was built:** Full Infrastructure-as-Code scaffold for the JACKPOT staging environment in a separate `jackpot-iac` repo — 7 reusable Terraform modules (network, cloud-sql, gke, gcs-buckets, artifact-registry, iam, secrets), thin staging wrapper + production stub, Helm chart `jackpot-api` with pre-upgrade Alembic migration Job, GitHub Actions `deploy-staging.yml` with Workload Identity Federation auth, idempotent `bootstrap_project.sh` for one-time GCP setup, `staging_smoke_test.sh` gate, and `docs/staging_access.md` + `docs/production_runbook.md` stub. 5 logical commits (Q-1 through Q-3, Q-6, Q-7) — Q-4 (`terraform apply`) and Q-5 (Cecret E2E) are intentionally left for manual execution because they create billable resources.
+
+**Key decisions:**
+- **Split Session Q scope from the user's original framing.** The original ask bundled `terraform apply` and a real Cecret E2E run into the autonomous pass, plus a `month-2-complete` tag at the end. I pushed back: applying is a billable, side-effecting action against a real GCP project, and tagging before post-apply verification is dishonest. The agreed split is what's reflected in the 5 commits — file work only — with Q-4/Q-5 operated manually and Q-8 gated on that confirmation.
+- **Zero hardcoded values in modules.** Every `project_id`, `region`, `environment`, bucket name, SA email, and secret name derives from `var.project_id` / `var.region` / `"jackpot-${var.environment}-<purpose>"`. The staging wrapper is thin (50 lines of module calls); the production wrapper is a commented-out twin of staging with Month 3 TODOs — production stands up by uncommenting blocks and filling tfvars, not by editing module code.
+- **Canonical naming authority lives in jackpot-backend, not jackpot-iac.** `jackpot-backend/docs/gcp_context.md` is the single source of truth for project IDs, regions, bucket naming, and SA emails. The jackpot-iac README points to it explicitly. This avoids two-repo naming drift — change the doc first, mirror into tfvars.
+- **State bucket chicken-and-egg solved via a separate script.** Terraform's GCS backend needs `jackpot-staging-tfstate` to exist *before* `terraform init` runs. `scripts/bootstrap_project.sh` creates it via `gsutil` (plus enables 16 APIs, creates the deploy SA, and sets up Workload Identity Federation for GitHub Actions) as an idempotent pre-step. This keeps the state bucket out of the Terraform graph entirely.
+- **Credentials to GitHub Actions via WIF, not SA JSON keys.** The bootstrap script creates a Workload Identity Federation pool + OIDC provider scoped to `linuxprophet` repos. GHA exchanges its OIDC token for a short-lived GCP access token — no long-lived keys stored in repo secrets. The workflow's `id-token: write` permission is what authorizes the exchange.
+- **Alembic migrations run as a Helm pre-upgrade Job, not an initContainer.** The migration Job uses `helm.sh/hook: pre-install,pre-upgrade`, which means the Deployment never rolls forward until `alembic upgrade head` exits 0. Using an initContainer would run migrations on every pod startup (race condition across replicas) rather than once per release.
+- **ConfigMap checksum annotation forces rolling restart on env changes.** `checksum/config: {{ include "configmap.yaml" . | sha256sum }}` in the Deployment's pod template annotations means any ConfigMap edit changes the pod spec hash, which triggers a rolling update. Without this, env-var-only changes would not restart pods.
+- **Secret Manager is metadata-only; values seeded post-apply.** The secrets module creates `google_secret_manager_secret` resources but no versions. After `terraform apply`, the operator runs the `terraform output secret_seed_commands` list to add real values. This keeps actual credentials out of Terraform state and the repo. Per-secret `roles/secretmanager.secretAccessor` bindings target the jackpot-api GSA specifically — tighter than the project-wide role.
+- **Three node pools, each tuned to its workload.** api-pool (n2-standard-4, 1-3 nodes, on-demand) runs the FastAPI Deployment and Nextflow controllers; workspace-pool (n2-standard-8, 0-2, on-demand) for JupyterHub Month 3; scrubber-pool (n2-highmem-4, 0-3, spot) for SRA Human Scrubber Jobs. Workspace and scrubber pools carry `workload=` taints so only the matching pods schedule there. Scale-to-zero on both cold pools — cluster autoscaler brings them up on demand.
+- **Bucket policy encoded per bucket.** sequences/references: versioning on; work: 90-day lifecycle, no versioning (per CLAUDE.md rule 38); backups: different region + Object Lock retention policy + 90-day lifecycle; staging: 30-day lifecycle (temporary pre-scrub). No versioning on work avoids fighting the lifecycle rule.
+- **Secret short-names double as env-var keys.** The secrets module's default list (`secret-key`, `database-url`, `google-oauth-client-id`, …) is chosen so each short-name upper-cases into the env var the backend reads (`SECRET_KEY`, `DATABASE_URL`, `GOOGLE_OAUTH_CLIENT_ID`). The deploy workflow iterates the list and synthesizes `kubectl create secret generic --from-literal=$K=$V` without a manual mapping table.
+
+**Watch out for:**
+- **GPG signing is not configured in the jackpot-iac repo.** The baseline commit `f9a0e20` is unsigned. My first attempt at `git commit -c commit.gpgsign=true` failed with "gpg failed to sign the data" because no signing key is in this repo's config. Dropped the flag; subsequent commits are unsigned to match the repo's existing style. If we want signed commits, configure `user.signingkey` in the jackpot-iac repo first.
+- **`gac` alias does not work in jackpot-iac.** `gac` runs `uv run ruff check --fix . && uv run ruff format .` before committing — there's no `pyproject.toml` in jackpot-iac, so ruff fails immediately. Use plain `git commit` in this repo. The `gac` alias is specific to jackpot-backend.
+- **backend/config.py's bucket env var names do not match CLAUDE.md's canonical bucket list.** config.py expects `STORAGE_BUCKET_SEQUENCES`, `_RAW`, `_STAGING`, `_DATASETS`, `_SUBMISSIONS`; CLAUDE.md canonicalizes `sequences`, `references`, `results`, `staging`, `work`, `backups`. I resolved this by mapping `_RAW`→staging, `_DATASETS`→references, `_SUBMISSIONS`→portal-exports in `values-staging.yaml`. The clean fix is to rename the config fields in a follow-up — out of scope for Session Q.
+- **`master_authorized_networks` defaults to empty (open endpoint).** This is fine for staging during initial bring-up but MUST be populated with the office/home/GHA NAT CIDRs before the project is promoted to production. The production tfvars.example flags this as a pre-apply requirement.
+- **Production stub is copy-edit-tfvars, not rewrite — but you still must uncomment the module blocks.** `terraform/production/main.tf` and `outputs.tf` have all module blocks commented out. When activating production: fill in tfvars, uncomment the main.tf blocks, uncomment the matching outputs, then `terraform apply`. Keeping them commented prevents `plan` from erroring on an empty `project_id`.
+- **Alembic migration Job name embeds image tag.** `{release}-migrate-{image.tag | trunc 20}` — if the same image tag is redeployed, the Helm pre-upgrade hook deletes the previous Job (hook-delete-policy: `before-hook-creation`), then recreates it. Safe for idempotent redeploys; beware if image.tag ever contains characters Kubernetes names reject (the template normalises underscores to dashes but doesn't escape other specials).
+- **Deploy workflow checks out `linuxprophet/jackpot-backend` at ref `staging`.** The cross-repo checkout uses the default GITHUB_TOKEN — if that token lacks read access to jackpot-backend, the workflow fails at the second `actions/checkout` step. If the repos are in the same org this works out of the box; otherwise a PAT with `contents:read` on jackpot-backend must be put in repo secrets and swapped in.
+- **`terraform fmt`/`terraform validate`/`helm template` were NOT run locally.** Neither tool is installed on this workstation. CI or the first `terraform init && plan` will surface any HCL issues I missed. Validate modules before the first real apply: `cd terraform/staging && terraform init -backend=false && terraform validate`.
+
+**ASCII diagram — deploy-staging flow:**
+
+```
+  git push origin staging
+         │
+         ▼
+  GitHub Actions: deploy-staging.yml
+         │
+         ├─ checkout jackpot-iac
+         ├─ checkout jackpot-backend @ staging
+         │
+         ├─ google-github-actions/auth
+         │     │  OIDC token  →  projects/…/locations/global/workloadIdentityPools/
+         │     │                   jackpot-staging-gh-pool/providers/github
+         │     ▼
+         │  short-lived access token for jackpot-staging-deploy@… SA
+         │
+         ├─ docker build + push jackpot-api:$(git rev-parse --short HEAD)
+         │     → us-central1-docker.pkg.dev/<project>/jackpot/jackpot-api
+         │
+         ├─ get-gke-credentials (jackpot-staging-gke, us-central1)
+         │
+         ├─ gcloud secrets versions access latest × 5
+         │     → kubectl create secret generic jackpot-api-secrets --from-literal …
+         │
+         ├─ helm upgrade --install jackpot-api ./helm/jackpot-api
+         │     ├─ pre-upgrade hook:  Job  alembic upgrade head      (must succeed)
+         │     └─ rolls:             Deployment  2 replicas on api-pool
+         │                           ConfigMap (env + buckets)
+         │                           Service (ClusterIP :80 → pod :8000)
+         │                           ServiceAccount (WI annotation → jackpot-api GSA)
+         │
+         └─ ./scripts/staging_smoke_test.sh
+               ├─ /health = 200 status=ok
+               ├─ /openapi.json = 200
+               └─ /api/v1/samples/ = 401/403 (auth gate works)
+```
+
+**File inventory (jackpot-iac, 43 files across 5 commits):**
+
+```
+Q-1 (commit 8151d3e): Terraform modules + staging root + production stub
+  .gitignore                                             NEW
+  README.md                                              EDIT — layout + bootstrap + env table
+  scripts/bootstrap_project.sh                           NEW — 1-time GCP setup, WIF, state bucket
+  terraform/modules/network/{main,variables,outputs}.tf  NEW — VPC, subnet, router, NAT, PSC
+  terraform/modules/cloud-sql/{...}.tf                   NEW — Postgres 16, private IP, PITR, daily backups
+  terraform/modules/gke/{...}.tf                         NEW — private cluster + 3 node pools
+  terraform/modules/gcs-buckets/{...}.tf                 NEW — 7 buckets w/ versioning/lifecycle/Object Lock
+  terraform/modules/artifact-registry/{...}.tf           NEW — Docker repo
+  terraform/modules/iam/{...}.tf                         NEW — 3 GSAs + WI bindings + bucket/AR IAM
+  terraform/staging/{providers,backend,variables,main,outputs}.tf + tfvars.example   NEW
+  terraform/production/{...}.tf + tfvars.example         NEW — commented-out stub
+
+Q-2 (commit 6131563): Secret Manager
+  terraform/modules/secrets/{main,variables,outputs}.tf  NEW — metadata-only secrets
+  terraform/staging/main.tf                              EDIT — wire up secrets module
+  terraform/staging/outputs.tf                           EDIT — export secret_seed_commands
+
+Q-3 (commit ab755ca): Helm chart + deploy pipeline
+  terraform/modules/secrets/variables.tf                 EDIT — rename short-names to match env vars
+  helm/jackpot-api/Chart.yaml                            NEW
+  helm/jackpot-api/values.yaml                           NEW — defaults
+  helm/jackpot-api/values-staging.yaml                   NEW — staging overrides
+  helm/jackpot-api/templates/_helpers.tpl                NEW
+  helm/jackpot-api/templates/serviceaccount.yaml         NEW — WI annotation
+  helm/jackpot-api/templates/configmap.yaml              NEW — env + bucket vars
+  helm/jackpot-api/templates/deployment.yaml             NEW — configmap checksum annotation
+  helm/jackpot-api/templates/service.yaml                NEW — ClusterIP
+  helm/jackpot-api/templates/job-migrations.yaml         NEW — Helm pre-upgrade hook
+  .github/workflows/deploy-staging.yml                   NEW — WIF → build → push → migrate → helm
+
+Q-6 (commit 5a46d9a): Smoke test
+  scripts/staging_smoke_test.sh                          NEW — /health, /openapi, auth gate, --check-kube, --check-buckets
+
+Q-7 (commit dcf95fd): Docs
+  docs/staging_access.md                                 NEW — endpoints, access, seed, redeploy, logs, rollback
+  docs/production_runbook.md                             NEW — Month 3 stub
+  docs/.env.staging.example                              NEW — backend env var surface for staging
+```
+
+Next up (manual, user-operated): Q-4 = `terraform apply` + `gcloud secrets versions add` + first Helm deploy; Q-5 = end-to-end Cecret run through staging. Q-8 (git tag `month-2-complete`) is gated on both.
