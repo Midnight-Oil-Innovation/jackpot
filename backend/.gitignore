@@ -25,3 +25,4 @@ docs/schema.md
 Thumbs.db
 .hypothesis/
 /uv
+.claude/
