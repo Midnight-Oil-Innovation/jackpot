@@ -1,7 +1,7 @@
 # JACKPOT — To-Do List
 
 **Last updated:** 2026-04-16
-**Baseline:** 362 tests passing, 82.84% coverage — Session C (users) complete
+**Baseline:** 371 tests passing, 83.36% coverage — Session D (domain_whitelist) complete
 **Active sprint:** Month 1 — Core Router Implementation
 
 Instructions for Claude Code: Work through items in order. Check off each item
@@ -210,18 +210,18 @@ These must be completed before any router session. They are blocking bugs.
 
 ## Phase 4 — Session D: domain_whitelist router
 
-- [ ] **D-1: Implement `GET /api/v1/domain-whitelist/`** (Platform Admin only)
-- [ ] **D-2: Implement `POST /api/v1/domain-whitelist/`** (Platform Admin only)
+- [x] **D-1: Implement `GET /api/v1/domain-whitelist/`** (Platform Admin only)
+- [x] **D-2: Implement `POST /api/v1/domain-whitelist/`** (Platform Admin only)
   - Normalizes domain to lowercase
   - Returns 409 on duplicate
-- [ ] **D-3: Implement `DELETE /api/v1/domain-whitelist/{id}`** (Platform Admin only)
+- [x] **D-3: Implement `DELETE /api/v1/domain-whitelist/{id}`** (Platform Admin only)
 
-- [ ] **D-4: Write `tests/test_domain_whitelist_api.py`**
+- [x] **D-4: Write `tests/test_domain_whitelist_api.py`**
   - Add domain, list shows it, delete removes it
   - Duplicate add → 409
   - Non-admin → 403
 
-- [ ] **D-5: Run tests and commit**
+- [x] **D-5: Run tests and commit**
   - `uv run pytest tests/test_domain_whitelist_api.py -v`
   - `gac "feat: domain_whitelist router + tests"`
 

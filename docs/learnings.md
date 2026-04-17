@@ -163,3 +163,45 @@ client ─► PATCH /api/v1/users/{id}  {is_platform_admin: true}
 ```
 
 ---
+
+## Session D: domain_whitelist router — 2026-04-16
+
+**What was built:** Three endpoints for `/api/v1/domain-whitelist/` — GET list (paginated), POST add (normalise + dedup), DELETE remove (hard delete, not soft) — plus 9-test integration suite. New baseline: 371 tests passing, 83.36% coverage (+9 tests, +0.52%). Router coverage: 100% (51 stmts).
+
+**Key decisions:**
+- **Hard delete, not soft delete.** Orgs/labs/users all use soft delete because a deactivated row still has FK children (samples, memberships, audit log). Whitelist entries have no children — the domain is just a string that gates self-registration. Removing from the whitelist must take effect immediately, so a `DELETE` row is the right move. The `before` state is captured in the audit log to preserve history.
+- **Normalise to lowercase at the API boundary.** Input `UPPER.example` is stored as `upper.example`. The UNIQUE constraint on `domain` is case-sensitive at the DB level, so without normalisation two case variants of the same domain could both be whitelisted. A case-insensitive pre-check before insert makes the 409 deterministic.
+- Added two new audit actions — `ADD_WHITELIST_DOMAIN` and `REMOVE_WHITELIST_DOMAIN`. The spec section for governance (Rule 4) requires every state-changing endpoint to audit, and the domain list directly gates who can register, so the audit trail is non-optional.
+- No PATCH endpoint — spec omits it. If admins want to fix a typo they remove the bad entry and add the new one; the two-step trail is clearer in audit review than a silent rename.
+
+**Watch out for:**
+- The seed data in `db/init.sql` includes `asu.edu` and `gmail.com` — the first list test asserts `asu.edu` is present, which works as long as the seed INSERT runs before the Alembic migrations in conftest. Seed INSERTs are at the bottom of `init.sql` and run as part of `conn.execute(text(sql))` before the Alembic step, so this is safe — but any future test that expects an empty whitelist would need to clean up seed entries first.
+- `execute_write(...)` on a DELETE with no RETURNING still returns `[]`. The handler fetches the `before` row via `execute_query` first (for 404 and audit), which is the right pattern because Critical Rule 40 requires RETURNING only on INSERT/UPDATE.
+- Removed `backend/routers/domain_whitelist.py` from `pyproject.toml` coverage omit — same pattern as every previous session.
+
+**ASCII diagram:**
+
+```
+client ─► POST /api/v1/domain-whitelist/  {"domain": "UPPER.example"}
+           │
+           ▼
+  require_platform_admin(user)       ── 403 if not admin
+           │
+           ▼
+  normalised = payload.domain.strip().lower()   # "upper.example"
+           │
+           ▼
+  ┌─ injected db session ──────────────────────────────────┐
+  │  SELECT 1 FROM domain_whitelist WHERE domain=:d        │
+  │     → if present → 409 CONFLICT                         │
+  │  INSERT INTO domain_whitelist (domain, description)    │
+  │     VALUES (:normalised, :desc) RETURNING *             │
+  │  log_audit(ADD_WHITELIST_DOMAIN, db_conn=db)           │
+  │  commit()                                              │
+  └────────────────────────────────────────────────────────┘
+           │
+           ▼
+  success(data=row, status_code=201)
+```
+
+---

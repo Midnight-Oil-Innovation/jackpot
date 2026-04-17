@@ -50,6 +50,10 @@ class AuditActions:
     CHANGE_MEMBER_ROLE = "CHANGE_MEMBER_ROLE"
     UPDATE_USER = "UPDATE_USER"
 
+    # Domain whitelist
+    ADD_WHITELIST_DOMAIN = "ADD_WHITELIST_DOMAIN"
+    REMOVE_WHITELIST_DOMAIN = "REMOVE_WHITELIST_DOMAIN"
+
 
 def log_audit(
     action: str,
