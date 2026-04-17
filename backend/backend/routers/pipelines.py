@@ -2,8 +2,8 @@
 Pipelines router.
 
 Implements:
-  POST /api/v1/pipelines/events  — Nextflow weblog receiver (no auth,
-                                   run_id acts as bearer token)
+  POST /api/v1/pipelines/events                         — Nextflow weblog receiver
+  POST /api/v1/pipelines/{run_id}/results/{result_type} — parser registration
 
 Stubs (Month 2 implementation):
   GET  /api/v1/pipelines/
@@ -15,13 +15,30 @@ Stubs (Month 2 implementation):
   POST /api/v1/pipelines/{run_id}/resume
 """
 
+import hmac
+import json
 import logging
+import sys
+from pathlib import Path
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
+from pydantic import ValidationError
 
+from backend.audit import AuditActions, log_audit
 from backend.database import execute_query, execute_write, get_db_dep
 from backend.pipeline_results_loader import load_pipeline_results
+from backend.responses import error, success
+
+# jackpot-nf ships the canonical result schemas used by both the parsers
+# and this registration endpoint. The submodule lives at ``nf/`` next to
+# this repo and exposes the ``shared`` package. Prepend its path so
+# ``from shared.schemas import RESULT_SCHEMAS`` resolves.
+_NF_ROOT = Path(__file__).resolve().parents[2] / "nf"
+if str(_NF_ROOT) not in sys.path:
+    sys.path.insert(0, str(_NF_ROOT))
+
+from shared.schemas import RESULT_SCHEMAS  # noqa: E402
 
 logger = logging.getLogger(__name__)
 
@@ -214,6 +231,161 @@ def receive_pipeline_event(
                 logger.error("Failed to store task trace: %s", e)
 
     return {"status": "ok", "event": event, "run_id": run_id}
+
+
+# ── Parser registration ───────────────────────────────────────────────────────
+
+
+def _split_jsonb_fields(payload: dict) -> tuple[list[str], list[str], dict]:
+    """
+    Build column list, bind-placeholder list, and params for an INSERT
+    from a Pydantic-validated payload. dict/list values are serialized
+    to JSON and cast to JSONB; scalars pass through.
+    """
+    cols: list[str] = []
+    placeholders: list[str] = []
+    params: dict = {}
+    for key, value in payload.items():
+        cols.append(key)
+        if isinstance(value, dict | list):
+            placeholders.append(f"CAST(:{key} AS JSONB)")
+            params[key] = json.dumps(value)
+        else:
+            placeholders.append(f":{key}")
+            params[key] = value
+    return cols, placeholders, params
+
+
+@router.post("/{run_id}/results/{result_type}")
+def register_pipeline_result(
+    run_id: str,
+    result_type: str,
+    body: dict[str, Any],
+    request: Request,
+    db=Depends(get_db_dep),  # noqa: B008
+):
+    """
+    Parser registration endpoint.
+
+    Parsers running inside a pipeline POST canonical result payloads here.
+    The run is authenticated with a per-run ``X-Pipeline-Token`` minted
+    when the pipeline was launched. The payload is validated against the
+    Pydantic schema registered for ``result_type``, persisted into the
+    matching typed result table, and summarized into ``pipeline_results``
+    in the same transaction.
+    """
+    schema_cls = RESULT_SCHEMAS.get(result_type)
+    if schema_cls is None:
+        return error(
+            "UNKNOWN_RESULT_TYPE",
+            f"Unknown result_type: {result_type}",
+            detail={"allowed": sorted(RESULT_SCHEMAS.keys())},
+            status_code=422,
+        )
+
+    rows = execute_query(
+        """
+        SELECT pipeline_token, pipeline_name, pipeline_version
+        FROM pipeline_runs
+        WHERE run_id = :run_id
+        """,
+        {"run_id": run_id},
+        conn=db,
+    )
+    if not rows:
+        return error(
+            "RUN_NOT_FOUND",
+            f"Unknown run_id: {run_id}",
+            status_code=404,
+        )
+    run = rows[0]
+
+    supplied_token = request.headers.get("X-Pipeline-Token", "")
+    expected_token = run.get("pipeline_token") or ""
+    if not expected_token or not hmac.compare_digest(supplied_token, expected_token):
+        return error(
+            "INVALID_TOKEN",
+            "Invalid or missing X-Pipeline-Token",
+            status_code=401,
+        )
+
+    try:
+        validated = schema_cls(**body)
+    except ValidationError as exc:
+        return error(
+            "INVALID_PAYLOAD",
+            "Payload failed schema validation",
+            detail={"errors": exc.errors()},
+            status_code=422,
+        )
+
+    record = validated.model_dump(exclude_unset=True)
+    record.setdefault("run_id", run_id)
+    # run_id from the URL is authoritative — never trust the body.
+    record["run_id"] = run_id
+
+    cols, placeholders, params = _split_jsonb_fields(record)
+    insert_sql = (
+        f"INSERT INTO {result_type} ({', '.join(cols)}) "
+        f"VALUES ({', '.join(placeholders)}) "
+        "ON CONFLICT DO NOTHING RETURNING id"
+    )
+    try:
+        inserted = execute_write(insert_sql, params, conn=db)
+    except Exception as exc:
+        logger.error("Typed-table insert failed for %s/%s: %s", run_id, result_type, exc)
+        raise HTTPException(status_code=500, detail="Result persistence failed") from exc
+
+    if not inserted:
+        return error(
+            "DUPLICATE_RESULT",
+            "Result already registered for this run/sample",
+            status_code=409,
+        )
+    result_id = inserted[0]["id"]
+
+    sample_id = record.get("sample_id")
+    metrics_payload = json.dumps({result_type: {"registered": True}})
+    execute_write(
+        """
+        INSERT INTO pipeline_results
+            (run_id, sample_id, pipeline_name, pipeline_version, metrics)
+        VALUES
+            (:run_id, :sample_id, :pipeline_name, :pipeline_version,
+             CAST(:metrics AS JSONB))
+        ON CONFLICT (run_id, sample_id) DO UPDATE SET
+            metrics = pipeline_results.metrics || EXCLUDED.metrics,
+            pipeline_name = COALESCE(pipeline_results.pipeline_name, EXCLUDED.pipeline_name),
+            pipeline_version = COALESCE(
+                pipeline_results.pipeline_version, EXCLUDED.pipeline_version
+            ),
+            updated_at = NOW()
+        """,
+        {
+            "run_id": run_id,
+            "sample_id": sample_id,
+            "pipeline_name": run.get("pipeline_name"),
+            "pipeline_version": run.get("pipeline_version"),
+            "metrics": metrics_payload,
+        },
+        conn=db,
+    )
+
+    log_audit(
+        action=AuditActions.REGISTER_PIPELINE_RESULT,
+        actor_id=None,
+        resource_type="pipeline_result",
+        resource_id=f"{run_id}:{result_type}:{result_id}",
+        before=None,
+        after={"result_type": result_type, "sample_id": sample_id},
+        metadata={"run_id": run_id},
+        db_conn=db,
+    )
+
+    return success(
+        {"status": "registered", "result_id": result_id},
+        status_code=201,
+    )
 
 
 # ── Stubs — implement in Month 2 ──────────────────────────────────────────────

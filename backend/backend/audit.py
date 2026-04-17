@@ -66,6 +66,9 @@ class AuditActions:
     CREATE_TOKEN = "CREATE_TOKEN"
     REVOKE_TOKEN = "REVOKE_TOKEN"
 
+    # Pipelines
+    REGISTER_PIPELINE_RESULT = "REGISTER_PIPELINE_RESULT"
+
 
 def log_audit(
     action: str,

@@ -459,7 +459,7 @@ Log findings to docs/review_log.md and resolve before continuing.
 
 ## Phase 11 — Session I: jackpot-nf plugin scaffolding + result registration endpoint
 
-- [ ] **I-1: Create new `jackpot-nf` repo**
+- [x] **I-1: Create new `jackpot-nf` repo**
 
   - Location: `~/ASU/jackpot/jackpot-nf`
 
@@ -483,7 +483,7 @@ Log findings to docs/review_log.md and resolve before continuing.
 
   - Verify: `git submodule status` shows jackpot-nf
 
-- [ ] **I-2: Implement `jackpot_register_client.py`**
+- [x] **I-2: Implement `jackpot_register_client.py`**
 
   - Shared HTTP client used by all parsers to POST results back to JACKPOT
   - Reads `JACKPOT_API_URL`, `JACKPOT_RUN_ID`, `JACKPOT_PIPELINE_TOKEN` from env
@@ -491,13 +491,13 @@ Log findings to docs/review_log.md and resolve before continuing.
   - Retries on 5xx with exponential backoff (max 3 attempts)
   - Raises `RegistrationError` on 4xx or persistent 5xx
 
-- [ ] **I-3: Define Pydantic result schemas in `shared/schemas/`**
+- [x] **I-3: Define Pydantic result schemas in `shared/schemas/`**
 
   - One schema per result table: `AMRResult`, `TypingResult`, `PangolinResult`, `NextcladeResult`, `TBTypingResult`, `AssemblyQC`, `MAGQC`, `TaxonomicProfile`, `WastewaterLineageAbundance`
   - Each schema mirrors the corresponding DB table exactly
   - Shared with `backend/models_generated.py` via schema import
 
-- [ ] **I-4: Implement `POST /api/v1/pipelines/{run_id}/results/{result_type}`**
+- [x] **I-4: Implement `POST /api/v1/pipelines/{run_id}/results/{result_type}`**
 
   - Router: `backend/routers/pipelines.py`
   - Auth: `pipeline_token` from header must match `pipeline_runs.pipeline_token`
@@ -505,14 +505,14 @@ Log findings to docs/review_log.md and resolve before continuing.
   - Writes to correct typed table in same transaction as pipeline_results metrics update
   - Returns `{"status": "registered", "result_id": N}`
 
-- [ ] **I-5: Implement `hamronization_normalizer.py`**
+- [x] **I-5: Implement `hamronization_normalizer.py`**
 
   - Wrapper around hAMRonization tool (pip install hAMRonization)
   - Input: raw AMR output file + tool name (amrfinderplus / resfinder / rgi)
   - Output: list of AMRResult objects in canonical format
   - Used by bactopia, Grandeur, and pathogensurveillance parsers
 
-- [ ] **I-6: Write `tests/test_pipelines_registration_api.py`**
+- [x] **I-6: Write `tests/test_pipelines_registration_api.py`**
 
   - Valid registration → 201, result in DB
   - Wrong pipeline_token → 401
@@ -520,7 +520,7 @@ Log findings to docs/review_log.md and resolve before continuing.
   - Duplicate registration → 409 or idempotent update (decide via spec)
   - Test fixture: mock pipeline_runs row with valid pipeline_token
 
-- [ ] **I-7: Run tests and commit**
+- [x] **I-7: Run tests and commit**
 
   - `uv run pytest tests/test_pipelines_registration_api.py -v`
   - `uv run pytest --cov=backend --cov-fail-under=60`
