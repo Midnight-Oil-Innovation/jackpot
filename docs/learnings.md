@@ -48,3 +48,65 @@ client ─► POST /api/v1/organizations/
 ```
 
 ---
+
+## Session B: labs + lab_membership router — 2026-04-16
+
+**What was built:** Nine endpoints for `/api/v1/labs/` — lab CRUD (POST, GET list, GET {id}, PATCH, DELETE soft-delete) plus member lifecycle (GET/POST members, PATCH/DELETE members/{user_id}) — with 17-test integration suite. New baseline: 346 tests passing, 81.78% coverage (+17 tests, +1.83%). Router coverage: 93% (166 stmts, 12 missed — defensive branches).
+
+**Key decisions:**
+- `require_platform_admin` gates create/list-all/delete; `require_lab_director` gates PATCH + all member endpoints. GET {id} allows Platform Admin OR any lab member (via `get_user_lab_membership`). This mirrors APGAP's role boundaries exactly.
+- GET list branches on `is_platform_admin`: admins see every lab paginated; others see only labs where `lab_membership.user_id = me`, via an INNER JOIN in the base query before `paginate()` wraps it. Kept the search-by-display_name filter uniform across both branches.
+- POST /members validates three ways before insert: user must exist (404), permission_group must exist (404), and `(lab_id, user_id)` must not already be a member (409). The 409 pre-check beats catching the UNIQUE violation because it lets us return a structured envelope instead of a SQL error.
+- All five state-changing endpoints log the correct AuditAction from the CLAUDE.md constants: `CREATE_LAB`, `UPDATE_LAB` (with `metadata={"soft_delete": True}` for DELETE), `ADD_LAB_MEMBER`, `CHANGE_MEMBER_ROLE`, `REMOVE_LAB_MEMBER`. No new constants invented.
+- Ruff `SIM102` flagged nested `if not admin: if not member:` — collapsed to one `and` expression. `F841` flagged a discarded response from the "theirs lab" create in the list-test; dropped the assignment.
+
+**Watch out for:**
+- **FK `audit_log_user_id_fkey` persists through the rename migration.** The migration renames the column `user_id` → `actor_id` but the FK constraint keeps its original name. So deleting a test user that has any audit row (even one from a previous test) still raises `violates foreign key constraint "audit_log_user_id_fkey"`. `_cleanup_user()` must `UPDATE audit_log SET actor_id = NULL WHERE actor_id IN (SELECT id FROM users WHERE email = :e)` before DELETE. Learned the hard way on the director/reader tests.
+- Three-step cleanup ordering for lab tests: (1) DELETE lab_membership rows pointing at the lab, (2) DELETE sequencing_labs rows with the same lab_id (FK from Critical Rule 21), (3) DELETE the lab. Skipping step 2 breaks tests that happen to run after any ingest-seeded data.
+- `is_lab_director=True` plus `permission_group_id = 'Lab Director'` are independent columns — both must be set when adding a director. `require_lab_director` checks the boolean flag only, so a permission_group of Lab Director without the flag won't grant write access.
+- Removed `backend/routers/labs.py` from `pyproject.toml` coverage omit — same rule as organizations.
+
+**ASCII diagram:**
+
+```
+client ─► GET /api/v1/labs/
+           │
+           ▼
+  get_current_user(request)
+           │
+     ┌─────┴─────┐
+     │           │
+  is_platform_  else (lab member only)
+  admin?
+     │           │
+     ▼           ▼
+  SELECT *    SELECT l.* FROM labs l
+  FROM labs   JOIN lab_membership lm
+              ON lm.lab_id = l.id
+              WHERE lm.user_id = :me
+     │           │
+     └─────┬─────┘
+           ▼
+  paginate(query, page, per_page, sort_by, sort_dir)
+  success_list(data, page, per_page, total)
+
+client ─► POST /api/v1/labs/{id}/members
+           │
+           ▼
+  require_lab_director(user, lab_id)  ── 403 if not director
+           │
+           ▼
+  ┌─ single injected db session ─────────────────────────┐
+  │  SELECT 1 FROM users WHERE id=:uid       → 404       │
+  │  SELECT 1 FROM permission_groups         → 404       │
+  │  SELECT 1 FROM lab_membership UNIQUE     → 409       │
+  │  INSERT INTO lab_membership RETURNING *              │
+  │  log_audit(ADD_LAB_MEMBER, db_conn=db)               │
+  │  commit()                                            │
+  └──────────────────────────────────────────────────────┘
+           │
+           ▼
+  success(data=row, status_code=201)
+```
+
+---

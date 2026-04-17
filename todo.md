@@ -1,7 +1,7 @@
 # JACKPOT — To-Do List
 
 **Last updated:** 2026-04-16
-**Baseline:** 329 tests passing, 79.95% coverage — Session A (organizations) complete
+**Baseline:** 346 tests passing, 81.79% coverage — Session B (labs + lab_membership) complete
 **Active sprint:** Month 1 — Core Router Implementation
 
 Instructions for Claude Code: Work through items in order. Check off each item
@@ -126,49 +126,49 @@ These must be completed before any router session. They are blocking bugs.
 
 ## Phase 2 — Session B: labs + lab_membership router
 
-- [ ] **B-1: Implement `POST /api/v1/labs/`** (Platform Admin only)
+- [x] **B-1: Implement `POST /api/v1/labs/`** (Platform Admin only)
   - Requires valid `organization_id`
   - Sets `active=True`
   - Logs `CREATE_LAB`
 
-- [ ] **B-2: Implement `GET /api/v1/labs/`** (Platform Admin sees all; others see their labs)
+- [x] **B-2: Implement `GET /api/v1/labs/`** (Platform Admin sees all; others see their labs)
   - For non-admins: joins `lab_membership` to filter to user's labs
   - Paginated
 
-- [ ] **B-3: Implement `GET /api/v1/labs/{id}`** (lab member or Platform Admin)
+- [x] **B-3: Implement `GET /api/v1/labs/{id}`** (lab member or Platform Admin)
   - Returns 403 if requester has no membership and is not Platform Admin
 
-- [ ] **B-4: Implement `PATCH /api/v1/labs/{id}`** (Lab Director or Platform Admin)
+- [x] **B-4: Implement `PATCH /api/v1/labs/{id}`** (Lab Director or Platform Admin)
   - Partial update with `model_dump(exclude_none=True)`
   - Logs `UPDATE_LAB`
 
-- [ ] **B-5: Implement `DELETE /api/v1/labs/{id}`** (Platform Admin only)
+- [x] **B-5: Implement `DELETE /api/v1/labs/{id}`** (Platform Admin only)
   - Soft delete: `active=False`
 
-- [ ] **B-6: Implement `GET /api/v1/labs/{id}/members`** (Lab Director or Platform Admin)
+- [x] **B-6: Implement `GET /api/v1/labs/{id}/members`** (Lab Director or Platform Admin)
   - Returns list of users with their `permission_group` and `is_lab_director` flag
 
-- [ ] **B-7: Implement `POST /api/v1/labs/{id}/members`** (Lab Director or Platform Admin)
+- [x] **B-7: Implement `POST /api/v1/labs/{id}/members`** (Lab Director or Platform Admin)
   - Adds user to `lab_membership` with a `permission_group_id`
   - Logs `ADD_LAB_MEMBER`
   - Returns 409 if user is already a member
 
-- [ ] **B-8: Implement `PATCH /api/v1/labs/{id}/members/{user_id}`** (Lab Director or Platform Admin)
+- [x] **B-8: Implement `PATCH /api/v1/labs/{id}/members/{user_id}`** (Lab Director or Platform Admin)
   - Changes `permission_group_id` and/or `is_lab_director` flag
   - Logs `CHANGE_MEMBER_ROLE`
 
-- [ ] **B-9: Implement `DELETE /api/v1/labs/{id}/members/{user_id}`** (Lab Director or Platform Admin)
+- [x] **B-9: Implement `DELETE /api/v1/labs/{id}/members/{user_id}`** (Lab Director or Platform Admin)
   - Removes from `lab_membership`
   - Logs `REMOVE_LAB_MEMBER`
 
-- [ ] **B-10: Write `tests/test_labs_api.py`**
+- [x] **B-10: Write `tests/test_labs_api.py`**
   - Lab CRUD with role enforcement
   - Membership lifecycle: add → change role → remove
   - Non-member GET → 403
   - Lab Reader cannot PATCH lab → 403
   - Duplicate member add → 409
 
-- [ ] **B-11: Run tests and commit**
+- [x] **B-11: Run tests and commit**
   - `uv run pytest tests/test_labs_api.py -v`
   - `uv run pytest --cov=backend --cov-fail-under=60`
   - `gac "feat: labs router — CRUD + lab_membership endpoints + tests"`
