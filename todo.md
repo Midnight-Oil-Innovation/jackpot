@@ -1,7 +1,7 @@
 # JACKPOT — To-Do List
 
 **Last updated:** 2026-04-16
-**Baseline:** 418 tests passing, 85.33% coverage — Session G (ingest router) complete
+**Baseline:** 450 tests passing, 86.23% coverage — Session H (samples router) complete
 **Active sprint:** Month 1 — Core Router Implementation
 
 Instructions for Claude Code: Work through items in order. Check off each item
@@ -339,7 +339,7 @@ single line.
 
 ## Phase 8 — Session H: samples router
 
-- [ ] **H-1: Implement `GET /api/v1/samples/`** (authenticated, access-controlled)
+- [x] **H-1: Implement `GET /api/v1/samples/`** (authenticated, access-controlled)
   - Full filter surface: `organism_name`, `source_type`, `sector`, `quality_status`,
     `scrub_status`, `sharing_level`, `lab_id`, `project_id`, `date_from`, `date_to`,
     `surveillance_relevant`
@@ -347,11 +347,11 @@ single line.
   - Applies `can_see_sample()` access control per row
   - Paginated via `paginate()`
 
-- [ ] **H-2: Implement `GET /api/v1/samples/{id}`** (access-controlled)
+- [x] **H-2: Implement `GET /api/v1/samples/{id}`** (access-controlled)
   - Applies `can_access_sample()` — returns 403 if denied, 404 if not found
   - Returns full sample detail including associated file list
 
-- [ ] **H-3: Implement `PATCH /api/v1/samples/{id}`** (Lab Collaborator+, own lab only)
+- [x] **H-3: Implement `PATCH /api/v1/samples/{id}`** (Lab Collaborator+, own lab only)
   - Partial update via `model_dump(exclude_none=True)`
   - Must NOT allow direct update of: `quality_status`, `surveillance_relevant`,
     `scrub_status`, `mmwr_week`, `iso_week`
@@ -359,20 +359,21 @@ single line.
     by calling validator
   - Logs `UPDATE_SAMPLE`
 
-- [ ] **H-4: Implement `DELETE /api/v1/samples/{id}`** (Lab Director or Platform Admin)
-  - Soft delete / archive — sets `is_archived=True`
+- [x] **H-4: Implement `DELETE /api/v1/samples/{id}`** (Lab Director or Platform Admin)
+  - Soft delete / archive — sets `is_deleted=True`, `deleted_at=NOW()`, `deleted_by_id`
+    (init.sql samples table uses `is_deleted`, not `is_archived`)
   - Logs `ARCHIVE_SAMPLE`
 
-- [ ] **H-5: Implement `GET /api/v1/samples/{id}/files`** (access-controlled)
+- [x] **H-5: Implement `GET /api/v1/samples/{id}/files`** (access-controlled)
   - Returns records from `sample_files` table for this sample
   - Applies same `can_access_sample()` check
 
-- [ ] **H-6: Implement `GET /api/v1/samples/{id}/download`** (access-controlled)
+- [x] **H-6: Implement `GET /api/v1/samples/{id}/download`** (access-controlled)
   - Generates presigned URL via `storage.generate_presigned_url()`
   - Default TTL: 3600 seconds
   - Returns `{"url": "...", "expires_in": 3600}`
 
-- [ ] **H-7: Write `tests/test_samples_router_api.py`**
+- [x] **H-7: Write `tests/test_samples_router_api.py`**
   - Get own sample (Lab Collaborator) → 200
   - Get other lab's PRIVATE sample → 403
   - Get DISCOVERABLE sample → 200 for authenticated users
@@ -384,7 +385,7 @@ single line.
   - Filter by `organism_name` → returns only matching samples
   - `?select_all=true` returns IDs only
 
-- [ ] **H-8: Run tests and commit**
+- [x] **H-8: Run tests and commit**
   - `uv run pytest tests/test_samples_router_api.py -v`
   - `uv run pytest --cov=backend --cov-fail-under=60`
   - `gac "feat: samples router — list/get/update/archive + tests"`

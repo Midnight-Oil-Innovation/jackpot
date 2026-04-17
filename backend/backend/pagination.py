@@ -18,6 +18,7 @@ class PaginatedResponse(BaseModel, Generic[T]):
 ALLOWED_SORT_COLUMNS = {
     "created_at",
     "updated_at",
+    "ingest_timestamp",
     "date_collected",
     "date_sequenced",
     "sample_id",
@@ -62,7 +63,7 @@ def paginate(
     count_result = execute_query(count_query, params)
     total = count_result[0]["total"] if count_result else 0
 
-    paged_query = f"{query} ORDER BY {sort_by} {sort_dir.upper()} " f"LIMIT :_limit OFFSET :_offset"
+    paged_query = f"{query} ORDER BY {sort_by} {sort_dir.upper()} LIMIT :_limit OFFSET :_offset"
     paged_params = {**(params or {}), "_limit": per_page, "_offset": offset}
     results = execute_query(paged_query, paged_params)
 
