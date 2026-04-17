@@ -1253,3 +1253,81 @@ Test delta: **515 → 537 passing tests** (+22); coverage 87.63%
 (backend/routers/sample_access.py at 91%). All existing sample endpoint
 tests continued to pass unchanged — the can_access_sample update was
 purely additive.
+
+---
+
+## Session P — Streamlit researcher pages (9 pages + smoke tests) — 2026-04-17
+
+**What was built:** Complete Streamlit researcher frontend under `frontend/` — 9 pages (dashboard, search, upload, data_entry, my_samples, datasets, access_requests, notifications, pipelines), a shared API client / session helpers / badge components, and a 12-test smoke suite that exercises every page import without a live Streamlit runtime. Net test delta: **537 → 549 passing tests** (+12), coverage 87.56%, still well above the 60% gate. Admin pages (lab_director, platform_admin, archive_requests, billing) are intentionally absent — Month 3 scope.
+
+**Key decisions:**
+- **Auto-discovery, not `st.navigation`.** Project pins streamlit==1.35.0; the explicit `st.Page`/`st.navigation` APIs landed in 1.36. Relying on Streamlit's filesystem page discovery (`frontend/pages/*.py` surfaces in the sidebar automatically) keeps us on the pinned version and saves an entrypoint rewrite when we eventually upgrade. `frontend/app.py` calls `main()` unconditionally at import time so auto-discovery still runs the landing page when Streamlit imports the module.
+- **Envelope unwrap in the API client, not in every page.** `ApiClient.get/post/patch/delete` reads the `{success, data}` JACKPOT envelope and returns `body["data"]` directly; errors raise `ApiError(code, message, status_code)`. Page code never sees the wrapper. This keeps the pages from being littered with `["data"]` indexing and means the eventual FastAPI → real auth migration is a single-file change.
+- **Test shim via `SimpleStreamlit`, not a headless browser.** `tests/test_streamlit_pages.py` installs a `sys.modules["streamlit"]` stub whose `__getattr__` returns a call-recording callable. Widgets return sensible defaults (text_input → `""` or supplied `value=`, checkbox → False, columns → list of shim instances, tabs/form/expander/container/sidebar → `_RecordingContext`). Pages import, their `render()` runs, and we assert `st.title` was called. Found two real bugs during test authoring: `with cols[i]:` failed because `columns()` returned plain `SimpleStreamlit` instances without context-manager protocol — fixed by adding `__enter__/__exit__` on the class itself (simpler than switching columns to a wrapper). No Playwright dependency, no browser, runs in 2s.
+- **`FakeApiClient` with canned defaults for the common paths.** Rather than per-test fixtures, the fake has built-in defaults for `/users/me`, `/samples/`, `/samples/<id>`, `/sample-access/requests`, `/pipelines/`, `/pipelines/{id}/{tasks,events}`. This means a page smoke test doesn't need to know which endpoints a given page touches — it just imports and renders. Canned responses are keyed by `(method, path)` so specific tests can still override.
+- **Two tiny backend additions for the frontend filters.** Added `owner_id` query parameter to `GET /samples/` (needed by dashboard and my_samples for "only mine") and a brand-new `GET /api/v1/pipelines/` list endpoint (needed by dashboard's active-runs panel). Both are small, spec-aligned additions rather than frontend-only workarounds. Also added `launched_at`/`completed_at` to `ALLOWED_SORT_COLUMNS` in `pagination.py` so pipeline lists sort cleanly. The pipelines router stays in the coverage omit list for now — its tests are in the Nextflow session.
+- **Placeholder pages announce themselves.** `notifications.py` and `datasets.py` back Month 3 routers that don't exist yet. Both render an `st.info` banner explaining the deferral, call the final expected endpoint anyway, and gracefully treat `404`/`501`/NETWORK as an empty list — so the day the router ships, removing the banner is the only edit needed.
+- **Post-submission edit warning is state-machine gated, not a second endpoint.** `data_entry.py`'s `_was_submitted()` checks `ncbi_submission_status`/`gisaid_submission_status`, `_submitted_warning()` compares the edited diff against `NCBI_GISAID_SENSITIVE_FIELDS`, and the save button won't fire the PATCH until the user has ticked an acknowledgement stored in `st.session_state["data_entry.ack_submitted"]`. Keeps backend simple — the guard is in the UI.
+- **Selection persists across pagination.** `search.py` stores `search.selected_ids` as a `set` in `st.session_state`. Row checkboxes sync to the set (add on check, discard on uncheck); select-all-N uses the backend's `?select_all=true` path which returns IDs only. The action bar then reads from the same set, and `datasets.py` pulls the same session-state key for the cross-page hand-off.
+
+**Watch out for:**
+- **`with cols[i]:` needs a context-manager on the column object.** Streamlit's real `st.columns()` returns objects that implement `__enter__`/`__exit__`. The first run of the smoke tests failed on three pages with `'SimpleStreamlit' object does not support the context manager protocol`. If anyone later refactors `SimpleStreamlit` to return a narrower stub, put those two methods back — every page uses `with cols[i]:` somewhere.
+- **`frontend/app.py` must call `main()` at import, not just under `__name__ == "__main__"`.** Streamlit's page loader imports the module; it never runs it as `__main__`. The current file guards both cases (`if __name__ == "__main__": main(); else: main()`) which is intentional belt-and-braces — don't "clean it up" without understanding that Streamlit never hits the `__main__` branch.
+- **`my_samples.py` Edit button uses `st.switch_page("pages/data_entry.py")`** — available since Streamlit 1.30. If the pin ever drops below 1.30, swap to setting session state and asking the user to click Data Entry in the sidebar.
+- **`sample-access` paths are hyphenated** (`/api/v1/sample-access/requests`), not underscored. Dashboard, access_requests page, and spec all agree, but I started to type `sample_access` multiple times — grep the page modules if a 404 shows up from the access-request panel.
+- **`FakeApiClient._default()` has to match the shape each page expects, not just the backend's canonical envelope.** For example dashboard's access-requests panel accepts both list-shaped and `{results: [...]}` responses; the fake returns a bare list to exercise that fallback path. If a real endpoint changes shape, update both the fake defaults and the page's defensive handling in lockstep.
+- **Coverage omit list already excludes pipelines/notifications/datasets.** Running `pytest` locally still shows 87.56% even though three of this session's routers aren't counted — that's by design (stub routers). Don't remove them from the omit list in `pyproject.toml` until their routers are fully implemented.
+
+**ASCII diagram — page → session → API → backend:**
+
+```
+      frontend/pages/<page>.py  (thin display layer, no business logic)
+              │
+              │ get_client()
+              ▼
+   frontend/lib/api.ApiClient  ──────────── ApiError(code, msg, status)
+        │            │                              ▲
+        │            │  POST/GET with               │
+        │            │  X-Mock-User-Email header    │
+        │            ▼                              │
+        │   httpx.Client  ─── JACKPOT envelope ─────┘
+        │                     {success, data} / {success, error}
+        │
+        └── unwraps body["data"], returns plain dict / list to the page
+
+   frontend/lib/session  caches /users/me under session_state["_jackpot_me"]
+                         (my_user_id / is_platform_admin / my_director_lab_ids)
+
+   tests/test_streamlit_pages.py
+        monkeypatch sys.modules["streamlit"] → SimpleStreamlit   (records calls)
+        monkeypatch api_mod.get_client       → FakeApiClient      (canned data)
+        importlib.import_module(page)        → render() runs      (asserts st.title)
+```
+
+**File inventory:**
+
+```
+frontend/__init__.py                          NEW — package marker
+frontend/lib/__init__.py                      NEW — package marker
+frontend/components/__init__.py               NEW — package marker
+frontend/pages/__init__.py                    NEW — package marker
+frontend/app.py                               NEW — Streamlit entrypoint
+frontend/lib/api.py                           NEW — ApiClient + ApiError + get_client
+frontend/lib/session.py                       NEW — /users/me cache + role helpers
+frontend/components/badges.py                 NEW — tier/sharing/scrub/run_status
+frontend/pages/dashboard.py                   NEW — 3-panel researcher home
+frontend/pages/search.py                      NEW — filter sidebar + bulk select
+frontend/pages/upload.py                      NEW — drag-drop ingest + scrub skip
+frontend/pages/data_entry.py                  NEW — guided edit + submit warning
+frontend/pages/my_samples.py                  NEW — scope-filtered owner view
+frontend/pages/datasets.py                    NEW — Month 3 placeholder
+frontend/pages/access_requests.py             NEW — my/incoming tabs
+frontend/pages/notifications.py               NEW — Month 3 placeholder
+frontend/pages/pipelines.py                   NEW — launch + 4-tab monitor + resume
+backend/routers/samples.py                    +owner_id filter param
+backend/routers/pipelines.py                  +GET /api/v1/pipelines/ list endpoint
+backend/pagination.py                         +launched_at/completed_at sort cols
+tests/test_streamlit_pages.py                 NEW — 12 smoke tests
+```
+
+Test delta: **537 → 549 passing tests** (+12); coverage 87.56%. The 9 pages load cleanly, react to the stub API without exceptions, and the ApiClient/envelope/badge units pass their isolated tests. Full end-to-end (Playwright) is Month 3 per spec.md line 702 — not blocking for Month 2 sign-off.

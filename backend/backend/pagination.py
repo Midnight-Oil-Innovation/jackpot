@@ -20,6 +20,8 @@ ALLOWED_SORT_COLUMNS = {
     "updated_at",
     "ingest_timestamp",
     "received_at",
+    "launched_at",
+    "completed_at",
     "requested_at",
     "approved_at",
     "denied_at",

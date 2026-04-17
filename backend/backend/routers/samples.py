@@ -203,6 +203,7 @@ def list_samples(
     sharing_level: str | None = None,
     lab_id: int | None = None,
     project_id: int | None = None,
+    owner_id: int | None = None,
     date_from: str | None = None,
     date_to: str | None = None,
     surveillance_relevant: bool | None = None,
@@ -246,6 +247,9 @@ def list_samples(
     if project_id is not None:
         where.append("s.project_id = :project_id")
         params["project_id"] = project_id
+    if owner_id is not None:
+        where.append("s.owner_id = :owner_id")
+        params["owner_id"] = owner_id
     if date_from:
         where.append("s.date_collected >= :date_from")
         params["date_from"] = date_from

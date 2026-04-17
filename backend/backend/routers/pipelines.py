@@ -2,6 +2,7 @@
 Pipelines router — launch, monitor, resume, BYOP skeleton, promotion.
 
 Implements:
+  GET    /api/v1/pipelines/                                 — paginated runs list
   POST   /api/v1/pipelines/launch                           — GCP Batch launch
   POST   /api/v1/pipelines/events                           — Nextflow weblog receiver
   GET    /api/v1/pipelines/{run_id}                         — run detail
@@ -101,6 +102,76 @@ def _fetch_run(run_id: str, db) -> dict | None:
         conn=db,
     )
     return rows[0] if rows else None
+
+
+# ── GET / ────────────────────────────────────────────────────────────────────
+
+
+@router.get("/")
+def list_pipeline_runs(
+    request: Request,
+    user_id: int | None = None,
+    lab_id: int | None = None,
+    project_id: int | None = None,
+    status: str | None = None,
+    pipeline_name: str | None = None,
+    page: int = Query(1, ge=1),
+    per_page: int = Query(50, ge=1, le=200),
+    sort_by: str = "launched_at",
+    sort_dir: str = "desc",
+    db=Depends(get_db_dep),  # noqa: B008
+):
+    """Paginated run list scoped to the caller's visibility.
+
+    Platform admins see every run; everyone else sees only runs in labs
+    they belong to (matching the lab_id stored on each run) OR runs they
+    launched themselves. Query params are additive filters inside that
+    visibility window.
+    """
+    user = get_current_user(request)
+
+    where: list[str] = []
+    params: dict = {}
+    if not user.get("is_platform_admin"):
+        where.append(
+            "(launched_by_id = :me OR lab_id IN "
+            "(SELECT lab_id FROM lab_membership WHERE user_id = :me))"
+        )
+        params["me"] = user["id"]
+
+    if user_id is not None:
+        where.append("launched_by_id = :user_id")
+        params["user_id"] = user_id
+    if lab_id is not None:
+        where.append("lab_id = :lab_id")
+        params["lab_id"] = lab_id
+    if project_id is not None:
+        where.append("project_id = :project_id")
+        params["project_id"] = project_id
+    if status:
+        where.append("status = :status")
+        params["status"] = status
+    if pipeline_name:
+        where.append("pipeline_name = :pipeline_name")
+        params["pipeline_name"] = pipeline_name
+
+    where_sql = " WHERE " + " AND ".join(where) if where else ""
+    base_query = f"SELECT * FROM pipeline_runs{where_sql}"
+    rows, total = paginate(
+        query=base_query,
+        params=params,
+        page=page,
+        per_page=per_page,
+        sort_by=sort_by,
+        sort_dir=sort_dir,
+    )
+    # strip the pipeline token — only the wrapper needs it
+    out = []
+    for r in rows:
+        d = _serialise(r)
+        d.pop("pipeline_token", None)
+        out.append(d)
+    return success_list(data=out, page=page, per_page=per_page, total=total)
 
 
 # ── POST /launch ──────────────────────────────────────────────────────────────

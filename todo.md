@@ -762,67 +762,67 @@ Log findings to docs/review_log.md and resolve before continuing.
 
 ## Phase 18 — Session P: Streamlit researcher pages
 
-- [ ] **P-1: `frontend/pages/dashboard.py`** — personal dashboard
+- [x] **P-1: `frontend/pages/dashboard.py`** — personal dashboard
   - Recent samples (last 10), pending access requests, active pipeline runs
   - Tier badges, quality_status indicators
   - Uses `GET /api/v1/samples/?owner=me`, `/sample_access/requests?requester_id=me`, `/pipelines/?user_id=me`
 
-- [ ] **P-2: `frontend/pages/search.py`** — sample search
+- [x] **P-2: `frontend/pages/search.py`** — sample search
   - Full filter sidebar: organism, source_type, sector, quality_status, sharing_level, lab, project, date range
   - Bulk select with select-all-N, persistent selection across filter changes
   - Split action bar: export / launch pipeline / add to dataset / request access
   - Tier badges on each result row
   - External database search toggle (JACKPOT samples vs external — uses `/api/v1/external-search/` when implemented; placeholder message for Month 2)
 
-- [ ] **P-3: `frontend/pages/upload.py`** — ingest UI
+- [x] **P-3: `frontend/pages/upload.py`** — ingest UI
   - Drag-and-drop file upload + metadata form
   - Live tier indicator as fields are completed
   - Scrubber skip request button with justification
   - Multi-file support: shows paired R1/R2 detection, lane grouping
   - Calls `POST /api/v1/ingest/upload`
 
-- [ ] **P-4: `frontend/pages/data_entry.py`** — guided metadata entry
+- [x] **P-4: `frontend/pages/data_entry.py`** — guided metadata entry
   - Used for completing pending Globus-imported samples and editing existing samples
   - Pre-filled form from sample record
   - Post-submission edit warning for NCBI/GISAID-submitted samples (per backlog topic 57)
   - Auto-save draft every 30s
   - Calls `PATCH /api/v1/samples/{id}`
 
-- [ ] **P-5: `frontend/pages/my_samples.py`** — user's samples
+- [x] **P-5: `frontend/pages/my_samples.py`** — user's samples
   - Table of samples where current user is owner/submitting_lab_member
   - Tier badges, scrub_status icons, quick edit link
   - Filters: only mine / my lab / my project
 
-- [ ] **P-6: `frontend/pages/datasets.py`** — analytical datasets
+- [x] **P-6: `frontend/pages/datasets.py`** — analytical datasets
   - List user's accessible datasets
   - Create new dataset from selection (flows back from search page)
   - Export: CSV / BCO / sample manifest
   - Microreact integration stub
 
-- [ ] **P-7: `frontend/pages/access_requests.py`** — access request management
+- [x] **P-7: `frontend/pages/access_requests.py`** — access request management
   - Tabs: my requests (as requester) / incoming (as Lab Director)
   - Approve/deny UI with grant duration selector
   - Request history with status timeline
 
-- [ ] **P-8: `frontend/pages/notifications.py`** — notification inbox
+- [x] **P-8: `frontend/pages/notifications.py`** — notification inbox
   - List with read/unread filter
   - Mark all read button
   - Click notification → navigate to action_url
   - Calls `GET /api/v1/notifications/` (router deferred to Month 3, use placeholder)
 
-- [ ] **P-9: `frontend/pages/pipelines.py`** — pipeline launch + monitor
+- [x] **P-9: `frontend/pages/pipelines.py`** — pipeline launch + monitor
   - Launch dialog: pipeline selector, parameter form auto-generated from nextflow_schema.json
   - Compatibility check badges (soft warnings overridable, hard blocks explained)
   - Four-tab monitoring view: Overview / Tasks / Events / Files
   - Resume button for FAILED runs
   - MultiQC iframe for completed runs
 
-- [ ] **P-10: Write `tests/test_streamlit_pages.py`**
+- [x] **P-10: Write `tests/test_streamlit_pages.py`**
   - Smoke tests: each page imports cleanly, renders without errors
   - Mock API responses, verify page reacts correctly
   - No full end-to-end UI tests in Month 2 (Playwright deferred to Month 3)
 
-- [ ] **P-11: Run tests and commit**
+- [x] **P-11: Run tests and commit**
 
 ---
 
