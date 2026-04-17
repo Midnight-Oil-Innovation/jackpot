@@ -350,3 +350,128 @@ client ─► GET /api/v1/tokens/
 ```
 
 ---
+
+## Session G: ingest router — 2026-04-16
+
+**What was built:** `/api/v1/ingest/upload` (GUI multipart), `/api/v1/ingest/csv`
+(bulk CSV), and `/api/v1/ingest/globus` (Platform-Admin webhook). 19 new tests.
+New baseline: 418 tests passing, 85.33% coverage (+19 tests, +0.25%). Commit
+`3c74b24`.
+
+**Key decisions**
+- **Shared `_ingest_one()` core** takes metadata, URI map, size map, user, db,
+  and ingest_method. This keeps the validator → sequencing-lab check →
+  epiweek → scrub_status → quality/surveillance → INSERT samples + sample_files
+  → audit pipeline in exactly one place. `/upload` stages files first and
+  computes URIs; `/csv` constructs URIs from the `gs://jackpot-staging/<sid>/`
+  convention since CSV rows reference pre-staged files; `/globus` doesn't call
+  it at all — it only notifies Lab Directors.
+- **Column whitelist via `_SAMPLE_COLUMNS` frozenset**, then dynamic INSERT
+  from sorted present keys. This lets the endpoint accept partial payloads
+  (only Tier 1 required fields) without hand-writing a Pydantic model for
+  every combination of source_type × tier. Bad keys are silently dropped.
+  Trade-off vs. a strict Pydantic model: we rely on `validate_sample()` for
+  semantic checks, and the whitelist for SQL safety.
+- **scrub_status derived from `file_detector.get_file_type`**: any `FASTQ`
+  present → `PENDING`; all `FASTA` → `SKIPPED`. This matches spec rule 4
+  (raw reads scrubbed; consensus sequences skipped). The scrub_status
+  applied identically to the samples row and each sample_files row so the
+  scrubber queue picks them up consistently.
+- **`compute_epiweeks(date_collected, precision)`** called in `_ingest_one`
+  before INSERT — respects the validator's precision read from
+  `metadata["date_collected_precision"]`. Year/month precision returns
+  `None` across all four columns; day returns live MMWR + ISO values.
+- **`/globus` uses `log_audit(CREATE_SAMPLE, resource_type='globus_deposit')`**
+  even though no sample row is created. The action is still a "sample
+  creation lifecycle event" — the downstream metadata completion workflow
+  produces the actual row later. This preserves the chain of custody from
+  first touch to final sample.
+- **Type coercion in `_coerce_types()`**: `lab_id`, `project_id`, `host_age`,
+  etc. can arrive as strings from JSON/CSV but the DB expects `INTEGER`.
+  A focused coercion helper keeps the INSERT clean rather than scattering
+  `int()` calls through the builder.
+- **FASTA-only scrub skip** vs. validator "SKIP via override" distinction:
+  FASTA upload auto-skips scrubber (it's already an assembled consensus —
+  nothing to scrub). Raw FASTQ always starts at `PENDING`; the override
+  request workflow (Lab Director → Platform Admin) is the only other path
+  to `SKIPPED` for FASTQ.
+
+**Watch out for**
+- **DB NOT NULL vs. validator tier mismatch.** The `samples` table has
+  `NOT NULL` on fields the validator considers Tier 2 (e.g. `date_sequenced`,
+  `library_preparation_method`, `sequencing_protocol`). A client sending
+  only BASE_REQUIRED metadata passes `validate_sample()` but the INSERT
+  will 500 on a NOT NULL violation. For now the contract is: client sends
+  all DB-NOT-NULL fields even for PRELIMINARY samples. A future migration
+  could relax these NOT NULLs; for Month 1 we document the contract in
+  tests — the `_base_metadata()` helper includes every NOT NULL field.
+- **`sequencing_lab` is validated by `name`**, not by ID. The seed has
+  "Sonora Quest Laboratories" and "Laboratory Corporation of America";
+  tests use "Sonora Quest Laboratories" instead of the old fixture's
+  "Otero Outpost" (which does not exist in the DB). Using a name that
+  doesn't exist in `sequencing_labs` returns 422 with a request-workflow
+  message pointing to `POST /api/v1/sequencing-labs/requests`.
+- **`UploadFile | None = File(None)`** requires `# noqa: B008` — FastAPI
+  needs the call in the default to register the field. Also: FastAPI hands
+  an empty-filename UploadFile when the client omits the field, so the
+  upload endpoint checks `if fastq_r2 is not None and fastq_r2.filename`
+  before including it.
+- **`monkeypatch.setattr("backend.routers.ingest.stage_file", fake)`** —
+  patch at the *router's* import site, not `backend.storage.stage_file`.
+  Python's `from X import Y` binds the name into the importing module;
+  patching the original only works if the router calls `storage.stage_file()`
+  via attribute access. We import `stage_file` directly, so the router-level
+  patch is the only working form. Same rule applies for any
+  `monkeypatch` of an imported helper.
+- **psycopg2 + SQLAlchemy auto-convert Python `list`s to PG arrays** when
+  the target column is `TEXT[]`. `nucleic_acid_extraction_method`,
+  `host_disease`, `purpose_for_collection`, etc. pass through cleanly —
+  don't wrap them in custom casts.
+- **CSV list-field parsing** accepts either JSON arrays (`["a","b"]`) or
+  semicolon-delimited strings (`a;b`). The `_CSV_LIST_FIELDS` set lists
+  known array columns. Unknown columns are passed through as strings and
+  silently ignored by the `_SAMPLE_COLUMNS` filter — safer than rejecting
+  them, since CSV templates may carry comment columns or ad-hoc notes.
+- **`/globus` creates notifications via `create_notification()`** which
+  swallows its own exceptions. A missing Lab Director assignment means
+  `directors_notified: 0` is returned, not an error — this is the correct
+  behavior (the deposit still happened; the lack of notification doesn't
+  invalidate it).
+- **Pre-commit `ruff-format` rewrites on first `gac`**, passes on second.
+  Same pattern as Sessions B, C, E, F. No action needed beyond re-running
+  `gac`.
+
+**Diagram — GUI upload flow**
+
+```
+client ─► POST /api/v1/ingest/upload  (multipart: metadata, fastq_r1, fastq_r2?)
+            │
+            ▼
+   get_current_user(request)
+            │
+            ▼
+   json.loads(metadata) ── 422 on invalid JSON
+            │
+            ▼
+   ┌─ single injected db session (get_db_dep) ───────────────┐
+   │   for each upload: stage_file → gs://jackpot-staging/…  │
+   │   _ingest_one(metadata, uri_map, size_map, user, db)    │
+   │     ├─ validate_sample(metadata) ── 422 with tier data  │
+   │     ├─ _check_sequencing_lab(name, db) ── 422 unknown   │
+   │     ├─ compute_epiweeks(date_collected, precision)      │
+   │     ├─ detect_files(filenames) ── R1/R2 pairing         │
+   │     ├─ get_convenience_uris(detected, uri_map)          │
+   │     ├─ scrub_status = PENDING (FASTQ) | SKIPPED (FASTA) │
+   │     ├─ compute_quality_status(validation)               │
+   │     ├─ compute_surveillance_relevant(org, targets, set) │
+   │     ├─ INSERT samples … RETURNING *                     │
+   │     ├─ INSERT sample_files per detected file            │
+   │     └─ log_audit(CREATE_SAMPLE, tier=N, method=gui)     │
+   │   commit → all writes atomic                            │
+   └─────────────────────────────────────────────────────────┘
+            │
+            ▼
+   success(data={...sample_row, files: [...]}, status_code=201)
+```
+
+---
