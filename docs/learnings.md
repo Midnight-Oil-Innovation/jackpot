@@ -863,3 +863,131 @@ tests/  (173 total, +36 for Session L)
 ```
 
 Submodule commit a09ec7d; backend bump tracks pointer.
+
+---
+
+## Session M — nf-core/pathogensurveillance parser + parser version matrix — 2026-04-17
+
+**What was built:** Session M phase 15: the 8-result-surface pathogensurveillance
+wrapper (sendsketch / amrfinderplus / mlst / graphtyper / reference_selection /
+phylogeny / report), a cross-pipeline AMR canonical-payload invariant that
+catches divergence between the three AMR-producing wrappers (bactopia,
+Grandeur, PSV), a shared `check_pipeline_version` helper, a full parser-version
+matrix in `nf/README.md`, a minimal `pipeline_catalog` table with a
+`parser_version` column, and a skip-by-default end-to-end integration test
+that walks every wrapper against its fixture tree.
+
+**Key decisions:**
+- **Decoupled layout dict in pathogensurveillance orchestrator.** The parsers
+  module hardcodes directory names in a `_LAYOUT` constant rather than scattering
+  them through `parse()`. When nf-core/pathogensurveillance shuffles its top-level
+  dirs between minor releases (they rename `variants/` frequently), only the
+  dict moves — no per-call sites edit.
+- **`pipeline_catalog` created minimally here, extended in Session N.** The
+  spec puts the table creation in Month 2 session 31 but Session M's
+  `parser_version` column can't land without the table. Solution: create the
+  thinnest possible shape (id, pipeline_name, pipeline_version, parser_version,
+  tier, is_active, timestamps) and let Session N `ALTER TABLE ADD COLUMN` the
+  launch fields. `IF NOT EXISTS` keeps the path safe if the session order flips.
+- **Reference selection: both layouts in one parser.** 1.1.0 ships two file
+  formats (key/value pairs vs. header-plus-row) depending on the minor. The
+  parser's layout-B check requires ALL first-row cells to be recognised field
+  names — initial `set(first) & _FIELDS` matched layout A's first cell
+  (`reference_accession`) and mis-parsed the value as a header.
+- **Version check is exact-string, not semver.** Cecret tags include '3.66',
+  viralrecon tags both '2.6' and '2.6.0' as distinct releases — semver range
+  resolution would silently accept or reject in surprising ways. The spec
+  already defines `SUPPORTED_PIPELINE_VERSIONS` as an enumerated list; trust it.
+- **Version mismatch warns, does not raise.** Per spec.md line 382, pipeline
+  version drift is non-blocking — the check builds a `pipeline_events`-ready
+  message but the helper itself is pure (caller owns HTTP transport, so tests
+  don't have to mock the network).
+- **E2E test uses a `integration` pytest marker + `addopts = -m 'not integration'`.**
+  Default `pytest` runs skip the 11 parse-every-fixture cases; CI runs them
+  explicitly via `pytest -m integration`. Coverage is still enforced, just
+  in a separate job.
+- **Added `nf/` to backend ruff exclude.** The submodule has its own pyproject
+  with matching line-length=100, but the backend's ruff was applying slightly
+  different format rules (trailing-comma style). Excluding the submodule at
+  the backend boundary is the right tooling separation — each repo owns its
+  own ruff config.
+
+**Watch out for:**
+- The AMR invariant test depends on `bactopia_amr.shared_amr is shared_amr`
+  (identity, not equivalence). If someone adds a local AMR parser to any of
+  the three wrappers that bypasses the shared path, the identity check fails
+  fast even if the payload happens to match for a given fixture.
+- `pipeline_catalog` is deliberately under-specified — Session N must ALTER
+  TABLE to add pipeline_uri, pipeline_revision, compute_config, etc. Don't
+  assume the current column set is final.
+- Integration test's `_sample_from_cmd_tail` greps the hamronize command for
+  a `.tsv` argument to derive the sample_id. If the real hamronize CLI
+  changes its positional-argument order or switches to stdin, update the
+  fake runner.
+- `pipeline_runs.parser_version_used` already exists from migration
+  `acd770bb1753` — do not re-add it in future migrations.
+- VCF fixtures: `AZ-PSV-002.vcf.gz` was generated via Python `gzip.open`,
+  not `bgzip`. The parser uses `gzip.open()` so both work, but if a future
+  change introduces `pysam.VariantFile` or similar, bgzip indexing will be
+  required and the fixture needs regenerating.
+- `addopts = "-m 'not integration'"` changes the default collect — new test
+  files accidentally using `@pytest.mark.integration` will be silently
+  deselected. Every marker use must be deliberate.
+
+**ASCII diagram — M-3 version-check flow:**
+
+```
+wrapper launcher
+  │
+  ▼                                      SUPPORTED_PIPELINE_VERSIONS
+RunMetadata(pipeline_name, version) ──► (pipelines/<name>/parsers/__init__.py)
+  │                                              │
+  │                                              ▼
+  └──► shared.version_check.check_pipeline_version
+                   │
+                   ├── version in list?
+                   │     ├── yes → VersionCheckResult(is_supported=True, warning_message=None)
+                   │     └── no  → VersionCheckResult(is_supported=False, warning_message="...")
+                   │
+                   ▼
+             caller posts to pipeline_events if warning_message is not None
+             (non-blocking — parse proceeds either way)
+```
+
+nf/ tree delta:
+```
+pipelines/pathogensurveillance/
+├── __init__.py                    SUPPORTED_PIPELINE_VERSIONS=[1.1.0]
+└── parsers/
+    ├── __init__.py                _LAYOUT dict; orchestrates 8 surfaces
+    ├── identification.py          sendsketch → TaxonomicProfile (top hit)
+    ├── amr.py                     defers to shared.parsers.amrfinderplus
+    ├── mlst.py                    defers to shared.parsers.mlst
+    ├── variants.py                graphtyper VCF → pipeline_metrics
+    ├── reference_selection.py     two-layout TSV → pipeline_metrics
+    ├── phylogeny.py               treefiles → FileArtifact (run-level)
+    └── report.py                  HTML report → FileArtifact (run-level)
+
+shared/version_check.py           check_pipeline_version(name, version, support)
+
+tests/  (236 total: 225 unit + 11 integration)
+├── fixtures/pathogensurveillance/{sendsketch,amrfinderplus,mlst,variants/graphtyper,
+│   reference_selection,phylogeny/{core_gene,busco,snp},report}/
+├── test_pathogensurveillance_parsers.py  32 tests
+├── test_amr_normalization_invariant.py    5 tests (cross-pipeline)
+├── test_version_check.py                 15 tests
+└── test_pipeline_integration_e2e.py      11 tests @pytest.mark.integration
+```
+
+Backend delta:
+```
+db/migrations/versions/b1a4c9d2e8f0_add_pipeline_catalog_and_parser_.py
+   CREATE TABLE pipeline_catalog (id, pipeline_name, pipeline_version,
+       parser_version, tier, is_active, created_at, updated_at)
+   UNIQUE (pipeline_name, pipeline_version)
+   INDEX (tier, is_active)
+pyproject.toml  ruff exclude += "nf/"
+todo.md         M-1..M-5 checked off
+```
+
+Submodule commit d3b6005; backend commit 264470a.
