@@ -991,3 +991,147 @@ todo.md         M-1..M-5 checked off
 ```
 
 Submodule commit d3b6005; backend commit 264470a.
+
+## Session N — pipelines router (launch, monitor, resume, BYOP, promotion) — 2026-04-17
+
+**What was built:** Full-fat replacement of the stub `pipelines` router —
+eight endpoints covering launch, weblog callback, detail/paginated listings,
+FAILED-gated resume, BYOP skeleton, and tier promotion — plus a new
+`pipeline_config` module and a migration (`cea9c08543ee`) that adds six
+operational tables.
+
+**Key decisions:**
+
+* **Fresh `run_id` and `pipeline_token` per launch.** `new_run_id()` returns
+  `jp-<uuid4>` and `new_pipeline_token()` uses `secrets.token_urlsafe(32)`
+  prefixed with `pt_`. The pair is stored on `pipeline_runs` and checked on
+  every subsequent weblog / result callback via `hmac.compare_digest`. No
+  user JWT on those endpoints — the token *is* the bearer.
+* **Per-run isolation.** `work_dir_for(run_id)` → `gs://jackpot-work/{id}/work`,
+  `result_uri_for(run_id)` → `gs://jackpot-results/{id}/`. Two runs never
+  share a `workDir` prefix (Critical Rule 25). The Groovy config is
+  generated fresh per run (Critical Rule 26), `resourceLabels` is populated
+  every time (Critical Rule 27), and a slug of the lab name feeds the
+  `jackpot_lab` label for GCP Billing attribution.
+* **Compatibility check is data-driven, not hardcoded.** Rules live in
+  `pipeline_catalog.compatibility_rules` JSONB. `source_types` +
+  `required_scrub` emit hard blocks (422); `min_quality_status` + `organisms`
+  emit soft warnings. Soft warnings return **202** with
+  `code=SOFT_WARNINGS`; caller retries with `override_soft_warnings=true`
+  to get 201. Hard blocks are never overridable.
+* **Resume requires FAILED state and reuses the old `work_dir`.** New
+  `run_id` + new `pipeline_token`, but `work_dir` is copied from the
+  previous run so Nextflow `-resume` hits the existing task cache. A
+  `pipeline_restarts` row links `new_run_id → previous_run_id` for
+  auditability.
+* **Promotion is gated by role, not by endpoint.** One endpoint
+  (`POST /{catalog_id}/promote`) handles both project→lab (Lab Director)
+  and lab→zoo (Platform Admin). Tier transition is strict: you can't
+  skip from project to zoo in one call, and downgrades aren't allowed.
+* **Local executor is a no-op.** `submit_to_batch()` returns a deterministic
+  `batch-{run_id}` pseudo job id when `PIPELINE_EXECUTOR=local` so the launch
+  flow is exercised end-to-end without actually starting Nextflow. Session Q
+  wires up the real GCP Batch client.
+* **Events pagination uses `received_at` (not `created_at`).** Added
+  `received_at` to `ALLOWED_SORT_COLUMNS` in `backend/pagination.py`
+  rather than aliasing or post-sorting client-side. Straightforward;
+  no other table collides on that column name.
+
+**Watch out for:**
+
+* **`pipeline_events` / `pipeline_tasks` / `pipeline_files` were referenced
+  by existing code (Session I) but didn't exist in the schema.** The old
+  `receive_pipeline_event` wrapped DB writes in `try/except Exception` and
+  silently swallowed the `UndefinedTable` error. Migration `cea9c08543ee`
+  creates all six operational tables in one go; don't drop the try/except
+  in the event handler until confirmed the migration has applied.
+* **Soft-warning semantics are a 202, not a 200.** The response envelope's
+  `success=false` with HTTP 202 is deliberate: the request is *accepted for
+  further action* (confirming the override), not *completed*.
+* **Non-admin tests rely on `MOCK_USER_EMAIL` swap.** The seed `gotero@...`
+  is a Platform Admin, so negative access-control cases must create a
+  throwaway user, `_switch_user` to that email, and clear `get_settings`
+  cache. The `as_platform_admin` fixture reverts on teardown via pytest
+  monkeypatch, so test ordering doesn't leak role state.
+* **`pipeline_runs.sample_ids` is `INTEGER[]`, not `TEXT[]`.** The router
+  accepts string `sample_id` values from clients (human-readable IDs like
+  `AZ-001`) and translates to integer PKs before the INSERT — don't pass
+  string arrays directly or PostgreSQL will reject them.
+* **X-Pipeline-Token check uses `hmac.compare_digest`.** Not `==`. This is
+  the standard timing-attack mitigation and must stay that way even if the
+  token format changes.
+* **BYOP stays UNVERIFIED.** The `POST /custom` endpoint writes a row and
+  returns 202. Actual Nextflow fetch + schema verification is Month 3 — do
+  not be tempted to shell out to `nextflow config` from the router.
+
+**ASCII diagram — launch → monitor → results pipeline:**
+
+```
+POST /launch
+  │  (pipeline_id, sample_ids, project_id, parameters)
+  ▼
+┌────────────────────────────────────────────────────────────┐
+│ compute_pipeline_compatibility(catalog_row, samples)       │
+│   ├── hard_blocks? → 422 INCOMPATIBLE_SAMPLES              │
+│   └── soft_warnings? → 202 SOFT_WARNINGS (unless override) │
+├────────────────────────────────────────────────────────────┤
+│ new_run_id() + new_pipeline_token()                        │
+│ work_dir_for(run_id)   → gs://jackpot-work/{id}/work       │
+│ result_uri_for(run_id) → gs://jackpot-results/{id}/        │
+│ generate_run_config(...)  ─► /tmp/jackpot_{run_id}.config  │
+├────────────────────────────────────────────────────────────┤
+│ INSERT pipeline_runs (status=QUEUED, pipeline_token,       │
+│        work_dir, result_uri, parameters, soft_warnings)    │
+│ submit_to_batch(...)  (no-op in local)                     │
+│ log_audit(CREATE_PIPELINE_RUN)                             │
+└────────────────────────────────────────────────────────────┘
+  │
+  │  Nextflow running on GCP Batch (or locally in dev)
+  │
+  ▼
+POST /events (X-Pipeline-Token)                   ┌─ workflow.started   → status=RUNNING
+  ├── hmac.compare_digest(token, run.token)       ├─ workflow.complete  → status=COMPLETED/FAILED
+  ├── INSERT pipeline_events (raw JSONB)          │                        + load_pipeline_results
+  └── route by event type ──────────────────────► ├─ process.*          → UPSERT pipeline_tasks
+                                                  └─ process.failed     → run.status=FAILED
+
+POST /{run_id}/results/{result_type} (X-Pipeline-Token)
+  ├── RESULT_SCHEMAS[result_type] → Pydantic validation
+  ├── INSERT <typed result table> (ON CONFLICT DO NOTHING)
+  └── UPSERT pipeline_results metrics (jsonb merge)
+
+GET /{run_id}                              POST /{run_id}/resume
+  ├── _user_has_lab_access                   ├── previous.status == FAILED (400 otherwise)
+  ├── run_dict (token stripped)              ├── new run_id + new token, REUSED work_dir
+  ├── + recent_events (last 20)              ├── INSERT pipeline_restarts (new ↔ previous)
+  └── + task_summary (status→count)          └── log_audit(RESUME_PIPELINE_RUN)
+
+POST /custom               (Lab Director)    POST /{catalog_id}/promote
+  └── project_pipelines            │              ├── project→lab : Lab Director
+      status=UNVERIFIED            │              │    + UPDATE catalog tier/scope
+      (Month 3: verify Nextflow)   │              │    + INSERT lab_pipelines
+                                   │              └── lab→zoo    : Platform Admin
+                                   │                   + UPDATE catalog tier=zoo
+```
+
+Backend delta:
+```
+backend/routers/pipelines.py                  full rewrite (~1040 lines, 8 endpoints)
+backend/pipeline_config.py                    NEW — run_id/token/work_dir/config/submit_to_batch
+backend/audit.py                              + CREATE/RESUME_PIPELINE_RUN,
+                                                REGISTER_CUSTOM_PIPELINE, PROMOTE_PIPELINE
+backend/config.py                             + pipeline_executor, jackpot_api_url,
+                                                work_bucket, results_bucket, gcp_region
+backend/pagination.py                         ALLOWED_SORT_COLUMNS += received_at
+db/migrations/versions/cea9c08543ee_*.py      NEW — pipeline_events, pipeline_tasks,
+                                                pipeline_files, pipeline_restarts,
+                                                project_pipelines, lab_pipelines;
+                                                +parameters/soft_warnings/catalog_id
+                                                on pipeline_runs;
+                                                +pipeline_uri/default_profile/
+                                                 compatibility_rules/scope_* on catalog
+tests/test_pipelines_router_api.py            NEW — 29 tests (launch, events, detail,
+                                                pagination, resume, BYOP, promote)
+```
+
+Test delta: **486 → 515 passing tests** (+29); coverage 87.16% (≥60% threshold).

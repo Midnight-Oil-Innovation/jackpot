@@ -651,7 +651,7 @@ Log findings to docs/review_log.md and resolve before continuing.
 
 ## Phase 16 — Session N: pipelines router (launch, monitor, resume, BYOP skeleton)
 
-- [ ] **N-1: Implement `POST /api/v1/pipelines/launch`**
+- [x] **N-1: Implement `POST /api/v1/pipelines/launch`**
   - Request body: `{pipeline_id, sample_ids, parameters, project_id}`
   - Compatibility check: `compute_pipeline_compatibility()` returns soft_warnings + hard_blocks
   - Hard block returns 422 with detailed reason
@@ -661,40 +661,40 @@ Log findings to docs/review_log.md and resolve before continuing.
   - Writes pipeline_runs row with status=QUEUED, returns `{run_id, status}`
   - Logs CREATE_PIPELINE_RUN audit
 
-- [ ] **N-2: Implement `POST /api/v1/pipelines/events`**
+- [x] **N-2: Implement `POST /api/v1/pipelines/events`**
   - No auth — run_id in path acts as bearer (but cross-check pipeline_token header per audit SEC-4)
   - Receives raw Nextflow weblog JSON
   - Writes to pipeline_events (raw) and updates pipeline_tasks (parsed)
   - Updates pipeline_runs.status on workflow-level events (started/completed/failed)
 
-- [ ] **N-3: Implement `GET /api/v1/pipelines/{run_id}`**
+- [x] **N-3: Implement `GET /api/v1/pipelines/{run_id}`**
   - Returns full run detail + last 20 events + task summary
   - Access control: lab member or Platform Admin
   - 403 if user has no access to the owning lab
 
-- [ ] **N-4: Implement `GET /api/v1/pipelines/{run_id}/tasks`** and `GET /api/v1/pipelines/{run_id}/events`
+- [x] **N-4: Implement `GET /api/v1/pipelines/{run_id}/tasks`** and `GET /api/v1/pipelines/{run_id}/events`
   - Paginated
   - Same access control
 
-- [ ] **N-5: Implement `POST /api/v1/pipelines/{run_id}/resume`**
+- [x] **N-5: Implement `POST /api/v1/pipelines/{run_id}/resume`**
   - Requires previous run to be in FAILED state
   - New pipeline_runs row created with new run_id
   - pipeline_restarts row links new_run_id ↔ previous_run_id
   - Reuses same work_dir for Nextflow -resume
   - Logs RESUME_PIPELINE_RUN audit
 
-- [ ] **N-6: Implement BYOP registration skeleton `POST /api/v1/pipelines/custom`**
+- [x] **N-6: Implement BYOP registration skeleton `POST /api/v1/pipelines/custom`**
   - Accepts GitHub/GitLab URL + revision + parameter schema
   - Validates schema JSON shape only (no actual Nextflow fetch in Month 2 — that's Month 3)
   - Writes to project_pipelines with status=UNVERIFIED
   - Returns 202 with message "BYOP registered pending verification (Month 3 feature)"
 
-- [ ] **N-7: Implement pipeline promotion `POST /api/v1/pipelines/{id}/promote`**
+- [x] **N-7: Implement pipeline promotion `POST /api/v1/pipelines/{id}/promote`**
   - project → lab: requires Lab Director
   - lab → zoo: requires Platform Admin
   - Logged with source tier, target tier, promoter user_id
 
-- [ ] **N-8: Write `tests/test_pipelines_router_api.py`**
+- [x] **N-8: Write `tests/test_pipelines_router_api.py`**
   - Launch with valid sample_ids → 201 + run_id
   - Launch with hard_block → 422
   - Launch with soft_warning → 202, then ?override=true → 201
@@ -706,7 +706,7 @@ Log findings to docs/review_log.md and resolve before continuing.
   - Promote project→lab as Lab Collaborator → 403
   - Promote project→lab as Lab Director → 200
 
-- [ ] **N-9: Run tests and commit**
+- [x] **N-9: Run tests and commit**
   - `gac "feat: pipelines router — launch, monitor, resume, BYOP skeleton"`
 
 ---

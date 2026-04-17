@@ -26,6 +26,11 @@ class Settings(BaseSettings):
     jackpot_api_token: str = ""
     scheduler_enabled: bool = True
     cors_origins: list[str] = ["http://localhost:8501", "http://localhost:4200"]
+    pipeline_executor: str = "local"
+    jackpot_api_url: str = "http://localhost:8000"
+    work_bucket: str = "jackpot-work"
+    results_bucket: str = "jackpot-results"
+    gcp_region: str = "us-central1"
 
     class Config:
         env_file = ".env.local"

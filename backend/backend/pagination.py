@@ -19,6 +19,7 @@ ALLOWED_SORT_COLUMNS = {
     "created_at",
     "updated_at",
     "ingest_timestamp",
+    "received_at",
     "date_collected",
     "date_sequenced",
     "sample_id",
