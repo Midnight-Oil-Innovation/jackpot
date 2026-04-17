@@ -1,0 +1,119 @@
+name: deploy-staging
+
+on:
+  push:
+    branches: [staging]
+  workflow_dispatch:
+    inputs:
+      image_tag:
+        description: "Image tag to deploy (defaults to commit SHA)"
+        required: false
+        default: ""
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: deploy-staging
+  cancel-in-progress: false
+
+env:
+  CLUSTER_NAME: jackpot-staging-gke
+  NAMESPACE: jackpot
+  RELEASE_NAME: jackpot-api
+  HELM_CHART_PATH: ./helm/jackpot-api
+  VALUES_FILE: ./helm/jackpot-api/values-staging.yaml
+
+jobs:
+  deploy:
+    name: Build, migrate, and deploy to staging
+    runs-on: ubuntu-latest
+    environment:
+      name: staging
+      url: https://api.staging.jackpot.example.org
+    steps:
+      - name: Checkout jackpot-iac
+        uses: actions/checkout@v4
+
+      - name: Checkout jackpot-backend
+        uses: actions/checkout@v4
+        with:
+          repository: linuxprophet/jackpot-backend
+          path: jackpot-backend
+          ref: staging
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Authenticate to GCP (Workload Identity Federation)
+        id: auth
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.GCP_DEPLOY_SA }}
+
+      - name: Set up gcloud
+        uses: google-github-actions/setup-gcloud@v2
+        with:
+          project_id: ${{ vars.GCP_PROJECT_ID }}
+
+      - name: Configure Docker for Artifact Registry
+        run: gcloud auth configure-docker ${{ vars.GCP_REGION }}-docker.pkg.dev --quiet
+
+      - name: Resolve image tag
+        id: tag
+        run: |
+          if [[ -n "${{ inputs.image_tag }}" ]]; then
+            echo "tag=${{ inputs.image_tag }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "tag=$(git -C jackpot-backend rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Build API image
+        run: |
+          IMAGE="${{ vars.GCP_REGION }}-docker.pkg.dev/${{ vars.GCP_PROJECT_ID }}/jackpot/jackpot-api:${{ steps.tag.outputs.tag }}"
+          echo "IMAGE=$IMAGE" >> "$GITHUB_ENV"
+          docker build -f jackpot-backend/Dockerfile.api -t "$IMAGE" jackpot-backend
+
+      - name: Push API image
+        run: docker push "$IMAGE"
+
+      - name: Get GKE credentials
+        uses: google-github-actions/get-gke-credentials@v2
+        with:
+          cluster_name: ${{ env.CLUSTER_NAME }}
+          location: ${{ vars.GCP_REGION }}
+
+      - name: Set up Helm
+        uses: azure/setup-helm@v4
+        with:
+          version: v3.15.2
+
+      - name: Ensure namespace exists
+        run: kubectl create namespace "$NAMESPACE" --dry-run=client -o yaml | kubectl apply -f -
+
+      - name: Sync Kubernetes Secret from Secret Manager
+        run: |
+          set -euo pipefail
+          declare -a keys=(SECRET_KEY DATABASE_URL GOOGLE_OAUTH_CLIENT_ID GOOGLE_OAUTH_CLIENT_SECRET NCBI_API_KEY)
+          args=()
+          for k in "${keys[@]}"; do
+            secret_name="jackpot-staging-$(echo "$k" | tr '[:upper:]_' '[:lower:]-')"
+            value=$(gcloud secrets versions access latest --secret="$secret_name" --project="${{ vars.GCP_PROJECT_ID }}")
+            args+=(--from-literal="$k=$value")
+          done
+          kubectl -n "$NAMESPACE" create secret generic jackpot-api-secrets \
+            "${args[@]}" \
+            --dry-run=client -o yaml | kubectl apply -f -
+
+      - name: Helm upgrade (runs alembic as pre-upgrade hook, then rolls Deployment)
+        run: |
+          helm upgrade --install "$RELEASE_NAME" "$HELM_CHART_PATH" \
+            --namespace "$NAMESPACE" \
+            --values "$VALUES_FILE" \
+            --set image.tag="${{ steps.tag.outputs.tag }}" \
+            --wait --timeout 10m
+
+      - name: Smoke test
+        run: bash ./scripts/staging_smoke_test.sh
+        env:
+          JACKPOT_API_URL: https://api.staging.jackpot.example.org

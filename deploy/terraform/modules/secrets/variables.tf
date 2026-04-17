@@ -15,13 +15,13 @@ variable "region" {
 }
 
 variable "secret_names" {
-  description = "List of secret short names (without environment prefix). Each becomes jackpot-<env>-<name>."
+  description = "List of secret short names (without environment prefix). Each becomes jackpot-<env>-<name>. Names double as the env-var key (upper-cased, dashes → underscores) so the deploy pipeline can map secret → env var mechanically."
   type        = list(string)
   default = [
     "secret-key",
-    "db-password",
-    "oauth-client-id",
-    "oauth-client-secret",
+    "database-url",
+    "google-oauth-client-id",
+    "google-oauth-client-secret",
     "ncbi-api-key",
     "gisaid-username",
     "gisaid-password",

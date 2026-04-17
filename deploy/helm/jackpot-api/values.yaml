@@ -1,0 +1,97 @@
+# Default values for jackpot-api. Override via values-<env>.yaml.
+nameOverride: ""
+fullnameOverride: ""
+
+image:
+  repository: ""          # e.g. us-central1-docker.pkg.dev/gotero3-acdp-488517/jackpot/jackpot-api
+  tag: ""                 # short git SHA or semver tag
+  pullPolicy: IfNotPresent
+
+replicaCount: 2
+
+serviceAccount:
+  create: true
+  name: jackpot-api
+  # Workload Identity: set to the jackpot-api GSA email (Terraform output api_sa_email)
+  gcpServiceAccountEmail: ""
+
+podSecurityContext:
+  fsGroup: 1000
+  runAsNonRoot: true
+  runAsUser: 1000
+
+resources:
+  requests:
+    cpu: 500m
+    memory: 1Gi
+  limits:
+    cpu: 2
+    memory: 4Gi
+
+service:
+  type: ClusterIP
+  port: 80
+  targetPort: 8000
+
+probes:
+  liveness:
+    path: /health
+    initialDelaySeconds: 30
+    periodSeconds: 10
+  readiness:
+    path: /health
+    initialDelaySeconds: 10
+    periodSeconds: 5
+
+nodeSelector:
+  pool: api
+
+tolerations: []
+
+affinity: {}
+
+# Alembic migration Job — runs before the Deployment is rolled forward.
+migrations:
+  enabled: true
+  # Set to the same image:tag as the API — migrations run against backend/migrations/
+  ttlSecondsAfterFinished: 600
+  backoffLimit: 1
+
+# Non-secret env vars — rendered into the ConfigMap. Secret values come from
+# Secret Manager via secretRefs below.
+env:
+  ENV: "gcp"
+  SCHEDULER_ENABLED: "false"
+  STORAGE_BACKEND: "gcs"
+  PIPELINE_EXECUTOR: "gcp_batch"
+  DLP_ENABLED: "true"
+  GCP_PROJECT_ID: ""
+  GCP_REGION: "us-central1"
+  ADHS_ORGANIZATION_NAME: "ADHS"
+  GOOGLE_OAUTH_REDIRECT_URL: ""
+  JACKPOT_API_URL: ""
+  CORS_ORIGINS: ""
+
+# Bucket env vars — names come from Terraform output `buckets`.
+buckets:
+  STORAGE_BUCKET_SEQUENCES: ""
+  STORAGE_BUCKET_RAW: ""
+  STORAGE_BUCKET_STAGING: ""
+  STORAGE_BUCKET_DATASETS: ""
+  STORAGE_BUCKET_SUBMISSIONS: ""
+  WORK_BUCKET: ""
+  RESULTS_BUCKET: ""
+
+# Secret Manager references — values pulled at pod startup via the
+# Secret Manager CSI driver, OR projected by the API using google-cloud-secret-manager.
+# For Month 2 we use simple Kubernetes Secrets populated by the deploy pipeline.
+secrets:
+  # Name of the Kubernetes Secret that holds the env values.
+  kubernetesSecretName: jackpot-api-secrets
+  # Keys inside that secret — match env vars the backend reads.
+  keys:
+    - SECRET_KEY
+    - DATABASE_URL
+    - GOOGLE_OAUTH_CLIENT_ID
+    - GOOGLE_OAUTH_CLIENT_SECRET
+    - NCBI_API_KEY
