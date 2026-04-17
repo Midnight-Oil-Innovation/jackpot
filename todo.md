@@ -530,7 +530,7 @@ Log findings to docs/review_log.md and resolve before continuing.
 
 ## Phase 12 — Session J: Viral pipeline parsers (Cecret, viralrecon, walkercreek)
 
-- [ ] **J-1: Cecret parser** (`jackpot-nf/pipelines/cecret/parsers/`)
+- [x] **J-1: Cecret parser** (`jackpot-nf/pipelines/cecret/parsers/`)
   - `pangolin.py`: parse `pangolin/lineage_report.csv` → PangolinResult per sample
   - `nextclade.py`: parse `nextclade/nextclade.tsv` → NextcladeResult per sample
   - `freyja.py`: parse `freyja/aggregated-freyja.tsv` → WastewaterLineageAbundance
@@ -538,32 +538,32 @@ Log findings to docs/review_log.md and resolve before continuing.
   - Wrapper: `jackpot_wrapper.nf` — calls Cecret, then runs parsers, then calls register_client
   - Supports Cecret version range 3.6–3.66 (current)
 
-- [ ] **J-2: viralrecon parser** (`jackpot-nf/pipelines/viralrecon/parsers/`)
+- [x] **J-2: viralrecon parser** (`jackpot-nf/pipelines/viralrecon/parsers/`)
   - `consensus.py`: register `*.consensus.fa` per sample
   - `pangolin.py`: parse pangolin output (shares Cecret's parser via `shared/`)
   - `nextclade.py`: parse nextclade output (shares Cecret's parser)
   - `variants.py`: parse iVar variant calls → pipeline_results.metrics
   - Wastewater mode: also populate WastewaterLineageAbundance
 
-- [ ] **J-3: walkercreek parser** (`jackpot-nf/pipelines/walkercreek/parsers/`)
+- [x] **J-3: walkercreek parser** (`jackpot-nf/pipelines/walkercreek/parsers/`)
   - `irma.py`: parse IRMA flu/RSV output → TypingResult (subtype, clade)
   - `consensus.py`: register per-segment consensus FASTAs
   - Handles both Illumina and Nanopore output structures
 
-- [ ] **J-4: Test fixtures for viral parsers**
+- [x] **J-4: Test fixtures for viral parsers**
   - Small real outputs from Cecret (SARS-CoV-2, MPX), viralrecon (wastewater), walkercreek (flu)
   - Store in `tests/fixtures/cecret/`, `tests/fixtures/viralrecon/`, `tests/fixtures/walkercreek/`
   - Each fixture is a minimal output directory that covers all parsed file types
 
-- [ ] **J-5: Unit tests per parser**
+- [x] **J-5: Unit tests per parser**
   - Each parser has `tests/test_{parser}.py`
   - Parses fixture → emits expected list of result payloads
   - Schema validation passes
   - Edge cases: empty file, malformed file, missing expected field
 
-- [ ] **J-6: Run tests and commit in jackpot-nf**
-  - `cd jackpot-nf && uv run pytest`
-  - Commit in jackpot-nf repo
+- [x] **J-6: Run tests and commit in jackpot-nf**
+  - `cd jackpot-nf && uv run pytest` — 79/79 passing (was 35)
+  - Commit in jackpot-nf repo — `2a098b0`
   - Update submodule pointer in jackpot-backend
   - `gac "feat: viral pipeline parsers — Cecret, viralrecon, walkercreek"`
 
