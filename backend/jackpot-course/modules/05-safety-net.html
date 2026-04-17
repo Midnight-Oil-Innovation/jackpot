@@ -1,0 +1,293 @@
+<section class="module" id="module-5" style="background: var(--color-bg)">
+  <div class="module-content">
+    <header class="module-header animate-in">
+      <span class="module-number">05</span>
+      <h1 class="module-title">The Safety Net</h1>
+      <p class="module-subtitle">Immutable audit trails, background jobs, and how to debug JACKPOT when something goes wrong</p>
+    </header>
+
+    <div class="module-body">
+
+      <!-- Screen 1: The audit trail -->
+      <section class="screen animate-in">
+        <h2 class="screen-heading">The Logbook That Cannot Be Erased</h2>
+        <p>
+          Imagine a ship&apos;s logbook — every entry is written in ink, dated and signed, and kept permanently. You can add new entries but you can never erase old ones. That is JACKPOT&apos;s audit log.
+        </p>
+        <p>
+          Every state-changing action — creating a sample, changing a permission, approving a scrub request — writes an immutable record to the <code>audit_log</code> table. Public health platforms are legally required to prove who changed what and when.
+        </p>
+
+        <div class="badge-list animate-in">
+          <div class="badge-item">
+            <code class="badge-code">action</code>
+            <span class="badge-desc">What happened: CREATE_SAMPLE, UPDATE_ORG, ADD_LAB_MEMBER, APPROVE_SCRUB_SKIP...</span>
+          </div>
+          <div class="badge-item">
+            <code class="badge-code">actor_id</code>
+            <span class="badge-desc">Who did it — the user ID of the person who triggered the change</span>
+          </div>
+          <div class="badge-item">
+            <code class="badge-code">resource_type + resource_id</code>
+            <span class="badge-desc">What was affected — e.g., resource_type=&ldquo;sample&rdquo;, resource_id=&ldquo;42&rdquo;</span>
+          </div>
+          <div class="badge-item">
+            <code class="badge-code">before_state / after_state</code>
+            <span class="badge-desc">The full JSON snapshot of the record before and after the change — like git diff for data</span>
+          </div>
+          <div class="badge-item">
+            <code class="badge-code">metadata</code>
+            <span class="badge-desc">Any extra context — IP address, request ID, pipeline run ID, etc.</span>
+          </div>
+        </div>
+
+        <div class="callout callout-accent">
+          <div class="callout-icon">💡</div>
+          <div class="callout-content">
+            <strong class="callout-title">Audit failures never crash the request</strong>
+            <p><code>log_audit()</code> is wrapped in a try/except. If the audit write fails, the error is logged to the application logger but not raised — the main operation still succeeds. The philosophy: a broken audit log is a serious alert, but it should not prevent a lab from uploading a sample during a disease outbreak.</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- Screen 2: Code translation — log_audit -->
+      <section class="screen animate-in">
+        <h2 class="screen-heading">The Audit Log Write — In Code</h2>
+        <p>Here is the entire <code>log_audit()</code> function from <code>backend/audit.py</code>. Notice the <span class="term" data-definition="JSONB is PostgreSQL's binary JSON column type. It stores JSON data in a compressed binary format that can be queried and indexed efficiently. Used here to store the before and after state snapshots.">JSONB</span> casting and the silent-failure design:</p>
+
+        <div class="translation-block animate-in">
+          <div class="translation-code">
+            <span class="translation-label">CODE — backend/audit.py</span>
+            <pre><code>
+<span class="code-line"><span class="code-keyword">def</span> <span class="code-function">log_audit</span>(action, actor_id, resource_type,</span>
+<span class="code-line">             resource_id, before, after, metadata,</span>
+<span class="code-line">             db_conn) -> <span class="code-keyword">None</span>:</span>
+<span class="code-line">    <span class="code-keyword">try</span>:</span>
+<span class="code-line">        <span class="code-function">execute_write</span>(</span>
+<span class="code-line">            <span class="code-string">"""INSERT INTO audit_log</span></span>
+<span class="code-line"><span class="code-string">               (action, actor_id, resource_type,</span></span>
+<span class="code-line"><span class="code-string">                resource_id, before_state, after_state,</span></span>
+<span class="code-line"><span class="code-string">                metadata)</span></span>
+<span class="code-line"><span class="code-string">               VALUES (:action, :actor_id, :resource_type,</span></span>
+<span class="code-line"><span class="code-string">                :resource_id, :before::jsonb,</span></span>
+<span class="code-line"><span class="code-string">                :after::jsonb, :metadata::jsonb)"""</span>,</span>
+<span class="code-line">            {<span class="code-string">"action"</span>: action, ...},</span>
+<span class="code-line">            conn=db_conn,</span>
+<span class="code-line">        )</span>
+<span class="code-line">    <span class="code-keyword">except</span> Exception <span class="code-keyword">as</span> exc:</span>
+<span class="code-line">        logger.<span class="code-function">error</span>(<span class="code-string">"Audit log write failed"</span>, exc_info=exc)</span>
+            </code></pre>
+          </div>
+          <div class="translation-english">
+            <span class="translation-label">PLAIN ENGLISH</span>
+            <div class="translation-lines">
+              <p class="tl">Define log_audit. It takes the action, who did it, what resource was affected, before/after snapshots, and an open database connection.</p>
+              <p class="tl">Returns None — this function does not give anything back; it just writes to the DB.</p>
+              <p class="tl">Try to run the INSERT. If anything goes wrong, jump to &ldquo;except&rdquo;.</p>
+              <p class="tl">Execute a write using the same database connection that the parent operation is using.</p>
+              <p class="tl">Insert a row into the audit_log table with all the provided fields.</p>
+              <p class="tl">The ::jsonb cast tells PostgreSQL to store the dict as binary JSON — queryable and indexed.</p>
+              <p class="tl">conn=db_conn means this INSERT shares the same transaction as the parent operation. Commit or rollback together.</p>
+              <p class="tl">If the INSERT fails for any reason (constraint, disk full, etc.)...</p>
+              <p class="tl">...log the error to the application logs but do NOT raise it. The caller&apos;s code keeps running.</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Screen 3: Background jobs -->
+      <section class="screen animate-in">
+        <h2 class="screen-heading">The Night Crew — Background Jobs</h2>
+        <p>
+          Some work is too slow to do during a user&apos;s request — like removing human DNA from a 5 GB sequencing file. JACKPOT runs these as scheduled background jobs, separate from the main API.
+        </p>
+
+        <div class="pattern-cards stagger-children">
+          <div class="pattern-card animate-in" style="border-top-color: var(--color-actor-2)">
+            <div class="pattern-icon" style="background: var(--color-info-light)">⏱️</div>
+            <h4 class="pattern-title">Scrubber Queue</h4>
+            <p class="pattern-desc">Runs every <strong>60 seconds</strong>. Finds all samples with <code>scrub_status = PENDING</code> and submits them to the human-read removal pipeline. Updates status to IN_PROGRESS, then COMPLETE or FAILED.</p>
+          </div>
+          <div class="pattern-card animate-in" style="border-top-color: var(--color-actor-4)">
+            <div class="pattern-icon" style="background: #FDF5E0">🌙</div>
+            <h4 class="pattern-title">Access Request Expiry</h4>
+            <p class="pattern-desc">Runs every night at <strong>2:00 AM</strong>. Finds pending dataset access requests that have exceeded their approval window and auto-denies them. Writes DENY_ACCESS_REQUEST to the audit log.</p>
+          </div>
+        </div>
+
+        <div class="flow-steps animate-in" style="margin-top: var(--space-8)">
+          <div class="flow-step">
+            <div class="flow-step-num" style="background: var(--color-actor-3)">L</div>
+            <p><strong>Local Dev:</strong> APScheduler runs inside the FastAPI process</p>
+          </div>
+          <div class="flow-arrow">→</div>
+          <div class="flow-step">
+            <div class="flow-step-num" style="background: var(--color-actor-5)">P</div>
+            <p><strong>Production:</strong> Google Cloud Scheduler sends HTTP triggers</p>
+          </div>
+        </div>
+
+        <div class="callout callout-info">
+          <div class="callout-icon">🧠</div>
+          <div class="callout-content">
+            <strong class="callout-title">Why not Celery or Redis?</strong>
+            <p>Many apps use <span class="term" data-definition="Celery is a popular Python task queue that uses Redis or RabbitMQ as a message broker. It runs workers in separate processes. JACKPOT deliberately avoids this — APScheduler and Cloud Scheduler are simpler to operate, require fewer moving parts, and are sufficient for the job volume.">Celery</span> for background work. JACKPOT does not — it is explicitly listed in the architecture constraints as &ldquo;no Celery, no Redis as task broker.&rdquo; Simpler infrastructure for a platform that needs to be operated by public health agencies, not dedicated DevOps teams.</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- Screen 4: Debugging — spot the bug -->
+      <section class="screen animate-in">
+        <h2 class="screen-heading">When Things Break — Finding the Right Layer</h2>
+        <p>When something goes wrong in JACKPOT, the error comes from one of five layers. Knowing which layer is responsible saves hours of debugging.</p>
+
+        <div class="arch-diagram">
+          <div class="arch-zone">
+            <h4 class="arch-zone-label">Debug by layer — click to see what each error means</h4>
+            <div style="display: flex; flex-wrap: wrap; gap: var(--space-3); justify-content: center;">
+              <div class="arch-component"
+                   data-desc="HTTP 4xx from router layer: Check the request body (Pydantic validation?), check permissions (403?), check the auth cookie (401?). Look in the router file for the endpoint that matches the URL."
+                   onclick="showArchDesc(this)">
+                <div class="arch-icon">⚡</div>
+                <span>Router Error</span>
+              </div>
+              <div class="arch-component"
+                   data-desc="Validation 422 from validator: Look at the errors list in the response body. It tells you exactly which field failed. Check SOURCE_REQUIRED and BASE_REQUIRED in validator.py for the field you need to add."
+                   onclick="showArchDesc(this)">
+                <div class="arch-icon">🔬</div>
+                <span>Validator 422</span>
+              </div>
+              <div class="arch-component"
+                   data-desc="Database error: SQLAlchemy errors usually mean a constraint violation (duplicate key, foreign key missing, column type mismatch). Check the SQL query in database.py. The most common cause: RETURNING * missing on an INSERT that expects a result."
+                   onclick="showArchDesc(this)">
+                <div class="arch-icon">🗄️</div>
+                <span>DB Error</span>
+              </div>
+              <div class="arch-component"
+                   data-desc="Storage error: StorageError from storage.py means the MinIO or GCS bucket is unreachable, the credentials are wrong, or the bucket name is misconfigured. Check STORAGE_BACKEND, STORAGE_BUCKET_STAGING, and STORAGE_ENDPOINT in docker-compose.yml."
+                   onclick="showArchDesc(this)">
+                <div class="arch-icon">📦</div>
+                <span>Storage Error</span>
+              </div>
+              <div class="arch-component"
+                   data-desc="Background job failure: Check scrub_status in the database. If it is stuck at IN_PROGRESS for hours, the scrubber job crashed. Check the APScheduler logs. If audit_log has no entry for a write that should have happened, the audit write failed silently — check the application error logs."
+                   onclick="showArchDesc(this)">
+                <div class="arch-icon">⏰</div>
+                <span>Background Job</span>
+              </div>
+            </div>
+            <div class="arch-description" id="arch-desc">Click any error type above to see where to look</div>
+          </div>
+        </div>
+
+        <div class="callout callout-warning">
+          <div class="callout-icon">⚠️</div>
+          <div class="callout-content">
+            <strong class="callout-title">The single most common JACKPOT bug: wrong is_active column name</strong>
+            <p>Organizations and Labs use <code>active</code> (no prefix). Everything else uses <code>is_active</code>. Mixing these up causes silent SQL errors where a soft-delete does not take effect or an active filter returns wrong results. Always check the schema when writing queries against orgs or labs.</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- Screen 5: Final quiz -->
+      <section class="screen animate-in">
+        <h2 class="screen-heading">Final Check — Putting It All Together</h2>
+
+        <div class="quiz-container" id="quiz-module5">
+
+          <div class="quiz-question-block"
+               data-correct="option-b"
+               data-explanation-right="Correct. The scrubber job runs every 60 seconds and processes PENDING samples. A 20-minute delay means the job is not running — check that APScheduler started correctly (scheduler_enabled=true in config) and look for crash logs."
+               data-explanation-wrong="The scrubbing is done by a background job running every 60 seconds, not as part of the upload. A 20-minute delay means the job itself is broken — look at APScheduler, not the ingest router.">
+            <h3 class="quiz-question">A lab reports that samples uploaded 20 minutes ago still show <code>scrub_status = PENDING</code> and never progress to IN_PROGRESS. Where do you look first?</h3>
+            <div class="quiz-options">
+              <button class="quiz-option" data-value="option-a" onclick="selectOption(this)">
+                <div class="quiz-option-radio"></div>
+                <span>The ingest router — the upload must have failed partway through</span>
+              </button>
+              <button class="quiz-option" data-value="option-b" onclick="selectOption(this)">
+                <div class="quiz-option-radio"></div>
+                <span>The APScheduler logs — the scrubber background job may have crashed or not started</span>
+              </button>
+              <button class="quiz-option" data-value="option-c" onclick="selectOption(this)">
+                <div class="quiz-option-radio"></div>
+                <span>The validator — PENDING status means validation did not complete</span>
+              </button>
+              <button class="quiz-option" data-value="option-d" onclick="selectOption(this)">
+                <div class="quiz-option-radio"></div>
+                <span>The MinIO bucket — the file was not uploaded so scrubbing cannot start</span>
+              </button>
+            </div>
+            <div class="quiz-feedback"></div>
+          </div>
+
+          <div class="quiz-question-block"
+               data-correct="option-c"
+               data-explanation-right="Right. The conn parameter threads the same database session through the router, execute_write, and log_audit. All writes commit or roll back together — so the audit log is always consistent with the data."
+               data-explanation-wrong="Think about what conn=db_conn does. By passing the same database connection to both execute_write and log_audit, all writes share one transaction. They can only both succeed or both fail — never one without the other.">
+            <h3 class="quiz-question">You notice that some sample records have no corresponding audit log entry. This should be impossible by design. What does it actually indicate?</h3>
+            <div class="quiz-options">
+              <button class="quiz-option" data-value="option-a" onclick="selectOption(this)">
+                <div class="quiz-option-radio"></div>
+                <span>The audit log table is full and new entries are being silently dropped</span>
+              </button>
+              <button class="quiz-option" data-value="option-b" onclick="selectOption(this)">
+                <div class="quiz-option-radio"></div>
+                <span>The audit log is optional — some routers were intentionally written without it</span>
+              </button>
+              <button class="quiz-option" data-value="option-c" onclick="selectOption(this)">
+                <div class="quiz-option-radio"></div>
+                <span>The sample was written by a router that did NOT pass conn=db to log_audit — a coding mistake</span>
+              </button>
+              <button class="quiz-option" data-value="option-d" onclick="selectOption(this)">
+                <div class="quiz-option-radio"></div>
+                <span>The PostgreSQL transaction committed before log_audit was called</span>
+              </button>
+            </div>
+            <div class="quiz-feedback"></div>
+          </div>
+
+          <div class="quiz-question-block"
+               data-correct="option-d"
+               data-explanation-right="Exactly — Cloud Scheduler is listed as the production scheduler, not APScheduler. APScheduler runs in the local dev process; Cloud Scheduler sends HTTP triggers to the production API. The jobs themselves (the Python functions) are identical in both environments."
+               data-explanation-wrong="Re-read the background jobs section. APScheduler runs locally. In production on GCP, Google Cloud Scheduler sends HTTP triggers instead. The Python job functions in jobs.py are the same — only how they are triggered differs.">
+            <h3 class="quiz-question">JACKPOT is deployed to Google Cloud. The scrubber queue job stops running every night at 2 AM. Which service do you check in the GCP console?</h3>
+            <div class="quiz-options">
+              <button class="quiz-option" data-value="option-a" onclick="selectOption(this)">
+                <div class="quiz-option-radio"></div>
+                <span>APScheduler logs inside the Cloud Run container</span>
+              </button>
+              <button class="quiz-option" data-value="option-b" onclick="selectOption(this)">
+                <div class="quiz-option-radio"></div>
+                <span>Redis — the task queue that sends jobs to the API</span>
+              </button>
+              <button class="quiz-option" data-value="option-c" onclick="selectOption(this)">
+                <div class="quiz-option-radio"></div>
+                <span>Cloud Pub/Sub — the message broker used by JACKPOT</span>
+              </button>
+              <button class="quiz-option" data-value="option-d" onclick="selectOption(this)">
+                <div class="quiz-option-radio"></div>
+                <span>Cloud Scheduler — it sends HTTP triggers to the API in production instead of APScheduler</span>
+              </button>
+            </div>
+            <div class="quiz-feedback"></div>
+          </div>
+
+          <button class="quiz-check-btn" onclick="checkQuiz('quiz-module5')">Check Answers</button>
+          <button class="quiz-reset-btn" onclick="resetQuiz('quiz-module5')">Try Again</button>
+        </div>
+
+        <!-- Closing callout -->
+        <div class="callout callout-accent" style="margin-top: var(--space-12)">
+          <div class="callout-icon">🧬</div>
+          <div class="callout-content">
+            <strong class="callout-title">You now understand JACKPOT</strong>
+            <p>You can read the code, trace a request from browser to database, explain the permission system, describe the 3-tier quality model, and know where to look when things break. That is the technical fluency you need to direct AI agents toward better implementations — and catch them when they go wrong.</p>
+          </div>
+        </div>
+
+      </section>
+
+    </div>
+  </div>
+</section>

@@ -1,0 +1,306 @@
+<section class="module" id="module-1" style="background: var(--color-bg)">
+  <div class="module-content">
+    <header class="module-header animate-in">
+      <span class="module-number">01</span>
+      <h1 class="module-title">The Pathogen Detective</h1>
+      <p class="module-subtitle">What JACKPOT does — and the 8-step journey every pathogen sample takes</p>
+    </header>
+
+    <div class="module-body">
+
+      <!-- Screen 1: What is JACKPOT? -->
+      <section class="screen animate-in">
+        <h2 class="screen-heading">A Platform for Tracking Pathogens at the Source</h2>
+        <p>
+          Imagine a disease outbreak is spreading across Arizona. Health labs are collecting samples — nasal swabs, wastewater, livestock tissue — and sequencing the <span class="term" data-definition="A pathogen's genome is the complete genetic blueprint of a virus or bacterium. Sequencing it means reading out its DNA or RNA letter-by-letter, like scanning a barcode that tells you exactly which variant of the disease you are dealing with.">pathogen's genome</span> to understand how it mutates and spreads.
+        </p>
+        <p>
+          The problem: every lab uses different file formats, different naming conventions, and different quality standards. Sharing data with global databases like <span class="term" data-definition="GISAID is the world's largest database of viral genome sequences — it tracked COVID-19 variants in real time. Labs upload their sequences here so researchers worldwide can monitor outbreaks.">GISAID</span> or <span class="term" data-definition="NCBI is the US National Center for Biotechnology Information. Its BioSample and SRA databases archive biological samples and raw sequencing data from labs around the world.">NCBI</span> requires strict metadata standards. And every raw sequencing file contains traces of human DNA that must be scrubbed before any sharing.
+        </p>
+
+        <div class="pattern-cards stagger-children" style="margin-top: var(--space-8)">
+          <div class="pattern-card animate-in" style="border-top-color: var(--color-actor-1)">
+            <div class="pattern-icon" style="background: var(--color-accent-light)">🧬</div>
+            <h4 class="pattern-title">Ingest Raw Data</h4>
+            <p class="pattern-desc">Accept <span class="term" data-definition="FASTQ files contain raw DNA sequences from a sequencer, along with quality scores for each letter. Think of them as the raw audio recordings before editing.">FASTQ</span> and <span class="term" data-definition="FASTA files contain assembled genome sequences — cleaner than FASTQ, no quality scores. Like a final transcript compared to raw audio.">FASTA</span> files plus structured metadata from public health labs.</p>
+          </div>
+          <div class="pattern-card animate-in" style="border-top-color: var(--color-actor-2)">
+            <div class="pattern-icon" style="background: var(--color-accent-light)">✅</div>
+            <h4 class="pattern-title">Validate Quality</h4>
+            <p class="pattern-desc">Check metadata against a 3-tier quality standard — PRELIMINARY, ANALYZABLE, SUBMITTABLE — so only good data reaches global databases.</p>
+          </div>
+          <div class="pattern-card animate-in" style="border-top-color: var(--color-actor-3)">
+            <div class="pattern-icon" style="background: var(--color-accent-light)">🔒</div>
+            <h4 class="pattern-title">Scrub Human DNA</h4>
+            <p class="pattern-desc">Remove human genetic material from every sample before it leaves the lab — a legal and ethical requirement for patient privacy.</p>
+          </div>
+          <div class="pattern-card animate-in" style="border-top-color: var(--color-actor-4)">
+            <div class="pattern-icon" style="background: var(--color-accent-light)">🌍</div>
+            <h4 class="pattern-title">Export to Global DBs</h4>
+            <p class="pattern-desc">Generate GISAID-compatible CSVs and NCBI submission packages so Arizona data feeds global outbreak surveillance in real time.</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- Screen 2: The journey of one sample -->
+      <section class="screen animate-in">
+        <h2 class="screen-heading">What Happens When a Lab Uploads a Sample</h2>
+        <p>
+          Imagine a lab technician at the Arizona State Public Health Lab uploads a FASTQ file and fills out a metadata form. Here is every step JACKPOT takes in the next few seconds — in order.
+        </p>
+
+        <div class="step-cards stagger-children">
+          <div class="step-card animate-in">
+            <div class="step-num">1</div>
+            <div class="step-body">
+              <strong>File arrives at the API</strong>
+              <p>The file and metadata hit one of 21 <span class="term" data-definition="A router in FastAPI is like a department in a company — it handles a specific set of requests. The ingest router handles uploads; the auth router handles logins. Each has its own URL prefix like /api/v1/ingest/.">router endpoints</span> on the FastAPI server.</p>
+            </div>
+          </div>
+          <div class="step-card animate-in">
+            <div class="step-num">2</div>
+            <div class="step-body">
+              <strong>Authentication check</strong>
+              <p>Guards verify the user&apos;s <span class="term" data-definition="A JWT (JSON Web Token) is a small digital pass — like a concert wristband — that proves who you are without the server needing to look you up in a database every time. It is signed cryptographically so it cannot be faked.">JWT token</span> and confirm they have permission to upload to the requested lab.</p>
+            </div>
+          </div>
+          <div class="step-card animate-in">
+            <div class="step-num">3</div>
+            <div class="step-body">
+              <strong>File type sniffed and paired</strong>
+              <p>The <span class="term" data-definition="The file detector reads the actual bytes inside a file to confirm it really is what its name claims. It also matches R1 and R2 files together — these are the two complementary strands of paired-end sequencing.">file detector</span> reads the first bytes to confirm the file is genuinely FASTQ (not mislabeled), then pairs R1 and R2 reads together.</p>
+            </div>
+          </div>
+          <div class="step-card animate-in">
+            <div class="step-num">4</div>
+            <div class="step-body">
+              <strong>PII scan</strong>
+              <p>The <span class="term" data-definition="DLP stands for Data Loss Prevention. The DLP scanner checks free-text fields like notes and comments for accidentally included personal information like names, phone numbers, or Social Security numbers.">DLP scanner</span> checks all free-text fields for accidentally included personal information.</p>
+            </div>
+          </div>
+          <div class="step-card animate-in">
+            <div class="step-num">5</div>
+            <div class="step-body">
+              <strong>Metadata validated</strong>
+              <p>The validator checks which quality tier the sample reaches — does it have enough fields to be just stored, analyzed, or submitted to global databases?</p>
+            </div>
+          </div>
+          <div class="step-card animate-in">
+            <div class="step-num">6</div>
+            <div class="step-body">
+              <strong>File staged to cloud storage</strong>
+              <p>The raw file is uploaded to a staging <span class="term" data-definition="A bucket is a container for files in cloud storage — like a named folder in the cloud. JACKPOT uses MinIO locally and Google Cloud Storage (GCS) in production. Both behave identically from the code's perspective.">bucket</span> in MinIO (local) or GCS (production).</p>
+            </div>
+          </div>
+          <div class="step-card animate-in">
+            <div class="step-num">7</div>
+            <div class="step-body">
+              <strong>Record written to PostgreSQL</strong>
+              <p>The sample row and an audit log entry are written to the database in the same <span class="term" data-definition="A database transaction is a group of operations that either all succeed together or all fail together — like a bank transfer. If the audit log write fails, the sample record is also rolled back, leaving the database in a clean state.">transaction</span>.</p>
+            </div>
+          </div>
+          <div class="step-card animate-in">
+            <div class="step-num">8</div>
+            <div class="step-body">
+              <strong>Scrubber job queued</strong>
+              <p>A background job is scheduled to remove human DNA from the file. Until scrubbing completes, the sample&apos;s <code>scrub_status</code> stays <code>PENDING</code>.</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Screen 3: Data flow animation -->
+      <section class="screen animate-in">
+        <h2 class="screen-heading">Watch the Data Move — Step by Step</h2>
+        <p>Click "Next Step" to trace a sample from the lab technician&apos;s browser all the way into the database.</p>
+
+        <div class="flow-animation" data-steps='[
+          {"highlight":"flow-actor-1","label":"Lab technician uploads a FASTQ file and metadata from their browser"},
+          {"highlight":"flow-actor-2","label":"FastAPI receives the request at POST /api/v1/ingest/upload","packet":true,"from":"actor-1","to":"actor-2"},
+          {"highlight":"flow-actor-3","label":"Auth guards verify the JWT cookie — is this user allowed to upload here?","packet":true,"from":"actor-2","to":"actor-3"},
+          {"highlight":"flow-actor-2","label":"Guards confirm access. Control returns to the ingest router","packet":true,"from":"actor-3","to":"actor-2"},
+          {"highlight":"flow-actor-4","label":"The validator checks all metadata fields against the 3-tier quality rules","packet":true,"from":"actor-2","to":"actor-4"},
+          {"highlight":"flow-actor-5","label":"MinIO/GCS staging bucket receives the raw sequencing file","packet":true,"from":"actor-2","to":"actor-5"},
+          {"highlight":"flow-actor-6","label":"PostgreSQL records the sample row and audit log entry in one transaction","packet":true,"from":"actor-2","to":"actor-6"},
+          {"highlight":"flow-actor-6","label":"Sample is now in the database with scrub_status = PENDING. Upload complete."}
+        ]'>
+          <div class="flow-actors">
+            <div class="flow-actor" id="flow-actor-1">
+              <div class="flow-actor-icon">🧑‍🔬</div>
+              <span>Lab Tech</span>
+            </div>
+            <div class="flow-actor" id="flow-actor-2">
+              <div class="flow-actor-icon">⚡</div>
+              <span>FastAPI</span>
+            </div>
+            <div class="flow-actor" id="flow-actor-3">
+              <div class="flow-actor-icon">🔐</div>
+              <span>Auth Guards</span>
+            </div>
+            <div class="flow-actor" id="flow-actor-4">
+              <div class="flow-actor-icon">🔬</div>
+              <span>Validator</span>
+            </div>
+            <div class="flow-actor" id="flow-actor-5">
+              <div class="flow-actor-icon">📦</div>
+              <span>Storage</span>
+            </div>
+            <div class="flow-actor" id="flow-actor-6">
+              <div class="flow-actor-icon">🗄️</div>
+              <span>PostgreSQL</span>
+            </div>
+          </div>
+          <div class="flow-packet" id="flow-packet"></div>
+          <div class="flow-step-label" id="flow-label">Click &ldquo;Next Step&rdquo; to begin</div>
+          <div class="flow-controls">
+            <button class="btn flow-next-btn">Next Step</button>
+            <button class="btn flow-reset-btn">Restart</button>
+            <span class="flow-progress"></span>
+          </div>
+        </div>
+
+        <div class="callout callout-accent">
+          <div class="callout-icon">💡</div>
+          <div class="callout-content">
+            <strong class="callout-title">The key insight: one request, many actors</strong>
+            <p>A single upload triggers six different systems in sequence. If any step fails — bad metadata, missing permissions, storage error — the whole request is rejected cleanly and the database stays untouched. This is the beauty of ordered validation.</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- Screen 4: Code translation — health check (real, minimal) -->
+      <section class="screen animate-in">
+        <h2 class="screen-heading">Your First Look at Real Code</h2>
+        <p>Here is JACKPOT&apos;s health-check <span class="term" data-definition="An endpoint is a specific URL that your API listens on. When something hits GET /health, the server runs this function and returns the result. Think of it as a specific address your code lives at.">endpoint</span> — the simplest piece of real code in the entire codebase. Read the plain English column to understand every line.</p>
+
+        <div class="translation-block animate-in">
+          <div class="translation-code">
+            <span class="translation-label">CODE</span>
+            <pre><code>
+<span class="code-line"><span class="code-keyword">@app</span>.<span class="code-function">get</span>(<span class="code-string">"/health"</span>)</span>
+<span class="code-line"><span class="code-keyword">def</span> <span class="code-function">health</span>() -> <span class="code-function">dict</span>:</span>
+<span class="code-line">    <span class="code-keyword">try</span>:</span>
+<span class="code-line">        <span class="code-function">execute_query</span>(<span class="code-string">"SELECT 1"</span>)</span>
+<span class="code-line">        db_status = <span class="code-string">"connected"</span></span>
+<span class="code-line">    <span class="code-keyword">except</span> Exception:</span>
+<span class="code-line">        db_status = <span class="code-string">"unavailable"</span></span>
+<span class="code-line">    <span class="code-keyword">return</span> {<span class="code-string">"status"</span>: <span class="code-string">"ok"</span>,</span>
+<span class="code-line">            <span class="code-string">"version"</span>: __version__,</span>
+<span class="code-line">            <span class="code-string">"database"</span>: db_status}</span>
+            </code></pre>
+          </div>
+          <div class="translation-english">
+            <span class="translation-label">PLAIN ENGLISH</span>
+            <div class="translation-lines">
+              <p class="tl">Register this function at the URL path <code>/health</code> for GET requests.</p>
+              <p class="tl">Define a function called <code>health</code> that returns a dictionary (key-value pairs).</p>
+              <p class="tl">Try to run the following — if anything goes wrong, jump to "except".</p>
+              <p class="tl">Ping the database with the simplest possible query — just to see if it responds.</p>
+              <p class="tl">If that worked, mark the database as "connected".</p>
+              <p class="tl">If anything threw an error, catch it here...</p>
+              <p class="tl">...and mark the database as "unavailable" instead.</p>
+              <p class="tl">Send back a JSON response with the API status, its version number, and the database status.</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="callout callout-info">
+          <div class="callout-icon">🔍</div>
+          <div class="callout-content">
+            <strong class="callout-title">The <code>@app.get</code> decorator</strong>
+            <p>That <code>@</code> symbol is called a <span class="term" data-definition="A decorator is a wrapper that adds behavior to a function without changing it. The @app.get decorator tells FastAPI: whenever someone makes a GET request to /health, run this function. You will see this pattern on every endpoint in JACKPOT.">decorator</span>. It is the pattern FastAPI uses to connect a URL to a Python function. Every endpoint in JACKPOT starts with one.</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- Screen 5: Quiz -->
+      <section class="screen animate-in">
+        <h2 class="screen-heading">Check Your Understanding</h2>
+
+        <div class="quiz-container" id="quiz-module1">
+          <div class="quiz-question-block"
+               data-correct="option-c"
+               data-explanation-right="Exactly. Validation happens before any write. If metadata is bad, the database never gets involved — that&apos;s how JACKPOT keeps its data clean."
+               data-explanation-wrong="Think about the order: you would not store a file you have not yet checked. The validator runs before the database write.">
+            <h3 class="quiz-question">A lab technician uploads a sample but forgets to include the required <code>organism_name</code> field. What does JACKPOT do?</h3>
+            <div class="quiz-options">
+              <button class="quiz-option" data-value="option-a" onclick="selectOption(this)">
+                <div class="quiz-option-radio"></div>
+                <span>Store the sample anyway and flag it for review later</span>
+              </button>
+              <button class="quiz-option" data-value="option-b" onclick="selectOption(this)">
+                <div class="quiz-option-radio"></div>
+                <span>Store the sample but skip the validation step</span>
+              </button>
+              <button class="quiz-option" data-value="option-c" onclick="selectOption(this)">
+                <div class="quiz-option-radio"></div>
+                <span>Reject the upload with an error — nothing is written to the database</span>
+              </button>
+              <button class="quiz-option" data-value="option-d" onclick="selectOption(this)">
+                <div class="quiz-option-radio"></div>
+                <span>Write to the database but skip the cloud storage step</span>
+              </button>
+            </div>
+            <div class="quiz-feedback"></div>
+          </div>
+
+          <div class="quiz-question-block"
+               data-correct="option-b"
+               data-explanation-right="Right — scrubbing is a background job that runs after the record is stored. The sample gets scrub_status = PENDING immediately. This means uploads are fast even though scrubbing can take minutes."
+               data-explanation-wrong="Scrubbing is too slow to do synchronously during an upload. The sample is stored first with scrub_status = PENDING, and a background job handles the scrubbing afterwards.">
+            <h3 class="quiz-question">After a successful upload, when does JACKPOT remove the human DNA from the sequencing file?</h3>
+            <div class="quiz-options">
+              <button class="quiz-option" data-value="option-a" onclick="selectOption(this)">
+                <div class="quiz-option-radio"></div>
+                <span>Immediately, before the record is saved to the database</span>
+              </button>
+              <button class="quiz-option" data-value="option-b" onclick="selectOption(this)">
+                <div class="quiz-option-radio"></div>
+                <span>Later, in a background job — the sample is stored first with scrub_status = PENDING</span>
+              </button>
+              <button class="quiz-option" data-value="option-c" onclick="selectOption(this)">
+                <div class="quiz-option-radio"></div>
+                <span>Never — JACKPOT does not handle human DNA removal</span>
+              </button>
+              <button class="quiz-option" data-value="option-d" onclick="selectOption(this)">
+                <div class="quiz-option-radio"></div>
+                <span>Only when the lab director explicitly requests it</span>
+              </button>
+            </div>
+            <div class="quiz-feedback"></div>
+          </div>
+
+          <div class="quiz-question-block"
+               data-correct="option-a"
+               data-explanation-right="Correct. The GISAID router already generates the export CSV. That means the data pipeline to GISAID is essentially done — you just need to trigger the export and confirm the column mapping is right."
+               data-explanation-wrong="Look back at the feature cards. GISAID export is listed as a supported feature, and gisaid.py is already implemented. The ingest router is still a stub.">
+            <h3 class="quiz-question">You want to add GISAID export for a new pathogen type. Based on what you learned, where would you look first in the codebase?</h3>
+            <div class="quiz-options">
+              <button class="quiz-option" data-value="option-a" onclick="selectOption(this)">
+                <div class="quiz-option-radio"></div>
+                <span>routers/gisaid.py — the GISAID export router is already implemented</span>
+              </button>
+              <button class="quiz-option" data-value="option-b" onclick="selectOption(this)">
+                <div class="quiz-option-radio"></div>
+                <span>routers/ingest.py — the ingest router is the entry point for all data</span>
+              </button>
+              <button class="quiz-option" data-value="option-c" onclick="selectOption(this)">
+                <div class="quiz-option-radio"></div>
+                <span>backend/storage.py — GISAID files are stored in cloud storage</span>
+              </button>
+              <button class="quiz-option" data-value="option-d" onclick="selectOption(this)">
+                <div class="quiz-option-radio"></div>
+                <span>backend/validator.py — GISAID requires validated data</span>
+              </button>
+            </div>
+            <div class="quiz-feedback"></div>
+          </div>
+
+          <button class="quiz-check-btn" onclick="checkQuiz('quiz-module1')">Check Answers</button>
+          <button class="quiz-reset-btn" onclick="resetQuiz('quiz-module1')">Try Again</button>
+        </div>
+      </section>
+
+    </div>
+  </div>
+</section>

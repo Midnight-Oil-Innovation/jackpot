@@ -1,0 +1,1580 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>JACKPOT — How a Pathogen Genomics Platform Works</title>
+
+  <!-- Google Fonts: Bricolage Grotesque · DM Sans · JetBrains Mono -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,600;12..96,700;12..96,800&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400;1,9..40,500&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+
+  <link rel="stylesheet" href="styles.css">
+
+  <!-- Teal accent — scientific, medical, precise -->
+  <style>
+    :root {
+      --color-accent:       #2A7B9B;
+      --color-accent-hover: #1F6280;
+      --color-accent-light: #E4F2F7;
+      --color-accent-muted: #5A9DB8;
+    }
+  </style>
+
+  <script src="main.js" defer></script>
+</head>
+<body>
+
+  <nav class="nav" id="nav">
+    <div class="progress-bar" id="progress-bar" role="progressbar" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100"></div>
+    <div class="nav-inner">
+      <span class="nav-title">JACKPOT — How a Pathogen Genomics Platform Works</span>
+      <div class="nav-dots" id="nav-dots" role="tablist">
+        <button class="nav-dot" data-target="module-1" data-tooltip="The Pathogen Detective" role="tab" aria-label="Module 1: The Pathogen Detective"></button>
+        <button class="nav-dot" data-target="module-2" data-tooltip="The Cast" role="tab" aria-label="Module 2: The Cast"></button>
+        <button class="nav-dot" data-target="module-3" data-tooltip="The Gatekeepers" role="tab" aria-label="Module 3: The Gatekeepers"></button>
+        <button class="nav-dot" data-target="module-4" data-tooltip="The Quality Engine" role="tab" aria-label="Module 4: The Quality Engine"></button>
+        <button class="nav-dot" data-target="module-5" data-tooltip="The Safety Net" role="tab" aria-label="Module 5: The Safety Net"></button>
+      </div>
+    </div>
+  </nav>
+
+  <main id="main">
+    <!-- modules/*.html content is assembled here by build.sh -->
+<section class="module" id="module-1" style="background: var(--color-bg)">
+  <div class="module-content">
+    <header class="module-header animate-in">
+      <span class="module-number">01</span>
+      <h1 class="module-title">The Pathogen Detective</h1>
+      <p class="module-subtitle">What JACKPOT does — and the 8-step journey every pathogen sample takes</p>
+    </header>
+
+    <div class="module-body">
+
+      <!-- Screen 1: What is JACKPOT? -->
+      <section class="screen animate-in">
+        <h2 class="screen-heading">A Platform for Tracking Pathogens at the Source</h2>
+        <p>
+          Imagine a disease outbreak is spreading across Arizona. Health labs are collecting samples — nasal swabs, wastewater, livestock tissue — and sequencing the <span class="term" data-definition="A pathogen's genome is the complete genetic blueprint of a virus or bacterium. Sequencing it means reading out its DNA or RNA letter-by-letter, like scanning a barcode that tells you exactly which variant of the disease you are dealing with.">pathogen's genome</span> to understand how it mutates and spreads.
+        </p>
+        <p>
+          The problem: every lab uses different file formats, different naming conventions, and different quality standards. Sharing data with global databases like <span class="term" data-definition="GISAID is the world's largest database of viral genome sequences — it tracked COVID-19 variants in real time. Labs upload their sequences here so researchers worldwide can monitor outbreaks.">GISAID</span> or <span class="term" data-definition="NCBI is the US National Center for Biotechnology Information. Its BioSample and SRA databases archive biological samples and raw sequencing data from labs around the world.">NCBI</span> requires strict metadata standards. And every raw sequencing file contains traces of human DNA that must be scrubbed before any sharing.
+        </p>
+
+        <div class="pattern-cards stagger-children" style="margin-top: var(--space-8)">
+          <div class="pattern-card animate-in" style="border-top-color: var(--color-actor-1)">
+            <div class="pattern-icon" style="background: var(--color-accent-light)">🧬</div>
+            <h4 class="pattern-title">Ingest Raw Data</h4>
+            <p class="pattern-desc">Accept <span class="term" data-definition="FASTQ files contain raw DNA sequences from a sequencer, along with quality scores for each letter. Think of them as the raw audio recordings before editing.">FASTQ</span> and <span class="term" data-definition="FASTA files contain assembled genome sequences — cleaner than FASTQ, no quality scores. Like a final transcript compared to raw audio.">FASTA</span> files plus structured metadata from public health labs.</p>
+          </div>
+          <div class="pattern-card animate-in" style="border-top-color: var(--color-actor-2)">
+            <div class="pattern-icon" style="background: var(--color-accent-light)">✅</div>
+            <h4 class="pattern-title">Validate Quality</h4>
+            <p class="pattern-desc">Check metadata against a 3-tier quality standard — PRELIMINARY, ANALYZABLE, SUBMITTABLE — so only good data reaches global databases.</p>
+          </div>
+          <div class="pattern-card animate-in" style="border-top-color: var(--color-actor-3)">
+            <div class="pattern-icon" style="background: var(--color-accent-light)">🔒</div>
+            <h4 class="pattern-title">Scrub Human DNA</h4>
+            <p class="pattern-desc">Remove human genetic material from every sample before it leaves the lab — a legal and ethical requirement for patient privacy.</p>
+          </div>
+          <div class="pattern-card animate-in" style="border-top-color: var(--color-actor-4)">
+            <div class="pattern-icon" style="background: var(--color-accent-light)">🌍</div>
+            <h4 class="pattern-title">Export to Global DBs</h4>
+            <p class="pattern-desc">Generate GISAID-compatible CSVs and NCBI submission packages so Arizona data feeds global outbreak surveillance in real time.</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- Screen 2: The journey of one sample -->
+      <section class="screen animate-in">
+        <h2 class="screen-heading">What Happens When a Lab Uploads a Sample</h2>
+        <p>
+          Imagine a lab technician at the Arizona State Public Health Lab uploads a FASTQ file and fills out a metadata form. Here is every step JACKPOT takes in the next few seconds — in order.
+        </p>
+
+        <div class="step-cards stagger-children">
+          <div class="step-card animate-in">
+            <div class="step-num">1</div>
+            <div class="step-body">
+              <strong>File arrives at the API</strong>
+              <p>The file and metadata hit one of 21 <span class="term" data-definition="A router in FastAPI is like a department in a company — it handles a specific set of requests. The ingest router handles uploads; the auth router handles logins. Each has its own URL prefix like /api/v1/ingest/.">router endpoints</span> on the FastAPI server.</p>
+            </div>
+          </div>
+          <div class="step-card animate-in">
+            <div class="step-num">2</div>
+            <div class="step-body">
+              <strong>Authentication check</strong>
+              <p>Guards verify the user&apos;s <span class="term" data-definition="A JWT (JSON Web Token) is a small digital pass — like a concert wristband — that proves who you are without the server needing to look you up in a database every time. It is signed cryptographically so it cannot be faked.">JWT token</span> and confirm they have permission to upload to the requested lab.</p>
+            </div>
+          </div>
+          <div class="step-card animate-in">
+            <div class="step-num">3</div>
+            <div class="step-body">
+              <strong>File type sniffed and paired</strong>
+              <p>The <span class="term" data-definition="The file detector reads the actual bytes inside a file to confirm it really is what its name claims. It also matches R1 and R2 files together — these are the two complementary strands of paired-end sequencing.">file detector</span> reads the first bytes to confirm the file is genuinely FASTQ (not mislabeled), then pairs R1 and R2 reads together.</p>
+            </div>
+          </div>
+          <div class="step-card animate-in">
+            <div class="step-num">4</div>
+            <div class="step-body">
+              <strong>PII scan</strong>
+              <p>The <span class="term" data-definition="DLP stands for Data Loss Prevention. The DLP scanner checks free-text fields like notes and comments for accidentally included personal information like names, phone numbers, or Social Security numbers.">DLP scanner</span> checks all free-text fields for accidentally included personal information.</p>
+            </div>
+          </div>
+          <div class="step-card animate-in">
+            <div class="step-num">5</div>
+            <div class="step-body">
+              <strong>Metadata validated</strong>
+              <p>The validator checks which quality tier the sample reaches — does it have enough fields to be just stored, analyzed, or submitted to global databases?</p>
+            </div>
+          </div>
+          <div class="step-card animate-in">
+            <div class="step-num">6</div>
+            <div class="step-body">
+              <strong>File staged to cloud storage</strong>
+              <p>The raw file is uploaded to a staging <span class="term" data-definition="A bucket is a container for files in cloud storage — like a named folder in the cloud. JACKPOT uses MinIO locally and Google Cloud Storage (GCS) in production. Both behave identically from the code's perspective.">bucket</span> in MinIO (local) or GCS (production).</p>
+            </div>
+          </div>
+          <div class="step-card animate-in">
+            <div class="step-num">7</div>
+            <div class="step-body">
+              <strong>Record written to PostgreSQL</strong>
+              <p>The sample row and an audit log entry are written to the database in the same <span class="term" data-definition="A database transaction is a group of operations that either all succeed together or all fail together — like a bank transfer. If the audit log write fails, the sample record is also rolled back, leaving the database in a clean state.">transaction</span>.</p>
+            </div>
+          </div>
+          <div class="step-card animate-in">
+            <div class="step-num">8</div>
+            <div class="step-body">
+              <strong>Scrubber job queued</strong>
+              <p>A background job is scheduled to remove human DNA from the file. Until scrubbing completes, the sample&apos;s <code>scrub_status</code> stays <code>PENDING</code>.</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Screen 3: Data flow animation -->
+      <section class="screen animate-in">
+        <h2 class="screen-heading">Watch the Data Move — Step by Step</h2>
+        <p>Click "Next Step" to trace a sample from the lab technician&apos;s browser all the way into the database.</p>
+
+        <div class="flow-animation" data-steps='[
+          {"highlight":"flow-actor-1","label":"Lab technician uploads a FASTQ file and metadata from their browser"},
+          {"highlight":"flow-actor-2","label":"FastAPI receives the request at POST /api/v1/ingest/upload","packet":true,"from":"actor-1","to":"actor-2"},
+          {"highlight":"flow-actor-3","label":"Auth guards verify the JWT cookie — is this user allowed to upload here?","packet":true,"from":"actor-2","to":"actor-3"},
+          {"highlight":"flow-actor-2","label":"Guards confirm access. Control returns to the ingest router","packet":true,"from":"actor-3","to":"actor-2"},
+          {"highlight":"flow-actor-4","label":"The validator checks all metadata fields against the 3-tier quality rules","packet":true,"from":"actor-2","to":"actor-4"},
+          {"highlight":"flow-actor-5","label":"MinIO/GCS staging bucket receives the raw sequencing file","packet":true,"from":"actor-2","to":"actor-5"},
+          {"highlight":"flow-actor-6","label":"PostgreSQL records the sample row and audit log entry in one transaction","packet":true,"from":"actor-2","to":"actor-6"},
+          {"highlight":"flow-actor-6","label":"Sample is now in the database with scrub_status = PENDING. Upload complete."}
+        ]'>
+          <div class="flow-actors">
+            <div class="flow-actor" id="flow-actor-1">
+              <div class="flow-actor-icon">🧑‍🔬</div>
+              <span>Lab Tech</span>
+            </div>
+            <div class="flow-actor" id="flow-actor-2">
+              <div class="flow-actor-icon">⚡</div>
+              <span>FastAPI</span>
+            </div>
+            <div class="flow-actor" id="flow-actor-3">
+              <div class="flow-actor-icon">🔐</div>
+              <span>Auth Guards</span>
+            </div>
+            <div class="flow-actor" id="flow-actor-4">
+              <div class="flow-actor-icon">🔬</div>
+              <span>Validator</span>
+            </div>
+            <div class="flow-actor" id="flow-actor-5">
+              <div class="flow-actor-icon">📦</div>
+              <span>Storage</span>
+            </div>
+            <div class="flow-actor" id="flow-actor-6">
+              <div class="flow-actor-icon">🗄️</div>
+              <span>PostgreSQL</span>
+            </div>
+          </div>
+          <div class="flow-packet" id="flow-packet"></div>
+          <div class="flow-step-label" id="flow-label">Click &ldquo;Next Step&rdquo; to begin</div>
+          <div class="flow-controls">
+            <button class="btn flow-next-btn">Next Step</button>
+            <button class="btn flow-reset-btn">Restart</button>
+            <span class="flow-progress"></span>
+          </div>
+        </div>
+
+        <div class="callout callout-accent">
+          <div class="callout-icon">💡</div>
+          <div class="callout-content">
+            <strong class="callout-title">The key insight: one request, many actors</strong>
+            <p>A single upload triggers six different systems in sequence. If any step fails — bad metadata, missing permissions, storage error — the whole request is rejected cleanly and the database stays untouched. This is the beauty of ordered validation.</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- Screen 4: Code translation — health check (real, minimal) -->
+      <section class="screen animate-in">
+        <h2 class="screen-heading">Your First Look at Real Code</h2>
+        <p>Here is JACKPOT&apos;s health-check <span class="term" data-definition="An endpoint is a specific URL that your API listens on. When something hits GET /health, the server runs this function and returns the result. Think of it as a specific address your code lives at.">endpoint</span> — the simplest piece of real code in the entire codebase. Read the plain English column to understand every line.</p>
+
+        <div class="translation-block animate-in">
+          <div class="translation-code">
+            <span class="translation-label">CODE</span>
+            <pre><code>
+<span class="code-line"><span class="code-keyword">@app</span>.<span class="code-function">get</span>(<span class="code-string">"/health"</span>)</span>
+<span class="code-line"><span class="code-keyword">def</span> <span class="code-function">health</span>() -> <span class="code-function">dict</span>:</span>
+<span class="code-line">    <span class="code-keyword">try</span>:</span>
+<span class="code-line">        <span class="code-function">execute_query</span>(<span class="code-string">"SELECT 1"</span>)</span>
+<span class="code-line">        db_status = <span class="code-string">"connected"</span></span>
+<span class="code-line">    <span class="code-keyword">except</span> Exception:</span>
+<span class="code-line">        db_status = <span class="code-string">"unavailable"</span></span>
+<span class="code-line">    <span class="code-keyword">return</span> {<span class="code-string">"status"</span>: <span class="code-string">"ok"</span>,</span>
+<span class="code-line">            <span class="code-string">"version"</span>: __version__,</span>
+<span class="code-line">            <span class="code-string">"database"</span>: db_status}</span>
+            </code></pre>
+          </div>
+          <div class="translation-english">
+            <span class="translation-label">PLAIN ENGLISH</span>
+            <div class="translation-lines">
+              <p class="tl">Register this function at the URL path <code>/health</code> for GET requests.</p>
+              <p class="tl">Define a function called <code>health</code> that returns a dictionary (key-value pairs).</p>
+              <p class="tl">Try to run the following — if anything goes wrong, jump to "except".</p>
+              <p class="tl">Ping the database with the simplest possible query — just to see if it responds.</p>
+              <p class="tl">If that worked, mark the database as "connected".</p>
+              <p class="tl">If anything threw an error, catch it here...</p>
+              <p class="tl">...and mark the database as "unavailable" instead.</p>
+              <p class="tl">Send back a JSON response with the API status, its version number, and the database status.</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="callout callout-info">
+          <div class="callout-icon">🔍</div>
+          <div class="callout-content">
+            <strong class="callout-title">The <code>@app.get</code> decorator</strong>
+            <p>That <code>@</code> symbol is called a <span class="term" data-definition="A decorator is a wrapper that adds behavior to a function without changing it. The @app.get decorator tells FastAPI: whenever someone makes a GET request to /health, run this function. You will see this pattern on every endpoint in JACKPOT.">decorator</span>. It is the pattern FastAPI uses to connect a URL to a Python function. Every endpoint in JACKPOT starts with one.</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- Screen 5: Quiz -->
+      <section class="screen animate-in">
+        <h2 class="screen-heading">Check Your Understanding</h2>
+
+        <div class="quiz-container" id="quiz-module1">
+          <div class="quiz-question-block"
+               data-correct="option-c"
+               data-explanation-right="Exactly. Validation happens before any write. If metadata is bad, the database never gets involved — that&apos;s how JACKPOT keeps its data clean."
+               data-explanation-wrong="Think about the order: you would not store a file you have not yet checked. The validator runs before the database write.">
+            <h3 class="quiz-question">A lab technician uploads a sample but forgets to include the required <code>organism_name</code> field. What does JACKPOT do?</h3>
+            <div class="quiz-options">
+              <button class="quiz-option" data-value="option-a" onclick="selectOption(this)">
+                <div class="quiz-option-radio"></div>
+                <span>Store the sample anyway and flag it for review later</span>
+              </button>
+              <button class="quiz-option" data-value="option-b" onclick="selectOption(this)">
+                <div class="quiz-option-radio"></div>
+                <span>Store the sample but skip the validation step</span>
+              </button>
+              <button class="quiz-option" data-value="option-c" onclick="selectOption(this)">
+                <div class="quiz-option-radio"></div>
+                <span>Reject the upload with an error — nothing is written to the database</span>
+              </button>
+              <button class="quiz-option" data-value="option-d" onclick="selectOption(this)">
+                <div class="quiz-option-radio"></div>
+                <span>Write to the database but skip the cloud storage step</span>
+              </button>
+            </div>
+            <div class="quiz-feedback"></div>
+          </div>
+
+          <div class="quiz-question-block"
+               data-correct="option-b"
+               data-explanation-right="Right — scrubbing is a background job that runs after the record is stored. The sample gets scrub_status = PENDING immediately. This means uploads are fast even though scrubbing can take minutes."
+               data-explanation-wrong="Scrubbing is too slow to do synchronously during an upload. The sample is stored first with scrub_status = PENDING, and a background job handles the scrubbing afterwards.">
+            <h3 class="quiz-question">After a successful upload, when does JACKPOT remove the human DNA from the sequencing file?</h3>
+            <div class="quiz-options">
+              <button class="quiz-option" data-value="option-a" onclick="selectOption(this)">
+                <div class="quiz-option-radio"></div>
+                <span>Immediately, before the record is saved to the database</span>
+              </button>
+              <button class="quiz-option" data-value="option-b" onclick="selectOption(this)">
+                <div class="quiz-option-radio"></div>
+                <span>Later, in a background job — the sample is stored first with scrub_status = PENDING</span>
+              </button>
+              <button class="quiz-option" data-value="option-c" onclick="selectOption(this)">
+                <div class="quiz-option-radio"></div>
+                <span>Never — JACKPOT does not handle human DNA removal</span>
+              </button>
+              <button class="quiz-option" data-value="option-d" onclick="selectOption(this)">
+                <div class="quiz-option-radio"></div>
+                <span>Only when the lab director explicitly requests it</span>
+              </button>
+            </div>
+            <div class="quiz-feedback"></div>
+          </div>
+
+          <div class="quiz-question-block"
+               data-correct="option-a"
+               data-explanation-right="Correct. The GISAID router already generates the export CSV. That means the data pipeline to GISAID is essentially done — you just need to trigger the export and confirm the column mapping is right."
+               data-explanation-wrong="Look back at the feature cards. GISAID export is listed as a supported feature, and gisaid.py is already implemented. The ingest router is still a stub.">
+            <h3 class="quiz-question">You want to add GISAID export for a new pathogen type. Based on what you learned, where would you look first in the codebase?</h3>
+            <div class="quiz-options">
+              <button class="quiz-option" data-value="option-a" onclick="selectOption(this)">
+                <div class="quiz-option-radio"></div>
+                <span>routers/gisaid.py — the GISAID export router is already implemented</span>
+              </button>
+              <button class="quiz-option" data-value="option-b" onclick="selectOption(this)">
+                <div class="quiz-option-radio"></div>
+                <span>routers/ingest.py — the ingest router is the entry point for all data</span>
+              </button>
+              <button class="quiz-option" data-value="option-c" onclick="selectOption(this)">
+                <div class="quiz-option-radio"></div>
+                <span>backend/storage.py — GISAID files are stored in cloud storage</span>
+              </button>
+              <button class="quiz-option" data-value="option-d" onclick="selectOption(this)">
+                <div class="quiz-option-radio"></div>
+                <span>backend/validator.py — GISAID requires validated data</span>
+              </button>
+            </div>
+            <div class="quiz-feedback"></div>
+          </div>
+
+          <button class="quiz-check-btn" onclick="checkQuiz('quiz-module1')">Check Answers</button>
+          <button class="quiz-reset-btn" onclick="resetQuiz('quiz-module1')">Try Again</button>
+        </div>
+      </section>
+
+    </div>
+  </div>
+</section>
+<section class="module" id="module-2" style="background: var(--color-bg-warm)">
+  <div class="module-content">
+    <header class="module-header animate-in">
+      <span class="module-number">02</span>
+      <h1 class="module-title">The Cast</h1>
+      <p class="module-subtitle">Meet the 21 routers, one database, and the storage layer that holds it all together</p>
+    </header>
+
+    <div class="module-body">
+
+      <!-- Screen 1: Architecture overview -->
+      <section class="screen animate-in">
+        <h2 class="screen-heading">Five Layers, One Platform</h2>
+        <p>
+          Think of JACKPOT like a hospital. The <span class="term" data-definition="FastAPI is the Python web framework that powers JACKPOT. It handles incoming HTTP requests, routes them to the right function, validates inputs with Pydantic, and generates the response. FastAPI is to JACKPOT what the front desk is to a hospital.">FastAPI</span> server is the front desk. The routers are the individual departments. The database is the records room. Storage is the physical file archive.
+        </p>
+
+        <div class="icon-rows stagger-children">
+          <div class="icon-row animate-in">
+            <div class="icon-circle" style="background: var(--color-actor-1)">⚡</div>
+            <div>
+              <strong>FastAPI (main.py)</strong>
+              <p>The <span class="term" data-definition="An entry point is the file Python runs first when you start the application. Everything else is registered from here — routers, middleware, scheduled jobs.">entry point</span>. Registers all 21 routers, wires up the CORS policy, starts the background scheduler, and serves the /health endpoint.</p>
+            </div>
+          </div>
+          <div class="icon-row animate-in">
+            <div class="icon-circle" style="background: var(--color-actor-2)">🗂️</div>
+            <div>
+              <strong>21 Routers (backend/routers/)</strong>
+              <p>Each router owns a domain: <code>auth</code>, <code>ingest</code>, <code>samples</code>, <code>gisaid</code>, <code>users</code>, <code>organizations</code>, and 15 more. Fully implemented: <code>auth</code> and <code>gisaid</code>. The rest are stubs returning <code>{"status":"not implemented"}</code>.</p>
+            </div>
+          </div>
+          <div class="icon-row animate-in">
+            <div class="icon-circle" style="background: var(--color-actor-3)">🗄️</div>
+            <div>
+              <strong>PostgreSQL + SQLAlchemy (backend/database.py)</strong>
+              <p>All 27 tables live here. <span class="term" data-definition="SQLAlchemy is a Python library that manages database connections and lets you write SQL as Python strings rather than raw drivers. It handles connection pooling — keeping a set of ready connections so the app does not reconnect for every request.">SQLAlchemy</span> manages the connection pool. Every query goes through <code>execute_query()</code> or <code>execute_write()</code> — routers never touch the database driver directly.</p>
+            </div>
+          </div>
+          <div class="icon-row animate-in">
+            <div class="icon-circle" style="background: var(--color-actor-4)">📦</div>
+            <div>
+              <strong>MinIO / GCS (backend/storage.py)</strong>
+              <p>Sequencing files are too large for a database. They live in an <span class="term" data-definition="S3-compatible storage means any object store that speaks the same API as Amazon S3. MinIO runs locally in Docker; Google Cloud Storage (GCS) runs in production. The same Python code works with both because storage.py hides the difference.">S3-compatible bucket</span>. Locally that is MinIO (in Docker); in production it is Google Cloud Storage.</p>
+            </div>
+          </div>
+          <div class="icon-row animate-in">
+            <div class="icon-circle" style="background: var(--color-actor-5)">⏰</div>
+            <div>
+              <strong>APScheduler / Cloud Scheduler (backend/jobs.py)</strong>
+              <p>Background jobs run on a schedule: the scrubber queue every 60 seconds, and access-request expiry every night at 2 AM. Locally this uses <span class="term" data-definition="APScheduler is a Python library for scheduling tasks. Think of it as a built-in cron job manager that runs inside the application process, no separate worker service needed.">APScheduler</span>; in production it uses Google Cloud Scheduler.</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Screen 2: File tree -->
+      <section class="screen animate-in">
+        <h2 class="screen-heading">Where Things Live in the Code</h2>
+        <p>Every file has a single job. Here is the map:</p>
+
+        <div class="file-tree animate-in">
+          <div class="ft-folder open">
+            <span class="ft-name">backend/</span>
+            <span class="ft-desc">The entire server application</span>
+            <div class="ft-children">
+              <div class="ft-file"><span class="ft-name">main.py</span><span class="ft-desc">App entry point — registers all routers and middleware</span></div>
+              <div class="ft-file"><span class="ft-name">config.py</span><span class="ft-desc">All environment variables (DB URL, secret key, storage credentials)</span></div>
+              <div class="ft-file"><span class="ft-name">database.py</span><span class="ft-desc">PostgreSQL connection pool + execute_query / execute_write helpers</span></div>
+              <div class="ft-file"><span class="ft-name">validator.py</span><span class="ft-desc">The 3-tier metadata quality engine — heart of the platform</span></div>
+              <div class="ft-file"><span class="ft-name">file_detector.py</span><span class="ft-desc">FASTQ/FASTA sniffing, R1/R2 pairing — single source of truth for files</span></div>
+              <div class="ft-file"><span class="ft-name">storage.py</span><span class="ft-desc">MinIO/GCS abstraction — routers never call boto3 directly</span></div>
+              <div class="ft-file"><span class="ft-name">audit.py</span><span class="ft-desc">Immutable audit log — every write gets recorded here</span></div>
+              <div class="ft-file"><span class="ft-name">jobs.py</span><span class="ft-desc">Background jobs: scrubber queue + access-request expiry</span></div>
+              <div class="ft-file"><span class="ft-name">responses.py</span><span class="ft-desc">Standard JSON response helpers: success(), error(), success_list()</span></div>
+              <div class="ft-file"><span class="ft-name">pagination.py</span><span class="ft-desc">Cursor-based pagination — used by all list endpoints</span></div>
+              <div class="ft-folder">
+                <span class="ft-name">auth/</span>
+                <span class="ft-desc">JWT issuance, Google OAuth, permission guards</span>
+              </div>
+              <div class="ft-folder">
+                <span class="ft-name">routers/</span>
+                <span class="ft-desc">21 route handlers — one file per domain</span>
+              </div>
+            </div>
+          </div>
+          <div class="ft-folder">
+            <span class="ft-name">schema/</span>
+            <span class="ft-desc">LinkML YAML schema — the canonical definition of all sample fields</span>
+          </div>
+          <div class="ft-folder">
+            <span class="ft-name">tests/</span>
+            <span class="ft-desc">316 tests at 76% coverage — pytest with a real PostgreSQL test DB</span>
+          </div>
+        </div>
+
+        <div class="callout callout-info">
+          <div class="callout-icon">🗺️</div>
+          <div class="callout-content">
+            <strong class="callout-title">Why this layout matters for steering AI</strong>
+            <p>When you ask an AI coding agent to &ldquo;add a new field to sample uploads,&rdquo; you now know the exact files to mention: <code>validator.py</code> (add the field to the tier rules), <code>routers/ingest.py</code> (accept it in the payload), and <code>schema/</code> (update the canonical schema). Vague instructions get vague results — specific file paths get precise changes.</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- Screen 3: Group chat — request lifecycle -->
+      <section class="screen animate-in">
+        <h2 class="screen-heading">A Request as a Group Conversation</h2>
+        <p>When a lab technician creates a new organization, here is the conversation happening inside the server — in milliseconds.</p>
+
+        <div class="chat-window" id="chat-module2">
+          <div class="chat-messages">
+            <div class="chat-message" data-msg="0" data-sender="browser" style="display:none">
+              <div class="chat-avatar" style="background: var(--color-actor-4)">🧑</div>
+              <div class="chat-bubble">
+                <span class="chat-sender" style="color: var(--color-actor-4)">Browser</span>
+                <p>POST /api/v1/organizations/ — here&apos;s the new org name and details</p>
+              </div>
+            </div>
+            <div class="chat-message" data-msg="1" data-sender="fastapi" style="display:none">
+              <div class="chat-avatar" style="background: var(--color-actor-1)">⚡</div>
+              <div class="chat-bubble">
+                <span class="chat-sender" style="color: var(--color-actor-1)">FastAPI Router</span>
+                <p>Got it. First, let me check the JWT cookie — who is making this request?</p>
+              </div>
+            </div>
+            <div class="chat-message" data-msg="2" data-sender="guards" style="display:none">
+              <div class="chat-avatar" style="background: var(--color-actor-2)">🔐</div>
+              <div class="chat-bubble">
+                <span class="chat-sender" style="color: var(--color-actor-2)">Auth Guards</span>
+                <p>Token is valid. User is glen@adhs.gov, is_platform_admin = TRUE. Access granted.</p>
+              </div>
+            </div>
+            <div class="chat-message" data-msg="3" data-sender="fastapi" style="display:none">
+              <div class="chat-avatar" style="background: var(--color-actor-1)">⚡</div>
+              <div class="chat-bubble">
+                <span class="chat-sender" style="color: var(--color-actor-1)">FastAPI Router</span>
+                <p>Good. Pydantic validated the request body. Running the INSERT now...</p>
+              </div>
+            </div>
+            <div class="chat-message" data-msg="4" data-sender="db" style="display:none">
+              <div class="chat-avatar" style="background: var(--color-actor-3)">🗄️</div>
+              <div class="chat-bubble">
+                <span class="chat-sender" style="color: var(--color-actor-3)">PostgreSQL</span>
+                <p>INSERT INTO organizations ... RETURNING * — here is the new row with its generated ID.</p>
+              </div>
+            </div>
+            <div class="chat-message" data-msg="5" data-sender="fastapi" style="display:none">
+              <div class="chat-avatar" style="background: var(--color-actor-1)">⚡</div>
+              <div class="chat-bubble">
+                <span class="chat-sender" style="color: var(--color-actor-1)">FastAPI Router</span>
+                <p>Also writing an audit log entry to the same transaction — CREATE_ORG, actor=glen, resource=org_id_42.</p>
+              </div>
+            </div>
+            <div class="chat-message" data-msg="6" data-sender="db" style="display:none">
+              <div class="chat-avatar" style="background: var(--color-actor-3)">🗄️</div>
+              <div class="chat-bubble">
+                <span class="chat-sender" style="color: var(--color-actor-3)">PostgreSQL</span>
+                <p>Both writes committed. Transaction closed.</p>
+              </div>
+            </div>
+            <div class="chat-message" data-msg="7" data-sender="browser" style="display:none">
+              <div class="chat-avatar" style="background: var(--color-actor-4)">🧑</div>
+              <div class="chat-bubble">
+                <span class="chat-sender" style="color: var(--color-actor-4)">Browser</span>
+                <p>Got {"status":"success","data":{...}} — new organization is live!</p>
+              </div>
+            </div>
+          </div>
+          <div class="chat-typing" id="chat-module2-typing" style="display:none">
+            <div class="chat-avatar" id="chat-module2-typing-avatar">?</div>
+            <div class="chat-typing-dots">
+              <span class="typing-dot"></span>
+              <span class="typing-dot"></span>
+              <span class="typing-dot"></span>
+            </div>
+          </div>
+          <div class="chat-controls">
+            <button class="btn chat-next-btn">Next Message</button>
+            <button class="btn chat-all-btn">Play All</button>
+            <button class="btn chat-reset-btn">Replay</button>
+            <span class="chat-progress"></span>
+          </div>
+        </div>
+      </section>
+
+      <!-- Screen 4: Code translation — execute_write with RETURNING -->
+      <section class="screen animate-in">
+        <h2 class="screen-heading">The Database Helper That Powers Every Write</h2>
+        <p>Every INSERT, UPDATE, and DELETE in JACKPOT goes through <code>execute_write()</code>. Here is the key part of it — with one pattern you will see everywhere.</p>
+
+        <div class="translation-block animate-in">
+          <div class="translation-code">
+            <span class="translation-label">CODE — backend/database.py</span>
+            <pre><code>
+<span class="code-line"><span class="code-keyword">def</span> <span class="code-function">execute_write</span>(</span>
+<span class="code-line">    query: <span class="code-function">str</span>,</span>
+<span class="code-line">    params: <span class="code-function">dict</span> | <span class="code-keyword">None</span> = <span class="code-keyword">None</span>,</span>
+<span class="code-line">    conn=<span class="code-keyword">None</span>,</span>
+<span class="code-line">) -> <span class="code-function">list</span>[<span class="code-function">dict</span>]:</span>
+<span class="code-line">    <span class="code-keyword">if</span> conn <span class="code-keyword">is not None</span>:</span>
+<span class="code-line">        result = conn.<span class="code-function">execute</span>(<span class="code-function">text</span>(query), params <span class="code-keyword">or</span> {})</span>
+<span class="code-line">        <span class="code-keyword">if</span> result.returns_rows:</span>
+<span class="code-line">            cols = result.<span class="code-function">keys</span>()</span>
+<span class="code-line">            <span class="code-keyword">return</span> [<span class="code-function">dict</span>(<span class="code-function">zip</span>(cols, row)) <span class="code-keyword">for</span> row <span class="code-keyword">in</span> result.<span class="code-function">fetchall</span>()]</span>
+<span class="code-line">        <span class="code-keyword">return</span> []</span>
+            </code></pre>
+          </div>
+          <div class="translation-english">
+            <span class="translation-label">PLAIN ENGLISH</span>
+            <div class="translation-lines">
+              <p class="tl">Define a function that writes to the database. It takes a SQL string, optional parameters, and an optional database connection.</p>
+              <p class="tl">The SQL query to run — written as a plain string like <code>"INSERT INTO orgs ..."</code></p>
+              <p class="tl">Values to substitute safely into the query — prevents SQL injection attacks.</p>
+              <p class="tl">An existing database session to join, so multiple writes share one transaction.</p>
+              <p class="tl">If a connection was passed in, use it (we are inside a bigger transaction)...</p>
+              <p class="tl">...run the query using that connection.</p>
+              <p class="tl">If the query returned rows (e.g., INSERT ... RETURNING *)...</p>
+              <p class="tl">...get the column names, then zip each row into a dictionary and return them all.</p>
+              <p class="tl">If nothing was returned (e.g., a DELETE with no RETURNING), return an empty list.</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="callout callout-accent">
+          <div class="callout-icon">💡</div>
+          <div class="callout-content">
+            <strong class="callout-title">RETURNING * — never SELECT after write</strong>
+            <p>PostgreSQL lets you add <code>RETURNING *</code> to an INSERT or UPDATE to get the saved row back immediately. JACKPOT uses this everywhere instead of running a separate SELECT query. One round-trip instead of two — and you always get the database-generated values like auto-increment IDs and timestamps.</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- Screen 5: Quiz -->
+      <section class="screen animate-in">
+        <h2 class="screen-heading">Check Your Understanding</h2>
+
+        <div class="quiz-container" id="quiz-module2">
+          <div class="quiz-question-block"
+               data-correct="option-b"
+               data-explanation-right="Correct — storage.py is the abstraction layer. Routers call stage_file() and move_to_sequences(), never boto3 directly. This means swapping MinIO for S3 or GCS requires changing only storage.py."
+               data-explanation-wrong="Routers in JACKPOT are not allowed to call boto3 directly. There is a deliberate abstraction layer: storage.py. This makes it easy to swap storage backends without touching every router.">
+            <h3 class="quiz-question">You need to change JACKPOT from MinIO to Amazon S3 for file storage. Which file do you change?</h3>
+            <div class="quiz-options">
+              <button class="quiz-option" data-value="option-a" onclick="selectOption(this)">
+                <div class="quiz-option-radio"></div>
+                <span>Every router file that handles file uploads</span>
+              </button>
+              <button class="quiz-option" data-value="option-b" onclick="selectOption(this)">
+                <div class="quiz-option-radio"></div>
+                <span>backend/storage.py — the single storage abstraction layer</span>
+              </button>
+              <button class="quiz-option" data-value="option-c" onclick="selectOption(this)">
+                <div class="quiz-option-radio"></div>
+                <span>backend/database.py — where all data is stored</span>
+              </button>
+              <button class="quiz-option" data-value="option-d" onclick="selectOption(this)">
+                <div class="quiz-option-radio"></div>
+                <span>backend/config.py only — environment variables handle storage backends</span>
+              </button>
+            </div>
+            <div class="quiz-feedback"></div>
+          </div>
+
+          <div class="quiz-question-block"
+               data-correct="option-c"
+               data-explanation-right="Exactly. The conn parameter threads a single database session through the router, execute_write, and log_audit. All three writes commit or roll back together."
+               data-explanation-wrong="The conn parameter is key here. When you pass the same conn to execute_write and log_audit, they share one transaction. If either fails, both are rolled back.">
+            <h3 class="quiz-question">A router creates a sample and logs an audit entry. The audit log write fails halfway through. What happens to the sample record?</h3>
+            <div class="quiz-options">
+              <button class="quiz-option" data-value="option-a" onclick="selectOption(this)">
+                <div class="quiz-option-radio"></div>
+                <span>The sample is saved, but the audit log entry is skipped</span>
+              </button>
+              <button class="quiz-option" data-value="option-b" onclick="selectOption(this)">
+                <div class="quiz-option-radio"></div>
+                <span>Both writes succeed — audit failures are silently ignored</span>
+              </button>
+              <button class="quiz-option" data-value="option-c" onclick="selectOption(this)">
+                <div class="quiz-option-radio"></div>
+                <span>Both are rolled back — they share the same transaction via the conn parameter</span>
+              </button>
+              <button class="quiz-option" data-value="option-d" onclick="selectOption(this)">
+                <div class="quiz-option-radio"></div>
+                <span>The sample is deleted separately by a cleanup job</span>
+              </button>
+            </div>
+            <div class="quiz-feedback"></div>
+          </div>
+
+          <button class="quiz-check-btn" onclick="checkQuiz('quiz-module2')">Check Answers</button>
+          <button class="quiz-reset-btn" onclick="resetQuiz('quiz-module2')">Try Again</button>
+        </div>
+      </section>
+
+    </div>
+  </div>
+</section>
+<section class="module" id="module-3" style="background: var(--color-bg)">
+  <div class="module-content">
+    <header class="module-header animate-in">
+      <span class="module-number">03</span>
+      <h1 class="module-title">The Gatekeepers</h1>
+      <p class="module-subtitle">Google OAuth, JWT cookies, and the three-tier permission system that controls who sees what</p>
+    </header>
+
+    <div class="module-body">
+
+      <!-- Screen 1: The login flow -->
+      <section class="screen animate-in">
+        <h2 class="screen-heading">Logging In — The Hotel Keycard System</h2>
+        <p>
+          Think of JACKPOT&apos;s login system like a hotel. The front desk (<span class="term" data-definition="Google OAuth is a login system that lets users sign in with their Google account. Instead of JACKPOT storing passwords, Google verifies the user's identity and sends JACKPOT a short-lived authorization code.">Google OAuth</span>) checks your ID and hands you a keycard (<span class="term" data-definition="A JWT (JSON Web Token) is a small, signed digital token — like a hotel keycard — that proves who you are. It contains your user ID and expiry time, signed with a secret key. Every request after login includes this token so the server knows who you are without looking you up in the database every time.">JWT</span>). That keycard opens specific doors based on your role. When it expires, you get a new one from the front desk without re-checking your ID.
+        </p>
+
+        <div class="flow-animation" data-steps='[
+          {"highlight":"flow-actor-1","label":"User clicks Sign In with Google on the JACKPOT frontend"},
+          {"highlight":"flow-actor-2","label":"Google verifies the user identity and returns a one-time auth code","packet":true,"from":"actor-1","to":"actor-2"},
+          {"highlight":"flow-actor-3","label":"Frontend sends that code to POST /api/v1/auth/google/login","packet":true,"from":"actor-2","to":"actor-3"},
+          {"highlight":"flow-actor-4","label":"JACKPOT checks the domain whitelist — is this email domain approved?","packet":true,"from":"actor-3","to":"actor-4"},
+          {"highlight":"flow-actor-4","label":"Looks up the user in PostgreSQL — must exist before login is allowed"},
+          {"highlight":"flow-actor-3","label":"Issues two JWT cookies: access token (15 min) + refresh token (7 days)","packet":true,"from":"actor-4","to":"actor-3"},
+          {"highlight":"flow-actor-1","label":"Browser stores the cookies — all future requests carry them automatically","packet":true,"from":"actor-3","to":"actor-1"},
+          {"highlight":"flow-actor-1","label":"User is now logged in. Every API call includes the access cookie."}
+        ]'>
+          <div class="flow-actors">
+            <div class="flow-actor" id="flow-actor-1">
+              <div class="flow-actor-icon">🧑</div>
+              <span>Browser</span>
+            </div>
+            <div class="flow-actor" id="flow-actor-2">
+              <div class="flow-actor-icon">G</div>
+              <span>Google</span>
+            </div>
+            <div class="flow-actor" id="flow-actor-3">
+              <div class="flow-actor-icon">⚡</div>
+              <span>JACKPOT API</span>
+            </div>
+            <div class="flow-actor" id="flow-actor-4">
+              <div class="flow-actor-icon">🗄️</div>
+              <span>PostgreSQL</span>
+            </div>
+          </div>
+          <div class="flow-packet" id="flow-packet"></div>
+          <div class="flow-step-label" id="flow-label">Click &ldquo;Next Step&rdquo; to trace a login</div>
+          <div class="flow-controls">
+            <button class="btn flow-next-btn">Next Step</button>
+            <button class="btn flow-reset-btn">Restart</button>
+            <span class="flow-progress"></span>
+          </div>
+        </div>
+
+        <div class="callout callout-info">
+          <div class="callout-icon">🍪</div>
+          <div class="callout-content">
+            <strong class="callout-title">Why HTTP-only cookies, not localStorage?</strong>
+            <p>JACKPOT sets JWT tokens as <span class="term" data-definition="An HttpOnly cookie is a browser cookie that JavaScript cannot read — only the browser can send it. This means a malicious script injected into the page cannot steal the token and impersonate the user. It is the most secure way to store authentication tokens in a web app.">HttpOnly cookies</span>, not in browser localStorage. This means JavaScript on the page cannot access the tokens — a stolen script cannot steal your session. The browser sends them automatically on every request.</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- Screen 2: Code translation — guards.py -->
+      <section class="screen animate-in">
+        <h2 class="screen-heading">How Every Request Gets Verified</h2>
+        <p>Every <span class="term" data-definition="A protected endpoint is an API route that requires authentication. Before running the actual logic, it checks whether the request includes a valid token. If not, it returns a 401 Unauthorized error.">protected endpoint</span> calls <code>get_current_user()</code> first. Here is the real code from <code>guards.py</code>:</p>
+
+        <div class="translation-block animate-in">
+          <div class="translation-code">
+            <span class="translation-label">CODE — backend/auth/guards.py</span>
+            <pre><code>
+<span class="code-line"><span class="code-keyword">def</span> <span class="code-function">get_current_user</span>(request: <span class="code-function">Request</span>) -> <span class="code-function">dict</span>:</span>
+<span class="code-line">    settings = <span class="code-function">get_settings</span>()</span>
+<span class="code-line">    <span class="code-keyword">if</span> settings.env == <span class="code-string">"local"</span>:</span>
+<span class="code-line">        rows = <span class="code-function">execute_query</span>(</span>
+<span class="code-line">            <span class="code-string">"SELECT * FROM users WHERE email = :e"</span>,</span>
+<span class="code-line">            {<span class="code-string">"e"</span>: settings.mock_user_email},</span>
+<span class="code-line">        )</span>
+<span class="code-line">        <span class="code-keyword">return</span> rows[<span class="code-number">0</span>] <span class="code-keyword">if</span> rows <span class="code-keyword">else</span> {<span class="code-string">"id"</span>: <span class="code-number">1</span>, ...}</span>
+<span class="code-line">    token = request.cookies.<span class="code-function">get</span>(<span class="code-string">"access"</span>)</span>
+<span class="code-line">    <span class="code-keyword">if not</span> token:</span>
+<span class="code-line">        <span class="code-keyword">raise</span> <span class="code-function">HTTPException</span>(status_code=<span class="code-number">401</span>, detail=<span class="code-string">"Not authenticated."</span>)</span>
+<span class="code-line">    payload = jwt.<span class="code-function">decode</span>(token, settings.secret_key, ...)</span>
+<span class="code-line">    rows = <span class="code-function">execute_query</span>(<span class="code-string">"SELECT ... FROM users WHERE id = :uid"</span>, ...)</span>
+<span class="code-line">    <span class="code-keyword">return</span> rows[<span class="code-number">0</span>]</span>
+            </code></pre>
+          </div>
+          <div class="translation-english">
+            <span class="translation-label">PLAIN ENGLISH</span>
+            <div class="translation-lines">
+              <p class="tl">Define a function that takes an HTTP request and returns a user dictionary.</p>
+              <p class="tl">Load the app settings (database URL, secret key, etc.) from environment variables.</p>
+              <p class="tl">If we are running locally (not in production)...</p>
+              <p class="tl">...look up the mock user defined in docker-compose.yml by their email address...</p>
+              <p class="tl">(using a safe parameterized query so nobody can inject SQL)</p>
+              <p class="tl">...and return them as the logged-in user. This lets developers work without real Google login.</p>
+              <p class="tl">In production: read the &ldquo;access&rdquo; cookie from the request.</p>
+              <p class="tl">If there is no cookie, reject the request with HTTP 401 — Unauthorized.</p>
+              <p class="tl">Decode and verify the JWT using the app&apos;s secret key.</p>
+              <p class="tl">Look the user up in the database to confirm they still exist and are active.</p>
+              <p class="tl">Return the user&apos;s data — the router can now use it for permission checks.</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Screen 3: The 3-tier permission system -->
+      <section class="screen animate-in">
+        <h2 class="screen-heading">Three Levels of Power</h2>
+        <p>
+          JACKPOT inherits its permission model from APGAP (its predecessor). There are three tiers, each more powerful than the last. The <span class="term" data-definition="PermissionGroups is a Python enum whose string values must exactly match those in the old APGAP system. Changing them would break backwards compatibility with labs that already have data in APGAP.">PermissionGroups</span> enum values are sacred — they cannot be renamed without breaking the legacy system.
+        </p>
+
+        <div class="arch-diagram">
+          <div class="arch-zone">
+            <h4 class="arch-zone-label">Permission Tiers — click any role to learn more</h4>
+            <div style="display: flex; gap: var(--space-4); flex-wrap: wrap; justify-content: center;">
+              <div class="arch-component"
+                   data-desc="Platform Admin — the superuser role. Can see and modify everything across all organizations, labs, and users. Sets up the domain whitelist, creates organizations, and approves scrub-skip requests. There is no action a Platform Admin cannot take."
+                   onclick="showArchDesc(this)">
+                <div class="arch-icon">👑</div>
+                <span>Platform Admin</span>
+              </div>
+              <div class="arch-component"
+                   data-desc="Lab Director — manages a single lab. Can add and remove lab members, change their roles, and manage the lab's sequencing assignments. Has full access to the lab's samples and projects. Cannot touch other labs or platform-level settings."
+                   onclick="showArchDesc(this)">
+                <div class="arch-icon">🔬</div>
+                <span>Lab Director</span>
+              </div>
+              <div class="arch-component"
+                   data-desc="Lab Member — a scientist or technician with access to one or more labs. Can upload samples, run pipelines, and export data — but only within their assigned labs and projects. Cannot change who has access or modify lab settings."
+                   onclick="showArchDesc(this)">
+                <div class="arch-icon">🧑‍🔬</div>
+                <span>Lab Member</span>
+              </div>
+              <div class="arch-component"
+                   data-desc="Data Analyst — a read-only cross-lab role. Can query and analyze samples across all labs they have been granted access to, but cannot upload or modify data. Useful for epidemiologists who need to see patterns across multiple labs."
+                   onclick="showArchDesc(this)">
+                <div class="arch-icon">📊</div>
+                <span>Data Analyst</span>
+              </div>
+            </div>
+            <div class="arch-description" id="arch-desc">Click any role above to see what it can do</div>
+          </div>
+        </div>
+
+        <div class="badge-list animate-in">
+          <div class="badge-item">
+            <code class="badge-code">require_platform_admin()</code>
+            <span class="badge-desc">Raises HTTP 403 if the current user does not have is_platform_admin = TRUE</span>
+          </div>
+          <div class="badge-item">
+            <code class="badge-code">require_lab_director()</code>
+            <span class="badge-desc">Platform Admins pass automatically; others must be the lab director of that specific lab</span>
+          </div>
+          <div class="badge-item">
+            <code class="badge-code">require_lab_access()</code>
+            <span class="badge-desc">Checks lab_membership AND project_membership — multiple paths to access</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- Screen 4: Group chat — auth conversation between router and guards -->
+      <section class="screen animate-in">
+        <h2 class="screen-heading">The Permission Check in Action</h2>
+        <p>A regular lab member tries to delete an organization. Here is what happens inside the server.</p>
+
+        <div class="chat-window" id="chat-module3">
+          <div class="chat-messages">
+            <div class="chat-message" data-msg="0" data-sender="router" style="display:none">
+              <div class="chat-avatar" style="background: var(--color-actor-1)">⚡</div>
+              <div class="chat-bubble">
+                <span class="chat-sender" style="color: var(--color-actor-1)">Organizations Router</span>
+                <p>DELETE /api/v1/organizations/7 — someone wants to delete org #7.</p>
+              </div>
+            </div>
+            <div class="chat-message" data-msg="1" data-sender="guards" style="display:none">
+              <div class="chat-avatar" style="background: var(--color-actor-2)">🔐</div>
+              <div class="chat-bubble">
+                <span class="chat-sender" style="color: var(--color-actor-2)">get_current_user</span>
+                <p>Cookie found. JWT decoded. Looking up user in the database... User is sarah@adhs.gov, is_platform_admin = FALSE.</p>
+              </div>
+            </div>
+            <div class="chat-message" data-msg="2" data-sender="router" style="display:none">
+              <div class="chat-avatar" style="background: var(--color-actor-1)">⚡</div>
+              <div class="chat-bubble">
+                <span class="chat-sender" style="color: var(--color-actor-1)">Organizations Router</span>
+                <p>Got the user. Now I need to check: is Sarah a Platform Admin? Calling require_platform_admin()...</p>
+              </div>
+            </div>
+            <div class="chat-message" data-msg="3" data-sender="guards" style="display:none">
+              <div class="chat-avatar" style="background: var(--color-actor-2)">🔐</div>
+              <div class="chat-bubble">
+                <span class="chat-sender" style="color: var(--color-actor-2)">require_platform_admin</span>
+                <p>is_platform_admin = FALSE. Raising HTTPException 403 — Forbidden.</p>
+              </div>
+            </div>
+            <div class="chat-message" data-msg="4" data-sender="browser" style="display:none">
+              <div class="chat-avatar" style="background: var(--color-actor-4)">🧑</div>
+              <div class="chat-bubble">
+                <span class="chat-sender" style="color: var(--color-actor-4)">Browser (Sarah)</span>
+                <p>Received HTTP 403 — &ldquo;Platform Admin required.&rdquo; The delete button grays out.</p>
+              </div>
+            </div>
+          </div>
+          <div class="chat-typing" id="chat-module3-typing" style="display:none">
+            <div class="chat-avatar" id="chat-module3-typing-avatar">?</div>
+            <div class="chat-typing-dots">
+              <span class="typing-dot"></span>
+              <span class="typing-dot"></span>
+              <span class="typing-dot"></span>
+            </div>
+          </div>
+          <div class="chat-controls">
+            <button class="btn chat-next-btn">Next Message</button>
+            <button class="btn chat-all-btn">Play All</button>
+            <button class="btn chat-reset-btn">Replay</button>
+            <span class="chat-progress"></span>
+          </div>
+        </div>
+
+        <div class="callout callout-accent">
+          <div class="callout-icon">💡</div>
+          <div class="callout-content">
+            <strong class="callout-title">403 vs 401 — two very different errors</strong>
+            <p><strong>401 Unauthorized</strong> means &ldquo;I don&apos;t know who you are — please log in.&rdquo; <strong>403 Forbidden</strong> means &ldquo;I know exactly who you are, and you are not allowed to do this.&rdquo; When you see a 403 in JACKPOT, look for a missing <code>require_*</code> guard call or an incorrect role assignment.</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- Screen 5: Quiz -->
+      <section class="screen animate-in">
+        <h2 class="screen-heading">Check Your Understanding</h2>
+
+        <div class="quiz-container" id="quiz-module3">
+          <div class="quiz-question-block"
+               data-correct="option-b"
+               data-explanation-right="Right — the domain whitelist is checked during login, before a JWT is ever issued. If the domain is not approved, the user cannot get a token at all."
+               data-explanation-wrong="The domain whitelist check happens inside the Google login endpoint, before any JWT is issued. The user never gets past the front desk.">
+            <h3 class="quiz-question">A researcher at a university hospital tries to log in with their @university.edu email. Their domain is not in the whitelist. What does JACKPOT return?</h3>
+            <div class="quiz-options">
+              <button class="quiz-option" data-value="option-a" onclick="selectOption(this)">
+                <div class="quiz-option-radio"></div>
+                <span>HTTP 401 — they get a JWT but it does not have any lab access</span>
+              </button>
+              <button class="quiz-option" data-value="option-b" onclick="selectOption(this)">
+                <div class="quiz-option-radio"></div>
+                <span>HTTP 403 — their domain is not authorized, no JWT is issued</span>
+              </button>
+              <button class="quiz-option" data-value="option-c" onclick="selectOption(this)">
+                <div class="quiz-option-radio"></div>
+                <span>HTTP 200 — they log in successfully but with read-only access</span>
+              </button>
+              <button class="quiz-option" data-value="option-d" onclick="selectOption(this)">
+                <div class="quiz-option-radio"></div>
+                <span>HTTP 404 — their email is not in the users table</span>
+              </button>
+            </div>
+            <div class="quiz-feedback"></div>
+          </div>
+
+          <div class="quiz-question-block"
+               data-correct="option-d"
+               data-explanation-right="Exactly. In local dev (env=local), get_current_user looks up the MOCK_USER_EMAIL from docker-compose.yml instead of reading a JWT cookie. This lets developers call every endpoint without running a Google OAuth flow."
+               data-explanation-wrong="In local dev mode, guards.py skips the JWT check entirely and looks up MOCK_USER_EMAIL from the environment. No browser, no Google, no token needed.">
+            <h3 class="quiz-question">You are developing JACKPOT locally and want to test a protected endpoint without going through Google login. How does JACKPOT handle this?</h3>
+            <div class="quiz-options">
+              <button class="quiz-option" data-value="option-a" onclick="selectOption(this)">
+                <div class="quiz-option-radio"></div>
+                <span>You must create a real Google OAuth app and configure it locally</span>
+              </button>
+              <button class="quiz-option" data-value="option-b" onclick="selectOption(this)">
+                <div class="quiz-option-radio"></div>
+                <span>You must manually generate a JWT token and paste it into your browser</span>
+              </button>
+              <button class="quiz-option" data-value="option-c" onclick="selectOption(this)">
+                <div class="quiz-option-radio"></div>
+                <span>Protected endpoints are disabled in local mode</span>
+              </button>
+              <button class="quiz-option" data-value="option-d" onclick="selectOption(this)">
+                <div class="quiz-option-radio"></div>
+                <span>guards.py checks env=local and looks up MOCK_USER_EMAIL from docker-compose.yml instead</span>
+              </button>
+            </div>
+            <div class="quiz-feedback"></div>
+          </div>
+
+          <div class="quiz-question-block"
+               data-correct="option-a"
+               data-explanation-right="Correct. require_lab_access() checks both lab_membership and project_membership. A user with only project access (no direct lab membership) still passes the guard. This is deliberate — project collaborators need to see lab data."
+               data-explanation-wrong="require_lab_access() is more flexible than require_lab_director(). It checks both lab_membership AND project_membership — if a user belongs to any project within the lab, they pass.">
+            <h3 class="quiz-question">A visiting researcher has no direct lab membership but is a member of a project inside Lab 5. They call GET /api/v1/labs/5/samples. Does require_lab_access() block them?</h3>
+            <div class="quiz-options">
+              <button class="quiz-option" data-value="option-a" onclick="selectOption(this)">
+                <div class="quiz-option-radio"></div>
+                <span>No — require_lab_access() also checks project_membership, so they pass</span>
+              </button>
+              <button class="quiz-option" data-value="option-b" onclick="selectOption(this)">
+                <div class="quiz-option-radio"></div>
+                <span>Yes — they need direct lab_membership to access any lab endpoint</span>
+              </button>
+              <button class="quiz-option" data-value="option-c" onclick="selectOption(this)">
+                <div class="quiz-option-radio"></div>
+                <span>Yes — only Platform Admins and Lab Directors can list samples</span>
+              </button>
+              <button class="quiz-option" data-value="option-d" onclick="selectOption(this)">
+                <div class="quiz-option-radio"></div>
+                <span>It depends on whether the project is marked as public</span>
+              </button>
+            </div>
+            <div class="quiz-feedback"></div>
+          </div>
+
+          <button class="quiz-check-btn" onclick="checkQuiz('quiz-module3')">Check Answers</button>
+          <button class="quiz-reset-btn" onclick="resetQuiz('quiz-module3')">Try Again</button>
+        </div>
+      </section>
+
+    </div>
+  </div>
+</section>
+<section class="module" id="module-4" style="background: var(--color-bg-warm)">
+  <div class="module-content">
+    <header class="module-header animate-in">
+      <span class="module-number">04</span>
+      <h1 class="module-title">The Quality Engine</h1>
+      <p class="module-subtitle">The 3-tier validator, the file detective, and the privacy scrubber that protect every sample</p>
+    </header>
+
+    <div class="module-body">
+
+      <!-- Screen 1: The 3-tier system -->
+      <section class="screen animate-in">
+        <h2 class="screen-heading">Not All Data Is Created Equal</h2>
+        <p>
+          Think of JACKPOT&apos;s quality system like passport control at an airport. Every traveler gets through security (Tier 1). Only those with the right visas can board international flights (Tier 3). Getting through is not binary — it is a spectrum.
+        </p>
+        <p>
+          The key insight: <strong>missing fields do not block ingest</strong>. A sample with incomplete metadata is still stored — it just cannot be used for certain purposes. The validator tells you exactly what you need to add to unlock each tier.
+        </p>
+
+        <div class="pattern-cards stagger-children" style="margin-top: var(--space-8)">
+          <div class="pattern-card animate-in" style="border-top-color: var(--color-actor-5)">
+            <div class="pattern-icon" style="background: var(--color-success-light)">🟢</div>
+            <h4 class="pattern-title">Tier 1 — PRELIMINARY</h4>
+            <p class="pattern-desc">The minimum to identify who, what, where, and when. <code>sample_id</code>, <code>organism_name</code>, <code>source_type</code>, <code>date_collected</code>, and 3 more required fields. Pipelines can launch immediately.</p>
+          </div>
+          <div class="pattern-card animate-in" style="border-top-color: var(--color-actor-4)">
+            <div class="pattern-icon" style="background: #FDF5E0">🟡</div>
+            <h4 class="pattern-title">Tier 2 — ANALYZABLE</h4>
+            <p class="pattern-desc">Adds epidemiological context: which lab sequenced it, the preparation method, the sequenced date. Required for epiweek calculations, time-series analysis, and external database indexing.</p>
+          </div>
+          <div class="pattern-card animate-in" style="border-top-color: var(--color-actor-1)">
+            <div class="pattern-icon" style="background: var(--color-accent-light)">🔵</div>
+            <h4 class="pattern-title">Tier 3 — SUBMITTABLE</h4>
+            <p class="pattern-desc">Adds the fields GISAID and NCBI require: sequencing protocol, originating lab, submitting lab, county. Unlocks GISAID CSV export and NCBI BioSample/SRA submission.</p>
+          </div>
+        </div>
+
+        <div class="callout callout-info">
+          <div class="callout-icon">🔬</div>
+          <div class="callout-content">
+            <strong class="callout-title">A sample can be SUBMITTABLE but not ANALYZABLE</strong>
+            <p>If a sample has all Tier 3 fields but only a year-precision date (YYYY, no month), it skips Tier 2 and jumps to Tier 3. NCBI and GISAID accept year-only dates; <span class="term" data-definition="An epiweek (epidemiological week) is a standardized week used by the CDC for disease surveillance. Week 1 starts on the first Sunday of the year. Calculating an epiweek requires at minimum a day and month — year-only dates cannot produce one.">epiweeks</span> require day and month precision. Both pathways are deliberately supported.</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- Screen 2: Code translation — validate_sample structure -->
+      <section class="screen animate-in">
+        <h2 class="screen-heading">Inside the Validator</h2>
+        <p>The validator checks metadata in a specific order — base fields first, then source-type-specific fields, then tier 2, then tier 3. Here is the structure from the real code:</p>
+
+        <div class="translation-block animate-in">
+          <div class="translation-code">
+            <span class="translation-label">CODE — backend/validator.py</span>
+            <pre><code>
+<span class="code-line">BASE_REQUIRED = [</span>
+<span class="code-line">    <span class="code-string">"sample_id"</span>,</span>
+<span class="code-line">    <span class="code-string">"organism_name"</span>,</span>
+<span class="code-line">    <span class="code-string">"source_type"</span>,</span>
+<span class="code-line">    <span class="code-string">"date_collected"</span>,</span>
+<span class="code-line">    <span class="code-string">"collection_location_country"</span>,</span>
+<span class="code-line">    <span class="code-string">"sequencing_platform"</span>,</span>
+<span class="code-line">    <span class="code-string">"type_of_experiment"</span>,</span>
+<span class="code-line">]</span>
+<span class="code-line"></span>
+<span class="code-line">SOURCE_REQUIRED: <span class="code-function">dict</span>[<span class="code-function">str</span>, <span class="code-function">list</span>] = {</span>
+<span class="code-line">    <span class="code-string">"Human"</span>: [<span class="code-string">"adhs_medsis_id"</span>, <span class="code-string">"biospecimen_type"</span>, ...],</span>
+<span class="code-line">    <span class="code-string">"Wastewater"</span>: [<span class="code-string">"population_served"</span>, <span class="code-string">"sample_type"</span>, ...],</span>
+<span class="code-line">    <span class="code-string">"Wildlife"</span>: [<span class="code-string">"host_species"</span>, <span class="code-string">"biospecimen_type"</span>, ...],</span>
+<span class="code-line">    <span class="code-string">"Isolate"</span>: [],  <span class="code-comment"># no extra fields needed</span></span>
+<span class="code-line">}</span>
+            </code></pre>
+          </div>
+          <div class="translation-english">
+            <span class="translation-label">PLAIN ENGLISH</span>
+            <div class="translation-lines">
+              <p class="tl">BASE_REQUIRED: these 7 fields must be present on <em>every</em> sample, regardless of type. Missing any one = hard error, ingest rejected.</p>
+              <p class="tl"><code>sample_id</code> — the lab-assigned identifier for this sample</p>
+              <p class="tl"><code>organism_name</code> — which pathogen (e.g., &ldquo;SARS-CoV-2&rdquo;)</p>
+              <p class="tl"><code>source_type</code> — where was this collected: Human, Wastewater, Wildlife, etc.</p>
+              <p class="tl"><code>date_collected</code> — when the sample was taken from its source</p>
+              <p class="tl">...plus country, sequencing platform, and experiment type.</p>
+              <p class="tl">SOURCE_REQUIRED: each source type has <em>additional</em> required fields on top of the base 7.</p>
+              <p class="tl">Human samples require a state health case ID (adhs_medsis_id) and specimen type.</p>
+              <p class="tl">Wastewater requires flow rate, population served, and sampling method.</p>
+              <p class="tl">Wildlife requires the host species and specimen type.</p>
+              <p class="tl">Isolate has no extra requirements — it is the simplest source type.</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Screen 3: The file detector -->
+      <section class="screen animate-in">
+        <h2 class="screen-heading">The File Detective — Content Over Names</h2>
+        <p>
+          A sequencing file called <code>sample.fastq</code> is not automatically a FASTQ file. Someone might have renamed it by accident. JACKPOT&apos;s <code>file_detector.py</code> reads the actual bytes inside the file to confirm — and then pairs up R1 and R2 reads automatically.
+        </p>
+
+        <div class="flow-steps animate-in">
+          <div class="flow-step">
+            <div class="flow-step-num">1</div>
+            <p>Read the first few bytes of the file</p>
+          </div>
+          <div class="flow-arrow">→</div>
+          <div class="flow-step">
+            <div class="flow-step-num">2</div>
+            <p>FASTQ starts with <code>@</code>, FASTA starts with <code>&gt;</code> — check the signature</p>
+          </div>
+          <div class="flow-arrow">→</div>
+          <div class="flow-step">
+            <div class="flow-step-num">3</div>
+            <p>Scan filenames with <span class="term" data-definition="A regex (regular expression) is a pattern for matching text. JACKPOT uses regexes like _R1_, _R2_, _1, _2, forward, reverse to identify which file in a pair is the forward read and which is the reverse read.">regex patterns</span> to find R1/R2 pairs</p>
+          </div>
+          <div class="flow-arrow">→</div>
+          <div class="flow-step">
+            <div class="flow-step-num">4</div>
+            <p>Group paired files together, flag unpaired or orphaned reads with warnings</p>
+          </div>
+          <div class="flow-arrow">→</div>
+          <div class="flow-step">
+            <div class="flow-step-num">5</div>
+            <p>Return a <code>DetectionResult</code> with file types, read directions, and lane info</p>
+          </div>
+        </div>
+
+        <div class="badge-list animate-in" style="margin-top: var(--space-8)">
+          <div class="badge-item">
+            <code class="badge-code">sample_R1.fastq.gz</code>
+            <span class="badge-desc">Paired read, forward direction (R1), gzip-compressed</span>
+          </div>
+          <div class="badge-item">
+            <code class="badge-code">sample_R2.fastq.gz</code>
+            <span class="badge-desc">Paired read, reverse direction (R2), gzip-compressed</span>
+          </div>
+          <div class="badge-item">
+            <code class="badge-code">sample_L001_R1_001.fastq.gz</code>
+            <span class="badge-desc">Multi-lane format: Lane 1, R1 — grouped with matching L001_R2</span>
+          </div>
+          <div class="badge-item">
+            <code class="badge-code">isolate.fasta</code>
+            <span class="badge-desc">Assembly-only FASTA — no human reads, scrub_status = SKIPPED automatically</span>
+          </div>
+        </div>
+
+        <div class="callout callout-warning">
+          <div class="callout-icon">⚠️</div>
+          <div class="callout-content">
+            <strong class="callout-title">FASTA files skip scrubbing automatically</strong>
+            <p>If a sample has only FASTA files (no raw FASTQ reads), the human-read scrubbing step is automatically skipped — <code>scrub_status = SKIPPED</code>. FASTA files are assembled sequences with human reads already removed by the sequencer. Only the validator (not the router) is allowed to set this status.</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- Screen 4: Group chat — validator talking through a sample -->
+      <section class="screen animate-in">
+        <h2 class="screen-heading">The Validator Thinking Out Loud</h2>
+        <p>A Human sample arrives. Here is the validation conversation — what the system checks and in what order.</p>
+
+        <div class="chat-window" id="chat-module4">
+          <div class="chat-messages">
+            <div class="chat-message" data-msg="0" data-sender="router" style="display:none">
+              <div class="chat-avatar" style="background: var(--color-actor-1)">⚡</div>
+              <div class="chat-bubble">
+                <span class="chat-sender" style="color: var(--color-actor-1)">Ingest Router</span>
+                <p>New sample from Lab 3. Source type: Human. Let me send it to the validator.</p>
+              </div>
+            </div>
+            <div class="chat-message" data-msg="1" data-sender="validator" style="display:none">
+              <div class="chat-avatar" style="background: var(--color-actor-3)">🔬</div>
+              <div class="chat-bubble">
+                <span class="chat-sender" style="color: var(--color-actor-3)">Validator</span>
+                <p>Checking the 7 base required fields... sample_id: present. organism_name: present. source_type: &ldquo;Human&rdquo; — valid. All 7 base fields: PASS. Moving on.</p>
+              </div>
+            </div>
+            <div class="chat-message" data-msg="2" data-sender="validator" style="display:none">
+              <div class="chat-avatar" style="background: var(--color-actor-3)">🔬</div>
+              <div class="chat-bubble">
+                <span class="chat-sender" style="color: var(--color-actor-3)">Validator</span>
+                <p>Source is Human. Checking Human-specific required fields... adhs_medsis_id: present. biospecimen_type: present. All Human-specific fields: PASS. Tier 1 achieved.</p>
+              </div>
+            </div>
+            <div class="chat-message" data-msg="3" data-sender="validator" style="display:none">
+              <div class="chat-avatar" style="background: var(--color-actor-3)">🔬</div>
+              <div class="chat-bubble">
+                <span class="chat-sender" style="color: var(--color-actor-3)">Validator</span>
+                <p>Checking Tier 2 fields... sequencing_lab: MISSING. date_sequenced: MISSING. Storing these in tier2_missing — ingest can still proceed at Tier 1.</p>
+              </div>
+            </div>
+            <div class="chat-message" data-msg="4" data-sender="validator" style="display:none">
+              <div class="chat-avatar" style="background: var(--color-actor-3)">🔬</div>
+              <div class="chat-bubble">
+                <span class="chat-sender" style="color: var(--color-actor-3)">Validator</span>
+                <p>Returning: valid=True, tier=1, tier2_missing=[&ldquo;sequencing_lab&rdquo;, &ldquo;date_sequenced&rdquo;]. Also auto-derived sector: &ldquo;clinical&rdquo; from source_type=Human.</p>
+              </div>
+            </div>
+            <div class="chat-message" data-msg="5" data-sender="router" style="display:none">
+              <div class="chat-avatar" style="background: var(--color-actor-1)">⚡</div>
+              <div class="chat-bubble">
+                <span class="chat-sender" style="color: var(--color-actor-1)">Ingest Router</span>
+                <p>Sample accepted at PRELIMINARY. Writing to database with quality_status=PRELIMINARY and the tier2_missing list stored for the lab to see.</p>
+              </div>
+            </div>
+          </div>
+          <div class="chat-typing" id="chat-module4-typing" style="display:none">
+            <div class="chat-avatar" id="chat-module4-typing-avatar">?</div>
+            <div class="chat-typing-dots">
+              <span class="typing-dot"></span>
+              <span class="typing-dot"></span>
+              <span class="typing-dot"></span>
+            </div>
+          </div>
+          <div class="chat-controls">
+            <button class="btn chat-next-btn">Next Message</button>
+            <button class="btn chat-all-btn">Play All</button>
+            <button class="btn chat-reset-btn">Replay</button>
+            <span class="chat-progress"></span>
+          </div>
+        </div>
+      </section>
+
+      <!-- Screen 5: Quiz -->
+      <section class="screen animate-in">
+        <h2 class="screen-heading">Check Your Understanding</h2>
+
+        <div class="quiz-container" id="quiz-module4">
+          <div class="quiz-question-block"
+               data-correct="option-c"
+               data-explanation-right="Correct. adhs_medsis_id is in SOURCE_REQUIRED for Human. It is a Tier 1 hard error, not a Tier 2 warning. The ingest is rejected — the lab must add this field and resubmit."
+               data-explanation-wrong="adhs_medsis_id is in SOURCE_REQUIRED[Human] — that means it is part of Tier 1, not Tier 2. Tier 1 errors are hard blocks. The sample is not stored.">
+            <h3 class="quiz-question">A lab submits a Human sample without an <code>adhs_medsis_id</code>. What does JACKPOT do?</h3>
+            <div class="quiz-options">
+              <button class="quiz-option" data-value="option-a" onclick="selectOption(this)">
+                <div class="quiz-option-radio"></div>
+                <span>Store the sample at PRELIMINARY with adhs_medsis_id in tier2_missing</span>
+              </button>
+              <button class="quiz-option" data-value="option-b" onclick="selectOption(this)">
+                <div class="quiz-option-radio"></div>
+                <span>Store the sample but block it from GISAID export</span>
+              </button>
+              <button class="quiz-option" data-value="option-c" onclick="selectOption(this)">
+                <div class="quiz-option-radio"></div>
+                <span>Reject the ingest entirely — adhs_medsis_id is a Tier 1 hard error for Human samples</span>
+              </button>
+              <button class="quiz-option" data-value="option-d" onclick="selectOption(this)">
+                <div class="quiz-option-radio"></div>
+                <span>Accept it but flag it for manual review by a Platform Admin</span>
+              </button>
+            </div>
+            <div class="quiz-feedback"></div>
+          </div>
+
+          <div class="quiz-question-block"
+               data-correct="option-b"
+               data-explanation-right="Right. The file detector reads the first byte of the file. If the extension says .fastq but the content starts with > (FASTA signature), it raises a FileDetectorError and the upload is rejected."
+               data-explanation-wrong="file_detector.py does content sniffing — it does not just trust the filename extension. It reads the first byte to confirm. A FASTA file named .fastq will be caught and rejected.">
+            <h3 class="quiz-question">A technician accidentally uploads a FASTA file but names it <code>sample.fastq</code>. What does JACKPOT do?</h3>
+            <div class="quiz-options">
+              <button class="quiz-option" data-value="option-a" onclick="selectOption(this)">
+                <div class="quiz-option-radio"></div>
+                <span>Accept it — the filename says .fastq so it is treated as FASTQ</span>
+              </button>
+              <button class="quiz-option" data-value="option-b" onclick="selectOption(this)">
+                <div class="quiz-option-radio"></div>
+                <span>Reject it — the file content starts with &gt; (FASTA signature), which contradicts the .fastq extension</span>
+              </button>
+              <button class="quiz-option" data-value="option-c" onclick="selectOption(this)">
+                <div class="quiz-option-radio"></div>
+                <span>Accept it as FASTA and automatically rename the file</span>
+              </button>
+              <button class="quiz-option" data-value="option-d" onclick="selectOption(this)">
+                <div class="quiz-option-radio"></div>
+                <span>Accept it but mark the sample with a content_warning flag</span>
+              </button>
+            </div>
+            <div class="quiz-feedback"></div>
+          </div>
+
+          <div class="quiz-question-block"
+               data-correct="option-d"
+               data-explanation-right="Exactly. The sector field is derived from source_type automatically — Human maps to clinical. The researcher only needs to supply sector explicitly if they want to override it (e.g., mark a Human sample as research instead of clinical)."
+               data-explanation-wrong="Look at SECTOR_FROM_SOURCE_TYPE in validator.py. Human always maps to clinical automatically. The researcher does not need to specify it.">
+            <h3 class="quiz-question">A lab adds a new Human sample but does not fill in the <code>sector</code> field. What happens?</h3>
+            <div class="quiz-options">
+              <button class="quiz-option" data-value="option-a" onclick="selectOption(this)">
+                <div class="quiz-option-radio"></div>
+                <span>Ingest fails — sector is a required Tier 1 field</span>
+              </button>
+              <button class="quiz-option" data-value="option-b" onclick="selectOption(this)">
+                <div class="quiz-option-radio"></div>
+                <span>The sample is stored with sector=null and must be corrected later</span>
+              </button>
+              <button class="quiz-option" data-value="option-c" onclick="selectOption(this)">
+                <div class="quiz-option-radio"></div>
+                <span>sector is added to tier2_missing and the sample lands at PRELIMINARY</span>
+              </button>
+              <button class="quiz-option" data-value="option-d" onclick="selectOption(this)">
+                <div class="quiz-option-radio"></div>
+                <span>sector is auto-derived as &ldquo;clinical&rdquo; because source_type is Human</span>
+              </button>
+            </div>
+            <div class="quiz-feedback"></div>
+          </div>
+
+          <button class="quiz-check-btn" onclick="checkQuiz('quiz-module4')">Check Answers</button>
+          <button class="quiz-reset-btn" onclick="resetQuiz('quiz-module4')">Try Again</button>
+        </div>
+      </section>
+
+    </div>
+  </div>
+</section>
+<section class="module" id="module-5" style="background: var(--color-bg)">
+  <div class="module-content">
+    <header class="module-header animate-in">
+      <span class="module-number">05</span>
+      <h1 class="module-title">The Safety Net</h1>
+      <p class="module-subtitle">Immutable audit trails, background jobs, and how to debug JACKPOT when something goes wrong</p>
+    </header>
+
+    <div class="module-body">
+
+      <!-- Screen 1: The audit trail -->
+      <section class="screen animate-in">
+        <h2 class="screen-heading">The Logbook That Cannot Be Erased</h2>
+        <p>
+          Imagine a ship&apos;s logbook — every entry is written in ink, dated and signed, and kept permanently. You can add new entries but you can never erase old ones. That is JACKPOT&apos;s audit log.
+        </p>
+        <p>
+          Every state-changing action — creating a sample, changing a permission, approving a scrub request — writes an immutable record to the <code>audit_log</code> table. Public health platforms are legally required to prove who changed what and when.
+        </p>
+
+        <div class="badge-list animate-in">
+          <div class="badge-item">
+            <code class="badge-code">action</code>
+            <span class="badge-desc">What happened: CREATE_SAMPLE, UPDATE_ORG, ADD_LAB_MEMBER, APPROVE_SCRUB_SKIP...</span>
+          </div>
+          <div class="badge-item">
+            <code class="badge-code">actor_id</code>
+            <span class="badge-desc">Who did it — the user ID of the person who triggered the change</span>
+          </div>
+          <div class="badge-item">
+            <code class="badge-code">resource_type + resource_id</code>
+            <span class="badge-desc">What was affected — e.g., resource_type=&ldquo;sample&rdquo;, resource_id=&ldquo;42&rdquo;</span>
+          </div>
+          <div class="badge-item">
+            <code class="badge-code">before_state / after_state</code>
+            <span class="badge-desc">The full JSON snapshot of the record before and after the change — like git diff for data</span>
+          </div>
+          <div class="badge-item">
+            <code class="badge-code">metadata</code>
+            <span class="badge-desc">Any extra context — IP address, request ID, pipeline run ID, etc.</span>
+          </div>
+        </div>
+
+        <div class="callout callout-accent">
+          <div class="callout-icon">💡</div>
+          <div class="callout-content">
+            <strong class="callout-title">Audit failures never crash the request</strong>
+            <p><code>log_audit()</code> is wrapped in a try/except. If the audit write fails, the error is logged to the application logger but not raised — the main operation still succeeds. The philosophy: a broken audit log is a serious alert, but it should not prevent a lab from uploading a sample during a disease outbreak.</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- Screen 2: Code translation — log_audit -->
+      <section class="screen animate-in">
+        <h2 class="screen-heading">The Audit Log Write — In Code</h2>
+        <p>Here is the entire <code>log_audit()</code> function from <code>backend/audit.py</code>. Notice the <span class="term" data-definition="JSONB is PostgreSQL's binary JSON column type. It stores JSON data in a compressed binary format that can be queried and indexed efficiently. Used here to store the before and after state snapshots.">JSONB</span> casting and the silent-failure design:</p>
+
+        <div class="translation-block animate-in">
+          <div class="translation-code">
+            <span class="translation-label">CODE — backend/audit.py</span>
+            <pre><code>
+<span class="code-line"><span class="code-keyword">def</span> <span class="code-function">log_audit</span>(action, actor_id, resource_type,</span>
+<span class="code-line">             resource_id, before, after, metadata,</span>
+<span class="code-line">             db_conn) -> <span class="code-keyword">None</span>:</span>
+<span class="code-line">    <span class="code-keyword">try</span>:</span>
+<span class="code-line">        <span class="code-function">execute_write</span>(</span>
+<span class="code-line">            <span class="code-string">"""INSERT INTO audit_log</span></span>
+<span class="code-line"><span class="code-string">               (action, actor_id, resource_type,</span></span>
+<span class="code-line"><span class="code-string">                resource_id, before_state, after_state,</span></span>
+<span class="code-line"><span class="code-string">                metadata)</span></span>
+<span class="code-line"><span class="code-string">               VALUES (:action, :actor_id, :resource_type,</span></span>
+<span class="code-line"><span class="code-string">                :resource_id, :before::jsonb,</span></span>
+<span class="code-line"><span class="code-string">                :after::jsonb, :metadata::jsonb)"""</span>,</span>
+<span class="code-line">            {<span class="code-string">"action"</span>: action, ...},</span>
+<span class="code-line">            conn=db_conn,</span>
+<span class="code-line">        )</span>
+<span class="code-line">    <span class="code-keyword">except</span> Exception <span class="code-keyword">as</span> exc:</span>
+<span class="code-line">        logger.<span class="code-function">error</span>(<span class="code-string">"Audit log write failed"</span>, exc_info=exc)</span>
+            </code></pre>
+          </div>
+          <div class="translation-english">
+            <span class="translation-label">PLAIN ENGLISH</span>
+            <div class="translation-lines">
+              <p class="tl">Define log_audit. It takes the action, who did it, what resource was affected, before/after snapshots, and an open database connection.</p>
+              <p class="tl">Returns None — this function does not give anything back; it just writes to the DB.</p>
+              <p class="tl">Try to run the INSERT. If anything goes wrong, jump to &ldquo;except&rdquo;.</p>
+              <p class="tl">Execute a write using the same database connection that the parent operation is using.</p>
+              <p class="tl">Insert a row into the audit_log table with all the provided fields.</p>
+              <p class="tl">The ::jsonb cast tells PostgreSQL to store the dict as binary JSON — queryable and indexed.</p>
+              <p class="tl">conn=db_conn means this INSERT shares the same transaction as the parent operation. Commit or rollback together.</p>
+              <p class="tl">If the INSERT fails for any reason (constraint, disk full, etc.)...</p>
+              <p class="tl">...log the error to the application logs but do NOT raise it. The caller&apos;s code keeps running.</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Screen 3: Background jobs -->
+      <section class="screen animate-in">
+        <h2 class="screen-heading">The Night Crew — Background Jobs</h2>
+        <p>
+          Some work is too slow to do during a user&apos;s request — like removing human DNA from a 5 GB sequencing file. JACKPOT runs these as scheduled background jobs, separate from the main API.
+        </p>
+
+        <div class="pattern-cards stagger-children">
+          <div class="pattern-card animate-in" style="border-top-color: var(--color-actor-2)">
+            <div class="pattern-icon" style="background: var(--color-info-light)">⏱️</div>
+            <h4 class="pattern-title">Scrubber Queue</h4>
+            <p class="pattern-desc">Runs every <strong>60 seconds</strong>. Finds all samples with <code>scrub_status = PENDING</code> and submits them to the human-read removal pipeline. Updates status to IN_PROGRESS, then COMPLETE or FAILED.</p>
+          </div>
+          <div class="pattern-card animate-in" style="border-top-color: var(--color-actor-4)">
+            <div class="pattern-icon" style="background: #FDF5E0">🌙</div>
+            <h4 class="pattern-title">Access Request Expiry</h4>
+            <p class="pattern-desc">Runs every night at <strong>2:00 AM</strong>. Finds pending dataset access requests that have exceeded their approval window and auto-denies them. Writes DENY_ACCESS_REQUEST to the audit log.</p>
+          </div>
+        </div>
+
+        <div class="flow-steps animate-in" style="margin-top: var(--space-8)">
+          <div class="flow-step">
+            <div class="flow-step-num" style="background: var(--color-actor-3)">L</div>
+            <p><strong>Local Dev:</strong> APScheduler runs inside the FastAPI process</p>
+          </div>
+          <div class="flow-arrow">→</div>
+          <div class="flow-step">
+            <div class="flow-step-num" style="background: var(--color-actor-5)">P</div>
+            <p><strong>Production:</strong> Google Cloud Scheduler sends HTTP triggers</p>
+          </div>
+        </div>
+
+        <div class="callout callout-info">
+          <div class="callout-icon">🧠</div>
+          <div class="callout-content">
+            <strong class="callout-title">Why not Celery or Redis?</strong>
+            <p>Many apps use <span class="term" data-definition="Celery is a popular Python task queue that uses Redis or RabbitMQ as a message broker. It runs workers in separate processes. JACKPOT deliberately avoids this — APScheduler and Cloud Scheduler are simpler to operate, require fewer moving parts, and are sufficient for the job volume.">Celery</span> for background work. JACKPOT does not — it is explicitly listed in the architecture constraints as &ldquo;no Celery, no Redis as task broker.&rdquo; Simpler infrastructure for a platform that needs to be operated by public health agencies, not dedicated DevOps teams.</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- Screen 4: Debugging — spot the bug -->
+      <section class="screen animate-in">
+        <h2 class="screen-heading">When Things Break — Finding the Right Layer</h2>
+        <p>When something goes wrong in JACKPOT, the error comes from one of five layers. Knowing which layer is responsible saves hours of debugging.</p>
+
+        <div class="arch-diagram">
+          <div class="arch-zone">
+            <h4 class="arch-zone-label">Debug by layer — click to see what each error means</h4>
+            <div style="display: flex; flex-wrap: wrap; gap: var(--space-3); justify-content: center;">
+              <div class="arch-component"
+                   data-desc="HTTP 4xx from router layer: Check the request body (Pydantic validation?), check permissions (403?), check the auth cookie (401?). Look in the router file for the endpoint that matches the URL."
+                   onclick="showArchDesc(this)">
+                <div class="arch-icon">⚡</div>
+                <span>Router Error</span>
+              </div>
+              <div class="arch-component"
+                   data-desc="Validation 422 from validator: Look at the errors list in the response body. It tells you exactly which field failed. Check SOURCE_REQUIRED and BASE_REQUIRED in validator.py for the field you need to add."
+                   onclick="showArchDesc(this)">
+                <div class="arch-icon">🔬</div>
+                <span>Validator 422</span>
+              </div>
+              <div class="arch-component"
+                   data-desc="Database error: SQLAlchemy errors usually mean a constraint violation (duplicate key, foreign key missing, column type mismatch). Check the SQL query in database.py. The most common cause: RETURNING * missing on an INSERT that expects a result."
+                   onclick="showArchDesc(this)">
+                <div class="arch-icon">🗄️</div>
+                <span>DB Error</span>
+              </div>
+              <div class="arch-component"
+                   data-desc="Storage error: StorageError from storage.py means the MinIO or GCS bucket is unreachable, the credentials are wrong, or the bucket name is misconfigured. Check STORAGE_BACKEND, STORAGE_BUCKET_STAGING, and STORAGE_ENDPOINT in docker-compose.yml."
+                   onclick="showArchDesc(this)">
+                <div class="arch-icon">📦</div>
+                <span>Storage Error</span>
+              </div>
+              <div class="arch-component"
+                   data-desc="Background job failure: Check scrub_status in the database. If it is stuck at IN_PROGRESS for hours, the scrubber job crashed. Check the APScheduler logs. If audit_log has no entry for a write that should have happened, the audit write failed silently — check the application error logs."
+                   onclick="showArchDesc(this)">
+                <div class="arch-icon">⏰</div>
+                <span>Background Job</span>
+              </div>
+            </div>
+            <div class="arch-description" id="arch-desc">Click any error type above to see where to look</div>
+          </div>
+        </div>
+
+        <div class="callout callout-warning">
+          <div class="callout-icon">⚠️</div>
+          <div class="callout-content">
+            <strong class="callout-title">The single most common JACKPOT bug: wrong is_active column name</strong>
+            <p>Organizations and Labs use <code>active</code> (no prefix). Everything else uses <code>is_active</code>. Mixing these up causes silent SQL errors where a soft-delete does not take effect or an active filter returns wrong results. Always check the schema when writing queries against orgs or labs.</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- Screen 5: Final quiz -->
+      <section class="screen animate-in">
+        <h2 class="screen-heading">Final Check — Putting It All Together</h2>
+
+        <div class="quiz-container" id="quiz-module5">
+
+          <div class="quiz-question-block"
+               data-correct="option-b"
+               data-explanation-right="Correct. The scrubber job runs every 60 seconds and processes PENDING samples. A 20-minute delay means the job is not running — check that APScheduler started correctly (scheduler_enabled=true in config) and look for crash logs."
+               data-explanation-wrong="The scrubbing is done by a background job running every 60 seconds, not as part of the upload. A 20-minute delay means the job itself is broken — look at APScheduler, not the ingest router.">
+            <h3 class="quiz-question">A lab reports that samples uploaded 20 minutes ago still show <code>scrub_status = PENDING</code> and never progress to IN_PROGRESS. Where do you look first?</h3>
+            <div class="quiz-options">
+              <button class="quiz-option" data-value="option-a" onclick="selectOption(this)">
+                <div class="quiz-option-radio"></div>
+                <span>The ingest router — the upload must have failed partway through</span>
+              </button>
+              <button class="quiz-option" data-value="option-b" onclick="selectOption(this)">
+                <div class="quiz-option-radio"></div>
+                <span>The APScheduler logs — the scrubber background job may have crashed or not started</span>
+              </button>
+              <button class="quiz-option" data-value="option-c" onclick="selectOption(this)">
+                <div class="quiz-option-radio"></div>
+                <span>The validator — PENDING status means validation did not complete</span>
+              </button>
+              <button class="quiz-option" data-value="option-d" onclick="selectOption(this)">
+                <div class="quiz-option-radio"></div>
+                <span>The MinIO bucket — the file was not uploaded so scrubbing cannot start</span>
+              </button>
+            </div>
+            <div class="quiz-feedback"></div>
+          </div>
+
+          <div class="quiz-question-block"
+               data-correct="option-c"
+               data-explanation-right="Right. The conn parameter threads the same database session through the router, execute_write, and log_audit. All writes commit or roll back together — so the audit log is always consistent with the data."
+               data-explanation-wrong="Think about what conn=db_conn does. By passing the same database connection to both execute_write and log_audit, all writes share one transaction. They can only both succeed or both fail — never one without the other.">
+            <h3 class="quiz-question">You notice that some sample records have no corresponding audit log entry. This should be impossible by design. What does it actually indicate?</h3>
+            <div class="quiz-options">
+              <button class="quiz-option" data-value="option-a" onclick="selectOption(this)">
+                <div class="quiz-option-radio"></div>
+                <span>The audit log table is full and new entries are being silently dropped</span>
+              </button>
+              <button class="quiz-option" data-value="option-b" onclick="selectOption(this)">
+                <div class="quiz-option-radio"></div>
+                <span>The audit log is optional — some routers were intentionally written without it</span>
+              </button>
+              <button class="quiz-option" data-value="option-c" onclick="selectOption(this)">
+                <div class="quiz-option-radio"></div>
+                <span>The sample was written by a router that did NOT pass conn=db to log_audit — a coding mistake</span>
+              </button>
+              <button class="quiz-option" data-value="option-d" onclick="selectOption(this)">
+                <div class="quiz-option-radio"></div>
+                <span>The PostgreSQL transaction committed before log_audit was called</span>
+              </button>
+            </div>
+            <div class="quiz-feedback"></div>
+          </div>
+
+          <div class="quiz-question-block"
+               data-correct="option-d"
+               data-explanation-right="Exactly — Cloud Scheduler is listed as the production scheduler, not APScheduler. APScheduler runs in the local dev process; Cloud Scheduler sends HTTP triggers to the production API. The jobs themselves (the Python functions) are identical in both environments."
+               data-explanation-wrong="Re-read the background jobs section. APScheduler runs locally. In production on GCP, Google Cloud Scheduler sends HTTP triggers instead. The Python job functions in jobs.py are the same — only how they are triggered differs.">
+            <h3 class="quiz-question">JACKPOT is deployed to Google Cloud. The scrubber queue job stops running every night at 2 AM. Which service do you check in the GCP console?</h3>
+            <div class="quiz-options">
+              <button class="quiz-option" data-value="option-a" onclick="selectOption(this)">
+                <div class="quiz-option-radio"></div>
+                <span>APScheduler logs inside the Cloud Run container</span>
+              </button>
+              <button class="quiz-option" data-value="option-b" onclick="selectOption(this)">
+                <div class="quiz-option-radio"></div>
+                <span>Redis — the task queue that sends jobs to the API</span>
+              </button>
+              <button class="quiz-option" data-value="option-c" onclick="selectOption(this)">
+                <div class="quiz-option-radio"></div>
+                <span>Cloud Pub/Sub — the message broker used by JACKPOT</span>
+              </button>
+              <button class="quiz-option" data-value="option-d" onclick="selectOption(this)">
+                <div class="quiz-option-radio"></div>
+                <span>Cloud Scheduler — it sends HTTP triggers to the API in production instead of APScheduler</span>
+              </button>
+            </div>
+            <div class="quiz-feedback"></div>
+          </div>
+
+          <button class="quiz-check-btn" onclick="checkQuiz('quiz-module5')">Check Answers</button>
+          <button class="quiz-reset-btn" onclick="resetQuiz('quiz-module5')">Try Again</button>
+        </div>
+
+        <!-- Closing callout -->
+        <div class="callout callout-accent" style="margin-top: var(--space-12)">
+          <div class="callout-icon">🧬</div>
+          <div class="callout-content">
+            <strong class="callout-title">You now understand JACKPOT</strong>
+            <p>You can read the code, trace a request from browser to database, explain the permission system, describe the 3-tier quality model, and know where to look when things break. That is the technical fluency you need to direct AI agents toward better implementations — and catch them when they go wrong.</p>
+          </div>
+        </div>
+
+      </section>
+
+    </div>
+  </div>
+</section>
+  </main>
+
+</body>
+</html>
