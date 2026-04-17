@@ -52,6 +52,21 @@ Examples: `gac "feat: organizations router — CRUD endpoints + tests"`
 
 ---
 
+## Learning and Explanation Style
+
+When implementing new patterns, routers, or non-trivial logic:
+- Briefly explain **why** a design decision was made, not just what was done
+- For new architectural patterns (e.g. first time using a new dependency), generate
+  a short ASCII diagram showing how the pieces connect
+- After implementing a router, offer a one-paragraph plain-English summary of
+  what it does and what could go wrong — suitable for a code reviewer unfamiliar
+  with the codebase
+- When fixing a bug, explain the root cause before showing the fix
+
+Do NOT over-explain trivial changes. Reserve explanations for non-obvious decisions.
+
+---
+
 
 ## Tech Stack
 
