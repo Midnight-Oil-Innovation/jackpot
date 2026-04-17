@@ -544,3 +544,56 @@ client ─► GET /api/v1/samples/{id}
 ```
 
 ---
+
+---
+
+## Session S: projects router + dataharmonizer — 2026-04-16
+
+**What was built:** Fleshed out two stub routers. `projects` grew from GET-only to full CRUD: `POST /` (Lab Director on target lab OR Platform Admin), `GET /` (membership-filtered list with `?name=` + `?lab_id=` filters), `GET /{id}` (lab OR project member), `PATCH /{id}` (Lab Director on the project's lab). `dataharmonizer` went from stub to two real endpoints: `GET /templates/{source_type}/{tier}` (CSV download via `template_generator.generate_csv_template`) and `POST /validate` (row-by-row CSV validation via `validator.validate_sample`). New baseline: **477 tests passing, 86.99% coverage** (+27 tests, +0.76%). `dataharmonizer.py` removed from coverage omit, now at 94%; `projects.py` at 99%.
+
+**Key decisions:**
+- **Project access delegates to lab-level authorization.** `require_lab_director(user, project.lab_id)` for writes; list visibility is `(lab_id IN user's labs) OR (project_id IN user's projects)`. This matches spec.md: "members inherit lab access". A user invited to a single project sees only that project; a lab member sees all projects in the lab. Platform Admin short-circuits to all rows.
+- **`AuditActions.CREATE_PROJECT` + `UPDATE_PROJECT` added.** Following the same pattern as `CREATE_LAB` / `UPDATE_LAB`. No `DELETE_PROJECT` — soft-delete via `active=FALSE` through PATCH; matches how `labs.py` handles the equivalent, except we skip the DELETE endpoint entirely for Month 1 (not in spec).
+- **DataHarmonizer endpoints live on their own router, not under `/templates`.** todo.md wrote `/api/v1/templates/{source_type}/{tier}` as the example URL but the section title is "Implement dataharmonizer router". The existing `templates.py` already serves query-string-driven downloads. Rather than duplicate routes, the dataharmonizer surface got its own path-based route under `/api/v1/dataharmonizer/templates/{source_type}/{tier}` — zero collision with `/api/v1/templates/?source_type=...`.
+- **Validation endpoint accepts both multipart file upload and raw `text/csv` body.** FastAPI's optional `UploadFile` (`file: UploadFile | None = File(default=None)`) gives us the form-upload path; when the field is absent we fall through to `await request.body()`. This lets the DataHarmonizer JS widget POST `text/csv` directly while the CLI can do a file upload. Empty body → 400.
+- **Meta-row skipping in the CSV parser.** `generate_csv_template` emits 5 header rows (names, labels, tier tags, validation hints, example). The validator's `_parse_csv_rows` looks for rows containing any of `{REQUIRED, ANALYZABLE, SUBMITTABLE, OPTIONAL}` within the first 4 data rows and advances `data_start` past them — so a user who pastes an unedited template doesn't get the label row validated as a sample.
+- **Commas-in-value become lists.** The parser splits any cell containing a comma into a list (except `gs://` URIs), since list-typed fields like `purpose_for_collection`, `host_disease`, `nucleic_acid_extraction_method` round-trip that way. Works fine with `csv.reader` which already handles cell quoting, so quoted `"a, b, c"` cells stay as a single string.
+- **Test user cleanup needs project FK nullification.** Added `UPDATE projects SET created_by_id = NULL WHERE created_by_id = uid` before `DELETE FROM users`. Same three-step pattern from Session H (audit actor → project FK → user) — if a new table adds an FK to users, add another nullification here.
+
+**Watch out for:**
+- **`Isolate` source type has no source-specific required fields.** Used it as the happy-path test in validate tests. `Human` requires `adhs_medsis_id`, `biospecimen_type`, `reason_for_collection`, `host_disease` — the naive 7-column CSV that passes BASE_REQUIRED still fails Human's extras. Pick `Isolate` for "should be valid" fixtures.
+- **Pre-commit ruff reformatted on first check.** Seventh session with the same finding — `gac` rewrites the file and exits non-zero the first time. Also surfaced an N806 on `META_MARKERS` being uppercase inside a function; renamed to `meta_markers`. Same pattern: run gac twice, let the first format and the second commit.
+- **Data analysts do not automatically see all projects.** The list filter is `lab_membership OR project_membership`; `is_data_analyst` does not bypass project visibility. That's a surveillance-samples-only privilege, applied at the samples layer, not the project layer. Keep this boundary when wiring future endpoints.
+- **`/api/v1/dataharmonizer/templates/{tier}` is case-insensitive.** `tier.upper()` before the enum lookup, so `preliminary`, `Preliminary`, and `PRELIMINARY` all work. The filename reflects the lowercase form.
+
+**ASCII diagram — dataharmonizer validate flow:**
+
+```
+client ─► POST /api/v1/dataharmonizer/validate
+            │   (multipart file OR raw text/csv body)
+            ▼
+   get_current_user(request)
+            │
+            ▼
+   body_bytes = file.read() or request.body()
+            │
+            ├─ empty            ─► 400
+            └─ invalid utf-8    ─► 400
+            │
+            ▼
+   _parse_csv_rows(raw)
+     ├─ row 1: header (field names)
+     ├─ rows 2-5: skip if REQUIRED/ANALYZABLE/SUBMITTABLE/OPTIONAL marker
+     ├─ each data row: split commas → list; else string
+     └─ yield list[dict]
+            │
+            ├─ no rows          ─► 400
+            │
+            ▼
+   for idx, record in enumerate(records):
+       validate_sample(record) → ValidationResult
+            │
+            ▼
+   return {total_rows, valid_rows, results: [{row, sample_id, valid,
+           tier, sector, errors, warnings, tier2_missing, tier3_missing}]}
+```
