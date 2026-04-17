@@ -571,33 +571,33 @@ Log findings to docs/review_log.md and resolve before continuing.
 
 ## Phase 13 — Session K: Bacterial isolate parsers (bactopia, Grandeur, mycosnp, tb-profiler)
 
-- [ ] **K-1: bactopia parser**
+- [x] **K-1: bactopia parser**
   - `amr.py`: parse AMRFinderPlus TSV → hAMRonization-normalized AMRResult
   - `mlst.py`: parse MLST output → TypingResult
   - `assembly.py`: register assembly FASTA + parse QUAST metrics → AssemblyQC
   - `annotation.py`: register Bakta/Prokka GFF to sample_files
 
-- [ ] **K-2: Grandeur parser**
+- [x] **K-2: Grandeur parser**
   - `amr.py`: parse AMRFinderPlus output (shares bactopia normalizer)
   - `mlst.py`: parse MLST (shares bactopia parser)
   - `kraken2.py`: parse Kraken2 species ID → TaxonomicProfile (single-organism isolate)
   - `blast.py`: parse BLAST against local DB → pipeline_results.metrics
 
-- [ ] **K-3: mycosnp-nf parser**
+- [x] **K-3: mycosnp-nf parser**
   - `snippy.py`: parse variant calls → pipeline_results.metrics
   - `tree.py`: register SNP tree Newick to sample_files
   - `typing.py`: fungal MLST when available → TypingResult
 
-- [ ] **K-4: tb-profiler parser**
+- [x] **K-4: tb-profiler parser**
   - `lineage.py`: parse lineage JSON → TBTypingResult (lineage, spoligotype)
   - `drug_resistance.py`: parse DR calls → TBTypingResult.who_drug_susceptibility JSONB
   - Populates tb_typing_results table specifically
 
-- [ ] **K-5: Test fixtures + unit tests**
+- [x] **K-5: Test fixtures + unit tests**
   - Real outputs from each of the four pipelines
   - One fixture per parser at minimum
 
-- [ ] **K-6: Run tests and commit**
+- [x] **K-6: Run tests and commit**
 
 ---
 

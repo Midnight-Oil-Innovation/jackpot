@@ -711,3 +711,72 @@ nf/                       ← jackpot-nf submodule
 
 Backend commit 6aeee66 bumps nf pointer to submodule commit 2a098b0.
 ```
+
+---
+
+## Session K: bacterial isolate parsers (bactopia/Grandeur/mycosnp/tb-profiler) — 2026-04-17
+
+**What was built:** Phase 13 of the jackpot-nf plugin — parsers for bactopia (K-1), Grandeur (K-2), mycosnp-nf (K-3), and tb-profiler (K-4), plus three new shared helpers (AMRFinderPlus, MLST, Kraken2), 15 fixtures, and 51 new unit tests (K-5, K-6). Submodule baseline: 137 tests passing (+51). Backend baseline unchanged at 486 tests / 86.99% (nf tests run inside the submodule, not in the parent pytest run).
+
+**Key decisions:**
+- **Shared AMR normalization threaded through `shared.hamronization_normalizer`** per the explicit spec requirement. `shared/parsers/amrfinderplus.py` wraps `normalize()` and exposes two entry points: `parse()` (runs the hAMRonize CLI on a raw AMRFinderPlus TSV) and `parse_canonical()` (skips the CLI when a `*.hamronized.tsv` already exists). Grandeur 4.x ships canonical outputs, so its parser prefers the shortcut and only falls back to `runner` when no canonical sibling is found. Bactopia always uses the CLI path.
+- **Injectable `runner` callable** on every AMR parser so tests don't need `hamronize` on PATH. `runner` signature is the subset of `subprocess.run` the normalizer actually uses (`(cmd, *, capture_output, text) → CompletedProcess`). Tests pass in a closure that returns a canned canonical TSV. The `shared.hamronization_normalizer.run_hamronize()` binary-presence check is still first — tests monkeypatch `shutil.which` to return a truthy path before calling.
+- **TB-profiler mirrors drug resistance into `amr_results`** per spec: each `dr_variants[].drugs[]` row becomes an `AMRResult` with `reference_database="WHO_catalogue"`, `reference_accession=f"WHO-Catalogue/{db_version}"`, `drug_class="antimycobacterial"`, `tool_name="tb-profiler"`. This lets TB resistance surface in platform-wide AMR search alongside bacterial AMR results without a special-case query. The original TB-typing row (`tb_typing_results` with `who_drug_susceptibility` JSONB) is still emitted for the WHO-catalogue-shaped view.
+- **Run-level sentinel `_run_`** for mycosnp cohort outputs. SNP trees (`core.aln.treefile`) are cohort-level artifacts, not per-sample; they can't have a real `sample_id`. Exposed as `pipelines.mycosnp.parsers.tree.RUN_LEVEL_SAMPLE_ID = "_run_"` so any downstream consumer that groups by `sample_id` can detect and route cohort artifacts distinctly.
+- **Canonical-takes-priority rule** in Grandeur AMR: if both `AZ-1.tsv` (raw) and `AZ-1.hamronized.tsv` (canonical) exist, only canonical is parsed. Test `test_canonical_takes_priority_over_raw` asserts the CLI runner is never invoked by raising `AssertionError` if it is — a loud failure is better than silently double-counting.
+- **Bactopia `_QUAST_COLUMN_MAP` is a guard surface**: a separate `test_quast_column_map_covers_expected_keys` test asserts every mapped target matches one of seven known AssemblyQC columns. If upstream QUAST renames a metric, we want a test failure rather than a silent drop.
+- **Absolute imports only** across all four pipelines (`from shared.parsers import RunMetadata`). Consistent with Session J's choice — the pipelines are sibling top-level packages under `nf/`, not submodules of `shared`.
+
+**Watch out for:**
+- **`_ALLELE_RE` matches dash-only alleles**: Tseemann's `mlst` emits `adk(-)` when the locus is present in the scheme but unassigned. The regex `^(?P<locus>[A-Za-z0-9_]+)\((?P<allele>[^)]+)\)$` captures this as `{"adk": "-"}`, not as a raw key `"adk(-)"`. First pass of `test_blank_st_becomes_none` asserted the raw-key fallback; corrected to assert `allele_calls["adk"] == "-"`.
+- **`hamronize` CLI presence is checked before the runner runs**. `shared.hamronization_normalizer.run_hamronize()` calls `shutil.which("hamronize")` at the top and raises `HamronizationError` if missing — so an injected `runner` alone isn't enough. All AMR tests either (a) provide a canonical TSV and never hit the CLI path, or (b) monkeypatch `shutil.which` to return a truthy path. The bactopia `fake_runner` fixture does this explicitly for every test in the class.
+- **TB-profiler `pipeline.software_version` fallback chain**: lineage parser prefers `data["pipeline"]["software_version"]`, falls back to `metadata.pipeline_version`, and only uses `None` if both are absent. `db_version` has no fallback — if the WHO catalogue version isn't in the JSON, the mirror rows get `reference_accession="WHO-Catalogue/None"` which is ugly but not wrong. Upstream tb-profiler always populates both in practice.
+- **Mycosnp typing parser is strict**: if the TSV is missing the `sequence_type` column it raises `FungalTypingParseError` rather than silently dropping to a partial `TypingResult`. This is intentional — a missing scheme column usually means the tool failed halfway, and we want the failure loud.
+- **Grandeur BLAST summary emits `pipeline_metrics`, not a dedicated model.** We don't have an `AlignmentSummary` schema and didn't want to invent one for a single consumer. If BLAST metrics become queryable via the API, promote to a Pydantic model then.
+- **GFF3 and GFF both accepted** by the bactopia annotation collector. The `file_type` column uses the bare extension (`gff`) regardless — consumers shouldn't have to branch on the two variants.
+
+**ASCII diagram:**
+
+```
+nf/
+├── shared/parsers/
+│   ├── amrfinderplus.py  wraps shared.hamronization_normalizer.normalize
+│   │                     parse()            → raw TSV  → CLI  → canonical
+│   │                     parse_canonical()  → canonical TSV directly
+│   ├── mlst.py           Tseemann mlst TSV → TypingResult
+│   └── kraken2.py        6-col report → TaxonomicProfile (top_only for isolates)
+│
+├── pipelines/
+│   ├── bactopia/parsers/
+│   │   ├── amr.py         amrfinderplus/<sample>.tsv → shared AMR (runs CLI)
+│   │   ├── mlst.py        mlst/<sample>.tsv → shared MLST
+│   │   ├── assembly.py    quast/report.tsv + shovill/*.contigs.fa → AssemblyQC + FileArtifact
+│   │   └── annotation.py  bakta/prokka GFF → FileArtifact(file_type=gff)
+│   │
+│   ├── grandeur/parsers/
+│   │   ├── amr.py         prefers *.hamronized.tsv (parse_canonical shortcut)
+│   │   │                  falls back to raw *.tsv via CLI only if no canonical
+│   │   ├── mlst.py        shared MLST
+│   │   ├── kraken2.py     shared Kraken2 (top_only=True)
+│   │   └── blast.py       -outfmt 6 tabular → pipeline_metrics
+│   │
+│   ├── mycosnp/parsers/
+│   │   ├── snippy.py      snippy/<sample>/<sample>.txt → pipeline_metrics
+│   │   ├── tree.py        tree/core.aln.treefile → FileArtifact(sample_id="_run_")
+│   │   └── typing.py      typing/*_{scheme}.tsv → TypingResult
+│   │
+│   └── tb_profiler/parsers/
+│       ├── lineage.py           results/<sample>.results.json → TBTypingResult
+│       └── drug_resistance.py   dr_variants[] → (a) who_drug_susceptibility JSONB
+│                                              → (b) amr_results mirror rows
+│                                                    reference_database="WHO_catalogue"
+│
+└── tests/  (137 total, +51 for Session K)
+    ├── fixtures/{bactopia,grandeur,mycosnp,tb_profiler}/...
+    ├── test_bactopia_parsers.py       18 tests (incl. fake_runner fixture)
+    ├── test_grandeur_parsers.py       11 tests (canonical-priority guard)
+    ├── test_mycosnp_parsers.py        12 tests
+    └── test_tb_profiler_parsers.py    10 tests
+
+Submodule commit 2973e7a; backend bump tracks pointer.
+```
