@@ -1,0 +1,4 @@
+Query: AZ-PSV-001.contigs.fa	Sketches: 1	DB: RefSeq
+WKID	KID	ANI	Complt	Contam	Matches	Unique	noHit	TaxID	gSize	gSeqs	taxName
+97.85	96.42	98.12	99.5	0.3	9876	8765	123	562	4876523	58	Escherichia coli
+96.50	95.01	97.82	99.1	0.4	9800	8700	130	28901	5000000	30	Salmonella enterica

@@ -28,6 +28,13 @@ packages = ["shared"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 asyncio_mode = "auto"
+# Integration tests walk every pipeline against its fixture tree; slow
+# by design, opt-in only.  Run with `pytest -m integration` in the
+# dedicated CI job; default `pytest` runs skip them.
+markers = [
+    "integration: end-to-end parser pass across every wrapped pipeline (opt-in)",
+]
+addopts = "-m 'not integration'"
 
 [tool.ruff]
 line-length = 100

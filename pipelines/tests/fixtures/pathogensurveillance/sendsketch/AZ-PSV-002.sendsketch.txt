@@ -1,0 +1,3 @@
+Query: AZ-PSV-002.contigs.fa	Sketches: 1	DB: RefSeq
+WKID	KID	ANI	Complt	Contam	Matches	Unique	noHit	TaxID	gSize	gSeqs	taxName
+99.10	98.75	99.38	100.0	0.1	11200	10980	45	1280	2821361	1	Staphylococcus aureus

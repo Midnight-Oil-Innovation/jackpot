@@ -1,0 +1,10 @@
+##fileformat=VCFv4.2
+##source=graphtyper
+##FILTER=<ID=PASS,Description="All filters passed">
+##FILTER=<ID=LowQual,Description="Low quality variant">
+#CHROM	POS	ID	REF	ALT	QUAL	FILTER	INFO
+NC_000913.3	1523	.	G	A	99	PASS	DP=50
+NC_000913.3	4876	.	T	C	88	PASS	DP=42
+NC_000913.3	9102	.	C	G	55	LowQual	DP=12
+NC_000913.3	14000	.	A	T	72	PASS	DP=38
+NC_000913.3	25500	.	G	T	35	LowQual	DP=8

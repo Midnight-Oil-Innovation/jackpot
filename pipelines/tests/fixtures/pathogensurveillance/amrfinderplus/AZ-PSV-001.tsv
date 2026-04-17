@@ -1,0 +1,2 @@
+Protein identifier	Contig id	Start	Stop	Strand	Gene symbol	Sequence name	Scope	Element type	Element subtype	Class	Subclass	Method	Target length	Reference sequence length	% Coverage of reference sequence	% Identity to reference sequence	Alignment length	Accession of closest sequence	Name of closest sequence	HMM id	HMM description
+NA	contig1	4012	5236	+	blaCTX-M-15	extended-spectrum beta-lactamase CTX-M-15	core	AMR	AMR	BETA-LACTAM	CEPHALOSPORIN	ALLELEX	408	408	100.00	99.66	408	NG_048935.1	blaCTX-M-15	NA	NA
