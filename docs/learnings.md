@@ -475,3 +475,72 @@ client ─► POST /api/v1/ingest/upload  (multipart: metadata, fastq_r1, fastq_
 ```
 
 ---
+
+## Session H: samples router — 2026-04-16
+
+**What was built:** Six samples endpoints on `/api/v1/samples/` — GET list (with 11-parameter filter surface + `?select_all=true` + `can_see_sample` per row), GET {id} (+ file list), PATCH {id} (partial update + recompute quality + surveillance), DELETE {id} (soft-delete / archive), GET {id}/files, GET {id}/download (presigned URL). Plus a proper access-control module in `backend/permissions.py` with `can_access_sample`, `can_see_sample`, and `visibility_sql_clause` (SQL-side predicate). 32 integration tests. New baseline: **450 tests passing, 86.23% coverage** (+32 tests, +0.9%). Router coverage 89%; permissions module 88%.
+
+**Key decisions:**
+- **Two-tier access model.** `can_see_sample` includes `DISCOVERABLE` (shows in lists); `can_access_sample` excludes it (detail requires an approved `sample_access_requests` row). That is the only way the access-request workflow makes semantic sense — otherwise DISCOVERABLE would collapse into PUBLIC. Spec.md §5 Session H confirms: "Platform Admin → lab member → PUBLIC → ADHS oversight (surveillance_relevant only) → approved request" — no DISCOVERABLE on that ladder. todo.md's test hint conflicted ("DISCOVERABLE → 200 for authenticated users") and was ignored in favour of the spec.
+- **Visibility enforced in SQL, not Python.** `visibility_sql_clause(user)` emits an OR'd EXISTS clause straight into the list WHERE, so the list endpoint paginates at the DB tier with no N+1 membership check. Platform Admin short-circuits to `"TRUE"`. Data analysts get `s.surveillance_relevant = TRUE` OR'd in for ADHS oversight.
+- **LOCKED_FIELDS frozenset on PATCH.** Instead of silently dropping forbidden keys, any attempt to set `quality_status`, `surveillance_relevant`, `scrub_status`, `mmwr_week`, `iso_week`, `iso_year`, `mmwr_year`, `ingest_timestamp`, `is_deleted`, identifiers/accessions, pipeline outputs, or file URIs returns **422 with the offending field names**. Editable fields are a separate `_EDITABLE_FIELDS` whitelist — only the intersection is written. After the caller's update, the endpoint re-runs `validate_sample() → compute_quality_status()` and `compute_surveillance_relevant()` on the merged row and issues a second UPDATE, so derived state always matches the canonical source of truth.
+- **Soft delete uses `is_deleted`, not `is_archived`.** todo.md H-4 says `is_archived=True` but the samples table in `db/init.sql` line 427 has `is_deleted BOOLEAN NOT NULL DEFAULT FALSE` plus `deleted_at` / `deleted_by_id`. Followed the schema and noted the reconciliation inline in todo.md. Log action stays `ARCHIVE_SAMPLE` (per AuditActions) — the action name describes the lifecycle stage, not the column name.
+- **`raw_fastq` download restricted to Lab Directors.** Pre-scrub FASTQ may contain PHI; the download endpoint additionally checks `is_lab_director` on the sample's lab (Platform Admin bypasses). Other file types just require `can_access_sample`.
+- **Pagination now allows `ingest_timestamp`.** Samples has no `created_at` — added `ingest_timestamp` to `pagination.ALLOWED_SORT_COLUMNS` and defaulted the samples list endpoint to `sort_by=ingest_timestamp`.
+- **Test fixtures use `_switch_user(email, monkeypatch)` + `get_settings.cache_clear()`** so the `lru_cache`'d settings pick up the new mock email. The same pattern from Sessions A/B/C. Mandatory before every role-change test.
+
+**Watch out for:**
+- **The samples table does NOT have `created_at`/`updated_at`.** Do not copy the UPDATE ... `SET updated_at = NOW()` idiom from organizations/labs. It raises `UndefinedColumn`. The initial PATCH query had it and was silently passing tests until the first PATCH test hit it.
+- **`sample_access_requests` FK blocks user DELETE in teardown.** `_cleanup_users()` must first `DELETE FROM sample_access_requests WHERE requester_id = :u OR owner_id = :u` before deleting the user. Audit log still needs the `UPDATE audit_log SET actor_id = NULL` step from Session B. Three-step cleanup now: access_requests → lab/project_membership → audit NULL → users.
+- **Pre-commit ruff-format reformatted 4 files on the first `gac`,** failed the hook, then passed on the second. Also a SIM103 "return the condition directly" flagged `_base_access` (the last `if _has_approved_access_request(): return True; return False` was collapsible). Same "run gac twice" pattern as Sessions B/C/E/F/G — documented here for the sixth time.
+- **Platform Admin uses `"TRUE"` in the SQL clause.** If future endpoints compose WHERE fragments via f-strings, that literal is a SQL keyword and is safe — but never substitute a user-supplied string there. The `visibility_sql_clause` helper intentionally returns only literals (`TRUE`, `PUBLIC`, `DISCOVERABLE`, `APPROVED`) plus parameterised `:uid`.
+- **DISCOVERABLE detail returns 403 by design.** A test named `test_discoverable_sample_detail_requires_access` asserts this and also that granting an APPROVED `sample_access_requests` row flips it to 200. Reviewers reading from todo.md may be surprised — the reconciliation is the doc-comment at the top of `permissions.py` and at the top of the test module.
+
+**ASCII diagram:**
+
+```
+client ─► GET /api/v1/samples/?lab_id=7&sharing_level=DISCOVERABLE
+            │
+            ▼
+   get_current_user(request)
+            │
+            ▼
+   visibility_sql_clause(user) ──► "(s.owner_id=:uid OR s.sharing_level IN
+            │                        ('PUBLIC','DISCOVERABLE') OR EXISTS(…
+            │                        lab_membership…) OR EXISTS(…project…)
+            │                        OR EXISTS(…sample_access_requests…))"
+            ▼
+   ┌─ WHERE  s.is_deleted = FALSE                            ──┐
+   │    AND  (visibility OR-ladder)                            │
+   │    AND  s.lab_id = :lab_id                                │
+   │    AND  s.sharing_level = :sharing_level                  │
+   └──────────────────────────────────────────────────────────┘
+            │
+            ▼
+   paginate() → (rows, total)
+            │
+            ▼
+   success_list(data=rows, page, per_page, total)
+
+
+client ─► GET /api/v1/samples/{id}
+            │
+            ▼
+   _get_sample(id)  ── is_deleted=FALSE filter
+            │
+      ┌─────┴─────┐
+      ▼           ▼
+   None?       can_access_sample(user, sample, conn)
+      │           │
+      ▼           ├── Platform Admin  ─► 200
+    404          ├── owner_id match  ─► 200
+                  ├── lab_membership   ─► 200
+                  ├── project_mbr      ─► 200
+                  ├── sharing=PUBLIC   ─► 200
+                  ├── data_analyst &&
+                  │   surveillance     ─► 200
+                  ├── APPROVED request ─► 200
+                  └── else             ─► 403
+```
+
+---
