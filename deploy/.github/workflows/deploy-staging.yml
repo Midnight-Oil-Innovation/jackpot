@@ -39,10 +39,10 @@ jobs:
       - name: Checkout jackpot-backend
         uses: actions/checkout@v4
         with:
-          repository: linuxprophet/jackpot-backend
+          repository: gotero/jackpot-backend
           path: jackpot-backend
           ref: staging
-          token: ${{ secrets.GITHUB_TOKEN }}
+          token: ${{ secrets.CROSS_REPO_PAT }}
 
       - name: Authenticate to GCP (Workload Identity Federation)
         id: auth

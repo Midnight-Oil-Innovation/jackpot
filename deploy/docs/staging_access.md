@@ -31,8 +31,8 @@ The staging hostnames above are placeholders. Update them here and in
 
 | Role | Principal | Granted via |
 |---|---|---|
-| Project Owner | `gotero@linuxprophet.com` | Manual — bootstrap account |
-| GitHub Actions deploy | `jackpot-staging-deploy@...` SA | Workload Identity Federation (`linuxprophet/jackpot-iac` repo) |
+| Project Owner | `gotero3@asu.edu` | Manual — bootstrap account |
+| GitHub Actions deploy | `jackpot-staging-deploy@...` SA | Workload Identity Federation (`gotero/jackpot-iac` repo) |
 | Backend pod workload identity | `jackpot-api@...` SA | KSA `jackpot/jackpot-api` |
 | Nextflow controllers | `jackpot-nextflow@...` SA | KSA `jackpot/jackpot-nextflow` |
 | Scrubber GKE Jobs | `jackpot-scrubber@...` SA | KSA `jackpot/jackpot-scrubber` |
