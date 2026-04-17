@@ -74,3 +74,13 @@ locals {
 #   buckets                  = module.buckets.all_buckets
 #   artifact_repository_name = module.artifact_registry.repository_name
 # }
+#
+# module "secrets" {
+#   source = "../modules/secrets"
+#
+#   project_id  = var.project_id
+#   environment = var.environment
+#   region      = var.region
+#   labels      = local.labels
+#   accessors   = [module.iam.api_sa_email]
+# }

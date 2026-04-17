@@ -56,3 +56,13 @@ output "scrubber_sa_email" {
 output "nextflow_sa_email" {
   value = module.iam.nextflow_sa_email
 }
+
+output "secret_names" {
+  description = "Map of short-name -> Secret Manager secret name."
+  value       = module.secrets.secret_names
+}
+
+output "secret_seed_commands" {
+  description = "Copy-paste gcloud commands to add placeholder values for every secret after apply."
+  value       = module.secrets.seed_commands
+}
