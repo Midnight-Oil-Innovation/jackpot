@@ -155,7 +155,7 @@ Notification System sections for their exact interfaces.
 
 ## Current Baseline
 
-- **346 tests passing, 0 failed, 81.78% coverage**
+- **362 tests passing, 0 failed, 82.84% coverage**
 - CI threshold: 60% — do not let coverage fall below this
 - Health check: `curl http://localhost:8000/health` → `{"status":"ok","version":"5.0.0","project":"JACKPOT"}`
 - All 27 database tables loaded in PostgreSQL

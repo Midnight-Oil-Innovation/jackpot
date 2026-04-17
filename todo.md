@@ -1,7 +1,7 @@
 # JACKPOT — To-Do List
 
 **Last updated:** 2026-04-16
-**Baseline:** 346 tests passing, 81.79% coverage — Session B (labs + lab_membership) complete
+**Baseline:** 362 tests passing, 82.84% coverage — Session C (users) complete
 **Active sprint:** Month 1 — Core Router Implementation
 
 Instructions for Claude Code: Work through items in order. Check off each item
@@ -177,31 +177,31 @@ These must be completed before any router session. They are blocking bugs.
 
 ## Phase 3 — Session C: users router
 
-- [ ] **C-1: Implement `GET /api/v1/users/me`** (any authenticated user)
+- [x] **C-1: Implement `GET /api/v1/users/me`** (any authenticated user)
   - Returns full user profile including lab memberships
 
-- [ ] **C-2: Implement `GET /api/v1/users/`** (Platform Admin only)
+- [x] **C-2: Implement `GET /api/v1/users/`** (Platform Admin only)
   - Paginated, supports `?search=` on email/name
   - Returns 403 for non-admins
 
-- [ ] **C-3: Implement `GET /api/v1/users/{id}`** (Platform Admin or same user)
+- [x] **C-3: Implement `GET /api/v1/users/{id}`** (Platform Admin or same user)
   - Returns 403 if requester is neither
 
-- [ ] **C-4: Implement `PATCH /api/v1/users/{id}`** (Platform Admin or same user)
+- [x] **C-4: Implement `PATCH /api/v1/users/{id}`** (Platform Admin or same user)
   - Partial update — users can update their own name/preferences
   - Platform Admin can update `is_platform_admin`, `is_active`
 
-- [ ] **C-5: Implement `DELETE /api/v1/users/{id}`** (Platform Admin only)
+- [x] **C-5: Implement `DELETE /api/v1/users/{id}`** (Platform Admin only)
   - Soft delete: sets `is_active=False`
 
-- [ ] **C-6: Write `tests/test_users_api.py`**
+- [x] **C-6: Write `tests/test_users_api.py`**
   - `/me` returns correct user
   - User can update own name; cannot promote self to Platform Admin
   - Platform Admin can deactivate user
   - Non-admin list → 403
   - Get other user as non-admin non-self → 403
 
-- [ ] **C-7: Run tests and commit**
+- [x] **C-7: Run tests and commit**
   - `uv run pytest tests/test_users_api.py -v`
   - `uv run pytest --cov=backend --cov-fail-under=60`
   - `gac "feat: users router — CRUD endpoints + tests"`

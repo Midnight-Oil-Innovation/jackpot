@@ -110,3 +110,56 @@ client ─► POST /api/v1/labs/{id}/members
 ```
 
 ---
+
+## Session C: users router — 2026-04-16
+
+**What was built:** Five endpoints for `/api/v1/users/` — `/me` (self + lab memberships), list (Platform Admin only), get by id (admin or self), PATCH (admin or self with field whitelist), DELETE soft-delete — plus 16-test integration suite. New baseline: 362 tests passing, 82.84% coverage (+16 tests, +1.06%). Router coverage: 98% (91 stmts, 2 missed).
+
+**Key decisions:**
+- Two editable-field sets on PATCH: `_SELF_EDITABLE = {"name"}` and `_ADMIN_EDITABLE = {"name", "is_platform_admin", "is_data_analyst", "is_active", "organization_id"}`. A non-admin touching any admin-only field returns 403 (not 422) — the request shape is valid, the actor is not. This is simpler and more grep-friendly than two separate Pydantic models.
+- `/me` returns the user row plus a `lab_memberships` array (lab_id, lab_name, permission_group_id, permission_group_name, is_lab_director). Joined via `lab_membership → labs` + `permission_groups`. This is the one endpoint the frontend polls on every page load, so shoving memberships in saves a second round-trip.
+- Added single new audit action `UPDATE_USER` — used for both PATCH and soft-delete (with `metadata={"soft_delete": True}`), same pattern as `UPDATE_ORG` / `UPDATE_LAB`. No `CREATE_USER` / `DELETE_USER` constants invented; user creation happens inside the OAuth flow, not via this router.
+- `_SELF_EDITABLE`/`_ADMIN_EDITABLE` checks happen *before* the row fetch. This means an unauthorized PATCH returns 403 even when the target user does not exist — intentional, don't leak existence to non-admins.
+
+**Watch out for:**
+- `get_current_user()` in local dev falls back to a synthetic Platform Admin dict (id=1) when `MOCK_USER_EMAIL` does not resolve. Test fixtures that expect "non-admin" behavior must insert the user AND `monkeypatch.setenv("MOCK_USER_EMAIL", ...)` AND `get_settings.cache_clear()` — all three. Same trap as Sessions A/B.
+- The `users` table has no `active` column — the soft-delete flag is `is_active`. Do not unify with orgs/labs (which use `active`).
+- The `updated_at` column has no trigger, so every write statement must include `updated_at = NOW()` in its SET clause. Orgs/labs do not do this because they were written first and the column has a default; the users table should be patched with a trigger in a later migration, but for now explicit `updated_at` works.
+- The `/me` `_get_lab_memberships` helper runs inside the same `db` session as the primary SELECT so both reads see a consistent snapshot — not strictly required (reads only) but keeps the session per-request pattern consistent.
+
+**ASCII diagram:**
+
+```
+client ─► GET /api/v1/users/me
+           │
+           ▼
+  get_current_user(request)          ── resolves MOCK_USER_EMAIL locally / JWT in GKE
+           │
+           ▼
+  ┌─ injected db session (get_db_dep) ─────────────────┐
+  │  SELECT * FROM users WHERE id = :me                 │
+  │  SELECT lm.*, l.display_name, pg.name               │
+  │    FROM lab_membership lm                           │
+  │    JOIN labs l ON l.id = lm.lab_id                  │
+  │    JOIN permission_groups pg                        │
+  │      ON pg.id = lm.permission_group_id              │
+  │    WHERE lm.user_id = :me                           │
+  └─────────────────────────────────────────────────────┘
+           │
+           ▼
+  { ...user, lab_memberships: [...] }
+
+client ─► PATCH /api/v1/users/{id}  {is_platform_admin: true}
+           │
+     non-admin target=self             admin
+           │                             │
+           ▼                             ▼
+  forbidden = {is_platform_admin}      allowed
+  ── not in _SELF_EDITABLE                │
+           │                             ▼
+           ▼                  UPDATE users SET … RETURNING *
+  403 ACCESS_DENIED           log_audit(UPDATE_USER, db_conn=db)
+                              success(data=after)
+```
+
+---
