@@ -69,7 +69,7 @@ def log_audit(
                  before_state, after_state, metadata)
             VALUES
                 (:action, :actor_id, :resource_type, :resource_id,
-                 :before::jsonb, :after::jsonb, :metadata::jsonb)
+                 CAST(:before AS JSONB), CAST(:after AS JSONB), CAST(:metadata AS JSONB))
             """,
             {
                 "action": action,

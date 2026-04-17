@@ -1,7 +1,7 @@
 # JACKPOT — To-Do List
 
 **Last updated:** 2026-04-16
-**Baseline:** 316 tests passing, 76.63% coverage — all P0 fixes complete — all P0 fixes complete
+**Baseline:** 329 tests passing, 79.95% coverage — Session A (organizations) complete
 **Active sprint:** Month 1 — Core Router Implementation
 
 Instructions for Claude Code: Work through items in order. Check off each item
@@ -86,38 +86,38 @@ These must be completed before any router session. They are blocking bugs.
 
 ## Phase 1 — Session A: organizations router
 
-- [ ] **A-1: Implement `POST /api/v1/organizations/`** (Platform Admin only)
+- [x] **A-1: Implement `POST /api/v1/organizations/`** (Platform Admin only)
   - Accepts: `display_name`, `org_type`, `contact_email`, optional policy fields
   - Writes to `organizations` table with `active=True`
   - Calls `log_audit(AuditActions.CREATE_ORG, ...)`
   - Returns `success(data=org_dict, status_code=201)`
 
-- [ ] **A-2: Implement `GET /api/v1/organizations/`** (Platform Admin only)
+- [x] **A-2: Implement `GET /api/v1/organizations/`** (Platform Admin only)
   - Paginated via `paginate()`
   - Supports `?search=` filter on `display_name`
   - Returns `success_list(...)`
 
-- [ ] **A-3: Implement `GET /api/v1/organizations/{id}`** (Platform Admin or org member)
+- [x] **A-3: Implement `GET /api/v1/organizations/{id}`** (Platform Admin or org member)
   - Returns 404 if not found
   - Returns 403 if requester has no org membership and is not Platform Admin
 
-- [ ] **A-4: Implement `PATCH /api/v1/organizations/{id}`** (Platform Admin only)
+- [x] **A-4: Implement `PATCH /api/v1/organizations/{id}`** (Platform Admin only)
   - Uses `model_dump(exclude_none=True)` for partial update
   - Logs `UPDATE_ORG` audit action with `before`/`after` state
   - Returns updated org
 
-- [ ] **A-5: Implement `DELETE /api/v1/organizations/{id}`** (Platform Admin only)
+- [x] **A-5: Implement `DELETE /api/v1/organizations/{id}`** (Platform Admin only)
   - Soft delete: sets `active=False`, does not physically delete
   - Returns `success_message("Organization deactivated.")`
 
-- [ ] **A-6: Write `tests/test_organizations_api.py`**
+- [x] **A-6: Write `tests/test_organizations_api.py`**
   - CRUD round-trip (create → get → patch → soft-delete)
   - Non-admin POST → 403
   - Non-admin PATCH → 403
   - GET missing org → 404
   - Pagination test (create 5 orgs, verify page/per_page behavior)
 
-- [ ] **A-7: Run tests and commit**
+- [x] **A-7: Run tests and commit**
   - `uv run pytest tests/test_organizations_api.py -v`
   - `uv run pytest --cov=backend --cov-fail-under=60`
   - `gac "feat: organizations router — CRUD endpoints + tests"`
