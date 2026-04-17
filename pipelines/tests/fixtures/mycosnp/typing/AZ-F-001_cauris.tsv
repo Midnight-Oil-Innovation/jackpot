@@ -1,0 +1,3 @@
+sample_id	scheme	scheme_version	sequence_type	clade	allele_calls
+AZ-F-001	cauris	2024-02-14	1	Clade_I	CAS1:1|CAS2:3|CAS3:2|CAS4:5|CAS5:1|CAS6:2|CAS7:4
+AZ-F-002	cauris	2024-02-14	4	Clade_IV	CAS1:4|CAS2:1|CAS3:5|CAS4:2|CAS5:3|CAS6:4|CAS7:6

@@ -1,0 +1,10 @@
+  0.04	1234	12	U	0	unclassified
+ 99.96	2991000	102	R	1	root
+ 99.96	2991000	102	D	2	Bacteria
+ 99.80	2985000	50	P	1224	Proteobacteria
+ 99.50	2975000	30	C	1236	Gammaproteobacteria
+ 99.10	2963000	40	O	91347	Enterobacterales
+ 98.90	2957000	25	F	543	Enterobacteriaceae
+ 98.50	2945000	150	G	590	Salmonella
+ 97.80	2923000	210	S	28901	Salmonella enterica
+  0.30	8972	5	S	623	Shigella flexneri

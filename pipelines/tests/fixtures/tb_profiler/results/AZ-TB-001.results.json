@@ -1,0 +1,30 @@
+{
+  "id": "AZ-TB-001",
+  "main_lin": "lineage4",
+  "sub_lin": "lineage4.9",
+  "drtype": "MDR",
+  "spoligotype": {"octal": "777000377760771", "family": "T"},
+  "pipeline": {"software_version": "6.2.0", "db_version": "2024-05-09"},
+  "dr_variants": [
+    {
+      "gene": "rpoB",
+      "locus_tag": "Rv0667",
+      "change": "p.Ser450Leu",
+      "freq": 0.98,
+      "type": "missense",
+      "drugs": [
+        {"drug": "rifampicin", "confidence": "1) Assoc w R", "who_confidence": "Assoc w R"}
+      ]
+    },
+    {
+      "gene": "katG",
+      "locus_tag": "Rv1908c",
+      "change": "p.Ser315Thr",
+      "freq": 0.95,
+      "type": "missense",
+      "drugs": [
+        {"drug": "isoniazid", "confidence": "1) Assoc w R", "who_confidence": "Assoc w R"}
+      ]
+    }
+  ]
+}
