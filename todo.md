@@ -1,7 +1,7 @@
 # JACKPOT — To-Do List
 
 **Last updated:** 2026-04-16
-**Baseline:** 399 tests passing, 85.08% coverage — Session F (tokens + project name filter) complete
+**Baseline:** 418 tests passing, 85.33% coverage — Session G (ingest router) complete
 **Active sprint:** Month 1 — Core Router Implementation
 
 Instructions for Claude Code: Work through items in order. Check off each item
@@ -292,7 +292,7 @@ This is the most complex router. Read the ingest-specific reminders in
 `docs/CLAUDE.md` and `spec.md` Section 5 (Session G) before writing a
 single line.
 
-- [ ] **G-1: Implement `POST /api/v1/ingest/upload`** — GUI/API file + metadata
+- [x] **G-1: Implement `POST /api/v1/ingest/upload`** — GUI/API file + metadata
   - Accepts multipart: `metadata` (JSON), `fastq_r1` (file), `fastq_r2` (optional file)
   - Validates `sequencing_lab` against DB — 422 with request workflow message if unknown
   - Calls `validator.validate(metadata)` → ValidationResult
@@ -305,13 +305,13 @@ single line.
   - Calls `log_audit(AuditActions.CREATE_SAMPLE, ...)`
   - Returns `success(data=sample_dict, status_code=201)`
 
-- [ ] **G-2: Implement `POST /api/v1/ingest/csv`** — bulk CSV upload
+- [x] **G-2: Implement `POST /api/v1/ingest/csv`** — bulk CSV upload
   - Accepts CSV file where files column is semicolon-delimited per row
   - Processes each row through same pipeline as GUI upload
   - Returns summary: `{"success": N, "failed": M, "errors": [...]}`
   - Partial success is acceptable — does not roll back on per-row failures
 
-- [ ] **G-3: Implement `POST /api/v1/ingest/globus`** — Globus webhook
+- [x] **G-3: Implement `POST /api/v1/ingest/globus`** — Globus webhook
   - Platform Admin / system token only
   - Looks up sequencing lab from Globus endpoint ID
   - Finds matching JACKPOT labs via `sequencing_lab_assignments`
@@ -319,7 +319,7 @@ single line.
   - Sets `scrub_status = PENDING` for all new samples
   - Returns 200 with file count
 
-- [ ] **G-4: Write `tests/test_ingest_api.py`**
+- [x] **G-4: Write `tests/test_ingest_api.py`**
   - Valid HumanSample upload → Tier 1 PRELIMINARY, scrub_status PENDING
   - Valid HumanSample upload with all fields → Tier 3 SUBMITTABLE
   - FASTA-only upload → scrub_status SKIPPED (auto)
@@ -330,7 +330,7 @@ single line.
   - Audit log entry created on successful ingest
   - epiweek fields populated correctly
 
-- [ ] **G-5: Run tests and commit**
+- [x] **G-5: Run tests and commit**
   - `uv run pytest tests/test_ingest_api.py -v`
   - `uv run pytest --cov=backend --cov-fail-under=60`
   - `gac "feat: ingest router — upload + CSV + globus endpoints + tests"`
