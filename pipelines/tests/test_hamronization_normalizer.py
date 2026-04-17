@@ -19,7 +19,6 @@ from shared.hamronization_normalizer import (  # noqa: E402
     run_hamronize,
 )
 
-
 CANONICAL_TSV = (
     "gene_symbol\tgene_name\tdrug_class\tantimicrobial_agent\t"
     "coverage_percentage\tsequence_identity\treference_database_name\t"

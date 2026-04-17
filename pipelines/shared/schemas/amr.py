@@ -27,5 +27,8 @@ class AMRResult(BaseModel):
     start_pos: int | None = Field(None, ge=0)
     end_pos: int | None = Field(None, ge=0)
     strand: str | None = Field(None, description="+ or -.")
-    tool_name: str = Field(..., description="Tool that produced the call (amrfinderplus, rgi, etc.).")
+    tool_name: str = Field(
+        ...,
+        description="Tool that produced the call (amrfinderplus, rgi, etc.).",
+    )
     tool_version: str | None = Field(None, description="Version string reported by the tool.")

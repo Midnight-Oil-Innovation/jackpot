@@ -10,10 +10,10 @@ import pytest
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from shared.schemas import (  # noqa: E402
+    MAGQC,
     RESULT_SCHEMAS,
     AMRResult,
     AssemblyQC,
-    MAGQC,
     NextcladeResult,
     PangolinResult,
     TaxonomicProfile,

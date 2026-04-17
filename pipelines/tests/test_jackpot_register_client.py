@@ -18,7 +18,10 @@ from shared.jackpot_register_client import (  # noqa: E402
 )
 
 
-def _client(mock_transport: httpx.MockTransport, sleep: MagicMock | None = None) -> JackpotRegisterClient:
+def _client(
+    mock_transport: httpx.MockTransport,
+    sleep: MagicMock | None = None,
+) -> JackpotRegisterClient:
     http_client = httpx.Client(transport=mock_transport, base_url="http://stub")
     return JackpotRegisterClient(
         api_url="http://api.test",
