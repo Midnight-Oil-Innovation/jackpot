@@ -603,21 +603,21 @@ Log findings to docs/review_log.md and resolve before continuing.
 
 ## Phase 14 — Session L: Metagenomic parsers (nf-core/mag, nf-core/taxprofiler)
 
-- [ ] **L-1: nf-core/mag parser**
+- [x] **L-1: nf-core/mag parser**
   - `checkm2.py`: parse CheckM2 output → MAGQC per MAG bin (completeness, contamination, strain heterogeneity, bin size)
   - `gtdbtk.py`: parse GTDB-Tk taxonomy → TaxonomicProfile
   - `bin_registry.py`: register each MAG bin as assembly file linked to sample
   - Critical: handle one-sample-to-many-MAGs relationship (sample_associations with type=mag_bin)
 
-- [ ] **L-2: nf-core/taxprofiler parser**
+- [x] **L-2: nf-core/taxprofiler parser**
   - `kraken2.py`: parse Kraken2 report → TaxonomicProfile (ranked list of taxa with abundance)
   - `bracken.py`: parse Bracken abundance estimates → TaxonomicProfile
   - `diamond.py`: parse DIAMOND protein profile (when present) → pipeline_results.metrics
   - Reuses Grandeur's kraken2 parser where possible
 
-- [ ] **L-3: Test fixtures + unit tests**
+- [x] **L-3: Test fixtures + unit tests**
 
-- [ ] **L-4: Run tests and commit**
+- [x] **L-4: Run tests and commit**
 
 ---
 
