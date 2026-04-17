@@ -55,11 +55,7 @@ class TestParseCanonicalTSV:
         assert parse_canonical_tsv("", sample_id="AZ-1") == []
 
     def test_skips_rows_with_no_gene_symbol(self):
-        bad = (
-            "gene_symbol\tanalysis_software_name\n"
-            "\tamrfinderplus\n"
-            "mcr-1\tamrfinderplus\n"
-        )
+        bad = "gene_symbol\tanalysis_software_name\n\tamrfinderplus\nmcr-1\tamrfinderplus\n"
         results = parse_canonical_tsv(bad, sample_id="AZ-1")
         assert len(results) == 1
         assert results[0].gene_symbol == "mcr-1"

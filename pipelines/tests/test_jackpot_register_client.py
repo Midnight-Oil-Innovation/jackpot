@@ -83,7 +83,9 @@ class TestRegisterResult:
         client = _client(httpx.MockTransport(handler))
         result = client.register_result("pangolin_results", {"sample_id": "AZ-1"})
         assert result == {"status": "registered", "result_id": 42}
-        assert captured["url"] == "http://api.test/api/v1/pipelines/run-abc/results/pangolin_results"
+        assert (
+            captured["url"] == "http://api.test/api/v1/pipelines/run-abc/results/pangolin_results"
+        )
         assert captured["headers"]["x-pipeline-token"] == "tok-xyz"
 
     def test_requires_result_type(self):

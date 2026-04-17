@@ -113,10 +113,7 @@ class JackpotRegisterClient:
         """POST one typed result. Returns the API's parsed JSON response."""
         if not result_type:
             raise RegistrationError("result_type is required")
-        url = (
-            f"{self._config.api_url}/api/v1/pipelines/"
-            f"{self._config.run_id}/results/{result_type}"
-        )
+        url = f"{self._config.api_url}/api/v1/pipelines/{self._config.run_id}/results/{result_type}"
         headers = {
             "X-Pipeline-Token": self._config.pipeline_token,
             "Content-Type": "application/json",

@@ -1,0 +1,4 @@
+sample_id	subtype	clade	irma_version	scheme
+AZ-FLU-001	H3N2	3C.2a1b.2a.2a.1	1.1.4	h3n2
+AZ-FLU-002	H1N1pdm09	6B.1A.5a.2a	1.1.4	h1n1pdm09
+AZ-RSV-001	RSV-A	A.D.5	1.1.4	rsv_a
