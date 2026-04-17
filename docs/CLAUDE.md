@@ -65,6 +65,16 @@ When implementing new patterns, routers, or non-trivial logic:
 
 Do NOT over-explain trivial changes. Reserve explanations for non-obvious decisions.
 
+After completing any router session or significant fix, append a new entry to
+`docs/learnings.md` using this format:
+
+    ## [Session/feature name] — [date]
+    **What was built:** one sentence
+    **Key decisions:** bullet list of non-obvious choices and why
+    **Watch out for:** gotchas, edge cases, constraints to remember
+    **ASCII diagram:** (if a new pattern was introduced)
+
+
 ---
 
 
