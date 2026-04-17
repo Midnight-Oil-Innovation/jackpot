@@ -623,7 +623,7 @@ Log findings to docs/review_log.md and resolve before continuing.
 
 ## Phase 15 — Session M: Pathogensurveillance parser + AMR/typing shared parsers
 
-- [ ] **M-1: nf-core/pathogensurveillance parser** (version 1.1.0 pinned)
+- [x] **M-1: nf-core/pathogensurveillance parser** (version 1.1.0 pinned)
   - `identification.py`: parse sendsketch output → TaxonomicProfile + identified organism
   - `amr.py`: parse AMR results (shares bactopia normalizer)
   - `mlst.py`: parse MLST results (shares bactopia parser)
@@ -631,21 +631,21 @@ Log findings to docs/review_log.md and resolve before continuing.
   - `variants.py`: parse graphtyper VCF → pipeline_results.metrics (variant count, filtered count)
   - `report.py`: register the interactive HTML report to sample_files (served via presigned URL)
 
-- [ ] **M-2: Shared AMR normalization validator**
+- [x] **M-2: Shared AMR normalization validator**
   - Test that AMR results from bactopia, Grandeur, and pathogensurveillance produce comparable canonical AMRResult output
   - Catches divergence when underlying tools update output formats
 
-- [ ] **M-3: Parser version matrix**
+- [x] **M-3: Parser version matrix**
   - Document in `jackpot-nf/README.md`: which parser version supports which pipeline version range
   - Add `parser_version` column to `pipeline_catalog` table (schema migration)
   - Wrapper validates pipeline version at run start, warns if outside supported range
 
-- [ ] **M-4: End-to-end integration test**
+- [x] **M-4: End-to-end integration test**
   - Not a unit test — a full workflow test that simulates running all 11 wrapped pipelines against fixtures
   - Verifies each parser produces valid result payloads
   - Skipped in CI by default (slow), run manually before tagging releases
 
-- [ ] **M-5: Run tests and commit**
+- [x] **M-5: Run tests and commit**
 
 ---
 
