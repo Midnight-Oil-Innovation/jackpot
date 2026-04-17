@@ -780,3 +780,86 @@ nf/
 
 Submodule commit 2973e7a; backend bump tracks pointer.
 ```
+
+## Session L: metagenomic parsers (nf-core/mag + nf-core/taxprofiler) — 2026-04-17
+**What was built:** Parser modules for nf-core/mag (CheckM2 MAG QC, GTDB-Tk taxonomy, bin-FASTA registry) and nf-core/taxprofiler (Kraken2 full ranked list, Bracken abundance, DIAMOND summary) inside the `jackpot-nf` submodule, plus 36 new unit tests covering the one-sample-to-many-MAGs relationship end-to-end.
+
+**Key decisions:**
+- **MAG derived-sample design is spread across three emit sites.** MAGQC rows use `sample_id=parent, bin_id=bin_id` (parent parses out of `<parent>.<binner>.<n>` via the default `sample_id_resolver`), GTDB-Tk TaxonomicProfile rows use `sample_id=bin_id` (the bin *is* the derived sample), and the bin FASTA FileArtifact also uses `sample_id=bin_id`. The parser layer stays dumb about the `sample_associations` junction table — the backend registration endpoint is the sole owner of derived-sample + mag_bin wiring. This keeps parsers pure functions of file → model.
+- **Shared Kraken2 parser now has two knobs: `top_only` and `species_only`.** Grandeur (isolate) keeps the default top-S behaviour. taxprofiler (metagenome) passes `top_only=False, species_only=False` and preserves every rank and row. Previously the species filter was unconditional inside the shared parser and silently dropped non-S rows even when `top_only=False`. Guard test `test_shared_kraken2_parser_used` asserts taxprofiler imports the shared module (not a fork).
+- **Bin FASTA discovery uses a heuristic, not hardcoded paths.** nf-core/mag emits bins under many variants (`GenomeBinning/MetaBAT2/bins/`, `GenomeBinning/DAS_Tool/bins/`, `GenomeBinning/MaxBin2/`, etc.). `_is_bin_file()` walks the tree and accepts files whose parent chain hits `bins/` or a binner-named directory (metabat2/maxbin2/concoct/das_tool/dastool/semibin/genomebinning), explicitly excluding `Assembly/` so primary contigs don't leak in.
+- **taxprofiler filename parsing uses `rpartition("_")` on the stripped stem.** Sample IDs may contain underscores; the last underscore is the sample/db delimiter. The db name feeds `reference_database` so surveillance queries can filter by Kraken2 DB (`standard` vs `viral-only` vs custom).
+- **DIAMOND emits `pipeline_metrics`, not `taxonomic_profile`.** Raw BLAST outfmt-6 is too rich to shoehorn into TaxonomicProfile; instead we summarise into total_hits + top_subject + top_bitscore + top_identity_percent. Empty files still emit a zero-hits row so downstream reports don't silently drop samples.
+- **Conservative missing-column handling.** `-` and `N/A` in CheckM2 numeric fields get dropped cleanly (field omitted from payload) rather than forcing a Pydantic ValidationError. Missing *required* columns (Name in CheckM2, required trio in GTDB-Tk/Bracken) raise typed ParseErrors.
+
+**Watch out for:**
+- **sample_associations is NOT set by the parser.** When writing the registration endpoint for MAG runs, iterate MAGQC rows, upsert each `bin_id` as a derived sample (parent = MAGQC.sample_id), then insert `sample_associations(parent_id=..., child_id=..., type='mag_bin')`. The parser layer intentionally omits this to keep it testable.
+- **Two MAGQC rows per parent is the expected shape,** not a bug. `AZ-META-001` having `.MetaBAT2.1` and `.MetaBAT2.2` bins produces two MAGQC rows sharing `sample_id=AZ-META-001` with distinct `bin_id`s. The registration layer must handle duplicate parent writes idempotently.
+- **Default `sample_id_resolver` splits on the first `.`.** If a sample naming scheme uses `.` in the parent ID itself (e.g. `sp.1_AZ.META.001`), the default resolver will chop it. Callers can pass a custom `sample_id_resolver` callable.
+- **`species_only=True` is still the default on the shared Kraken2 parser** — Grandeur isolate paths are unchanged. Only taxprofiler opts out. Future metagenomic callers must remember to flip both flags.
+- **Bracken fraction is stored as percent, rounded to 4 decimals.** `0.123456789` → `12.3457`. Already-rounded downstream consumers (Streamlit pages, BigQuery dashboards) should expect percent, not fraction.
+- **DIAMOND needs ≥ 12 columns per row** (standard outfmt-6). Malformed rows are skipped silently; empty files emit a zero-hits summary.
+
+**ASCII diagram:**
+```
+nf-core/mag output
+├── CheckM2/checkm2_quality_report.tsv
+│       └──► checkm2.parse → MAGQC rows
+│                             sample_id=parent, bin_id=<parent>.<binner>.<n>
+│                             (one parent → many MAGQC rows)
+├── Taxonomy/GTDB-Tk/gtdbtk.{bac120,ar53}.summary.tsv
+│       └──► gtdbtk.parse → TaxonomicProfile rows
+│                            sample_id=bin_id  (derived sample)
+└── GenomeBinning/<binner>/bins/*.fa
+        └──► bin_registry.collect → FileArtifact rows
+                                     sample_id=bin_id  (derived sample)
+                                     file_subtype=mag_bin, file_type=fasta
+       ╔════════════════════════════════════════════════════════╗
+       ║  Backend registration endpoint (NOT the parser) is     ║
+       ║  responsible for:                                      ║
+       ║    1. Upserting derived sample rows keyed on bin_id    ║
+       ║    2. Inserting sample_associations(parent→child,      ║
+       ║       type='mag_bin')                                  ║
+       ╚════════════════════════════════════════════════════════╝
+
+nf-core/taxprofiler output
+├── kraken2/<sample>_<db>.kraken2.kraken2.report.txt
+│       └──► kraken2.parse  (shared Kraken2, top_only=False, species_only=False)
+│                            → TaxonomicProfile rows (every rank retained)
+├── bracken/<sample>_<db>.bracken.tsv
+│       └──► bracken.parse → TaxonomicProfile rows
+│                            abundance_percent = fraction * 100 (4dp)
+└── diamond/<sample>_<db>.diamond.tsv  (BLAST outfmt-6)
+        └──► diamond.parse → ONE pipeline_metrics row per sample
+                              total_hits, top_subject, top_bitscore,
+                              top_identity_percent
+```
+
+nf/ tree delta:
+```
+pipelines/
+├── mag/
+│   ├── __init__.py            SUPPORTED_PIPELINE_VERSIONS=[2.5.4,3.0.0,3.0.3,3.1.0]
+│   └── parsers/
+│       ├── __init__.py        orchestrator: checkm2 + gtdbtk + bin_registry
+│       ├── checkm2.py         CheckM2 TSV → MAGQC  (sample_id_resolver hook)
+│       ├── gtdbtk.py          bac120 + ar53 summary → TaxonomicProfile
+│       └── bin_registry.py    bin FASTAs → FileArtifact(mag_bin)
+└── taxprofiler/
+    ├── __init__.py            SUPPORTED_PIPELINE_VERSIONS=[1.1.5,1.1.6,1.2.0]
+    └── parsers/
+        ├── __init__.py        orchestrator
+        ├── kraken2.py         defers to shared.parsers.kraken2 (top_only=False)
+        ├── bracken.py         abundance TSV → TaxonomicProfile
+        └── diamond.py         BLAST outfmt-6 → pipeline_metrics
+
+shared/parsers/kraken2.py      + species_only parameter (default True)
+
+tests/  (173 total, +36 for Session L)
+├── fixtures/mag/{CheckM2,GenomeBinning/{MetaBAT2,DAS_Tool}/bins,Taxonomy/GTDB-Tk}/
+├── fixtures/taxprofiler/{kraken2,bracken,diamond}/
+├── test_mag_parsers.py         20 tests (derived-sample wiring, bin-id=sample_id)
+└── test_taxprofiler_parsers.py 16 tests (incl. shared-parser guard test)
+```
+
+Submodule commit a09ec7d; backend bump tracks pointer.
