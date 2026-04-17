@@ -1,0 +1,39 @@
+# Terraform
+**/.terraform/
+**/.terraform.lock.hcl
+*.tfstate
+*.tfstate.*
+*.tfstate.backup
+*.tfplan
+crash.log
+crash.*.log
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+
+# Do NOT ignore .terraform.lock.hcl — we commit it for reproducible builds
+!**/.terraform.lock.hcl
+
+# Local tfvars overrides (secrets may land here)
+terraform.tfvars
+*.auto.tfvars
+!*.tfvars.example
+
+# Credentials
+*-sa-key.json
+credentials.json
+.gcloud/
+
+# Helm
+**/charts/*.tgz
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editors
+.idea/
+.vscode/
+*.swp
+*.swo
