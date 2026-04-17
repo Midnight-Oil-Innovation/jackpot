@@ -1,7 +1,7 @@
 # JACKPOT — To-Do List
 
 **Last updated:** 2026-04-16
-**Baseline:** 371 tests passing, 83.36% coverage — Session D (domain_whitelist) complete
+**Baseline:** 384 tests passing, 84.20% coverage — Session E (sequencing_labs) complete
 **Active sprint:** Month 1 — Core Router Implementation
 
 Instructions for Claude Code: Work through items in order. Check off each item
@@ -229,26 +229,26 @@ These must be completed before any router session. They are blocking bugs.
 
 ## Phase 5 — Session E: sequencing_labs router
 
-- [ ] **E-1: Implement `GET /api/v1/sequencing-labs/`** (any authenticated user)
+- [x] **E-1: Implement `GET /api/v1/sequencing-labs/`** (any authenticated user)
   - Returns all sequencing labs including seed data (Sonora Quest, LabCorp, Otero Outpost)
 
-- [ ] **E-2: Implement `POST /api/v1/sequencing-labs/`** (Platform Admin only)
-- [ ] **E-3: Implement `GET /api/v1/sequencing-labs/{id}`** (any authenticated user)
-- [ ] **E-4: Implement `PATCH /api/v1/sequencing-labs/{id}`** (Platform Admin only)
+- [x] **E-2: Implement `POST /api/v1/sequencing-labs/`** (Platform Admin only)
+- [x] **E-3: Implement `GET /api/v1/sequencing-labs/{id}`** (any authenticated user)
+- [x] **E-4: Implement `PATCH /api/v1/sequencing-labs/{id}`** (Platform Admin only)
 
-- [ ] **E-5: Implement `POST /api/v1/sequencing-labs/{id}/assign/{lab_id}`** (Platform Admin)
+- [x] **E-5: Implement `POST /api/v1/sequencing-labs/{id}/assign/{lab_id}`** (Platform Admin)
   - Inserts into `sequencing_lab_assignments` (sequencing_lab_id, lab_id)
   - Returns 409 if assignment already exists
 
-- [ ] **E-6: Implement `DELETE /api/v1/sequencing-labs/{id}/assign/{lab_id}`** (Platform Admin)
+- [x] **E-6: Implement `DELETE /api/v1/sequencing-labs/{id}/assign/{lab_id}`** (Platform Admin)
 
-- [ ] **E-7: Write `tests/test_sequencing_labs_api.py`**
+- [x] **E-7: Write `tests/test_sequencing_labs_api.py`**
   - Seed data visible in list
   - CRUD lifecycle
   - Assignment round-trip
   - Non-admin create → 403
 
-- [ ] **E-8: Run tests and commit**
+- [x] **E-8: Run tests and commit**
   - `uv run pytest tests/test_sequencing_labs_api.py -v`
   - `gac "feat: sequencing_labs router — CRUD + assignments + tests"`
 

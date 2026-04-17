@@ -205,3 +205,61 @@ client ─► POST /api/v1/domain-whitelist/  {"domain": "UPPER.example"}
 ```
 
 ---
+
+## Session E: sequencing_labs router — 2026-04-16
+
+**What was built:** Six endpoints for `/api/v1/sequencing-labs/` — list, POST create, GET by id, PATCH update, POST assign/{lab_id}, DELETE assign/{lab_id} — plus a new Alembic migration creating the `sequencing_lab_assignments` join table, plus a 13-test integration suite. New baseline: 384 tests passing, 84.20% coverage (+13 tests, +0.84%).
+
+**Key decisions:**
+- **Created a new Alembic migration (`919759af99a1`) for `sequencing_lab_assignments`.** Critical Rule 21 mandates the table but neither `db/init.sql` nor any existing migration had created it — this is a spec-mandated schema gap that Session E had to fill before endpoints could be written. The table enforces `UNIQUE(sequencing_lab_id, lab_id)` so 409 duplicates are caught at the DB level too, and cascades on delete of either parent row. The init.sql `sequencing_labs.lab_id` FK column is preserved (legacy 1:1 auto-link for the JACKPOT-lab-as-sequencing-lab case) — the join table is the additive, many-to-many channel.
+- **List endpoint requires authentication but not admin.** Spec line: "any authenticated user" can see sequencing labs, because ingest forms need to populate a dropdown of valid `sequencing_lab` values. Only create/patch/assign/unassign require `require_platform_admin`.
+- **Two-stage validation on assign:** pre-check both `sequencing_labs.id` and `labs.id` exist so we can return precise 404s, then pre-check assignment uniqueness for 409. Pure DB UNIQUE violation would force a 500 or a messy error-envelope wrap.
+- **Four new audit actions** — `CREATE_SEQUENCING_LAB`, `UPDATE_SEQUENCING_LAB`, `ASSIGN_SEQUENCING_LAB`, `UNASSIGN_SEQUENCING_LAB`. The assignment/unassignment log entry sets `resource_type="sequencing_lab_assignment"` with `metadata={"sequencing_lab_id": ..., "lab_id": ...}` so a historical query by either parent id is possible via JSONB `metadata ->> 'lab_id'`.
+- **PATCH uses `_UPDATABLE` whitelist** `{"name", "organization", "is_external", "is_active"}` — intentionally excludes `lab_id` (legacy auto-link column must not be edited through this endpoint) and `created_at`.
+
+**Watch out for:**
+- **The join table did not exist until this session.** Any prior code or test that references `sequencing_lab_assignments` against the stub DB would have failed until the migration was applied. `tests/conftest.py` runs `alembic upgrade head` after `db/init.sql`, so the table is available as soon as the migration file lands — no one-shot DB rebuild required.
+- Spec says the list should show "Sonora Quest, LabCorp, Otero Outpost" but the actual seed only contains `Sonora Quest Laboratories`, `Laboratory Corporation of America`, and `Otero Lab` (as a non-external auto-added entry). The test asserts the first two verbatim — the third is renamed ("Otero Lab" not "Otero Outpost") and the test doesn't pin it. If ingest code ever hardcodes a "Otero Outpost" match, grep will surface the mismatch.
+- `DELETE /assign/{lab_id}` 200s on first call and 404s on second — tests exercise both. There is no idempotent mode; callers must cope.
+- The `valid_human_sample` test fixture lists `"sequencing_lab": "Otero Outpost"` which does *not* match the seed. That fixture is only used by ingest tests (Session G) and ingest validation is expected to treat it as unknown → 422. Don't try to "fix" the fixture here.
+
+**ASCII diagram:**
+
+```
+           sequencing_labs                labs
+           ┌────────────┐            ┌────────────┐
+           │id          │◄──┐    ┌──►│id          │
+           │name UNIQUE │   │    │   │display_name│
+           │is_external │   │    │   │active      │
+           │is_active   │   │    │   └────────────┘
+           └────────────┘   │    │
+                            │    │
+                  sequencing_lab_assignments
+                  ┌────────────────────────┐
+                  │id                      │
+                  │sequencing_lab_id ──────┘
+                  │lab_id ─────────────────┐
+                  │UNIQUE(sid, lid)        │
+                  │created_at              │
+                  └────────────────────────┘
+
+client ─► POST /api/v1/sequencing-labs/{sid}/assign/{lid}
+           │
+           ▼
+  require_platform_admin(user)            ── 403 if not admin
+           │
+           ▼
+  ┌─ injected db session ─────────────────────────────────┐
+  │  SELECT 1 FROM sequencing_labs WHERE id=:sid → 404    │
+  │  SELECT 1 FROM labs WHERE id=:lid            → 404    │
+  │  SELECT 1 FROM sequencing_lab_assignments             │
+  │    WHERE sequencing_lab_id=:sid AND lab_id=:lid → 409 │
+  │  INSERT INTO sequencing_lab_assignments RETURNING *   │
+  │  log_audit(ASSIGN_SEQUENCING_LAB, db_conn=db)         │
+  └───────────────────────────────────────────────────────┘
+           │
+           ▼
+  success(data=row, status_code=201)
+```
+
+---
