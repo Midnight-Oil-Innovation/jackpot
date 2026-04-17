@@ -1,0 +1,9 @@
+ 82.50	165000	5000	D	2	Bacteria
+ 62.00	124000	2000	P	1224	Pseudomonadota
+ 45.00	90000	1500	C	1236	Gammaproteobacteria
+ 32.00	64000	1000	O	91347	Enterobacterales
+ 28.00	56000	800	F	543	Enterobacteriaceae
+ 22.00	44000	600	G	561	Escherichia
+ 18.00	36000	400	S	562	Escherichia coli
+  5.00	10000	200	S	590	Salmonella enterica
+  4.00	 8000	150	G	570	Klebsiella

@@ -37,14 +37,32 @@ def parse(
     tool_version: str | None = None,
     reference_database: str = DEFAULT_REFERENCE_DB,
     top_only: bool = True,
+    species_only: bool = True,
 ) -> list[ParsedResult]:
+    """
+    Parameters
+    ----------
+    top_only
+        When ``True`` (isolate use), keep only the single highest
+        clade-reads row.  Set to ``False`` for metagenomic profiling
+        (taxprofiler) to retain a ranked list.
+    species_only
+        When ``True`` (default), filter to rank ``S`` rows before
+        ``top_only`` selection, falling back to all ranks only if no
+        species row is present.  Set to ``False`` to retain every row
+        regardless of rank — required for taxprofiler's full ranked
+        output.
+    """
     if not path.exists():
         raise FileNotFoundError(f"Kraken2 report not found: {path}")
     rows = list(_iter_rows(path))
     if not rows:
         return []
-    species_rows = [r for r in rows if r["rank"] == "S"]
-    selected = species_rows or rows
+    if species_only:
+        species_rows = [r for r in rows if r["rank"] == "S"]
+        selected = species_rows or rows
+    else:
+        selected = rows
     if top_only:
         # Highest clade-read count wins.
         top = max(selected, key=lambda r: r["clade_reads"])
