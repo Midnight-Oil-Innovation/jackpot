@@ -1,7 +1,7 @@
 # JACKPOT — To-Do List
 
 **Last updated:** 2026-04-16
-**Baseline:** 384 tests passing, 84.20% coverage — Session E (sequencing_labs) complete
+**Baseline:** 399 tests passing, 85.08% coverage — Session F (tokens + project name filter) complete
 **Active sprint:** Month 1 — Core Router Implementation
 
 Instructions for Claude Code: Work through items in order. Check off each item
@@ -256,31 +256,31 @@ These must be completed before any router session. They are blocking bugs.
 
 ## Phase 6 — Session F: tokens router
 
-- [ ] **F-1: Implement `GET /api/v1/projects/` `?name=` filter**
+- [x] **F-1: Implement `GET /api/v1/projects/` `?name=` filter**
   - Required for CLI project lookup by name
   - Add `?name=` query param to the projects list endpoint
   - Exact match (case-insensitive)
 
-- [ ] **F-2: Implement `GET /api/v1/tokens/`** (authenticated user)
+- [x] **F-2: Implement `GET /api/v1/tokens/`** (authenticated user)
   - Returns user's own tokens only (never other users')
   - Shows: id, name, last_used_at, default_lab_id, default_project_id — never the token value
 
-- [ ] **F-3: Implement `POST /api/v1/tokens/`** (authenticated user)
+- [x] **F-3: Implement `POST /api/v1/tokens/`** (authenticated user)
   - Generates a secure random token (32 bytes, URL-safe base64)
   - Stores bcrypt hash in DB
   - Returns full token value in response exactly once
   - Stores `default_lab_id` and `default_project_id` if provided
 
-- [ ] **F-4: Implement `DELETE /api/v1/tokens/{id}`** (owner or Platform Admin)
+- [x] **F-4: Implement `DELETE /api/v1/tokens/{id}`** (owner or Platform Admin)
   - Hard delete — tokens have no soft-delete lifecycle
 
-- [ ] **F-5: Write `tests/test_tokens_api.py`**
+- [x] **F-5: Write `tests/test_tokens_api.py`**
   - Create token: response contains value; subsequent GET does not
   - Revoke own token
   - Cannot see/revoke other user's token → 403
   - Project name lookup returns correct project
 
-- [ ] **F-6: Run tests and commit**
+- [x] **F-6: Run tests and commit**
   - `uv run pytest tests/test_tokens_api.py -v`
   - `gac "feat: tokens router + project name filter + tests"`
 

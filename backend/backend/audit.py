@@ -60,6 +60,10 @@ class AuditActions:
     ASSIGN_SEQUENCING_LAB = "ASSIGN_SEQUENCING_LAB"
     UNASSIGN_SEQUENCING_LAB = "UNASSIGN_SEQUENCING_LAB"
 
+    # Personal API tokens
+    CREATE_TOKEN = "CREATE_TOKEN"
+    REVOKE_TOKEN = "REVOKE_TOKEN"
+
 
 def log_audit(
     action: str,

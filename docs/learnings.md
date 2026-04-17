@@ -263,3 +263,90 @@ client ─► POST /api/v1/sequencing-labs/{sid}/assign/{lid}
 ```
 
 ---
+
+## 2026-04-16 — Session F: tokens router + project name filter
+
+**What was built**
+- Fleshed out stub `backend/routers/projects.py` into a real paginated list
+  with `?name=` case-insensitive exact filter (for the CLI project lookup),
+  plus `GET /api/v1/projects/{id}` for completeness. Authenticated only.
+- Fleshed out stub `backend/routers/tokens.py` into 3 endpoints:
+  `GET /`, `POST /`, `DELETE /{id}`. Tokens are owned by the caller; Platform
+  Admin can revoke anyone's. Token value shown once on create, then only the
+  SHA-256 hash lives in `personal_tokens.token_hash`.
+- Alembic migration `e2dede78c435` adds `default_lab_id` + `default_project_id`
+  FKs to `personal_tokens` (ON DELETE SET NULL).
+- Added `CREATE_TOKEN` / `REVOKE_TOKEN` audit actions.
+- Removed `projects.py` and `tokens.py` from `pyproject.toml` coverage omit
+  list → both reach 100% stmt coverage.
+
+**Key decisions**
+- **SHA-256, not bcrypt**, for token hashing. The spec says "stored as hash
+  in DB" — the DDL comment in `db/init.sql:100` already specifies SHA-256
+  and the existing column is `token_hash` (fixed-width text). Bcrypt buys
+  nothing here: API tokens already carry 256 bits of entropy from
+  `secrets.token_urlsafe(32)`, so the slow-hash protection against rainbow
+  tables is wasted cycles. SHA-256 also permits O(1) lookup by hash, which
+  any future auth-via-token path will need. Bcrypt would force a
+  full-table scan on every authenticated request. Noted this choice
+  explicitly so a future reader doesn't flag it as a password-hashing bug.
+- Kept the DB column name `last_used` (not `last_used_at`). The todo used
+  the `_at` suffix casually; a rename migration for one column isn't worth
+  the churn across init.sql + any external readers. Exposed as `last_used`
+  in the API.
+- Fresh `/projects` endpoint takes `?name=` as a query param and matches
+  on `LOWER(display_name) = LOWER(:name)` — *exact* match, not ILIKE %%,
+  because the CLI does `jackpot run --project "Foo Bar"` and needs
+  deterministic resolution. A substring match would silently pick a
+  different project if names overlapped.
+- Pre-checked `default_lab_id` / `default_project_id` FKs *inside* the same
+  transaction before INSERT, returning precise 404s. Without the pre-check
+  the DB would raise a generic `ForeignKeyViolation` that bubbles up as 500.
+- Platform-admin-can-revoke path reuses the already-fetched `before` row
+  (SELECT-then-check) rather than doing a second DELETE with a compound
+  predicate. That way audit log captures the full prior state regardless of
+  who did the revoke.
+
+**Watch out for**
+- The `cleanup_user` helper in `tests/test_tokens_api.py` must DELETE from
+  `personal_tokens` *before* deleting the user, or the `user_id` FK blocks
+  the delete. Added that step to the helper.
+- `secrets.token_urlsafe(32)` returns ~43 chars — assertion checks
+  `len > 20` to stay robust if the byte length ever changes.
+- Test `test_platform_admin_can_revoke_any_token` flips back to the dev
+  seed email (`gotero@linuxprophet.com`) to exercise the admin branch; the
+  conftest `monkeypatch` + `cache_clear()` pattern from earlier sessions
+  handles this cleanly — the `autouse=True` fixture in conftest resets it
+  after the test so other tests aren't polluted.
+
+**Diagram — token create/list flow**
+
+```
+client ─► POST /api/v1/tokens/  {name, default_lab_id?, default_project_id?}
+            │
+            ▼
+   get_current_user(request)
+            │
+            ▼
+   pre-check FKs (db-scoped)         ── 404 on unknown lab/project
+            │
+            ▼
+   raw = secrets.token_urlsafe(32)    ── only in memory, never logged
+   hash = sha256(raw).hexdigest()
+            │
+            ▼
+   INSERT personal_tokens RETURNING <public cols>
+   log_audit(CREATE_TOKEN, db_conn=db)
+            │
+            ▼
+   response = {..public row.., "token": raw}   ← shown once
+            │
+            ▼  (subsequent)
+client ─► GET /api/v1/tokens/
+            │
+            ▼
+   SELECT <public cols> FROM personal_tokens WHERE user_id = :uid
+   (token_hash is NEVER in _PUBLIC_COLUMNS — impossible to leak)
+```
+
+---
