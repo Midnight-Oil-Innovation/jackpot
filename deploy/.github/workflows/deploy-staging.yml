@@ -36,19 +36,6 @@ jobs:
       - name: Checkout jackpot-iac
         uses: actions/checkout@v4
 
-      - name: Debug - check CROSS_REPO_PAT is resolved
-        env:
-          GH_PAT: ${{ secrets.CROSS_REPO_PAT }}
-        run: |
-          if [[ -z "$GH_PAT" ]]; then
-            echo "ERROR: CROSS_REPO_PAT is empty/unset"; exit 1
-          fi
-          echo "PAT length: ${#GH_PAT}"
-          echo "PAT prefix: ${GH_PAT:0:8}..."
-          # Use it against the jackpot-backend repo directly
-          code=$(curl -s -o /dev/null -w "%{http_code}" -H "Authorization: Bearer $GH_PAT" https://api.github.com/repos/gotero/jackpot-backend)
-          echo "api.github.com/repos/gotero/jackpot-backend: $code"
-
       - name: Checkout jackpot-backend (without submodules)
         uses: actions/checkout@v4
         with:
@@ -141,7 +128,19 @@ jobs:
             --set image.tag="${{ steps.tag.outputs.tag }}" \
             --wait --timeout 10m
 
-      - name: Smoke test
-        run: bash ./scripts/staging_smoke_test.sh
+      - name: Smoke test (via kubectl port-forward)
+        run: |
+          set -euo pipefail
+          kubectl -n "$NAMESPACE" port-forward svc/jackpot-api 8080:80 >/tmp/pf.log 2>&1 &
+          PF_PID=$!
+          trap 'kill "$PF_PID" 2>/dev/null || true' EXIT
+          # Wait for the tunnel to become usable
+          for i in $(seq 1 30); do
+            if curl -s -o /dev/null --max-time 2 http://localhost:8080/health; then
+              break
+            fi
+            sleep 1
+          done
+          bash ./scripts/staging_smoke_test.sh
         env:
-          JACKPOT_API_URL: https://api.staging.jackpot.example.org
+          JACKPOT_API_URL: http://localhost:8080
