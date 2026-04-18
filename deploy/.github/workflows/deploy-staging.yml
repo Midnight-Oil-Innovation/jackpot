@@ -36,15 +36,28 @@ jobs:
       - name: Checkout jackpot-iac
         uses: actions/checkout@v4
 
-      - name: Checkout jackpot-backend
+      - name: Checkout jackpot-backend (without submodules)
         uses: actions/checkout@v4
         with:
           repository: gotero/jackpot-backend
           path: jackpot-backend
           ref: staging
           token: ${{ secrets.CROSS_REPO_PAT }}
-          persist-credentials: true
-          submodules: recursive
+          persist-credentials: false
+
+      - name: Initialise jackpot-backend submodules
+        working-directory: jackpot-backend
+        env:
+          GH_PAT: ${{ secrets.CROSS_REPO_PAT }}
+        run: |
+          set -euo pipefail
+          # Inject the PAT into every github.com URL for submodule clones.
+          # This is scoped to this job's runner and discarded at job end.
+          git config --global url."https://x-access-token:${GH_PAT}@github.com/".insteadOf "https://github.com/"
+          git config --global url."https://x-access-token:${GH_PAT}@github.com/".insteadOf "git@github.com:"
+          git submodule update --init --recursive
+          # Scrub the token out of the global config as soon as we're done.
+          git config --global --unset-all url."https://x-access-token:${GH_PAT}@github.com/".insteadOf || true
 
       - name: Authenticate to GCP (Workload Identity Federation)
         id: auth
