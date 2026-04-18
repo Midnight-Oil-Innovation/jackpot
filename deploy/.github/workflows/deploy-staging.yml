@@ -36,6 +36,19 @@ jobs:
       - name: Checkout jackpot-iac
         uses: actions/checkout@v4
 
+      - name: Debug - check CROSS_REPO_PAT is resolved
+        env:
+          GH_PAT: ${{ secrets.CROSS_REPO_PAT }}
+        run: |
+          if [[ -z "$GH_PAT" ]]; then
+            echo "ERROR: CROSS_REPO_PAT is empty/unset"; exit 1
+          fi
+          echo "PAT length: ${#GH_PAT}"
+          echo "PAT prefix: ${GH_PAT:0:8}..."
+          # Use it against the jackpot-backend repo directly
+          code=$(curl -s -o /dev/null -w "%{http_code}" -H "Authorization: Bearer $GH_PAT" https://api.github.com/repos/gotero/jackpot-backend)
+          echo "api.github.com/repos/gotero/jackpot-backend: $code"
+
       - name: Checkout jackpot-backend (without submodules)
         uses: actions/checkout@v4
         with:
