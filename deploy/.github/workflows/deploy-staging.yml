@@ -45,7 +45,6 @@ jobs:
           token: ${{ secrets.CROSS_REPO_PAT }}
           persist-credentials: false
           submodules: recursive
-          submodules: recursive
 
       - name: Authenticate to GCP (Workload Identity Federation)
         id: auth
