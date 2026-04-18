@@ -43,7 +43,7 @@ jobs:
           path: jackpot-backend
           ref: staging
           token: ${{ secrets.CROSS_REPO_PAT }}
-          persist-credentials: false
+          persist-credentials: true
           submodules: recursive
 
       - name: Authenticate to GCP (Workload Identity Federation)
