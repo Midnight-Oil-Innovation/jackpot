@@ -1443,3 +1443,127 @@ Q-7 (commit dcf95fd): Docs
 ```
 
 Next up (manual, user-operated): Q-4 = `terraform apply` + `gcloud secrets versions add` + first Helm deploy; Q-5 = end-to-end Cecret run through staging. Q-8 (git tag `month-2-complete`) is gated on both.
+
+# Session 5 — First staging deploy (2026-04-17 evening)
+
+**Paste this as the next entry in `docs/learnings.md`.** Style-matched to
+the existing entries — prose-heavy, chronological, failure-first.
+
+---
+
+## Q-4 continuation + Q-5 smoke: First GCP staging deploy to green
+
+Session 5 was meant to be a quick final step — push `jackpot-iac:staging`
+and watch the workflow run. What it actually became was a marathon
+debugging run chasing ten distinct root causes from ConfigMap format
+through to corrupted secrets. The staging API is live and green at
+session end. The path to get there was instructive, and each failure
+mode is worth capturing for the next deploy in a new environment.
+
+### Ten root causes in one session
+
+The failures stacked. Each fix uncovered the next layer:
+
+1. **`cors_origins` Pydantic JSON-parse.** Alembic migration Job died
+   before touching the database. `cors_origins: list[str]` + a plain
+   ConfigMap string value = `JSONDecodeError`. Fixed tactically by
+   encoding `CORS_ORIGINS` in values-staging.yaml as a JSON-array
+   string. Permanent fix (backlog P0.2) uses `Annotated[list[str],
+   NoDecode]` + `field_validator` to accept multiple forms.
+
+2. **Wrong DB name in `DATABASE_URL`.** Cloud SQL had `jackpot_db`.
+   Secret Manager had `/jackpot` — someone followed
+   `docs/staging_access.md` too quickly and dropped the `_db`. Fixed
+   with `gcloud secrets versions add`. Backlog P1.1 makes Terraform
+   own this Secret end-to-end.
+
+3. **Alembic chain assumes `init.sql` pre-loaded.** Flagged in the code
+   audit as WEAK-3. Migration 2 does `ALTER TABLE samples` where
+   `samples` was created in `db/init.sql` — which runs in Docker Compose
+   via the postgres entrypoint but doesn't run anywhere in GCP. Fixed
+   with a one-off bootstrap Job (postgres:16-alpine image loads
+   init.sql via a shared emptyDir volume, then jackpot image stamps
+   Alembic at `a7fd1fcccb77`). Permanent fix (backlog P0.1) is a
+   baseline migration containing the DDL.
+
+4. **`jackpot-nf` submodule URL was a filesystem path.**
+   `.gitmodules` said `url = /Users/glen/ASU/jackpot/jackpot-nf`.
+   Worked on the Mac. Failed everywhere else. `jackpot-nf` hadn't been
+   pushed to GitHub at all. Pushed to `gotero/jackpot-nf`, fixed the
+   URL, matched the `schema` submodule pattern.
+
+5. **`Dockerfile.api` didn't `COPY nf/`.** Even after the submodule was
+   accessible, the image still didn't include the directory. `pipelines.py`
+   does `sys.path.insert(0, "../nf")` at import time, so the entire
+   FastAPI app crashed at startup with `ModuleNotFoundError: No module
+   named 'shared'`. Fixed with a single COPY line. Permanent fix
+   (backlog P0.3) moves `RESULT_SCHEMAS` into the backend package.
+
+6. **Workflow didn't checkout submodules recursively.** Added
+   `submodules: recursive` to `actions/checkout@v4`. But first we had
+   to accidentally duplicate the line (fix #7 below).
+
+7. **Duplicate YAML key.** The Python heredoc that applied the previous
+   patch ran twice, producing `submodules: recursive` on two adjacent
+   lines. PyYAML accepted it (last-wins on duplicate keys). GitHub
+   Actions rejected it — 0s elapsed failure with every step showing
+   `-`. Removed the duplicate. Lesson: `yaml.safe_load` is not a
+   workflow linter.
+
+8. **Submodule PAT auth dance.** With recursive submodules enabled, the
+   checkout step got 403 on both `jackpot-nf` and `jackpot-schema`.
+   Initial theory was missing PAT permissions (was actually right —
+   that PAT was invalid, see #9). Working solution regardless: split
+   the checkout into two steps, inject the PAT via git's `insteadOf`
+   URL rewrite right before `git submodule update --init --recursive`,
+   scrub it after.
+
+9. **`CROSS_REPO_PAT` was actually a Google OAuth client secret.** The
+   nastiest surprise. After fixing all the auth logic, a diagnostic
+   step printed `PAT prefix: GOCSPX-j...` — which is a Google OAuth
+   client secret prefix, not a GitHub PAT prefix. The secret had been
+   overwritten during unrelated Secret Manager work a few hours
+   earlier. `gh secret set CROSS_REPO_PAT` with the real PAT fixed it.
+
+10. **Helm release stuck at `pending-upgrade`.** One of the earlier
+    failed deploys had timed out under `--wait`, which doesn't
+    auto-rollback. Revision 9 was stuck at `pending-upgrade`, blocking
+    all subsequent upgrade attempts. Manual `helm rollback jackpot-api
+    8` got it back to a `deployed` state; the next upgrade succeeded.
+
+Final smoke-test failure (cosmetic only): the placeholder URL
+`api.staging.jackpot.example.org` doesn't resolve anywhere. Rewired the
+workflow's smoke test step to use `kubectl port-forward` against the
+in-cluster Service. Green.
+
+End state: Helm revision 12, STATUS `deployed`, 2/2 API pods Ready,
+`/health` returns DB connected. All five Alembic migrations applied.
+
+### The actionable takeaways
+
+Seven things worth changing in the codebase or process based on
+Session 5. Numbered to match the new TODO priority list:
+
+- **P0.1** Alembic baseline migration so `upgrade head` works from
+  empty.
+- **P0.2** `cors_origins` validator for multi-format env input.
+- **P0.3** Move `RESULT_SCHEMAS` out of `nf/` so `pipelines.py` doesn't
+  need sys.path manipulation.
+- **P1.1** Terraform-owned `DATABASE_URL` Secret.
+- **P1.3** Public Ingress + DNS + cert for staging (unblocks real
+  smoke test + OAuth).
+- **P1.4** `helm upgrade --atomic` or auto-rollback.
+- **P1.5** GitHub Actions Node 24 migration.
+
+### The new operational doc
+
+`docs/staging_access.md` was written during Q-7 but was mostly a stub.
+After Session 5 it's the canonical staging runbook — deploy flow, DB
+access, secret rotation, and the troubleshooting patterns discovered
+for every one of the ten failure modes above. Including the bootstrap
+Job YAML for fresh environments (until P0.1 lands).
+
+Next up: run `local_test_checklist.md` on the laptop before any new GCP
+activity. Then land P0.1 + P0.2 + P0.3 as three quick PRs. Then resume
+the original router implementation plan (organizations → labs → users
+→ ...).

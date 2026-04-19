@@ -1,445 +1,447 @@
 # JACKPOT — To-Do List
 
-**Last updated:** 2026-04-16
-**Baseline:** 477 tests passing, 86.99% coverage — Session S (projects + dataharmonizer) complete
-**Active sprint:** Month 1 — Core Router Implementation
+**Last updated:** 2026-04-19 early AM (post-Session 5 — staging deploy + Streamlit local debug)
+**Baseline:** 477 tests passing, 86.99% coverage — Session S (projects + dataharmonizer) complete, Session 5 staging deploy work landed on top
+**Active sprint:** Phase 21 (UI page triage) + Phase 20 (Session 5 debt)
 
-Instructions for Claude Code: Work through items in order. Check off each item
-only after `uv run pytest` passes. Never skip an item — if blocked, note the
-blocker in `docs/review_log.md` and move to the next unblocked item.
-
----
-
-## Phase 0 — Pre-Session Fixes
-
-These must be completed before any router session. They are blocking bugs.
-
-- [x] **P0-1: Fix `tests/conftest.py` — missing Alembic migrations**
-  - Add `alembic upgrade head` to the `initialize_test_db` fixture in `tests/conftest.py`
-  - Verify: `uv run pytest tests/test_validator.py -v` passes (was failing due to missing columns)
-
-- [x] **P0-2: Fix `routers/auth.py` — module-level `settings = get_settings()`**
-  - Move `settings` instantiation inside function scope (match pattern in `guards.py`, `oauth.py`, `storage.py`)
-  - Verify: `uv run pytest -x -v` completes without test isolation failure
-
-- [x] **P0-3: Fix "Otero Lab" stale reference in test fixtures**
-  - Run: `grep -n "Otero" tests/conftest.py tests/test_samples_api.py`
-  - Fix all stale occurrences in `valid_human_sample` fixture
-  - Verify: `uv run pytest tests/test_samples_api.py -v` passes
-
-- [x] **P0-4: Add JWT refresh endpoint to `routers/auth.py`**
-  - Implement `POST /api/v1/auth/refresh` using existing `issue_refresh_token()` infrastructure
-  - Access tokens are 15 min; refresh tokens are 7 days
-  - Verify: `uv run pytest tests/ -k "refresh" -v` passes
-
-- [x] **P0-5: Fix `contextlib.suppress(Exception)` in test DB setup**
-  - Replace bare exception suppression in `tests/conftest.py` with specific SQL error handling
-  - Schema load errors must surface, not be silently swallowed
-  - Verify: intentionally break `db/init.sql` temporarily and confirm test fails visibly
-
-- [x] **P0-6: Run full test suite and confirm baseline is stable**
-  - Run: `uv run pytest`
-  - Expected: ≥275 tests passing, 0 failed, ≥60% coverage
-  - Commit: `gac "fix: pre-session baseline fixes — conftest migrations, auth settings, fixtures"`
-
-- [x] **P0-7: Fix `log_audit()` — forward `db_conn` to `execute_write()`**
-  - Add `conn=db_conn` to the `execute_write()` call in `backend/audit.py`
-  - Without this, audit writes are in separate transactions — CLIA compliance gap
-  - Verify: write a test that rolls back a business write and confirms no orphan audit row
-
-- [x] **P0-8: Fix `create_notification()` — forward `db_conn` to `execute_write()`**
-  - Add `conn=db_conn` to the `execute_write()` call in `backend/notifications.py`
-  - Same transactional cohesion issue as audit
-
-- [x] **P0-9: Fix `execute_query()` — add `conn=` parameter**
-  - `backend/routers/pipelines.py` calls `execute_query(..., conn=conn)` but
-    `execute_query()` doesn't accept `conn=` — will crash on workflow.complete events
-  - Add `conn=None` parameter matching `execute_write()` pattern
-
-- [x] **P0-10: Fix JWT type claim validation in `guards.py`**
-  - After `jwt.decode()`, check `payload.get("type") == "access"`
-  - Without this, 7-day refresh tokens are accepted as 15-min access tokens
-
-- [x] **P0-11: Fix health endpoint — return 503 when DB unavailable**
-  - Change to `return JSONResponse(status_code=503, content={...})` when `db_status == "unavailable"`
-  - GKE readiness probes need a non-200 to stop routing traffic to broken pods
-
-- [x] **P0-12: Fix APScheduler job intervals and IDs in `main.py`**
-  - Scrubber queue: `hours=1` → `seconds=60` (architecture doc says every 60s)
-  - Access request: `hours=1` → `hours=24` or cron (architecture doc says nightly)
-  - Fix job IDs: `scrub_override_auto_deny` → `scrubber_queue`; `access_request_auto_approve` → `access_request_expiry`
-
-- [x] **P0-13: Fix validator BASE_REQUIRED — split into tier-specific lists**
-  - Current BASE_REQUIRED hard-rejects samples missing Tier 2/3 fields
-  - Tier 1 minimum should only require: sample_id, organism_name, source_type, sector, date_collected, collection_location_country
-  - Move sequencing_lab, collection_facility, library_preparation_method, sequencing_protocol, purpose_for_collection to Tier 2 warnings
-
-- [x] **P0-14: Add `Isolate` source type to validator**
-  - Add `"Isolate": []` to `SOURCE_REQUIRED` dict (no source-specific required fields)
-
-- [x] **P0-15: Fix validator docstring — v4.1 → v4.4**
-
-- [x] **P0-16: Make CORS origins configurable**
-  - Add `cors_origins: list[str]` to Settings class with default `["http://localhost:8501", "http://localhost:4200"]`
-  - Use `settings.cors_origins` in `main.py` CORSMiddleware config
----
-
-## Phase 1 — Session A: organizations router
-
-- [x] **A-1: Implement `POST /api/v1/organizations/`** (Platform Admin only)
-  - Accepts: `display_name`, `org_type`, `contact_email`, optional policy fields
-  - Writes to `organizations` table with `active=True`
-  - Calls `log_audit(AuditActions.CREATE_ORG, ...)`
-  - Returns `success(data=org_dict, status_code=201)`
-
-- [x] **A-2: Implement `GET /api/v1/organizations/`** (Platform Admin only)
-  - Paginated via `paginate()`
-  - Supports `?search=` filter on `display_name`
-  - Returns `success_list(...)`
-
-- [x] **A-3: Implement `GET /api/v1/organizations/{id}`** (Platform Admin or org member)
-  - Returns 404 if not found
-  - Returns 403 if requester has no org membership and is not Platform Admin
-
-- [x] **A-4: Implement `PATCH /api/v1/organizations/{id}`** (Platform Admin only)
-  - Uses `model_dump(exclude_none=True)` for partial update
-  - Logs `UPDATE_ORG` audit action with `before`/`after` state
-  - Returns updated org
-
-- [x] **A-5: Implement `DELETE /api/v1/organizations/{id}`** (Platform Admin only)
-  - Soft delete: sets `active=False`, does not physically delete
-  - Returns `success_message("Organization deactivated.")`
-
-- [x] **A-6: Write `tests/test_organizations_api.py`**
-  - CRUD round-trip (create → get → patch → soft-delete)
-  - Non-admin POST → 403
-  - Non-admin PATCH → 403
-  - GET missing org → 404
-  - Pagination test (create 5 orgs, verify page/per_page behavior)
-
-- [x] **A-7: Run tests and commit**
-  - `uv run pytest tests/test_organizations_api.py -v`
-  - `uv run pytest --cov=backend --cov-fail-under=60`
-  - `gac "feat: organizations router — CRUD endpoints + tests"`
+Instructions for Claude Code: Work through items in order within each phase.
+Check off each item only after `uv run pytest` passes. Never skip an item —
+if blocked, note the blocker in `docs/review_log.md` and move to the next
+unblocked item.
 
 ---
 
-## Phase 2 — Session B: labs + lab_membership router
+## Current state (verified end of Session 5)
 
-- [x] **B-1: Implement `POST /api/v1/labs/`** (Platform Admin only)
-  - Requires valid `organization_id`
-  - Sets `active=True`
-  - Logs `CREATE_LAB`
+**Backend — Month 1 + most of Month 2 complete:**
 
-- [x] **B-2: Implement `GET /api/v1/labs/`** (Platform Admin sees all; others see their labs)
-  - For non-admins: joins `lab_membership` to filter to user's labs
-  - Paginated
+- **Fully implemented routers:** `auth`, `gisaid`, `organizations`, `labs`
+  (including `lab_membership`), `projects`, `users`, `domain_whitelist`,
+  `sequencing_labs`, `tokens`, `dataharmonizer`, `ingest` (upload, csv,
+  globus), `samples` (list, get, update, archive, files, download),
+  `pipelines` (launch, events, monitor, results, resume, BYOP,
+  promotion — 10 endpoints), `sample_access`, `templates`.
+- **Backend modules:** `validator`, `file_detector`, `harmonizer`,
+  `epiweek`, `audit`, `permissions`, `dlp_scanner`,
+  `pipeline_results_loader`, `pipeline_config`, `template_generator`,
+  `notifications`, `responses`, `pagination`, `storage`, `config`,
+  `database`, `middleware`, `logging`, `version`.
+- **jackpot-nf:** 11 pipeline parsers (viral, bacterial, metagenomic),
+  nf-jackpot plugin, shared result schemas, hamronization normalizer.
+- **Test suite:** 477 tests passing, 86.99% coverage as of Session S
+  complete. Session 5 added staging infra changes without net-new test
+  coverage.
+- **Local Docker Compose stack:** running cleanly — `api`, `postgres`,
+  `minio`, `minio_init`, `ui` all green. `/health` returns DB-connected.
+- **GCP staging:** deployed Session 5, API live, `/health` green
+  in-cluster. 6 known quirks from Session 5 debugging documented in
+  `docs/staging_access.md`.
 
-- [x] **B-3: Implement `GET /api/v1/labs/{id}`** (lab member or Platform Admin)
-  - Returns 403 if requester has no membership and is not Platform Admin
+**Frontend — scaffold complete, renders, authenticates:**
 
-- [x] **B-4: Implement `PATCH /api/v1/labs/{id}`** (Lab Director or Platform Admin)
-  - Partial update with `model_dump(exclude_none=True)`
-  - Logs `UPDATE_LAB`
-
-- [x] **B-5: Implement `DELETE /api/v1/labs/{id}`** (Platform Admin only)
-  - Soft delete: `active=False`
-
-- [x] **B-6: Implement `GET /api/v1/labs/{id}/members`** (Lab Director or Platform Admin)
-  - Returns list of users with their `permission_group` and `is_lab_director` flag
-
-- [x] **B-7: Implement `POST /api/v1/labs/{id}/members`** (Lab Director or Platform Admin)
-  - Adds user to `lab_membership` with a `permission_group_id`
-  - Logs `ADD_LAB_MEMBER`
-  - Returns 409 if user is already a member
-
-- [x] **B-8: Implement `PATCH /api/v1/labs/{id}/members/{user_id}`** (Lab Director or Platform Admin)
-  - Changes `permission_group_id` and/or `is_lab_director` flag
-  - Logs `CHANGE_MEMBER_ROLE`
-
-- [x] **B-9: Implement `DELETE /api/v1/labs/{id}/members/{user_id}`** (Lab Director or Platform Admin)
-  - Removes from `lab_membership`
-  - Logs `REMOVE_LAB_MEMBER`
-
-- [x] **B-10: Write `tests/test_labs_api.py`**
-  - Lab CRUD with role enforcement
-  - Membership lifecycle: add → change role → remove
-  - Non-member GET → 403
-  - Lab Reader cannot PATCH lab → 403
-  - Duplicate member add → 409
-
-- [x] **B-11: Run tests and commit**
-  - `uv run pytest tests/test_labs_api.py -v`
-  - `uv run pytest --cov=backend --cov-fail-under=60`
-  - `gac "feat: labs router — CRUD + lab_membership endpoints + tests"`
+- Streamlit pages live in `jackpot-backend/frontend/` (not the separate
+  `jackpot-frontend` repo, which is a vestigial stub).
+- All 9 researcher pages exist: `dashboard`, `search`, `upload`,
+  `data_entry`, `my_samples`, `datasets`, `access_requests`,
+  `notifications`, `pipelines`. Admin pages (`lab_director`,
+  `platform_admin`, `archive_requests`, `billing`) intentionally
+  deferred to Month 3.
+- Landing page renders at `http://localhost:8501`. Sidebar shows all 9
+  pages. Mock auth works end-to-end — `current_user()` returns the
+  seeded admin user with lab memberships.
+- **Unknown:** individual page render behavior. Phase 21 UI-B through
+  UI-F walks every page to find out.
 
 ---
 
-## Phase 3 — Session C: users router
+## Phase 0 — Pre-Session Fixes (COMPLETE)
 
-- [x] **C-1: Implement `GET /api/v1/users/me`** (any authenticated user)
-  - Returns full user profile including lab memberships
+These were the blocking bugs resolved before any router session began.
 
-- [x] **C-2: Implement `GET /api/v1/users/`** (Platform Admin only)
-  - Paginated, supports `?search=` on email/name
-  - Returns 403 for non-admins
+- [x] **P0-1 through P0-16** — all completed. Summary: conftest Alembic
+  migrations, auth settings isolation, JWT refresh endpoint,
+  audit/notification transaction cohesion, execute_query conn param,
+  JWT type claim validation, /health 503 on DB down, APScheduler job
+  intervals, tier-specific validator BASE_REQUIRED, Isolate source
+  type, validator docstring v4.1→v4.4, configurable CORS origins.
 
-- [x] **C-3: Implement `GET /api/v1/users/{id}`** (Platform Admin or same user)
-  - Returns 403 if requester is neither
+## Phase 1 — Session A: organizations router (COMPLETE)
 
-- [x] **C-4: Implement `PATCH /api/v1/users/{id}`** (Platform Admin or same user)
-  - Partial update — users can update their own name/preferences
-  - Platform Admin can update `is_platform_admin`, `is_active`
+- [x] A-1 through A-7 — POST / GET / GET{id} / PATCH / DELETE, tests,
+  commit.
 
-- [x] **C-5: Implement `DELETE /api/v1/users/{id}`** (Platform Admin only)
-  - Soft delete: sets `is_active=False`
+## Phase 2 — Session B: labs + lab_membership router (COMPLETE)
 
-- [x] **C-6: Write `tests/test_users_api.py`**
-  - `/me` returns correct user
-  - User can update own name; cannot promote self to Platform Admin
-  - Platform Admin can deactivate user
-  - Non-admin list → 403
-  - Get other user as non-admin non-self → 403
+- [x] B-1 through B-11 — CRUD on labs, full membership lifecycle
+  (add / change role / remove), tests, commit.
 
-- [x] **C-7: Run tests and commit**
-  - `uv run pytest tests/test_users_api.py -v`
-  - `uv run pytest --cov=backend --cov-fail-under=60`
-  - `gac "feat: users router — CRUD endpoints + tests"`
+## Phase 3 — Session C: users router (COMPLETE)
 
----
+- [x] C-1 through C-7 — `/me`, CRUD, self-update guardrails, Platform
+  Admin override, tests, commit.
 
-## Phase 4 — Session D: domain_whitelist router
+## Phase 4 — Session D: domain_whitelist router (COMPLETE)
 
-- [x] **D-1: Implement `GET /api/v1/domain-whitelist/`** (Platform Admin only)
-- [x] **D-2: Implement `POST /api/v1/domain-whitelist/`** (Platform Admin only)
-  - Normalizes domain to lowercase
-  - Returns 409 on duplicate
-- [x] **D-3: Implement `DELETE /api/v1/domain-whitelist/{id}`** (Platform Admin only)
+- [x] D-1 through D-5 — domain whitelist CRUD + tests.
 
-- [x] **D-4: Write `tests/test_domain_whitelist_api.py`**
-  - Add domain, list shows it, delete removes it
-  - Duplicate add → 409
-  - Non-admin → 403
+## Phase 5 — Session E: sequencing_labs router (COMPLETE)
 
-- [x] **D-5: Run tests and commit**
-  - `uv run pytest tests/test_domain_whitelist_api.py -v`
-  - `gac "feat: domain_whitelist router + tests"`
+- [x] E-1 through E-8 — CRUD + assignments to labs + tests.
 
----
+## Phase 6 — Session F: tokens router (COMPLETE)
 
-## Phase 5 — Session E: sequencing_labs router
+- [x] F-1 through F-6 — API token CRUD with bcrypt hashing, project
+  name filter, tests.
 
-- [x] **E-1: Implement `GET /api/v1/sequencing-labs/`** (any authenticated user)
-  - Returns all sequencing labs including seed data (Sonora Quest, LabCorp, Otero Outpost)
+## Phase 7 — Session G: ingest router (COMPLETE)
 
-- [x] **E-2: Implement `POST /api/v1/sequencing-labs/`** (Platform Admin only)
-- [x] **E-3: Implement `GET /api/v1/sequencing-labs/{id}`** (any authenticated user)
-- [x] **E-4: Implement `PATCH /api/v1/sequencing-labs/{id}`** (Platform Admin only)
+- [x] G-1 through G-5 — upload, csv, globus endpoints. Full ingest
+  pipeline: validate → epiweek → scrub_status → surveillance_relevant
+  → quality_status → stage files → sample + sample_files writes in one
+  transaction → audit.
 
-- [x] **E-5: Implement `POST /api/v1/sequencing-labs/{id}/assign/{lab_id}`** (Platform Admin)
-  - Inserts into `sequencing_lab_assignments` (sequencing_lab_id, lab_id)
-  - Returns 409 if assignment already exists
+## Phase 8 — Session H: samples router (COMPLETE)
 
-- [x] **E-6: Implement `DELETE /api/v1/sequencing-labs/{id}/assign/{lab_id}`** (Platform Admin)
-
-- [x] **E-7: Write `tests/test_sequencing_labs_api.py`**
-  - Seed data visible in list
-  - CRUD lifecycle
-  - Assignment round-trip
-  - Non-admin create → 403
-
-- [x] **E-8: Run tests and commit**
-  - `uv run pytest tests/test_sequencing_labs_api.py -v`
-  - `gac "feat: sequencing_labs router — CRUD + assignments + tests"`
-
----
-
-## Phase 6 — Session F: tokens router
-
-- [x] **F-1: Implement `GET /api/v1/projects/` `?name=` filter**
-  - Required for CLI project lookup by name
-  - Add `?name=` query param to the projects list endpoint
-  - Exact match (case-insensitive)
-
-- [x] **F-2: Implement `GET /api/v1/tokens/`** (authenticated user)
-  - Returns user's own tokens only (never other users')
-  - Shows: id, name, last_used_at, default_lab_id, default_project_id — never the token value
-
-- [x] **F-3: Implement `POST /api/v1/tokens/`** (authenticated user)
-  - Generates a secure random token (32 bytes, URL-safe base64)
-  - Stores bcrypt hash in DB
-  - Returns full token value in response exactly once
-  - Stores `default_lab_id` and `default_project_id` if provided
-
-- [x] **F-4: Implement `DELETE /api/v1/tokens/{id}`** (owner or Platform Admin)
-  - Hard delete — tokens have no soft-delete lifecycle
-
-- [x] **F-5: Write `tests/test_tokens_api.py`**
-  - Create token: response contains value; subsequent GET does not
-  - Revoke own token
-  - Cannot see/revoke other user's token → 403
-  - Project name lookup returns correct project
-
-- [x] **F-6: Run tests and commit**
-  - `uv run pytest tests/test_tokens_api.py -v`
-  - `gac "feat: tokens router + project name filter + tests"`
-
----
-
-## Phase 7 — Session G: ingest router
-
-This is the most complex router. Read the ingest-specific reminders in
-`docs/CLAUDE.md` and `spec.md` Section 5 (Session G) before writing a
-single line.
-
-- [x] **G-1: Implement `POST /api/v1/ingest/upload`** — GUI/API file + metadata
-  - Accepts multipart: `metadata` (JSON), `fastq_r1` (file), `fastq_r2` (optional file)
-  - Validates `sequencing_lab` against DB — 422 with request workflow message if unknown
-  - Calls `validator.validate(metadata)` → ValidationResult
-  - Calls `compute_epiweeks(date_collected, precision)` from ValidationResult
-  - Sets `scrub_status = PENDING` (raw reads) or `SKIPPED` (FASTA-only, via validator)
-  - Calls `compute_surveillance_relevant()` and `compute_quality_status()` from validator
-  - Stages files via `storage.stage_file()`
-  - Calls `file_detector.detect_files()` for pairing, convenience URI population
-  - Writes to `samples` table then `sample_files` table in same transaction
-  - Calls `log_audit(AuditActions.CREATE_SAMPLE, ...)`
-  - Returns `success(data=sample_dict, status_code=201)`
-
-- [x] **G-2: Implement `POST /api/v1/ingest/csv`** — bulk CSV upload
-  - Accepts CSV file where files column is semicolon-delimited per row
-  - Processes each row through same pipeline as GUI upload
-  - Returns summary: `{"success": N, "failed": M, "errors": [...]}`
-  - Partial success is acceptable — does not roll back on per-row failures
-
-- [x] **G-3: Implement `POST /api/v1/ingest/globus`** — Globus webhook
-  - Platform Admin / system token only
-  - Looks up sequencing lab from Globus endpoint ID
-  - Finds matching JACKPOT labs via `sequencing_lab_assignments`
-  - Notifies Lab Directors via `create_notification(NotificationEvents.GLOBUS_FILES_ARRIVED, ...)`
-  - Sets `scrub_status = PENDING` for all new samples
-  - Returns 200 with file count
-
-- [x] **G-4: Write `tests/test_ingest_api.py`**
-  - Valid HumanSample upload → Tier 1 PRELIMINARY, scrub_status PENDING
-  - Valid HumanSample upload with all fields → Tier 3 SUBMITTABLE
-  - FASTA-only upload → scrub_status SKIPPED (auto)
-  - Missing `adhs_medsis_id` for HumanSample → 422
-  - Unknown `sequencing_lab` → 422 with request workflow message
-  - R1/R2 paired file detection works correctly
-  - Non-human sample (isolate) with all fields → SUBMITTABLE, no adhs_medsis_id required
-  - Audit log entry created on successful ingest
-  - epiweek fields populated correctly
-
-- [x] **G-5: Run tests and commit**
-  - `uv run pytest tests/test_ingest_api.py -v`
-  - `uv run pytest --cov=backend --cov-fail-under=60`
-  - `gac "feat: ingest router — upload + CSV + globus endpoints + tests"`
-
----
-
-## Phase 8 — Session H: samples router
-
-- [x] **H-1: Implement `GET /api/v1/samples/`** (authenticated, access-controlled)
-  - Full filter surface: `organism_name`, `source_type`, `sector`, `quality_status`,
-    `scrub_status`, `sharing_level`, `lab_id`, `project_id`, `date_from`, `date_to`,
-    `surveillance_relevant`
-  - `?select_all=true` returns IDs only (no pagination) for bulk select
-  - Applies `can_see_sample()` access control per row
-  - Paginated via `paginate()`
-
-- [x] **H-2: Implement `GET /api/v1/samples/{id}`** (access-controlled)
-  - Applies `can_access_sample()` — returns 403 if denied, 404 if not found
-  - Returns full sample detail including associated file list
-
-- [x] **H-3: Implement `PATCH /api/v1/samples/{id}`** (Lab Collaborator+, own lab only)
-  - Partial update via `model_dump(exclude_none=True)`
-  - Must NOT allow direct update of: `quality_status`, `surveillance_relevant`,
-    `scrub_status`, `mmwr_week`, `iso_week`
-  - After metadata update, recompute `quality_status` and `surveillance_relevant`
-    by calling validator
-  - Logs `UPDATE_SAMPLE`
-
-- [x] **H-4: Implement `DELETE /api/v1/samples/{id}`** (Lab Director or Platform Admin)
-  - Soft delete / archive — sets `is_deleted=True`, `deleted_at=NOW()`, `deleted_by_id`
-    (init.sql samples table uses `is_deleted`, not `is_archived`)
-  - Logs `ARCHIVE_SAMPLE`
-
-- [x] **H-5: Implement `GET /api/v1/samples/{id}/files`** (access-controlled)
-  - Returns records from `sample_files` table for this sample
-  - Applies same `can_access_sample()` check
-
-- [x] **H-6: Implement `GET /api/v1/samples/{id}/download`** (access-controlled)
-  - Generates presigned URL via `storage.generate_presigned_url()`
-  - Default TTL: 3600 seconds
-  - Returns `{"url": "...", "expires_in": 3600}`
-
-- [x] **H-7: Write `tests/test_samples_router_api.py`**
-  - Get own sample (Lab Collaborator) → 200
-  - Get other lab's PRIVATE sample → 403
-  - Get DISCOVERABLE sample → 200 for authenticated users
-  - Get PUBLIC sample → 200 for any authenticated user
-  - PATCH own sample → metadata updated, quality_status recomputed
-  - PATCH locked fields (quality_status) → rejected
-  - Archive (Lab Director) → is_archived True
-  - Archive (Lab Collaborator) → 403
-  - Filter by `organism_name` → returns only matching samples
-  - `?select_all=true` returns IDs only
-
-- [x] **H-8: Run tests and commit**
-  - `uv run pytest tests/test_samples_router_api.py -v`
-  - `uv run pytest --cov=backend --cov-fail-under=60`
-  - `gac "feat: samples router — list/get/update/archive + tests"`
-
----
+- [x] H-1 through H-8 — list with full filter surface and `select_all`,
+  get, update (with locked-field protection), archive, files, download
+  with presigned URLs.
 
 ## Phase 9 — Month 1 Stretch Goals
 
-These are important but not blocking for the core ingest/samples flow.
+- [x] S-1: projects router — full, with `?name=` filter for CLI
+- [x] S-2: dataharmonizer router — full, 94% coverage
+- [ ] S-3: Full test suite regression check + merge development → main
+  - `uv run pytest` all passing, coverage ≥ 60%
+  - Currently only blocked by developer choosing to tag and merge;
+    Month 1 itself is feature-complete.
 
-- [x] **S-1: Implement `projects` router** (stub → full)
-  - Required endpoints: `GET /api/v1/projects/`, `POST /`, `GET /{id}`, `PATCH /{id}`
-  - `?name=` filter required (needed by CLI via tokens router)
-  - Projects belong to a lab; members inherit lab access
-  - Added `?lab_id=` filter; list filters non-admins to their lab/project membership
-  - Added `AuditActions.CREATE_PROJECT` / `UPDATE_PROJECT`
-  - 15 new tests in `tests/test_projects_api.py`
+## Phase 11 — Session I: jackpot-nf plugin + result registration (COMPLETE)
 
-- [x] **S-2: Implement `dataharmonizer` router** (stub → full)
-  - `GET /api/v1/dataharmonizer/templates/{source_type}/{tier}` — download CSV template
-  - `POST /api/v1/dataharmonizer/validate` — validate a CSV against the LinkML schema
-  - Templates generated by `backend/template_generator.py` — never hand-written
-  - Validation delegates to `backend.validator.validate_sample` row-by-row
-  - Removed `backend/routers/dataharmonizer.py` from coverage omit (94% covered)
-  - 12 new tests in `tests/test_dataharmonizer_api.py`
+- [x] I-1 through I-7 — jackpot-nf repo created, register_client,
+  Pydantic schemas, `POST /api/v1/pipelines/{run_id}/results/{result_type}`
+  endpoint, hAMRonization normalizer, tests.
 
-- [ ] **S-3: Full test suite regression check**
-  - `uv run pytest`
-  - All tests passing, coverage ≥ 60%
-  - Merge `development` → `main`
+## Phase 12 — Session J: Viral pipeline parsers (COMPLETE)
+
+- [x] J-1 through J-6 — Cecret (pangolin, nextclade, freyja, consensus),
+  viralrecon (consensus, pangolin, nextclade, variants, wastewater),
+  walkercreek (irma, consensus). 79/79 tests passing.
+
+## Phase 13 — Session K: Bacterial isolate parsers (COMPLETE)
+
+- [x] K-1 through K-6 — bactopia (amr, mlst, assembly, annotation),
+  Grandeur (amr, mlst, kraken2, blast), mycosnp-nf (snippy, tree,
+  typing), tb-profiler (lineage, drug_resistance). Tests + commit.
+
+## Phase 14 — Session L: Metagenomic parsers (COMPLETE)
+
+- [x] L-1 through L-4 — nf-core/mag (checkm2, gtdbtk, bin_registry),
+  nf-core/taxprofiler (kraken2, bracken, diamond). Tests + commit.
+
+## Phase 15 — Session M: pathogensurveillance + shared parsers (COMPLETE)
+
+- [x] M-1 through M-5 — pathogensurveillance parser (v1.1.0 pinned),
+  shared AMR normalization validator, parser version matrix, end-to-end
+  integration test framework.
+
+## Phase 16 — Session N: pipelines router (COMPLETE)
+
+- [x] N-1 through N-9 — launch with compatibility check, events
+  weblog receiver, monitoring (run detail, tasks, events), resume for
+  FAILED runs, BYOP registration skeleton, pipeline promotion workflow.
+
+## Phase 17 — Session O: sample_access router (COMPLETE)
+
+- [x] O-1 through O-8 — access request CRUD, approve/deny workflow,
+  `can_access_sample()` integration with grants, background expiry job.
+
+## Phase 18 — Session P: Streamlit researcher pages (COMPLETE)
+
+- [x] P-1 through P-11 — all 9 researcher pages implemented in
+  `jackpot-backend/frontend/pages/`: dashboard, search, upload,
+  data_entry, my_samples, datasets, access_requests, notifications,
+  pipelines. Plus smoke tests for page imports.
+
+- [x] **UI plumbing verified (early 2026-04-19):**
+  - `frontend/app.py` exists and renders
+  - `frontend/lib/session.py` + `frontend/lib/api.py` wire mock auth
+  - `frontend/components/` and `frontend/lib/` packages present
+  - Docker Compose `ui` service works after fixes in Phase 20
+    UI-plumbing block
+  - Landing page shows "Signed in as Glen Otero" with the seeded
+    platform admin user
+  - Sidebar lists all 9 pages
 
 ---
 
-## Phase 10 — Month 2 (Future)
+## Phase 19 — Session Q: GCP staging environment (MOSTLY COMPLETE)
 
-Tracked here for completeness. Not in scope for Month 1.
-
-- [ ] `sample_access` router — access request lifecycle (submit / approve / deny / expire)
-- [ ] `notifications` router — GET notifications, mark read
-- [ ] `pipelines` router — launch, status, weblog callback, results
-- [ ] `ncbi_submissions` router — BioSample / SRA submission workflow
-- [ ] `datasets` router — analytical dataset creation and export
-- [ ] `archive_requests` router — formal deletion request workflow
-- [ ] `saved_searches` router — save and recall search filter sets
-- [ ] JupyterHub workspace integration (Minikube setup, spawner profiles)
-- [ ] Streamlit frontend pages (dashboard, search, upload, lab director, platform admin)
-- [ ] US-states controlled vocabulary for `collection_location_state`
-- [ ] Rate limiting on public endpoints
-- [ ] CORS restriction from dev wildcard to specific origins
-- [ ] Re-enable detect-secrets in `.pre-commit-config.yaml` before first GCP deployment
+- [x] **Q-1: jackpot-iac Terraform for staging** — network, Cloud SQL,
+  GKE (3 node pools), 7 GCS buckets, Artifact Registry, IAM (3 GSAs +
+  Workload Identity bindings). Commit `e15f40e`.
+- [x] **Q-2: Secret Manager entries** — `SECRET_KEY`, `DATABASE_URL`,
+  `GOOGLE_OAUTH_CLIENT_ID`, `GOOGLE_OAUTH_CLIENT_SECRET`,
+  `NCBI_API_KEY`. Commit `6131563`.
+- [x] **Q-3: GitHub Actions deployment pipeline** — WIF → build → push
+  → helm upgrade (migrations as pre-upgrade hook). Commit `ab755ca`.
+  Session 5 added: split checkout, PAT `insteadOf` submodule auth,
+  in-cluster port-forward smoke test.
+- [x] **Q-4: Deploy jackpot-backend to staging** — deployed Session 5,
+  API live, `/health` returns `{"status":"ok","database":"connected"}`,
+  Alembic head at `c536de6329e0`, 2/2 pods Ready.
+- [ ] **Q-5: End-to-end pipeline test on staging** — Cecret (or
+  viralrecon) full stack. **Blocked on:** P3.1 (test_batch.nf minimal
+  harness) + UI-B/C for driving the flow. See Phase 24.
+- [x] **Q-6: Staging smoke test suite** — `scripts/staging_smoke_test.sh`
+  exists, runs in CI, currently uses `kubectl port-forward` (tactical
+  Session 5 fix).
+- [x] **Q-7: Document staging access** — `docs/staging_access.md`
+  exists in `jackpot-iac/docs/`. Updated Session 5 with bootstrap Job
+  YAML, troubleshooting runbook, cost controls.
+- [ ] **Q-8: Commit and tag `month-2-complete`** — blocked on Q-5 and
+  the permanent fixes in Phase 20.
 
 ---
 
-## Periodic Review Checkpoint
+## Phase 20 — Session 5 Debt
+
+Tactical fixes from the first staging deploy + Streamlit UI debugging
+are in place, but the permanent fixes aren't. These land the cleanup
+before a second environment (staging-clone, production) is attempted,
+and before any teammate tries to run the stack locally.
+
+### UI-plumbing — DONE (2026-04-19 early AM)
+
+Completed inline during Streamlit debug session. Recorded here for the
+next developer who might otherwise re-encounter the same six bugs:
+
+- [x] **Dockerfile.ui layout fix** — `COPY frontend/ .` (flattens)
+      replaced with `COPY frontend/ ./frontend/` (preserves package);
+      `CMD` path updated to `frontend/app.py`.
+- [x] **docker-compose.yml mount fix** — `./frontend:/app` (overrode
+      image layout) replaced with `./frontend:/app/frontend`; schema
+      mount moved to `/app/schema`.
+- [x] **docker-compose.yml command override removed** — explicit
+      `command:` directive was still pointing at the old flattened
+      `app.py` path; removed so image CMD takes over.
+- [x] **PYTHONPATH=/app added to ui service env** — Streamlit runs
+      with `sys.path[0]` set to `/app/frontend/` so the `frontend`
+      package couldn't resolve its own absolute imports without `/app`
+      also on the path.
+- [x] **API_BASE_URL read by ApiClient** — `frontend/lib/api.py` now
+      reads `API_BASE_URL` as a fallback after `JACKPOT_API_URL`
+      (compose was setting the former, client only read the latter).
+- [x] **MOCK_USER_EMAIL already set on api service** — confirmed line
+      78 of `docker-compose.yml`. Both ui and api containers get the
+      env var; the X-Mock-User-Email header round-trip works.
+
+### Q-9: Alembic baseline migration
+
+- [ ] Add new Alembic revision `baseline_v4_1_schema` containing
+      `db/init.sql`'s full DDL as `op.execute(sa.text(...))`.
+- [ ] Chain `a7fd1fcccb77` after it — set
+      `down_revision = "<baseline_rev>"`.
+- [ ] Set `down_revision = None` on the new baseline.
+- [ ] Verify: `alembic upgrade head` works against a fresh empty DB
+      locally (step 5 in `local_test_checklist.md`).
+- [ ] Add CLAUDE.md Critical Rule 42: "The full schema must be
+      reachable via `alembic upgrade head` from an empty database.
+      Never depend on `init.sql` running via Docker's entrypoint in
+      production."
+- [ ] Document cut-over path for environments that already ran
+      `init.sql` + patch migrations — they need an `alembic stamp` of
+      the new baseline.
+
+### Q-10: cors_origins validator in `backend/config.py`
+
+- [ ] Apply `Annotated[list[str], NoDecode]` + `field_validator`
+      pattern to accept JSON arrays, comma-separated strings, empty
+      strings, and real lists:
+
+```python
+from typing import Annotated
+from pydantic import field_validator
+from pydantic_settings import NoDecode
+
+cors_origins: Annotated[list[str], NoDecode] = [
+    "http://localhost:8501",
+    "http://localhost:4200",
+]
+
+@field_validator("cors_origins", mode="before")
+@classmethod
+def _parse_cors_origins(cls, v):
+    import json
+    if v is None or v == "":
+        return []
+    if isinstance(v, str):
+        v = v.strip()
+        if v.startswith("["):
+            return json.loads(v)
+        return [o.strip() for o in v.split(",") if o.strip()]
+    return v
+```
+
+- [ ] Bump `pydantic-settings>=2.3.0` in `pyproject.toml`.
+- [ ] Revert `values-staging.yaml` CORS_ORIGINS to plain
+      comma-separated format and verify deploy still works.
+
+### Q-11: Remove `sys.path` hack from `pipelines.py`
+
+- [ ] Option A (preferred): move `nf/shared/schemas/__init__.py`
+      content into `backend/pipeline_schemas.py`. Change
+      `from shared.schemas import RESULT_SCHEMAS` →
+      `from backend.pipeline_schemas import RESULT_SCHEMAS`. Remove
+      `sys.path.insert` from `pipelines.py`.
+- [ ] Alternative Option B: vendor `nf/shared/` into
+      `backend/vendored/nf_shared/` if `nf/shared/` has ongoing
+      independent development.
+- [ ] Verify: `docker run --rm jackpot-api:local-test /opt/venv/bin/python -c "from backend.main import app"`
+      succeeds *without* `COPY nf/` in the Dockerfile.
+- [ ] Can then remove `COPY nf/ ./nf/` from `Dockerfile.api`.
+
+### Q-12: Terraform-owned DATABASE_URL Secret
+
+- [ ] Wire `terraform/modules/secrets/` to construct `DATABASE_URL`
+      from Cloud SQL module outputs (`private_ip`, port, db name) +
+      password Secret reference.
+- [ ] Eliminates the hand-populated Secret that caused the `/jackpot`
+      vs `/jackpot_db` drift in Session 5.
+
+### Q-13: Rotate staging DB password
+
+- [ ] Run the rotation (password visible in chat during Session 5
+      debugging — staging only, low blast radius):
+
+```bash
+NEW_PASS=$(openssl rand -base64 24 | tr -d '=+/')
+gcloud sql users set-password jackpot \
+    --instance=jackpot-staging-db \
+    --password="$NEW_PASS" \
+    --project=gotero3-acdp-488517
+gcloud secrets versions add jackpot-staging-database-url \
+    --project=gotero3-acdp-488517 \
+    --data-file=- \
+    <<< "postgresql://jackpot:${NEW_PASS}@10.188.230.3:5432/jackpot_db"
+cd ~/ASU/jackpot/jackpot-iac
+gh workflow run deploy-staging.yml --ref staging
+```
+
+### Q-14: Public Ingress + DNS + managed cert for staging
+
+- [ ] Terraform additions: GKE Ingress (or `LoadBalancer` Service),
+      Cloud DNS record, managed SSL cert.
+- [ ] Update `JACKPOT_API_URL`, `CORS_ORIGINS`,
+      `GOOGLE_OAUTH_REDIRECT_URL` in `values-staging.yaml` to real URL.
+- [ ] Flip `scripts/staging_smoke_test.sh` back to hitting real URL
+      instead of `localhost:8080` port-forward.
+- [ ] **Unblocks:** end-to-end Google OAuth testing, Q-5 (staging E2E
+      pipeline test with real weblog callbacks).
+
+### Q-15: Helm upgrade hardening
+
+- [ ] Option A: add `--atomic` to the workflow's `helm upgrade` —
+      auto-rolls-back on failure, keeps release clean, but loses debug
+      evidence on timeout.
+- [ ] Option B: add a pre-upgrade step that detects `pending-*` status
+      and rolls back automatically.
+- [ ] Manual recovery command if stuck:
+      `helm -n jackpot rollback jackpot-api <last-good-rev>`
+
+### Q-16: Bump GitHub Actions to Node 24
+
+- [ ] Either set `FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true` at the
+      workflow `env:` level, or upgrade actions when `@v5` versions
+      are available.
+- [ ] Every workflow run currently warns Node 20 is deprecated as of
+      2026-09-16.
+
+### Q-17: Update CLAUDE.md with Session 5 lessons
+
+- [ ] Add Critical Rules 42-47 from `claude_md_rules_addendum.md`:
+  - Rule 42: Alembic must reach head from empty DB
+  - Rule 43: list-typed settings need multi-form validators
+  - Rule 44: `nf/` submodule must be importable or wrapped
+  - Rule 45: Never paste across secret types (prefix check)
+  - Rule 46: `yaml.safe_load` is not a GitHub Actions validator
+  - Rule 47: Helm `--wait` timeouts wedge at `pending-*`
+
+### Q-18: Fix misleading "API unreachable" banner in `frontend/app.py`
+
+- [ ] `current_user()` in `frontend/lib/session.py` returns `None` for
+      both auth failures and network failures. The landing page in
+      `frontend/app.py` shows "API unreachable" for both cases. Fix
+      the distinction:
+  - Option A: change `ApiClient` to raise different exceptions for
+    network vs. auth; let `app.py` render different banners.
+  - Option B: probe `/health` first in `app.py`; show "API unreachable"
+    only if that fails, otherwise show "Not signed in."
+- [ ] **Estimated effort:** 15 minutes with fresh eyes.
+
+---
+
+## Phase 21 — UI Page Triage
+
+The Streamlit shell is green. What remains is walking every page to
+see which render cleanly against the running backend vs. which break.
+Do these in order — each builds on earlier ones.
+
+### UI-A: Landing page smoke (COMPLETE)
+
+- [x] Hit http://localhost:8501 → landing page renders
+- [x] Sidebar shows all 9 pages
+- [x] Auth probe via `current_user()` returns Glen Otero (platform
+      admin, Otero Lab director)
+
+### UI-B: Upload page
+
+- [ ] Navigate to Upload.
+- [ ] Verify the form renders — all BaseSample fields present,
+      sequencing lab dropdown populated from
+      `GET /api/v1/sequencing-labs/`, project dropdown populated
+      from `GET /api/v1/projects/`.
+- [ ] Upload a test FASTQ + full metadata (HumanSample, clinical
+      sector, organism SARS-CoV-2, all Tier 3 fields).
+- [ ] Submit → expect success response with `sample_id` and computed
+      `quality_status`.
+- [ ] If broken, triage and log the failure in `docs/review_log.md`.
+
+### UI-C: Search page
+
+- [ ] Filter by the sample uploaded in UI-B (organism, collection date).
+- [ ] Expected: the sample appears in the result list with tier badge
+      and quality_status.
+- [ ] Verify bulk-select mechanic works.
+
+### UI-D: Sample detail page
+
+- [ ] Click into the sample from search results.
+- [ ] Verify all metadata visible, file list shows the uploaded file,
+      download link generates a presigned URL.
+- [ ] PATCH a metadata field → expect `quality_status` recomputation.
+- [ ] PATCH a locked field (e.g. `quality_status`) → expect rejection.
+
+### UI-E: Dashboard page
+
+- [ ] Recent samples list should include the UI-B upload.
+- [ ] Quick actions (Upload / Search / New Dataset) navigate correctly.
+
+### UI-F: My Samples, Access Requests, Notifications, Datasets, Pipelines
+
+- [ ] Click each in turn. Log which render cleanly vs. which show
+      error banners vs. which are "Month 3 placeholder" by design.
+- [ ] Build a per-page bug list before scheduling fixes. Some pages
+      may call endpoints that don't exist yet (e.g. `notifications`
+      router is deferred to Month 3).
+
+### UI-G: End-of-Phase-21 commit
+
+- [ ] `gac "feat(ui): Phase 21 page triage complete — see review_log.md"`
+- [ ] Update `docs/review_log.md` with the per-page status.
+
+---
+
+## Phase 22 — Periodic Review Checkpoint
 
 After every ~20 completed tasks, pause and run this review:
 
@@ -451,437 +453,136 @@ Check: are there any TODO comments or placeholder code left in place?
 Log findings to docs/review_log.md and resolve before continuing.
 ```
 
-- [ ] **SEC-1: Tighten CORS methods/headers in `backend/main.py`** — replace `allow_methods=["*"]` with `["GET","POST","PATCH","DELETE","OPTIONS"]` and restrict `allow_headers` to the actually needed set
-- [ ] **SEC-2: Add rate limiting** — `slowapi` on auth endpoints (`/api/v1/auth/login`, `/api/v1/auth/callback`) and ingest endpoints before GCP deployment
-
-- [ ] **DEPLOY-1: Document staging→production gate** — add a required manual approval step in `.github/workflows/` before production deploy
-- [ ] **DEPLOY-2: Test backup restore** — run a full PITR restore drill to a separate Cloud SQL instance before going live with real data
-
-## Phase 11 — Session I: jackpot-nf plugin scaffolding + result registration endpoint
-
-- [x] **I-1: Create new `jackpot-nf` repo**
-
-  - Location: `~/ASU/jackpot/jackpot-nf`
-
-  - Structure:
-
-    ```
-    jackpot-nf/
-    ├── plugins/nf-jackpot/       # Nextflow plugin — generic weblog/workdir
-    ├── pipelines/                # Per-pipeline wrapper directories (populated in Sessions J-M)
-    ├── shared/
-    │   ├── jackpot_register_client.py
-    │   ├── hamronization_normalizer.py
-    │   └── schemas/              # Pydantic result payloads
-    ├── tests/
-    │   └── fixtures/             # Real pipeline outputs per pipeline
-    ├── pyproject.toml
-    └── README.md
-    ```
-
-  - Add to `jackpot-backend` as git submodule at `nf/`
-
-  - Verify: `git submodule status` shows jackpot-nf
-
-- [x] **I-2: Implement `jackpot_register_client.py`**
-
-  - Shared HTTP client used by all parsers to POST results back to JACKPOT
-  - Reads `JACKPOT_API_URL`, `JACKPOT_RUN_ID`, `JACKPOT_PIPELINE_TOKEN` from env
-  - Single method: `register_result(result_type: str, payload: dict) -> dict`
-  - Retries on 5xx with exponential backoff (max 3 attempts)
-  - Raises `RegistrationError` on 4xx or persistent 5xx
-
-- [x] **I-3: Define Pydantic result schemas in `shared/schemas/`**
-
-  - One schema per result table: `AMRResult`, `TypingResult`, `PangolinResult`, `NextcladeResult`, `TBTypingResult`, `AssemblyQC`, `MAGQC`, `TaxonomicProfile`, `WastewaterLineageAbundance`
-  - Each schema mirrors the corresponding DB table exactly
-  - Shared with `backend/models_generated.py` via schema import
-
-- [x] **I-4: Implement `POST /api/v1/pipelines/{run_id}/results/{result_type}`**
-
-  - Router: `backend/routers/pipelines.py`
-  - Auth: `pipeline_token` from header must match `pipeline_runs.pipeline_token`
-  - Validates payload against result_type's Pydantic schema
-  - Writes to correct typed table in same transaction as pipeline_results metrics update
-  - Returns `{"status": "registered", "result_id": N}`
-
-- [x] **I-5: Implement `hamronization_normalizer.py`**
-
-  - Wrapper around hAMRonization tool (pip install hAMRonization)
-  - Input: raw AMR output file + tool name (amrfinderplus / resfinder / rgi)
-  - Output: list of AMRResult objects in canonical format
-  - Used by bactopia, Grandeur, and pathogensurveillance parsers
-
-- [x] **I-6: Write `tests/test_pipelines_registration_api.py`**
-
-  - Valid registration → 201, result in DB
-  - Wrong pipeline_token → 401
-  - Invalid payload schema → 422 with specific field errors
-  - Duplicate registration → 409 or idempotent update (decide via spec)
-  - Test fixture: mock pipeline_runs row with valid pipeline_token
-
-- [x] **I-7: Run tests and commit**
-
-  - `uv run pytest tests/test_pipelines_registration_api.py -v`
-  - `uv run pytest --cov=backend --cov-fail-under=60`
-  - `gac "feat: jackpot-nf scaffolding + result registration endpoint"`
+- [ ] **SEC-1: Tighten CORS methods/headers in `backend/main.py`** —
+      replace `allow_methods=["*"]` with
+      `["GET","POST","PATCH","DELETE","OPTIONS"]` and restrict
+      `allow_headers` to the actually needed set.
+- [ ] **SEC-2: Add rate limiting** — `slowapi` on auth endpoints
+      (`/api/v1/auth/login`, `/api/v1/auth/callback`) and ingest
+      endpoints before GCP production deployment.
+- [ ] **DEPLOY-1: Document staging→production gate** — add a required
+      manual approval step in `.github/workflows/` before production
+      deploy.
+- [ ] **DEPLOY-2: Test backup restore** — run a full PITR restore drill
+      to a separate Cloud SQL instance before going live with real data.
 
 ---
 
-## Phase 12 — Session J: Viral pipeline parsers (Cecret, viralrecon, walkercreek)
+## Phase 23 — Minimal Nextflow Test Pipeline
 
-- [x] **J-1: Cecret parser** (`jackpot-nf/pipelines/cecret/parsers/`)
-  - `pangolin.py`: parse `pangolin/lineage_report.csv` → PangolinResult per sample
-  - `nextclade.py`: parse `nextclade/nextclade.tsv` → NextcladeResult per sample
-  - `freyja.py`: parse `freyja/aggregated-freyja.tsv` → WastewaterLineageAbundance
-  - `consensus.py`: register `consensus/*.consensus.fa` → sample_files (FASTA)
-  - Wrapper: `jackpot_wrapper.nf` — calls Cecret, then runs parsers, then calls register_client
-  - Supports Cecret version range 3.6–3.66 (current)
+### P3.1 — `scripts/test_batch.nf`
 
-- [x] **J-2: viralrecon parser** (`jackpot-nf/pipelines/viralrecon/parsers/`)
-  - `consensus.py`: register `*.consensus.fa` per sample
-  - `pangolin.py`: parse pangolin output (shares Cecret's parser via `shared/`)
-  - `nextclade.py`: parse nextclade output (shares Cecret's parser)
-  - `variants.py`: parse iVar variant calls → pipeline_results.metrics
-  - Wastewater mode: also populate WastewaterLineageAbundance
-
-- [x] **J-3: walkercreek parser** (`jackpot-nf/pipelines/walkercreek/parsers/`)
-  - `irma.py`: parse IRMA flu/RSV output → TypingResult (subtype, clade)
-  - `consensus.py`: register per-segment consensus FASTAs
-  - Handles both Illumina and Nanopore output structures
-
-- [x] **J-4: Test fixtures for viral parsers**
-  - Small real outputs from Cecret (SARS-CoV-2, MPX), viralrecon (wastewater), walkercreek (flu)
-  - Store in `tests/fixtures/cecret/`, `tests/fixtures/viralrecon/`, `tests/fixtures/walkercreek/`
-  - Each fixture is a minimal output directory that covers all parsed file types
-
-- [x] **J-5: Unit tests per parser**
-  - Each parser has `tests/test_{parser}.py`
-  - Parses fixture → emits expected list of result payloads
-  - Schema validation passes
-  - Edge cases: empty file, malformed file, missing expected field
-
-- [x] **J-6: Run tests and commit in jackpot-nf**
-  - `cd jackpot-nf && uv run pytest` — 79/79 passing (was 35)
-  - Commit in jackpot-nf repo — `2a098b0`
-  - Update submodule pointer in jackpot-backend
-  - `gac "feat: viral pipeline parsers — Cecret, viralrecon, walkercreek"`
+- [ ] Build a 20-line Nextflow pipeline: echo a string, write a tiny
+      result file, exit.
+- [ ] Configure with `-weblog http://localhost:8000/api/v1/pipelines/events`
+      for local dev, the public URL (from Q-14) for staging.
+- [ ] Run against local stack: verify the pipelines router receives
+      events, registers a run, transitions state correctly.
+- [ ] Smallest-possible exerciser of the weblog receiver and pipeline
+      state machine. Worth having before viralrecon or any nf-core
+      pipeline is attempted.
 
 ---
 
-## Phase 13 — Session K: Bacterial isolate parsers (bactopia, Grandeur, mycosnp, tb-profiler)
+## Phase 24 — End-to-end Pipeline Test on Staging (closes Q-5)
 
-- [x] **K-1: bactopia parser**
-  - `amr.py`: parse AMRFinderPlus TSV → hAMRonization-normalized AMRResult
-  - `mlst.py`: parse MLST output → TypingResult
-  - `assembly.py`: register assembly FASTA + parse QUAST metrics → AssemblyQC
-  - `annotation.py`: register Bakta/Prokka GFF to sample_files
+**Depends on:** Q-9 (Alembic baseline), Q-14 (public URL), P3.1 (test
+harness), UI-B (Upload page working), UI-F pipelines-page entry.
 
-- [x] **K-2: Grandeur parser**
-  - `amr.py`: parse AMRFinderPlus output (shares bactopia normalizer)
-  - `mlst.py`: parse MLST (shares bactopia parser)
-  - `kraken2.py`: parse Kraken2 species ID → TaxonomicProfile (single-organism isolate)
-  - `blast.py`: parse BLAST against local DB → pipeline_results.metrics
-
-- [x] **K-3: mycosnp-nf parser**
-  - `snippy.py`: parse variant calls → pipeline_results.metrics
-  - `tree.py`: register SNP tree Newick to sample_files
-  - `typing.py`: fungal MLST when available → TypingResult
-
-- [x] **K-4: tb-profiler parser**
-  - `lineage.py`: parse lineage JSON → TBTypingResult (lineage, spoligotype)
-  - `drug_resistance.py`: parse DR calls → TBTypingResult.who_drug_susceptibility JSONB
-  - Populates tb_typing_results table specifically
-
-- [x] **K-5: Test fixtures + unit tests**
-  - Real outputs from each of the four pipelines
-  - One fixture per parser at minimum
-
-- [x] **K-6: Run tests and commit**
+- [ ] Pick viralrecon as the first real pipeline test (better-documented
+      than Cecret as an nf-core pipeline).
+- [ ] Upload a test SARS-CoV-2 sample via the UI.
+- [ ] Launch viralrecon via the pipelines page.
+- [ ] Verify the full chain: sample uploaded → staged → scrubbed →
+      pipeline launched → events received → results registered →
+      `pangolin_results` + `nextclade_results` tables populated →
+      MultiQC report viewable in the UI.
+- [ ] Document the full run in `docs/staging_e2e_test.md`.
+- [ ] Tag: `git tag -a month-2-complete -m "Month 2 complete: pipelines + parsers + sample_access + Streamlit + GCP staging + E2E verified"`
 
 ---
 
-## Phase 14 — Session L: Metagenomic parsers (nf-core/mag, nf-core/taxprofiler)
+## Phase 25 — Month 3 Stretch Goals (Tracked, Not Scheduled)
 
-- [x] **L-1: nf-core/mag parser**
-  - `checkm2.py`: parse CheckM2 output → MAGQC per MAG bin (completeness, contamination, strain heterogeneity, bin size)
-  - `gtdbtk.py`: parse GTDB-Tk taxonomy → TaxonomicProfile
-  - `bin_registry.py`: register each MAG bin as assembly file linked to sample
-  - Critical: handle one-sample-to-many-MAGs relationship (sample_associations with type=mag_bin)
-
-- [x] **L-2: nf-core/taxprofiler parser**
-  - `kraken2.py`: parse Kraken2 report → TaxonomicProfile (ranked list of taxa with abundance)
-  - `bracken.py`: parse Bracken abundance estimates → TaxonomicProfile
-  - `diamond.py`: parse DIAMOND protein profile (when present) → pipeline_results.metrics
-  - Reuses Grandeur's kraken2 parser where possible
-
-- [x] **L-3: Test fixtures + unit tests**
-
-- [x] **L-4: Run tests and commit**
-
----
-
-## Phase 15 — Session M: Pathogensurveillance parser + AMR/typing shared parsers
-
-- [x] **M-1: nf-core/pathogensurveillance parser** (version 1.1.0 pinned)
-  - `identification.py`: parse sendsketch output → TaxonomicProfile + identified organism
-  - `amr.py`: parse AMR results (shares bactopia normalizer)
-  - `mlst.py`: parse MLST results (shares bactopia parser)
-  - `phylogeny.py`: register SNP tree + core gene tree + BUSCO tree to sample_files
-  - `variants.py`: parse graphtyper VCF → pipeline_results.metrics (variant count, filtered count)
-  - `report.py`: register the interactive HTML report to sample_files (served via presigned URL)
-
-- [x] **M-2: Shared AMR normalization validator**
-  - Test that AMR results from bactopia, Grandeur, and pathogensurveillance produce comparable canonical AMRResult output
-  - Catches divergence when underlying tools update output formats
-
-- [x] **M-3: Parser version matrix**
-  - Document in `jackpot-nf/README.md`: which parser version supports which pipeline version range
-  - Add `parser_version` column to `pipeline_catalog` table (schema migration)
-  - Wrapper validates pipeline version at run start, warns if outside supported range
-
-- [x] **M-4: End-to-end integration test**
-  - Not a unit test — a full workflow test that simulates running all 11 wrapped pipelines against fixtures
-  - Verifies each parser produces valid result payloads
-  - Skipped in CI by default (slow), run manually before tagging releases
-
-- [x] **M-5: Run tests and commit**
-
----
-
-## Phase 16 — Session N: pipelines router (launch, monitor, resume, BYOP skeleton)
-
-- [x] **N-1: Implement `POST /api/v1/pipelines/launch`**
-  - Request body: `{pipeline_id, sample_ids, parameters, project_id}`
-  - Compatibility check: `compute_pipeline_compatibility()` returns soft_warnings + hard_blocks
-  - Hard block returns 422 with detailed reason
-  - Soft warning returns 202 with warnings list, caller must confirm with `?override=true`
-  - Generates per-run config with `pipeline_config.py` (work_dir, weblog URL, pipeline_token, resourceLabels)
-  - Submits to GCP Batch via Nextflow launcher
-  - Writes pipeline_runs row with status=QUEUED, returns `{run_id, status}`
-  - Logs CREATE_PIPELINE_RUN audit
-
-- [x] **N-2: Implement `POST /api/v1/pipelines/events`**
-  - No auth — run_id in path acts as bearer (but cross-check pipeline_token header per audit SEC-4)
-  - Receives raw Nextflow weblog JSON
-  - Writes to pipeline_events (raw) and updates pipeline_tasks (parsed)
-  - Updates pipeline_runs.status on workflow-level events (started/completed/failed)
-
-- [x] **N-3: Implement `GET /api/v1/pipelines/{run_id}`**
-  - Returns full run detail + last 20 events + task summary
-  - Access control: lab member or Platform Admin
-  - 403 if user has no access to the owning lab
-
-- [x] **N-4: Implement `GET /api/v1/pipelines/{run_id}/tasks`** and `GET /api/v1/pipelines/{run_id}/events`
-  - Paginated
-  - Same access control
-
-- [x] **N-5: Implement `POST /api/v1/pipelines/{run_id}/resume`**
-  - Requires previous run to be in FAILED state
-  - New pipeline_runs row created with new run_id
-  - pipeline_restarts row links new_run_id ↔ previous_run_id
-  - Reuses same work_dir for Nextflow -resume
-  - Logs RESUME_PIPELINE_RUN audit
-
-- [x] **N-6: Implement BYOP registration skeleton `POST /api/v1/pipelines/custom`**
-  - Accepts GitHub/GitLab URL + revision + parameter schema
-  - Validates schema JSON shape only (no actual Nextflow fetch in Month 2 — that's Month 3)
-  - Writes to project_pipelines with status=UNVERIFIED
-  - Returns 202 with message "BYOP registered pending verification (Month 3 feature)"
-
-- [x] **N-7: Implement pipeline promotion `POST /api/v1/pipelines/{id}/promote`**
-  - project → lab: requires Lab Director
-  - lab → zoo: requires Platform Admin
-  - Logged with source tier, target tier, promoter user_id
-
-- [x] **N-8: Write `tests/test_pipelines_router_api.py`**
-  - Launch with valid sample_ids → 201 + run_id
-  - Launch with hard_block → 422
-  - Launch with soft_warning → 202, then ?override=true → 201
-  - Events callback with valid run_id → 200, row written
-  - Get run detail → 200 with tasks + events
-  - Resume FAILED run → new run_id, restart row created
-  - Resume non-FAILED run → 400
-  - BYOP registration returns 202 (not full implementation)
-  - Promote project→lab as Lab Collaborator → 403
-  - Promote project→lab as Lab Director → 200
-
-- [x] **N-9: Run tests and commit**
-  - `gac "feat: pipelines router — launch, monitor, resume, BYOP skeleton"`
-
----
-
-## Phase 17 — Session O: sample_access router
-
-- [x] **O-1: Implement `POST /api/v1/sample_access/requests`**
-  - Request body: `{sample_id, justification, requested_duration_days}`
-  - Sample must be DISCOVERABLE (not PRIVATE/LAB — those require Lab Director to change sharing_level)
-  - Creates row in sample_access_requests with status=PENDING, auto_approve_after=NOW+7d
-  - Notifies Lab Director of owning lab
-  - Returns 201 with request_id
-
-- [x] **O-2: Implement `GET /api/v1/sample_access/requests`**
-  - Filters: `?status=`, `?lab_id=` (owning lab), `?requester_id=`
-  - Lab Director sees pending requests for their labs
-  - Platform Admin sees all
-  - Requester sees their own
-
-- [x] **O-3: Implement `POST /api/v1/sample_access/requests/{id}/approve`**
-  - Lab Director or Platform Admin only
-  - Sets status=APPROVED, access_expires_at = NOW + requested_duration_days
-  - Creates access grant in sample_access_grants table
-  - Notifies requester
-
-- [x] **O-4: Implement `POST /api/v1/sample_access/requests/{id}/deny`**
-  - Lab Director or Platform Admin only
-  - Sets status=DENIED, optional denial_reason
-  - Notifies requester
-
-- [x] **O-5: Update `can_access_sample()` in guards.py**
-  - Add check: user has active grant in sample_access_grants for this sample
-  - Grant must not be expired (access_expires_at > NOW)
-
-- [x] **O-6: Background job: access request expiry**
-  - Already in main.py scheduler — wire up logic in `run_access_request_job()` in `backend/jobs.py`
-  - Auto-approve at auto_approve_after
-  - Send 75-day warning at auto_approve_after - 15 days
-  - Send 7-day expiry warning before access_expires_at
-  - Expire grants where access_expires_at <= NOW
-
-- [x] **O-7: Write `tests/test_sample_access_router_api.py`**
-  - Request access to DISCOVERABLE sample → 201
-  - Request access to PRIVATE sample → 403
-  - Approve as Lab Director → grant created, can_access_sample() returns True
-  - Deny as Lab Director → status DENIED
-  - Auto-approve past auto_approve_after via scheduler → status AUTO_APPROVED
-  - Expired grant → can_access_sample() returns False
-
-- [x] **O-8: Run tests and commit**
-
----
-
-## Phase 18 — Session P: Streamlit researcher pages
-
-- [x] **P-1: `frontend/pages/dashboard.py`** — personal dashboard
-  - Recent samples (last 10), pending access requests, active pipeline runs
-  - Tier badges, quality_status indicators
-  - Uses `GET /api/v1/samples/?owner=me`, `/sample_access/requests?requester_id=me`, `/pipelines/?user_id=me`
-
-- [x] **P-2: `frontend/pages/search.py`** — sample search
-  - Full filter sidebar: organism, source_type, sector, quality_status, sharing_level, lab, project, date range
-  - Bulk select with select-all-N, persistent selection across filter changes
-  - Split action bar: export / launch pipeline / add to dataset / request access
-  - Tier badges on each result row
-  - External database search toggle (JACKPOT samples vs external — uses `/api/v1/external-search/` when implemented; placeholder message for Month 2)
-
-- [x] **P-3: `frontend/pages/upload.py`** — ingest UI
-  - Drag-and-drop file upload + metadata form
-  - Live tier indicator as fields are completed
-  - Scrubber skip request button with justification
-  - Multi-file support: shows paired R1/R2 detection, lane grouping
-  - Calls `POST /api/v1/ingest/upload`
-
-- [x] **P-4: `frontend/pages/data_entry.py`** — guided metadata entry
-  - Used for completing pending Globus-imported samples and editing existing samples
-  - Pre-filled form from sample record
-  - Post-submission edit warning for NCBI/GISAID-submitted samples (per backlog topic 57)
-  - Auto-save draft every 30s
-  - Calls `PATCH /api/v1/samples/{id}`
-
-- [x] **P-5: `frontend/pages/my_samples.py`** — user's samples
-  - Table of samples where current user is owner/submitting_lab_member
-  - Tier badges, scrub_status icons, quick edit link
-  - Filters: only mine / my lab / my project
-
-- [x] **P-6: `frontend/pages/datasets.py`** — analytical datasets
-  - List user's accessible datasets
-  - Create new dataset from selection (flows back from search page)
-  - Export: CSV / BCO / sample manifest
-  - Microreact integration stub
-
-- [x] **P-7: `frontend/pages/access_requests.py`** — access request management
-  - Tabs: my requests (as requester) / incoming (as Lab Director)
-  - Approve/deny UI with grant duration selector
-  - Request history with status timeline
-
-- [x] **P-8: `frontend/pages/notifications.py`** — notification inbox
-  - List with read/unread filter
-  - Mark all read button
-  - Click notification → navigate to action_url
-  - Calls `GET /api/v1/notifications/` (router deferred to Month 3, use placeholder)
-
-- [x] **P-9: `frontend/pages/pipelines.py`** — pipeline launch + monitor
-  - Launch dialog: pipeline selector, parameter form auto-generated from nextflow_schema.json
-  - Compatibility check badges (soft warnings overridable, hard blocks explained)
-  - Four-tab monitoring view: Overview / Tasks / Events / Files
-  - Resume button for FAILED runs
-  - MultiQC iframe for completed runs
-
-- [x] **P-10: Write `tests/test_streamlit_pages.py`**
-  - Smoke tests: each page imports cleanly, renders without errors
-  - Mock API responses, verify page reacts correctly
-  - No full end-to-end UI tests in Month 2 (Playwright deferred to Month 3)
-
-- [x] **P-11: Run tests and commit**
-
----
-
-## Phase 19 — Session Q: GCP staging environment (IaC + deploy)
-
-- [ ] **Q-1: jackpot-iac Terraform for staging**
-  - `jackpot-iac/terraform/staging/`
-  - Cloud SQL instance (smallest tier, daily backups, PITR 7 days)
-  - GKE cluster with 3 node pools (api-pool min=1, workspace-pool min=0, scrubber-pool min=0)
-  - GCS buckets: jackpot-staging-raw, jackpot-staging-sequences, jackpot-staging-work, jackpot-staging-results, jackpot-staging-datasets, jackpot-staging-submissions, jackpot-staging-backups
-  - All lifecycle rules configured per architecture doc
-  - resourceLabels on all resources: `env=staging`, `project=jackpot`
-
-- [ ] **Q-2: Secrets Manager entries**
-  - SECRET_KEY, Google OAuth client/secret, NCBI API key, GISAID credentials
-  - All generated fresh, not reused from local dev
-
-- [ ] **Q-3: Cloud Deploy or GitHub Actions deployment pipeline**
-  - Trigger: push to `staging` branch
-  - Steps: build image → push to Artifact Registry → helm upgrade api/scrubber/nextflow deployments → run `alembic upgrade head` against Cloud SQL
-  - Staging uses separate Docker image tags from production
-
-- [ ] **Q-4: Deploy jackpot-backend to staging**
-  - Alembic migrations run against Cloud SQL
-  - Seed data loaded (orgs, labs, sequencing_labs, reportable_organisms, pipeline_catalog)
-  - Health check returns 200 from staging endpoint
-
-- [ ] **Q-5: End-to-end pipeline test on staging**
-  - Run Cecret against a SARS-CoV-2 test sample through full stack
-  - Verify: sample uploaded → staged → scrubbed → pipeline launched → events received → results registered → pangolin_results/nextclade_results tables populated
-  - Document in `docs/staging_e2e_test.md`
-
-- [ ] **Q-6: Staging smoke test suite**
-  - `scripts/staging_smoke_test.sh` — hits all endpoints, verifies auth, runs one pipeline
-  - Run after every staging deploy
-  - Red/green dashboard
-
-- [ ] **Q-7: Document staging access**
-  - `docs/staging_access.md` — how to reach staging, who has access, how to redeploy
-  - Add staging URLs to `.env.staging` template
-
-- [ ] **Q-8: Commit and tag**
-  - `gac "feat: GCP staging environment — IaC + deployment + E2E verified"`
-  - `git tag -a month-2-complete -m "Month 2 complete: pipelines + parsers + sample_access + Streamlit + GCP staging"`
-
----
-
-## Phase 20 — Month 3 Stretch Goals (Tracked, Not Scheduled)
-
-- [ ] Streamlit admin pages: `lab_director.py`, `platform_admin.py`, `archive_requests.py`, `billing.py`
-- [ ] JupyterHub workspace with all three profiles (Analyst, Bioinformatician, Developer)
-- [ ] BYOP wire-up: fetch nextflow_schema.json from registered repo, validate, enable launching
+- [ ] Streamlit admin pages: `lab_director.py`, `platform_admin.py`,
+      `archive_requests.py`, `billing.py`
+- [ ] JupyterHub workspace with all three profiles (Analyst,
+      Bioinformatician, Developer)
+- [ ] BYOP full wire-up: fetch `nextflow_schema.json` from registered
+      repo, validate, enable launching
 - [ ] GCP production deployment
 - [ ] `ncbi_submissions` router (TOSTADAS integration)
 - [ ] `datasets` router (table exists, router stub)
 - [ ] `archive_requests` router
 - [ ] `saved_searches` router
-- [ ] `notifications` router (full)
+- [ ] `notifications` router (full — currently placeholder in UI)
 - [ ] Remaining parsers if any pipelines were deferred
-- [ ] External database search (`/api/v1/external-search/` — NCBI, ENA, GISAID proxy)
+- [ ] External database search (`/api/v1/external-search/` — NCBI, ENA,
+      GISAID proxy)
 - [ ] Re-enable detect-secrets in pre-commit
 - [ ] Playwright end-to-end UI tests
+- [ ] US-states controlled vocabulary for `collection_location_state`
+- [ ] Retire `jackpot-frontend` repo (vestigial stub — real UI lives
+      in `jackpot-backend/frontend/`)
+
+---
+
+## Done in Session 5 (2026-04-17 evening — 2026-04-19 early AM)
+
+**First staging deploy to GKE** — 10 root causes diagnosed and fixed:
+
+- `jackpot-nf` pushed to GitHub (was only on local Mac).
+- `.gitmodules` URL fixed (filesystem path → GitHub URL).
+- `submodules: recursive` + PAT `insteadOf` injection in workflow.
+- `Dockerfile.api` updated to `COPY nf/`.
+- `cors_origins` ConfigMap format tactical fix (JSON-array string).
+- `DATABASE_URL` Secret corrected (`/jackpot` → `/jackpot_db`).
+- `CROSS_REPO_PAT` restored (had been overwritten with a Google OAuth
+  client secret).
+- Helm release unstuck from `pending-upgrade` via manual rollback.
+- Smoke test rewired to use `kubectl port-forward`.
+- Bootstrap Job written for fresh-DB init.sql + alembic stamp flow.
+
+**Streamlit UI local** — 6 chained bugs diagnosed and fixed:
+
+- `Dockerfile.ui` `COPY frontend/ .` was flattening the layout.
+- `docker-compose.yml` `./frontend:/app` mount was overriding the image
+  layout with the flattened form.
+- `docker-compose.yml` `command:` directive was overriding the image
+  CMD with the old `app.py` path.
+- Streamlit's `sys.path[0]` is the script dir, so `/app/frontend/` was
+  on the path but not `/app/` — `PYTHONPATH=/app` fixed it.
+- `ApiClient` in `frontend/lib/api.py` was reading `JACKPOT_API_URL`
+  but compose was setting `API_BASE_URL` — added as fallback.
+- `MOCK_USER_EMAIL` was already on the api service (line 78 of
+  compose) but a first-pass diagnostic missed it — resulted in a
+  momentary duplicate-key error after my patch attempt.
+
+All permanent fixes for these are tracked in Phase 20 Q-9 through Q-18.
+
+---
+
+## Notes for the next session
+
+**Fresh morning, 5 minutes first:** open http://localhost:8501 and
+confirm the landing page says "Signed in as Glen Otero" (should be
+correct given last night's fixes). Then walk Phase 21 UI-B through
+UI-G to build the per-page bug list.
+
+**Before any GCP deploy to a new environment:** run
+`local_test_checklist.md` top to bottom. Specifically Part 1 step 5
+(Alembic from empty DB) — if that fails, Q-9 hasn't landed and you
+need the bootstrap Job workaround.
+
+**For the Month 1 human-testable demo:** Phase 21 IS the demo. Once
+UI-B through UI-D are green, you can show "upload a sample → find it
+in search → view its details" in a browser. That's the full Month 1
+scope.
+
+**For production readiness:** Q-9 (Alembic baseline) is the most
+important unblock. It makes every fresh deploy honest and eliminates
+the bootstrap Job dependency.
+
+**For closing Month 2:** Q-5 (staging E2E pipeline test) gates the
+`month-2-complete` tag. Phases 20, 21, 23, and 24 are the ordered
+critical path to get there.

@@ -13,8 +13,8 @@ and public health research. Successor to APGAP (ASU-RSE-Services).
 
 1. Read `spec.md` — understand the goals and constraints for the current sprint
 2. Read `todo.md` — find the next unchecked task
-3. Re-read this file (`docs/CLAUDE.md`) — all 43+ Critical Rules apply at all times
-4. Confirm the baseline is stable: `uv run pytest` — ≥316 tests passing, ≥60% coverage
+3. Re-read this file (`docs/CLAUDE.md`) — all 50 Critical Rules apply at all times
+4. Confirm the baseline is stable: `uv run pytest` — ≥477 tests passing, ≥60% coverage
 
 ### Work Loop
 
@@ -157,9 +157,10 @@ Notification System sections for their exact interfaces.
 
 - **477 tests passing, 0 failed, 86.99% coverage**
 - CI threshold: 60% — do not let coverage fall below this
-- Health check: `curl http://localhost:8000/health` → `{"status":"ok","version":"5.0.0","project":"JACKPOT"}`
+- Health check local: `curl http://localhost:8000/health` → `{"status":"ok","version":"5.0.0","project":"JACKPOT","database":"connected"}`
+- Health check staging (via `kubectl port-forward`): identical envelope
 - All 27 database tables loaded in PostgreSQL
-- Both `development` and `main` are at the same commit
+- Both `development` and `main` are at the same commit; `staging` branch triggers the GCP deploy
 
 Do not regress the test count or coverage without a deliberate reason.
 After every implementation session, run `uv run pytest` and confirm both
@@ -425,24 +426,6 @@ Always use `RETURNING *` unless only specific columns are needed.
 Example: `INSERT INTO samples (...) VALUES (...) RETURNING *`
 This applies to every router — never write a row and then SELECT it back.
 
-**42. Templates are generated artifacts — never hand-maintained.**
-CSV/XLSX templates are generated from the LinkML JSON Schema by
-`backend/template_generator.py`. Templates are produced along two axes:
-source_type (12 types) × tier (PRELIMINARY/ANALYZABLE/SUBMITTABLE), with
-an optional metagenomics overlay. The template endpoints are public (no
-auth required). Never create template files manually in the repository.
-If a field is missing from a template, fix the schema — the generator
-will pick it up automatically.
-
-**43. DLP metadata scan runs on all free-text fields before DB commit.**
-`backend/dlp_scanner.py` scans every string field not backed by an enum
-for PII (names, emails, SSNs, MRNs, phone numbers) via GCP Cloud DLP API.
-`pii_scan_status` works like `scrub_status`: FLAGGED samples are stored
-but blocked from queries, pipelines, and export until a Lab Director
-overrides or the submitter fixes the flagged fields. In local dev,
-`DLP_ENABLED=false` (default) bypasses the scan and returns CLEAN.
-Exception: `pi_name` is excluded from the PERSON_NAME check because
-it is expected to contain a name.
 **41. Routers use `get_db_dep()` with `Depends()` for database access.**
 Import `get_db_dep` from `backend.database` and `Depends` from `fastapi`.
 Pass the session as `conn` to `execute_write()`, `log_audit()`, and
@@ -475,6 +458,272 @@ def create_org(payload: OrgCreate, db=Depends(get_db_dep)):
     )
     return success(data=row[0], status_code=201)
 ```
+
+**42. Templates are generated artifacts — never hand-maintained.**
+CSV/XLSX templates are generated from the LinkML JSON Schema by
+`backend/template_generator.py`. Templates are produced along two axes:
+source_type (12 types) × tier (PRELIMINARY/ANALYZABLE/SUBMITTABLE), with
+an optional metagenomics overlay. The template endpoints are public (no
+auth required). Never create template files manually in the repository.
+If a field is missing from a template, fix the schema — the generator
+will pick it up automatically.
+
+**43. DLP metadata scan runs on all free-text fields before DB commit.**
+`backend/dlp_scanner.py` scans every string field not backed by an enum
+for PII (names, emails, SSNs, MRNs, phone numbers) via GCP Cloud DLP API.
+`pii_scan_status` works like `scrub_status`: FLAGGED samples are stored
+but blocked from queries, pipelines, and export until a Lab Director
+overrides or the submitter fixes the flagged fields. In local dev,
+`DLP_ENABLED=false` (default) bypasses the scan and returns CLEAN.
+Exception: `pi_name` is excluded from the PERSON_NAME check because
+it is expected to contain a name.
+
+**44. Alembic must reach head from an empty database.**
+The full database schema must be reachable via `alembic upgrade head`
+from a completely empty PostgreSQL instance. No migration in the chain
+may assume the existence of tables created outside the Alembic graph.
+
+Local Docker Compose loads `db/init.sql` via the postgres container's
+entrypoint before Alembic runs. Cloud SQL (and any other production
+PostgreSQL) has no such entrypoint — the instance comes up empty.
+Session 5 discovered this the hard way when the first deploy crashed
+trying to `ALTER TABLE samples` (in migration `1de94c16e612`) against a
+DB where `samples` didn't exist. The tactical fix was a bootstrap Job
+that loads `init.sql` and stamps `alembic_version` at `a7fd1fcccb77`.
+
+**How to enforce.** When adding any Alembic migration, test it locally
+against a fresh empty database:
+
+```bash
+docker compose exec postgres psql -U jackpot -d postgres -c \
+    "DROP DATABASE IF EXISTS jackpot_test_empty;"
+docker compose exec postgres psql -U jackpot -d postgres -c \
+    "CREATE DATABASE jackpot_test_empty;"
+docker compose exec -e DATABASE_URL=postgresql://jackpot:jackpot@postgres:5432/jackpot_test_empty \
+    api /opt/venv/bin/alembic upgrade head
+```
+
+If this fails with "relation does not exist" or similar, the chain
+depends on pre-existing state. Fix by either adding a new baseline
+migration containing the DDL, or by making the dependent migration
+create what it needs.
+
+**Related backlog:** Q-9 in `todo.md` — create the baseline migration
+containing `db/init.sql`. Until that lands, new environments need the
+bootstrap Job documented in `jackpot-iac/docs/staging_access.md` §6.
+
+**45. `list[str]` Settings fields require a multi-form validator.**
+When declaring a `list[str]` or similar field in `backend/config.py`'s
+`Settings` class, always pair it with a
+`field_validator(mode="before")` that accepts (a) a real list, (b) a
+JSON-array string, (c) a comma-separated string, and (d) an empty
+string. Use `Annotated[list[str], NoDecode]` to disable pydantic's
+eager JSON parsing.
+
+Pydantic-settings v2 runs env var values through `json.loads()`
+unconditionally for `list[*]` fields. Without a validator, the value
+in the ConfigMap must be a JSON-array string — an unusual and easily-
+broken format. Session 5 opened with a `JSONDecodeError` in Alembic
+because `CORS_ORIGINS: "https://staging.jackpot.example.org"` (a plain
+string) couldn't be parsed.
+
+**The correct pattern:**
+
+```python
+from typing import Annotated
+from pydantic import field_validator
+from pydantic_settings import BaseSettings, NoDecode
+
+class Settings(BaseSettings):
+    cors_origins: Annotated[list[str], NoDecode] = [
+        "http://localhost:8501",
+        "http://localhost:4200",
+    ]
+
+    @field_validator("cors_origins", mode="before")
+    @classmethod
+    def _parse_cors_origins(cls, v):
+        import json
+        if v is None or v == "":
+            return []
+        if isinstance(v, str):
+            v = v.strip()
+            if v.startswith("["):
+                return json.loads(v)
+            return [o.strip() for o in v.split(",") if o.strip()]
+        return v
+```
+
+**Related backlog:** Q-10 in `todo.md` — apply this pattern to
+`cors_origins` and revert `values-staging.yaml` to plain comma-separated.
+
+**46. `nf/` submodule contents must be importable or wrapped.**
+`backend/routers/pipelines.py` imports `RESULT_SCHEMAS` from the
+`jackpot-nf` submodule via `sys.path.insert(0, str(_NF_ROOT))`. Any
+change to the backend that removes `nf/` from the deployment (Docker
+image, CI runner, test environment) must either restore the import
+path or wrap the import in a try/except that tolerates missing state.
+
+If `nf/shared/` isn't on disk, the entire FastAPI app crashes with
+`ModuleNotFoundError` at import time because `main.py` imports the
+pipelines router unconditionally. Session 5 spent a lot of time on
+this before the `Dockerfile.api COPY nf/` fix landed.
+
+**Required in `Dockerfile.api`:**
+
+```dockerfile
+COPY nf/ ./nf/
+```
+
+**Required in CI checkout:** `submodules: recursive` on
+`actions/checkout@v4`, or an explicit `git submodule update --init --recursive`
+step with proper PAT injection via `url."https://x-access-token:${GH_PAT}@github.com/".insteadOf`.
+
+**Required in git config:** `.gitmodules` for `jackpot-backend` must
+reference `git@github.com:gotero/jackpot-nf.git`, never a local
+filesystem path. Same applies to the `schema` submodule.
+
+**Related backlog:** Q-11 in `todo.md` — eliminate the sys.path hack by
+moving `RESULT_SCHEMAS` into the backend package. Then `COPY nf/` can
+be dropped from `Dockerfile.api` entirely.
+
+**47. Never paste across secret types.**
+GitHub Actions secrets, GCP Secret Manager entries, and Google OAuth
+client credentials are visually similar strings but completely
+different secret types. Before `gh secret set` or
+`gcloud secrets versions add`, cross-check the prefix of the value
+against the expected type for the secret.
+
+**Known prefixes:**
+
+| Prefix | Secret type |
+|--------|-------------|
+| `ghp_` | GitHub classic PAT |
+| `github_pat_` | GitHub fine-grained PAT |
+| `GOCSPX-` | Google OAuth client secret |
+| `AIza` | Google API key |
+| `sk-` | OpenAI API key (if ever used) |
+| 40-char hex | Generic session / secret key |
+
+Session 5 had `CROSS_REPO_PAT` (which must be a GitHub PAT) silently
+overwritten with a Google OAuth client secret during an unrelated
+Secret Manager edit. The workflow kept failing with 401s for hours
+because every other system assumed the secret was valid.
+
+**Verification step** — add as a temporary debug step when a
+secret-based auth fails in CI:
+
+```yaml
+- name: Debug PAT
+  env:
+    GH_PAT: ${{ secrets.CROSS_REPO_PAT }}
+  run: |
+    echo "PAT length: ${#GH_PAT}"
+    echo "PAT prefix: ${GH_PAT:0:8}..."
+```
+
+**48. `yaml.safe_load` is not a valid CI YAML linter.**
+Do not trust `python3 -c "import yaml; yaml.safe_load(...)"` alone to
+verify a GitHub Actions workflow file is valid. PyYAML accepts duplicate
+mapping keys silently (last-wins). GitHub's own workflow validator
+rejects duplicate keys, so a file that parses locally will still fail
+at 0s elapsed in Actions.
+
+Session 5 had a workflow edit that produced two adjacent
+`submodules: recursive` lines. PyYAML reported success. GitHub rejected
+it. Two wasted push attempts.
+
+**Better verification:**
+
+1. Read the diff carefully before committing. Duplicate keys are
+   visually obvious if you're looking.
+2. After pushing, watch `gh run list` for 0s-elapsed failures — that
+   pattern almost always means the workflow file itself is invalid to
+   Actions.
+3. For structural confidence, check that every `with:` block has
+   exactly one entry per key.
+
+**49. Helm `--wait` timeouts leave the release in `pending-*`.**
+Deploys using `helm upgrade --wait --timeout <N>m` may leave the release
+stuck at `pending-upgrade` status on timeout. Before the next deploy,
+check `helm history <release>` and roll back to the last `deployed`
+revision if the most recent is `pending-*` or `failed`.
+
+Helm doesn't auto-rollback on timeout — it considers the deploy
+incomplete. Subsequent upgrade attempts silently no-op because the
+release is mid-transaction.
+
+**Recovery:**
+
+```bash
+helm -n <ns> history <release>    # note the last "deployed" revision
+helm -n <ns> rollback <release> <rev>
+helm -n <ns> status <release>     # verify STATUS: deployed
+```
+
+**Related backlog:** Q-15 in `todo.md` — add `--atomic` to the workflow,
+or a cleanup step that auto-rolls-back before each upgrade attempt.
+
+**50. Streamlit `frontend` package must be importable from `/app`.**
+The Streamlit UI lives in `jackpot-backend/frontend/` and uses absolute
+imports like `from frontend.lib.session import current_user`. Streamlit
+sets `sys.path[0]` to the script's directory — i.e. `/app/frontend/`
+inside the container — which does NOT put `frontend` itself on the path.
+
+**The container layout must be:**
+
+```
+/app/
+├── frontend/
+│   ├── __init__.py
+│   ├── app.py
+│   ├── lib/
+│   ├── pages/
+│   └── components/
+└── (other source dirs)
+```
+
+**Dockerfile.ui** must preserve the package name:
+
+```dockerfile
+COPY frontend/ ./frontend/               # NOT: COPY frontend/ .
+CMD ["/opt/venv/bin/streamlit", "run", "frontend/app.py", \
+     "--server.port=8501", "--server.address=0.0.0.0"]
+```
+
+**docker-compose.yml `ui` service** must mount the package correctly
+and set PYTHONPATH:
+
+```yaml
+ui:
+  build:
+    context: .
+    dockerfile: Dockerfile.ui
+  environment:
+    API_BASE_URL:    http://api:8000
+    ENV:             local
+    MOCK_USER_EMAIL: gotero@linuxprophet.com
+    PYTHONPATH:      /app                  # REQUIRED
+  volumes:
+    - ./frontend:/app/frontend             # NOT: ./frontend:/app
+    - ./schema:/app/schema
+```
+
+Do **not** add a `command:` directive to the compose service — it will
+override the image's CMD. Let the Dockerfile's CMD drive.
+
+**`MOCK_USER_EMAIL` must be set on BOTH the `ui` and `api` services.**
+The UI client ships `X-Mock-User-Email` as a parity header, but the
+actual identity lookup happens server-side via
+`os.getenv("MOCK_USER_EMAIL")` on the API container.
+
+Session 5's UI debugging resolved six distinct bugs that all trace back
+to violations of this rule — Dockerfile flattening the layout, compose
+mount overriding the image layout, explicit `command:` overriding the
+CMD, missing PYTHONPATH, `ApiClient` reading only `JACKPOT_API_URL`
+(not `API_BASE_URL`), and mismatched `MOCK_USER_EMAIL` between
+services. `frontend/lib/api.py`'s `ApiClient` now reads both env var
+names as fallbacks; keep that behavior.
 
 ---
 
@@ -1248,11 +1497,16 @@ Never migrate the full stack to minikube.
 ### Docker Compose (primary — always running)
 
 ```
-jackpot-backend   FastAPI API          localhost:8000
-jackpot-frontend  Streamlit UI         localhost:8501
+api               FastAPI API          localhost:8000
+ui                Streamlit UI         localhost:8501   (source: jackpot-backend/frontend/)
 postgres          PostgreSQL           localhost:5432
 minio             Object storage       localhost:9000 (API), 9001 (console)
 ```
+
+Note: the UI source lives inside `jackpot-backend/frontend/`, not in the
+separate `jackpot-frontend` repo. That repo is a vestigial stub
+(`print("Hello from jackpot-frontend!")`) kept only as a placeholder for
+the Month 3 React migration — retiring it is on the Month 3 backlog.
 
 Start/stop:
 ```bash
@@ -1809,30 +2063,41 @@ The signal to begin the React migration is when any of these are true:
 
 ### How to structure Streamlit code for future migration
 
-Keep `jackpot-frontend` organized so each Streamlit page maps 1:1 to a
+Keep `jackpot-backend/frontend/` organized so each Streamlit page maps 1:1 to a
 future React route. This makes migration surgical rather than a rewrite.
+The code lives inside `jackpot-backend/` (not in the `jackpot-frontend`
+repo, which is a vestigial stub — see Critical Rule 50).
 
 ```
-jackpot-frontend/
+jackpot-backend/frontend/
+├── __init__.py
 ├── app.py                  # Entry point — navigation only
-├── pages/
+├── pages/                  # Streamlit auto-loads each file as a sidebar page
+│   ├── __init__.py
 │   ├── dashboard.py        # → /dashboard
-│   ├── samples.py          # → /samples
-│   ├── sample_detail.py    # → /samples/:id
-│   ├── pipelines.py        # → /pipelines
-│   ├── pipeline_detail.py  # → /pipelines/:id
 │   ├── search.py           # → /search
-│   ├── projects.py         # → /projects
-│   ├── project_detail.py   # → /projects/:id
-│   ├── lab.py              # → /labs/:id
-│   └── platform_admin.py   # → /admin
-└── components/
-    ├── sample_table.py     # Reusable sample list with bulk select
-    ├── pipeline_status.py  # Pipeline run status widget
-    ├── metadata_form.py    # Tier-aware metadata input form
-    ├── scrub_badge.py      # Scrub status indicator
-    └── notifications.py    # Notification badge and drawer
+│   ├── upload.py           # → /upload
+│   ├── data_entry.py       # → /data-entry
+│   ├── my_samples.py       # → /my-samples
+│   ├── datasets.py         # → /datasets
+│   ├── access_requests.py  # → /access-requests
+│   ├── notifications.py    # → /notifications
+│   └── pipelines.py        # → /pipelines
+├── lib/                    # Cross-page helpers
+│   ├── __init__.py
+│   ├── api.py              # ApiClient + ApiError — single HTTP surface
+│   └── session.py          # current_user(), my_user_id(), etc.
+└── components/             # Reusable widgets
+    ├── __init__.py
+    ├── sample_table.py     # Sample list with bulk select (Month 2+)
+    ├── pipeline_status.py  # Pipeline run status widget (Month 2+)
+    ├── metadata_form.py    # Tier-aware metadata input form (Month 2+)
+    ├── scrub_badge.py      # Scrub status indicator (Month 2+)
+    └── notifications.py    # Notification badge and drawer (Month 2+)
 ```
+
+Admin pages (`lab_director`, `platform_admin`, `archive_requests`,
+`billing`) are intentionally absent — they're deferred to Month 3.
 
 Never put business logic in Streamlit pages — all logic belongs in the
 FastAPI backend. Streamlit pages are thin display layers that call the

@@ -56,7 +56,10 @@ class ApiClient:
         timeout: float = DEFAULT_TIMEOUT_SEC,
     ) -> None:
         self.base_url = (
-            base_url or os.getenv("JACKPOT_API_URL") or "http://localhost:8000"
+            base_url
+            or os.getenv("JACKPOT_API_URL")
+            or os.getenv("API_BASE_URL")
+            or "http://localhost:8000"
         ).rstrip("/")
         self._cookies = dict(cookies or {})
         self._mock_email = mock_user_email or os.getenv("MOCK_USER_EMAIL")
