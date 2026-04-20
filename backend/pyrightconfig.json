@@ -1,4 +1,6 @@
 {
+  "venvPath": ".",
+  "venv": ".venv",
   "include": ["backend", "tests"],
   "exclude": [
     "backend/models_generated.py",
