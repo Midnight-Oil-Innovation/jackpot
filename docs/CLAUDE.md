@@ -13,7 +13,7 @@ and public health research. Successor to APGAP (ASU-RSE-Services).
 
 1. Read `spec.md` — understand the goals and constraints for the current sprint
 2. Read `todo.md` — find the next unchecked task
-3. Re-read this file (`docs/CLAUDE.md`) — all 50 Critical Rules apply at all times
+3. Re-read this file (`docs/CLAUDE.md`) — all 51 Critical Rules apply at all times
 4. Confirm the baseline is stable: `uv run pytest` — ≥477 tests passing, ≥60% coverage
 
 ### Work Loop
@@ -724,6 +724,13 @@ CMD, missing PYTHONPATH, `ApiClient` reading only `JACKPOT_API_URL`
 (not `API_BASE_URL`), and mismatched `MOCK_USER_EMAIL` between
 services. `frontend/lib/api.py`'s `ApiClient` now reads both env var
 names as fallbacks; keep that behavior.
+
+Rule 51 — Pyright LSP runs live during Claude Code sessions.
+Configuration lives at ./pyrightconfig.json. Excludes
+models_generated.py (generator output, hand-patched per Rule 20) and
+generated migration files. If Pyright flags an error on a PR, fix it
+before merging — don't # type: ignore without explaining why in the
+comment.
 
 ---
 

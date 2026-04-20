@@ -1358,8 +1358,7 @@ All in `~/ASU/jackpot/docs/` unless noted:
   validation (API + UI parts)
 - `jackpot-iac/docs/staging_access.md` — staging access + bootstrap Job +
   troubleshooting
-- `docs/CLAUDE.md` — 47 Critical Rules (last update pending Q-17 for
-  Rules 42-47)
+- `docs/CLAUDE.md` — 51 Critical Rules
 
 ### Code quality / CI
 
