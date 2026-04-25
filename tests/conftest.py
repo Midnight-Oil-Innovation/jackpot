@@ -85,7 +85,7 @@ def valid_human_sample():
         "scrub_status": "PENDING",
         "pii_scan_status": "PENDING",
         "ingest_method": "gui",
-        "fastq_r1_uri": "gs://jackpot-sequences/asu/otero/AZ-TEST-001/R1.fastq.gz",
+        "fastq_r1_uri": "gs://jackpot-sequences/linuxprophet/otero/AZ-TEST-001/R1.fastq.gz",
         "adhs_medsis_id": "ADHS-2026-001",
         "biospecimen_type": "nasopharyngeal_swab",
         "reason_for_collection": ["clinical"],

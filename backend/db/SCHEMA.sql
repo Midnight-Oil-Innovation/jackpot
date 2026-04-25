@@ -721,12 +721,12 @@ CREATE TABLE IF NOT EXISTS saved_searches (
 -- Seed data for local development
 -- =============================================================================
 INSERT INTO domain_whitelist (domain, description)
-VALUES ('asu.edu', 'Arizona State University'),
+VALUES ('linuxprophet.org', 'Linux Prophet'),
        ('gmail.com', 'Local dev — REMOVE IN PRODUCTION')
 ON CONFLICT DO NOTHING;
 
 INSERT INTO organizations (display_name)
-VALUES ('ASU'), ('ADHS')
+VALUES ('Linux Prophet'), ('ADHS')
 ON CONFLICT DO NOTHING;
 
 INSERT INTO users (email, name, organization_id, is_platform_admin)
@@ -749,5 +749,5 @@ ON CONFLICT DO NOTHING;
 
 -- Auto-add Otero Outpost as a sequencing lab (demonstrates the backlog #42 auto-add hook)
 INSERT INTO sequencing_labs (name, organization, lab_id, is_external)
-VALUES ('Otero Outpost', 'ASU', 1, FALSE)
+VALUES ('Otero Outpost', 'Linux Prophet', 1, FALSE)
 ON CONFLICT DO NOTHING;

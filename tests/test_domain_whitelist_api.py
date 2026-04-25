@@ -46,7 +46,7 @@ async def test_list_domains_admin(client):
     body = resp.json()
     assert body["success"] is True
     domains = [d["domain"] for d in body["data"]]
-    assert "asu.edu" in domains
+    assert "linuxprophet.org" in domains
 
 
 @pytest.mark.asyncio

@@ -1864,3 +1864,63 @@ Confirmed by reading `frontend/pages/upload.py:179-184` +
 - **`tests/conftest.py` had `sequencing_lab="Otero Outpost"`
   pre-baked.** Someone foresaw the rename. The seed migration just
   caught reality up to the test fixture's expectations.
+
+## Renaming a seed entity in already-deployed environments (2026-04-24)
+
+Renamed the JACKPOT-internal organisation from "ASU" to "Linux
+Prophet" — same data-migration pattern that closed the Otero
+Lab → Otero Outpost rename earlier in the day. Three rows updated
+in one migration: `organizations.display_name`,
+`sequencing_labs.organization` (denormalised text), and
+`domain_whitelist.domain` (`asu.edu` → `linuxprophet.org`).
+
+### The pattern
+
+When a seeded entity needs to be renamed AND the environment is
+already deployed somewhere (local, staging, prod, fork):
+
+1. **Update the snapshot** in `db/SCHEMA.sql` so the human-readable
+   reference matches the post-migration end state. Don't touch the
+   landed baseline migration — that's the immutable starting point;
+   the rename is a delta on top of it.
+2. **Write a data migration** that lives at the head of the chain.
+   Match by old value (`WHERE display_name = 'ASU'`), not by id.
+   Two reasons: (a) UNIQUE constraints on the column make the
+   match unambiguous; (b) match-by-old-value is portable across
+   forks and clones where ids may not have stayed `1`.
+3. **Idempotent by construction** — re-running upgrade head on a
+   DB already at the new value is a no-op (the WHERE clause
+   matches nothing). Verified explicitly during this session.
+4. **Reversible** — write the `downgrade()` body that flips the
+   UPDATE back. Verified by `alembic downgrade -1 && upgrade head`
+   round-trip.
+5. **Update the test fixtures and assertions in the same commit.**
+   Anything that asserts on the old value
+   (`tests/test_organizations_api.py:240`,
+   `tests/test_domain_whitelist_api.py:49`, etc.) will break the
+   moment the migration runs in CI. Same commit = same review =
+   one round-trip.
+6. **Don't update generated code** (`backend/models_generated.py`)
+   or schema-submodule-derived strings — those are out of band.
+
+### Three things worth recording
+
+- **Schema description vs task description.** The task asked to
+  rename `name` and `slug` columns; the actual schema has
+  `display_name` only and no slug column. Confirmed with the
+  product owner before starting — a one-question check saves an
+  invented schema change. Always verify column names from
+  `\d <table>` before writing the UPDATE.
+- **Match by old value, not by id, when the column has UNIQUE.**
+  The migration could have hardcoded `WHERE id = 1`, but
+  match-by-old-value is portable to staging (which may have
+  different ids if seeded via different rounds) and idempotent
+  for free. The `display_name` UNIQUE constraint guarantees
+  uniqueness.
+- **Domain mismatch caught at planning time.** Glen's email is
+  `gotero@linuxprophet.com` but the new domain whitelist is
+  `linuxprophet.org`. Mock auth bypasses the whitelist for local
+  dev so this isn't a daily-flow blocker, but flagged for the
+  product owner: real Google OAuth sign-ups from `@linuxprophet.com`
+  won't be whitelisted by the seed if/when OAuth fronts the API.
+  Surfacing the mismatch beats silently auto-correcting it.

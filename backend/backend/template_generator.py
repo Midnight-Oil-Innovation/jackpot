@@ -155,7 +155,7 @@ BASE_EXAMPLE: dict[str, str] = {
     "library_preparation_method": "Bead-Linked Transposome Tagmentation",
     "sequencing_protocol": "https://dx.doi.org/10.17504/protocols.io.example",
     "sequencing_platform": "Illumina",
-    "sequencing_lab": "ASU Biodesign CLAS",
+    "sequencing_lab": "Linux Prophet Biodesign CLAS",
     "date_collected": "2026-04-01",
     "date_sequenced": "2026-04-05",
     "collection_facility": "Banner Health",
@@ -165,7 +165,7 @@ BASE_EXAMPLE: dict[str, str] = {
     "collection_location_county": "Maricopa",
     "sector": "clinical",
     "originating_lab": "Banner Health Clinical Lab",
-    "submitting_lab": "ASU Biodesign CLAS",
+    "submitting_lab": "Linux Prophet Biodesign CLAS",
 }
 
 SOURCE_TYPE_EXAMPLES: dict[str, dict[str, str]] = {
@@ -190,7 +190,7 @@ SOURCE_TYPE_EXAMPLES: dict[str, dict[str, str]] = {
         "source_type": "Soil",
         "sector": "environmental",
         "organism_name": "Coccidioides immitis",
-        "collection_facility": "ASU Field Station",
+        "collection_facility": "Linux Prophet Field Station",
         "purpose_for_collection": "research",
     },
 }

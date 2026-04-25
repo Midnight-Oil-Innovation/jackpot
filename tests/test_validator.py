@@ -153,7 +153,7 @@ def _full_human_data(**overrides) -> dict:
         "collection_location_state": "Arizona",
         # Tier 3 — TIER3_REQUIRED
         "originating_lab": "Banner Health Clinical Lab",
-        "submitting_lab": "ASU Biodesign CLAS",
+        "submitting_lab": "Linux Prophet Biodesign CLAS",
         "collection_location_county": "Maricopa",
         "purpose_for_collection": ["clinical"],
         "sequencing_protocol": "https://www.protocols.io/view/nextera-xt",
@@ -185,7 +185,7 @@ def _full_wastewater_data(**overrides) -> dict:
         "concentration_method": "ultracentrifugation",
         "flow_rate_mgd": 42.5,
         # Tier 2 — TIER2_REQUIRED
-        "sequencing_lab": "ASU Biodesign CLAS",
+        "sequencing_lab": "Linux Prophet Biodesign CLAS",
         "collection_facility": "South Tempe Water Reclamation Facility",
         "library_preparation_method": "Nextera XT",
         "nucleic_acid_extraction_method": ["QIAamp PowerWater"],
@@ -193,7 +193,7 @@ def _full_wastewater_data(**overrides) -> dict:
         "collection_location_state": "Arizona",
         # Tier 3 — TIER3_REQUIRED
         "originating_lab": "Tempe WWTP Lab",
-        "submitting_lab": "ASU Biodesign CLAS",
+        "submitting_lab": "Linux Prophet Biodesign CLAS",
         "collection_location_county": "Maricopa",
         "purpose_for_collection": ["surveillance"],
         "sequencing_protocol": "https://www.protocols.io/view/nwss-ww",

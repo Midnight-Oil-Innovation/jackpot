@@ -54,6 +54,17 @@ unblocked item.
 
 ---
 
+## Out-of-band housekeeping
+
+- **2026-04-24** — Renamed JACKPOT organisation "ASU" → "Linux Prophet"
+  via migration `c1bd67369a7c`. Same migration renames the
+  `sequencing_labs.organization` denormalised text and the
+  `domain_whitelist` row (`asu.edu` → `linuxprophet.org`). Seed
+  snapshot updated in `db/SCHEMA.sql`. Pattern documented in
+  `docs/learnings.md`.
+
+---
+
 ## Phase 0 — Pre-Session Fixes (COMPLETE)
 
 These were the blocking bugs resolved before any router session began.
