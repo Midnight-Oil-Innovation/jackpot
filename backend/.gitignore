@@ -26,3 +26,7 @@ Thumbs.db
 .hypothesis/
 /uv
 .claude/
+*.swp
+*.swo
+.*.swp
+.*.swo
