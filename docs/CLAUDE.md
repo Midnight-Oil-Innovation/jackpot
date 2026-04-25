@@ -13,7 +13,7 @@ and public health research. Successor to APGAP (ASU-RSE-Services).
 
 1. Read `spec.md` — understand the goals and constraints for the current sprint
 2. Read `todo.md` — find the next unchecked task
-3. Re-read this file (`docs/CLAUDE.md`) — all 51 Critical Rules apply at all times
+3. Re-read this file (`docs/CLAUDE.md`) — all 52 Critical Rules apply at all times
 4. Confirm the baseline is stable: `uv run pytest` — ≥477 tests passing, ≥60% coverage
 
 ### Work Loop
@@ -130,8 +130,8 @@ After completing any router session or significant fix, append a new entry to
     │   │   └── oauth.py         Google OAuth flow (production only)
     │   └── routers/         One file per feature area; each registers its own APIRouter
     ├── db/
-    │   ├── init.sql         Reference schema (27 tables) — never edit in production
-    │   └── migrations/      Alembic migration files — all schema changes go here
+    │   ├── SCHEMA.sql       Read-only reference snapshot (27 tables) — regenerate with pg_dump
+    │   └── migrations/      Alembic migration files — single source of truth for schema
     ├── schema/              git submodule → jackpot-schema repo
     │   └── schema/
     │       └── jackpot_schema.yaml   Single source of truth for all metadata
@@ -176,7 +176,8 @@ DO NOT rename: `"Platform Admin"`, `"Lab Director"`, `"Lab Collaborator"`,
 `"Lab Reader"`, `"Bioinformatics User"`, `"Data Analyst"`.
 
 **2. All database schema changes go through Alembic.**
-Never edit `db/init.sql` directly in production.
+`db/SCHEMA.sql` is a read-only reference snapshot — never edit it; the
+Alembic chain is the single source of truth (Critical Rule 52).
 JACKPOT uses raw SQL, not SQLAlchemy ORM models, so `--autogenerate` will
 fail with "no MetaData object". Always use the manual form instead:
 Command: `uv run alembic revision -m "description"` (no --autogenerate)
@@ -483,34 +484,27 @@ The full database schema must be reachable via `alembic upgrade head`
 from a completely empty PostgreSQL instance. No migration in the chain
 may assume the existence of tables created outside the Alembic graph.
 
-Local Docker Compose loads `db/init.sql` via the postgres container's
-entrypoint before Alembic runs. Cloud SQL (and any other production
-PostgreSQL) has no such entrypoint — the instance comes up empty.
-Session 5 discovered this the hard way when the first deploy crashed
-trying to `ALTER TABLE samples` (in migration `1de94c16e612`) against a
-DB where `samples` didn't exist. The tactical fix was a bootstrap Job
-that loads `init.sql` and stamps `alembic_version` at `a7fd1fcccb77`.
+Q-9 closed this with the baseline migration `5adf11b77c19` (which
+embeds the v4.1 DDL formerly in `db/init.sql`). The local Compose
+postgres no longer mounts an init script, and the api container runs
+`alembic upgrade head` on startup via `backend/entrypoint.sh`.
 
 **How to enforce.** When adding any Alembic migration, test it locally
 against a fresh empty database:
 
 ```bash
-docker compose exec postgres psql -U jackpot -d postgres -c \
-    "DROP DATABASE IF EXISTS jackpot_test_empty;"
-docker compose exec postgres psql -U jackpot -d postgres -c \
-    "CREATE DATABASE jackpot_test_empty;"
-docker compose exec -e DATABASE_URL=postgresql://jackpot:jackpot@postgres:5432/jackpot_test_empty \
-    api /opt/venv/bin/alembic upgrade head
+docker compose down -v && docker compose up -d
+docker compose logs -f api  # expect "alembic upgrade head" then uvicorn
+curl http://localhost:8000/health
 ```
 
 If this fails with "relation does not exist" or similar, the chain
-depends on pre-existing state. Fix by either adding a new baseline
-migration containing the DDL, or by making the dependent migration
-create what it needs.
+depends on pre-existing state. Fix by either adding the missing DDL
+to the baseline migration (only when correcting a bug — never to
+sneak in schema changes), or by making the dependent migration create
+what it needs.
 
-**Related backlog:** Q-9 in `todo.md` — create the baseline migration
-containing `db/init.sql`. Until that lands, new environments need the
-bootstrap Job documented in `jackpot-iac/docs/staging_access.md` §6.
+See also Critical Rule 52.
 
 **45. `list[str]` Settings fields require a multi-form validator.**
 When declaring a `list[str]` or similar field in `backend/config.py`'s
@@ -731,6 +725,16 @@ models_generated.py (generator output, hand-patched per Rule 20) and
 generated migration files. If Pyright flags an error on a PR, fix it
 before merging — don't # type: ignore without explaining why in the
 comment.
+
+**52. The full schema must be reachable via `alembic upgrade head` from
+an empty database.** Never depend on `db/SCHEMA.sql` (or any other SQL
+file) running before Alembic in any deployment target. Alembic is the
+single source of truth.
+
+`db/SCHEMA.sql` is a regenerable reference snapshot for humans
+reviewing the schema; it has no role at runtime. The baseline
+migration `5adf11b77c19` is what builds an empty DB. See Rule 44 for
+the empty-DB upgrade test.
 
 ---
 
@@ -1161,9 +1165,9 @@ log_audit(
 )
 ```
 
-The `audit_log` table must already exist (it is part of `db/init.sql`).
-`log_audit()` must be created in `backend/audit.py` before the first
-state-changing endpoint is written.
+The `audit_log` table must already exist (it is part of the Alembic
+baseline migration `5adf11b77c19`). `log_audit()` must be created in
+`backend/audit.py` before the first state-changing endpoint is written.
 
 ---
 

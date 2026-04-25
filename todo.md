@@ -235,22 +235,31 @@ next developer who might otherwise re-encounter the same six bugs:
       78 of `docker-compose.yml`. Both ui and api containers get the
       env var; the X-Mock-User-Email header round-trip works.
 
-### Q-9: Alembic baseline migration
+### Q-9: Alembic baseline migration ✅ CLOSED
 
-- [ ] Add new Alembic revision `baseline_v4_1_schema` containing
-      `db/init.sql`'s full DDL as `op.execute(sa.text(...))`.
-- [ ] Chain `a7fd1fcccb77` after it — set
-      `down_revision = "<baseline_rev>"`.
-- [ ] Set `down_revision = None` on the new baseline.
-- [ ] Verify: `alembic upgrade head` works against a fresh empty DB
-      locally (step 5 in `local_test_checklist.md`).
-- [ ] Add CLAUDE.md Critical Rule 42: "The full schema must be
-      reachable via `alembic upgrade head` from an empty database.
-      Never depend on `init.sql` running via Docker's entrypoint in
-      production."
-- [ ] Document cut-over path for environments that already ran
-      `init.sql` + patch migrations — they need an `alembic stamp` of
-      the new baseline.
+Baseline revision: **`5adf11b77c19`** (`baseline schema from init.sql`).
+
+- [x] Added Alembic revision `5adf11b77c19` containing the full v4.1
+      DDL from the former `db/init.sql` as a single `op.execute()`.
+- [x] Chained `a7fd1fcccb77` after it
+      (`down_revision = "5adf11b77c19"`).
+- [x] Set `down_revision = None` on the new baseline.
+- [x] Verified `alembic upgrade head` against a fresh empty DB:
+      `docker compose down -v && docker compose up -d` → api container
+      runs `alembic upgrade head` via `backend/entrypoint.sh` →
+      `/health` returns `{"status":"ok","database":"connected"}`.
+      Round-trip `downgrade base` + `upgrade head` rebuilds cleanly.
+- [x] Renamed `db/init.sql` → `db/SCHEMA.sql` (read-only reference
+      snapshot with header). Removed Postgres entrypoint mount from
+      `docker-compose.yml`.
+- [x] Added Critical Rule 52 to `docs/CLAUDE.md`. Amended Rule 44 to
+      drop the bootstrap-Job/Q-9-pending caveats.
+- [x] Documented cut-over path in `docs/staging_access.md §6`:
+      one-time `kubectl exec ... alembic stamp 5adf11b77c19` for
+      environments deployed pre-Q-9.
+- [x] `tests/conftest.py` no longer loads init.sql — runs only
+      `alembic upgrade head`, exercising the same path as production.
+- [x] 549 tests passing, 87.56% coverage (above ≥477 / ≥86.99% baseline).
 
 ### Q-10: cors_origins validator in `backend/config.py`
 

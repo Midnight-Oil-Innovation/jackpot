@@ -1567,3 +1567,44 @@ Next up: run `local_test_checklist.md` on the laptop before any new GCP
 activity. Then land P0.1 + P0.2 + P0.3 as three quick PRs. Then resume
 the original router implementation plan (organizations → labs → users
 → ...).
+
+## Q-9 — Alembic baseline migration (2026-04-24)
+
+Closed the bootstrap gap. `alembic upgrade head` now builds the full
+schema from an empty database via baseline revision `5adf11b77c19`.
+The bootstrap Job and the postgres entrypoint mount are gone.
+
+### Three things worth recording
+
+- **Critical Rule numbering already had a 42 and a 44.** The Q-9
+  task description said "Add Critical Rule 42" but rule 42 was
+  already taken (Templates) and rule 44 already specified the
+  empty-DB invariant — pointing at Q-9 as the open backlog. The
+  resolution: append a new rule 52 with the verbatim text
+  ("Alembic is the single source of truth"), and amend rule 44 to
+  drop the bootstrap-Job paragraph and the "until Q-9 lands"
+  caveat. When closing a backlog item, audit the rule that named
+  it — odds are it needs an edit too. Bumped the "all 51 Critical
+  Rules apply" line to 52.
+
+- **conftest.py double-bootstrap was load-bearing dead weight after
+  Q-9.** Pre-Q-9, conftest read `db/init.sql` then ran `alembic
+  upgrade head` because the chain assumed the init.sql DDL existed.
+  Post-Q-9, the alembic chain is self-sufficient — the init.sql
+  load was actively misleading because it implied tests were proving
+  something they weren't (production runs alembic alone). Dropping
+  the load makes tests exercise the same path production uses.
+  When you fix a chain to be self-sufficient, hunt for the test
+  scaffolding that compensated for the gap and remove it too —
+  otherwise the test suite still passes for the wrong reason.
+
+- **The Helm "bootstrap Job" was never a chart template.** The
+  Q-9 description implied there was a chart manifest to delete,
+  but a search of `jackpot-iac/helm/jackpot-api/templates/` turned
+  up only `job-migrations.yaml` (the canonical pre-upgrade alembic
+  Job). The "bootstrap" was an inline `kubectl apply` heredoc
+  living entirely inside `docs/staging_access.md §6`. The fix was
+  to replace §6 with a one-time `alembic stamp 5adf11b77c19`
+  instruction for environments deployed pre-Q-9. No cross-repo
+  changes needed. When a task says "delete X from the chart",
+  verify X actually lives in the chart before deleting anything.

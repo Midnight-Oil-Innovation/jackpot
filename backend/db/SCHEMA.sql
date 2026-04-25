@@ -1,3 +1,11 @@
+-- =====================================================================
+-- JACKPOT SCHEMA REFERENCE
+-- DO NOT EDIT. This file is a human-readable snapshot of the schema.
+-- Source of truth: Alembic migrations in db/migrations/versions/.
+-- Regenerate with: pg_dump --schema-only -h localhost -U jackpot \
+--   jackpot_db > db/SCHEMA.sql
+-- =====================================================================
+
 -- =============================================================================
 -- JACKPOT Database Schema v4.1
 -- Local: PostgreSQL 16 | Production: BigQuery

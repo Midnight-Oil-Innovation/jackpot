@@ -1,7 +1,9 @@
+import os
+import subprocess
+
 import pytest
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
-from sqlalchemy import create_engine, text
 from testcontainers.postgres import PostgresContainer
 
 from backend.config import get_settings
@@ -22,18 +24,6 @@ def test_db_url(postgres_container):
 
 @pytest.fixture(scope="session", autouse=True)
 def initialize_test_db(test_db_url):
-    engine = create_engine(test_db_url)
-    with open("db/init.sql") as f:
-        sql = f.read()
-    with engine.connect() as conn:
-        conn.execute(text(sql))
-        conn.commit()
-
-    # Apply all Alembic migrations so the test DB has every column
-    # added since db/init.sql was written (sector, quality_status, etc.)
-    import os
-    import subprocess
-
     env = os.environ.copy()
     env["DATABASE_URL"] = test_db_url
     result = subprocess.run(
@@ -46,7 +36,6 @@ def initialize_test_db(test_db_url):
         raise RuntimeError("Alembic upgrade failed: " + result.stdout + result.stderr)
 
     yield
-    engine.dispose()
 
 
 @pytest.fixture(autouse=True)

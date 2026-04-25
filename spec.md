@@ -60,15 +60,14 @@ These constraints are non-negotiable. Every implementation must respect them.
 ### Database
 
 - PostgreSQL (local dev via Docker Compose) / Cloud SQL PostgreSQL (production)
-- All schema changes go through Alembic migrations — never edit `db/init.sql` directly
+- All schema changes go through Alembic migrations — `db/SCHEMA.sql` is
+  a read-only reference snapshot, never the source of truth
 - After any schema change: regenerate `backend/models_generated.py` with
   `gen-pydantic --pydantic-version 2` then apply the boolean keyword patch
   (Critical Rule 20)
-- **NEW (Session 5 lesson):** `alembic upgrade head` must be reachable from
-  an empty database. Staging revealed that migration `1de94c16e612` does
-  `ALTER TABLE samples` and assumes `db/init.sql` has already run. Fresh
-  environments need a baseline migration that contains the init DDL — see
-  Critical Rule 42 (Phase 20 Q-9 on the todo).
+- `alembic upgrade head` reaches the full schema from an empty database
+  via the baseline migration `5adf11b77c19` (Critical Rules 44 + 52,
+  Q-9 closed).
 
 ### API
 
@@ -438,8 +437,8 @@ uv run pytest --cov=backend --cov-fail-under=60
 
 **Before any GCP deploy to a new environment** (staging-clone, production):
 run `docs/local_test_checklist.md` top to bottom. Part 1 step 5 (Alembic
-from an empty DB) is critical — if that fails, Phase 20 Q-9 hasn't landed
-and you need the bootstrap Job workaround.
+from an empty DB) is the canonical sanity check — Q-9 closed the gap so
+this should now pass without any bootstrap Job.
 
 ---
 
@@ -1073,9 +1072,9 @@ Local DB access for debugging: `cloud-sql-proxy` against
 These six fixes landed during the first deploy. Permanent fixes are
 tracked in Phase 20 Q-9 through Q-17 on `todo.md`:
 
-1. **Bootstrap Job loads `db/init.sql` on first deploy.** Fresh Cloud SQL
-   has no init.sql; Alembic assumes it. Permanent fix: Alembic baseline
-   migration (Q-9).
+1. ~~**Bootstrap Job loads `db/init.sql` on first deploy.**~~ **Closed
+   by Q-9.** The baseline Alembic migration `5adf11b77c19` now builds
+   the schema from an empty DB; the bootstrap Job is gone.
 2. **`cors_origins` env value is a JSON-array string in `values-staging.yaml`.**
    Pydantic-settings v2 otherwise tries to JSON-parse it. Permanent fix:
    `Annotated[list[str], NoDecode]` validator (Q-10).
@@ -1275,9 +1274,8 @@ to `todo.md`.
 
 ### 11.1 Phase 20 — Session 5 Debt
 
-**Q-9 (P0):** Alembic baseline migration. Makes `alembic upgrade head` work
-from an empty DB. Eliminates the bootstrap Job workaround. Highest priority
-because it blocks every future clean deploy.
+**Q-9 (P0):** ✅ Closed — baseline migration `5adf11b77c19` makes
+`alembic upgrade head` work from an empty DB. Bootstrap Job retired.
 
 **Q-10 (P0):** `cors_origins` validator with `NoDecode` + `field_validator`
 in `backend/config.py`. Lets env var be plain comma-separated again.

@@ -134,9 +134,10 @@ list including `pipelines`, `samples`, `ingest`, `organizations`, `labs`,
 
 ## 5. Alembic from a completely empty database
 
-This catches the session-5 failure class: Alembic migrations that assume
-`db/init.sql` ran first. A fresh GCP deploy has no `init.sql`, so this
-local test simulates that exact condition.
+This is the canonical Critical Rule 44 / Rule 52 sanity check: Alembic
+must build the full schema from scratch with no helper SQL. Q-9 closed
+the original gap with the baseline migration `5adf11b77c19`; this test
+guards against regressions.
 
 ```bash
 # Drop and recreate the DB inside the running postgres container
@@ -151,12 +152,12 @@ docker compose exec -e DATABASE_URL=postgresql://jackpot:jackpot@postgres:5432/j
 ```
 
 **Expected:** Alembic prints `Running upgrade  -> <rev>` for each migration
-in the chain and exits 0.
+in the chain (starting at the baseline `5adf11b77c19`) and exits 0.
 
-**If it fails with "relation does not exist"**, your Alembic chain depends
-on `db/init.sql` having been pre-loaded. This is the Session 5 landmine —
-backlog item 2, "Alembic baseline migration" — and it needs to be fixed
-before the next fresh GCP deploy can succeed without a bootstrap Job.
+**If it fails with "relation does not exist"**, a new migration has
+introduced a hidden dependency on prior schema state that's not in the
+chain. Fix the offending migration to create what it needs — never
+re-introduce a bootstrap Job.
 
 **Cleanup:**
 

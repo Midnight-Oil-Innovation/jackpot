@@ -190,97 +190,30 @@ with `ghp_` or `github_pat_`. Cross-check the prefix before pasting.
 
 ---
 
-## 6. First-time environment bootstrap
+## 6. One-time baseline stamp for environments deployed before Q-9
 
-If you're setting up a new environment (staging-clone, production), the
-Alembic migrations alone won't build the schema because they assume
-`db/init.sql` has already run — which only happens in Docker Compose
-locally, not in Cloud SQL.
+Q-9 closed the bootstrap gap: `alembic upgrade head` now builds the
+full schema from an empty database via the baseline migration
+`5adf11b77c19`. **Fresh environments need nothing extra** — Terraform
+applies, the Helm pre-upgrade migration Job runs `alembic upgrade
+head`, and the schema is built.
 
-**Until the baseline Alembic migration lands (TODO P0.1), use this
-bootstrap:**
+**Environments deployed pre-Q-9** (where the legacy bootstrap Job
+loaded `init.sql` and stamped Alembic at `a7fd1fcccb77`) need a
+one-time stamp at the new baseline before the next deploy, so Alembic
+recognises that the existing tables correspond to the baseline
+revision rather than the now-orphaned `a7fd1fcccb77` head:
 
 ```bash
-# 1. Terraform applies infrastructure (Cloud SQL instance, buckets, GKE, etc.)
-cd ~/ASU/jackpot/jackpot-iac/terraform/staging
-terraform apply
-
-# 2. Run the one-off DB bootstrap Job (loads init.sql + stamps Alembic)
-kubectl apply -f - <<'EOF'
-apiVersion: batch/v1
-kind: Job
-metadata:
-  name: jackpot-db-bootstrap
-  namespace: jackpot
-  labels:
-    component: db-bootstrap
-spec:
-  backoffLimit: 0
-  ttlSecondsAfterFinished: 3600
-  template:
-    metadata:
-      labels:
-        component: db-bootstrap
-    spec:
-      restartPolicy: Never
-      serviceAccountName: jackpot-api
-      nodeSelector:
-        pool: api
-      volumes:
-        - name: shared
-          emptyDir: {}
-      initContainers:
-        - name: copy-init-sql
-          image: us-central1-docker.pkg.dev/gotero3-acdp-488517/jackpot/jackpot-api:latest
-          command:
-            - /bin/sh
-            - -c
-            - |
-              set -euo pipefail
-              cp /app/db/init.sql /shared/init.sql
-          volumeMounts:
-            - name: shared
-              mountPath: /shared
-        - name: load-init-sql
-          image: postgres:16-alpine
-          command:
-            - /bin/sh
-            - -c
-            - |
-              set -euo pipefail
-              psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f /shared/init.sql
-          envFrom:
-            - configMapRef:
-                name: jackpot-api-config
-            - secretRef:
-                name: jackpot-api-secrets
-          volumeMounts:
-            - name: shared
-              mountPath: /shared
-      containers:
-        - name: alembic-stamp
-          image: us-central1-docker.pkg.dev/gotero3-acdp-488517/jackpot/jackpot-api:latest
-          command:
-            - /opt/venv/bin/alembic
-            - stamp
-            - a7fd1fcccb77
-          envFrom:
-            - configMapRef:
-                name: jackpot-api-config
-            - secretRef:
-                name: jackpot-api-secrets
-EOF
-
-# 3. Wait for the Job to complete
-kubectl -n jackpot wait --for=condition=complete --timeout=300s \
-    job/jackpot-db-bootstrap
-
-# 4. Now trigger a normal deploy — migrations will chain from a7fd1fcccb77
-gh workflow run deploy-staging.yml --ref staging
+kubectl -n jackpot exec -it deploy/jackpot-api -- \
+    /opt/venv/bin/alembic stamp 5adf11b77c19
 ```
 
-Once TODO P0.1 (Alembic baseline migration) lands, this entire section
-goes away — `alembic upgrade head` will work from an empty DB.
+After this, `helm upgrade` runs normally — the pre-upgrade migration
+Job sees the chain at the baseline and applies only the deltas above
+it. The `a7fd1fcccb77` rename migration is idempotent (only renames
+`is_lab_admin` if the column still exists) so it's a clean no-op
+against any DB built from the baseline.
 
 ---
 

@@ -32,8 +32,9 @@ logger = logging.getLogger(__name__)
 
 # Whitelist of columns the ingest pipeline may INSERT into the samples table.
 # Guards against unexpected keys slipping in from client metadata. Columns
-# are taken from db/init.sql plus migrations (sector, surveillance_relevant,
-# quality_status, target_organisms, date_collected_precision, etc.).
+# are taken from the Alembic baseline migration plus subsequent revisions
+# (sector, surveillance_relevant, quality_status, target_organisms,
+# date_collected_precision, etc.). See db/SCHEMA.sql for a snapshot.
 _SAMPLE_COLUMNS: frozenset[str] = frozenset(
     {
         "sample_id",
