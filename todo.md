@@ -284,19 +284,36 @@ bumped to `>=2.3.0,<3` (resolved 2.14.0) so `NoDecode` is importable.
       (`'["http://localhost:8501","http://localhost:4200"]'`) forms;
       `/health` returns `{"status":"ok","database":"connected"}`.
 
-### Q-11: Remove `sys.path` hack from `pipelines.py`
+### Q-11: Remove `sys.path` hack from `pipelines.py` ✅ CLOSED
 
-- [ ] Option A (preferred): move `nf/shared/schemas/__init__.py`
-      content into `backend/pipeline_schemas.py`. Change
-      `from shared.schemas import RESULT_SCHEMAS` →
-      `from backend.pipeline_schemas import RESULT_SCHEMAS`. Remove
-      `sys.path.insert` from `pipelines.py`.
-- [ ] Alternative Option B: vendor `nf/shared/` into
-      `backend/vendored/nf_shared/` if `nf/shared/` has ongoing
-      independent development.
-- [ ] Verify: `docker run --rm jackpot-api:local-test /opt/venv/bin/python -c "from backend.main import app"`
-      succeeds *without* `COPY nf/` in the Dockerfile.
-- [ ] Can then remove `COPY nf/ ./nf/` from `Dockerfile.api`.
+Vendored `nf/shared/schemas/` → `backend/pipeline_schemas/` (10-file
+package, identical layout — preserves diff-ability with the nf side).
+
+- [x] Picked Option B (layout-preserving vendor) — `backend/pipeline_schemas/`
+      is a package mirroring `nf/shared/schemas/` file-for-file, not a
+      flattened single module. Easier upstream-diff. Provenance noted
+      in the package `__init__.py` docstring.
+- [x] `backend/routers/pipelines.py` now does
+      `from backend.pipeline_schemas import RESULT_SCHEMAS`. Deleted
+      the `_NF_ROOT` block, the `sys.path.insert`, and the late
+      `from shared.schemas import …`. `import sys` removed (no other
+      usage); `Path` retained (used elsewhere).
+- [x] `Dockerfile.api` no longer has `COPY nf/`. New `.dockerignore`
+      at repo root excludes `nf/` (and other build-context bloat) so
+      the API image is smaller and won't accidentally regress.
+- [x] Critical Rule 54 added; Rule 46 amended to drop the Q-11 caveat
+      and reflect the new boundary (mirrors Q-9/Q-10 split pattern).
+- [x] Verified `from backend.routers import pipelines` succeeds with
+      `nf/` absent from disk (mv nf nf.bak simulation).
+- [x] Verified docker build succeeds with `nf/` excluded; image's
+      `/app/` no longer contains `nf/`; `from backend.pipeline_schemas
+      import RESULT_SCHEMAS` works inside the container (9 schemas).
+- [x] `docker compose down && up -d --build` brings stack up clean;
+      `/health` → `{"status":"ok","database":"connected"}`.
+- [x] `jackpot-nf` submodule unchanged (SHA `a45fb13`).
+- [x] 560 tests passing, 88.34% coverage (was 560/87.62% — coverage
+      ticked up because the vendored schemas count toward the
+      measured surface).
 
 ### Q-12: Terraform-owned DATABASE_URL Secret
 

@@ -13,7 +13,7 @@ and public health research. Successor to APGAP (ASU-RSE-Services).
 
 1. Read `spec.md` — understand the goals and constraints for the current sprint
 2. Read `todo.md` — find the next unchecked task
-3. Re-read this file (`docs/CLAUDE.md`) — all 53 Critical Rules apply at all times
+3. Re-read this file (`docs/CLAUDE.md`) — all 54 Critical Rules apply at all times
 4. Confirm the baseline is stable: `uv run pytest` — ≥477 tests passing, ≥60% coverage
 
 ### Work Loop
@@ -551,35 +551,29 @@ class Settings(BaseSettings):
 
 See also Critical Rule 53.
 
-**46. `nf/` submodule contents must be importable or wrapped.**
-`backend/routers/pipelines.py` imports `RESULT_SCHEMAS` from the
-`jackpot-nf` submodule via `sys.path.insert(0, str(_NF_ROOT))`. Any
-change to the backend that removes `nf/` from the deployment (Docker
-image, CI runner, test environment) must either restore the import
-path or wrap the import in a try/except that tolerates missing state.
+**46. `nf/` submodule is runtime-only — backend never imports across the boundary.**
+The `jackpot-nf` submodule at `nf/` ships Nextflow processes, parsers,
+plugins, and result schemas that run inside GCP Batch containers. The
+backend MUST NOT import any module from `nf/` at Python import time.
+Anything the backend genuinely needs from nf is vendored into the
+backend package and kept in sync via explicit code review (Q-11 closed
+this for `RESULT_SCHEMAS` — see `backend/pipeline_schemas/`).
 
-If `nf/shared/` isn't on disk, the entire FastAPI app crashes with
-`ModuleNotFoundError` at import time because `main.py` imports the
-pipelines router unconditionally. Session 5 spent a lot of time on
-this before the `Dockerfile.api COPY nf/` fix landed.
-
-**Required in `Dockerfile.api`:**
-
-```dockerfile
-COPY nf/ ./nf/
-```
+`backend/routers/pipelines.py` imports `RESULT_SCHEMAS` from
+`backend.pipeline_schemas`, never from `nf/shared/schemas`. The
+`Dockerfile.api` does NOT `COPY nf/`, and `.dockerignore` excludes
+`nf/` from the build context.
 
 **Required in CI checkout:** `submodules: recursive` on
-`actions/checkout@v4`, or an explicit `git submodule update --init --recursive`
-step with proper PAT injection via `url."https://x-access-token:${GH_PAT}@github.com/".insteadOf`.
+`actions/checkout@v4` is still needed for the `schema` submodule (the
+LinkML source) — but `nf/` is no longer required for the backend
+build. CI workflows that only test/build the backend can skip `nf/`.
 
 **Required in git config:** `.gitmodules` for `jackpot-backend` must
 reference `git@github.com:gotero/jackpot-nf.git`, never a local
 filesystem path. Same applies to the `schema` submodule.
 
-**Related backlog:** Q-11 in `todo.md` — eliminate the sys.path hack by
-moving `RESULT_SCHEMAS` into the backend package. Then `COPY nf/` can
-be dropped from `Dockerfile.api` entirely.
+See also Critical Rule 54.
 
 **47. Never paste across secret types.**
 GitHub Actions secrets, GCP Secret Manager entries, and Google OAuth
@@ -746,6 +740,15 @@ Pydantic-settings v2 unconditionally `json.loads()` list fields
 otherwise, which is what crashed the staging Alembic Job in Session 5.
 
 See Rule 45 for the worked code template.
+
+**54. Backend code MUST NOT import from sibling repos via sys.path manipulation.**
+
+Anything the backend needs at import time must live inside the
+`backend/` package. Cross-repo Python (e.g. nf-iridanext result
+schemas) is vendored into `backend/` and kept in sync via explicit
+code review, not via import-time path tricks. Any tool that
+evaluates backend code without the sibling repo present (linting
+in CI, tests in sandboxes, backend-only docker builds) must work.
 
 ---
 

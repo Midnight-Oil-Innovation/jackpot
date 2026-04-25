@@ -1653,3 +1653,43 @@ Rule 44 ↔ Rule 52 in Q-9.
   Only the env-var test proves `NoDecode` is doing its job. If you
   ever add another `list[*]` Settings field, mirror this two-axis
   test pattern — `tests/test_config.py` is the template.
+
+## Q-11 — Vendor RESULT_SCHEMAS into backend (2026-04-24)
+
+Closed the cross-repo sys.path hack. `backend/routers/pipelines.py`
+now imports `RESULT_SCHEMAS` from `backend.pipeline_schemas`, a
+10-file package vendored from `nf/shared/schemas/` and kept in sync
+via explicit code review. `Dockerfile.api` no longer `COPY nf/`s, and
+a new `.dockerignore` excludes `nf/` from the build context.
+
+### Three things worth recording
+
+- **`.dockerignore` is build-context-wide, not Dockerfile-specific.**
+  My first draft excluded `frontend/` on the theory that it was only
+  needed by `Dockerfile.ui`. Wrong: `.dockerignore` applies to every
+  build that uses the same context. The first compose rebuild blew
+  up immediately with `target ui: failed to compute cache key ...
+  "/frontend": not found`. Fix: drop `frontend/` from `.dockerignore`
+  and leave a comment explaining the rule. Lesson: when sharing a
+  build context across multiple Dockerfiles (the compose pattern),
+  `.dockerignore` entries must be the intersection of what every
+  Dockerfile DOESN'T need, not the union of what each one
+  individually doesn't need.
+
+- **Layout-preserving vendor beats flatten-into-one-module.** The
+  user's plan offered two options: copy `nf/shared/schemas/` as a
+  10-file package vs. flatten into a single
+  `backend/pipeline_schemas.py`. Picked the package layout (10 files,
+  not 1) because future schema changes on the nf side now diff
+  cleanly file-for-file against the vendored copy. The
+  flatten-into-one approach would force a manual re-merge every time
+  any single schema changed upstream. Cost of the package layout: 9
+  extra files in git. Benefit: trivial future syncs.
+
+- **Pyright LSP reported a stale "import could not be resolved"
+  error after the new package was created; the CLI Pyright run was
+  clean.** First sign that the LSP cache hadn't picked up the new
+  package directory yet — the file existed on disk but the LSP's
+  workspace index was stale. `uv run pyright backend/routers/pipelines.py`
+  reported `0 errors`. Treat new-package LSP misses as cache lag,
+  not a real bug — verify with the CLI before chasing.

@@ -19,7 +19,6 @@ from __future__ import annotations
 import hmac
 import json
 import logging
-import sys
 from pathlib import Path
 from typing import Any
 
@@ -45,17 +44,8 @@ from backend.pipeline_config import (
     work_dir_for,
 )
 from backend.pipeline_results_loader import load_pipeline_results
+from backend.pipeline_schemas import RESULT_SCHEMAS
 from backend.responses import error, success, success_list
-
-# jackpot-nf ships the canonical result schemas used by both the parsers
-# and this registration endpoint. The submodule lives at ``nf/`` next to
-# this repo and exposes the ``shared`` package. Prepend its path so
-# ``from shared.schemas import RESULT_SCHEMAS`` resolves.
-_NF_ROOT = Path(__file__).resolve().parents[2] / "nf"
-if str(_NF_ROOT) not in sys.path:
-    sys.path.insert(0, str(_NF_ROOT))
-
-from shared.schemas import RESULT_SCHEMAS  # noqa: E402
 
 logger = logging.getLogger(__name__)
 
