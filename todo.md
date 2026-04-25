@@ -408,18 +408,47 @@ Do these in order — each builds on earlier ones.
 - [x] Auth probe via `current_user()` returns Glen Otero (platform
       admin, Otero Lab director)
 
-### UI-B: Upload page
+### UI-B: Upload page ✅ CONTRACT VERIFIED (2026-04-24) — browser walk still owed
 
-- [ ] Navigate to Upload.
-- [ ] Verify the form renders — all BaseSample fields present,
-      sequencing lab dropdown populated from
-      `GET /api/v1/sequencing-labs/`, project dropdown populated
-      from `GET /api/v1/projects/`.
-- [ ] Upload a test FASTQ + full metadata (HumanSample, clinical
-      sector, organism SARS-CoV-2, all Tier 3 fields).
-- [ ] Submit → expect success response with `sample_id` and computed
-      `quality_status`.
-- [ ] If broken, triage and log the failure in `docs/review_log.md`.
+Reframed to backend-contract + page-code review (no headless-browser
+tooling in session). Detailed report: `docs/learnings.md` "UI-B —
+Upload page triage". Two real backend bugs found and fixed at root.
+
+- [x] **Backend ingest contract**: happy + 4 error scenarios verified
+      via curl against the live local stack. Envelope shape matches
+      `frontend/lib/api.py` expectations.
+- [x] **Bug fix 1 — `validate_file_type()` was never called on
+      upload.** Now invoked in `backend/routers/ingest.py:upload()`
+      via tempfile, with `FileDetectorError` → 400. CSV-named-fasta
+      and gzipped-CSV-named-fastq.gz now rejected with human messages.
+      Regression: `test_upload_rejects_csv_renamed_to_fasta`,
+      `test_upload_rejects_gzipped_csv_renamed_to_fastq_gz`.
+- [x] **Bug fix 2 — HTTPException-based errors bypassed the JACKPOT
+      envelope.** Added global `HTTPException` and
+      `RequestValidationError` handlers in `backend/main.py` that
+      normalise every error to `{"success": false, "error": {...}}`.
+      Also fixed `dataharmonizer.py` raw `JSONResponse({"detail": ...})`
+      → `responses.error()`. Regression:
+      `test_validation_error_uses_jackpot_envelope`,
+      `test_string_detail_http_exception_uses_envelope`.
+- [x] **Page-code review**: `upload.py` + `api.py` confirmed to parse
+      the new envelope correctly. Every error path → `ApiError.message`
+      → `st.error("Upload failed: ...")`. No paths produce raw JSON
+      dumps post-fix.
+- [x] **Seed rename**: "Otero Lab" → "Otero Outpost" via Alembic
+      migration `e5315db18d40`. `db/SCHEMA.sql` snapshot updated.
+- [x] **564 tests passing, 88.22% coverage** (was 560/87.62%; +4
+      regression tests, no skips).
+- [ ] **Browser walkthrough still owed** — needs a human at the
+      keyboard to confirm rendering. Steps to click through (matches
+      contract walkthrough): valid upload → error scenarios 7/8/9.
+      Step 6 (missing host_age) doesn't trigger as the task assumed
+      — host_age is optional in the current validator; product-owner
+      decision needed if it should be required for Human samples.
+- [ ] **Recommend opening UI-B2** for missing form fields:
+      sequencing-lab + project dropdowns, sector auto-derive, host
+      species/age/sex, isolation source, organism autocomplete,
+      year-only date tolerance UI. Current page is an MVP scaffold.
 
 ### UI-C: Search page
 

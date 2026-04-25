@@ -32,14 +32,14 @@ async def test_download_template_metagenomics(client):
 async def test_download_template_unknown_source_returns_400(client):
     resp = await client.get("/api/v1/dataharmonizer/templates/martian/ANALYZABLE")
     assert resp.status_code == 400
-    assert "source_type" in resp.json()["detail"]
+    assert "source_type" in resp.json()["error"]["message"]
 
 
 @pytest.mark.asyncio
 async def test_download_template_unknown_tier_returns_400(client):
     resp = await client.get("/api/v1/dataharmonizer/templates/human/LEGENDARY")
     assert resp.status_code == 400
-    assert "tier" in resp.json()["detail"].lower()
+    assert "tier" in resp.json()["error"]["message"].lower()
 
 
 @pytest.mark.asyncio

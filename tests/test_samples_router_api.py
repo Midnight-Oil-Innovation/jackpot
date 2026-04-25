@@ -433,7 +433,7 @@ async def test_patch_locked_fields_rejected(client, as_platform_admin):
         json={"quality_status": "SUBMITTABLE"},
     )
     assert resp.status_code == 422
-    assert "quality_status" in str(resp.json()["detail"])
+    assert "quality_status" in str(resp.json()["error"]["message"])
     _cleanup_samples(sid)
 
 

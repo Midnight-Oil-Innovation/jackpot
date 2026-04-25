@@ -3,7 +3,9 @@ import csv
 import io
 import json
 import logging
+import tempfile
 from datetime import date
+from pathlib import Path
 from typing import Any
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
@@ -13,9 +15,11 @@ from backend.auth.guards import get_current_user, require_platform_admin
 from backend.database import execute_query, execute_write, get_db_dep
 from backend.epiweek import compute_epiweeks
 from backend.file_detector import (
+    FileDetectorError,
     detect_files,
     get_convenience_uris,
     get_file_type,
+    validate_file_type,
 )
 from backend.notifications import NotificationEvents, create_notification
 from backend.responses import success
@@ -361,14 +365,28 @@ async def upload(
     uri_map: dict[str, str] = {}
     size_map: dict[str, int] = {}
     for up in uploads:
+        filename = up.filename
+        if not filename:
+            raise HTTPException(status_code=422, detail="Uploaded file is missing a filename.")
         data = await up.read()
-        key = f"staging/{sample_id}/{up.filename}"
+        # Critical Rule 11: file content vs extension validation lives only
+        # in file_detector. Write the bytes to a temp file with the original
+        # name so validate_file_type() can sniff content + check extension
+        # before we stage anything to object storage.
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp_path = Path(tmpdir) / filename
+            tmp_path.write_bytes(data)
+            try:
+                validate_file_type(tmp_path)
+            except FileDetectorError as exc:
+                raise HTTPException(status_code=400, detail=str(exc)) from exc
+        key = f"staging/{sample_id}/{filename}"
         try:
             uri = stage_file(io.BytesIO(data), key)
         except StorageError as exc:
             raise HTTPException(status_code=500, detail=str(exc)) from exc
-        uri_map[up.filename] = uri
-        size_map[up.filename] = len(data)
+        uri_map[filename] = uri
+        size_map[filename] = len(data)
 
     sample, files = _ingest_one(meta, uri_map, size_map, user, db, "gui")
     out = _serialise(sample)

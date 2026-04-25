@@ -14,9 +14,9 @@ import io
 
 from fastapi import APIRouter, HTTPException, Request, Response, UploadFile
 from fastapi import File as FastAPIFile
-from fastapi.responses import JSONResponse
 
 from backend.auth.guards import get_current_user
+from backend.responses import error
 from backend.template_generator import (
     SOURCE_TYPE_CLASS,
     TemplateTier,
@@ -31,25 +31,21 @@ router = APIRouter(prefix="/api/v1/dataharmonizer", tags=["dataharmonizer"])
 def download_template(source_type: str, tier: str, metagenomics: bool = False):
     """Download a CSV template for a source type + quality tier."""
     if source_type not in SOURCE_TYPE_CLASS:
-        return JSONResponse(
+        return error(
+            code="UNKNOWN_SOURCE_TYPE",
+            message=(
+                f"Unknown source_type '{source_type}'. "
+                f"Expected one of: {sorted(SOURCE_TYPE_CLASS.keys())}"
+            ),
             status_code=400,
-            content={
-                "detail": (
-                    f"Unknown source_type '{source_type}'. "
-                    f"Expected one of: {sorted(SOURCE_TYPE_CLASS.keys())}"
-                )
-            },
         )
     try:
         tier_enum = TemplateTier(tier.upper())
     except ValueError:
-        return JSONResponse(
+        return error(
+            code="UNKNOWN_TIER",
+            message=(f"Unknown tier '{tier}'. Expected one of: {[t.value for t in TemplateTier]}"),
             status_code=400,
-            content={
-                "detail": (
-                    f"Unknown tier '{tier}'. Expected one of: {[t.value for t in TemplateTier]}"
-                )
-            },
         )
 
     csv_content = generate_csv_template(source_type, tier_enum, metagenomics)

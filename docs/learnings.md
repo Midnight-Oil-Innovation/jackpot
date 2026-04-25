@@ -1693,3 +1693,174 @@ a new `.dockerignore` excludes `nf/` from the build context.
   workspace index was stale. `uv run pyright backend/routers/pipelines.py`
   reported `0 errors`. Treat new-package LSP misses as cache lag,
   not a real bug — verify with the CLI before chasing.
+
+## UI-B — Upload page triage (2026-04-24)
+
+Reframed from "browser walkthrough" to "backend-contract verification
++ page-code review" because this session has no headless-browser
+tooling. Drove every payload the page would send via curl, verified
+the API contract for each happy/error path, and read
+`frontend/pages/upload.py` + `frontend/lib/api.py` to confirm the
+error-rendering plumbing handles each path. Surfaced two real backend
+bugs and fixed both at root.
+
+### Page surface inventory (current Upload page MVP)
+
+| Expected field per UI-B task | Status |
+|---|---|
+| Sample type selector | PRESENT (Human/Animal/Vector/Wastewater/Environmental) |
+| Sector | PRESENT but MANUAL — not auto-derived from source_type |
+| Tier selector with descriptions | MISSING — only a live "estimated tier" badge |
+| Organism name | PRESENT (free text — no autocomplete/dropdown) |
+| Collection country | PRESENT (free text) |
+| Collection state + admin units | MISSING (only country) |
+| Date collected (year-only tolerance UI) | PARTIAL — `st.date_input` forces a full date |
+| Host species | MISSING |
+| Host age | MISSING |
+| Host sex | MISSING |
+| Isolation source | MISSING |
+| Sequencing lab DROPDOWN from /api/v1/sequencing-labs/ | MISSING — free text input |
+| Project DROPDOWN from /api/v1/projects/ | MISSING — `st.number_input` for project_id |
+| FASTQ R1/R2 file upload | PRESENT |
+
+The page is a working MVP: it relays metadata + files to the ingest
+endpoint, surfaces the validator's tier on the response, and handles
+errors via the ApiClient envelope. It is NOT the full-featured form
+the UI-B task description envisaged. Recommend opening **UI-B2** for:
+sequencing-lab + project dropdowns, sector auto-derivation, host
+fields, isolation source, organism autocomplete, year-only date
+tolerance UI.
+
+### Per-scenario status
+
+All scenarios driven via `curl POST /api/v1/ingest/upload` against
+the live local stack with the mock identity (Glen Otero, Platform
+Admin, Otero-Outpost director). "Contract verified" = API returned
+the expected envelope and the page-code review confirms `upload.py`
+will render it via `st.error(f"Upload failed: {exc.message}")`.
+
+| Step | Scenario | Status |
+|---|---|---|
+| 3 | GET /api/v1/sequencing-labs/ → 3 seeded labs | CONTRACT VERIFIED (Sonora Quest, LabCorp, Otero Outpost) |
+| 3 | GET /api/v1/projects/ → ≥1 | CONTRACT VERIFIED (Dev Project) |
+| 4 | POST /api/v1/ingest/upload happy path | CONTRACT VERIFIED — 201, sample_id returned, quality_status=PRELIMINARY, sector=clinical, scrub_status=PENDING |
+| 5 | GET /api/v1/samples/{integer-id} retrieves | CONTRACT VERIFIED. Note: endpoint requires the integer DB id, not the string sample_id — UI must capture `data.id` from the upload response |
+| 5 | audit_log row written | CONTRACT VERIFIED (action=CREATE_SAMPLE, resource_type=sample) |
+| 6 | Missing host_age (Tier 3 field) → 422 | NOT TRIGGERED — host_age is optional per current validator. The UI-B task description expected a Tier 3 requirement, but `validate_sample()` doesn't enforce it. Documented for product-owner review |
+| 7 | CSV body named .fasta → 400 | CONTRACT VERIFIED **after fix** — `Upload failed: fake.fasta has extension .fasta but its content could not be recognised as any known format. ...` |
+| 8 | Gzipped CSV named .fastq.gz → 400 | CONTRACT VERIFIED **after fix** — same human-readable message, `_read_first_bytes` decompressed gzip first |
+| 9 | Missing organism_name (BASE_REQUIRED) → 422 | CONTRACT VERIFIED — `Upload failed: Missing required field: organism_name` |
+| 10 | Invalid enum value | FORECLOSED by UI — source_type/sharing/sector are all `st.selectbox`, can't pick an out-of-range value from the page |
+
+### Bugs found and fixed
+
+**Bug 1: file content vs extension validation skipped on upload.**
+
+- **Symptom**: a CSV body uploaded as `fake.fasta` was accepted
+  (returned 201 with the CSV staged into MinIO under a `.fasta` URI).
+  Step 7 of the UI-B walkthrough was supposed to trigger this and
+  didn't.
+- **Root cause**: `backend/routers/ingest.py:upload()` called
+  `detect_files()` on filenames but never invoked the existing
+  `validate_file_type()` function from `backend/file_detector.py`,
+  which IS the content-vs-extension sniffer (handles gzip
+  transparently).
+- **Fix** (`backend/routers/ingest.py:367-388`): for each uploaded
+  file, write its bytes to a `tempfile.TemporaryDirectory` with the
+  original filename, then call `validate_file_type(tmp_path)` before
+  staging. `FileDetectorError` → `HTTPException(400, detail=str(exc))`
+  which the new envelope handler wraps as
+  `{"success": false, "error": {"code": "HTTP_400", "message": "..."}}`.
+- **Regression tests**: `test_upload_rejects_csv_renamed_to_fasta`
+  + `test_upload_rejects_gzipped_csv_renamed_to_fastq_gz` in
+  `tests/test_ingest_api.py`. Cover both the bare-extension case and
+  the gzip-peek case.
+
+**Bug 2: HTTPException-based errors bypass the JACKPOT envelope.**
+
+- **Symptom**: validator failures returned the raw FastAPI shape
+  `{"detail": {"errors": [...], "warnings": [...], ...}}`. The
+  ApiClient at `frontend/lib/api.py:141-147` looks for
+  `body["error"]["message"]`; none present, so `err = {}`,
+  `err.get("message")` is None, falls back to
+  `resp.text` which is the entire JSON dump. The user would see
+  `Upload failed: {"detail":{"errors":["Missing required field..."]}}`
+  in the Streamlit toast — Critical Rule 24 violation.
+- **Root cause**: `ingest.py` (14 raises), `samples.py` (16),
+  `dataharmonizer.py` (3 — using raw `JSONResponse` instead of the
+  helper), and a few others use FastAPI's `HTTPException` instead of
+  `responses.error()`. Per-router rewrite is too invasive for this
+  scope.
+- **Fix** (`backend/main.py:117-160`): one global
+  `@app.exception_handler(HTTPException)` that converts all
+  HTTPException raises to the JACKPOT envelope (string detail →
+  `error.message`, dict detail → `error.message` from first error
+  entry + full structure preserved in `error.detail`). Plus a
+  `RequestValidationError` handler so FastAPI's auto-422s also use
+  the envelope (path/body validation errors get a clean string
+  message like `"path.sample_id: Input should be a valid integer"`).
+- **Also fixed**: `backend/routers/dataharmonizer.py` was using raw
+  `JSONResponse({"detail": ...})` — replaced with `error()` helper
+  for consistency (the global handler doesn't intercept this since
+  it's not an HTTPException).
+- **Regression tests**:
+  `test_validation_error_uses_jackpot_envelope` (dict-detail path),
+  `test_string_detail_http_exception_uses_envelope` (string-detail
+  path) in `tests/test_ingest_api.py`. Existing tests that asserted
+  on the old `resp.json()["detail"]` shape were updated to
+  `resp.json()["error"]["message"]` /
+  `resp.json()["error"]["detail"]` — affected
+  `test_dataharmonizer_api.py` (×2),
+  `test_samples_router_api.py` (×1),
+  `test_ingest_api.py` (×2).
+
+### Page-code review — error-rendering plumbing
+
+Confirmed by reading `frontend/pages/upload.py:179-184` +
+`frontend/lib/api.py:141-147`:
+
+- **Envelope errors** (`success: false`) → `ApiError(code, message)`
+  → `st.error(f"Upload failed: {exc.message}")`. Both server-defined
+  codes (`HTTP_400` from file_detector, `HTTP_422` from validator)
+  and ApiClient-defined codes (`NETWORK`, `BAD_RESPONSE`,
+  `HTTP_ERROR`) flow through the same path.
+- **Non-JSON error responses** (api.py:130-131) → `HTTP_ERROR` code
+  with the raw response text. Should be rare given the new global
+  handler returns JSONResponse for everything; left as defence in
+  depth.
+- After the fix, every error path returns a string suitable for
+  direct display in `st.error()` — no JSON dumps, no stack traces.
+
+### Out-of-scope / followup recommendations
+
+- **UI-B2 (recommended new backlog item)**: build out the Upload
+  page form with sequencing-lab dropdown, project dropdown, sector
+  auto-derive from source_type, host fields, isolation source.
+  Estimated effort: 1-2 sessions.
+- **Browser walkthrough**: still required to confirm rendering
+  matches the contract. Once UI-B2 lands, the human walk should
+  click through happy + error paths and verify the actual `st.error`
+  toast renders the messages I traced.
+- **Other `HTTPException`-heavy routers** (`samples.py` has 16,
+  `auth.py` has 2, `gisaid.py` has 2): now silently fixed by the
+  global envelope handler. If individual routers want richer error
+  codes (e.g. `SAMPLE_NOT_FOUND` instead of `HTTP_404`), they can
+  migrate to `responses.error()` over time.
+
+### Lessons
+
+- **When the UI is a layer ahead of you, drive the contract not the
+  pixels.** I couldn't see widgets render, but `curl` against the
+  same endpoint with the same multipart form caught two real bugs
+  the page would have surfaced as opaque toasts. The walkthrough
+  doc was written assuming a browser; reframing to the API surface
+  found the bugs faster than clicking would have.
+- **A global FastAPI exception handler is the right blast radius
+  for a contract-shape fix.** Per-router rewrites would have
+  touched 16 files and broken the existing test contracts. The
+  one-handler fix in main.py is reversible, idempotent for handlers
+  that already use `responses.error()`, and the test-suite
+  breakage was 5 line edits.
+- **`tests/conftest.py` had `sequencing_lab="Otero Outpost"`
+  pre-baked.** Someone foresaw the rename. The seed migration just
+  caught reality up to the test fixture's expectations.

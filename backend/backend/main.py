@@ -1,7 +1,8 @@
 from contextlib import asynccontextmanager
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
@@ -10,6 +11,7 @@ from backend.database import execute_query
 from backend.jobs import run_access_request_job, run_scrubber_queue_job
 from backend.logging_config import configure_logging
 from backend.middleware import RequestIDMiddleware
+from backend.responses import error
 from backend.routers import (
     archive_requests,
     auth,
@@ -107,21 +109,68 @@ app.add_middleware(
 )
 
 
+# Critical Rule 24: every error response goes through the JACKPOT envelope
+# from backend/responses.py. A handful of routers still raise HTTPException
+# directly (FastAPI's idiomatic error pattern); these handlers normalise
+# the response shape so the frontend ApiClient can always extract a clean
+# message from `error.message` instead of falling back to a raw JSON dump.
+@app.exception_handler(HTTPException)
+async def _http_exception_to_envelope(request: Request, exc: HTTPException) -> JSONResponse:
+    detail = exc.detail
+    if isinstance(detail, dict):
+        # Structured detail (e.g. validator output: {"errors": [...], "warnings": [...]}).
+        # Primary message = first error if available; full structure preserved in detail.
+        errors = detail.get("errors") if isinstance(detail.get("errors"), list) else None
+        message = errors[0] if errors else "Request failed."
+        return error(
+            code=f"HTTP_{exc.status_code}",
+            message=message,
+            detail=detail,
+            status_code=exc.status_code,
+        )
+    return error(
+        code=f"HTTP_{exc.status_code}",
+        message=str(detail) if detail is not None else "Request failed.",
+        status_code=exc.status_code,
+    )
+
+
+@app.exception_handler(RequestValidationError)
+async def _request_validation_to_envelope(
+    request: Request, exc: RequestValidationError
+) -> JSONResponse:
+    # FastAPI's auto-422 for missing/invalid request fields. Surface the first
+    # validation error as the primary message so the UI gets a readable string.
+    errs = exc.errors()
+    if errs:
+        first = errs[0]
+        loc = ".".join(str(p) for p in first.get("loc", []) if p not in ("body",))
+        message = f"{loc}: {first.get('msg', 'invalid')}" if loc else first.get("msg", "invalid")
+    else:
+        message = "Request validation failed."
+    return error(
+        code="HTTP_422",
+        message=message,
+        detail={"errors": errs},
+        status_code=422,
+    )
+
+
 @app.get("/health")
-def health() -> dict:
+def health() -> JSONResponse:
     try:
         execute_query("SELECT 1")
         db_status = "connected"
     except Exception:
         db_status = "unavailable"
-    if db_status == "unavailable":
-        return JSONResponse(
-            status_code=503,
-            content={
-                "status": "unavailable",
-                "version": __version__,
-                "project": "JACKPOT",
-                "database": db_status,
-            },
-        )
-    return {"status": "ok", "version": __version__, "project": "JACKPOT", "database": db_status}
+    status_code = 503 if db_status == "unavailable" else 200
+    body_status = "unavailable" if db_status == "unavailable" else "ok"
+    return JSONResponse(
+        status_code=status_code,
+        content={
+            "status": body_status,
+            "version": __version__,
+            "project": "JACKPOT",
+            "database": db_status,
+        },
+    )

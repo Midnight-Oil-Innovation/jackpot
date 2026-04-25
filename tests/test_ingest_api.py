@@ -194,7 +194,7 @@ async def test_upload_unknown_sequencing_lab_returns_422(client, mock_storage):
         },
     )
     assert resp.status_code == 422
-    assert "Unknown sequencing lab" in str(resp.json()["detail"])
+    assert "Unknown sequencing lab" in str(resp.json()["error"]["message"])
     _cleanup_sample(sid)
 
 
@@ -216,7 +216,10 @@ async def test_upload_missing_adhs_medsis_id_returns_422(client, mock_storage):
         },
     )
     assert resp.status_code == 422
-    detail = resp.json()["detail"]
+    body = resp.json()
+    assert body["success"] is False
+    assert "adhs_medsis_id" in body["error"]["message"]
+    detail = body["error"]["detail"]
     assert any("adhs_medsis_id" in e for e in detail.get("errors", []))
     _cleanup_sample(sid)
 
@@ -491,3 +494,117 @@ async def test_ingest_root_lists_endpoints(client):
     resp = await client.get("/api/v1/ingest/")
     assert resp.status_code == 200
     assert "endpoints" in resp.json()
+
+
+# ── UI-B regression tests ────────────────────────────────────────────────────
+# Both of these guard against the bugs Phase 21 UI-B uncovered: file-content
+# validation was being skipped on upload, and HTTPException-based errors
+# bypassed the JACKPOT envelope so the frontend rendered raw JSON dumps.
+
+
+@pytest.mark.asyncio
+async def test_upload_rejects_csv_renamed_to_fasta(client, mock_storage):
+    """CSV bytes named .fasta must be rejected by file_detector content sniffing."""
+    sid = "ING-EXT-LIE"
+    _cleanup_sample(sid)
+    meta = _base_metadata(sid)
+    resp = await client.post(
+        "/api/v1/ingest/upload",
+        data={"metadata": json.dumps(meta)},
+        files={
+            "fastq_r1": (
+                "fake.fasta",
+                b"col1,col2,col3\na,b,c\nd,e,f\n",
+                "application/octet-stream",
+            ),
+        },
+    )
+    assert resp.status_code == 400
+    body = resp.json()
+    assert body["success"] is False
+    assert body["error"]["code"] == "HTTP_400"
+    # Human-readable, names the file and the extension. Not a stack trace.
+    assert "fake.fasta" in body["error"]["message"]
+    assert ".fasta" in body["error"]["message"]
+    _cleanup_sample(sid)
+
+
+@pytest.mark.asyncio
+async def test_upload_rejects_gzipped_csv_renamed_to_fastq_gz(client, mock_storage):
+    """Gzipped CSV named .fastq.gz must be rejected — file_detector peeks through gzip."""
+    import gzip as _gzip
+
+    sid = "ING-GZ-LIE"
+    _cleanup_sample(sid)
+    meta = _base_metadata(sid)
+    payload = _gzip.compress(b"col1,col2,col3\na,b,c\nd,e,f\n")
+    resp = await client.post(
+        "/api/v1/ingest/upload",
+        data={"metadata": json.dumps(meta)},
+        files={
+            "fastq_r1": ("fake.fastq.gz", payload, "application/gzip"),
+        },
+    )
+    assert resp.status_code == 400
+    body = resp.json()
+    assert body["success"] is False
+    assert "fake.fastq.gz" in body["error"]["message"]
+    _cleanup_sample(sid)
+
+
+@pytest.mark.asyncio
+async def test_validation_error_uses_jackpot_envelope(client, mock_storage):
+    """HTTPException(detail={...}) responses are normalised to the JACKPOT envelope.
+
+    Pre-fix, the raw FastAPI shape `{"detail": {...}}` reached the frontend and
+    the ApiClient fell back to dumping the whole body as the error message.
+    The global handler in main.py now wraps every HTTPException in
+    {"success": false, "error": {"code", "message", "detail"}}.
+    """
+    sid = "ING-ENVELOPE"
+    _cleanup_sample(sid)
+    meta = _base_metadata(sid)
+    meta.pop("organism_name")  # BASE_REQUIRED — triggers validator failure
+    resp = await client.post(
+        "/api/v1/ingest/upload",
+        data={"metadata": json.dumps(meta)},
+        files={
+            "fastq_r1": (
+                f"{sid}_R1.fastq.gz",
+                b"@SEQ\nACGT\n+\n!!!!\n",
+                "application/gzip",
+            ),
+        },
+    )
+    assert resp.status_code == 422
+    body = resp.json()
+    # Envelope contract — these keys are what frontend/lib/api.py reads.
+    assert body["success"] is False
+    assert body["error"]["code"] == "HTTP_422"
+    assert "organism_name" in body["error"]["message"]
+    assert isinstance(body["error"]["detail"], dict)
+    _cleanup_sample(sid)
+
+
+@pytest.mark.asyncio
+async def test_string_detail_http_exception_uses_envelope(client, mock_storage):
+    """HTTPException(detail='string') also normalises (sequencing_lab is rejected)."""
+    sid = "ING-ENVELOPE-STR"
+    _cleanup_sample(sid)
+    meta = _base_metadata(sid, sequencing_lab="Nonexistent Sequencing Lab")
+    resp = await client.post(
+        "/api/v1/ingest/upload",
+        data={"metadata": json.dumps(meta)},
+        files={
+            "fastq_r1": (
+                f"{sid}_R1.fastq.gz",
+                b"@SEQ\nACGT\n+\n!!!!\n",
+                "application/gzip",
+            ),
+        },
+    )
+    assert resp.status_code == 422
+    body = resp.json()
+    assert body["success"] is False
+    assert "Unknown sequencing lab" in body["error"]["message"]
+    _cleanup_sample(sid)

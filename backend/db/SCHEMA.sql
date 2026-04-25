@@ -734,7 +734,7 @@ VALUES ('gotero@linuxprophet.com', 'Glen Otero', 1, TRUE)
 ON CONFLICT DO NOTHING;
 
 INSERT INTO labs (organization_id, display_name, description, created_by_id)
-VALUES (1, 'Otero Lab', 'Local dev seed lab', 1)
+VALUES (1, 'Otero Outpost', 'Local dev seed lab', 1)
 ON CONFLICT DO NOTHING;
 
 INSERT INTO lab_membership (user_id, lab_id, permission_group_id, is_lab_director, granted_by_id)
@@ -747,7 +747,7 @@ VALUES (1, 'Dev Project', 'Local dev seed project', 1,
         ARRAY['Severe acute respiratory syndrome coronavirus 2'])
 ON CONFLICT DO NOTHING;
 
--- Auto-add Otero Lab as a sequencing lab (demonstrates the backlog #42 auto-add hook)
+-- Auto-add Otero Outpost as a sequencing lab (demonstrates the backlog #42 auto-add hook)
 INSERT INTO sequencing_labs (name, organization, lab_id, is_external)
-VALUES ('Otero Lab', 'ASU', 1, FALSE)
+VALUES ('Otero Outpost', 'ASU', 1, FALSE)
 ON CONFLICT DO NOTHING;
