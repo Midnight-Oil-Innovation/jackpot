@@ -1,6 +1,9 @@
+import json
 from functools import lru_cache
+from typing import Annotated
 
-from pydantic_settings import BaseSettings
+from pydantic import field_validator
+from pydantic_settings import BaseSettings, NoDecode
 
 
 class Settings(BaseSettings):
@@ -25,12 +28,34 @@ class Settings(BaseSettings):
     ncbi_api_key: str = ""
     jackpot_api_token: str = ""
     scheduler_enabled: bool = True
-    cors_origins: list[str] = ["http://localhost:8501", "http://localhost:4200"]
+    cors_origins: Annotated[list[str], NoDecode] = [
+        "http://localhost:8501",
+        "http://localhost:4200",
+    ]
     pipeline_executor: str = "local"
     jackpot_api_url: str = "http://localhost:8000"
     work_bucket: str = "jackpot-work"
     results_bucket: str = "jackpot-results"
     gcp_region: str = "us-central1"
+
+    @field_validator("cors_origins", mode="before")
+    @classmethod
+    def _parse_cors_origins(cls, v: object) -> list[str]:
+        # Critical Rule 53: list-typed Settings fields must accept JSON
+        # arrays, comma-separated strings, empty strings, and real lists.
+        if v is None or v == "":
+            return []
+        if isinstance(v, list):
+            return v
+        if isinstance(v, str):
+            s = v.strip()
+            if s.startswith("["):
+                try:
+                    return json.loads(s)
+                except json.JSONDecodeError as e:
+                    raise ValueError(f"cors_origins looks like JSON but won't parse: {e}") from e
+            return [item.strip() for item in s.split(",") if item.strip()]
+        raise ValueError(f"cors_origins must be str or list, got {type(v).__name__}")
 
     class Config:
         env_file = ".env.local"

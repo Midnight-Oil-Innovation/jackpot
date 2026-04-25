@@ -13,7 +13,7 @@ and public health research. Successor to APGAP (ASU-RSE-Services).
 
 1. Read `spec.md` — understand the goals and constraints for the current sprint
 2. Read `todo.md` — find the next unchecked task
-3. Re-read this file (`docs/CLAUDE.md`) — all 52 Critical Rules apply at all times
+3. Re-read this file (`docs/CLAUDE.md`) — all 53 Critical Rules apply at all times
 4. Confirm the baseline is stable: `uv run pytest` — ≥477 tests passing, ≥60% coverage
 
 ### Work Loop
@@ -514,14 +514,8 @@ JSON-array string, (c) a comma-separated string, and (d) an empty
 string. Use `Annotated[list[str], NoDecode]` to disable pydantic's
 eager JSON parsing.
 
-Pydantic-settings v2 runs env var values through `json.loads()`
-unconditionally for `list[*]` fields. Without a validator, the value
-in the ConfigMap must be a JSON-array string — an unusual and easily-
-broken format. Session 5 opened with a `JSONDecodeError` in Alembic
-because `CORS_ORIGINS: "https://staging.jackpot.example.org"` (a plain
-string) couldn't be parsed.
-
-**The correct pattern:**
+**The correct pattern** (applied to `cors_origins` in Q-10; see
+`backend/config.py` for the live reference):
 
 ```python
 from typing import Annotated
@@ -540,16 +534,22 @@ class Settings(BaseSettings):
         import json
         if v is None or v == "":
             return []
+        if isinstance(v, list):
+            return v
         if isinstance(v, str):
-            v = v.strip()
-            if v.startswith("["):
-                return json.loads(v)
-            return [o.strip() for o in v.split(",") if o.strip()]
-        return v
+            s = v.strip()
+            if s.startswith("["):
+                try:
+                    return json.loads(s)
+                except json.JSONDecodeError as e:
+                    raise ValueError(
+                        f"cors_origins looks like JSON but won't parse: {e}"
+                    ) from e
+            return [item.strip() for item in s.split(",") if item.strip()]
+        raise ValueError(f"cors_origins must be str or list, got {type(v).__name__}")
 ```
 
-**Related backlog:** Q-10 in `todo.md` — apply this pattern to
-`cors_origins` and revert `values-staging.yaml` to plain comma-separated.
+See also Critical Rule 53.
 
 **46. `nf/` submodule contents must be importable or wrapped.**
 `backend/routers/pipelines.py` imports `RESULT_SCHEMAS` from the
@@ -735,6 +735,17 @@ single source of truth.
 reviewing the schema; it has no role at runtime. The baseline
 migration `5adf11b77c19` is what builds an empty DB. See Rule 44 for
 the empty-DB upgrade test.
+
+**53. List-typed Settings fields need multi-form validators.**
+
+Any list-typed Settings field that may be populated from an env var
+must use `Annotated[list[*], NoDecode]` plus a
+`@field_validator(mode="before")` that accepts JSON arrays,
+comma-separated strings, empty strings, and real lists.
+Pydantic-settings v2 unconditionally `json.loads()` list fields
+otherwise, which is what crashed the staging Alembic Job in Session 5.
+
+See Rule 45 for the worked code template.
 
 ---
 

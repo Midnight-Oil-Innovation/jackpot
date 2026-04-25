@@ -1608,3 +1608,48 @@ The bootstrap Job and the postgres entrypoint mount are gone.
   instruction for environments deployed pre-Q-9. No cross-repo
   changes needed. When a task says "delete X from the chart",
   verify X actually lives in the chart before deleting anything.
+
+## Q-10 — cors_origins multi-form validator (2026-04-24)
+
+Closed the JSON-array-only constraint on `Settings.cors_origins`. The
+field now accepts JSON arrays, comma-separated strings, empty strings,
+`None`, and real lists via `Annotated[list[str], NoDecode]` + a
+`mode="before"` validator. Reverted staging's `values-staging.yaml` to
+plain comma-separated. Same Rule 45 ↔ Rule 53 split we did for
+Rule 44 ↔ Rule 52 in Q-9.
+
+### Three things worth recording
+
+- **`NoDecode` requires pydantic-settings ≥2.3.0; the repo was
+  pinned at 2.2.1.** The fix pattern documented in old Rule 45
+  imports `NoDecode` from `pydantic_settings`, which only exists in
+  2.3.0+. Closing Q-10 forced a dependency bump
+  (`pydantic-settings>=2.3.0,<3`, resolved to 2.14.0). Whenever a
+  documented "fix pattern" cites a symbol, sanity-check that the
+  symbol is reachable from the pin set before closing the backlog
+  item — otherwise the rule is aspirational, not actual.
+
+- **Stale venv shebangs hide as test-fixture failures.** First test
+  run after the dep bump exploded with
+  `ImportError: cannot import name 'NoDecode'` even though
+  `uv run python -c 'import pydantic_settings; ...'` proved the
+  symbol was reachable. Root cause: every script in `.venv/bin/`
+  had a shebang pointing at a sibling checkout's Python
+  (`/Users/glen/ASU/...` instead of `/Users/glen/...`). When
+  conftest.py ran `subprocess.run(["uv", "run", "alembic", ...])`,
+  alembic loaded the wrong Python and saw the OLD pydantic_settings.
+  Fix: `rm -rf .venv && uv sync`. Lesson: when an import error
+  cites a `site-packages` path that isn't your CWD's venv, the
+  venv's bin/ shebangs are stale; recreate the venv. `uv sync`
+  alone won't rewrite shebangs of already-installed scripts.
+
+- **Two tests per shape — once via constructor, once via env
+  var — proves both the validator AND `NoDecode` work.** The
+  constructor tests (`Settings(cors_origins="...")`) prove the
+  validator's parsing logic. But pre-Q-10, the env-var path
+  (`monkeypatch.setenv("CORS_ORIGINS", "...")` + `Settings()`)
+  would have crashed at `json.loads()` BEFORE the validator could
+  run, because pydantic-settings auto-decoded `list[*]` fields.
+  Only the env-var test proves `NoDecode` is doing its job. If you
+  ever add another `list[*]` Settings field, mirror this two-axis
+  test pattern — `tests/test_config.py` is the template.

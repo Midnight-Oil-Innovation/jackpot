@@ -261,39 +261,28 @@ Baseline revision: **`5adf11b77c19`** (`baseline schema from init.sql`).
       `alembic upgrade head`, exercising the same path as production.
 - [x] 549 tests passing, 87.56% coverage (above ≥477 / ≥86.99% baseline).
 
-### Q-10: cors_origins validator in `backend/config.py`
+### Q-10: cors_origins validator in `backend/config.py` ✅ CLOSED
 
-- [ ] Apply `Annotated[list[str], NoDecode]` + `field_validator`
-      pattern to accept JSON arrays, comma-separated strings, empty
-      strings, and real lists:
+Validator + 11 unit tests in `tests/test_config.py`. Pydantic-settings
+bumped to `>=2.3.0,<3` (resolved 2.14.0) so `NoDecode` is importable.
 
-```python
-from typing import Annotated
-from pydantic import field_validator
-from pydantic_settings import NoDecode
-
-cors_origins: Annotated[list[str], NoDecode] = [
-    "http://localhost:8501",
-    "http://localhost:4200",
-]
-
-@field_validator("cors_origins", mode="before")
-@classmethod
-def _parse_cors_origins(cls, v):
-    import json
-    if v is None or v == "":
-        return []
-    if isinstance(v, str):
-        v = v.strip()
-        if v.startswith("["):
-            return json.loads(v)
-        return [o.strip() for o in v.split(",") if o.strip()]
-    return v
-```
-
-- [ ] Bump `pydantic-settings>=2.3.0` in `pyproject.toml`.
-- [ ] Revert `values-staging.yaml` CORS_ORIGINS to plain
-      comma-separated format and verify deploy still works.
+- [x] Applied `Annotated[list[str], NoDecode]` + `field_validator(mode="before")`
+      to `cors_origins` in `backend/config.py`. Accepts JSON arrays,
+      comma-separated strings, empty strings, `None`, and real lists;
+      raises `ValueError` with a helpful message on malformed JSON.
+- [x] Bumped `pydantic-settings>=2.3.0,<3` in `pyproject.toml`
+      (was `==2.2.1`). `uv lock` regenerated.
+- [x] Reverted `jackpot-iac/helm/jackpot-api/values-staging.yaml` line
+      24 CORS_ORIGINS to plain comma-separated form.
+- [x] Added Critical Rule 53 to `docs/CLAUDE.md`. Amended Rule 45 to
+      drop the cors-specific Q-10 backlog caveat (mirrors Q-9's
+      Rule 44 ↔ Rule 52 split).
+- [x] 560 tests passing, 87.62% coverage (was 549/87.56% baseline —
+      +11 new config tests, no regressions).
+- [x] Compose smoke: api boots cleanly with both CSV
+      (`http://localhost:8501,http://localhost:4200`) and JSON-array
+      (`'["http://localhost:8501","http://localhost:4200"]'`) forms;
+      `/health` returns `{"status":"ok","database":"connected"}`.
 
 ### Q-11: Remove `sys.path` hack from `pipelines.py`
 
