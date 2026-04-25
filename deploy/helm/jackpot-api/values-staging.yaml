@@ -21,7 +21,7 @@ env:
   ADHS_ORGANIZATION_NAME: "ADHS"
   GOOGLE_OAUTH_REDIRECT_URL: "postmessage"
   JACKPOT_API_URL: "https://api.staging.jackpot.example.org"
-  CORS_ORIGINS: '["https://staging.jackpot.example.org","http://localhost:8501"]'
+  CORS_ORIGINS: "https://staging.jackpot.example.org,http://localhost:8501"
 
 buckets:
   STORAGE_BUCKET_SEQUENCES: jackpot-staging-sequences
