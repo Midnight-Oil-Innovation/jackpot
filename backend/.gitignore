@@ -30,3 +30,15 @@ Thumbs.db
 *.swo
 .*.swp
 .*.swo
+
+# JACKPOT deployment env files — never commit real secrets
+.env
+.env.local
+.env.production
+deploy/**/.env
+deploy/**/.env.local
+deploy/**/.env.production
+
+# Always allow committing example templates
+!.env.example
+!deploy/**/.env.example
