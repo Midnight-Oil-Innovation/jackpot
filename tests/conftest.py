@@ -42,7 +42,7 @@ def initialize_test_db(test_db_url):
 def override_settings(test_db_url, monkeypatch):
     monkeypatch.setenv("DATABASE_URL", test_db_url)
     monkeypatch.setenv("ENV", "local")
-    monkeypatch.setenv("MOCK_USER_EMAIL", "gotero@linuxprophet.com")
+    monkeypatch.setenv("MOCK_USER_EMAIL", "admin@example.org")
     monkeypatch.setenv("STORAGE_ENDPOINT", "http://localhost:9000")
     monkeypatch.setenv("STORAGE_ACCESS_KEY", "minioadmin")
     monkeypatch.setenv("STORAGE_SECRET_KEY", "minioadmin")
@@ -65,28 +65,28 @@ async def client():
 @pytest.fixture
 def valid_human_sample():
     return {
-        "sample_id": "AZ-TEST-001",
+        "sample_id": "EXAMPLE-TEST-001",
         "organism_name": "Severe acute respiratory syndrome coronavirus 2",
         "source_type": "Human",
         "date_collected": "2026-01-15",
         "date_sequenced": "2026-01-17",
         "collection_location_country": "United States",
-        "collection_location_state": "Arizona",
+        "collection_location_state": "California",
         "sequencing_platform": "Illumina",
-        "sequencing_lab": "Otero Outpost",
+        "sequencing_lab": "Example Lab",
         "type_of_experiment": "WGS",
         "library_preparation_method": "ARTIC",
         "nucleic_acid_extraction_method": ["QIAamp DSP Viral RNA"],
         "sequencing_protocol": "https://www.protocols.io/view/artic-v4-1",
-        "collection_facility": "Mayo Clinic Phoenix",
+        "collection_facility": "Example Hospital",
         "purpose_for_collection": ["clinical"],
         "sharing_level": "PRIVATE",
         "sector": "clinical",
         "scrub_status": "PENDING",
         "pii_scan_status": "PENDING",
         "ingest_method": "gui",
-        "fastq_r1_uri": "gs://jackpot-sequences/linuxprophet/otero/AZ-TEST-001/R1.fastq.gz",
-        "adhs_medsis_id": "ADHS-2026-001",
+        "fastq_r1_uri": "gs://jackpot-sequences/example/EXAMPLE-TEST-001/R1.fastq.gz",
+        "external_case_id": "CASE-2026-001",
         "biospecimen_type": "nasopharyngeal_swab",
         "reason_for_collection": ["clinical"],
         "host_disease": ["covid-19"],

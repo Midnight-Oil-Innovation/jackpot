@@ -21,7 +21,7 @@ def test_valid_human_sample_passes(valid_human_sample):
         "date_collected",
         "collection_location_country",
         "sequencing_platform",
-        "adhs_medsis_id",
+        "external_case_id",
     ],
 )
 def test_missing_required_field_fails(valid_human_sample, missing_field):
@@ -132,7 +132,7 @@ def _full_human_data(**overrides) -> dict:
     """A sample dict with all Tier 1 + Tier 2 + Tier 3 fields for HumanSample."""
     data = {
         # Tier 1 — BASE_REQUIRED
-        "sample_id": "AZ-TEST-001",
+        "sample_id": "EXAMPLE-TEST-001",
         "organism_name": "Salmonella enterica",
         "source_type": "Human",
         "date_collected": "2024-06-15",
@@ -140,21 +140,21 @@ def _full_human_data(**overrides) -> dict:
         "sequencing_platform": "Illumina",
         "type_of_experiment": "WGS",
         # Tier 1 — SOURCE_REQUIRED (Human)
-        "adhs_medsis_id": "AZ-MEDSIS-12345",
+        "external_case_id": "CASE-12345",
         "biospecimen_type": "blood",
         "reason_for_collection": ["clinical"],
         "host_disease": ["salmonellosis"],
         # Tier 2 — TIER2_REQUIRED
         "sequencing_lab": "Sonora Quest Laboratories",
-        "collection_facility": "Banner University Medical Center",
+        "collection_facility": "Example Medical Center",
         "library_preparation_method": "Nextera XT",
         "nucleic_acid_extraction_method": ["QIAamp"],
         "date_sequenced": "2024-06-20",
-        "collection_location_state": "Arizona",
+        "collection_location_state": "California",
         # Tier 3 — TIER3_REQUIRED
-        "originating_lab": "Banner Health Clinical Lab",
-        "submitting_lab": "Linux Prophet Biodesign CLAS",
-        "collection_location_county": "Maricopa",
+        "originating_lab": "Example Clinical Lab",
+        "submitting_lab": "Example Sequencing Lab",
+        "collection_location_county": "San Diego",
         "purpose_for_collection": ["clinical"],
         "sequencing_protocol": "https://www.protocols.io/view/nextera-xt",
         # Tier 3 — TIER3_REQUIRED_HUMAN
@@ -170,7 +170,7 @@ def _full_wastewater_data(**overrides) -> dict:
     """A sample dict with all Tier 1 + Tier 2 + Tier 3 fields for WastewaterSample."""
     data = {
         # Tier 1 — BASE_REQUIRED
-        "sample_id": "AZ-WW-001",
+        "sample_id": "EXAMPLE-WW-001",
         "organism_name": "metagenome",
         "source_type": "Wastewater",
         "date_collected": "2024-06-15",
@@ -185,16 +185,16 @@ def _full_wastewater_data(**overrides) -> dict:
         "concentration_method": "ultracentrifugation",
         "flow_rate_mgd": 42.5,
         # Tier 2 — TIER2_REQUIRED
-        "sequencing_lab": "Linux Prophet Biodesign CLAS",
-        "collection_facility": "South Tempe Water Reclamation Facility",
+        "sequencing_lab": "Example Sequencing Lab",
+        "collection_facility": "Example Water Reclamation Facility",
         "library_preparation_method": "Nextera XT",
         "nucleic_acid_extraction_method": ["QIAamp PowerWater"],
         "date_sequenced": "2024-06-20",
-        "collection_location_state": "Arizona",
+        "collection_location_state": "California",
         # Tier 3 — TIER3_REQUIRED
-        "originating_lab": "Tempe WWTP Lab",
-        "submitting_lab": "Linux Prophet Biodesign CLAS",
-        "collection_location_county": "Maricopa",
+        "originating_lab": "Example WWTP Lab",
+        "submitting_lab": "Example Sequencing Lab",
+        "collection_location_county": "San Diego",
         "purpose_for_collection": ["surveillance"],
         "sequencing_protocol": "https://www.protocols.io/view/nwss-ww",
         "date_collected_precision": "day",

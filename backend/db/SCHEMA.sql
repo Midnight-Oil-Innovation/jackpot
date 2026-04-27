@@ -325,7 +325,7 @@ CREATE TABLE IF NOT EXISTS samples (
     comments                        TEXT,
 
     -- Human host
-    adhs_medsis_id                  TEXT,
+    external_case_id                  TEXT,
     case_id                         TEXT,
     biospecimen_type                TEXT,
     reason_for_collection           TEXT[],

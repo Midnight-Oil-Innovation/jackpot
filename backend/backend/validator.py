@@ -93,7 +93,7 @@ SECTOR_FROM_SOURCE_TYPE: dict[str, str] = {
 
 # ── Source-type-specific Tier 1 required fields ───────────────────────────
 SOURCE_REQUIRED: dict[str, list[str]] = {
-    "Human": ["adhs_medsis_id", "biospecimen_type", "reason_for_collection", "host_disease"],
+    "Human": ["external_case_id", "biospecimen_type", "reason_for_collection", "host_disease"],
     "Wildlife": ["host_species", "biospecimen_type", "host_disease"],
     "CompanionAnimal": ["host_species", "biospecimen_type", "host_disease"],
     "Livestock": ["host_species", "biospecimen_type", "livestock_products", "host_disease"],

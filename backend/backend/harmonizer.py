@@ -5,8 +5,8 @@ Maps raw CSV column names to JACKPOT schema field names using a
 mapping_config YAML file. Called by the batch ingest router before
 validate_sample().
 
-Mapping config format (see schema/mapping_configs/asu_human_v1.yaml):
-    source_format: asu_human_v1
+Mapping config format (see schema/mapping_configs/example_human_v1.yaml):
+    source_format: example_human_v1
     target_class: HumanSample
     column_mappings:
       "Raw Column Name": schema_field_name
@@ -30,7 +30,7 @@ def load_mapping(mapping_name: str) -> dict:
     Load a mapping config YAML by name (without .yaml extension).
     Results are cached in memory for the process lifetime.
 
-    Example: load_mapping("asu_human_v1")
+    Example: load_mapping("example_human_v1")
     """
     if mapping_name in _cache:
         return _cache[mapping_name]

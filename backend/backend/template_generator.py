@@ -147,7 +147,7 @@ METAGENOMICS_FIELDS: list[str] = [
 # Pre-filled example row for row 5 of the CSV template.
 
 BASE_EXAMPLE: dict[str, str] = {
-    "sample_id": "AZ-2026-001",
+    "sample_id": "EXAMPLE-2026-001",
     "organism_name": "Salmonella enterica",
     "source_type": "Human",
     "type_of_experiment": "WGS",
@@ -155,22 +155,22 @@ BASE_EXAMPLE: dict[str, str] = {
     "library_preparation_method": "Bead-Linked Transposome Tagmentation",
     "sequencing_protocol": "https://dx.doi.org/10.17504/protocols.io.example",
     "sequencing_platform": "Illumina",
-    "sequencing_lab": "Linux Prophet Biodesign CLAS",
+    "sequencing_lab": "Example Sequencing Lab",
     "date_collected": "2026-04-01",
     "date_sequenced": "2026-04-05",
-    "collection_facility": "Banner Health",
+    "collection_facility": "Example Hospital",
     "purpose_for_collection": "diagnostic",
     "collection_location_country": "USA",
-    "collection_location_state": "Arizona",
-    "collection_location_county": "Maricopa",
+    "collection_location_state": "California",
+    "collection_location_county": "San Diego",
     "sector": "clinical",
-    "originating_lab": "Banner Health Clinical Lab",
-    "submitting_lab": "Linux Prophet Biodesign CLAS",
+    "originating_lab": "Example Clinical Lab",
+    "submitting_lab": "Example Sequencing Lab",
 }
 
 SOURCE_TYPE_EXAMPLES: dict[str, dict[str, str]] = {
     "human": {
-        "adhs_medsis_id": "12345LMNO",
+        "external_case_id": "12345LMNO",
         "biospecimen_type": "nasopharyngeal swab",
         "reason_for_collection": "clinical",
         "host_age": "45",
@@ -183,14 +183,14 @@ SOURCE_TYPE_EXAMPLES: dict[str, dict[str, str]] = {
         "source_type": "Wastewater",
         "sector": "wastewater",
         "organism_name": "SARS-CoV-2",
-        "collection_facility": "South Tempe WWTP",
+        "collection_facility": "Example WWTP",
         "purpose_for_collection": "surveillance",
     },
     "soil": {
         "source_type": "Soil",
         "sector": "environmental",
         "organism_name": "Coccidioides immitis",
-        "collection_facility": "Linux Prophet Field Station",
+        "collection_facility": "Example Field Station",
         "purpose_for_collection": "research",
     },
 }

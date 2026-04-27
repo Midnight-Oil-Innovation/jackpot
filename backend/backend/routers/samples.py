@@ -112,7 +112,7 @@ _EDITABLE_FIELDS: frozenset[str] = frozenset(
         "organism_name",
         "source_type",
         # Human
-        "adhs_medsis_id",
+        "external_case_id",
         "case_id",
         "biospecimen_type",
         "reason_for_collection",

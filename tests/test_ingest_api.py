@@ -49,17 +49,17 @@ def _base_metadata(sample_id: str = "ING-TEST-001", **overrides) -> dict:
         "date_collected_precision": "day",
         "date_sequenced": "2026-01-17",
         "collection_location_country": "United States",
-        "collection_location_state": "Arizona",
+        "collection_location_state": "California",
         "sequencing_platform": "Illumina",
         "sequencing_lab": "Sonora Quest Laboratories",
         "type_of_experiment": "WGS",
         "library_preparation_method": "ARTIC",
         "nucleic_acid_extraction_method": ["QIAamp DSP Viral RNA"],
         "sequencing_protocol": "https://www.protocols.io/view/artic-v4-1",
-        "collection_facility": "Mayo Clinic Phoenix",
+        "collection_facility": "Example Hospital",
         "purpose_for_collection": ["clinical"],
         "sharing_level": "PRIVATE",
-        "adhs_medsis_id": "ADHS-2026-001",
+        "external_case_id": "CASE-2026-001",
         "biospecimen_type": "nasopharyngeal_swab",
         "reason_for_collection": ["clinical"],
         "host_disease": ["covid-19"],
@@ -133,9 +133,9 @@ async def test_upload_submittable_tier(client, mock_storage):
     _cleanup_sample(sid)
     meta = _base_metadata(
         sid,
-        originating_lab="Mayo Clinic Phoenix",
-        submitting_lab="Otero Lab",
-        collection_location_county="Maricopa",
+        originating_lab="Example Hospital",
+        submitting_lab="Example Lab",
+        collection_location_county="San Diego",
         host_sex="female",
         host_age=42,
     )
@@ -199,11 +199,11 @@ async def test_upload_unknown_sequencing_lab_returns_422(client, mock_storage):
 
 
 @pytest.mark.asyncio
-async def test_upload_missing_adhs_medsis_id_returns_422(client, mock_storage):
-    sid = "ING-NO-MEDSIS"
+async def test_upload_missing_external_case_id_returns_422(client, mock_storage):
+    sid = "ING-NO-CASE-ID"
     _cleanup_sample(sid)
     meta = _base_metadata(sid)
-    meta.pop("adhs_medsis_id")
+    meta.pop("external_case_id")
     resp = await client.post(
         "/api/v1/ingest/upload",
         data={"metadata": json.dumps(meta)},
@@ -218,9 +218,9 @@ async def test_upload_missing_adhs_medsis_id_returns_422(client, mock_storage):
     assert resp.status_code == 422
     body = resp.json()
     assert body["success"] is False
-    assert "adhs_medsis_id" in body["error"]["message"]
+    assert "external_case_id" in body["error"]["message"]
     detail = body["error"]["detail"]
-    assert any("adhs_medsis_id" in e for e in detail.get("errors", []))
+    assert any("external_case_id" in e for e in detail.get("errors", []))
     _cleanup_sample(sid)
 
 
@@ -375,13 +375,13 @@ async def test_csv_ingest_success(client, mock_storage):
         "sequencing_platform,sequencing_lab,type_of_experiment,"
         "library_preparation_method,nucleic_acid_extraction_method,"
         "sequencing_protocol,collection_facility,"
-        "adhs_medsis_id,biospecimen_type,reason_for_collection,host_disease,"
+        "external_case_id,biospecimen_type,reason_for_collection,host_disease,"
         "date_sequenced,purpose_for_collection,lab_id,project_id,files\n"
         f"{sid},Severe acute respiratory syndrome coronavirus 2,Human,"
-        "2026-01-15,United States,Arizona,Illumina,"
+        "2026-01-15,United States,California,Illumina,"
         "Sonora Quest Laboratories,WGS,ARTIC,QIAamp DSP Viral RNA,"
-        "https://www.protocols.io/view/artic-v4-1,Mayo Clinic Phoenix,"
-        "ADHS-2026-001,nasopharyngeal_swab,clinical,covid-19,"
+        "https://www.protocols.io/view/artic-v4-1,Example Hospital,"
+        "CASE-2026-001,nasopharyngeal_swab,clinical,covid-19,"
         f"2026-01-17,clinical,1,1,{sid}_R1.fastq.gz\n"
     )
     resp = await client.post(
@@ -407,19 +407,19 @@ async def test_csv_ingest_partial_failure(client, mock_storage):
         "sequencing_platform,sequencing_lab,type_of_experiment,"
         "library_preparation_method,nucleic_acid_extraction_method,"
         "sequencing_protocol,collection_facility,"
-        "adhs_medsis_id,biospecimen_type,reason_for_collection,host_disease,"
+        "external_case_id,biospecimen_type,reason_for_collection,host_disease,"
         "date_sequenced,purpose_for_collection,lab_id,project_id,files\n"
         f"{good},Severe acute respiratory syndrome coronavirus 2,Human,"
-        "2026-01-15,United States,Arizona,Illumina,"
+        "2026-01-15,United States,California,Illumina,"
         "Sonora Quest Laboratories,WGS,ARTIC,QIAamp DSP Viral RNA,"
-        "https://www.protocols.io/view/artic-v4-1,Mayo Clinic Phoenix,"
-        "ADHS-2026-001,nasopharyngeal_swab,clinical,covid-19,"
+        "https://www.protocols.io/view/artic-v4-1,Example Hospital,"
+        "CASE-2026-001,nasopharyngeal_swab,clinical,covid-19,"
         f"2026-01-17,clinical,1,1,{good}_R1.fastq.gz\n"
         f"{bad},Severe acute respiratory syndrome coronavirus 2,Human,"
-        "2026-01-15,United States,Arizona,Illumina,"
+        "2026-01-15,United States,California,Illumina,"
         "Nonexistent Lab,WGS,ARTIC,QIAamp DSP Viral RNA,"
-        "https://www.protocols.io/view/artic-v4-1,Mayo Clinic Phoenix,"
-        "ADHS-2026-001,nasopharyngeal_swab,clinical,covid-19,"
+        "https://www.protocols.io/view/artic-v4-1,Example Hospital,"
+        "CASE-2026-001,nasopharyngeal_swab,clinical,covid-19,"
         f"2026-01-17,clinical,1,1,{bad}_R1.fastq.gz\n"
     )
     resp = await client.post(
@@ -471,7 +471,7 @@ async def test_globus_ingest_notifies_directors(client):
         "/api/v1/ingest/globus",
         json={
             "sequencing_lab": "Sonora Quest Laboratories",
-            "files": ["AZ-001_R1.fastq.gz", "AZ-001_R2.fastq.gz"],
+            "files": ["EX-001_R1.fastq.gz", "EX-001_R2.fastq.gz"],
         },
     )
     assert resp.status_code == 200, resp.text

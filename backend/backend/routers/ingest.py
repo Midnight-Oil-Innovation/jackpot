@@ -89,7 +89,7 @@ _SAMPLE_COLUMNS: frozenset[str] = frozenset(
         "contact_other",
         "comments",
         # Human
-        "adhs_medsis_id",
+        "external_case_id",
         "case_id",
         "biospecimen_type",
         "reason_for_collection",
