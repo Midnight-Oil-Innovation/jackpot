@@ -8,8 +8,8 @@ description: >
     - All APGAP spreadsheet field definitions (All_Sequences, human_host,
       wildlife_host, companion_animal, livestock, wastewater, water, air,
       soil, surface, food_products, produce_ag, vectors)
-    - ADHS mandatory reportable communicable diseases organism list
-    - Coccidioides spp. (Valley fever) by ASU/ADHS request
+    - Reportable communicable diseases organism list (operator-configurable)
+    - Coccidioides spp. (Valley fever)
     - metagenome for metagenomic samples
     - Database-managed sequencing_lab controlled vocabulary design
     - SampleAssociation cross-sample linkage table
@@ -54,7 +54,7 @@ classes:
 
   Organization:
     description: >
-      An institution (e.g. ASU, ADHS, CDC). Maps to APGAP Organization model.
+      An institution (e.g. a public health agency, academic lab, NGO, or CDC). Maps to APGAP Organization model.
     attributes:
       display_name:
         identifier: true
@@ -130,9 +130,9 @@ classes:
         range: OrganismNameEnum
         required: true
         description: >
-          NCBI organism name. Controlled vocabulary derived from the ADHS
-          mandatory reportable communicable diseases list, plus Coccidioides
-          spp. (Valley fever) and metagenome for metagenomic samples.
+          NCBI organism name. Controlled vocabulary derived from the host
+          jurisdiction's reportable communicable diseases list, plus
+          Coccidioides spp. (Valley fever) and metagenome for metagenomic samples.
           Platform Admins may add new values when novel pathogens emerge.
           Researchers may request additions via the portal.
           Use 'metagenome' when no specific organism is targeted.
@@ -305,16 +305,16 @@ classes:
           City, town, municipality, or village of sample collection. Free text.
           Used in NCBI BioSample geo_loc_name construction alongside
           collection_location_country and collection_location_state:
-          format is "Country:State:City" (e.g. "USA:Arizona:Phoenix").
+          format is "Country:State:City" (e.g. "USA:State:City").
           Optional — omitted from geo_loc_name if not provided.
 
       geo_lat:
         range: float
-        description: "Decimal latitude (WGS84), e.g. 33.4484"
+        description: "Decimal latitude (WGS84), e.g. 39.7392"
 
       geo_lon:
         range: float
-        description: "Decimal longitude (WGS84), e.g. -112.0740"
+        description: "Decimal longitude (WGS84), e.g. -104.9903"
 
       # MMWR epiweek (computed from date_collected at ingest)
       mmwr_year:
@@ -335,9 +335,10 @@ classes:
         description: >-
           Generic public health case identifier. Links samples across sectors
           (human, animal, environmental) that share an epidemiological
-          connection. ADHS uses adhs_medsis_id (HumanSample only) for
-          MEDSIS-specific IDs. Other jurisdictions use this field:
-          CalREDIE (CA), ECLRS (NY), NEDSS (CDC), etc.
+          connection. HumanSample also provides external_case_id for an
+          operator-issued anonymized identifier where the operator has its
+          own case-management system. Other jurisdictions use this generic
+          case_id field: CalREDIE (CA), ECLRS (NY), NEDSS (CDC), etc.
           Nullable — not all samples belong to a named case.
 
       case_source_system:
@@ -367,7 +368,7 @@ classes:
         range: boolean
         required: true
         description: >-
-          Whether ADHS public health oversight access applies to this sample.
+          Whether the host operator's public health oversight access applies to this sample.
           Computed at ingest from organism_name against the reportable_organisms
           table. TRUE if organism is reportable, FALSE otherwise.
           For metagenomic samples (organism_name = metagenome): TRUE if any
@@ -762,17 +763,18 @@ classes:
       Maps to GA4GH Phenopacket Individual + Disease elements.
     attributes:
 
-      adhs_medsis_id:
+      external_case_id:
         required: true
         description: >
-          APGAP: 'ADHS issued ID (links with MEDSIS case data on their end)'.
-          Either (1) an anonymized ID linking to the MEDSIS case record, or
-          (2) an exemption code obtained for the study if the sample does not
-          originate from ADHS surveillance.
-          Validation: cross-checked against ADHS-issued ID list when that
-          list becomes available. Currently free text — validation to be
-          added when ADHS establishes the list.
-          Distinct from case_id (used by non-ADHS public health sources).
+          Operator-issued anonymized identifier or exemption code for a
+          human sample. Either (1) an anonymized ID linking to the host
+          jurisdiction's case-management system, or (2) an exemption code
+          obtained for the study if the sample does not originate from
+          surveillance.
+          Validation: cross-checked against the operator's authoritative
+          ID list when that list becomes available. Currently free text.
+          Distinct from case_id (used by samples whose case identifier
+          comes from a different surveillance system).
 
 
       biospecimen_type:
@@ -1114,7 +1116,7 @@ classes:
           APGAP: 'Service area (county_names)'. NWSS: county_names.
           Counties served by this sampling site, by name or FIPS code.
           System cross-maps name ↔ FIPS. Multiple entries permitted.
-          Examples: 'Maricopa County', '04013', 'Coconino'.
+          Examples: 'Some County', '04013', 'Another County'.
 
       population_served:
         range: integer
@@ -1575,7 +1577,7 @@ classes:
         required: true
         description: >-
           Human-readable name for the investigation.
-          e.g. 'Maricopa County Salmonella Typhimurium Cluster 2026'.
+          e.g. 'Some County Salmonella Typhimurium Cluster 2026'.
 
       investigation_status:
         range: OutbreakStatusEnum
@@ -1600,7 +1602,7 @@ classes:
         required: true
         description: >-
           Primary public health jurisdiction responsible for this investigation.
-          e.g. 'ADHS', 'Maricopa County DHS', 'CDC', 'WHO PAHO'.
+          e.g. 'State Health Dept', 'County DHS', 'CDC', 'WHO PAHO'.
 
       sectors_involved:
         multivalued: true
@@ -1733,8 +1735,9 @@ classes:
 enums:
 
   # ── Organism Names ─────────────────────────────────────────────────────────
-  # Source: ADHS mandatory reportable communicable diseases list.
-  # Additions: Coccidioides spp. (Valley fever) by ASU/ADHS request;
+  # Source: configurable per host operator (typically the host
+  # jurisdiction's reportable communicable diseases list).
+  # Additions: Coccidioides spp. (Valley fever);
   #            metagenome per NCBI convention.
   # All names use NCBI Taxonomy format for NCBI submission compatibility.
   # Platform Admins may add new values at runtime via the portal admin UI.
@@ -1742,7 +1745,8 @@ enums:
   OrganismNameEnum:
     description: >
       Controlled vocabulary of pathogen organism names.
-      Derived from ADHS mandatory reportable communicable diseases.
+      Derived from a configurable reportable communicable diseases list
+      (defaults to the host jurisdiction's official list).
       Anchored to NCBI Taxonomy for BioSample/SRA/GenBank/GISAID compatibility.
 
     permissible_values:
@@ -1873,13 +1877,13 @@ enums:
       Coccidioides immitis:
         description: >
           Valley fever (coccidioidomycosis) — California strain.
-          Added by ASU/ADHS request; not on ADHS communicable disease list.
+          Optional regional addition; not on the standard reportable list.
 
       Coccidioides posadasii:
         description: >
-          Valley fever (coccidioidomycosis) — Arizona/Texas strain.
-          Predominant species in Arizona.
-          Added by ASU/ADHS request; not on ADHS communicable disease list.
+          Valley fever (coccidioidomycosis) — Southwestern US strain.
+          Predominant species in arid regions.
+          Optional regional addition; not on the standard reportable list.
 
       # ── Viruses (25 species/taxa) ──────────────────────────────────────────
       Chikungunya virus:
@@ -1949,7 +1953,7 @@ enums:
 
       Respiratory syncytial virus:
         description: >
-          RSV — included under ADHS 'Respiratory disease (outbreak)'.
+          RSV — typically included under 'Respiratory disease (outbreak)' on reportable lists.
           Use strain field for RSV-A or RSV-B.
 
       Rubella virus:
@@ -2008,7 +2012,7 @@ enums:
       # ── Novel / Emerging ──────────────────────────────────────────────────
       novel pathogen:
         description: >
-          ADHS reportable category: 'Emerging or exotic disease'.
+          Reportable category typically: 'Emerging or exotic disease'.
           Use when a novel pathogen is identified but has no stable NCBI
           Taxonomy name yet. Platform Admin assigns permanent name when
           NCBI Taxonomy provides one.

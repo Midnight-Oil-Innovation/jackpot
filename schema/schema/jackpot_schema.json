@@ -83,7 +83,7 @@
                     "type": "array"
                 },
                 "case_id": {
-                    "description": "Generic public health case identifier. Links samples across sectors (human, animal, environmental) that share an epidemiological connection. ADHS uses adhs_medsis_id (HumanSample only) for MEDSIS-specific IDs. Other jurisdictions use this field: CalREDIE (CA), ECLRS (NY), NEDSS (CDC), etc. Nullable \u2014 not all samples belong to a named case.",
+                    "description": "Generic public health case identifier. Links samples across sectors (human, animal, environmental) that share an epidemiological connection. HumanSample also provides external_case_id for an operator-issued anonymized identifier where the operator has its own case-management system. Other jurisdictions use this generic case_id field: CalREDIE (CA), ECLRS (NY), NEDSS (CDC), etc. Nullable \u2014 not all samples belong to a named case.",
                     "type": "string"
                 },
                 "case_source_system": {
@@ -103,7 +103,7 @@
                     "type": "string"
                 },
                 "collection_location_city": {
-                    "description": "City, town, municipality, or village of sample collection. Free text. Used in NCBI BioSample geo_loc_name construction alongside collection_location_country and collection_location_state: format is \"Country:State:City\" (e.g. \"USA:Arizona:Phoenix\"). Optional \u2014 omitted from geo_loc_name if not provided.",
+                    "description": "City, town, municipality, or village of sample collection. Free text. Used in NCBI BioSample geo_loc_name construction alongside collection_location_country and collection_location_state: format is \"Country:State:City\" (e.g. \"USA:State:City\"). Optional \u2014 omitted from geo_loc_name if not provided.",
                     "type": "string"
                 },
                 "collection_location_country": {
@@ -219,11 +219,11 @@
                     "type": "number"
                 },
                 "geo_lat": {
-                    "description": "Decimal latitude (WGS84), e.g. 33.4484",
+                    "description": "Decimal latitude (WGS84), e.g. 39.7392",
                     "type": "number"
                 },
                 "geo_lon": {
-                    "description": "Decimal longitude (WGS84), e.g. -112.0740",
+                    "description": "Decimal longitude (WGS84), e.g. -104.9903",
                     "type": "number"
                 },
                 "gisaid_accession": {
@@ -352,7 +352,7 @@
                 },
                 "organism_name": {
                     "$ref": "#/$defs/OrganismNameEnum",
-                    "description": "NCBI organism name. Controlled vocabulary derived from the ADHS mandatory reportable communicable diseases list, plus Coccidioides spp. (Valley fever) and metagenome for metagenomic samples. Platform Admins may add new values when novel pathogens emerge. Researchers may request additions via the portal. Use 'metagenome' when no specific organism is targeted. APGAP: 'Pathogen/organism name (or metagenomic)'.\n"
+                    "description": "NCBI organism name. Controlled vocabulary derived from the host jurisdiction's reportable communicable diseases list, plus Coccidioides spp. (Valley fever) and metagenome for metagenomic samples. Platform Admins may add new values when novel pathogens emerge. Researchers may request additions via the portal. Use 'metagenome' when no specific organism is targeted. APGAP: 'Pathogen/organism name (or metagenomic)'.\n"
                 },
                 "originating_lab": {
                     "description": "Lab that collected the original sample. Maps to GISAID \"Originating lab\" and NCBI BioSample originating_lab. Required for WHO Principle 6 attribution. May differ from sequencing_lab (who sequenced it) and submitting_lab (who uploaded to JACKPOT).",
@@ -498,7 +498,7 @@
                     "type": "string"
                 },
                 "surveillance_relevant": {
-                    "description": "Whether ADHS public health oversight access applies to this sample. Computed at ingest from organism_name against the reportable_organisms table. TRUE if organism is reportable, FALSE otherwise. For metagenomic samples (organism_name = metagenome): TRUE if any target_organism is reportable, or TRUE by default if no targets specified (conservative). Can be overridden \u2014 see surveillance_relevant_override.",
+                    "description": "Whether the host operator's public health oversight access applies to this sample. Computed at ingest from organism_name against the reportable_organisms table. TRUE if organism is reportable, FALSE otherwise. For metagenomic samples (organism_name = metagenome): TRUE if any target_organism is reportable, or TRUE by default if no targets specified (conservative). Can be overridden \u2014 see surveillance_relevant_override.",
                     "type": "boolean"
                 },
                 "surveillance_relevant_override": {
@@ -733,7 +733,7 @@
                     "type": "array"
                 },
                 "case_id": {
-                    "description": "Generic public health case identifier. Links samples across sectors (human, animal, environmental) that share an epidemiological connection. ADHS uses adhs_medsis_id (HumanSample only) for MEDSIS-specific IDs. Other jurisdictions use this field: CalREDIE (CA), ECLRS (NY), NEDSS (CDC), etc. Nullable \u2014 not all samples belong to a named case.",
+                    "description": "Generic public health case identifier. Links samples across sectors (human, animal, environmental) that share an epidemiological connection. HumanSample also provides external_case_id for an operator-issued anonymized identifier where the operator has its own case-management system. Other jurisdictions use this generic case_id field: CalREDIE (CA), ECLRS (NY), NEDSS (CDC), etc. Nullable \u2014 not all samples belong to a named case.",
                     "type": "string"
                 },
                 "case_source_system": {
@@ -753,7 +753,7 @@
                     "type": "string"
                 },
                 "collection_location_city": {
-                    "description": "City, town, municipality, or village of sample collection. Free text. Used in NCBI BioSample geo_loc_name construction alongside collection_location_country and collection_location_state: format is \"Country:State:City\" (e.g. \"USA:Arizona:Phoenix\"). Optional \u2014 omitted from geo_loc_name if not provided.",
+                    "description": "City, town, municipality, or village of sample collection. Free text. Used in NCBI BioSample geo_loc_name construction alongside collection_location_country and collection_location_state: format is \"Country:State:City\" (e.g. \"USA:State:City\"). Optional \u2014 omitted from geo_loc_name if not provided.",
                     "type": "string"
                 },
                 "collection_location_country": {
@@ -864,11 +864,11 @@
                     "type": "number"
                 },
                 "geo_lat": {
-                    "description": "Decimal latitude (WGS84), e.g. 33.4484",
+                    "description": "Decimal latitude (WGS84), e.g. 39.7392",
                     "type": "number"
                 },
                 "geo_lon": {
-                    "description": "Decimal longitude (WGS84), e.g. -112.0740",
+                    "description": "Decimal longitude (WGS84), e.g. -104.9903",
                     "type": "number"
                 },
                 "gisaid_accession": {
@@ -1013,7 +1013,7 @@
                 },
                 "organism_name": {
                     "$ref": "#/$defs/OrganismNameEnum",
-                    "description": "NCBI organism name. Controlled vocabulary derived from the ADHS mandatory reportable communicable diseases list, plus Coccidioides spp. (Valley fever) and metagenome for metagenomic samples. Platform Admins may add new values when novel pathogens emerge. Researchers may request additions via the portal. Use 'metagenome' when no specific organism is targeted. APGAP: 'Pathogen/organism name (or metagenomic)'.\n"
+                    "description": "NCBI organism name. Controlled vocabulary derived from the host jurisdiction's reportable communicable diseases list, plus Coccidioides spp. (Valley fever) and metagenome for metagenomic samples. Platform Admins may add new values when novel pathogens emerge. Researchers may request additions via the portal. Use 'metagenome' when no specific organism is targeted. APGAP: 'Pathogen/organism name (or metagenomic)'.\n"
                 },
                 "originating_lab": {
                     "description": "Lab that collected the original sample. Maps to GISAID \"Originating lab\" and NCBI BioSample originating_lab. Required for WHO Principle 6 attribution. May differ from sequencing_lab (who sequenced it) and submitting_lab (who uploaded to JACKPOT).",
@@ -1151,7 +1151,7 @@
                     "type": "string"
                 },
                 "surveillance_relevant": {
-                    "description": "Whether ADHS public health oversight access applies to this sample. Computed at ingest from organism_name against the reportable_organisms table. TRUE if organism is reportable, FALSE otherwise. For metagenomic samples (organism_name = metagenome): TRUE if any target_organism is reportable, or TRUE by default if no targets specified (conservative). Can be overridden \u2014 see surveillance_relevant_override.",
+                    "description": "Whether the host operator's public health oversight access applies to this sample. Computed at ingest from organism_name against the reportable_organisms table. TRUE if organism is reportable, FALSE otherwise. For metagenomic samples (organism_name = metagenome): TRUE if any target_organism is reportable, or TRUE by default if no targets specified (conservative). Can be overridden \u2014 see surveillance_relevant_override.",
                     "type": "boolean"
                 },
                 "surveillance_relevant_override": {
@@ -1314,7 +1314,7 @@
                     "type": "array"
                 },
                 "case_id": {
-                    "description": "Generic public health case identifier. Links samples across sectors (human, animal, environmental) that share an epidemiological connection. ADHS uses adhs_medsis_id (HumanSample only) for MEDSIS-specific IDs. Other jurisdictions use this field: CalREDIE (CA), ECLRS (NY), NEDSS (CDC), etc. Nullable \u2014 not all samples belong to a named case.",
+                    "description": "Generic public health case identifier. Links samples across sectors (human, animal, environmental) that share an epidemiological connection. HumanSample also provides external_case_id for an operator-issued anonymized identifier where the operator has its own case-management system. Other jurisdictions use this generic case_id field: CalREDIE (CA), ECLRS (NY), NEDSS (CDC), etc. Nullable \u2014 not all samples belong to a named case.",
                     "type": "string"
                 },
                 "case_source_system": {
@@ -1334,7 +1334,7 @@
                     "type": "string"
                 },
                 "collection_location_city": {
-                    "description": "City, town, municipality, or village of sample collection. Free text. Used in NCBI BioSample geo_loc_name construction alongside collection_location_country and collection_location_state: format is \"Country:State:City\" (e.g. \"USA:Arizona:Phoenix\"). Optional \u2014 omitted from geo_loc_name if not provided.",
+                    "description": "City, town, municipality, or village of sample collection. Free text. Used in NCBI BioSample geo_loc_name construction alongside collection_location_country and collection_location_state: format is \"Country:State:City\" (e.g. \"USA:State:City\"). Optional \u2014 omitted from geo_loc_name if not provided.",
                     "type": "string"
                 },
                 "collection_location_country": {
@@ -1441,11 +1441,11 @@
                     "type": "number"
                 },
                 "geo_lat": {
-                    "description": "Decimal latitude (WGS84), e.g. 33.4484",
+                    "description": "Decimal latitude (WGS84), e.g. 39.7392",
                     "type": "number"
                 },
                 "geo_lon": {
-                    "description": "Decimal longitude (WGS84), e.g. -112.0740",
+                    "description": "Decimal longitude (WGS84), e.g. -104.9903",
                     "type": "number"
                 },
                 "gisaid_accession": {
@@ -1574,7 +1574,7 @@
                 },
                 "organism_name": {
                     "$ref": "#/$defs/OrganismNameEnum",
-                    "description": "NCBI organism name. Controlled vocabulary derived from the ADHS mandatory reportable communicable diseases list, plus Coccidioides spp. (Valley fever) and metagenome for metagenomic samples. Platform Admins may add new values when novel pathogens emerge. Researchers may request additions via the portal. Use 'metagenome' when no specific organism is targeted. APGAP: 'Pathogen/organism name (or metagenomic)'.\n"
+                    "description": "NCBI organism name. Controlled vocabulary derived from the host jurisdiction's reportable communicable diseases list, plus Coccidioides spp. (Valley fever) and metagenome for metagenomic samples. Platform Admins may add new values when novel pathogens emerge. Researchers may request additions via the portal. Use 'metagenome' when no specific organism is targeted. APGAP: 'Pathogen/organism name (or metagenomic)'.\n"
                 },
                 "originating_lab": {
                     "description": "Lab that collected the original sample. Maps to GISAID \"Originating lab\" and NCBI BioSample originating_lab. Required for WHO Principle 6 attribution. May differ from sequencing_lab (who sequenced it) and submitting_lab (who uploaded to JACKPOT).",
@@ -1712,7 +1712,7 @@
                     "type": "string"
                 },
                 "surveillance_relevant": {
-                    "description": "Whether ADHS public health oversight access applies to this sample. Computed at ingest from organism_name against the reportable_organisms table. TRUE if organism is reportable, FALSE otherwise. For metagenomic samples (organism_name = metagenome): TRUE if any target_organism is reportable, or TRUE by default if no targets specified (conservative). Can be overridden \u2014 see surveillance_relevant_override.",
+                    "description": "Whether the host operator's public health oversight access applies to this sample. Computed at ingest from organism_name against the reportable_organisms table. TRUE if organism is reportable, FALSE otherwise. For metagenomic samples (organism_name = metagenome): TRUE if any target_organism is reportable, or TRUE by default if no targets specified (conservative). Can be overridden \u2014 see surveillance_relevant_override.",
                     "type": "boolean"
                 },
                 "surveillance_relevant_override": {
@@ -1873,7 +1873,7 @@
                     "type": "array"
                 },
                 "case_id": {
-                    "description": "Generic public health case identifier. Links samples across sectors (human, animal, environmental) that share an epidemiological connection. ADHS uses adhs_medsis_id (HumanSample only) for MEDSIS-specific IDs. Other jurisdictions use this field: CalREDIE (CA), ECLRS (NY), NEDSS (CDC), etc. Nullable \u2014 not all samples belong to a named case.",
+                    "description": "Generic public health case identifier. Links samples across sectors (human, animal, environmental) that share an epidemiological connection. HumanSample also provides external_case_id for an operator-issued anonymized identifier where the operator has its own case-management system. Other jurisdictions use this generic case_id field: CalREDIE (CA), ECLRS (NY), NEDSS (CDC), etc. Nullable \u2014 not all samples belong to a named case.",
                     "type": "string"
                 },
                 "case_source_system": {
@@ -1893,7 +1893,7 @@
                     "type": "string"
                 },
                 "collection_location_city": {
-                    "description": "City, town, municipality, or village of sample collection. Free text. Used in NCBI BioSample geo_loc_name construction alongside collection_location_country and collection_location_state: format is \"Country:State:City\" (e.g. \"USA:Arizona:Phoenix\"). Optional \u2014 omitted from geo_loc_name if not provided.",
+                    "description": "City, town, municipality, or village of sample collection. Free text. Used in NCBI BioSample geo_loc_name construction alongside collection_location_country and collection_location_state: format is \"Country:State:City\" (e.g. \"USA:State:City\"). Optional \u2014 omitted from geo_loc_name if not provided.",
                     "type": "string"
                 },
                 "collection_location_country": {
@@ -2016,11 +2016,11 @@
                     "type": "number"
                 },
                 "geo_lat": {
-                    "description": "Decimal latitude (WGS84), e.g. 33.4484",
+                    "description": "Decimal latitude (WGS84), e.g. 39.7392",
                     "type": "number"
                 },
                 "geo_lon": {
-                    "description": "Decimal longitude (WGS84), e.g. -112.0740",
+                    "description": "Decimal longitude (WGS84), e.g. -104.9903",
                     "type": "number"
                 },
                 "gisaid_accession": {
@@ -2149,7 +2149,7 @@
                 },
                 "organism_name": {
                     "$ref": "#/$defs/OrganismNameEnum",
-                    "description": "NCBI organism name. Controlled vocabulary derived from the ADHS mandatory reportable communicable diseases list, plus Coccidioides spp. (Valley fever) and metagenome for metagenomic samples. Platform Admins may add new values when novel pathogens emerge. Researchers may request additions via the portal. Use 'metagenome' when no specific organism is targeted. APGAP: 'Pathogen/organism name (or metagenomic)'.\n"
+                    "description": "NCBI organism name. Controlled vocabulary derived from the host jurisdiction's reportable communicable diseases list, plus Coccidioides spp. (Valley fever) and metagenome for metagenomic samples. Platform Admins may add new values when novel pathogens emerge. Researchers may request additions via the portal. Use 'metagenome' when no specific organism is targeted. APGAP: 'Pathogen/organism name (or metagenomic)'.\n"
                 },
                 "originating_lab": {
                     "description": "Lab that collected the original sample. Maps to GISAID \"Originating lab\" and NCBI BioSample originating_lab. Required for WHO Principle 6 attribution. May differ from sequencing_lab (who sequenced it) and submitting_lab (who uploaded to JACKPOT).",
@@ -2295,7 +2295,7 @@
                     "type": "string"
                 },
                 "surveillance_relevant": {
-                    "description": "Whether ADHS public health oversight access applies to this sample. Computed at ingest from organism_name against the reportable_organisms table. TRUE if organism is reportable, FALSE otherwise. For metagenomic samples (organism_name = metagenome): TRUE if any target_organism is reportable, or TRUE by default if no targets specified (conservative). Can be overridden \u2014 see surveillance_relevant_override.",
+                    "description": "Whether the host operator's public health oversight access applies to this sample. Computed at ingest from organism_name against the reportable_organisms table. TRUE if organism is reportable, FALSE otherwise. For metagenomic samples (organism_name = metagenome): TRUE if any target_organism is reportable, or TRUE by default if no targets specified (conservative). Can be overridden \u2014 see surveillance_relevant_override.",
                     "type": "boolean"
                 },
                 "surveillance_relevant_override": {
@@ -2360,10 +2360,6 @@
             "additionalProperties": false,
             "description": "Clinical or surveillance sample from a human host. Fields from APGAP human_host.xlsx. Maps to GA4GH Phenopacket Individual + Disease elements.",
             "properties": {
-                "adhs_medsis_id": {
-                    "description": "APGAP: 'ADHS issued ID (links with MEDSIS case data on their end)'. Either (1) an anonymized ID linking to the MEDSIS case record, or (2) an exemption code obtained for the study if the sample does not originate from ADHS surveillance. Validation: cross-checked against ADHS-issued ID list when that list becomes available. Currently free text \u2014 validation to be added when ADHS establishes the list. Distinct from case_id (used by non-ADHS public health sources).\n",
-                    "type": "string"
-                },
                 "amrfinder_genes": {
                     "description": "AMR genes detected by NCBI AMRFinder",
                     "items": {
@@ -2410,7 +2406,7 @@
                     "type": "array"
                 },
                 "case_id": {
-                    "description": "Generic public health case identifier. Links samples across sectors (human, animal, environmental) that share an epidemiological connection. ADHS uses adhs_medsis_id (HumanSample only) for MEDSIS-specific IDs. Other jurisdictions use this field: CalREDIE (CA), ECLRS (NY), NEDSS (CDC), etc. Nullable \u2014 not all samples belong to a named case.",
+                    "description": "Generic public health case identifier. Links samples across sectors (human, animal, environmental) that share an epidemiological connection. HumanSample also provides external_case_id for an operator-issued anonymized identifier where the operator has its own case-management system. Other jurisdictions use this generic case_id field: CalREDIE (CA), ECLRS (NY), NEDSS (CDC), etc. Nullable \u2014 not all samples belong to a named case.",
                     "type": "string"
                 },
                 "case_source_system": {
@@ -2434,7 +2430,7 @@
                     "type": "string"
                 },
                 "collection_location_city": {
-                    "description": "City, town, municipality, or village of sample collection. Free text. Used in NCBI BioSample geo_loc_name construction alongside collection_location_country and collection_location_state: format is \"Country:State:City\" (e.g. \"USA:Arizona:Phoenix\"). Optional \u2014 omitted from geo_loc_name if not provided.",
+                    "description": "City, town, municipality, or village of sample collection. Free text. Used in NCBI BioSample geo_loc_name construction alongside collection_location_country and collection_location_state: format is \"Country:State:City\" (e.g. \"USA:State:City\"). Optional \u2014 omitted from geo_loc_name if not provided.",
                     "type": "string"
                 },
                 "collection_location_country": {
@@ -2533,6 +2529,10 @@
                     "description": "European Nucleotide Archive run accession (ERR prefix). ENA and NCBI SRA mirror each other but submitting labs in Europe and Asia may submit via ENA. Required for WHO Principle 9 interoperability with non-US partners.",
                     "type": "string"
                 },
+                "external_case_id": {
+                    "description": "Operator-issued anonymized identifier or exemption code for a human sample. Either (1) an anonymized ID linking to the host jurisdiction's case-management system, or (2) an exemption code obtained for the study if the sample does not originate from surveillance. Validation: cross-checked against the operator's authoritative ID list when that list becomes available. Currently free text. Distinct from case_id (used by samples whose case identifier comes from a different surveillance system).\n",
+                    "type": "string"
+                },
                 "fastq_r1_uri": {
                     "description": "Convenience field: URI of the primary (R1 or first) scrubbed read file. Populated automatically for simple 2-file paired runs. Supports gs:// (GCS) and drs:// (GA4GH DRS) schemes. Accepted extensions: .fastq, .fq, .fasta, .fa, .fna with optional .gz or .bz2 compression. For all other cases (multi-lane, nanopore, multiple unpaired), query the sample_files table for the complete file list.\n",
                     "type": "string"
@@ -2550,11 +2550,11 @@
                     "type": "number"
                 },
                 "geo_lat": {
-                    "description": "Decimal latitude (WGS84), e.g. 33.4484",
+                    "description": "Decimal latitude (WGS84), e.g. 39.7392",
                     "type": "number"
                 },
                 "geo_lon": {
-                    "description": "Decimal longitude (WGS84), e.g. -112.0740",
+                    "description": "Decimal longitude (WGS84), e.g. -104.9903",
                     "type": "number"
                 },
                 "gisaid_accession": {
@@ -2714,7 +2714,7 @@
                 },
                 "organism_name": {
                     "$ref": "#/$defs/OrganismNameEnum",
-                    "description": "NCBI organism name. Controlled vocabulary derived from the ADHS mandatory reportable communicable diseases list, plus Coccidioides spp. (Valley fever) and metagenome for metagenomic samples. Platform Admins may add new values when novel pathogens emerge. Researchers may request additions via the portal. Use 'metagenome' when no specific organism is targeted. APGAP: 'Pathogen/organism name (or metagenomic)'.\n"
+                    "description": "NCBI organism name. Controlled vocabulary derived from the host jurisdiction's reportable communicable diseases list, plus Coccidioides spp. (Valley fever) and metagenome for metagenomic samples. Platform Admins may add new values when novel pathogens emerge. Researchers may request additions via the portal. Use 'metagenome' when no specific organism is targeted. APGAP: 'Pathogen/organism name (or metagenomic)'.\n"
                 },
                 "originating_lab": {
                     "description": "Lab that collected the original sample. Maps to GISAID \"Originating lab\" and NCBI BioSample originating_lab. Required for WHO Principle 6 attribution. May differ from sequencing_lab (who sequenced it) and submitting_lab (who uploaded to JACKPOT).",
@@ -2859,7 +2859,7 @@
                     "type": "string"
                 },
                 "surveillance_relevant": {
-                    "description": "Whether ADHS public health oversight access applies to this sample. Computed at ingest from organism_name against the reportable_organisms table. TRUE if organism is reportable, FALSE otherwise. For metagenomic samples (organism_name = metagenome): TRUE if any target_organism is reportable, or TRUE by default if no targets specified (conservative). Can be overridden \u2014 see surveillance_relevant_override.",
+                    "description": "Whether the host operator's public health oversight access applies to this sample. Computed at ingest from organism_name against the reportable_organisms table. TRUE if organism is reportable, FALSE otherwise. For metagenomic samples (organism_name = metagenome): TRUE if any target_organism is reportable, or TRUE by default if no targets specified (conservative). Can be overridden \u2014 see surveillance_relevant_override.",
                     "type": "boolean"
                 },
                 "surveillance_relevant_override": {
@@ -2912,7 +2912,7 @@
                 }
             },
             "required": [
-                "adhs_medsis_id",
+                "external_case_id",
                 "biospecimen_type",
                 "reason_for_collection",
                 "host_disease",
@@ -3064,7 +3064,7 @@
                     "type": "array"
                 },
                 "case_id": {
-                    "description": "Generic public health case identifier. Links samples across sectors (human, animal, environmental) that share an epidemiological connection. ADHS uses adhs_medsis_id (HumanSample only) for MEDSIS-specific IDs. Other jurisdictions use this field: CalREDIE (CA), ECLRS (NY), NEDSS (CDC), etc. Nullable \u2014 not all samples belong to a named case.",
+                    "description": "Generic public health case identifier. Links samples across sectors (human, animal, environmental) that share an epidemiological connection. HumanSample also provides external_case_id for an operator-issued anonymized identifier where the operator has its own case-management system. Other jurisdictions use this generic case_id field: CalREDIE (CA), ECLRS (NY), NEDSS (CDC), etc. Nullable \u2014 not all samples belong to a named case.",
                     "type": "string"
                 },
                 "case_source_system": {
@@ -3084,7 +3084,7 @@
                     "type": "string"
                 },
                 "collection_location_city": {
-                    "description": "City, town, municipality, or village of sample collection. Free text. Used in NCBI BioSample geo_loc_name construction alongside collection_location_country and collection_location_state: format is \"Country:State:City\" (e.g. \"USA:Arizona:Phoenix\"). Optional \u2014 omitted from geo_loc_name if not provided.",
+                    "description": "City, town, municipality, or village of sample collection. Free text. Used in NCBI BioSample geo_loc_name construction alongside collection_location_country and collection_location_state: format is \"Country:State:City\" (e.g. \"USA:State:City\"). Optional \u2014 omitted from geo_loc_name if not provided.",
                     "type": "string"
                 },
                 "collection_location_country": {
@@ -3197,11 +3197,11 @@
                     "type": "number"
                 },
                 "geo_lat": {
-                    "description": "Decimal latitude (WGS84), e.g. 33.4484",
+                    "description": "Decimal latitude (WGS84), e.g. 39.7392",
                     "type": "number"
                 },
                 "geo_lon": {
-                    "description": "Decimal longitude (WGS84), e.g. -112.0740",
+                    "description": "Decimal longitude (WGS84), e.g. -104.9903",
                     "type": "number"
                 },
                 "gisaid_accession": {
@@ -3355,7 +3355,7 @@
                 },
                 "organism_name": {
                     "$ref": "#/$defs/OrganismNameEnum",
-                    "description": "NCBI organism name. Controlled vocabulary derived from the ADHS mandatory reportable communicable diseases list, plus Coccidioides spp. (Valley fever) and metagenome for metagenomic samples. Platform Admins may add new values when novel pathogens emerge. Researchers may request additions via the portal. Use 'metagenome' when no specific organism is targeted. APGAP: 'Pathogen/organism name (or metagenomic)'.\n"
+                    "description": "NCBI organism name. Controlled vocabulary derived from the host jurisdiction's reportable communicable diseases list, plus Coccidioides spp. (Valley fever) and metagenome for metagenomic samples. Platform Admins may add new values when novel pathogens emerge. Researchers may request additions via the portal. Use 'metagenome' when no specific organism is targeted. APGAP: 'Pathogen/organism name (or metagenomic)'.\n"
                 },
                 "originating_lab": {
                     "description": "Lab that collected the original sample. Maps to GISAID \"Originating lab\" and NCBI BioSample originating_lab. Required for WHO Principle 6 attribution. May differ from sequencing_lab (who sequenced it) and submitting_lab (who uploaded to JACKPOT).",
@@ -3493,7 +3493,7 @@
                     "type": "string"
                 },
                 "surveillance_relevant": {
-                    "description": "Whether ADHS public health oversight access applies to this sample. Computed at ingest from organism_name against the reportable_organisms table. TRUE if organism is reportable, FALSE otherwise. For metagenomic samples (organism_name = metagenome): TRUE if any target_organism is reportable, or TRUE by default if no targets specified (conservative). Can be overridden \u2014 see surveillance_relevant_override.",
+                    "description": "Whether the host operator's public health oversight access applies to this sample. Computed at ingest from organism_name against the reportable_organisms table. TRUE if organism is reportable, FALSE otherwise. For metagenomic samples (organism_name = metagenome): TRUE if any target_organism is reportable, or TRUE by default if no targets specified (conservative). Can be overridden \u2014 see surveillance_relevant_override.",
                     "type": "boolean"
                 },
                 "surveillance_relevant_override": {
@@ -3568,7 +3568,7 @@
             "type": "string"
         },
         "OrganismNameEnum": {
-            "description": "Controlled vocabulary of pathogen organism names. Derived from ADHS mandatory reportable communicable diseases. Anchored to NCBI Taxonomy for BioSample/SRA/GenBank/GISAID compatibility.",
+            "description": "Controlled vocabulary of pathogen organism names. Derived from a configurable reportable communicable diseases list (defaults to the host jurisdiction's official list). Anchored to NCBI Taxonomy for BioSample/SRA/GenBank/GISAID compatibility.",
             "enum": [
                 "metagenome",
                 "Bacillus anthracis",
@@ -3652,7 +3652,7 @@
         },
         "Organization": {
             "additionalProperties": false,
-            "description": "An institution (e.g. ASU, ADHS, CDC). Maps to APGAP Organization model.",
+            "description": "An institution (e.g. a public health agency, academic lab, NGO, or CDC). Maps to APGAP Organization model.",
             "properties": {
                 "default_approve_analytical_dataset_requests": {
                     "description": "Auto-approve dataset access requests from this org",
@@ -3703,7 +3703,7 @@
                     "type": "string"
                 },
                 "outbreak_name": {
-                    "description": "Human-readable name for the investigation. e.g. 'Maricopa County Salmonella Typhimurium Cluster 2026'.",
+                    "description": "Human-readable name for the investigation. e.g. 'Some County Salmonella Typhimurium Cluster 2026'.",
                     "type": "string"
                 },
                 "pathogen": {
@@ -3711,7 +3711,7 @@
                     "description": "Primary pathogen under investigation."
                 },
                 "reporting_jurisdiction": {
-                    "description": "Primary public health jurisdiction responsible for this investigation. e.g. 'ADHS', 'Maricopa County DHS', 'CDC', 'WHO PAHO'.",
+                    "description": "Primary public health jurisdiction responsible for this investigation. e.g. 'State Health Dept', 'County DHS', 'CDC', 'WHO PAHO'.",
                     "type": "string"
                 },
                 "sectors_involved": {
@@ -3878,7 +3878,7 @@
                     "type": "array"
                 },
                 "case_id": {
-                    "description": "Generic public health case identifier. Links samples across sectors (human, animal, environmental) that share an epidemiological connection. ADHS uses adhs_medsis_id (HumanSample only) for MEDSIS-specific IDs. Other jurisdictions use this field: CalREDIE (CA), ECLRS (NY), NEDSS (CDC), etc. Nullable \u2014 not all samples belong to a named case.",
+                    "description": "Generic public health case identifier. Links samples across sectors (human, animal, environmental) that share an epidemiological connection. HumanSample also provides external_case_id for an operator-issued anonymized identifier where the operator has its own case-management system. Other jurisdictions use this generic case_id field: CalREDIE (CA), ECLRS (NY), NEDSS (CDC), etc. Nullable \u2014 not all samples belong to a named case.",
                     "type": "string"
                 },
                 "case_source_system": {
@@ -3898,7 +3898,7 @@
                     "type": "string"
                 },
                 "collection_location_city": {
-                    "description": "City, town, municipality, or village of sample collection. Free text. Used in NCBI BioSample geo_loc_name construction alongside collection_location_country and collection_location_state: format is \"Country:State:City\" (e.g. \"USA:Arizona:Phoenix\"). Optional \u2014 omitted from geo_loc_name if not provided.",
+                    "description": "City, town, municipality, or village of sample collection. Free text. Used in NCBI BioSample geo_loc_name construction alongside collection_location_country and collection_location_state: format is \"Country:State:City\" (e.g. \"USA:State:City\"). Optional \u2014 omitted from geo_loc_name if not provided.",
                     "type": "string"
                 },
                 "collection_location_country": {
@@ -4026,11 +4026,11 @@
                     "type": "number"
                 },
                 "geo_lat": {
-                    "description": "Decimal latitude (WGS84), e.g. 33.4484",
+                    "description": "Decimal latitude (WGS84), e.g. 39.7392",
                     "type": "number"
                 },
                 "geo_lon": {
-                    "description": "Decimal longitude (WGS84), e.g. -112.0740",
+                    "description": "Decimal longitude (WGS84), e.g. -104.9903",
                     "type": "number"
                 },
                 "gisaid_accession": {
@@ -4163,7 +4163,7 @@
                 },
                 "organism_name": {
                     "$ref": "#/$defs/OrganismNameEnum",
-                    "description": "NCBI organism name. Controlled vocabulary derived from the ADHS mandatory reportable communicable diseases list, plus Coccidioides spp. (Valley fever) and metagenome for metagenomic samples. Platform Admins may add new values when novel pathogens emerge. Researchers may request additions via the portal. Use 'metagenome' when no specific organism is targeted. APGAP: 'Pathogen/organism name (or metagenomic)'.\n"
+                    "description": "NCBI organism name. Controlled vocabulary derived from the host jurisdiction's reportable communicable diseases list, plus Coccidioides spp. (Valley fever) and metagenome for metagenomic samples. Platform Admins may add new values when novel pathogens emerge. Researchers may request additions via the portal. Use 'metagenome' when no specific organism is targeted. APGAP: 'Pathogen/organism name (or metagenomic)'.\n"
                 },
                 "originating_lab": {
                     "description": "Lab that collected the original sample. Maps to GISAID \"Originating lab\" and NCBI BioSample originating_lab. Required for WHO Principle 6 attribution. May differ from sequencing_lab (who sequenced it) and submitting_lab (who uploaded to JACKPOT).",
@@ -4311,7 +4311,7 @@
                     "type": "string"
                 },
                 "surveillance_relevant": {
-                    "description": "Whether ADHS public health oversight access applies to this sample. Computed at ingest from organism_name against the reportable_organisms table. TRUE if organism is reportable, FALSE otherwise. For metagenomic samples (organism_name = metagenome): TRUE if any target_organism is reportable, or TRUE by default if no targets specified (conservative). Can be overridden \u2014 see surveillance_relevant_override.",
+                    "description": "Whether the host operator's public health oversight access applies to this sample. Computed at ingest from organism_name against the reportable_organisms table. TRUE if organism is reportable, FALSE otherwise. For metagenomic samples (organism_name = metagenome): TRUE if any target_organism is reportable, or TRUE by default if no targets specified (conservative). Can be overridden \u2014 see surveillance_relevant_override.",
                     "type": "boolean"
                 },
                 "surveillance_relevant_override": {
@@ -4514,7 +4514,7 @@
                     "type": "array"
                 },
                 "case_id": {
-                    "description": "Generic public health case identifier. Links samples across sectors (human, animal, environmental) that share an epidemiological connection. ADHS uses adhs_medsis_id (HumanSample only) for MEDSIS-specific IDs. Other jurisdictions use this field: CalREDIE (CA), ECLRS (NY), NEDSS (CDC), etc. Nullable \u2014 not all samples belong to a named case.",
+                    "description": "Generic public health case identifier. Links samples across sectors (human, animal, environmental) that share an epidemiological connection. HumanSample also provides external_case_id for an operator-issued anonymized identifier where the operator has its own case-management system. Other jurisdictions use this generic case_id field: CalREDIE (CA), ECLRS (NY), NEDSS (CDC), etc. Nullable \u2014 not all samples belong to a named case.",
                     "type": "string"
                 },
                 "case_source_system": {
@@ -4534,7 +4534,7 @@
                     "type": "string"
                 },
                 "collection_location_city": {
-                    "description": "City, town, municipality, or village of sample collection. Free text. Used in NCBI BioSample geo_loc_name construction alongside collection_location_country and collection_location_state: format is \"Country:State:City\" (e.g. \"USA:Arizona:Phoenix\"). Optional \u2014 omitted from geo_loc_name if not provided.",
+                    "description": "City, town, municipality, or village of sample collection. Free text. Used in NCBI BioSample geo_loc_name construction alongside collection_location_country and collection_location_state: format is \"Country:State:City\" (e.g. \"USA:State:City\"). Optional \u2014 omitted from geo_loc_name if not provided.",
                     "type": "string"
                 },
                 "collection_location_country": {
@@ -4641,11 +4641,11 @@
                     "type": "number"
                 },
                 "geo_lat": {
-                    "description": "Decimal latitude (WGS84), e.g. 33.4484",
+                    "description": "Decimal latitude (WGS84), e.g. 39.7392",
                     "type": "number"
                 },
                 "geo_lon": {
-                    "description": "Decimal longitude (WGS84), e.g. -112.0740",
+                    "description": "Decimal longitude (WGS84), e.g. -104.9903",
                     "type": "number"
                 },
                 "gisaid_accession": {
@@ -4774,7 +4774,7 @@
                 },
                 "organism_name": {
                     "$ref": "#/$defs/OrganismNameEnum",
-                    "description": "NCBI organism name. Controlled vocabulary derived from the ADHS mandatory reportable communicable diseases list, plus Coccidioides spp. (Valley fever) and metagenome for metagenomic samples. Platform Admins may add new values when novel pathogens emerge. Researchers may request additions via the portal. Use 'metagenome' when no specific organism is targeted. APGAP: 'Pathogen/organism name (or metagenomic)'.\n"
+                    "description": "NCBI organism name. Controlled vocabulary derived from the host jurisdiction's reportable communicable diseases list, plus Coccidioides spp. (Valley fever) and metagenome for metagenomic samples. Platform Admins may add new values when novel pathogens emerge. Researchers may request additions via the portal. Use 'metagenome' when no specific organism is targeted. APGAP: 'Pathogen/organism name (or metagenomic)'.\n"
                 },
                 "originating_lab": {
                     "description": "Lab that collected the original sample. Maps to GISAID \"Originating lab\" and NCBI BioSample originating_lab. Required for WHO Principle 6 attribution. May differ from sequencing_lab (who sequenced it) and submitting_lab (who uploaded to JACKPOT).",
@@ -4912,7 +4912,7 @@
                     "type": "string"
                 },
                 "surveillance_relevant": {
-                    "description": "Whether ADHS public health oversight access applies to this sample. Computed at ingest from organism_name against the reportable_organisms table. TRUE if organism is reportable, FALSE otherwise. For metagenomic samples (organism_name = metagenome): TRUE if any target_organism is reportable, or TRUE by default if no targets specified (conservative). Can be overridden \u2014 see surveillance_relevant_override.",
+                    "description": "Whether the host operator's public health oversight access applies to this sample. Computed at ingest from organism_name against the reportable_organisms table. TRUE if organism is reportable, FALSE otherwise. For metagenomic samples (organism_name = metagenome): TRUE if any target_organism is reportable, or TRUE by default if no targets specified (conservative). Can be overridden \u2014 see surveillance_relevant_override.",
                     "type": "boolean"
                 },
                 "surveillance_relevant_override": {
@@ -5211,7 +5211,7 @@
                     "type": "array"
                 },
                 "case_id": {
-                    "description": "Generic public health case identifier. Links samples across sectors (human, animal, environmental) that share an epidemiological connection. ADHS uses adhs_medsis_id (HumanSample only) for MEDSIS-specific IDs. Other jurisdictions use this field: CalREDIE (CA), ECLRS (NY), NEDSS (CDC), etc. Nullable \u2014 not all samples belong to a named case.",
+                    "description": "Generic public health case identifier. Links samples across sectors (human, animal, environmental) that share an epidemiological connection. HumanSample also provides external_case_id for an operator-issued anonymized identifier where the operator has its own case-management system. Other jurisdictions use this generic case_id field: CalREDIE (CA), ECLRS (NY), NEDSS (CDC), etc. Nullable \u2014 not all samples belong to a named case.",
                     "type": "string"
                 },
                 "case_source_system": {
@@ -5231,7 +5231,7 @@
                     "type": "string"
                 },
                 "collection_location_city": {
-                    "description": "City, town, municipality, or village of sample collection. Free text. Used in NCBI BioSample geo_loc_name construction alongside collection_location_country and collection_location_state: format is \"Country:State:City\" (e.g. \"USA:Arizona:Phoenix\"). Optional \u2014 omitted from geo_loc_name if not provided.",
+                    "description": "City, town, municipality, or village of sample collection. Free text. Used in NCBI BioSample geo_loc_name construction alongside collection_location_country and collection_location_state: format is \"Country:State:City\" (e.g. \"USA:State:City\"). Optional \u2014 omitted from geo_loc_name if not provided.",
                     "type": "string"
                 },
                 "collection_location_country": {
@@ -5348,11 +5348,11 @@
                     "type": "number"
                 },
                 "geo_lat": {
-                    "description": "Decimal latitude (WGS84), e.g. 33.4484",
+                    "description": "Decimal latitude (WGS84), e.g. 39.7392",
                     "type": "number"
                 },
                 "geo_lon": {
-                    "description": "Decimal longitude (WGS84), e.g. -112.0740",
+                    "description": "Decimal longitude (WGS84), e.g. -104.9903",
                     "type": "number"
                 },
                 "gisaid_accession": {
@@ -5493,7 +5493,7 @@
                 },
                 "organism_name": {
                     "$ref": "#/$defs/OrganismNameEnum",
-                    "description": "NCBI organism name. Controlled vocabulary derived from the ADHS mandatory reportable communicable diseases list, plus Coccidioides spp. (Valley fever) and metagenome for metagenomic samples. Platform Admins may add new values when novel pathogens emerge. Researchers may request additions via the portal. Use 'metagenome' when no specific organism is targeted. APGAP: 'Pathogen/organism name (or metagenomic)'.\n"
+                    "description": "NCBI organism name. Controlled vocabulary derived from the host jurisdiction's reportable communicable diseases list, plus Coccidioides spp. (Valley fever) and metagenome for metagenomic samples. Platform Admins may add new values when novel pathogens emerge. Researchers may request additions via the portal. Use 'metagenome' when no specific organism is targeted. APGAP: 'Pathogen/organism name (or metagenomic)'.\n"
                 },
                 "originating_lab": {
                     "description": "Lab that collected the original sample. Maps to GISAID \"Originating lab\" and NCBI BioSample originating_lab. Required for WHO Principle 6 attribution. May differ from sequencing_lab (who sequenced it) and submitting_lab (who uploaded to JACKPOT).",
@@ -5651,7 +5651,7 @@
                     "type": "string"
                 },
                 "surveillance_relevant": {
-                    "description": "Whether ADHS public health oversight access applies to this sample. Computed at ingest from organism_name against the reportable_organisms table. TRUE if organism is reportable, FALSE otherwise. For metagenomic samples (organism_name = metagenome): TRUE if any target_organism is reportable, or TRUE by default if no targets specified (conservative). Can be overridden \u2014 see surveillance_relevant_override.",
+                    "description": "Whether the host operator's public health oversight access applies to this sample. Computed at ingest from organism_name against the reportable_organisms table. TRUE if organism is reportable, FALSE otherwise. For metagenomic samples (organism_name = metagenome): TRUE if any target_organism is reportable, or TRUE by default if no targets specified (conservative). Can be overridden \u2014 see surveillance_relevant_override.",
                     "type": "boolean"
                 },
                 "surveillance_relevant_override": {
@@ -5791,7 +5791,7 @@
                     "type": "array"
                 },
                 "case_id": {
-                    "description": "Generic public health case identifier. Links samples across sectors (human, animal, environmental) that share an epidemiological connection. ADHS uses adhs_medsis_id (HumanSample only) for MEDSIS-specific IDs. Other jurisdictions use this field: CalREDIE (CA), ECLRS (NY), NEDSS (CDC), etc. Nullable \u2014 not all samples belong to a named case.",
+                    "description": "Generic public health case identifier. Links samples across sectors (human, animal, environmental) that share an epidemiological connection. HumanSample also provides external_case_id for an operator-issued anonymized identifier where the operator has its own case-management system. Other jurisdictions use this generic case_id field: CalREDIE (CA), ECLRS (NY), NEDSS (CDC), etc. Nullable \u2014 not all samples belong to a named case.",
                     "type": "string"
                 },
                 "case_source_system": {
@@ -5811,7 +5811,7 @@
                     "type": "string"
                 },
                 "collection_location_city": {
-                    "description": "City, town, municipality, or village of sample collection. Free text. Used in NCBI BioSample geo_loc_name construction alongside collection_location_country and collection_location_state: format is \"Country:State:City\" (e.g. \"USA:Arizona:Phoenix\"). Optional \u2014 omitted from geo_loc_name if not provided.",
+                    "description": "City, town, municipality, or village of sample collection. Free text. Used in NCBI BioSample geo_loc_name construction alongside collection_location_country and collection_location_state: format is \"Country:State:City\" (e.g. \"USA:State:City\"). Optional \u2014 omitted from geo_loc_name if not provided.",
                     "type": "string"
                 },
                 "collection_location_country": {
@@ -5928,11 +5928,11 @@
                     "type": "number"
                 },
                 "geo_lat": {
-                    "description": "Decimal latitude (WGS84), e.g. 33.4484",
+                    "description": "Decimal latitude (WGS84), e.g. 39.7392",
                     "type": "number"
                 },
                 "geo_lon": {
-                    "description": "Decimal longitude (WGS84), e.g. -112.0740",
+                    "description": "Decimal longitude (WGS84), e.g. -104.9903",
                     "type": "number"
                 },
                 "gisaid_accession": {
@@ -6073,7 +6073,7 @@
                 },
                 "organism_name": {
                     "$ref": "#/$defs/OrganismNameEnum",
-                    "description": "NCBI organism name. Controlled vocabulary derived from the ADHS mandatory reportable communicable diseases list, plus Coccidioides spp. (Valley fever) and metagenome for metagenomic samples. Platform Admins may add new values when novel pathogens emerge. Researchers may request additions via the portal. Use 'metagenome' when no specific organism is targeted. APGAP: 'Pathogen/organism name (or metagenomic)'.\n"
+                    "description": "NCBI organism name. Controlled vocabulary derived from the host jurisdiction's reportable communicable diseases list, plus Coccidioides spp. (Valley fever) and metagenome for metagenomic samples. Platform Admins may add new values when novel pathogens emerge. Researchers may request additions via the portal. Use 'metagenome' when no specific organism is targeted. APGAP: 'Pathogen/organism name (or metagenomic)'.\n"
                 },
                 "originating_lab": {
                     "description": "Lab that collected the original sample. Maps to GISAID \"Originating lab\" and NCBI BioSample originating_lab. Required for WHO Principle 6 attribution. May differ from sequencing_lab (who sequenced it) and submitting_lab (who uploaded to JACKPOT).",
@@ -6252,7 +6252,7 @@
                     "type": "string"
                 },
                 "surveillance_relevant": {
-                    "description": "Whether ADHS public health oversight access applies to this sample. Computed at ingest from organism_name against the reportable_organisms table. TRUE if organism is reportable, FALSE otherwise. For metagenomic samples (organism_name = metagenome): TRUE if any target_organism is reportable, or TRUE by default if no targets specified (conservative). Can be overridden \u2014 see surveillance_relevant_override.",
+                    "description": "Whether the host operator's public health oversight access applies to this sample. Computed at ingest from organism_name against the reportable_organisms table. TRUE if organism is reportable, FALSE otherwise. For metagenomic samples (organism_name = metagenome): TRUE if any target_organism is reportable, or TRUE by default if no targets specified (conservative). Can be overridden \u2014 see surveillance_relevant_override.",
                     "type": "boolean"
                 },
                 "surveillance_relevant_override": {
@@ -6378,6 +6378,7 @@
             "description": "",
             "enum": [
                 "homogenized",
+                "pooled_homogenate",
                 "non_destructive_extraction",
                 "other"
             ],
@@ -6433,7 +6434,7 @@
                     "type": "array"
                 },
                 "case_id": {
-                    "description": "Generic public health case identifier. Links samples across sectors (human, animal, environmental) that share an epidemiological connection. ADHS uses adhs_medsis_id (HumanSample only) for MEDSIS-specific IDs. Other jurisdictions use this field: CalREDIE (CA), ECLRS (NY), NEDSS (CDC), etc. Nullable \u2014 not all samples belong to a named case.",
+                    "description": "Generic public health case identifier. Links samples across sectors (human, animal, environmental) that share an epidemiological connection. HumanSample also provides external_case_id for an operator-issued anonymized identifier where the operator has its own case-management system. Other jurisdictions use this generic case_id field: CalREDIE (CA), ECLRS (NY), NEDSS (CDC), etc. Nullable \u2014 not all samples belong to a named case.",
                     "type": "string"
                 },
                 "case_source_system": {
@@ -6453,7 +6454,7 @@
                     "type": "string"
                 },
                 "collection_location_city": {
-                    "description": "City, town, municipality, or village of sample collection. Free text. Used in NCBI BioSample geo_loc_name construction alongside collection_location_country and collection_location_state: format is \"Country:State:City\" (e.g. \"USA:Arizona:Phoenix\"). Optional \u2014 omitted from geo_loc_name if not provided.",
+                    "description": "City, town, municipality, or village of sample collection. Free text. Used in NCBI BioSample geo_loc_name construction alongside collection_location_country and collection_location_state: format is \"Country:State:City\" (e.g. \"USA:State:City\"). Optional \u2014 omitted from geo_loc_name if not provided.",
                     "type": "string"
                 },
                 "collection_location_country": {
@@ -6560,11 +6561,11 @@
                     "type": "number"
                 },
                 "geo_lat": {
-                    "description": "Decimal latitude (WGS84), e.g. 33.4484",
+                    "description": "Decimal latitude (WGS84), e.g. 39.7392",
                     "type": "number"
                 },
                 "geo_lon": {
-                    "description": "Decimal longitude (WGS84), e.g. -112.0740",
+                    "description": "Decimal longitude (WGS84), e.g. -104.9903",
                     "type": "number"
                 },
                 "gisaid_accession": {
@@ -6693,7 +6694,7 @@
                 },
                 "organism_name": {
                     "$ref": "#/$defs/OrganismNameEnum",
-                    "description": "NCBI organism name. Controlled vocabulary derived from the ADHS mandatory reportable communicable diseases list, plus Coccidioides spp. (Valley fever) and metagenome for metagenomic samples. Platform Admins may add new values when novel pathogens emerge. Researchers may request additions via the portal. Use 'metagenome' when no specific organism is targeted. APGAP: 'Pathogen/organism name (or metagenomic)'.\n"
+                    "description": "NCBI organism name. Controlled vocabulary derived from the host jurisdiction's reportable communicable diseases list, plus Coccidioides spp. (Valley fever) and metagenome for metagenomic samples. Platform Admins may add new values when novel pathogens emerge. Researchers may request additions via the portal. Use 'metagenome' when no specific organism is targeted. APGAP: 'Pathogen/organism name (or metagenomic)'.\n"
                 },
                 "originating_lab": {
                     "description": "Lab that collected the original sample. Maps to GISAID \"Originating lab\" and NCBI BioSample originating_lab. Required for WHO Principle 6 attribution. May differ from sequencing_lab (who sequenced it) and submitting_lab (who uploaded to JACKPOT).",
@@ -6732,6 +6733,14 @@
                 },
                 "pii_scan_status": {
                     "$ref": "#/$defs/PIIScanStatusEnum"
+                },
+                "pool_size_max": {
+                    "description": "Maximum number of individual arthropods in this pool. For an exact count, set pool_size_min = pool_size_max. Required when biospecimen_type = pooled_homogenate.\n",
+                    "type": "integer"
+                },
+                "pool_size_min": {
+                    "description": "Minimum number of individual arthropods in this pool. For an exact count, set pool_size_min = pool_size_max. Required when biospecimen_type = pooled_homogenate. Used for Minimum Infection Rate (MIR) calculations. CDC standard pool size is <= 50 arthropods.\n",
+                    "type": "integer"
                 },
                 "project": {
                     "type": "string"
@@ -6831,7 +6840,7 @@
                     "type": "string"
                 },
                 "surveillance_relevant": {
-                    "description": "Whether ADHS public health oversight access applies to this sample. Computed at ingest from organism_name against the reportable_organisms table. TRUE if organism is reportable, FALSE otherwise. For metagenomic samples (organism_name = metagenome): TRUE if any target_organism is reportable, or TRUE by default if no targets specified (conservative). Can be overridden \u2014 see surveillance_relevant_override.",
+                    "description": "Whether the host operator's public health oversight access applies to this sample. Computed at ingest from organism_name against the reportable_organisms table. TRUE if organism is reportable, FALSE otherwise. For metagenomic samples (organism_name = metagenome): TRUE if any target_organism is reportable, or TRUE by default if no targets specified (conservative). Can be overridden \u2014 see surveillance_relevant_override.",
                     "type": "boolean"
                 },
                 "surveillance_relevant_override": {
@@ -6946,7 +6955,7 @@
                     "type": "array"
                 },
                 "case_id": {
-                    "description": "Generic public health case identifier. Links samples across sectors (human, animal, environmental) that share an epidemiological connection. ADHS uses adhs_medsis_id (HumanSample only) for MEDSIS-specific IDs. Other jurisdictions use this field: CalREDIE (CA), ECLRS (NY), NEDSS (CDC), etc. Nullable \u2014 not all samples belong to a named case.",
+                    "description": "Generic public health case identifier. Links samples across sectors (human, animal, environmental) that share an epidemiological connection. HumanSample also provides external_case_id for an operator-issued anonymized identifier where the operator has its own case-management system. Other jurisdictions use this generic case_id field: CalREDIE (CA), ECLRS (NY), NEDSS (CDC), etc. Nullable \u2014 not all samples belong to a named case.",
                     "type": "string"
                 },
                 "case_source_system": {
@@ -6966,7 +6975,7 @@
                     "type": "string"
                 },
                 "collection_location_city": {
-                    "description": "City, town, municipality, or village of sample collection. Free text. Used in NCBI BioSample geo_loc_name construction alongside collection_location_country and collection_location_state: format is \"Country:State:City\" (e.g. \"USA:Arizona:Phoenix\"). Optional \u2014 omitted from geo_loc_name if not provided.",
+                    "description": "City, town, municipality, or village of sample collection. Free text. Used in NCBI BioSample geo_loc_name construction alongside collection_location_country and collection_location_state: format is \"Country:State:City\" (e.g. \"USA:State:City\"). Optional \u2014 omitted from geo_loc_name if not provided.",
                     "type": "string"
                 },
                 "collection_location_country": {
@@ -7001,7 +7010,7 @@
                     "type": "string"
                 },
                 "county_names": {
-                    "description": "APGAP: 'Service area (county_names)'. NWSS: county_names. Counties served by this sampling site, by name or FIPS code. System cross-maps name \u2194 FIPS. Multiple entries permitted. Examples: 'Maricopa County', '04013', 'Coconino'.\n",
+                    "description": "APGAP: 'Service area (county_names)'. NWSS: county_names. Counties served by this sampling site, by name or FIPS code. System cross-maps name \u2194 FIPS. Multiple entries permitted. Examples: 'Some County', '04013', 'Another County'.\n",
                     "items": {
                         "type": "string"
                     },
@@ -7099,11 +7108,11 @@
                     "type": "number"
                 },
                 "geo_lat": {
-                    "description": "Decimal latitude (WGS84), e.g. 33.4484",
+                    "description": "Decimal latitude (WGS84), e.g. 39.7392",
                     "type": "number"
                 },
                 "geo_lon": {
-                    "description": "Decimal longitude (WGS84), e.g. -112.0740",
+                    "description": "Decimal longitude (WGS84), e.g. -104.9903",
                     "type": "number"
                 },
                 "gisaid_accession": {
@@ -7248,7 +7257,7 @@
                 },
                 "organism_name": {
                     "$ref": "#/$defs/OrganismNameEnum",
-                    "description": "NCBI organism name. Controlled vocabulary derived from the ADHS mandatory reportable communicable diseases list, plus Coccidioides spp. (Valley fever) and metagenome for metagenomic samples. Platform Admins may add new values when novel pathogens emerge. Researchers may request additions via the portal. Use 'metagenome' when no specific organism is targeted. APGAP: 'Pathogen/organism name (or metagenomic)'.\n"
+                    "description": "NCBI organism name. Controlled vocabulary derived from the host jurisdiction's reportable communicable diseases list, plus Coccidioides spp. (Valley fever) and metagenome for metagenomic samples. Platform Admins may add new values when novel pathogens emerge. Researchers may request additions via the portal. Use 'metagenome' when no specific organism is targeted. APGAP: 'Pathogen/organism name (or metagenomic)'.\n"
                 },
                 "originating_lab": {
                     "description": "Lab that collected the original sample. Maps to GISAID \"Originating lab\" and NCBI BioSample originating_lab. Required for WHO Principle 6 attribution. May differ from sequencing_lab (who sequenced it) and submitting_lab (who uploaded to JACKPOT).",
@@ -7442,7 +7451,7 @@
                     "type": "string"
                 },
                 "surveillance_relevant": {
-                    "description": "Whether ADHS public health oversight access applies to this sample. Computed at ingest from organism_name against the reportable_organisms table. TRUE if organism is reportable, FALSE otherwise. For metagenomic samples (organism_name = metagenome): TRUE if any target_organism is reportable, or TRUE by default if no targets specified (conservative). Can be overridden \u2014 see surveillance_relevant_override.",
+                    "description": "Whether the host operator's public health oversight access applies to this sample. Computed at ingest from organism_name against the reportable_organisms table. TRUE if organism is reportable, FALSE otherwise. For metagenomic samples (organism_name = metagenome): TRUE if any target_organism is reportable, or TRUE by default if no targets specified (conservative). Can be overridden \u2014 see surveillance_relevant_override.",
                     "type": "boolean"
                 },
                 "surveillance_relevant_override": {
@@ -7568,7 +7577,7 @@
                     "type": "array"
                 },
                 "case_id": {
-                    "description": "Generic public health case identifier. Links samples across sectors (human, animal, environmental) that share an epidemiological connection. ADHS uses adhs_medsis_id (HumanSample only) for MEDSIS-specific IDs. Other jurisdictions use this field: CalREDIE (CA), ECLRS (NY), NEDSS (CDC), etc. Nullable \u2014 not all samples belong to a named case.",
+                    "description": "Generic public health case identifier. Links samples across sectors (human, animal, environmental) that share an epidemiological connection. HumanSample also provides external_case_id for an operator-issued anonymized identifier where the operator has its own case-management system. Other jurisdictions use this generic case_id field: CalREDIE (CA), ECLRS (NY), NEDSS (CDC), etc. Nullable \u2014 not all samples belong to a named case.",
                     "type": "string"
                 },
                 "case_source_system": {
@@ -7588,7 +7597,7 @@
                     "type": "string"
                 },
                 "collection_location_city": {
-                    "description": "City, town, municipality, or village of sample collection. Free text. Used in NCBI BioSample geo_loc_name construction alongside collection_location_country and collection_location_state: format is \"Country:State:City\" (e.g. \"USA:Arizona:Phoenix\"). Optional \u2014 omitted from geo_loc_name if not provided.",
+                    "description": "City, town, municipality, or village of sample collection. Free text. Used in NCBI BioSample geo_loc_name construction alongside collection_location_country and collection_location_state: format is \"Country:State:City\" (e.g. \"USA:State:City\"). Optional \u2014 omitted from geo_loc_name if not provided.",
                     "type": "string"
                 },
                 "collection_location_country": {
@@ -7704,11 +7713,11 @@
                     "type": "number"
                 },
                 "geo_lat": {
-                    "description": "Decimal latitude (WGS84), e.g. 33.4484",
+                    "description": "Decimal latitude (WGS84), e.g. 39.7392",
                     "type": "number"
                 },
                 "geo_lon": {
-                    "description": "Decimal longitude (WGS84), e.g. -112.0740",
+                    "description": "Decimal longitude (WGS84), e.g. -104.9903",
                     "type": "number"
                 },
                 "gisaid_accession": {
@@ -7837,7 +7846,7 @@
                 },
                 "organism_name": {
                     "$ref": "#/$defs/OrganismNameEnum",
-                    "description": "NCBI organism name. Controlled vocabulary derived from the ADHS mandatory reportable communicable diseases list, plus Coccidioides spp. (Valley fever) and metagenome for metagenomic samples. Platform Admins may add new values when novel pathogens emerge. Researchers may request additions via the portal. Use 'metagenome' when no specific organism is targeted. APGAP: 'Pathogen/organism name (or metagenomic)'.\n"
+                    "description": "NCBI organism name. Controlled vocabulary derived from the host jurisdiction's reportable communicable diseases list, plus Coccidioides spp. (Valley fever) and metagenome for metagenomic samples. Platform Admins may add new values when novel pathogens emerge. Researchers may request additions via the portal. Use 'metagenome' when no specific organism is targeted. APGAP: 'Pathogen/organism name (or metagenomic)'.\n"
                 },
                 "originating_lab": {
                     "description": "Lab that collected the original sample. Maps to GISAID \"Originating lab\" and NCBI BioSample originating_lab. Required for WHO Principle 6 attribution. May differ from sequencing_lab (who sequenced it) and submitting_lab (who uploaded to JACKPOT).",
@@ -7983,7 +7992,7 @@
                     "type": "string"
                 },
                 "surveillance_relevant": {
-                    "description": "Whether ADHS public health oversight access applies to this sample. Computed at ingest from organism_name against the reportable_organisms table. TRUE if organism is reportable, FALSE otherwise. For metagenomic samples (organism_name = metagenome): TRUE if any target_organism is reportable, or TRUE by default if no targets specified (conservative). Can be overridden \u2014 see surveillance_relevant_override.",
+                    "description": "Whether the host operator's public health oversight access applies to this sample. Computed at ingest from organism_name against the reportable_organisms table. TRUE if organism is reportable, FALSE otherwise. For metagenomic samples (organism_name = metagenome): TRUE if any target_organism is reportable, or TRUE by default if no targets specified (conservative). Can be overridden \u2014 see surveillance_relevant_override.",
                     "type": "boolean"
                 },
                 "surveillance_relevant_override": {
@@ -8125,7 +8134,7 @@
                     "type": "array"
                 },
                 "case_id": {
-                    "description": "Generic public health case identifier. Links samples across sectors (human, animal, environmental) that share an epidemiological connection. ADHS uses adhs_medsis_id (HumanSample only) for MEDSIS-specific IDs. Other jurisdictions use this field: CalREDIE (CA), ECLRS (NY), NEDSS (CDC), etc. Nullable \u2014 not all samples belong to a named case.",
+                    "description": "Generic public health case identifier. Links samples across sectors (human, animal, environmental) that share an epidemiological connection. HumanSample also provides external_case_id for an operator-issued anonymized identifier where the operator has its own case-management system. Other jurisdictions use this generic case_id field: CalREDIE (CA), ECLRS (NY), NEDSS (CDC), etc. Nullable \u2014 not all samples belong to a named case.",
                     "type": "string"
                 },
                 "case_source_system": {
@@ -8145,7 +8154,7 @@
                     "type": "string"
                 },
                 "collection_location_city": {
-                    "description": "City, town, municipality, or village of sample collection. Free text. Used in NCBI BioSample geo_loc_name construction alongside collection_location_country and collection_location_state: format is \"Country:State:City\" (e.g. \"USA:Arizona:Phoenix\"). Optional \u2014 omitted from geo_loc_name if not provided.",
+                    "description": "City, town, municipality, or village of sample collection. Free text. Used in NCBI BioSample geo_loc_name construction alongside collection_location_country and collection_location_state: format is \"Country:State:City\" (e.g. \"USA:State:City\"). Optional \u2014 omitted from geo_loc_name if not provided.",
                     "type": "string"
                 },
                 "collection_location_country": {
@@ -8252,11 +8261,11 @@
                     "type": "number"
                 },
                 "geo_lat": {
-                    "description": "Decimal latitude (WGS84), e.g. 33.4484",
+                    "description": "Decimal latitude (WGS84), e.g. 39.7392",
                     "type": "number"
                 },
                 "geo_lon": {
-                    "description": "Decimal longitude (WGS84), e.g. -112.0740",
+                    "description": "Decimal longitude (WGS84), e.g. -104.9903",
                     "type": "number"
                 },
                 "gisaid_accession": {
@@ -8398,7 +8407,7 @@
                 },
                 "organism_name": {
                     "$ref": "#/$defs/OrganismNameEnum",
-                    "description": "NCBI organism name. Controlled vocabulary derived from the ADHS mandatory reportable communicable diseases list, plus Coccidioides spp. (Valley fever) and metagenome for metagenomic samples. Platform Admins may add new values when novel pathogens emerge. Researchers may request additions via the portal. Use 'metagenome' when no specific organism is targeted. APGAP: 'Pathogen/organism name (or metagenomic)'.\n"
+                    "description": "NCBI organism name. Controlled vocabulary derived from the host jurisdiction's reportable communicable diseases list, plus Coccidioides spp. (Valley fever) and metagenome for metagenomic samples. Platform Admins may add new values when novel pathogens emerge. Researchers may request additions via the portal. Use 'metagenome' when no specific organism is targeted. APGAP: 'Pathogen/organism name (or metagenomic)'.\n"
                 },
                 "originating_lab": {
                     "description": "Lab that collected the original sample. Maps to GISAID \"Originating lab\" and NCBI BioSample originating_lab. Required for WHO Principle 6 attribution. May differ from sequencing_lab (who sequenced it) and submitting_lab (who uploaded to JACKPOT).",
@@ -8536,7 +8545,7 @@
                     "type": "string"
                 },
                 "surveillance_relevant": {
-                    "description": "Whether ADHS public health oversight access applies to this sample. Computed at ingest from organism_name against the reportable_organisms table. TRUE if organism is reportable, FALSE otherwise. For metagenomic samples (organism_name = metagenome): TRUE if any target_organism is reportable, or TRUE by default if no targets specified (conservative). Can be overridden \u2014 see surveillance_relevant_override.",
+                    "description": "Whether the host operator's public health oversight access applies to this sample. Computed at ingest from organism_name against the reportable_organisms table. TRUE if organism is reportable, FALSE otherwise. For metagenomic samples (organism_name = metagenome): TRUE if any target_organism is reportable, or TRUE by default if no targets specified (conservative). Can be overridden \u2014 see surveillance_relevant_override.",
                     "type": "boolean"
                 },
                 "surveillance_relevant_override": {

@@ -1,4 +1,4 @@
-source_format: asu_wastewater_v1
+source_format: example_wastewater_v1
 target_class: WastewaterSample
 column_mappings:
   "Sample ID":          sample_id
