@@ -39,7 +39,7 @@
         <div class="translation-code">
           <span class="translation-label">CODE</span>
           <pre><code>
-<span class="code-line"><span class="code-property">adhs_medsis_id</span>:</span>
+<span class="code-line"><span class="code-property">external_case_id</span>:</span>
 <span class="code-line">  <span class="code-keyword">required</span>: <span class="code-keyword">true</span></span>
 <span class="code-line"></span>
 <span class="code-line"><span class="code-property">host_age</span>:</span>
@@ -61,7 +61,7 @@
         <div class="translation-english">
           <span class="translation-label">PLAIN ENGLISH</span>
           <div class="translation-lines">
-            <p class="tl"><strong>adhs_medsis_id</strong> — required link to Arizona's disease reporting system. Every human sample must have one (or an exemption code). This connects the genome to the public health case record.</p>
+            <p class="tl"><strong>external_case_id</strong> — required link to the host jurisdiction's disease reporting system. Every human sample must have one (or an exemption code). This connects the genome to the public health case record.</p>
             <p class="tl"><strong>host_age: integer</strong> — the patient's exact age, stored internally for research analysis</p>
             <p class="tl"><strong>host_age_range: AgeRangeEnum</strong> — the same age as a decade bracket (e.g. "25-34 years"). This version is shared publicly to protect privacy — exact age is considered <span class="tooltip" data-tip="Personally Identifiable Information — data that could identify a specific individual, like exact age combined with disease, location, and date">PII</span>.</p>
             <p class="tl"><strong>date_of_symptom_onset</strong> — when symptoms started. The gap between this and collection date tells epidemiologists how fast the disease progresses.</p>
@@ -127,7 +127,7 @@
 <span class="code-line">    <span class="code-property">wwtp_name</span>:</span>
 <span class="code-line">      <span class="code-keyword">description</span>: &gt;</span>
 <span class="code-line">        Wastewater facility name.</span>
-<span class="code-line">        e.g. &apos;South Tempe Water</span>
+<span class="code-line">        e.g. &apos;Example WWTP</span>
 <span class="code-line">        Reclamation Facility&apos;</span>
 <span class="code-line">    <span class="code-property">nwss_sewershed_id</span>:</span>
 <span class="code-line">      <span class="code-keyword">description</span>: &gt;-</span>
@@ -142,7 +142,7 @@
           <div class="translation-lines">
             <p class="tl"><strong>WastewaterSample is_a: EnvironmentalSample</strong> — inherits from the environmental base class (which itself inherits from Sample). Two levels of inheritance.</p>
             <p class="tl"><strong>wwtp_name</strong> — which treatment facility the sample came from. This is the physical location anchor for the data.</p>
-            <p class="tl"><strong>nwss_sewershed_id</strong> — the CDC&apos;s <span class="tooltip" data-tip="National Wastewater Surveillance System — the CDC program that aggregates wastewater pathogen data from thousands of sampling sites across the US">NWSS</span> assigns a unique ID to every wastewater monitoring site in the US. By storing this ID, JACKPOT&apos;s Arizona data feeds directly into the national CDC surveillance database without manual matching.</p>
+            <p class="tl"><strong>nwss_sewershed_id</strong> — the CDC&apos;s <span class="tooltip" data-tip="National Wastewater Surveillance System — the CDC program that aggregates wastewater pathogen data from thousands of sampling sites across the US">NWSS</span> assigns a unique ID to every wastewater monitoring site in the US. By storing this ID, local data feeds directly into the national CDC surveillance database without manual matching.</p>
             <p class="tl"><strong>population_served: integer</strong> — how many people&apos;s waste passes through this facility. Crucial for calculating prevalence rates (signal strength ÷ population = estimated infection rate).</p>
           </div>
         </div>
@@ -159,36 +159,36 @@
           <div class="chat-message" data-msg="0" data-sender="human" style="display:none">
             <div class="chat-avatar" style="background: var(--color-actor-1)">H</div>
             <div class="chat-bubble">
-              <span class="chat-sender" style="color: var(--color-actor-1)">HumanSample AZ-2026-1234</span>
-              <p>Salmonella Typhimurium, ST34. Patient hospitalized. Collection: Maricopa County, March 12.</p>
+              <span class="chat-sender" style="color: var(--color-actor-1)">HumanSample EX-2026-1234</span>
+              <p>Salmonella Typhimurium, ST34. Patient hospitalized. Collection: San Diego County, March 12.</p>
             </div>
           </div>
           <div class="chat-message" data-msg="1" data-sender="food" style="display:none">
             <div class="chat-avatar" style="background: var(--color-actor-4)">F</div>
             <div class="chat-bubble">
-              <span class="chat-sender" style="color: var(--color-actor-4)">FoodProductSample AZ-2026-5567</span>
-              <p>Salmonella Typhimurium recovered from ground beef at Tempe distribution center. Same ST34 lineage.</p>
+              <span class="chat-sender" style="color: var(--color-actor-4)">FoodProductSample EX-2026-5567</span>
+              <p>Salmonella Typhimurium recovered from ground beef at example distribution center. Same ST34 lineage.</p>
             </div>
           </div>
           <div class="chat-message" data-msg="2" data-sender="outbreak" style="display:none">
             <div class="chat-avatar" style="background: var(--color-actor-2)">O</div>
             <div class="chat-bubble">
-              <span class="chat-sender" style="color: var(--color-actor-2)">OutbreakInvestigation AZ-SALM-2026-001</span>
-              <p>Linking both samples under investigation "Maricopa County Salmonella Typhimurium Cluster 2026". Sectors: clinical + food product. Reporting jurisdiction: ADHS.</p>
+              <span class="chat-sender" style="color: var(--color-actor-2)">OutbreakInvestigation EX-SALM-2026-001</span>
+              <p>Linking both samples under investigation "San Diego County Salmonella Typhimurium Cluster 2026". Sectors: clinical + food product. Reporting jurisdiction: the host operator.</p>
             </div>
           </div>
           <div class="chat-message" data-msg="3" data-sender="livestock" style="display:none">
             <div class="chat-avatar" style="background: var(--color-actor-5)">L</div>
             <div class="chat-bubble">
-              <span class="chat-sender" style="color: var(--color-actor-5)">LivestockSample AZ-2026-7789</span>
-              <p>Same ST34 recovered from cattle at Pinal County feedlot. Adding to outbreak AZ-SALM-2026-001. Now 3 sectors: clinical + food + livestock.</p>
+              <span class="chat-sender" style="color: var(--color-actor-5)">LivestockSample EX-2026-7789</span>
+              <p>Same ST34 recovered from cattle at a regional feedlot. Adding to outbreak EX-SALM-2026-001. Now 3 sectors: clinical + food + livestock.</p>
             </div>
           </div>
           <div class="chat-message" data-msg="4" data-sender="outbreak" style="display:none">
             <div class="chat-avatar" style="background: var(--color-actor-2)">O</div>
             <div class="chat-bubble">
-              <span class="chat-sender" style="color: var(--color-actor-2)">OutbreakInvestigation AZ-SALM-2026-001</span>
-              <p>Case count: 12. Source identified: Pinal County feedlot → Tempe distribution → Maricopa patients. Situation report sent to CDC NNDSS. Status: contained.</p>
+              <span class="chat-sender" style="color: var(--color-actor-2)">OutbreakInvestigation EX-SALM-2026-001</span>
+              <p>Case count: 12. Source identified: feedlot → distribution center → patients in San Diego County. Situation report sent to CDC NNDSS. Status: contained.</p>
             </div>
           </div>
         </div>
@@ -211,7 +211,7 @@
       </div>
 
       <div class="callout callout-tip" style="margin-top: var(--space-6);">
-        <strong>Aha!</strong> The <code>OutbreakInvestigation</code> class (added in v4.4) is what makes this query possible: "Show me all samples linked to AZ-SALM-2026-001." Without it, you&apos;d have to search for <code>case_type = outbreak</code> across thousands of samples and manually piece together the picture.
+        <strong>Aha!</strong> The <code>OutbreakInvestigation</code> class (added in v4.4) is what makes this query possible: "Show me all samples linked to EX-SALM-2026-001." Without it, you&apos;d have to search for <code>case_type = outbreak</code> across thousands of samples and manually piece together the picture.
       </div>
     </div>
 
@@ -251,7 +251,7 @@
              data-correct="option-b"
              data-explanation-right="Right — travel_origin_region tracks where a migratory animal came from, which is the wildlife equivalent of a human travel history. Flyways are the migration routes."
              data-explanation-wrong="Think about which field is specifically designed for migratory animals and tracks where they came from before arriving at the sampling location.">
-          <h3 class="quiz-question">You want to understand whether a bird carrying H5N1 in Arizona migrated from a high-risk region. Which field in WildlifeSample captures this?</h3>
+          <h3 class="quiz-question">You want to understand whether a bird carrying H5N1 in your jurisdiction migrated from a high-risk region. Which field in WildlifeSample captures this?</h3>
           <div class="quiz-options">
             <button class="quiz-option" data-value="option-a" onclick="selectOption(this)">
               <div class="quiz-option-radio"></div>

@@ -46,7 +46,7 @@
     <!-- SCREEN 2: Mapping config translation -->
     <div class="screen animate-in">
       <h2 class="screen-title">What a Mapping Config Looks Like</h2>
-      <p>Here's the actual mapping config for ASU's human sample spreadsheets. It's the bridge between a lab's custom column names and JACKPOT's standardized schema fields.</p>
+      <p>Here's an example mapping config for a lab's human sample spreadsheets. It's the bridge between the lab's custom column names and JACKPOT's standardized schema fields.</p>
 
       <div class="translation-block animate-in">
         <div class="translation-code">
@@ -59,7 +59,7 @@
 <span class="code-line">  <span class="code-string">"Collection Date"</span>: date_collected</span>
 <span class="code-line">  <span class="code-string">"Pathogen"</span>: organism_name</span>
 <span class="code-line">  <span class="code-string">"Age"</span>: host_age</span>
-<span class="code-line">  <span class="code-string">"MEDSIS ID"</span>: adhs_medsis_id</span>
+<span class="code-line">  <span class="code-string">"External Case ID"</span>: external_case_id</span>
 <span class="code-line"><span class="code-property">file_detection</span>:</span>
 <span class="code-line">  <span class="code-property">files_column</span>: <span class="code-string">"FASTQ files"</span></span>
 <span class="code-line">  <span class="code-property">separator</span>: <span class="code-string">";"</span></span>
@@ -69,11 +69,11 @@
         <div class="translation-english">
           <span class="translation-label">PLAIN ENGLISH</span>
           <div class="translation-lines">
-            <p class="tl"><strong>source_format: asu_human_v1</strong> — this config applies specifically to ASU's human sample spreadsheet format (version 1)</p>
+            <p class="tl"><strong>source_format: example_human_v1</strong> — this config applies specifically to a lab's human sample spreadsheet format (version 1)</p>
             <p class="tl"><strong>target_class: HumanSample</strong> — incoming rows should be validated against the HumanSample schema class</p>
             <p class="tl"><strong>column_mappings</strong> — the translation dictionary. The left side is the spreadsheet column header; the right side is the schema field name.</p>
             <p class="tl"><strong>"Sample ID": sample_id</strong> — wherever the spreadsheet says "Sample ID", use that value for the schema&apos;s sample_id field</p>
-            <p class="tl"><strong>"MEDSIS ID": adhs_medsis_id</strong> — the lab calls it "MEDSIS ID", the schema calls it "adhs_medsis_id". The mapping bridges the gap.</p>
+            <p class="tl"><strong>"External Case ID": external_case_id</strong> — the lab might call it "MEDSIS ID" or "Case Number" or any other internal name; the schema calls it "external_case_id". The mapping bridges the gap.</p>
             <p class="tl"><strong>file_detection: auto_detect_pairs: true</strong> — the <span class="tooltip" data-tip="FASTQ files contain raw sequencing reads — the actual A, T, C, G sequences read by the sequencer. Paired-end sequencing produces two files per sample (R1 and R2).">FASTQ</span> files are listed semicolon-separated in one column; auto-detect finds the paired R1+R2 files automatically.</p>
           </div>
         </div>
@@ -120,7 +120,7 @@
         {"highlight":"flow-actor-1","label":"Spreadsheet arrives via portal — mapping config identifies column names"},
         {"highlight":"flow-actor-2","label":"Schema validation runs — required fields checked, controlled values verified","packet":true,"from":"actor-1","to":"actor-2"},
         {"highlight":"flow-actor-3","label":"MMWR epiweek computed from date_collected — standard CDC epidemiological week number","packet":true,"from":"actor-2","to":"actor-3"},
-        {"highlight":"flow-actor-3","label":"surveillance_relevant computed — is this organism on the ADHS reportable diseases list?"},
+        {"highlight":"flow-actor-3","label":"surveillance_relevant computed — is this organism on the host operator's reportable diseases list?"},
         {"highlight":"flow-actor-4","label":"JACKPOT URI minted — a permanent global address for this sample","packet":true,"from":"actor-3","to":"actor-4"},
         {"highlight":"flow-actor-5","label":"FASTQ files located in staging bucket — convenience URIs populated","packet":true,"from":"actor-4","to":"actor-5"},
         {"highlight":"flow-actor-5","label":"Sample is PRELIMINARY tier — immediately available for pipeline runs"}
@@ -173,7 +173,7 @@
         <div class="pattern-card" style="border-left: 4px solid var(--color-actor-5);">
           <div class="pattern-card-icon">🌍</div>
           <h4>GISAID</h4>
-          <p>The global database for respiratory viruses — COVID, flu, RSV. Every SARS-CoV-2 variant name you heard during the pandemic (Alpha, Delta, Omicron) was named based on GISAID data. Arizona sequences become part of global variant tracking.</p>
+          <p>The global database for respiratory viruses — COVID, flu, RSV. Every SARS-CoV-2 variant name you heard during the pandemic (Alpha, Delta, Omicron) was named based on GISAID data. Local sequences become part of global variant tracking.</p>
         </div>
         <div class="pattern-card" style="border-left: 4px solid var(--color-actor-3);">
           <div class="pattern-card-icon">💧</div>

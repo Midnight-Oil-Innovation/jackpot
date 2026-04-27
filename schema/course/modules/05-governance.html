@@ -20,7 +20,7 @@
         <div class="pattern-card">
           <div class="pattern-card-icon">🏛️</div>
           <h4>Surveillance Oversight</h4>
-          <p>ADHS has automatic visibility into reportable disease samples — but with a governance board override process</p>
+          <p>The host operator has automatic visibility into reportable disease samples — but with a governance board override process</p>
         </div>
         <div class="pattern-card">
           <div class="pattern-card-icon">📜</div>
@@ -72,7 +72,7 @@
     <!-- SCREEN 3: Surveillance relevance -->
     <div class="screen animate-in">
       <h2 class="screen-title">The Surveillance Override System</h2>
-      <p>JACKPOT automatically grants ADHS visibility into samples involving reportable pathogens. But labs can request overrides — with governance board review for privacy-sensitive changes.</p>
+      <p>JACKPOT automatically grants the host operator visibility into samples involving reportable pathogens. But labs can request overrides — with governance board review for privacy-sensitive changes.</p>
 
       <div class="chat-window" id="chat-module5">
         <div class="chat-messages">
@@ -80,14 +80,14 @@
             <div class="chat-avatar" style="background: var(--color-actor-2)">I</div>
             <div class="chat-bubble">
               <span class="chat-sender" style="color: var(--color-actor-2)">Ingest Engine</span>
-              <p>Sample AZ-2026-0987 ingested. Organism: Salmonella enterica. Checking reportable organisms list...</p>
+              <p>Sample EX-2026-0987 ingested. Organism: Salmonella enterica. Checking reportable organisms list...</p>
             </div>
           </div>
           <div class="chat-message" data-msg="1" data-sender="ingest" style="display:none">
             <div class="chat-avatar" style="background: var(--color-actor-2)">I</div>
             <div class="chat-bubble">
               <span class="chat-sender" style="color: var(--color-actor-2)">Ingest Engine</span>
-              <p>Salmonella is a reportable pathogen in Arizona. Setting <code>surveillance_relevant = TRUE</code> automatically. ADHS will have oversight access.</p>
+              <p>Salmonella is a reportable pathogen in this jurisdiction. Setting <code>surveillance_relevant = TRUE</code> automatically. The host operator will have oversight access.</p>
             </div>
           </div>
           <div class="chat-message" data-msg="2" data-sender="lab" style="display:none">
@@ -101,7 +101,7 @@
             <div class="chat-avatar" style="background: var(--color-actor-3)">S</div>
             <div class="chat-bubble">
               <span class="chat-sender" style="color: var(--color-actor-3)">Governance Board System</span>
-              <p>Override request submitted. <code>surveillance_relevant_override = TRUE</code>, <code>surveillance_override_pending = TRUE</code>. Sample stays visible to ADHS until the board approves. Override category: research_exemption.</p>
+              <p>Override request submitted. <code>surveillance_relevant_override = TRUE</code>, <code>surveillance_override_pending = TRUE</code>. Sample stays visible to the host operator until the board approves. Override category: research_exemption.</p>
             </div>
           </div>
           <div class="chat-message" data-msg="4" data-sender="board" style="display:none">
@@ -223,7 +223,7 @@
              data-correct="option-b"
              data-explanation-right="Exactly — REGISTERED_ACCESS is specifically designed for this: researchers at partner institutions sign a DUA once and get access without per-request approval, enabling federated data sharing between institutions."
              data-explanation-wrong="Think about which sharing level was explicitly designed for federated research networks where researchers need access without per-sample approval, but data isn't fully public.">
-          <h3 class="quiz-question">A researcher at a partner university in Mexico needs access to Arizona SARS-CoV-2 genomic data for a joint CDC project. They shouldn't need Lab Director approval for every sample, but data shouldn't be fully public. Which sharing level is right?</h3>
+          <h3 class="quiz-question">A researcher at a partner university abroad needs access to local SARS-CoV-2 genomic data for a joint CDC project. They shouldn't need Lab Director approval for every sample, but data shouldn't be fully public. Which sharing level is right?</h3>
           <div class="quiz-options">
             <button class="quiz-option" data-value="option-a" onclick="selectOption(this)">
               <div class="quiz-option-radio"></div>
@@ -269,17 +269,17 @@
 
         <div class="quiz-question-block"
              data-correct="option-a"
-             data-explanation-right="Exactly — surveillance_relevant stays TRUE (ADHS keeps oversight) until the governance board explicitly approves the change. The system defaults to public health visibility, not privacy. Labs must justify removing oversight."
-             data-explanation-wrong="Think about which direction fails safely. When a researcher requests to remove ADHS oversight, what does the system do while waiting for board approval?">
-          <h3 class="quiz-question">A lab submits a request to remove ADHS surveillance access from a sample (setting surveillance_relevant from TRUE to FALSE). While the governance board review is pending, what is the access state?</h3>
+             data-explanation-right="Exactly — surveillance_relevant stays TRUE (the host operator keeps oversight) until the governance board explicitly approves the change. The system defaults to public health visibility, not privacy. Labs must justify removing oversight."
+             data-explanation-wrong="Think about which direction fails safely. When a researcher requests to remove the host operator's oversight, what does the system do while waiting for board approval?">
+          <h3 class="quiz-question">A lab submits a request to remove the host operator's surveillance access from a sample (setting surveillance_relevant from TRUE to FALSE). While the governance board review is pending, what is the access state?</h3>
           <div class="quiz-options">
             <button class="quiz-option" data-value="option-a" onclick="selectOption(this)">
               <div class="quiz-option-radio"></div>
-              <span>ADHS still has oversight access — it stays TRUE until approved</span>
+              <span>The host operator still has oversight access — it stays TRUE until approved</span>
             </button>
             <button class="quiz-option" data-value="option-b" onclick="selectOption(this)">
               <div class="quiz-option-radio"></div>
-              <span>ADHS access is temporarily suspended pending review</span>
+              <span>The host operator's access is temporarily suspended pending review</span>
             </button>
             <button class="quiz-option" data-value="option-c" onclick="selectOption(this)">
               <div class="quiz-option-radio"></div>

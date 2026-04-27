@@ -51,7 +51,7 @@
       <p class="module-subtitle">What happens from the moment a swab is collected to the moment a public health alert goes out — and the software that makes it possible.</p>
 
       <div class="callout callout-info" style="margin-top: var(--space-8);">
-        <strong>JACKPOT</strong> stands for <em>Joint ASU/ADHS Center for Pathogen Genomics and One-Health Tracking</em>. It's a platform built at Arizona State University in partnership with the Arizona Department of Health Services to track infectious disease outbreaks using genomic sequencing.
+        <strong>JACKPOT</strong> stands for <em>Just Another Collection of Killer Pathogen ‘Omics Tools</em>. It's an open-source platform that any public health agency, academic lab, or research consortium can deploy to track infectious disease outbreaks using genomic sequencing.
       </div>
 
       <div class="pattern-cards" style="margin-top: var(--space-8);">
@@ -68,7 +68,7 @@
         <div class="pattern-card">
           <div class="pattern-card-icon">🏥</div>
           <h4>Who uses it</h4>
-          <p>Public health officials, academic researchers, and epidemiologists tracking disease spread across Arizona and beyond</p>
+          <p>Public health officials, academic researchers, and epidemiologists tracking disease spread across the host jurisdiction and beyond</p>
         </div>
       </div>
     </div>
@@ -76,15 +76,15 @@
     <!-- SCREEN 2: The journey of a sample -->
     <div class="screen animate-in">
       <h2 class="screen-title">Imagine: A Patient Walks Into a Clinic</h2>
-      <p>A nurse takes a nasal swab. That swab kicks off a journey through labs, computers, and databases — eventually informing whether Arizona is seeing a new outbreak. Here's that journey:</p>
+      <p>A nurse takes a nasal swab. That swab kicks off a journey through labs, computers, and databases — eventually informing whether the host jurisdiction is seeing a new outbreak. Here's that journey:</p>
 
       <div class="flow-animation" data-steps='[
-        {"highlight":"flow-actor-1","label":"A nurse collects a swab from a patient in Phoenix"},
+        {"highlight":"flow-actor-1","label":"A nurse collects a swab from a patient at a clinic"},
         {"highlight":"flow-actor-2","label":"The clinical lab runs a PCR test — positive for Influenza A","packet":true,"from":"actor-1","to":"actor-2"},
         {"highlight":"flow-actor-3","label":"The sample goes to a sequencing lab to read its full genome","packet":true,"from":"actor-2","to":"actor-3"},
         {"highlight":"flow-actor-4","label":"A researcher uploads the data to JACKPOT via a spreadsheet","packet":true,"from":"actor-3","to":"actor-4"},
         {"highlight":"flow-actor-5","label":"JACKPOT runs automated pipelines: lineage assignment, QC checks","packet":true,"from":"actor-4","to":"actor-5"},
-        {"highlight":"flow-actor-5","label":"ADHS sees: H3N2 clade, 3 identical genomes in Maricopa County this week — possible cluster"}
+        {"highlight":"flow-actor-5","label":"The host operator sees: H3N2 clade, 3 identical genomes in San Diego County this week — possible cluster"}
       ]'>
         <div class="flow-actors">
           <div class="flow-actor" id="flow-actor-1">
@@ -105,7 +105,7 @@
           </div>
           <div class="flow-actor" id="flow-actor-5">
             <div class="flow-actor-icon">📊</div>
-            <span>ADHS Dashboard</span>
+            <span>Operator Dashboard</span>
           </div>
         </div>
 
@@ -127,7 +127,7 @@
       <p>Traditional lab tests tell you <em>what</em> pathogen is present. Genomic sequencing tells you <em>which exact version</em> — and that difference is huge for outbreak detection.</p>
 
       <div class="callout callout-highlight" style="margin: var(--space-6) 0;">
-        <strong>The postal code analogy:</strong> Knowing someone has COVID is like knowing they live in "Arizona." Knowing their <span class="tooltip" data-tip="A named variant of a virus, identified by specific mutations in its genome — like BA.2.86 or JN.1 for SARS-CoV-2">lineage</span> is like knowing their exact street address. It lets you trace who infected whom.
+        <strong>The postal code analogy:</strong> Knowing someone has COVID is like knowing they live in "California." Knowing their <span class="tooltip" data-tip="A named variant of a virus, identified by specific mutations in its genome — like BA.2.86 or JN.1 for SARS-CoV-2">lineage</span> is like knowing their exact street address. It lets you trace who infected whom.
       </div>
 
       <div class="step-cards">
@@ -142,14 +142,14 @@
           <div class="step-number">2</div>
           <div class="step-content">
             <h4>Variant Tracking</h4>
-            <p>Which new variants are circulating in Arizona? When did they arrive? Is this a local spread or travel-imported? The genome answers all of these.</p>
+            <p>Which new variants are circulating in your jurisdiction? When did they arrive? Is this a local spread or travel-imported? The genome answers all of these.</p>
           </div>
         </div>
         <div class="step-card">
           <div class="step-number">3</div>
           <div class="step-content">
             <h4>National Reporting</h4>
-            <p>JACKPOT formats genomic data for <span class="tooltip" data-tip="National Center for Biotechnology Information — the US government database that archives all genomic sequence data publicly">NCBI</span>, <span class="tooltip" data-tip="Global Initiative on Sharing All Influenza Data — an international database for flu, COVID, and pox genomes">GISAID</span>, and CDC — so Arizona data feeds into the global picture.</p>
+            <p>JACKPOT formats genomic data for <span class="tooltip" data-tip="National Center for Biotechnology Information — the US government database that archives all genomic sequence data publicly">NCBI</span>, <span class="tooltip" data-tip="Global Initiative on Sharing All Influenza Data — an international database for flu, COVID, and pox genomes">GISAID</span>, and CDC — so local data feeds into the global picture.</p>
           </div>
         </div>
       </div>
@@ -224,9 +224,9 @@
       <p>The schema is organized as a <span class="tooltip" data-tip="A family-tree structure where child items inherit properties from parent items — like how all dogs are animals but not all animals are dogs">class hierarchy</span>. Think of it like a family tree where each child inherits everything from its parent, then adds its own special traits.</p>
 
       <div class="flow-animation" data-steps='[
-        {"highlight":"flow-actor-1","label":"Organization: the top-level institution — e.g., Arizona State University or ADHS"},
+        {"highlight":"flow-actor-1","label":"Organization: the top-level institution — e.g., a university or public health department"},
         {"highlight":"flow-actor-2","label":"Lab: a research group within the org — e.g., the Biodesign Institute genomics lab","packet":true,"from":"actor-1","to":"actor-2"},
-        {"highlight":"flow-actor-3","label":"Project: a specific surveillance effort — e.g., Arizona COVID Wastewater Surveillance 2026","packet":true,"from":"actor-2","to":"actor-3"},
+        {"highlight":"flow-actor-3","label":"Project: a specific surveillance effort — e.g., County COVID Wastewater Surveillance 2026","packet":true,"from":"actor-2","to":"actor-3"},
         {"highlight":"flow-actor-4","label":"Sample: a single sequenced specimen — always belongs to a lab and project","packet":true,"from":"actor-3","to":"actor-4"},
         {"highlight":"flow-actor-5","label":"HumanSample (or WildlifeSample, WastewaterSample...): a specialized version with extra fields","packet":true,"from":"actor-4","to":"actor-5"}
       ]'>
@@ -283,7 +283,7 @@
 <span class="code-line">    Clinical or surveillance sample</span>
 <span class="code-line">    from a human host.</span>
 <span class="code-line">  <span class="code-keyword">attributes</span>:</span>
-<span class="code-line">    <span class="code-property">adhs_medsis_id</span>:</span>
+<span class="code-line">    <span class="code-property">external_case_id</span>:</span>
 <span class="code-line">      <span class="code-keyword">required</span>: <span class="code-keyword">true</span></span>
 <span class="code-line">    <span class="code-property">host_age</span>:</span>
 <span class="code-line">      <span class="code-keyword">range</span>: integer</span>
@@ -299,7 +299,7 @@
             <p class="tl"><strong>is_a: Sample</strong> — this inherits everything from the base Sample class. All 60+ base fields come along automatically.</p>
             <p class="tl"><strong>description:</strong> — a human-readable note about what this class is for</p>
             <p class="tl"><strong>attributes:</strong> — the extra fields that ONLY HumanSample has</p>
-            <p class="tl"><strong>adhs_medsis_id</strong> — required: true means this field MUST be filled in. It links to the Arizona disease reporting system.</p>
+            <p class="tl"><strong>external_case_id</strong> — required: true means this field MUST be filled in. It links to the host jurisdiction's disease reporting system.</p>
             <p class="tl"><strong>host_age: range: integer</strong> — age must be a whole number, not text like "forty"</p>
             <p class="tl"><strong>clinical_outcome</strong> — how the patient fared: hospitalized, ICU, outpatient, etc.</p>
           </div>
@@ -451,7 +451,7 @@
         <div class="translation-code">
           <span class="translation-label">CODE</span>
           <pre><code>
-<span class="code-line"><span class="code-property">adhs_medsis_id</span>:</span>
+<span class="code-line"><span class="code-property">external_case_id</span>:</span>
 <span class="code-line">  <span class="code-keyword">required</span>: <span class="code-keyword">true</span></span>
 <span class="code-line"></span>
 <span class="code-line"><span class="code-property">host_age</span>:</span>
@@ -473,7 +473,7 @@
         <div class="translation-english">
           <span class="translation-label">PLAIN ENGLISH</span>
           <div class="translation-lines">
-            <p class="tl"><strong>adhs_medsis_id</strong> — required link to Arizona's disease reporting system. Every human sample must have one (or an exemption code). This connects the genome to the public health case record.</p>
+            <p class="tl"><strong>external_case_id</strong> — required link to the host jurisdiction's disease reporting system. Every human sample must have one (or an exemption code). This connects the genome to the public health case record.</p>
             <p class="tl"><strong>host_age: integer</strong> — the patient's exact age, stored internally for research analysis</p>
             <p class="tl"><strong>host_age_range: AgeRangeEnum</strong> — the same age as a decade bracket (e.g. "25-34 years"). This version is shared publicly to protect privacy — exact age is considered <span class="tooltip" data-tip="Personally Identifiable Information — data that could identify a specific individual, like exact age combined with disease, location, and date">PII</span>.</p>
             <p class="tl"><strong>date_of_symptom_onset</strong> — when symptoms started. The gap between this and collection date tells epidemiologists how fast the disease progresses.</p>
@@ -539,7 +539,7 @@
 <span class="code-line">    <span class="code-property">wwtp_name</span>:</span>
 <span class="code-line">      <span class="code-keyword">description</span>: &gt;</span>
 <span class="code-line">        Wastewater facility name.</span>
-<span class="code-line">        e.g. &apos;South Tempe Water</span>
+<span class="code-line">        e.g. &apos;Example WWTP</span>
 <span class="code-line">        Reclamation Facility&apos;</span>
 <span class="code-line">    <span class="code-property">nwss_sewershed_id</span>:</span>
 <span class="code-line">      <span class="code-keyword">description</span>: &gt;-</span>
@@ -554,7 +554,7 @@
           <div class="translation-lines">
             <p class="tl"><strong>WastewaterSample is_a: EnvironmentalSample</strong> — inherits from the environmental base class (which itself inherits from Sample). Two levels of inheritance.</p>
             <p class="tl"><strong>wwtp_name</strong> — which treatment facility the sample came from. This is the physical location anchor for the data.</p>
-            <p class="tl"><strong>nwss_sewershed_id</strong> — the CDC&apos;s <span class="tooltip" data-tip="National Wastewater Surveillance System — the CDC program that aggregates wastewater pathogen data from thousands of sampling sites across the US">NWSS</span> assigns a unique ID to every wastewater monitoring site in the US. By storing this ID, JACKPOT&apos;s Arizona data feeds directly into the national CDC surveillance database without manual matching.</p>
+            <p class="tl"><strong>nwss_sewershed_id</strong> — the CDC&apos;s <span class="tooltip" data-tip="National Wastewater Surveillance System — the CDC program that aggregates wastewater pathogen data from thousands of sampling sites across the US">NWSS</span> assigns a unique ID to every wastewater monitoring site in the US. By storing this ID, local data feeds directly into the national CDC surveillance database without manual matching.</p>
             <p class="tl"><strong>population_served: integer</strong> — how many people&apos;s waste passes through this facility. Crucial for calculating prevalence rates (signal strength ÷ population = estimated infection rate).</p>
           </div>
         </div>
@@ -571,36 +571,36 @@
           <div class="chat-message" data-msg="0" data-sender="human" style="display:none">
             <div class="chat-avatar" style="background: var(--color-actor-1)">H</div>
             <div class="chat-bubble">
-              <span class="chat-sender" style="color: var(--color-actor-1)">HumanSample AZ-2026-1234</span>
-              <p>Salmonella Typhimurium, ST34. Patient hospitalized. Collection: Maricopa County, March 12.</p>
+              <span class="chat-sender" style="color: var(--color-actor-1)">HumanSample EX-2026-1234</span>
+              <p>Salmonella Typhimurium, ST34. Patient hospitalized. Collection: San Diego County, March 12.</p>
             </div>
           </div>
           <div class="chat-message" data-msg="1" data-sender="food" style="display:none">
             <div class="chat-avatar" style="background: var(--color-actor-4)">F</div>
             <div class="chat-bubble">
-              <span class="chat-sender" style="color: var(--color-actor-4)">FoodProductSample AZ-2026-5567</span>
-              <p>Salmonella Typhimurium recovered from ground beef at Tempe distribution center. Same ST34 lineage.</p>
+              <span class="chat-sender" style="color: var(--color-actor-4)">FoodProductSample EX-2026-5567</span>
+              <p>Salmonella Typhimurium recovered from ground beef at example distribution center. Same ST34 lineage.</p>
             </div>
           </div>
           <div class="chat-message" data-msg="2" data-sender="outbreak" style="display:none">
             <div class="chat-avatar" style="background: var(--color-actor-2)">O</div>
             <div class="chat-bubble">
-              <span class="chat-sender" style="color: var(--color-actor-2)">OutbreakInvestigation AZ-SALM-2026-001</span>
-              <p>Linking both samples under investigation "Maricopa County Salmonella Typhimurium Cluster 2026". Sectors: clinical + food product. Reporting jurisdiction: ADHS.</p>
+              <span class="chat-sender" style="color: var(--color-actor-2)">OutbreakInvestigation EX-SALM-2026-001</span>
+              <p>Linking both samples under investigation "San Diego County Salmonella Typhimurium Cluster 2026". Sectors: clinical + food product. Reporting jurisdiction: the host operator.</p>
             </div>
           </div>
           <div class="chat-message" data-msg="3" data-sender="livestock" style="display:none">
             <div class="chat-avatar" style="background: var(--color-actor-5)">L</div>
             <div class="chat-bubble">
-              <span class="chat-sender" style="color: var(--color-actor-5)">LivestockSample AZ-2026-7789</span>
-              <p>Same ST34 recovered from cattle at Pinal County feedlot. Adding to outbreak AZ-SALM-2026-001. Now 3 sectors: clinical + food + livestock.</p>
+              <span class="chat-sender" style="color: var(--color-actor-5)">LivestockSample EX-2026-7789</span>
+              <p>Same ST34 recovered from cattle at a regional feedlot. Adding to outbreak EX-SALM-2026-001. Now 3 sectors: clinical + food + livestock.</p>
             </div>
           </div>
           <div class="chat-message" data-msg="4" data-sender="outbreak" style="display:none">
             <div class="chat-avatar" style="background: var(--color-actor-2)">O</div>
             <div class="chat-bubble">
-              <span class="chat-sender" style="color: var(--color-actor-2)">OutbreakInvestigation AZ-SALM-2026-001</span>
-              <p>Case count: 12. Source identified: Pinal County feedlot → Tempe distribution → Maricopa patients. Situation report sent to CDC NNDSS. Status: contained.</p>
+              <span class="chat-sender" style="color: var(--color-actor-2)">OutbreakInvestigation EX-SALM-2026-001</span>
+              <p>Case count: 12. Source identified: feedlot → distribution center → patients in San Diego County. Situation report sent to CDC NNDSS. Status: contained.</p>
             </div>
           </div>
         </div>
@@ -623,7 +623,7 @@
       </div>
 
       <div class="callout callout-tip" style="margin-top: var(--space-6);">
-        <strong>Aha!</strong> The <code>OutbreakInvestigation</code> class (added in v4.4) is what makes this query possible: "Show me all samples linked to AZ-SALM-2026-001." Without it, you&apos;d have to search for <code>case_type = outbreak</code> across thousands of samples and manually piece together the picture.
+        <strong>Aha!</strong> The <code>OutbreakInvestigation</code> class (added in v4.4) is what makes this query possible: "Show me all samples linked to EX-SALM-2026-001." Without it, you&apos;d have to search for <code>case_type = outbreak</code> across thousands of samples and manually piece together the picture.
       </div>
     </div>
 
@@ -663,7 +663,7 @@
              data-correct="option-b"
              data-explanation-right="Right — travel_origin_region tracks where a migratory animal came from, which is the wildlife equivalent of a human travel history. Flyways are the migration routes."
              data-explanation-wrong="Think about which field is specifically designed for migratory animals and tracks where they came from before arriving at the sampling location.">
-          <h3 class="quiz-question">You want to understand whether a bird carrying H5N1 in Arizona migrated from a high-risk region. Which field in WildlifeSample captures this?</h3>
+          <h3 class="quiz-question">You want to understand whether a bird carrying H5N1 in your jurisdiction migrated from a high-risk region. Which field in WildlifeSample captures this?</h3>
           <div class="quiz-options">
             <button class="quiz-option" data-value="option-a" onclick="selectOption(this)">
               <div class="quiz-option-radio"></div>
@@ -758,7 +758,7 @@
     <!-- SCREEN 2: Mapping config translation -->
     <div class="screen animate-in">
       <h2 class="screen-title">What a Mapping Config Looks Like</h2>
-      <p>Here's the actual mapping config for ASU's human sample spreadsheets. It's the bridge between a lab's custom column names and JACKPOT's standardized schema fields.</p>
+      <p>Here's an example mapping config for a lab's human sample spreadsheets. It's the bridge between the lab's custom column names and JACKPOT's standardized schema fields.</p>
 
       <div class="translation-block animate-in">
         <div class="translation-code">
@@ -771,7 +771,7 @@
 <span class="code-line">  <span class="code-string">"Collection Date"</span>: date_collected</span>
 <span class="code-line">  <span class="code-string">"Pathogen"</span>: organism_name</span>
 <span class="code-line">  <span class="code-string">"Age"</span>: host_age</span>
-<span class="code-line">  <span class="code-string">"MEDSIS ID"</span>: adhs_medsis_id</span>
+<span class="code-line">  <span class="code-string">"External Case ID"</span>: external_case_id</span>
 <span class="code-line"><span class="code-property">file_detection</span>:</span>
 <span class="code-line">  <span class="code-property">files_column</span>: <span class="code-string">"FASTQ files"</span></span>
 <span class="code-line">  <span class="code-property">separator</span>: <span class="code-string">";"</span></span>
@@ -781,11 +781,11 @@
         <div class="translation-english">
           <span class="translation-label">PLAIN ENGLISH</span>
           <div class="translation-lines">
-            <p class="tl"><strong>source_format: asu_human_v1</strong> — this config applies specifically to ASU's human sample spreadsheet format (version 1)</p>
+            <p class="tl"><strong>source_format: example_human_v1</strong> — this config applies specifically to a lab's human sample spreadsheet format (version 1)</p>
             <p class="tl"><strong>target_class: HumanSample</strong> — incoming rows should be validated against the HumanSample schema class</p>
             <p class="tl"><strong>column_mappings</strong> — the translation dictionary. The left side is the spreadsheet column header; the right side is the schema field name.</p>
             <p class="tl"><strong>"Sample ID": sample_id</strong> — wherever the spreadsheet says "Sample ID", use that value for the schema&apos;s sample_id field</p>
-            <p class="tl"><strong>"MEDSIS ID": adhs_medsis_id</strong> — the lab calls it "MEDSIS ID", the schema calls it "adhs_medsis_id". The mapping bridges the gap.</p>
+            <p class="tl"><strong>"External Case ID": external_case_id</strong> — the lab might call it "MEDSIS ID" or "Case Number" or any other internal name; the schema calls it "external_case_id". The mapping bridges the gap.</p>
             <p class="tl"><strong>file_detection: auto_detect_pairs: true</strong> — the <span class="tooltip" data-tip="FASTQ files contain raw sequencing reads — the actual A, T, C, G sequences read by the sequencer. Paired-end sequencing produces two files per sample (R1 and R2).">FASTQ</span> files are listed semicolon-separated in one column; auto-detect finds the paired R1+R2 files automatically.</p>
           </div>
         </div>
@@ -832,7 +832,7 @@
         {"highlight":"flow-actor-1","label":"Spreadsheet arrives via portal — mapping config identifies column names"},
         {"highlight":"flow-actor-2","label":"Schema validation runs — required fields checked, controlled values verified","packet":true,"from":"actor-1","to":"actor-2"},
         {"highlight":"flow-actor-3","label":"MMWR epiweek computed from date_collected — standard CDC epidemiological week number","packet":true,"from":"actor-2","to":"actor-3"},
-        {"highlight":"flow-actor-3","label":"surveillance_relevant computed — is this organism on the ADHS reportable diseases list?"},
+        {"highlight":"flow-actor-3","label":"surveillance_relevant computed — is this organism on the host operator's reportable diseases list?"},
         {"highlight":"flow-actor-4","label":"JACKPOT URI minted — a permanent global address for this sample","packet":true,"from":"actor-3","to":"actor-4"},
         {"highlight":"flow-actor-5","label":"FASTQ files located in staging bucket — convenience URIs populated","packet":true,"from":"actor-4","to":"actor-5"},
         {"highlight":"flow-actor-5","label":"Sample is PRELIMINARY tier — immediately available for pipeline runs"}
@@ -885,7 +885,7 @@
         <div class="pattern-card" style="border-left: 4px solid var(--color-actor-5);">
           <div class="pattern-card-icon">🌍</div>
           <h4>GISAID</h4>
-          <p>The global database for respiratory viruses — COVID, flu, RSV. Every SARS-CoV-2 variant name you heard during the pandemic (Alpha, Delta, Omicron) was named based on GISAID data. Arizona sequences become part of global variant tracking.</p>
+          <p>The global database for respiratory viruses — COVID, flu, RSV. Every SARS-CoV-2 variant name you heard during the pandemic (Alpha, Delta, Omicron) was named based on GISAID data. Local sequences become part of global variant tracking.</p>
         </div>
         <div class="pattern-card" style="border-left: 4px solid var(--color-actor-3);">
           <div class="pattern-card-icon">💧</div>
@@ -923,7 +923,7 @@
         <div class="pattern-card">
           <div class="pattern-card-icon">🏛️</div>
           <h4>Surveillance Oversight</h4>
-          <p>ADHS has automatic visibility into reportable disease samples — but with a governance board override process</p>
+          <p>The host operator has automatic visibility into reportable disease samples — but with a governance board override process</p>
         </div>
         <div class="pattern-card">
           <div class="pattern-card-icon">📜</div>
@@ -975,7 +975,7 @@
     <!-- SCREEN 3: Surveillance relevance -->
     <div class="screen animate-in">
       <h2 class="screen-title">The Surveillance Override System</h2>
-      <p>JACKPOT automatically grants ADHS visibility into samples involving reportable pathogens. But labs can request overrides — with governance board review for privacy-sensitive changes.</p>
+      <p>JACKPOT automatically grants the host operator visibility into samples involving reportable pathogens. But labs can request overrides — with governance board review for privacy-sensitive changes.</p>
 
       <div class="chat-window" id="chat-module5">
         <div class="chat-messages">
@@ -983,14 +983,14 @@
             <div class="chat-avatar" style="background: var(--color-actor-2)">I</div>
             <div class="chat-bubble">
               <span class="chat-sender" style="color: var(--color-actor-2)">Ingest Engine</span>
-              <p>Sample AZ-2026-0987 ingested. Organism: Salmonella enterica. Checking reportable organisms list...</p>
+              <p>Sample EX-2026-0987 ingested. Organism: Salmonella enterica. Checking reportable organisms list...</p>
             </div>
           </div>
           <div class="chat-message" data-msg="1" data-sender="ingest" style="display:none">
             <div class="chat-avatar" style="background: var(--color-actor-2)">I</div>
             <div class="chat-bubble">
               <span class="chat-sender" style="color: var(--color-actor-2)">Ingest Engine</span>
-              <p>Salmonella is a reportable pathogen in Arizona. Setting <code>surveillance_relevant = TRUE</code> automatically. ADHS will have oversight access.</p>
+              <p>Salmonella is a reportable pathogen in this jurisdiction. Setting <code>surveillance_relevant = TRUE</code> automatically. The host operator will have oversight access.</p>
             </div>
           </div>
           <div class="chat-message" data-msg="2" data-sender="lab" style="display:none">
@@ -1004,7 +1004,7 @@
             <div class="chat-avatar" style="background: var(--color-actor-3)">S</div>
             <div class="chat-bubble">
               <span class="chat-sender" style="color: var(--color-actor-3)">Governance Board System</span>
-              <p>Override request submitted. <code>surveillance_relevant_override = TRUE</code>, <code>surveillance_override_pending = TRUE</code>. Sample stays visible to ADHS until the board approves. Override category: research_exemption.</p>
+              <p>Override request submitted. <code>surveillance_relevant_override = TRUE</code>, <code>surveillance_override_pending = TRUE</code>. Sample stays visible to the host operator until the board approves. Override category: research_exemption.</p>
             </div>
           </div>
           <div class="chat-message" data-msg="4" data-sender="board" style="display:none">
@@ -1126,7 +1126,7 @@
              data-correct="option-b"
              data-explanation-right="Exactly — REGISTERED_ACCESS is specifically designed for this: researchers at partner institutions sign a DUA once and get access without per-request approval, enabling federated data sharing between institutions."
              data-explanation-wrong="Think about which sharing level was explicitly designed for federated research networks where researchers need access without per-sample approval, but data isn't fully public.">
-          <h3 class="quiz-question">A researcher at a partner university in Mexico needs access to Arizona SARS-CoV-2 genomic data for a joint CDC project. They shouldn't need Lab Director approval for every sample, but data shouldn't be fully public. Which sharing level is right?</h3>
+          <h3 class="quiz-question">A researcher at a partner university abroad needs access to local SARS-CoV-2 genomic data for a joint CDC project. They shouldn't need Lab Director approval for every sample, but data shouldn't be fully public. Which sharing level is right?</h3>
           <div class="quiz-options">
             <button class="quiz-option" data-value="option-a" onclick="selectOption(this)">
               <div class="quiz-option-radio"></div>
@@ -1172,17 +1172,17 @@
 
         <div class="quiz-question-block"
              data-correct="option-a"
-             data-explanation-right="Exactly — surveillance_relevant stays TRUE (ADHS keeps oversight) until the governance board explicitly approves the change. The system defaults to public health visibility, not privacy. Labs must justify removing oversight."
-             data-explanation-wrong="Think about which direction fails safely. When a researcher requests to remove ADHS oversight, what does the system do while waiting for board approval?">
-          <h3 class="quiz-question">A lab submits a request to remove ADHS surveillance access from a sample (setting surveillance_relevant from TRUE to FALSE). While the governance board review is pending, what is the access state?</h3>
+             data-explanation-right="Exactly — surveillance_relevant stays TRUE (the host operator keeps oversight) until the governance board explicitly approves the change. The system defaults to public health visibility, not privacy. Labs must justify removing oversight."
+             data-explanation-wrong="Think about which direction fails safely. When a researcher requests to remove the host operator's oversight, what does the system do while waiting for board approval?">
+          <h3 class="quiz-question">A lab submits a request to remove the host operator's surveillance access from a sample (setting surveillance_relevant from TRUE to FALSE). While the governance board review is pending, what is the access state?</h3>
           <div class="quiz-options">
             <button class="quiz-option" data-value="option-a" onclick="selectOption(this)">
               <div class="quiz-option-radio"></div>
-              <span>ADHS still has oversight access — it stays TRUE until approved</span>
+              <span>The host operator still has oversight access — it stays TRUE until approved</span>
             </button>
             <button class="quiz-option" data-value="option-b" onclick="selectOption(this)">
               <div class="quiz-option-radio"></div>
-              <span>ADHS access is temporarily suspended pending review</span>
+              <span>The host operator's access is temporarily suspended pending review</span>
             </button>
             <button class="quiz-option" data-value="option-c" onclick="selectOption(this)">
               <div class="quiz-option-radio"></div>

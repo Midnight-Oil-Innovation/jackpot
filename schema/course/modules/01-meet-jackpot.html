@@ -8,7 +8,7 @@
       <p class="module-subtitle">What happens from the moment a swab is collected to the moment a public health alert goes out — and the software that makes it possible.</p>
 
       <div class="callout callout-info" style="margin-top: var(--space-8);">
-        <strong>JACKPOT</strong> stands for <em>Joint ASU/ADHS Center for Pathogen Genomics and One-Health Tracking</em>. It's a platform built at Arizona State University in partnership with the Arizona Department of Health Services to track infectious disease outbreaks using genomic sequencing.
+        <strong>JACKPOT</strong> stands for <em>Just Another Collection of Killer Pathogen ‘Omics Tools</em>. It's an open-source platform that any public health agency, academic lab, or research consortium can deploy to track infectious disease outbreaks using genomic sequencing.
       </div>
 
       <div class="pattern-cards" style="margin-top: var(--space-8);">
@@ -25,7 +25,7 @@
         <div class="pattern-card">
           <div class="pattern-card-icon">🏥</div>
           <h4>Who uses it</h4>
-          <p>Public health officials, academic researchers, and epidemiologists tracking disease spread across Arizona and beyond</p>
+          <p>Public health officials, academic researchers, and epidemiologists tracking disease spread across the host jurisdiction and beyond</p>
         </div>
       </div>
     </div>
@@ -33,15 +33,15 @@
     <!-- SCREEN 2: The journey of a sample -->
     <div class="screen animate-in">
       <h2 class="screen-title">Imagine: A Patient Walks Into a Clinic</h2>
-      <p>A nurse takes a nasal swab. That swab kicks off a journey through labs, computers, and databases — eventually informing whether Arizona is seeing a new outbreak. Here's that journey:</p>
+      <p>A nurse takes a nasal swab. That swab kicks off a journey through labs, computers, and databases — eventually informing whether the host jurisdiction is seeing a new outbreak. Here's that journey:</p>
 
       <div class="flow-animation" data-steps='[
-        {"highlight":"flow-actor-1","label":"A nurse collects a swab from a patient in Phoenix"},
+        {"highlight":"flow-actor-1","label":"A nurse collects a swab from a patient at a clinic"},
         {"highlight":"flow-actor-2","label":"The clinical lab runs a PCR test — positive for Influenza A","packet":true,"from":"actor-1","to":"actor-2"},
         {"highlight":"flow-actor-3","label":"The sample goes to a sequencing lab to read its full genome","packet":true,"from":"actor-2","to":"actor-3"},
         {"highlight":"flow-actor-4","label":"A researcher uploads the data to JACKPOT via a spreadsheet","packet":true,"from":"actor-3","to":"actor-4"},
         {"highlight":"flow-actor-5","label":"JACKPOT runs automated pipelines: lineage assignment, QC checks","packet":true,"from":"actor-4","to":"actor-5"},
-        {"highlight":"flow-actor-5","label":"ADHS sees: H3N2 clade, 3 identical genomes in Maricopa County this week — possible cluster"}
+        {"highlight":"flow-actor-5","label":"The host operator sees: H3N2 clade, 3 identical genomes in San Diego County this week — possible cluster"}
       ]'>
         <div class="flow-actors">
           <div class="flow-actor" id="flow-actor-1">
@@ -62,7 +62,7 @@
           </div>
           <div class="flow-actor" id="flow-actor-5">
             <div class="flow-actor-icon">📊</div>
-            <span>ADHS Dashboard</span>
+            <span>Operator Dashboard</span>
           </div>
         </div>
 
@@ -84,7 +84,7 @@
       <p>Traditional lab tests tell you <em>what</em> pathogen is present. Genomic sequencing tells you <em>which exact version</em> — and that difference is huge for outbreak detection.</p>
 
       <div class="callout callout-highlight" style="margin: var(--space-6) 0;">
-        <strong>The postal code analogy:</strong> Knowing someone has COVID is like knowing they live in "Arizona." Knowing their <span class="tooltip" data-tip="A named variant of a virus, identified by specific mutations in its genome — like BA.2.86 or JN.1 for SARS-CoV-2">lineage</span> is like knowing their exact street address. It lets you trace who infected whom.
+        <strong>The postal code analogy:</strong> Knowing someone has COVID is like knowing they live in "California." Knowing their <span class="tooltip" data-tip="A named variant of a virus, identified by specific mutations in its genome — like BA.2.86 or JN.1 for SARS-CoV-2">lineage</span> is like knowing their exact street address. It lets you trace who infected whom.
       </div>
 
       <div class="step-cards">
@@ -99,14 +99,14 @@
           <div class="step-number">2</div>
           <div class="step-content">
             <h4>Variant Tracking</h4>
-            <p>Which new variants are circulating in Arizona? When did they arrive? Is this a local spread or travel-imported? The genome answers all of these.</p>
+            <p>Which new variants are circulating in your jurisdiction? When did they arrive? Is this a local spread or travel-imported? The genome answers all of these.</p>
           </div>
         </div>
         <div class="step-card">
           <div class="step-number">3</div>
           <div class="step-content">
             <h4>National Reporting</h4>
-            <p>JACKPOT formats genomic data for <span class="tooltip" data-tip="National Center for Biotechnology Information — the US government database that archives all genomic sequence data publicly">NCBI</span>, <span class="tooltip" data-tip="Global Initiative on Sharing All Influenza Data — an international database for flu, COVID, and pox genomes">GISAID</span>, and CDC — so Arizona data feeds into the global picture.</p>
+            <p>JACKPOT formats genomic data for <span class="tooltip" data-tip="National Center for Biotechnology Information — the US government database that archives all genomic sequence data publicly">NCBI</span>, <span class="tooltip" data-tip="Global Initiative on Sharing All Influenza Data — an international database for flu, COVID, and pox genomes">GISAID</span>, and CDC — so local data feeds into the global picture.</p>
           </div>
         </div>
       </div>
