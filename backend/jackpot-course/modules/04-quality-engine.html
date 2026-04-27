@@ -65,7 +65,7 @@
 <span class="code-line">]</span>
 <span class="code-line"></span>
 <span class="code-line">SOURCE_REQUIRED: <span class="code-function">dict</span>[<span class="code-function">str</span>, <span class="code-function">list</span>] = {</span>
-<span class="code-line">    <span class="code-string">"Human"</span>: [<span class="code-string">"adhs_medsis_id"</span>, <span class="code-string">"biospecimen_type"</span>, ...],</span>
+<span class="code-line">    <span class="code-string">"Human"</span>: [<span class="code-string">"external_case_id"</span>, <span class="code-string">"biospecimen_type"</span>, ...],</span>
 <span class="code-line">    <span class="code-string">"Wastewater"</span>: [<span class="code-string">"population_served"</span>, <span class="code-string">"sample_type"</span>, ...],</span>
 <span class="code-line">    <span class="code-string">"Wildlife"</span>: [<span class="code-string">"host_species"</span>, <span class="code-string">"biospecimen_type"</span>, ...],</span>
 <span class="code-line">    <span class="code-string">"Isolate"</span>: [],  <span class="code-comment"># no extra fields needed</span></span>
@@ -82,7 +82,7 @@
               <p class="tl"><code>date_collected</code> — when the sample was taken from its source</p>
               <p class="tl">...plus country, sequencing platform, and experiment type.</p>
               <p class="tl">SOURCE_REQUIRED: each source type has <em>additional</em> required fields on top of the base 7.</p>
-              <p class="tl">Human samples require a state health case ID (adhs_medsis_id) and specimen type.</p>
+              <p class="tl">Human samples require an external case identifier (external_case_id) and specimen type.</p>
               <p class="tl">Wastewater requires flow rate, population served, and sampling method.</p>
               <p class="tl">Wildlife requires the host species and specimen type.</p>
               <p class="tl">Isolate has no extra requirements — it is the simplest source type.</p>
@@ -178,7 +178,7 @@
               <div class="chat-avatar" style="background: var(--color-actor-3)">🔬</div>
               <div class="chat-bubble">
                 <span class="chat-sender" style="color: var(--color-actor-3)">Validator</span>
-                <p>Source is Human. Checking Human-specific required fields... adhs_medsis_id: present. biospecimen_type: present. All Human-specific fields: PASS. Tier 1 achieved.</p>
+                <p>Source is Human. Checking Human-specific required fields... external_case_id: present. biospecimen_type: present. All Human-specific fields: PASS. Tier 1 achieved.</p>
               </div>
             </div>
             <div class="chat-message" data-msg="3" data-sender="validator" style="display:none">
@@ -227,13 +227,13 @@
         <div class="quiz-container" id="quiz-module4">
           <div class="quiz-question-block"
                data-correct="option-c"
-               data-explanation-right="Correct. adhs_medsis_id is in SOURCE_REQUIRED for Human. It is a Tier 1 hard error, not a Tier 2 warning. The ingest is rejected — the lab must add this field and resubmit."
-               data-explanation-wrong="adhs_medsis_id is in SOURCE_REQUIRED[Human] — that means it is part of Tier 1, not Tier 2. Tier 1 errors are hard blocks. The sample is not stored.">
-            <h3 class="quiz-question">A lab submits a Human sample without an <code>adhs_medsis_id</code>. What does JACKPOT do?</h3>
+               data-explanation-right="Correct. external_case_id is in SOURCE_REQUIRED for Human. It is a Tier 1 hard error, not a Tier 2 warning. The ingest is rejected — the lab must add this field and resubmit."
+               data-explanation-wrong="external_case_id is in SOURCE_REQUIRED[Human] — that means it is part of Tier 1, not Tier 2. Tier 1 errors are hard blocks. The sample is not stored.">
+            <h3 class="quiz-question">A lab submits a Human sample without an <code>external_case_id</code>. What does JACKPOT do?</h3>
             <div class="quiz-options">
               <button class="quiz-option" data-value="option-a" onclick="selectOption(this)">
                 <div class="quiz-option-radio"></div>
-                <span>Store the sample at PRELIMINARY with adhs_medsis_id in tier2_missing</span>
+                <span>Store the sample at PRELIMINARY with external_case_id in tier2_missing</span>
               </button>
               <button class="quiz-option" data-value="option-b" onclick="selectOption(this)">
                 <div class="quiz-option-radio"></div>
@@ -241,7 +241,7 @@
               </button>
               <button class="quiz-option" data-value="option-c" onclick="selectOption(this)">
                 <div class="quiz-option-radio"></div>
-                <span>Reject the ingest entirely — adhs_medsis_id is a Tier 1 hard error for Human samples</span>
+                <span>Reject the ingest entirely — external_case_id is a Tier 1 hard error for Human samples</span>
               </button>
               <button class="quiz-option" data-value="option-d" onclick="selectOption(this)">
                 <div class="quiz-option-radio"></div>
