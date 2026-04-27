@@ -6,7 +6,7 @@ Access model (per spec.md §5 Session H):
   to any authenticated user; lab/project members + owner see their own.
 * ``can_access_sample`` — detail access. DISCOVERABLE alone is NOT sufficient;
   detail requires Platform Admin, lab/project membership, ownership, PUBLIC,
-  ADHS oversight (``surveillance_relevant``), or an APPROVED access request.
+  host-operator oversight (``surveillance_relevant``), or an APPROVED access request.
 """
 
 import pytest
@@ -144,10 +144,10 @@ def _insert_sample(
         "library_preparation_method": "ARTIC",
         "sequencing_protocol": "https://www.protocols.io/view/artic-v4-1",
         "sequencing_platform": "Illumina",
-        "sequencing_lab": "Sonora Quest Laboratories",
+        "sequencing_lab": "Example Sequencing Lab",
         "date_collected": "2026-01-15",
         "date_sequenced": "2026-01-17",
-        "collection_facility": "Mayo Clinic Phoenix",
+        "collection_facility": "Example Hospital",
         "collection_location_country": "United States",
         "sharing_level": sharing_level,
         "fastq_r1_uri": fastq_r1_uri,
@@ -381,7 +381,7 @@ async def test_discoverable_sample_detail_requires_access(client, monkeypatch):
 
 @pytest.mark.asyncio
 async def test_data_analyst_can_access_surveillance_samples(client, monkeypatch):
-    sid = "H-ADHS-SURV"
+    sid = "H-SURV-OPERATOR"
     _cleanup_samples(sid)
     other_lab = _ensure_other_lab()
     other_project = _ensure_other_project(other_lab)

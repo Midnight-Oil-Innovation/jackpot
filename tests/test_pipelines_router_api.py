@@ -155,8 +155,8 @@ def _insert_sample(
         VALUES
             (:sid, :lid, :pid, :oid, :src, :org,
              'WGS', 'ARTIC', 'https://www.protocols.io/view/artic-v4-1',
-             'Illumina', 'Sonora Quest Laboratories', '2026-01-15', '2026-01-17',
-             'Mayo Clinic Phoenix', 'United States', 'PRIVATE',
+             'Illumina', 'Example Sequencing Lab', '2026-01-15', '2026-01-17',
+             'Example Hospital', 'United States', 'PRIVATE',
              'gs://jackpot-sequences/test/R1.fastq.gz', :scrub, :qual)
         RETURNING *
         """,

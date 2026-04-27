@@ -21,19 +21,19 @@ from backend.pipeline_results_loader import (
 
 class TestInferFileType:
     def test_consensus_fasta(self):
-        assert _infer_file_type("consensus/AZ-001.consensus.fa.gz") == "consensus_fasta"
+        assert _infer_file_type("consensus/EX-001.consensus.fa.gz") == "consensus_fasta"
 
     def test_assembly_fasta(self):
-        assert _infer_file_type("assembly/AZ-001.assembly.fasta.gz") == "assembly_fasta"
+        assert _infer_file_type("assembly/EX-001.assembly.fasta.gz") == "assembly_fasta"
 
     def test_vcf(self):
-        assert _infer_file_type("variants/AZ-001.vcf.gz") == "variant_calls"
+        assert _infer_file_type("variants/EX-001.vcf.gz") == "variant_calls"
 
     def test_multiqc(self):
         assert _infer_file_type("multiqc/multiqc_report.html") == "multiqc_report"
 
     def test_bam(self):
-        assert _infer_file_type("mapped/AZ-001.bam") == "alignment"
+        assert _infer_file_type("mapped/EX-001.bam") == "alignment"
 
     def test_manifest(self):
         assert _infer_file_type("iridanext.output.json.gz") == "pipeline_manifest"
@@ -188,10 +188,10 @@ class TestReadManifest:
         manifest_data = {
             "files": {
                 "global": [{"path": "multiqc/multiqc_report.html"}],
-                "samples": {"AZ-001": [{"path": "consensus/AZ-001.consensus.fa.gz"}]},
+                "samples": {"EX-001": [{"path": "consensus/EX-001.consensus.fa.gz"}]},
             },
             "metadata": {
-                "samples": {"AZ-001": {"pango_lineage": "BA.2.86", "coverage_depth": "1250.3"}}
+                "samples": {"EX-001": {"pango_lineage": "BA.2.86", "coverage_depth": "1250.3"}}
             },
         }
         compressed = self._make_manifest(manifest_data)
@@ -208,7 +208,7 @@ class TestReadManifest:
             result = _read_manifest("gs://jackpot-results/run-001/")
 
         assert result["files"]["global"][0]["path"] == "multiqc/multiqc_report.html"
-        assert result["metadata"]["samples"]["AZ-001"]["pango_lineage"] == "BA.2.86"
+        assert result["metadata"]["samples"]["EX-001"]["pango_lineage"] == "BA.2.86"
 
     def test_normalises_trailing_slash(self):
         from backend.pipeline_results_loader import _read_manifest

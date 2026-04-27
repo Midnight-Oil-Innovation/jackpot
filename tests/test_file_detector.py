@@ -91,10 +91,10 @@ def test_non_sequence_files_skipped():
 
 
 def test_convenience_uris_simple_paired():
-    result = detect_files(["AZ-001_R1.fastq.gz", "AZ-001_R2.fastq.gz"])
+    result = detect_files(["EX-001_R1.fastq.gz", "EX-001_R2.fastq.gz"])
     uri_map = {
-        "AZ-001_R1.fastq.gz": "gs://bucket/AZ-001_R1.fastq.gz",
-        "AZ-001_R2.fastq.gz": "gs://bucket/AZ-001_R2.fastq.gz",
+        "EX-001_R1.fastq.gz": "gs://bucket/EX-001_R1.fastq.gz",
+        "EX-001_R2.fastq.gz": "gs://bucket/EX-001_R2.fastq.gz",
     }
     r1, r2 = get_convenience_uris(result, uri_map)
     assert r1 is not None and "R1" in r1

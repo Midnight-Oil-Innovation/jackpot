@@ -47,7 +47,7 @@ async def test_register_pangolin_result_201(client):
     token = "tok-" + uuid.uuid4().hex
     run_id = _seed_pipeline_run(token)
     payload = {
-        "sample_id": "AZ-1",
+        "sample_id": "EX-1",
         "lineage": "BA.2.86",
         "pangolin_version": "4.3.1",
         "conflict": 0.0,
@@ -66,14 +66,14 @@ async def test_register_pangolin_result_201(client):
     rows = execute_query(
         "SELECT lineage, pangolin_version FROM pangolin_results "
         "WHERE run_id = :r AND sample_id = :s",
-        {"r": run_id, "s": "AZ-1"},
+        {"r": run_id, "s": "EX-1"},
     )
     assert len(rows) == 1
     assert rows[0]["lineage"] == "BA.2.86"
 
     summary = execute_query(
         "SELECT metrics FROM pipeline_results WHERE run_id = :r AND sample_id = :s",
-        {"r": run_id, "s": "AZ-1"},
+        {"r": run_id, "s": "EX-1"},
     )
     assert len(summary) == 1
     assert summary[0]["metrics"]["pangolin_results"]["registered"] is True
@@ -95,7 +95,7 @@ async def test_wrong_token_returns_401(client):
 
     resp = await client.post(
         f"/api/v1/pipelines/{run_id}/results/pangolin_results",
-        json={"sample_id": "AZ-1", "lineage": "BA.2.86", "pangolin_version": "4.3.1"},
+        json={"sample_id": "EX-1", "lineage": "BA.2.86", "pangolin_version": "4.3.1"},
         headers={"X-Pipeline-Token": "wrong-token"},
     )
     assert resp.status_code == 401
@@ -114,7 +114,7 @@ async def test_missing_token_returns_401(client):
 
     resp = await client.post(
         f"/api/v1/pipelines/{run_id}/results/pangolin_results",
-        json={"sample_id": "AZ-1", "lineage": "BA.2.86", "pangolin_version": "4.3.1"},
+        json={"sample_id": "EX-1", "lineage": "BA.2.86", "pangolin_version": "4.3.1"},
     )
     assert resp.status_code == 401
     _cleanup(run_id)
@@ -124,7 +124,7 @@ async def test_missing_token_returns_401(client):
 async def test_unknown_run_id_returns_404(client):
     resp = await client.post(
         "/api/v1/pipelines/does-not-exist/results/pangolin_results",
-        json={"sample_id": "AZ-1", "lineage": "BA.2.86", "pangolin_version": "4.3.1"},
+        json={"sample_id": "EX-1", "lineage": "BA.2.86", "pangolin_version": "4.3.1"},
         headers={"X-Pipeline-Token": "anything"},
     )
     assert resp.status_code == 404
@@ -137,7 +137,7 @@ async def test_unknown_result_type_returns_422(client):
     run_id = _seed_pipeline_run(token)
     resp = await client.post(
         f"/api/v1/pipelines/{run_id}/results/gobbledygook",
-        json={"sample_id": "AZ-1"},
+        json={"sample_id": "EX-1"},
         headers={"X-Pipeline-Token": token},
     )
     assert resp.status_code == 422
@@ -154,7 +154,7 @@ async def test_invalid_payload_returns_422(client):
     resp = await client.post(
         f"/api/v1/pipelines/{run_id}/results/amr_results",
         json={
-            "sample_id": "AZ-1",
+            "sample_id": "EX-1",
             "gene_symbol": "mcr-1",
             "tool_name": "amrfinderplus",
             "identity_percent": 120,
@@ -171,7 +171,7 @@ async def test_duplicate_returns_409(client):
     token = "tok-" + uuid.uuid4().hex
     run_id = _seed_pipeline_run(token)
     payload = {
-        "sample_id": "AZ-1",
+        "sample_id": "EX-1",
         "lineage": "BA.2.86",
         "pangolin_version": "4.3.1",
     }
@@ -199,7 +199,7 @@ async def test_jsonb_field_persisted(client):
     run_id = _seed_pipeline_run(token)
     subs = ["A23403G", "C14408T"]
     payload = {
-        "sample_id": "AZ-1",
+        "sample_id": "EX-1",
         "nextclade_version": "3.4.1",
         "clade": "24A",
         "substitutions": subs,
@@ -215,7 +215,7 @@ async def test_jsonb_field_persisted(client):
     rows = execute_query(
         "SELECT substitutions, total_substitutions FROM nextclade_results "
         "WHERE run_id = :r AND sample_id = :s",
-        {"r": run_id, "s": "AZ-1"},
+        {"r": run_id, "s": "EX-1"},
     )
     assert rows[0]["substitutions"] == subs
     assert rows[0]["total_substitutions"] == 2
@@ -230,21 +230,21 @@ async def test_metrics_merges_across_result_types(client):
 
     r1 = await client.post(
         f"/api/v1/pipelines/{run_id}/results/pangolin_results",
-        json={"sample_id": "AZ-1", "lineage": "BA.2.86", "pangolin_version": "4.3.1"},
+        json={"sample_id": "EX-1", "lineage": "BA.2.86", "pangolin_version": "4.3.1"},
         headers={"X-Pipeline-Token": token},
     )
     assert r1.status_code == 201
 
     r2 = await client.post(
         f"/api/v1/pipelines/{run_id}/results/amr_results",
-        json={"sample_id": "AZ-1", "gene_symbol": "mcr-1", "tool_name": "amrfinderplus"},
+        json={"sample_id": "EX-1", "gene_symbol": "mcr-1", "tool_name": "amrfinderplus"},
         headers={"X-Pipeline-Token": token},
     )
     assert r2.status_code == 201
 
     summary = execute_query(
         "SELECT metrics FROM pipeline_results WHERE run_id = :r AND sample_id = :s",
-        {"r": run_id, "s": "AZ-1"},
+        {"r": run_id, "s": "EX-1"},
     )
     assert len(summary) == 1
     metrics = summary[0]["metrics"]

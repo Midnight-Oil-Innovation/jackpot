@@ -70,7 +70,7 @@ async def test_validate_valid_row(client):
     csv_body = (
         "sample_id,organism_name,source_type,date_collected,"
         "collection_location_country,sequencing_platform,type_of_experiment\n"
-        "AZ-001,Escherichia coli,Isolate,"
+        "EX-001,Escherichia coli,Isolate,"
         "2026-01-15,United States,Illumina,WGS\n"
     )
     resp = await client.post(
@@ -83,7 +83,7 @@ async def test_validate_valid_row(client):
     assert body["total_rows"] == 1
     assert body["valid_rows"] == 1
     row = body["results"][0]
-    assert row["sample_id"] == "AZ-001"
+    assert row["sample_id"] == "EX-001"
     assert row["valid"] is True
     assert row["errors"] == []
 
@@ -91,7 +91,7 @@ async def test_validate_valid_row(client):
 @pytest.mark.asyncio
 async def test_validate_missing_required_row(client):
     # Missing organism_name, date_collected, etc.
-    csv_body = "sample_id,source_type\nAZ-002,Human\n"
+    csv_body = "sample_id,source_type\nEX-002,Human\n"
     resp = await client.post(
         "/api/v1/dataharmonizer/validate",
         content=csv_body.encode(),
@@ -111,9 +111,9 @@ async def test_validate_multiple_rows(client):
     csv_body = (
         "sample_id,organism_name,source_type,date_collected,"
         "collection_location_country,sequencing_platform,type_of_experiment\n"
-        "AZ-100,Escherichia coli,Isolate,"
+        "EX-100,Escherichia coli,Isolate,"
         "2026-01-15,United States,Illumina,WGS\n"
-        "AZ-101,,Isolate,2026-01-16,United States,Illumina,WGS\n"
+        "EX-101,,Isolate,2026-01-16,United States,Illumina,WGS\n"
     )
     resp = await client.post(
         "/api/v1/dataharmonizer/validate",
@@ -150,7 +150,7 @@ async def test_validate_skips_template_meta_rows(client):
         "Sample ID,Organism Name,Source Type,Date Collected,Country,Platform,Experiment\n"
         "REQUIRED,REQUIRED,REQUIRED,REQUIRED,REQUIRED,REQUIRED,REQUIRED\n"
         "AZ-ID,Pathogen species name,Human,YYYY-MM-DD,Country name,Illumina/ONT,WGS\n"
-        "AZ-200,Severe acute respiratory syndrome coronavirus 2,Human,"
+        "EX-200,Severe acute respiratory syndrome coronavirus 2,Human,"
         "2026-02-01,United States,Illumina,WGS\n"
     )
     resp = await client.post(
@@ -162,4 +162,4 @@ async def test_validate_skips_template_meta_rows(client):
     body = resp.json()
     # Should find exactly 1 data row — the one after REQUIRED tag row
     sample_ids = [r["sample_id"] for r in body["results"]]
-    assert "AZ-200" in sample_ids
+    assert "EX-200" in sample_ids

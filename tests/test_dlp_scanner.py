@@ -78,10 +78,10 @@ class TestContentBuilding:
     """Test building the DLP content string from sample metadata."""
 
     def test_builds_content_from_string_fields(self):
-        sample = {"sample_id": "AZ-001", "strain": "Delta", "host_age": 45}
+        sample = {"sample_id": "EX-001", "strain": "Delta", "host_age": 45}
         scannable = {"sample_id", "strain"}
         content, offsets = _build_content_item(sample, scannable)
-        assert "[sample_id]: AZ-001" in content
+        assert "[sample_id]: EX-001" in content
         assert "[strain]: Delta" in content
         assert "host_age" not in content  # not in scannable set
 
@@ -92,7 +92,7 @@ class TestContentBuilding:
         assert content == ""
 
     def test_offsets_map_correctly(self):
-        sample = {"sample_id": "AZ-001", "strain": "Delta"}
+        sample = {"sample_id": "EX-001", "strain": "Delta"}
         scannable = {"sample_id", "strain"}
         content, offsets = _build_content_item(sample, scannable)
         for field_name, (start, end) in offsets.items():
@@ -145,7 +145,7 @@ class TestScanSampleMetadata:
         assert result.scan_time_ms == 0.0
 
     def test_result_is_correct_type(self):
-        result = scan_sample_metadata({"sample_id": "AZ-001"})
+        result = scan_sample_metadata({"sample_id": "EX-001"})
         assert isinstance(result, DLPScanResult)
 
 
@@ -154,16 +154,16 @@ class TestScanBatchMetadata:
 
     def test_returns_clean_for_all_samples(self):
         samples = [
-            {"sample_id": "AZ-001", "strain": "Delta"},
-            {"sample_id": "AZ-002", "strain": "Omicron"},
-            {"sample_id": "AZ-003", "strain": "Alpha"},
+            {"sample_id": "EX-001", "strain": "Delta"},
+            {"sample_id": "EX-002", "strain": "Omicron"},
+            {"sample_id": "EX-003", "strain": "Alpha"},
         ]
         results = scan_batch_metadata(samples)
         assert len(results) == 3
         assert all(r.clean for r in results.values())
-        assert "AZ-001" in results
-        assert "AZ-002" in results
-        assert "AZ-003" in results
+        assert "EX-001" in results
+        assert "EX-002" in results
+        assert "EX-003" in results
 
     def test_handles_missing_sample_id(self):
         samples = [{"strain": "Delta"}]
