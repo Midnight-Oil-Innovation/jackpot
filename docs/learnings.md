@@ -175,7 +175,7 @@ client ─► PATCH /api/v1/users/{id}  {is_platform_admin: true}
 - No PATCH endpoint — spec omits it. If admins want to fix a typo they remove the bad entry and add the new one; the two-step trail is clearer in audit review than a silent rename.
 
 **Watch out for:**
-- The seed data in `db/init.sql` includes `asu.edu` and `gmail.com` — the first list test asserts `asu.edu` is present, which works as long as the seed INSERT runs before the Alembic migrations in conftest. Seed INSERTs are at the bottom of `init.sql` and run as part of `conn.execute(text(sql))` before the Alembic step, so this is safe — but any future test that expects an empty whitelist would need to clean up seed entries first.
+- The seed data in `db/init.sql` includes `example-academic.edu` and `gmail.com` — the first list test asserts `example-academic.edu` is present, which works as long as the seed INSERT runs before the Alembic migrations in conftest. Seed INSERTs are at the bottom of `init.sql` and run as part of `conn.execute(text(sql))` before the Alembic step, so this is safe — but any future test that expects an empty whitelist would need to clean up seed entries first.
 - `execute_write(...)` on a DELETE with no RETURNING still returns `[]`. The handler fetches the `before` row via `execute_query` first (for 404 and audit), which is the right pattern because Critical Rule 40 requires RETURNING only on INSERT/UPDATE.
 - Removed `backend/routers/domain_whitelist.py` from `pyproject.toml` coverage omit — same pattern as every previous session.
 
@@ -219,9 +219,9 @@ client ─► POST /api/v1/domain-whitelist/  {"domain": "UPPER.example"}
 
 **Watch out for:**
 - **The join table did not exist until this session.** Any prior code or test that references `sequencing_lab_assignments` against the stub DB would have failed until the migration was applied. `tests/conftest.py` runs `alembic upgrade head` after `db/init.sql`, so the table is available as soon as the migration file lands — no one-shot DB rebuild required.
-- Spec says the list should show "Sonora Quest, LabCorp, Otero Outpost" but the actual seed only contains `Sonora Quest Laboratories`, `Laboratory Corporation of America`, and `Otero Lab` (as a non-external auto-added entry). The test asserts the first two verbatim — the third is renamed ("Otero Lab" not "Otero Outpost") and the test doesn't pin it. If ingest code ever hardcodes a "Otero Outpost" match, grep will surface the mismatch.
+- Spec says the list should show "Sonora Quest, LabCorp, Example Lab" but the actual seed only contains `Sonora Quest Laboratories`, `Laboratory Corporation of America`, and `Example Lab` (as a non-external auto-added entry). The test asserts the first two verbatim — the third is renamed (name was renamed in seed data) and the test doesn't pin it. If ingest code ever hardcodes a "Example Lab" match, grep will surface the mismatch.
 - `DELETE /assign/{lab_id}` 200s on first call and 404s on second — tests exercise both. There is no idempotent mode; callers must cope.
-- The `valid_human_sample` test fixture lists `"sequencing_lab": "Otero Outpost"` which does *not* match the seed. That fixture is only used by ingest tests (Session G) and ingest validation is expected to treat it as unknown → 422. Don't try to "fix" the fixture here.
+- The `valid_human_sample` test fixture lists `"sequencing_lab": "Example Lab"` which does *not* match the seed. That fixture is only used by ingest tests (Session G) and ingest validation is expected to treat it as unknown → 422. Don't try to "fix" the fixture here.
 
 **ASCII diagram:**
 
@@ -314,7 +314,7 @@ client ─► POST /api/v1/sequencing-labs/{sid}/assign/{lid}
 - `secrets.token_urlsafe(32)` returns ~43 chars — assertion checks
   `len > 20` to stay robust if the byte length ever changes.
 - Test `test_platform_admin_can_revoke_any_token` flips back to the dev
-  seed email (`gotero@linuxprophet.com`) to exercise the admin branch; the
+  seed email (`admin@example.org`) to exercise the admin branch; the
   conftest `monkeypatch` + `cache_clear()` pattern from earlier sessions
   handles this cleanly — the `autouse=True` fixture in conftest resets it
   after the test so other tests aren't polluted.
@@ -408,7 +408,7 @@ New baseline: 418 tests passing, 85.33% coverage (+19 tests, +0.25%). Commit
 - **`sequencing_lab` is validated by `name`**, not by ID. The seed has
   "Sonora Quest Laboratories" and "Laboratory Corporation of America";
   tests use "Sonora Quest Laboratories" instead of the old fixture's
-  "Otero Outpost" (which does not exist in the DB). Using a name that
+  "Example Lab" (which does not exist in the DB). Using a name that
   doesn't exist in `sequencing_labs` returns 422 with a request-workflow
   message pointing to `POST /api/v1/sequencing-labs/requests`.
 - **`UploadFile | None = File(None)`** requires `# noqa: B008` — FastAPI
@@ -481,8 +481,8 @@ client ─► POST /api/v1/ingest/upload  (multipart: metadata, fastq_r1, fastq_
 **What was built:** Six samples endpoints on `/api/v1/samples/` — GET list (with 11-parameter filter surface + `?select_all=true` + `can_see_sample` per row), GET {id} (+ file list), PATCH {id} (partial update + recompute quality + surveillance), DELETE {id} (soft-delete / archive), GET {id}/files, GET {id}/download (presigned URL). Plus a proper access-control module in `backend/permissions.py` with `can_access_sample`, `can_see_sample`, and `visibility_sql_clause` (SQL-side predicate). 32 integration tests. New baseline: **450 tests passing, 86.23% coverage** (+32 tests, +0.9%). Router coverage 89%; permissions module 88%.
 
 **Key decisions:**
-- **Two-tier access model.** `can_see_sample` includes `DISCOVERABLE` (shows in lists); `can_access_sample` excludes it (detail requires an approved `sample_access_requests` row). That is the only way the access-request workflow makes semantic sense — otherwise DISCOVERABLE would collapse into PUBLIC. Spec.md §5 Session H confirms: "Platform Admin → lab member → PUBLIC → ADHS oversight (surveillance_relevant only) → approved request" — no DISCOVERABLE on that ladder. todo.md's test hint conflicted ("DISCOVERABLE → 200 for authenticated users") and was ignored in favour of the spec.
-- **Visibility enforced in SQL, not Python.** `visibility_sql_clause(user)` emits an OR'd EXISTS clause straight into the list WHERE, so the list endpoint paginates at the DB tier with no N+1 membership check. Platform Admin short-circuits to `"TRUE"`. Data analysts get `s.surveillance_relevant = TRUE` OR'd in for ADHS oversight.
+- **Two-tier access model.** `can_see_sample` includes `DISCOVERABLE` (shows in lists); `can_access_sample` excludes it (detail requires an approved `sample_access_requests` row). That is the only way the access-request workflow makes semantic sense — otherwise DISCOVERABLE would collapse into PUBLIC. Spec.md §5 Session H confirms: "Platform Admin → lab member → PUBLIC → host-operator oversight (surveillance_relevant only) → approved request" — no DISCOVERABLE on that ladder. todo.md's test hint conflicted ("DISCOVERABLE → 200 for authenticated users") and was ignored in favour of the spec.
+- **Visibility enforced in SQL, not Python.** `visibility_sql_clause(user)` emits an OR'd EXISTS clause straight into the list WHERE, so the list endpoint paginates at the DB tier with no N+1 membership check. Platform Admin short-circuits to `"TRUE"`. Data analysts get `s.surveillance_relevant = TRUE` OR'd in for host-operator oversight.
 - **LOCKED_FIELDS frozenset on PATCH.** Instead of silently dropping forbidden keys, any attempt to set `quality_status`, `surveillance_relevant`, `scrub_status`, `mmwr_week`, `iso_week`, `iso_year`, `mmwr_year`, `ingest_timestamp`, `is_deleted`, identifiers/accessions, pipeline outputs, or file URIs returns **422 with the offending field names**. Editable fields are a separate `_EDITABLE_FIELDS` whitelist — only the intersection is written. After the caller's update, the endpoint re-runs `validate_sample() → compute_quality_status()` and `compute_surveillance_relevant()` on the merged row and issues a second UPDATE, so derived state always matches the canonical source of truth.
 - **Soft delete uses `is_deleted`, not `is_archived`.** todo.md H-4 says `is_archived=True` but the samples table in `db/init.sql` line 427 has `is_deleted BOOLEAN NOT NULL DEFAULT FALSE` plus `deleted_at` / `deleted_by_id`. Followed the schema and noted the reconciliation inline in todo.md. Log action stays `ARCHIVE_SAMPLE` (per AuditActions) — the action name describes the lifecycle stage, not the column name.
 - **`raw_fastq` download restricted to Lab Directors.** Pre-scrub FASTQ may contain PHI; the download endpoint additionally checks `is_lab_director` on the sample's lab (Platform Admin bypasses). Other file types just require `can_access_sample`.
@@ -561,7 +561,7 @@ client ─► GET /api/v1/samples/{id}
 - **Test user cleanup needs project FK nullification.** Added `UPDATE projects SET created_by_id = NULL WHERE created_by_id = uid` before `DELETE FROM users`. Same three-step pattern from Session H (audit actor → project FK → user) — if a new table adds an FK to users, add another nullification here.
 
 **Watch out for:**
-- **`Isolate` source type has no source-specific required fields.** Used it as the happy-path test in validate tests. `Human` requires `adhs_medsis_id`, `biospecimen_type`, `reason_for_collection`, `host_disease` — the naive 7-column CSV that passes BASE_REQUIRED still fails Human's extras. Pick `Isolate` for "should be valid" fixtures.
+- **`Isolate` source type has no source-specific required fields.** Used it as the happy-path test in validate tests. `Human` requires `external_case_id`, `biospecimen_type`, `reason_for_collection`, `host_disease` — the naive 7-column CSV that passes BASE_REQUIRED still fails Human's extras. Pick `Isolate` for "should be valid" fixtures.
 - **Pre-commit ruff reformatted on first check.** Seventh session with the same finding — `gac` rewrites the file and exits non-zero the first time. Also surfaced an N806 on `META_MARKERS` being uppercase inside a function; renamed to `meta_markers`. Same pattern: run gac twice, let the first format and the second commit.
 - **Data analysts do not automatically see all projects.** The list filter is `lab_membership OR project_membership`; `is_data_analyst` does not bypass project visibility. That's a surveillance-samples-only privilege, applied at the samples layer, not the project layer. Keep this boundary when wiring future endpoints.
 - **`/api/v1/dataharmonizer/templates/{tier}` is case-insensitive.** `tier.upper()` before the enum lookup, so `preliminary`, `Preliminary`, and `PRELIMINARY` all work. The filename reflects the lowercase form.
@@ -1048,7 +1048,7 @@ operational tables.
 * **Soft-warning semantics are a 202, not a 200.** The response envelope's
   `success=false` with HTTP 202 is deliberate: the request is *accepted for
   further action* (confirming the override), not *completed*.
-* **Non-admin tests rely on `MOCK_USER_EMAIL` swap.** The seed `gotero@...`
+* **Non-admin tests rely on `MOCK_USER_EMAIL` swap.** The seed `<your-github-user>@...`
   is a Platform Admin, so negative access-control cases must create a
   throwaway user, `_switch_user` to that email, and clear `get_settings`
   cache. The `as_platform_admin` fixture reverts on teardown via pytest
@@ -1343,7 +1343,7 @@ Test delta: **537 → 549 passing tests** (+12); coverage 87.56%. The 9 pages lo
 - **Zero hardcoded values in modules.** Every `project_id`, `region`, `environment`, bucket name, SA email, and secret name derives from `var.project_id` / `var.region` / `"jackpot-${var.environment}-<purpose>"`. The staging wrapper is thin (50 lines of module calls); the production wrapper is a commented-out twin of staging with Month 3 TODOs — production stands up by uncommenting blocks and filling tfvars, not by editing module code.
 - **Canonical naming authority lives in jackpot-backend, not jackpot-iac.** `jackpot-backend/docs/gcp_context.md` is the single source of truth for project IDs, regions, bucket naming, and SA emails. The jackpot-iac README points to it explicitly. This avoids two-repo naming drift — change the doc first, mirror into tfvars.
 - **State bucket chicken-and-egg solved via a separate script.** Terraform's GCS backend needs `jackpot-staging-tfstate` to exist *before* `terraform init` runs. `scripts/bootstrap_project.sh` creates it via `gsutil` (plus enables 16 APIs, creates the deploy SA, and sets up Workload Identity Federation for GitHub Actions) as an idempotent pre-step. This keeps the state bucket out of the Terraform graph entirely.
-- **Credentials to GitHub Actions via WIF, not SA JSON keys.** The bootstrap script creates a Workload Identity Federation pool + OIDC provider scoped to `linuxprophet` repos. GHA exchanges its OIDC token for a short-lived GCP access token — no long-lived keys stored in repo secrets. The workflow's `id-token: write` permission is what authorizes the exchange.
+- **Credentials to GitHub Actions via WIF, not SA JSON keys.** The bootstrap script creates a Workload Identity Federation pool + OIDC provider scoped to `example-org` repos. GHA exchanges its OIDC token for a short-lived GCP access token — no long-lived keys stored in repo secrets. The workflow's `id-token: write` permission is what authorizes the exchange.
 - **Alembic migrations run as a Helm pre-upgrade Job, not an initContainer.** The migration Job uses `helm.sh/hook: pre-install,pre-upgrade`, which means the Deployment never rolls forward until `alembic upgrade head` exits 0. Using an initContainer would run migrations on every pod startup (race condition across replicas) rather than once per release.
 - **ConfigMap checksum annotation forces rolling restart on env changes.** `checksum/config: {{ include "configmap.yaml" . | sha256sum }}` in the Deployment's pod template annotations means any ConfigMap edit changes the pod spec hash, which triggers a rolling update. Without this, env-var-only changes would not restart pods.
 - **Secret Manager is metadata-only; values seeded post-apply.** The secrets module creates `google_secret_manager_secret` resources but no versions. After `terraform apply`, the operator runs the `terraform output secret_seed_commands` list to add real values. This keeps actual credentials out of Terraform state and the repo. Per-secret `roles/secretmanager.secretAccessor` bindings target the jackpot-api GSA specifically — tighter than the project-wide role.
@@ -1358,7 +1358,7 @@ Test delta: **537 → 549 passing tests** (+12); coverage 87.56%. The 9 pages lo
 - **`master_authorized_networks` defaults to empty (open endpoint).** This is fine for staging during initial bring-up but MUST be populated with the office/home/GHA NAT CIDRs before the project is promoted to production. The production tfvars.example flags this as a pre-apply requirement.
 - **Production stub is copy-edit-tfvars, not rewrite — but you still must uncomment the module blocks.** `terraform/production/main.tf` and `outputs.tf` have all module blocks commented out. When activating production: fill in tfvars, uncomment the main.tf blocks, uncomment the matching outputs, then `terraform apply`. Keeping them commented prevents `plan` from erroring on an empty `project_id`.
 - **Alembic migration Job name embeds image tag.** `{release}-migrate-{image.tag | trunc 20}` — if the same image tag is redeployed, the Helm pre-upgrade hook deletes the previous Job (hook-delete-policy: `before-hook-creation`), then recreates it. Safe for idempotent redeploys; beware if image.tag ever contains characters Kubernetes names reject (the template normalises underscores to dashes but doesn't escape other specials).
-- **Deploy workflow checks out `linuxprophet/jackpot-backend` at ref `staging`.** The cross-repo checkout uses the default GITHUB_TOKEN — if that token lacks read access to jackpot-backend, the workflow fails at the second `actions/checkout` step. If the repos are in the same org this works out of the box; otherwise a PAT with `contents:read` on jackpot-backend must be put in repo secrets and swapped in.
+- **Deploy workflow checks out `<your-org>/jackpot-backend` at ref `staging`.** The cross-repo checkout uses the default GITHUB_TOKEN — if that token lacks read access to jackpot-backend, the workflow fails at the second `actions/checkout` step. If the repos are in the same org this works out of the box; otherwise a PAT with `contents:read` on jackpot-backend must be put in repo secrets and swapped in.
 - **`terraform fmt`/`terraform validate`/`helm template` were NOT run locally.** Neither tool is installed on this workstation. CI or the first `terraform init && plan` will surface any HCL issues I missed. Validate modules before the first real apply: `cd terraform/staging && terraform init -backend=false && terraform validate`.
 
 **ASCII diagram — deploy-staging flow:**
@@ -1487,9 +1487,9 @@ The failures stacked. Each fix uncovered the next layer:
    baseline migration containing the DDL.
 
 4. **`jackpot-nf` submodule URL was a filesystem path.**
-   `.gitmodules` said `url = /Users/glen/ASU/jackpot/jackpot-nf`.
+   `.gitmodules` said `url = /Users/glen/jackpot/jackpot-nf`.
    Worked on the Mac. Failed everywhere else. `jackpot-nf` hadn't been
-   pushed to GitHub at all. Pushed to `gotero/jackpot-nf`, fixed the
+   pushed to GitHub at all. Pushed to `<your-org>/jackpot-nf`, fixed the
    URL, matched the `schema` submodule pattern.
 
 5. **`Dockerfile.api` didn't `COPY nf/`.** Even after the submodule was
@@ -1635,7 +1635,7 @@ Rule 44 ↔ Rule 52 in Q-9.
   `uv run python -c 'import pydantic_settings; ...'` proved the
   symbol was reachable. Root cause: every script in `.venv/bin/`
   had a shebang pointing at a sibling checkout's Python
-  (`/Users/glen/ASU/...` instead of `/Users/glen/...`). When
+  (`/Users/glen/...` instead of `/Users/glen/...`). When
   conftest.py ran `subprocess.run(["uv", "run", "alembic", ...])`,
   alembic loaded the wrong Python and saw the OLD pydantic_settings.
   Fix: `rm -rf .venv && uv sync`. Lesson: when an import error
@@ -1734,14 +1734,14 @@ tolerance UI.
 ### Per-scenario status
 
 All scenarios driven via `curl POST /api/v1/ingest/upload` against
-the live local stack with the mock identity (Glen Otero, Platform
-Admin, Otero-Outpost director). "Contract verified" = API returned
+the live local stack with the mock identity (the maintainer, Platform
+Admin, Example-Lab director). "Contract verified" = API returned
 the expected envelope and the page-code review confirms `upload.py`
 will render it via `st.error(f"Upload failed: {exc.message}")`.
 
 | Step | Scenario | Status |
 |---|---|---|
-| 3 | GET /api/v1/sequencing-labs/ → 3 seeded labs | CONTRACT VERIFIED (Sonora Quest, LabCorp, Otero Outpost) |
+| 3 | GET /api/v1/sequencing-labs/ → 3 seeded labs | CONTRACT VERIFIED (Sonora Quest, LabCorp, Example Lab) |
 | 3 | GET /api/v1/projects/ → ≥1 | CONTRACT VERIFIED (Dev Project) |
 | 4 | POST /api/v1/ingest/upload happy path | CONTRACT VERIFIED — 201, sample_id returned, quality_status=PRELIMINARY, sector=clinical, scrub_status=PENDING |
 | 5 | GET /api/v1/samples/{integer-id} retrieves | CONTRACT VERIFIED. Note: endpoint requires the integer DB id, not the string sample_id — UI must capture `data.id` from the upload response |
@@ -1861,18 +1861,17 @@ Confirmed by reading `frontend/pages/upload.py:179-184` +
   one-handler fix in main.py is reversible, idempotent for handlers
   that already use `responses.error()`, and the test-suite
   breakage was 5 line edits.
-- **`tests/conftest.py` had `sequencing_lab="Otero Outpost"`
+- **`tests/conftest.py` had `sequencing_lab="Example Lab"`
   pre-baked.** Someone foresaw the rename. The seed migration just
   caught reality up to the test fixture's expectations.
 
 ## Renaming a seed entity in already-deployed environments (2026-04-24)
 
-Renamed the JACKPOT-internal organisation from "ASU" to "Linux
-Prophet" — same data-migration pattern that closed the Otero
-Lab → Otero Outpost rename earlier in the day. Three rows updated
+Renamed the JACKPOT-internal organisation from "the host academic operator" to "Linux
+Prophet" — same data-migration pattern that closed the seed-data rename earlier in the day. Three rows updated
 in one migration: `organizations.display_name`,
 `sequencing_labs.organization` (denormalised text), and
-`domain_whitelist.domain` (`asu.edu` → `linuxprophet.org`).
+`domain_whitelist.domain` (`example-academic.edu` → `example.org`).
 
 ### The pattern
 
@@ -1884,7 +1883,7 @@ already deployed somewhere (local, staging, prod, fork):
    landed baseline migration — that's the immutable starting point;
    the rename is a delta on top of it.
 2. **Write a data migration** that lives at the head of the chain.
-   Match by old value (`WHERE display_name = 'ASU'`), not by id.
+   Match by old value (`WHERE display_name = '<host-academic-operator>'`), not by id.
    Two reasons: (a) UNIQUE constraints on the column make the
    match unambiguous; (b) match-by-old-value is portable across
    forks and clones where ids may not have stayed `1`.
@@ -1918,9 +1917,9 @@ already deployed somewhere (local, staging, prod, fork):
   for free. The `display_name` UNIQUE constraint guarantees
   uniqueness.
 - **Domain mismatch caught at planning time.** Glen's email is
-  `gotero@linuxprophet.com` but the new domain whitelist is
-  `linuxprophet.org`. Mock auth bypasses the whitelist for local
+  `admin@example.org` but the new domain whitelist is
+  `example.org`. Mock auth bypasses the whitelist for local
   dev so this isn't a daily-flow blocker, but flagged for the
-  product owner: real Google OAuth sign-ups from `@linuxprophet.com`
+  product owner: real Google OAuth sign-ups from `@example.org`
   won't be whitelisted by the seed if/when OAuth fronts the API.
   Surfacing the mismatch beats silently auto-correcting it.

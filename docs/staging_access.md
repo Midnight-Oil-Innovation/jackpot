@@ -12,7 +12,7 @@ from the hard-won experience of the first successful deploy.
 
 | Resource | Identifier |
 |---|---|
-| GCP project | `gotero3-acdp-488517` |
+| GCP project | `jackpot-staging-project` |
 | GCP region | `us-central1` |
 | GKE cluster | `jackpot-staging-gke` (regional) |
 | K8s namespace | `jackpot` |
@@ -46,7 +46,7 @@ The GitHub Actions workflow `deploy-staging.yml` handles the rest:
 Trigger a fresh deploy manually:
 
 ```bash
-cd ~/ASU/jackpot/jackpot-iac
+cd ~/jackpot/jackpot-iac
 gh workflow run deploy-staging.yml --ref staging
 gh run watch
 ```
@@ -118,13 +118,13 @@ brew install cloud-sql-proxy
 
 # Start the proxy (leave running in a terminal)
 cloud-sql-proxy \
-    --project=gotero3-acdp-488517 \
-    gotero3-acdp-488517:us-central1:jackpot-staging-db
+    --project=jackpot-staging-project \
+    jackpot-staging-project:us-central1:jackpot-staging-db
 
 # In another terminal — get the password from Secret Manager
 PGPASSWORD=$(gcloud secrets versions access latest \
     --secret=jackpot-staging-database-url \
-    --project=gotero3-acdp-488517 \
+    --project=jackpot-staging-project \
     | sed -E 's|.*:([^@]+)@.*|\1|') \
 psql "postgresql://jackpot@127.0.0.1:5432/jackpot_db"
 ```
@@ -139,16 +139,16 @@ echo "New password (save this): $NEW_PASS"
 gcloud sql users set-password jackpot \
     --instance=jackpot-staging-db \
     --password="$NEW_PASS" \
-    --project=gotero3-acdp-488517
+    --project=jackpot-staging-project
 
 # Update Secret Manager — MUST include the /jackpot_db suffix
 gcloud secrets versions add jackpot-staging-database-url \
-    --project=gotero3-acdp-488517 \
+    --project=jackpot-staging-project \
     --data-file=- \
     <<< "postgresql://jackpot:${NEW_PASS}@10.188.230.3:5432/jackpot_db"
 
 # Redeploy so pods pick up the new Secret
-cd ~/ASU/jackpot/jackpot-iac
+cd ~/jackpot/jackpot-iac
 gh workflow run deploy-staging.yml --ref staging
 ```
 
@@ -173,7 +173,7 @@ step on every deploy:
 
 ```bash
 gcloud secrets versions add <secret-name> \
-    --project=gotero3-acdp-488517 \
+    --project=jackpot-staging-project \
     --data-file=- \
     <<< "<new-value>"
 ```
@@ -315,7 +315,7 @@ silently accepts duplicate keys that GitHub's validator rejects. Use
 both:
 
 ```bash
-cd ~/ASU/jackpot/jackpot-iac
+cd ~/jackpot/jackpot-iac
 python3 -c "import yaml; yaml.safe_load(open('.github/workflows/deploy-staging.yml')); print('YAML OK')"
 
 # Then visually eyeball the diff to spot duplicate keys or indentation issues
@@ -339,7 +339,7 @@ temporary debug step to the workflow:
     echo "PAT prefix: ${GH_PAT:0:8}..."
     code=$(curl -s -o /dev/null -w "%{http_code}" \
         -H "Authorization: Bearer $GH_PAT" \
-        https://api.github.com/repos/gotero/jackpot-backend)
+        https://api.github.com/repos/<your-org>/jackpot-backend)
     echo "api.github.com status: $code"
 ```
 
@@ -355,7 +355,7 @@ temporary debug step to the workflow:
 If you need to replace the PAT:
 
 ```bash
-gh secret set CROSS_REPO_PAT --repo gotero/jackpot-iac
+gh secret set CROSS_REPO_PAT --repo <your-org>/jackpot-iac
 # Paste the correct PAT when prompted, then Ctrl-D
 ```
 
@@ -372,12 +372,12 @@ Preserves everything (Helm release, DB, buckets) while stopping the
 # Scale down
 gcloud container clusters resize jackpot-staging-gke \
     --num-nodes=0 --region=us-central1 --node-pool=api-pool \
-    --project=gotero3-acdp-488517 --quiet
+    --project=jackpot-staging-project --quiet
 
 # Scale back up when needed
 gcloud container clusters resize jackpot-staging-gke \
     --num-nodes=2 --region=us-central1 --node-pool=api-pool \
-    --project=gotero3-acdp-488517 --quiet
+    --project=jackpot-staging-project --quiet
 ```
 
 ### Stop Cloud SQL for longer idle periods
@@ -387,11 +387,11 @@ Additional ~$50-60/mo savings. Instance storage is preserved.
 ```bash
 # Stop
 gcloud sql instances patch jackpot-staging-db \
-    --activation-policy=NEVER --project=gotero3-acdp-488517
+    --activation-policy=NEVER --project=jackpot-staging-project
 
 # Restart (~2 min to come back up)
 gcloud sql instances patch jackpot-staging-db \
-    --activation-policy=ALWAYS --project=gotero3-acdp-488517
+    --activation-policy=ALWAYS --project=jackpot-staging-project
 ```
 
 ### Do NOT `terraform destroy` casually

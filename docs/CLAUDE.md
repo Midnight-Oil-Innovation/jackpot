@@ -3,7 +3,7 @@
 ## Project: JACKPOT
 
 Pathogen genomics platform for genomic epidemiology, bioinformatics,
-and public health research. Successor to APGAP (ASU-RSE-Services).
+and public health research. Successor to APGAP (legacy single-institution platform).
 
 ---
 
@@ -100,7 +100,7 @@ After completing any router session or significant fix, append a new entry to
 ## Directory Structure
 
 ```
-~/ASU/jackpot/               ← workspace folder (not a git repo)
+~/jackpot/               ← workspace folder (not a git repo)
 └── jackpot-backend/         ← git repository (this repo)
     ├── backend/             ← Python source code — imported as `backend`
     │   ├── main.py              App entrypoint — add router imports here; starts APScheduler
@@ -202,9 +202,9 @@ to `/api/v1/api/v1/samples`.
 
 **7. Use `uv run` for all Python commands. Never `pip`, never activate venv.**
 
-**8. `adhs_medsis_id` is required for HumanSample. It is NOT the same as `case_id`.**
-`adhs_medsis_id` = ADHS-issued anonymized ID or exemption code.
-`case_id` = generic non-ADHS public health case identifier (CDC NEDSS etc.).
+**8. `external_case_id` is required for HumanSample. It is NOT the same as `case_id`.**
+`external_case_id` = operator-issued anonymized ID or exemption code.
+`case_id` = generic non-host public health case identifier (CDC NEDSS etc.).
 
 **9. Epiweek is computed at ingest, never by the user.**
 Call `compute_epiweeks(date_collected)` from `epiweek.py` before every DB write.
@@ -570,7 +570,7 @@ LinkML source) — but `nf/` is no longer required for the backend
 build. CI workflows that only test/build the backend can skip `nf/`.
 
 **Required in git config:** `.gitmodules` for `jackpot-backend` must
-reference `git@github.com:gotero/jackpot-nf.git`, never a local
+reference `git@github.com:<your-org>/jackpot-nf.git`, never a local
 filesystem path. Same applies to the `schema` submodule.
 
 See also Critical Rule 54.
@@ -690,7 +690,7 @@ ui:
   environment:
     API_BASE_URL:    http://api:8000
     ENV:             local
-    MOCK_USER_EMAIL: gotero@linuxprophet.com
+    MOCK_USER_EMAIL: admin@example.org
     PYTHONPATH:      /app                  # REQUIRED
   volumes:
     - ./frontend:/app/frontend             # NOT: ./frontend:/app
@@ -781,7 +781,7 @@ container only (not postgres — that would lose the inserted rows):
 docker compose up -d api
 ```
 
-Revert by changing `MOCK_USER_EMAIL` back to `gotero@linuxprophet.com`
+Revert by changing `MOCK_USER_EMAIL` back to `admin@example.org`
 and running `docker compose up -d api` again.
 
 ---
@@ -924,7 +924,7 @@ meaningful error when WORKSPACE_ENABLED=false or equivalent:
 
 ## OrganismNameEnum (62 values)
 
-Derived from ADHS mandatory reportable communicable diseases list.
+Derived from the host jurisdiction's mandatory reportable communicable diseases list.
 Additions: `Coccidioides immitis`, `Coccidioides posadasii` (Valley fever),
 `metagenome` (metagenomic samples), `novel pathogen` (emerging/exotic disease).
 All values use NCBI Taxonomy names for BioSample/SRA/GenBank/GISAID compatibility.
@@ -1017,7 +1017,7 @@ response shape in a router — use the helpers from `backend/responses.py`.
   "success": false,
   "error": {
     "code": "NOT_FOUND",
-    "message": "Sample AZ-2026-001 not found.",
+    "message": "Sample EXAMPLE-2026-001 not found.",
     "detail": {}
   }
 }
@@ -1676,7 +1676,7 @@ nextflow run ${pipeline_uri} \
 When `PIPELINE_EXECUTOR=gcp_batch`, Nextflow runs on GCP Batch VMs.
 The `-weblog` callback URL must be publicly reachable from those VMs.
 
-- **Production**: use the deployed API URL (`https://api.jackpot.adhs.az.gov`)
+- **Production**: use the deployed API URL (`https://api.jackpot.example.org`)
 - **Local dev testing with gcp_batch**: use `ngrok` or `cloudflared tunnel`
   to expose the local API temporarily:
 
@@ -2178,11 +2178,11 @@ the assistant can only call endpoints the logged-in user is authorized
 to call. Never give the assistant write access.
 
 ```
-User: "Why is sample AZ-2026-001 stuck?"
+User: "Why is sample EXAMPLE-2026-001 stuck?"
   ↓
 LLM decides: data question → call sample lookup tool
   ↓
-Tool call: GET /api/v1/samples/AZ-2026-001 (as the logged-in user)
+Tool call: GET /api/v1/samples/EXAMPLE-2026-001 (as the logged-in user)
   ↓
 Response grounded in live data, not guesswork
 ```

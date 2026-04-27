@@ -15,14 +15,14 @@ passed.
 Confirm your shell is in the right place and submodules are populated.
 
 ```bash
-cd ~/ASU/jackpot/jackpot-backend
+cd ~/jackpot/jackpot-backend
 pwd
 git status
 git submodule status
 ```
 
 **Expected:**
-- `pwd` → `/Users/glen/ASU/jackpot/jackpot-backend`
+- `pwd` → `/Users/glen/jackpot/jackpot-backend`
 - `git status` → `On branch staging`, clean or with expected local changes
 - `git submodule status` → two submodule lines (`schema` and `nf`), both with
   a hash at HEAD and not prefixed with `-` (absent) or `+` (out of sync)
@@ -41,7 +41,7 @@ Tear down any stale containers and volumes so the DB bootstraps fresh and
 matches what a new GCP deploy would experience.
 
 ```bash
-cd ~/ASU/jackpot/jackpot-backend
+cd ~/jackpot/jackpot-backend
 docker compose down -v
 docker compose up -d --build
 ```
@@ -181,7 +181,7 @@ docker compose exec api /opt/venv/bin/alembic current
 ## 7. Full test suite
 
 ```bash
-cd ~/ASU/jackpot/jackpot-backend
+cd ~/jackpot/jackpot-backend
 docker compose exec api /opt/venv/bin/pytest --tb=short -q
 ```
 
@@ -201,7 +201,7 @@ produces importable code. Catches schema drift that would break GCP's
 build step.
 
 ```bash
-cd ~/ASU/jackpot/jackpot-backend
+cd ~/jackpot/jackpot-backend
 
 # Validate schema YAML parses
 python3 -c \
@@ -296,7 +296,7 @@ an unhandled exception inside the event handler.
 Build the API image locally exactly the way CI does, then spot-check it.
 
 ```bash
-cd ~/ASU/jackpot/jackpot-backend
+cd ~/jackpot/jackpot-backend
 docker build -f Dockerfile.api -t jackpot-api:local-test .
 ```
 
@@ -321,7 +321,7 @@ docker run --rm jackpot-api:local-test /opt/venv/bin/python -c \
 After all of the above passes:
 
 ```bash
-cd ~/ASU/jackpot/jackpot-backend
+cd ~/jackpot/jackpot-backend
 git fetch origin
 git status
 git log origin/staging..HEAD --oneline

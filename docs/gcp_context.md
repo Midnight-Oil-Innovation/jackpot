@@ -1,7 +1,7 @@
 # JACKPOT GCP Context
 
 ## Projects
-- Staging: gotero3-acdp-488517
+- Staging: jackpot-staging-project
 - Production: <TBD — Month 3>
 
 ## Regions

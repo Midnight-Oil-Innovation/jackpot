@@ -56,10 +56,10 @@ unblocked item.
 
 ## Out-of-band housekeeping
 
-- **2026-04-24** — Renamed JACKPOT organisation "ASU" → "Linux Prophet"
+- **2026-04-24** — Renamed JACKPOT organisation "host academic operator" → "Linux Prophet"
   via migration `c1bd67369a7c`. Same migration renames the
   `sequencing_labs.organization` denormalised text and the
-  `domain_whitelist` row (`asu.edu` → `linuxprophet.org`). Seed
+  `domain_whitelist` row (`example-academic.edu` → `example.org`). Seed
   snapshot updated in `db/SCHEMA.sql`. Pattern documented in
   `docs/learnings.md`.
 
@@ -179,7 +179,7 @@ These were the blocking bugs resolved before any router session began.
   - `frontend/components/` and `frontend/lib/` packages present
   - Docker Compose `ui` service works after fixes in Phase 20
     UI-plumbing block
-  - Landing page shows "Signed in as Glen Otero" with the seeded
+  - Landing page shows "Signed in as the maintainer" with the seeded
     platform admin user
   - Sidebar lists all 9 pages
 
@@ -344,12 +344,12 @@ NEW_PASS=$(openssl rand -base64 24 | tr -d '=+/')
 gcloud sql users set-password jackpot \
     --instance=jackpot-staging-db \
     --password="$NEW_PASS" \
-    --project=gotero3-acdp-488517
+    --project=jackpot-staging-project
 gcloud secrets versions add jackpot-staging-database-url \
-    --project=gotero3-acdp-488517 \
+    --project=jackpot-staging-project \
     --data-file=- \
     <<< "postgresql://jackpot:${NEW_PASS}@10.188.230.3:5432/jackpot_db"
-cd ~/ASU/jackpot/jackpot-iac
+cd ~/jackpot/jackpot-iac
 gh workflow run deploy-staging.yml --ref staging
 ```
 
@@ -416,8 +416,8 @@ Do these in order — each builds on earlier ones.
 
 - [x] Hit http://localhost:8501 → landing page renders
 - [x] Sidebar shows all 9 pages
-- [x] Auth probe via `current_user()` returns Glen Otero (platform
-      admin, Otero Lab director)
+- [x] Auth probe via `current_user()` returns the maintainer (platform
+      admin, Example Lab director)
 
 ### UI-B: Upload page ✅ CONTRACT VERIFIED (2026-04-24) — browser walk still owed
 
@@ -446,7 +446,7 @@ Upload page triage". Two real backend bugs found and fixed at root.
       the new envelope correctly. Every error path → `ApiError.message`
       → `st.error("Upload failed: ...")`. No paths produce raw JSON
       dumps post-fix.
-- [x] **Seed rename**: "Otero Lab" → "Otero Outpost" via Alembic
+- [x] **Seed rename**: "Example Lab" → "Example Lab" via Alembic
       migration `e5315db18d40`. `db/SCHEMA.sql` snapshot updated.
 - [x] **564 tests passing, 88.22% coverage** (was 560/87.62%; +4
       regression tests, no skips).
@@ -620,7 +620,7 @@ All permanent fixes for these are tracked in Phase 20 Q-9 through Q-18.
 ## Notes for the next session
 
 **Fresh morning, 5 minutes first:** open http://localhost:8501 and
-confirm the landing page says "Signed in as Glen Otero" (should be
+confirm the landing page says "Signed in as the maintainer" (should be
 correct given last night's fixes). Then walk Phase 21 UI-B through
 UI-G to build the per-page bug list.
 

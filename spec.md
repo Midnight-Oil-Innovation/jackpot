@@ -3,16 +3,15 @@
 **Version:** 2.0
 **Last updated:** 2026-04-19 (post-Session 5 — staging deploy + Streamlit local debug)
 **Status:** Month 1 + most of Month 2 complete — active sprint on Session 5 debt and UI page triage
-**Audience:** Claude Code autonomous agent + Glen Otero
+**Audience:** Claude Code autonomous agent + the maintainer
 
 ---
 
 ## 1. Project Goal
 
 Build **JACKPOT** — a pathogen genomics platform for genomic epidemiology,
-bioinformatics, and public health research — for the Arizona Department of
-Health Services (ADHS). JACKPOT is the successor to APGAP
-(ASU-RSE-Services). It must be APGAP-compatible: same org/lab/project/user
+bioinformatics, and public health research — for the host operator. JACKPOT is the successor to APGAP
+(legacy single-institution platform). It must be APGAP-compatible: same org/lab/project/user
 hierarchy, same PermissionGroups enum string values, same role semantics.
 
 The platform enables public health labs to:
@@ -41,7 +40,7 @@ The platform enables public health labs to:
 - All 21 routers registered in `main.py`; 14 are fully implemented (see
   Section 4.2); the rest are stubs for Month 2/3
 - Seed data loaded: 75 reportable organisms, 3 sequencing labs
-- GCP staging live at project `gotero3-acdp-488517`, region `us-central1`
+- GCP staging live at project `jackpot-staging-project`, region `us-central1`
 - Streamlit UI renders locally at `http://localhost:8501` with all 9
   researcher pages in the sidebar and mock auth working
 
@@ -111,7 +110,7 @@ These constraints are non-negotiable. Every implementation must respect them.
 - `scrub_status = SKIPPED` set only in validator.py (FASTA-only auto-skip)
   or scrub override workflow
 - One CSV row = one sample — files semicolon-delimited in a single cell
-- `adhs_medsis_id` required for HumanSample only
+- `external_case_id` required for HumanSample only
 - `active` column for orgs/labs; `is_active` for all other tables
 - Background jobs use APScheduler (local) / Cloud Scheduler (production) —
   no Celery, no Redis as task broker
@@ -151,7 +150,7 @@ These blocking bugs were resolved before any router session began:
 1. ✅ `tests/conftest.py` Alembic migrations — `initialize_test_db` now
    runs `alembic upgrade head`.
 2. ✅ `routers/auth.py` module-level settings — moved inside function scope.
-3. ✅ `valid_human_sample` fixture — "Otero Lab" references fixed.
+3. ✅ `valid_human_sample` fixture — "Example Lab" references fixed.
 4. ✅ `active` vs `is_active` — CLAUDE.md note added; routers follow the
    convention (orgs/labs use `active`, everything else `is_active`).
 5. ✅ JWT refresh endpoint — `POST /api/v1/auth/refresh` implemented.
@@ -313,7 +312,7 @@ soft delete.
 notifications.
 
 **Tests:** CRUD, assignment workflow, list returns seed data (Sonora Quest,
-LabCorp, Otero Outpost).
+LabCorp, Example Lab).
 
 ---
 
@@ -347,7 +346,7 @@ LabCorp, Otero Outpost).
 
 - `sequencing_lab` validated against `sequencing_labs` DB table — return
   422 with request workflow message if unknown
-- `adhs_medsis_id` required for `source_type == "Human"` only
+- `external_case_id` required for `source_type == "Human"` only
 - `file_detector.py` is the only place filename/pairing logic lives
 - `compute_epiweeks(date_collected, precision)` called before every DB
   write — precision from validator
@@ -361,7 +360,7 @@ LabCorp, Otero Outpost).
 - `epiweek` computed at ingest, written to DB
 
 **Tests:** Valid human upload (Tier 1, 2, 3), FASTA-only auto-skip, unknown
-sequencing lab 422, missing adhs_medsis_id 422, file detection for R1/R2
+sequencing lab 422, missing external_case_id 422, file detection for R1/R2
 pairs, multi-lane, nanopore.
 
 ---
@@ -380,7 +379,7 @@ pairs, multi-lane, nanopore.
 **Key rules:**
 
 - `can_access_sample()` enforces: Platform Admin → lab member → PUBLIC →
-  ADHS oversight (surveillance_relevant only) → approved request
+  host-operator oversight (surveillance_relevant only) → approved request
 - `?select_all=true` returns IDs only (no pagination) for bulk select
 - Filters: `organism_name`, `source_type`, `sector`, `quality_status`,
   `scrub_status`, `sharing_level`, `lab_id`, `project_id`, `date_collected`
@@ -451,7 +450,7 @@ this should now pass without any bootstrap Job.
 ### Session I — jackpot-nf plugin contract + result registration
 
 **Repo structure:**
-`jackpot-nf` lives in a new 5th repo at `~/ASU/jackpot/jackpot-nf`, added
+`jackpot-nf` lives in a new 5th repo at `~/jackpot/jackpot-nf`, added
 as a git submodule to `jackpot-backend` at `nf/`. Layout:
 
 ```
@@ -974,7 +973,7 @@ workaround until public Ingress lands (Phase 20 Q-14).
 
 **Access control:**
 `docs/staging_access.md` (in `jackpot-iac/docs/`) documents who has access
-(Glen + 2 ADHS staff), how to reach staging URLs, how to redeploy, how to
+(Glen + 2 operator staff members), how to reach staging URLs, how to redeploy, how to
 read Cloud Logging.
 
 **Key rules:**
@@ -996,11 +995,11 @@ E2E smoke test (above) + Terraform plan/apply idempotency (running
 
 Everything below reflects the actual staging environment as it existed at
 the end of Session 5. Architecture diagrams live at
-`~/ASU/jackpot/docs/jackpot_gcp_staging_deployment.html`.
+`~/jackpot/docs/jackpot_gcp_staging_deployment.html`.
 
 ### 9.1 Project-level facts
 
-- **GCP project:** `gotero3-acdp-488517`
+- **GCP project:** `jackpot-staging-project`
 - **Region:** `us-central1`
 - **IaC owner:** `jackpot-iac/terraform/staging/`
 - **Deploy trigger:** push to `staging` branch of jackpot-iac
@@ -1042,7 +1041,7 @@ the end of Session 5. Architecture diagrams live at
 - **GCS buckets (7, all prefixed `jackpot-staging-`):** `sequences`,
   `staging`, `references`, `results`, `work`, `backups`, `portal-exports`
 - **Artifact Registry:**
-  `us-central1-docker.pkg.dev/gotero3-acdp-488517/jackpot/jackpot-api`
+  `us-central1-docker.pkg.dev/jackpot-staging-project/jackpot/jackpot-api`
 - **Secret Manager** (5 secrets): `jackpot-staging-secret-key`,
   `jackpot-staging-database-url`, `jackpot-staging-google-oauth-client-id`,
   `jackpot-staging-google-oauth-client-secret`, `jackpot-staging-ncbi-api-key`
@@ -1065,7 +1064,7 @@ laptops and on the GitHub Actions runner in CI. Public Ingress + DNS +
 managed cert is Phase 20 Q-14 on the backlog.
 
 Local DB access for debugging: `cloud-sql-proxy` against
-`gotero3-acdp-488517:us-central1:jackpot-staging-db` on `127.0.0.1:5432`.
+`jackpot-staging-project:us-central1:jackpot-staging-db` on `127.0.0.1:5432`.
 
 ### 9.7 Known quirks / tactical fixes in place
 
@@ -1105,11 +1104,11 @@ tracked in Phase 20 Q-9 through Q-17 on `todo.md`:
 # Scale api-pool to 0 (stops ~$284/mo of compute)
 gcloud container clusters resize jackpot-staging-gke \
   --node-pool=api-pool --num-nodes=0 \
-  --region=us-central1 --project=gotero3-acdp-488517
+  --region=us-central1 --project=jackpot-staging-project
 
 # Stop Cloud SQL (stops ~$55/mo but also halts PITR)
 gcloud sql instances patch jackpot-staging-db \
-  --activation-policy=NEVER --project=gotero3-acdp-488517
+  --activation-policy=NEVER --project=jackpot-staging-project
 ```
 
 Reverse by setting api-pool to `--num-nodes=2` and Cloud SQL
@@ -1155,7 +1154,7 @@ jackpot-backend/frontend/
 ### 10.2 How to run it
 
 ```bash
-cd ~/ASU/jackpot/jackpot-backend
+cd ~/jackpot/jackpot-backend
 docker compose up -d
 # Open http://localhost:8501
 ```
@@ -1163,7 +1162,7 @@ docker compose up -d
 Or standalone (no Docker):
 
 ```bash
-cd ~/ASU/jackpot/jackpot-backend
+cd ~/jackpot/jackpot-backend
 uv run streamlit run frontend/app.py
 ```
 
@@ -1184,7 +1183,7 @@ ui:
   environment:
     API_BASE_URL:    http://api:8000
     ENV:             local
-    MOCK_USER_EMAIL: gotero@linuxprophet.com
+    MOCK_USER_EMAIL: admin@example.org
     PYTHONPATH:      /app                    # REQUIRED — see 10.5
   ports:
     - "8501:8501"
@@ -1257,11 +1256,11 @@ debugging session:
 
 ### 10.6 Auth in local dev
 
-- `MOCK_USER_EMAIL=gotero@linuxprophet.com` on both `api` and `ui` services
+- `MOCK_USER_EMAIL=admin@example.org` on both `api` and `ui` services
 - Streamlit sends the header; FastAPI's `get_current_user` looks up the env
   var and resolves it via the `users` table
-- Seeded user record (ID 1): Glen Otero, platform admin, Otero Lab director
-- Landing page should show "Signed in as Glen Otero" once Q-18 lands; today
+- Seeded user record (ID 1): the maintainer, platform admin, Example Lab director
+- Landing page should show "Signed in as the maintainer" once Q-18 lands; today
   it shows a misleading "API unreachable" banner even when auth is fine
 
 ---
@@ -1341,7 +1340,7 @@ result registration → UI-visible MultiQC report. Once green, tag
 
 ### Architecture diagrams
 
-All in `~/ASU/jackpot/docs/` unless noted:
+All in `~/jackpot/docs/` unless noted:
 
 - `jackpot_gcp_staging_deployment.html` — Infrastructure reference
   (APGAP-style) + mental model (layered with Session 5 callouts)

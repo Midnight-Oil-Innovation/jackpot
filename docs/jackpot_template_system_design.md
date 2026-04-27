@@ -2,7 +2,7 @@
 
 **Document version:** 1.0
 **Last updated:** 2026-04-15
-**Author:** Glen Otero
+**Author:** the maintainer
 **Companion documents:**
 
 - `jackpot_architecture.md` — Architecture & Developer Reference v5.0
@@ -84,7 +84,7 @@ The updated `human_host_template.xlsx` is a **combined sequences + human host te
 - Only 4 organisms in the dropdown (SARS-CoV-2, Influenza, Candida auris, Salmonella spp) — JACKPOT has 62
 - Only 4 collection facilities — should be a DB-managed lookup, not static
 - Only 14 countries in dropdown
-- Only 15 Arizona counties — missing Maricopa, Pima, and Pinal (the three most populated)
+- Only 15 state counties — missing example counties (the three most populated)
 - Sex values include redundant entries: Male/Female/DSD AND M/F/DSD (6 values for 3 concepts)
 - Ct value "validation" is just two cells containing the text "minimum value: 0" and "maximum value: 50" — not actual numeric validation
 - `FASTQ filename` column (C) has file extension validation but not filename pattern validation
@@ -129,7 +129,7 @@ The same conceptual field has different column header strings in different templ
 |---|---|---|---|
 | FASTQ file | `FASTQ filename` | `filename` | `FASTQ filename` |
 | Age | `Age (years)` | `AGE (IN YEARS)` | `Age (years)` |
-| ADHS ID | `ADHS issued ID (links with MEDSIS case data on their end)` | `ASHB-ISSUED ID` | `ADHS issued ID (links with MEDSIS case data on their end)` |
+| External Case ID | `operator-issued ID (links with the external case-management system)` | `OPERATOR-ISSUED ID` | `operator-issued ID (links with the external case-management system)` |
 | Contact | `Contact (if other than user uploading data)` | `CONTACT (OTHER THAN UPLOADED DATA)` | `Contact (if other than user uploading data)` |
 | Source type | `Source type` | *(missing)* | `Source type` |
 
@@ -184,7 +184,7 @@ The updated `human_host_template.xlsx` has 22 data validations, which is a signi
 - Organism dropdown has only 4 values (SARS-CoV-2, Influenza, Candida auris, Salmonella spp). JACKPOT's `OrganismNameEnum` has 62 values plus `metagenome` and `novel pathogen`.
 - Collection facility dropdown has only 4 values. This should be a DB-managed lookup, not a static list.
 - Sex values include redundant entries (Male + M, Female + F, DSD + Differences of Sex Development = 6 values for 3 concepts).
-- County dropdown has only 15 of Arizona's 15 counties but some names don't match standard spellings.
+- County dropdown has only 15 of the state's 15 counties but some names don't match standard spellings.
 - Ct value "validation" is text labels ("minimum value: 0", "maximum value: 50"), not actual numeric range validation.
 - Typo: "llumina iSeq100" (missing the "I" in Illumina).
 
@@ -192,7 +192,7 @@ The updated `human_host_template.xlsx` has 22 data validations, which is a signi
 
 ### FM-7: No example data row
 
-No template contains a pre-filled example row showing what correctly formatted data looks like. The COVID example CSV has data, but with problems: US-format dates ("12/1/25"), ALL CAPS values ("SONORA QUEST", "HONORHEALTH"), organism names that don't match NCBI Taxonomy ("COVID19" instead of "SARS-CoV-2" in the Disease field), and "MARICOPA COUNTY" (with "COUNTY" appended).
+No template contains a pre-filled example row showing what correctly formatted data looks like. The COVID example CSV has data, but with problems: US-format dates ("12/1/25"), ALL CAPS values ("SONORA QUEST", "HONORHEALTH"), organism names that don't match NCBI Taxonomy ("COVID19" instead of "SARS-CoV-2" in the Disease field), and "EXAMPLE COUNTY" (with "COUNTY" appended).
 
 **JACKPOT fix:** Template row 5 is always a pre-filled example row with correctly formatted values. ISO 8601 dates, NCBI Taxonomy organism names, controlled vocabulary values matching the schema enums exactly.
 
@@ -232,7 +232,7 @@ Templates are generated along two orthogonal axes:
 
 | Source Type | Schema Class | Unique Fields Added |
 |---|---|---|
-| human | HumanSample | adhs_medsis_id, biospecimen_type, host_age, host_sex, host_species, disease, isolation_source, isolate, reason_for_collection |
+| human | HumanSample | external_case_id, biospecimen_type, host_age, host_sex, host_species, disease, isolation_source, isolate, reason_for_collection |
 | companion_animal | CompanionAnimalSample | host_species, subject_id, breed, age_animal, sex_animal |
 | wildlife | WildlifeHostSample | host_species, subject_id, capture_method |
 | vector | VectorSample | vector_species, host_species, trap_type |
@@ -656,7 +656,7 @@ Labs currently using APGAP templates can continue to upload using them. The `har
 | `Source Location City` | `collection_location_city` |
 | `Source Location Zip` | `collection_location_zip` |
 | `Source Location GPS` | `collection_location_gps` |
-| `ADHS issued ID (links with MEDSIS case data on their end)` | `adhs_medsis_id` |
+| `operator-issued ID (links with the external case-management system)` | `external_case_id` |
 | `Biospecimen type` | `biospecimen_type` |
 | `Reason for sample collection` | `reason_for_collection` |
 | `Sex` | `host_sex` (value mapping: "Male"/"M" → "Male", etc.) |
