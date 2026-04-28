@@ -1,13 +1,26 @@
 # JACKPOT — Project Specification
 
-**Version:** 2.0
-**Last updated:** 2026-04-19 (post-Session 5 — staging deploy + Streamlit local debug)
-**Status:** Month 1 + most of Month 2 complete — active sprint on Session 5 debt and UI page triage
+**Version:** 2.1
+**Last updated:** 2026-04-28 (post-Pathoplexus/Loculus comparative analysis session)
+**Status:** Month 1 + most of Month 2 complete — active sprint on Session 5 debt and UI page triage. Pivot to independence + AGPL-3.0 + multi-deployment-target architecture decided April 2026; cleanup phases (6.1–11) in progress before P0d monorepo migration.
 **Audience:** Claude Code autonomous agent + the maintainer
 
 ---
 
 ## 1. Project Goal
+
+> **Pivot context (April 2026):** JACKPOT is now an **independent project** under `Midnight-Oil-Innovation/jackpot`, no longer ADHS/ASU-coupled and no longer specifically the APGAP successor. License flipped from Apache 2.0 to **AGPL-3.0**. The platform is now **multi-deployment-target by design**, with 6 install scenarios:
+>
+> - **A** Single academic lab on a laptop (first priority — designed in P0e)
+> - **B** Single org on cloud (GCP/AWS/Azure)
+> - **C** Multi-lab agency (e.g. state health dept — the original ADHS shape)
+> - **D** Hosted multi-tenant SaaS
+> - **E** Federation member (peers with other JACKPOT instances)
+> - **F** CI / e2e test harness
+>
+> Production code knows nothing about Glen, Midnight-Oil-Innovation, or any specific operator. Only the operator-bootstrap layer (`jackpot init` CLI, P0e) does, and it learns those names at install time. APGAP-compatibility constraints below are now **historical** — kept here for any operator continuing to migrate from APGAP. New deployments don't need APGAP compatibility.
+>
+> See `jackpot_pathoplexus_loculus_overview.md` for the full comparative analysis driving this pivot, including peer-platform landscape and a 34-item adoption backlog (Phase 26 in `todo.md`).
 
 Build **JACKPOT** — a pathogen genomics platform for genomic epidemiology,
 bioinformatics, and public health research — for the host operator. JACKPOT is the successor to APGAP
@@ -1346,8 +1359,18 @@ All in `~/jackpot/docs/` unless noted:
   (APGAP-style) + mental model (layered with Session 5 callouts)
 - `jackpot_architecture_v5.md` — 1,860-line architecture doc
 - `jackpot_session_summary_and_backlog.md` — design decisions + backlog,
-  the running engineering log
+  the running engineering log (v2.4 includes Phase 26 backlog)
 - `jackpot_schema.yaml` — LinkML schema source of truth
+
+### Comparative analysis (April 2026)
+
+- `jackpot_pathoplexus_loculus_overview.md` — 1,873-line comparative
+  analysis between JACKPOT and the Pathoplexus/Loculus stack plus 8
+  other peer platforms (GenSpectrum/LAPIS, Pathogenwatch, EnteroBase,
+  NCBI Pathogen Detection on GCP, BV-BRC, Solu, RT-MetA, GISAID).
+  Sources of truth for: AGPL-3.0 license decision rationale, multi-
+  deployment-target architecture, 34-item B-XXX adoption backlog
+  (Phase 26 in `todo.md`).
 
 ### Operational runbooks
 
@@ -1368,6 +1391,16 @@ All in `~/jackpot/docs/` unless noted:
 ---
 
 ## 13. Open Questions / Decisions Log
+
+### April 2026 — pivot decisions
+
+- **License flipped Apache 2.0 → AGPL-3.0.** Strategic, not legal. Closes the SaaS loophole via §13. Joins the European public-health pathogen-genomics cluster (Loculus, GenSpectrum/LAPIS, SILO, dashboard-components — all AGPL-3.0). Anti-GISAID-capture stance. Unblocks direct code adoption from the entire Loculus stack. See `jackpot_pathoplexus_loculus_overview.md` Section 3 for the full rationale.
+- **JACKPOT is independent.** No longer ADHS-contracted, no longer ASU-affiliated, no longer specifically the APGAP successor. Single-owner project under `Midnight-Oil-Innovation/jackpot`.
+- **Multi-deployment-target architecture.** 6 install scenarios (A–F). Production code is operator-agnostic; `jackpot init` (P0e) handles per-operator bootstrap.
+- **Phasing post-Phase-11.** Phases 6.1–11 cosmetic genericization → P0d (monorepo migration) → P0e (install/CLI architecture) → P0b (Schema v5.0 — instances/tenants/federated_peers) → P0c (multi-tenancy middleware) → P1–P5 (operator-type configurability, federation, governance, reference deployments, new-needs integration).
+- **Don't replace existing ingest gates.** `file_detector.py`, `validator.py`, `dlp_scanner.py`, and the `sra-human-scrubber` Nextflow integration collectively constitute a more thorough ingest pipeline than anything in Loculus's preprocessing for JACKPOT's surveillance-focused operating model. The recommendation is to expose the Loculus pluggable preprocessing HTTP contract (`/extract-unprocessed-data`, `/submit-processed-data`) as an *opt-in* for sophisticated operators while keeping in-process validation as the default.
+
+### Carried over
 
 - **When to retire `jackpot-frontend` repo?** Currently vestigial.
   Tracked as Month 3 stretch goal.

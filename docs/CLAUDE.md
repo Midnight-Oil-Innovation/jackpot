@@ -3,7 +3,16 @@
 ## Project: JACKPOT
 
 Pathogen genomics platform for genomic epidemiology, bioinformatics,
-and public health research. Successor to APGAP (legacy single-institution platform).
+and public health research.
+
+**Project context (April 2026 pivot):** JACKPOT is an independent project under
+`Midnight-Oil-Innovation/jackpot`, licensed AGPL-3.0. The platform is
+multi-deployment-target by design — production code is operator-agnostic and
+serves 6 install scenarios (A laptop, B single-org cloud, C multi-lab agency,
+D hosted SaaS, E federation member, F CI test). The `jackpot init` CLI
+(coming in P0e) handles per-operator bootstrap. Phasing: cleanup phases 6.1–11
+→ P0d (monorepo migration) → P0e (install/CLI) → P0b (Schema v5.0 with
+instances/tenants/federated_peers) → P0c (multi-tenancy middleware) → P1–P5.
 
 ---
 
@@ -13,7 +22,7 @@ and public health research. Successor to APGAP (legacy single-institution platfo
 
 1. Read `spec.md` — understand the goals and constraints for the current sprint
 2. Read `todo.md` — find the next unchecked task
-3. Re-read this file (`docs/CLAUDE.md`) — all 54 Critical Rules apply at all times
+3. Re-read this file (`docs/CLAUDE.md`) — all 55 Critical Rules apply at all times
 4. Confirm the baseline is stable: `uv run pytest` — ≥477 tests passing, ≥60% coverage
 
 ### Work Loop
@@ -171,7 +180,7 @@ numbers are stable or improved.
 ## Critical Rules — Read Every Rule Before Making Any Change
 
 **1. PermissionGroups enum values are sacred.**
-Values MUST match `asu_apgap/utils/permissions.py` exactly.
+
 DO NOT rename: `"Platform Admin"`, `"Lab Director"`, `"Lab Collaborator"`,
 `"Lab Reader"`, `"Bioinformatics User"`, `"Data Analyst"`.
 
@@ -750,6 +759,28 @@ code review, not via import-time path tricks. Any tool that
 evaluates backend code without the sibling repo present (linting
 in CI, tests in sandboxes, backend-only docker builds) must work.
 
+**55. Production code is operator-agnostic — no operator-specific values in source.**
+
+JACKPOT is multi-deployment-target (scenarios A–F). Production code MUST NOT
+hardcode any of these:
+
+- Organization names ("Linux Prophet", "Midnight-Oil-Innovation", any specific lab name)
+- Email domains, contact addresses, or admin handles
+- Jurisdiction-specific reportable-organism lists (the 62-value seed set is a default reference, not a constant)
+- GCP project IDs, region names, bucket names, or any infrastructure identifier
+- Globus endpoint IDs, NCBI submitter accounts, GISAID credentials
+- File-naming conventions specific to one sequencing lab
+
+Anything in the above list comes from one of three runtime sources:
+
+1. **Environment variables** (set per-instance, e.g. `JACKPOT_ORG_NAME`, `GCP_PROJECT_ID`)
+2. **Database tables** (seeded at install time by `jackpot init`, mutable by Platform Admins via admin UI — `organizations`, `sequencing_labs`, `reportable_organisms`, `lab_pipelines`, etc.)
+3. **Operator config files** (per-deployment YAML/JSON loaded at startup, e.g. `config/operator.yaml`, never committed to the source tree of the operator-agnostic monorepo)
+
+If you find yourself about to write `if org_name == "Linux Prophet" or `BUCKET = "jackpot-raw-prod-1234"` in production source — STOP. That value belongs in env vars, the database, or operator config. Tests can use fixtures with operator-shaped values, but the values themselves stay in the test fixtures, not in production modules.
+
+The `jackpot init` CLI (P0e) is the only place where operator-specific values are *learned* — the CLI prompts for them and writes them into env vars, the database, and operator config. Production code reads from those three sources and stays clean.
+
 ---
 
 ## Local Dev Role Switching
@@ -912,23 +943,23 @@ meaningful error when WORKSPACE_ENABLED=false or equivalent:
 
 ---
 
-## APGAP Compatibility
+## APGAP Compatibility (historical)
+
+> **Note:** APGAP-compatibility is no longer a hard constraint. JACKPOT is now an independent project, not specifically the APGAP successor. The compatibility points below are preserved for any in-flight migration of an APGAP deployment to JACKPOT, and because the org/lab/project/user hierarchy and PermissionGroups enum values designed for APGAP-compat happen to be solid choices in their own right. New deployments don't need to satisfy any of these.
 
 - Organization → Lab → Project → User hierarchy is identical
-- PermissionGroups enum string values match APGAP exactly
+- PermissionGroups enum string values match APGAP exactly (also enforced by Critical Rule 1 for backwards compatibility on existing deployments)
 - `is_lab_director=TRUE` on `lab_membership` = Lab Director
 - Projects preserve all Seqera fields (`workspace_id`, `compute_env_id`, `credentials_id`)
-- Migration script: `scripts/migrate_from_apgap.py`
+- Migration script: `scripts/migrate_from_apgap.py` (only relevant for APGAP→JACKPOT migration deployments)
 
 ---
 
-## OrganismNameEnum (62 values)
+## OrganismNameEnum (62 values in default reference set)
 
-Derived from the host jurisdiction's mandatory reportable communicable diseases list.
-Additions: `Coccidioides immitis`, `Coccidioides posadasii` (Valley fever),
-`metagenome` (metagenomic samples), `novel pathogen` (emerging/exotic disease).
-All values use NCBI Taxonomy names for BioSample/SRA/GenBank/GISAID compatibility.
-Platform Admins add new values via the admin UI — never hardcode new organisms.
+The default 62-value enum was originally derived from a specific jurisdiction's mandatory reportable communicable diseases list and includes one-Health additions (`Coccidioides immitis`, `Coccidioides posadasii` for Valley fever, `metagenome` for metagenomic samples, `novel pathogen` for emerging/exotic disease). All values use NCBI Taxonomy names for BioSample/SRA/GenBank/GISAID compatibility.
+
+**Operator-agnostic from P0e onward:** the seed enum values become an operator-configurable list at install time (`jackpot init`). Production code references the runtime enum from the database (table seeded at install) — never a hardcoded Python list. Platform Admins add new values via the admin UI; never hardcode new organisms in source. See Rule 55.
 
 ---
 
