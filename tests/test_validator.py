@@ -145,7 +145,7 @@ def _full_human_data(**overrides) -> dict:
         "reason_for_collection": ["clinical"],
         "host_disease": ["salmonellosis"],
         # Tier 2 — TIER2_REQUIRED
-        "sequencing_lab": "Sonora Quest Laboratories",
+        "sequencing_lab": "Example Sequencing Lab",
         "collection_facility": "Example Medical Center",
         "library_preparation_method": "Nextera XT",
         "nucleic_acid_extraction_method": ["QIAamp"],
