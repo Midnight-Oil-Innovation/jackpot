@@ -842,7 +842,7 @@ Thumbs.db
         dry,
     )
 
-    print(f"\n{'═'*50}")
+    print(f"\n{'═' * 50}")
     print(f"{'DRY RUN complete' if dry else 'Files written successfully.'}")
     print("\nNext:")
     print(f"  1. Copy jackpot_schema_v4_1.yaml to {SCHEMA}/schema/jackpot_schema.yaml")

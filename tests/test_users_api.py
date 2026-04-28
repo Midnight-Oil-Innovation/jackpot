@@ -56,7 +56,7 @@ async def test_get_me_returns_current_user(client):
     assert resp.status_code == 200, resp.text
     body = resp.json()
     assert body["success"] is True
-    assert body["data"]["email"] == "gotero@linuxprophet.com"
+    assert body["data"]["email"] == "admin@example.org"
     assert "lab_memberships" in body["data"]
     assert isinstance(body["data"]["lab_memberships"], list)
 

@@ -51,7 +51,7 @@ def _base_metadata(sample_id: str = "ING-TEST-001", **overrides) -> dict:
         "collection_location_country": "United States",
         "collection_location_state": "California",
         "sequencing_platform": "Illumina",
-        "sequencing_lab": "Sonora Quest Laboratories",
+        "sequencing_lab": "Example Sequencing Lab",
         "type_of_experiment": "WGS",
         "library_preparation_method": "ARTIC",
         "nucleic_acid_extraction_method": ["QIAamp DSP Viral RNA"],
@@ -379,7 +379,7 @@ async def test_csv_ingest_success(client, mock_storage):
         "date_sequenced,purpose_for_collection,lab_id,project_id,files\n"
         f"{sid},Severe acute respiratory syndrome coronavirus 2,Human,"
         "2026-01-15,United States,California,Illumina,"
-        "Sonora Quest Laboratories,WGS,ARTIC,QIAamp DSP Viral RNA,"
+        "Example Sequencing Lab,WGS,ARTIC,QIAamp DSP Viral RNA,"
         "https://www.protocols.io/view/artic-v4-1,Example Hospital,"
         "CASE-2026-001,nasopharyngeal_swab,clinical,covid-19,"
         f"2026-01-17,clinical,1,1,{sid}_R1.fastq.gz\n"
@@ -411,7 +411,7 @@ async def test_csv_ingest_partial_failure(client, mock_storage):
         "date_sequenced,purpose_for_collection,lab_id,project_id,files\n"
         f"{good},Severe acute respiratory syndrome coronavirus 2,Human,"
         "2026-01-15,United States,California,Illumina,"
-        "Sonora Quest Laboratories,WGS,ARTIC,QIAamp DSP Viral RNA,"
+        "Example Sequencing Lab,WGS,ARTIC,QIAamp DSP Viral RNA,"
         "https://www.protocols.io/view/artic-v4-1,Example Hospital,"
         "CASE-2026-001,nasopharyngeal_swab,clinical,covid-19,"
         f"2026-01-17,clinical,1,1,{good}_R1.fastq.gz\n"
@@ -449,7 +449,7 @@ async def test_globus_ingest_requires_platform_admin(client, monkeypatch):
 
     resp = await client.post(
         "/api/v1/ingest/globus",
-        json={"sequencing_lab": "Sonora Quest Laboratories", "files": ["x.fq.gz"]},
+        json={"sequencing_lab": "Example Sequencing Lab", "files": ["x.fq.gz"]},
     )
     assert resp.status_code == 403
 
@@ -470,7 +470,7 @@ async def test_globus_ingest_notifies_directors(client):
     resp = await client.post(
         "/api/v1/ingest/globus",
         json={
-            "sequencing_lab": "Sonora Quest Laboratories",
+            "sequencing_lab": "Example Sequencing Lab",
             "files": ["EX-001_R1.fastq.gz", "EX-001_R2.fastq.gz"],
         },
     )
@@ -484,7 +484,7 @@ async def test_globus_ingest_notifies_directors(client):
 async def test_globus_ingest_requires_files_list(client):
     resp = await client.post(
         "/api/v1/ingest/globus",
-        json={"sequencing_lab": "Sonora Quest Laboratories"},
+        json={"sequencing_lab": "Example Sequencing Lab"},
     )
     assert resp.status_code == 422
 

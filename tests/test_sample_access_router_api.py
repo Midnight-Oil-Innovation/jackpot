@@ -9,8 +9,8 @@ expiry job and the can_access_sample() update:
     POST   /api/v1/sample-access/requests/{id}/approve
     POST   /api/v1/sample-access/requests/{id}/deny
 
-The seed DB has gotero@linuxprophet.com (uid 1, Platform Admin) as a
-member of Otero Lab (id 1). Other-lab scenarios spin up a throw-away
+The seed DB has admin@example.org (uid 1, Platform Admin) as a
+member of Example Lab (id 1). Other-lab scenarios spin up a throw-away
 lab + project so the access-control matrix can be exercised without
 mutating the seed lab.
 """
@@ -215,7 +215,7 @@ def _get_grant_row(req_id: int) -> dict | None:
 
 @pytest.fixture
 def as_platform_admin(monkeypatch):
-    _switch_user("gotero@linuxprophet.com", monkeypatch)
+    _switch_user("admin@example.org", monkeypatch)
 
 
 # ────────────────────────── POST /requests ──────────────────────────
@@ -376,7 +376,7 @@ async def test_list_requests_admin_sees_all(client, monkeypatch):
         {"sid": s["id"], "uid": uid, "owner": SEED_USER_ID},
     )
 
-    _switch_user("gotero@linuxprophet.com", monkeypatch)
+    _switch_user("admin@example.org", monkeypatch)
     resp = await client.get(f"/api/v1/sample-access/requests?sample_id={s['id']}")
     assert resp.status_code == 200
     rows = resp.json()["data"]
@@ -484,7 +484,7 @@ async def test_list_requests_filter_status(client, monkeypatch):
         {"sid": s["id"], "uid": uid, "owner": SEED_USER_ID},
     )
 
-    _switch_user("gotero@linuxprophet.com", monkeypatch)
+    _switch_user("admin@example.org", monkeypatch)
     resp = await client.get(f"/api/v1/sample-access/requests?status=DENIED&sample_id={s['id']}")
     assert resp.status_code == 200
     rows = resp.json()["data"]

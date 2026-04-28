@@ -22,9 +22,9 @@ DATABASE_URL = os.environ.get(
 
 # (name, organization, is_external)
 SEQUENCING_LABS: list[tuple[str, str, bool]] = [
-    ("Sonora Quest Laboratories", "Sonora Quest Laboratories", True),
-    ("Laboratory Corporation of America", "Laboratory Corporation of America", True),
-    ("Otero Outpost", "Arizona State University", False),
+    ("Example Sequencing Lab", "Example Sequencing Lab", True),
+    ("Example Reference Lab", "Example Reference Lab", True),
+    ("Example Lab", "Example Org", False),
 ]
 
 

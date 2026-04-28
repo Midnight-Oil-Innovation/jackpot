@@ -11,8 +11,8 @@ Covers every endpoint introduced in Session N:
     POST   /api/v1/pipelines/custom
     POST   /api/v1/pipelines/{catalog_id}/promote
 
-The seed DB has gotero@linuxprophet.com (uid 1, Platform Admin) as
-Lab Director of Otero Lab (id 1) + Dev Project (id 1). Non-admin
+The seed DB has admin@example.org (uid 1, Platform Admin) as
+Lab Director of Example Lab (id 1) + Dev Project (id 1). Non-admin
 scenarios create throw-away users and switch MOCK_USER_EMAIL via
 monkeypatch + get_settings.cache_clear() — same pattern as
 test_samples_router_api.py.
@@ -249,7 +249,7 @@ def _cleanup_project_pipeline(project_id: int, name: str) -> None:
 
 @pytest.fixture
 def as_platform_admin(monkeypatch):
-    _switch_user("gotero@linuxprophet.com", monkeypatch)
+    _switch_user("admin@example.org", monkeypatch)
 
 
 # ───────────────────────── POST /launch ─────────────────────────

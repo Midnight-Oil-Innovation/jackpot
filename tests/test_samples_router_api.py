@@ -16,8 +16,8 @@ from backend.database import execute_query, execute_write
 
 # ─────────────────────────── fixtures / helpers ────────────────────────────
 
-SEED_USER_ID = 1  # gotero@linuxprophet.com, Platform Admin
-SEED_LAB_ID = 1  # Otero Lab
+SEED_USER_ID = 1  # admin@example.org, Platform Admin
+SEED_LAB_ID = 1  # Example Lab
 SEED_PROJECT_ID = 1  # Dev Project
 
 
@@ -61,7 +61,7 @@ def _cleanup_users(emails: list[str]) -> None:
 
 
 def _ensure_other_lab() -> int:
-    """Create 'Other Lab' (distinct from the seeded Otero Lab) on demand."""
+    """Create 'Other Lab' (distinct from the seeded Example Lab) on demand."""
     rows = execute_query("SELECT id FROM labs WHERE display_name = 'Other Lab'")
     if rows:
         return rows[0]["id"]
@@ -165,7 +165,7 @@ def _insert_sample(
 
 @pytest.fixture
 def as_platform_admin(monkeypatch):
-    _switch_user("gotero@linuxprophet.com", monkeypatch)
+    _switch_user("admin@example.org", monkeypatch)
 
 
 # ──────────────────────────────── tests ────────────────────────────────────

@@ -101,7 +101,7 @@ def can_access_sample(user: dict, sample: dict, conn=None) -> bool:
 
     DISCOVERABLE alone is NOT sufficient — detail requires an approved
     request or one of the stronger ties (ownership, lab/project, PUBLIC,
-    ADHS oversight for surveillance-relevant samples).
+    host-operator oversight for surveillance-relevant samples).
     """
     return _base_access(user, sample, conn)
 

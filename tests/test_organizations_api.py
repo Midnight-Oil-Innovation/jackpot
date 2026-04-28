@@ -237,4 +237,4 @@ async def test_list_without_search_includes_seed_orgs(client):
     resp = await client.get("/api/v1/organizations/?per_page=200")
     assert resp.status_code == 200
     names = [o["display_name"] for o in resp.json()["data"]]
-    assert "Linux Prophet" in names or "ADHS" in names
+    assert "Example Org" in names

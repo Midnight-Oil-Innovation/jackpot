@@ -1,7 +1,10 @@
 #!/usr/bin/env python3
 """
-Seed the reportable_organisms table with ADHS mandatory reportable
-communicable diseases plus ASU/ADHS additions.
+Seed the reportable_organisms table with a default reference set
+of reportable communicable diseases.
+
+The 62-value default set is operator-configurable from P0e onward;
+platform admins add/remove organisms via the admin UI at runtime.
 
 Usage:
     python3 scripts/seed_reportable_organisms.py
@@ -22,14 +25,14 @@ DATABASE_URL = os.environ.get(
 )
 
 # (organism_name, notes)
-# Derived from ADHS mandatory reportable communicable diseases list.
-# Anchored to NCBI Taxonomy names for BioSample/SRA/GenBank/GISAID compatibility.
+# Default reference set anchored to NCBI Taxonomy names for
+# BioSample/SRA/GenBank/GISAID compatibility.
 REPORTABLE_ORGANISMS: list[tuple[str, str]] = [
     # ── Bacteria ─────────────────────────────────────────────────────────────
     ("Bacillus anthracis", "Anthrax"),
     ("Bordetella pertussis", "Pertussis (whooping cough)"),
-    ("Borrelia hermsii", "Relapsing fever — tick-borne (Southwest US)"),
-    ("Borrelia turicatae", "Relapsing fever — tick-borne (Southwest US)"),
+    ("Borrelia hermsii", "Relapsing fever — tick-borne"),
+    ("Borrelia turicatae", "Relapsing fever — tick-borne"),
     ("Brucella abortus", "Brucellosis — bovine"),
     ("Brucella canis", "Brucellosis — canine"),
     ("Brucella melitensis", "Brucellosis — goat/sheep"),
@@ -74,14 +77,13 @@ REPORTABLE_ORGANISMS: list[tuple[str, str]] = [
     ("Candida auris", "Candida auris — multidrug-resistant fungal pathogen"),
     (
         "Coccidioides immitis",
-        "Valley fever (coccidioidomycosis) — California strain. "
-        "Added by ASU/ADHS request; not on ADHS communicable disease list.",
+        "Valley fever (coccidioidomycosis). "
+        "Default-set inclusion; not on every jurisdiction's reportable list.",
     ),
     (
         "Coccidioides posadasii",
-        "Valley fever (coccidioidomycosis) — Arizona/Texas strain. "
-        "Predominant species in Arizona. "
-        "Added by ASU/ADHS request; not on ADHS communicable disease list.",
+        "Valley fever (coccidioidomycosis). "
+        "Default-set inclusion; not on every jurisdiction's reportable list.",
     ),
     # ── Viruses ───────────────────────────────────────────────────────────────
     ("Chikungunya virus", "Chikungunya fever"),
@@ -104,8 +106,7 @@ REPORTABLE_ORGANISMS: list[tuple[str, str]] = [
     ("MERS-CoV", "Middle East respiratory syndrome coronavirus"),
     (
         "Mpox virus",
-        "Mpox (formerly monkeypox). Use strain field for clade "
-        "(hMPXV Clade I or hMPXV Clade II).",
+        "Mpox (formerly monkeypox). Use strain field for clade (hMPXV Clade I or hMPXV Clade II).",
     ),
     ("Mumps virus", "Mumps"),
     (
@@ -115,11 +116,11 @@ REPORTABLE_ORGANISMS: list[tuple[str, str]] = [
     ),
     (
         "Rabies lyssavirus",
-        "Rabies. Use strain field for variant " "(e.g. bat variant, skunk variant, fox variant).",
+        "Rabies. Use strain field for variant (e.g. bat variant, skunk variant, fox variant).",
     ),
     (
         "Respiratory syncytial virus",
-        "RSV — included under ADHS 'Respiratory disease (outbreak)'. "
+        "RSV — included under 'Respiratory disease (outbreak)' category. "
         "Use strain field for RSV-A or RSV-B.",
     ),
     ("Rubella virus", "Rubella (German measles)"),
@@ -131,7 +132,7 @@ REPORTABLE_ORGANISMS: list[tuple[str, str]] = [
     ),
     (
         "Sin Nombre orthohantavirus",
-        "Hantavirus pulmonary syndrome — Sin Nombre virus (Southwest US)",
+        "Hantavirus pulmonary syndrome — Sin Nombre virus",
     ),
     ("St. Louis encephalitis virus", "St. Louis encephalitis"),
     ("Vaccinia virus", "Vaccinia-related adverse event (smallpox vaccine)"),
@@ -153,7 +154,7 @@ REPORTABLE_ORGANISMS: list[tuple[str, str]] = [
     # ── Novel / Emerging ──────────────────────────────────────────────────────
     (
         "novel pathogen",
-        "ADHS reportable category: 'Emerging or exotic disease'. "
+        "Reportable category: 'Emerging or exotic disease'. "
         "Use when a novel pathogen is identified but has no stable NCBI Taxonomy name yet. "
         "Platform Admin assigns permanent name when NCBI Taxonomy provides one.",
     ),

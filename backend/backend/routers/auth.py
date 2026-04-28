@@ -23,8 +23,7 @@ async def google_login(code: str, request: Request, response: Response) -> dict:
     if not check_domain_whitelist(email):
         raise HTTPException(
             status_code=403,
-            detail=f"Domain '{email.split('@')[1]}' is not authorised. "
-            "Contact a Platform Admin.",
+            detail=f"Domain '{email.split('@')[1]}' is not authorised. Contact a Platform Admin.",
         )
 
     user = get_user_by_email(email)

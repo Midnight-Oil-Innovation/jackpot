@@ -59,8 +59,8 @@ async def test_list_sequencing_labs_seed_data_visible(client):
     resp = await client.get("/api/v1/sequencing-labs/?per_page=200")
     assert resp.status_code == 200, resp.text
     names = [r["name"] for r in resp.json()["data"]]
-    assert "Sonora Quest Laboratories" in names
-    assert "Laboratory Corporation of America" in names
+    assert "Example Sequencing Lab" in names
+    assert "Example Reference Lab" in names
 
 
 @pytest.mark.asyncio

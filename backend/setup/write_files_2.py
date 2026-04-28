@@ -2271,7 +2271,7 @@ Priority order:
         "docs/CLAUDE.md",
     ]
 
-    print(f"\n{'═'*55}")
+    print(f"\n{'═' * 55}")
     print(f"{'DRY RUN complete' if dry else 'Files written successfully.'}")
     print(f"\nFiles covered ({len(written)}):")
     for f in written:

@@ -20,11 +20,11 @@ class Settings(BaseSettings):
     gcp_project_id: str = ""
     dlp_enabled: bool = False
     secret_key: str = "dev-secret-key-change-in-prod"
-    mock_user_email: str = "gotero@linuxprophet.com"
+    mock_user_email: str = "admin@example.org"
     google_oauth_client_id: str = ""
     google_oauth_client_secret: str = ""
     google_oauth_redirect_url: str = "postmessage"
-    adhs_organization_name: str = "ADHS"
+    host_organization_name: str = ""
     ncbi_api_key: str = ""
     jackpot_api_token: str = ""
     scheduler_enabled: bool = True

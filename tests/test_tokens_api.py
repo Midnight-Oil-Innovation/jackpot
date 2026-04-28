@@ -134,8 +134,8 @@ async def test_platform_admin_can_revoke_any_token(client, monkeypatch):
     r1 = await client.post("/api/v1/tokens/", json={"name": "admin-revokable"})
     tid = r1.json()["data"]["id"]
 
-    # Default MOCK_USER_EMAIL (gotero@linuxprophet.com) is Platform Admin in seed data
-    monkeypatch.setenv("MOCK_USER_EMAIL", "gotero@linuxprophet.com")
+    # Default MOCK_USER_EMAIL (admin@example.org) is Platform Admin in seed data
+    monkeypatch.setenv("MOCK_USER_EMAIL", "admin@example.org")
     get_settings.cache_clear()
 
     r2 = await client.delete(f"/api/v1/tokens/{tid}")
