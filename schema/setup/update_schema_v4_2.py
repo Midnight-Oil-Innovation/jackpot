@@ -28,7 +28,7 @@ Changes applied:
       date_phenotype_reported to BaseSample (turnaround tracking)
 
 Usage:
-    cd ~/ASU/jackpot/jackpot-schema
+    cd ~/jackpot/jackpot-schema
     python3 ~/path/to/update_schema_v4_2.py
 
     # Dry run (print what would change, don't write):
@@ -62,15 +62,16 @@ NEW_BASEAMPLE_FIELDS = """\
         description: >-
           Generic public health case identifier. Links samples across sectors
           (human, animal, environmental) that share an epidemiological
-          connection. ADHS uses adhs_medsis_id (HumanSample only) for
-          MEDSIS-specific IDs. Other jurisdictions use this field:
+          connection. The host operator may use a system-specific
+          field (e.g. adhs_medsis_id for HumanSample under MEDSIS-style
+          systems). Other jurisdictions use this field:
           CalREDIE (CA), ECLRS (NY), NEDSS (CDC), etc.
           Nullable — not all samples belong to a named case.
 
       case_source_system:
         description: >-
           The surveillance system that issued the case_id.
-          Examples: MEDSIS, CalREDIE, ECLRS, NEDSS, ESSENCE.
+          Examples: MEDSIS-style systems, CalREDIE, ECLRS, NEDSS, ESSENCE.
           Free text — not a controlled vocabulary since system names
           vary by jurisdiction and evolve over time.
 
@@ -94,7 +95,7 @@ NEW_BASEAMPLE_FIELDS = """\
         range: boolean
         required: true
         description: >-
-          Whether ADHS public health oversight access applies to this sample.
+          Whether host-operator public health oversight access applies to this sample.
           Computed at ingest from organism_name against the reportable_organisms
           table. TRUE if organism is reportable, FALSE otherwise.
           For metagenomic samples (organism_name = metagenome): TRUE if any
@@ -480,7 +481,7 @@ BASEAMPLE_INSERT_ANCHOR = "      # ── Cross-sample Linkage"
 HUMANSAMPLE_CASEID_START = (
     "      case_id:\n"
     "        description: >\n"
-    "          Generic public health case identifier for non-ADHS sources\n"
+    "          Generic public health case identifier for non-MEDSIS sources\n"
     "          (e.g. CDC NEDSS case ID, county health department ID).\n"
 )
 

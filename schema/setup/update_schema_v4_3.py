@@ -19,7 +19,7 @@ Changes applied:
      portal_to_tostadas.py (format: Country:State:City).
 
 Usage:
-    cd ~/ASU/jackpot/jackpot-schema
+    cd ~/jackpot/jackpot-schema
     python3 ~/path/to/update_schema_v4_3.py --dry-run
     python3 ~/path/to/update_schema_v4_3.py
 
@@ -138,7 +138,7 @@ NEW_CITY_PLUS_ANCHOR = """\
           City, town, municipality, or village of sample collection. Free text.
           Used in NCBI BioSample geo_loc_name construction alongside
           collection_location_country and collection_location_state:
-          format is "Country:State:City" (e.g. "USA:Arizona:Phoenix").
+          format is "Country:State:City" (e.g. "USA:California:San Diego").
           Optional — omitted from geo_loc_name if not provided.
 
       geo_lat:

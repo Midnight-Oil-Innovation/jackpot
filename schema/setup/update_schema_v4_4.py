@@ -61,7 +61,7 @@ AMRPhenotypeResult class deferred to v4.5 (requires broader WHO GLASS
 alignment discussion). Captured in backlog.
 
 Usage:
-    cd ~/ASU/jackpot/jackpot-schema
+    cd ~/jackpot/jackpot-schema
     python3 setup/update_schema_v4_4.py --dry-run
     python3 setup/update_schema_v4_4.py
 """
@@ -407,7 +407,7 @@ NEW_FAIR_PROV = """\
         required: true
         description: >-
           Human-readable name for the investigation.
-          e.g. 'Maricopa County Salmonella Typhimurium Cluster 2026'.
+          e.g. 'Example County Salmonella Typhimurium Cluster 2026'.
 
       investigation_status:
         range: OutbreakStatusEnum
@@ -432,7 +432,7 @@ NEW_FAIR_PROV = """\
         required: true
         description: >-
           Primary public health jurisdiction responsible for this investigation.
-          e.g. 'ADHS', 'Maricopa County DHS', 'CDC', 'WHO PAHO'.
+          e.g. 'State DHS', 'County DHS', 'CDC', 'WHO PAHO'.
 
       sectors_involved:
         multivalued: true
@@ -749,7 +749,7 @@ def main() -> None:
         "yaml.safe_load(open('schema/jackpot_schema.yaml')); print('OK')\""
     )
     print("  3. Run schema_update.py from the workspace root:")
-    print("     python3 ~/ASU/jackpot/schema_update.py \\")
+    print("     python3 ~/jackpot/schema_update.py \\")
     print("         --version 4.4 \\")
     print(
         '         --message "WHO/CDC alignment — symptom onset, travel history, '
