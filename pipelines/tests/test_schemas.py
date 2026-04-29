@@ -46,14 +46,14 @@ class TestRegistryMapping:
 
 class TestAMRResult:
     def test_minimum_valid(self):
-        obj = AMRResult(sample_id="AZ-1", gene_symbol="mcr-1", tool_name="amrfinderplus")
-        assert obj.sample_id == "AZ-1"
+        obj = AMRResult(sample_id="EX-1", gene_symbol="mcr-1", tool_name="amrfinderplus")
+        assert obj.sample_id == "EX-1"
         assert obj.reference_database is None
 
     def test_rejects_out_of_range_identity(self):
         with pytest.raises(ValueError):
             AMRResult(
-                sample_id="AZ-1",
+                sample_id="EX-1",
                 gene_symbol="mcr-1",
                 tool_name="amrfinderplus",
                 identity_percent=120,
@@ -62,7 +62,7 @@ class TestAMRResult:
     def test_rejects_extra_fields(self):
         with pytest.raises(ValueError):
             AMRResult(
-                sample_id="AZ-1",
+                sample_id="EX-1",
                 gene_symbol="mcr-1",
                 tool_name="amrfinderplus",
                 unknown_field="x",
@@ -72,7 +72,7 @@ class TestAMRResult:
 class TestPangolin:
     def test_minimum_valid(self):
         obj = PangolinResult(
-            sample_id="AZ-1",
+            sample_id="EX-1",
             lineage="BA.2.86",
             pangolin_version="4.3.1",
         )
@@ -82,13 +82,13 @@ class TestPangolin:
 class TestNextclade:
     def test_requires_version(self):
         with pytest.raises(ValueError):
-            NextcladeResult(sample_id="AZ-1")
+            NextcladeResult(sample_id="EX-1")
 
 
 class TestTyping:
     def test_minimum_valid(self):
         obj = TypingResult(
-            sample_id="AZ-1",
+            sample_id="EX-1",
             scheme="mlst_senterica",
             tool_name="mlst",
         )
@@ -97,7 +97,7 @@ class TestTyping:
 
 class TestTBTyping:
     def test_minimum_valid(self):
-        obj = TBTypingResult(sample_id="AZ-1", tbprofiler_version="5.0")
+        obj = TBTypingResult(sample_id="EX-1", tbprofiler_version="5.0")
         assert obj.main_lineage is None
 
 
@@ -105,7 +105,7 @@ class TestAssemblyQC:
     def test_percent_bounds(self):
         with pytest.raises(ValueError):
             AssemblyQC(
-                sample_id="AZ-1",
+                sample_id="EX-1",
                 tool_name="QUAST",
                 genome_completeness=110,
             )
@@ -114,20 +114,20 @@ class TestAssemblyQC:
 class TestMAGQC:
     def test_requires_bin_id(self):
         with pytest.raises(ValueError):
-            MAGQC(sample_id="AZ-1", tool_name="CheckM2")
+            MAGQC(sample_id="EX-1", tool_name="CheckM2")
 
 
 class TestTaxonomicProfile:
     def test_requires_taxon_id(self):
         with pytest.raises(ValueError):
-            TaxonomicProfile(sample_id="AZ-1", tool_name="kraken2")
+            TaxonomicProfile(sample_id="EX-1", tool_name="kraken2")
 
 
 class TestWastewater:
     def test_abundance_bounds(self):
         with pytest.raises(ValueError):
             WastewaterLineageAbundance(
-                sample_id="AZ-WW-1",
+                sample_id="EX-WW-1",
                 lineage="BA.2",
                 abundance=1.5,
                 tool_name="freyja",
@@ -135,7 +135,7 @@ class TestWastewater:
 
     def test_minimum_valid(self):
         obj = WastewaterLineageAbundance(
-            sample_id="AZ-WW-1",
+            sample_id="EX-WW-1",
             lineage="BA.2",
             abundance=0.33,
             tool_name="freyja",

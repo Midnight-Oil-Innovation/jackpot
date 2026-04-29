@@ -81,7 +81,7 @@ class TestRegisterResult:
             return httpx.Response(201, json={"status": "registered", "result_id": 42})
 
         client = _client(httpx.MockTransport(handler))
-        result = client.register_result("pangolin_results", {"sample_id": "AZ-1"})
+        result = client.register_result("pangolin_results", {"sample_id": "EX-1"})
         assert result == {"status": "registered", "result_id": 42}
         assert (
             captured["url"] == "http://api.test/api/v1/pipelines/run-abc/results/pangolin_results"
@@ -91,7 +91,7 @@ class TestRegisterResult:
     def test_requires_result_type(self):
         client = _client(httpx.MockTransport(lambda r: httpx.Response(200, json={})))
         with pytest.raises(RegistrationError, match="result_type"):
-            client.register_result("", {"sample_id": "AZ-1"})
+            client.register_result("", {"sample_id": "EX-1"})
 
     def test_4xx_raises_immediately(self):
         calls = 0
@@ -104,7 +104,7 @@ class TestRegisterResult:
         sleep = MagicMock()
         client = _client(httpx.MockTransport(handler), sleep=sleep)
         with pytest.raises(RegistrationError) as excinfo:
-            client.register_result("pangolin_results", {"sample_id": "AZ-1"})
+            client.register_result("pangolin_results", {"sample_id": "EX-1"})
         assert excinfo.value.status_code == 401
         assert calls == 1
         sleep.assert_not_called()
@@ -123,7 +123,7 @@ class TestRegisterResult:
 
         sleep = MagicMock()
         client = _client(httpx.MockTransport(handler), sleep=sleep)
-        result = client.register_result("amr_results", {"sample_id": "AZ-2"})
+        result = client.register_result("amr_results", {"sample_id": "EX-2"})
         assert result["result_id"] == 7
         # Two backoffs (after the first and second 5xx)
         assert sleep.call_count == 2
@@ -137,7 +137,7 @@ class TestRegisterResult:
 
         client = _client(httpx.MockTransport(handler), sleep=MagicMock())
         with pytest.raises(RegistrationError) as excinfo:
-            client.register_result("amr_results", {"sample_id": "AZ-3"})
+            client.register_result("amr_results", {"sample_id": "EX-3"})
         assert excinfo.value.status_code == 503
 
     def test_http_error_retries(self):
@@ -150,7 +150,7 @@ class TestRegisterResult:
             return httpx.Response(201, json={"status": "registered", "result_id": 1})
 
         client = _client(httpx.MockTransport(handler), sleep=MagicMock())
-        result = client.register_result("pangolin_results", {"sample_id": "AZ-4"})
+        result = client.register_result("pangolin_results", {"sample_id": "EX-4"})
         assert result["result_id"] == 1
 
     def test_convenience_wrapper(self, monkeypatch):
@@ -171,5 +171,5 @@ class TestRegisterResult:
             real_init(self, *args, **kwargs)
 
         monkeypatch.setattr(httpx.Client, "__init__", fake_init)
-        result = register_result("pangolin_results", {"sample_id": "AZ-9"})
+        result = register_result("pangolin_results", {"sample_id": "EX-9"})
         assert result["result_id"] == 99

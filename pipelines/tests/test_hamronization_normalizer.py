@@ -36,10 +36,10 @@ CANONICAL_TSV = (
 
 class TestParseCanonicalTSV:
     def test_parses_two_rows(self):
-        results = parse_canonical_tsv(CANONICAL_TSV, sample_id="AZ-1")
+        results = parse_canonical_tsv(CANONICAL_TSV, sample_id="EX-1")
         assert len(results) == 2
         assert results[0].gene_symbol == "mcr-1"
-        assert results[0].sample_id == "AZ-1"
+        assert results[0].sample_id == "EX-1"
         assert results[0].drug_class == "colistin"
         assert results[0].coverage_percent == pytest.approx(99.5)
         assert results[0].identity_percent == pytest.approx(99.1)
@@ -52,11 +52,11 @@ class TestParseCanonicalTSV:
         assert results[1].gene_symbol == "blaTEM-1"
 
     def test_empty_input_returns_empty_list(self):
-        assert parse_canonical_tsv("", sample_id="AZ-1") == []
+        assert parse_canonical_tsv("", sample_id="EX-1") == []
 
     def test_skips_rows_with_no_gene_symbol(self):
         bad = "gene_symbol\tanalysis_software_name\n\tamrfinderplus\nmcr-1\tamrfinderplus\n"
-        results = parse_canonical_tsv(bad, sample_id="AZ-1")
+        results = parse_canonical_tsv(bad, sample_id="EX-1")
         assert len(results) == 1
         assert results[0].gene_symbol == "mcr-1"
 
@@ -65,7 +65,7 @@ class TestParseCanonicalTSV:
             "gene_symbol\tanalysis_software_name\tcoverage_percentage\n"
             "mcr-1\tamrfinderplus\tnot-a-number\n"
         )
-        [result] = parse_canonical_tsv(broken, sample_id="AZ-1")
+        [result] = parse_canonical_tsv(broken, sample_id="EX-1")
         assert result.coverage_percent is None
 
 
@@ -76,10 +76,10 @@ class TestRunHamronize:
         return HamronizeInput(
             tool=tool,
             raw_output_path=raw,
-            sample_id="AZ-1",
+            sample_id="EX-1",
             analysis_software_version="3.12.8",
             reference_database_version="2024-09-05",
-            input_file_name="AZ-1.contigs.fa",
+            input_file_name="EX-1.contigs.fa",
         )
 
     def test_unsupported_tool_raises(self, tmp_path):
@@ -91,7 +91,7 @@ class TestRunHamronize:
         spec = HamronizeInput(
             tool="amrfinderplus",
             raw_output_path=tmp_path / "does-not-exist.tsv",
-            sample_id="AZ-1",
+            sample_id="EX-1",
             analysis_software_version="3.12.8",
             reference_database_version="2024-09-05",
         )
@@ -126,7 +126,7 @@ class TestRunHamronize:
         assert output == CANONICAL_TSV
         assert "amrfinderplus" in captured["cmd"]
         assert "3.12.8" in captured["cmd"]
-        assert "AZ-1.contigs.fa" in captured["cmd"]
+        assert "EX-1.contigs.fa" in captured["cmd"]
 
 
 class TestNormalize:
@@ -136,7 +136,7 @@ class TestNormalize:
         spec = HamronizeInput(
             tool="amrfinderplus",
             raw_output_path=raw,
-            sample_id="AZ-XYZ",
+            sample_id="EX-XYZ",
             analysis_software_version="3.12.8",
             reference_database_version="2024-09-05",
         )
@@ -146,5 +146,5 @@ class TestNormalize:
         monkeypatch.setattr("shutil.which", lambda _: "/usr/bin/hamronize")
         results = normalize(spec, runner=fake_runner)
         assert len(results) == 2
-        assert results[0].sample_id == "AZ-XYZ"
+        assert results[0].sample_id == "EX-XYZ"
         assert results[0].gene_symbol == "mcr-1"
