@@ -4,7 +4,7 @@
 **Baseline:** 477 tests passing, 86.99% coverage — Session S (projects + dataharmonizer) complete, Session 5 staging deploy work landed on top
 **Active sprint:** Phase 21 (UI page triage) + Phase 20 (Session 5 debt)
 
-**Project context as of 2026-04-28:** JACKPOT pivoted to an independent project under `Midnight-Oil-Innovation/jackpot` (no longer ADHS/ASU-coupled, no longer the APGAP successor). License flipped from Apache 2.0 to **AGPL-3.0**. New multi-deployment-target architecture covers 6 install scenarios (A laptop, B single-org cloud, C multi-lab agency, D hosted SaaS, E federation member, F CI test). Post-Phase-11 cleanup → P0d (monorepo migration) → P0e (jackpot init CLI) → P0b/c (multi-tenancy schema + middleware) → P1–P5. See `jackpot_pathoplexus_loculus_overview.md` for the full comparative analysis driving Phase 26 below.
+**Project context as of 2026-04-28:** JACKPOT pivoted to an independent project under `Midnight-Oil-Innovation/jackpot` (no longer ADHS/ASU-coupled, no longer the APGAP successor). License flipped from Apache 2.0 to **AGPL-3.0**. New multi-deployment-target architecture covers 6 install scenarios (A laptop, B single-org cloud, C multi-lab agency, D hosted SaaS, E federation member, F CI test). Cleanup A through J COMPLETE → P0d (monorepo migration) → P0e (jackpot init CLI) → P0b/c (multi-tenancy schema + middleware) → P1–P5. See `jackpot_pathoplexus_loculus_overview.md` for the full comparative analysis driving Phase 26 below.
 
 Instructions for Claude Code: Work through items in order within each phase.
 Check off each item only after `uv run pytest` passes. Never skip an item —
@@ -63,6 +63,29 @@ unblocked item.
   `sequencing_labs.organization` denormalised text and the
   `domain_whitelist` row. Seed snapshot updated in `db/SCHEMA.sql`.
   Pattern documented in `docs/learnings.md`.
+
+- **2026-04-26 to 2026-04-28** — Cleanup A through J: removed institutional
+  references (ADHS/ASU/Linux Prophet/Otero/Sonora Quest/Maricopa/Phoenix/etc.)
+  from the codebase to align with the operator-agnostic principle (Critical
+  Rule 55). Production code now knows nothing about any specific operator;
+  only the eventual `jackpot init` bootstrap step learns operator names at
+  install time.
+
+  | Letter | Scope                              | Commit    | Notes |
+  |--------|------------------------------------|-----------|-------|
+  | A      | docs cleanup                        | `68e3565` | jackpot-backend |
+  | B      | schema rename `adhs_medsis_id` → `external_case_id` | `667aaaf` | + submodule `8416e28` |
+  | C      | HTML course content                 | `b804e76` | + submodule `684a0c4` |
+  | D      | test fixture data                   | `d51e39d` | jackpot-backend |
+  | E      | straggler test fixtures             | `c29fa42` | jackpot-backend |
+  | F      | seed scripts genericized            | `771cbc8` | + new migration `00b4bd99ddee` |
+  | G      | submodule schema-update scripts     | (no-op)   | already clean from prior work |
+  | H      | misc files + 2 deletions            | `83f9f28` | deleted `CLAUDE_addition.md`, `rewrite_validator.py` |
+  | I      | nf/ test fixtures (AZ-* → EX-*)     | `a9a2a94` | + submodule `f11e719` |
+  | J      | Streamlit frontend                  | (no-op)   | grep matches were all 'banner' false positives |
+
+  Net result: the codebase is operator-agnostic. The next phase, P0d, is
+  the monorepo migration to `Midnight-Oil-Innovation/jackpot`.
 
 ---
 
