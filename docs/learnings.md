@@ -219,7 +219,7 @@ client ─► POST /api/v1/domain-whitelist/  {"domain": "UPPER.example"}
 
 **Watch out for:**
 - **The join table did not exist until this session.** Any prior code or test that references `sequencing_lab_assignments` against the stub DB would have failed until the migration was applied. `tests/conftest.py` runs `alembic upgrade head` after `db/init.sql`, so the table is available as soon as the migration file lands — no one-shot DB rebuild required.
-- Spec says the list should show "Sonora Quest, LabCorp, Example Lab" but the actual seed only contains `Sonora Quest Laboratories`, `Laboratory Corporation of America`, and `Example Lab` (as a non-external auto-added entry). The test asserts the first two verbatim — the third is renamed (name was renamed in seed data) and the test doesn't pin it. If ingest code ever hardcodes a "Example Lab" match, grep will surface the mismatch.
+- Seed contains `Example Sequencing Lab`, `Example Reference Lab`, and `Example Lab` (the last as a non-external auto-added entry). Tests assert the first two verbatim. If ingest code ever hardcodes a specific lab-name match, grep will surface the mismatch.
 - `DELETE /assign/{lab_id}` 200s on first call and 404s on second — tests exercise both. There is no idempotent mode; callers must cope.
 - The `valid_human_sample` test fixture lists `"sequencing_lab": "Example Lab"` which does *not* match the seed. That fixture is only used by ingest tests (Session G) and ingest validation is expected to treat it as unknown → 422. Don't try to "fix" the fixture here.
 
@@ -406,9 +406,9 @@ New baseline: 418 tests passing, 85.33% coverage (+19 tests, +0.25%). Commit
   could relax these NOT NULLs; for Month 1 we document the contract in
   tests — the `_base_metadata()` helper includes every NOT NULL field.
 - **`sequencing_lab` is validated by `name`**, not by ID. The seed has
-  "Sonora Quest Laboratories" and "Laboratory Corporation of America";
-  tests use "Sonora Quest Laboratories" instead of the old fixture's
-  "Example Lab" (which does not exist in the DB). Using a name that
+  "Example Sequencing Lab" and "Example Reference Lab";
+  tests use "Example Sequencing Lab" as the canonical valid value
+  (which exists in the DB seed). Using a name that
   doesn't exist in `sequencing_labs` returns 422 with a request-workflow
   message pointing to `POST /api/v1/sequencing-labs/requests`.
 - **`UploadFile | None = File(None)`** requires `# noqa: B008` — FastAPI
@@ -1741,7 +1741,7 @@ will render it via `st.error(f"Upload failed: {exc.message}")`.
 
 | Step | Scenario | Status |
 |---|---|---|
-| 3 | GET /api/v1/sequencing-labs/ → 3 seeded labs | CONTRACT VERIFIED (Sonora Quest, LabCorp, Example Lab) |
+| 3 | GET /api/v1/sequencing-labs/ → 3 seeded labs | CONTRACT VERIFIED (Example Sequencing Lab, Example Reference Lab, Example Lab) |
 | 3 | GET /api/v1/projects/ → ≥1 | CONTRACT VERIFIED (Dev Project) |
 | 4 | POST /api/v1/ingest/upload happy path | CONTRACT VERIFIED — 201, sample_id returned, quality_status=PRELIMINARY, sector=clinical, scrub_status=PENDING |
 | 5 | GET /api/v1/samples/{integer-id} retrieves | CONTRACT VERIFIED. Note: endpoint requires the integer DB id, not the string sample_id — UI must capture `data.id` from the upload response |

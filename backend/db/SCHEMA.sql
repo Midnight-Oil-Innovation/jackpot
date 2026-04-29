@@ -52,8 +52,8 @@ CREATE TABLE IF NOT EXISTS sequencing_labs (
 );
 
 INSERT INTO sequencing_labs (name, organization, is_external) VALUES
-    ('Sonora Quest Laboratories',         'Sonora Quest', TRUE),
-    ('Laboratory Corporation of America', 'LabCorp',      TRUE)
+    ('Example Sequencing Lab',  'Example Sequencing Lab', TRUE),
+    ('Example Reference Lab',  'Example Reference Lab',  TRUE)
 ON CONFLICT DO NOTHING;
 
 -- =============================================================================
@@ -721,20 +721,20 @@ CREATE TABLE IF NOT EXISTS saved_searches (
 -- Seed data for local development
 -- =============================================================================
 INSERT INTO domain_whitelist (domain, description)
-VALUES ('linuxprophet.org', 'Linux Prophet'),
+VALUES ('example.org', 'Example Org'),
        ('gmail.com', 'Local dev — REMOVE IN PRODUCTION')
 ON CONFLICT DO NOTHING;
 
 INSERT INTO organizations (display_name)
-VALUES ('Linux Prophet'), ('ADHS')
+VALUES ('Example Org')
 ON CONFLICT DO NOTHING;
 
 INSERT INTO users (email, name, organization_id, is_platform_admin)
-VALUES ('gotero@linuxprophet.com', 'Glen Otero', 1, TRUE)
+VALUES ('admin@example.org', 'Admin User', 1, TRUE)
 ON CONFLICT DO NOTHING;
 
 INSERT INTO labs (organization_id, display_name, description, created_by_id)
-VALUES (1, 'Otero Outpost', 'Local dev seed lab', 1)
+VALUES (1, 'Example Lab', 'Local dev seed lab', 1)
 ON CONFLICT DO NOTHING;
 
 INSERT INTO lab_membership (user_id, lab_id, permission_group_id, is_lab_director, granted_by_id)
@@ -747,7 +747,7 @@ VALUES (1, 'Dev Project', 'Local dev seed project', 1,
         ARRAY['Severe acute respiratory syndrome coronavirus 2'])
 ON CONFLICT DO NOTHING;
 
--- Auto-add Otero Outpost as a sequencing lab (demonstrates the backlog #42 auto-add hook)
+-- Auto-add Example Lab as a sequencing lab (demonstrates the backlog #42 auto-add hook)
 INSERT INTO sequencing_labs (name, organization, lab_id, is_external)
-VALUES ('Otero Outpost', 'Linux Prophet', 1, FALSE)
+VALUES ('Example Lab', 'Example Org', 1, FALSE)
 ON CONFLICT DO NOTHING;

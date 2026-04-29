@@ -58,12 +58,11 @@ unblocked item.
 
 ## Out-of-band housekeeping
 
-- **2026-04-24** — Renamed JACKPOT organisation "host academic operator" → "Linux Prophet"
+- **2026-04-24** — Renamed JACKPOT organisation "host academic operator" → "Example Org"
   via migration `c1bd67369a7c`. Same migration renames the
   `sequencing_labs.organization` denormalised text and the
-  `domain_whitelist` row (`example-academic.edu` → `example.org`). Seed
-  snapshot updated in `db/SCHEMA.sql`. Pattern documented in
-  `docs/learnings.md`.
+  `domain_whitelist` row. Seed snapshot updated in `db/SCHEMA.sql`.
+  Pattern documented in `docs/learnings.md`.
 
 ---
 
