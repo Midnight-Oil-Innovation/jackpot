@@ -27,11 +27,16 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  CLUSTER_NAME:    jackpot-staging-gke
-  NAMESPACE:       jackpot
+  # Operator-specific identifiers come from GitHub Actions repo/env vars
+  # so the workflow stays operator-agnostic per Critical Rule 55. Set
+  # GCP_CLUSTER_NAME, GCP_NAMESPACE, GCP_SECRET_PREFIX in the repo's
+  # `staging` environment vars.
+  CLUSTER_NAME:    ${{ vars.GCP_CLUSTER_NAME }}
+  NAMESPACE:       ${{ vars.GCP_NAMESPACE }}
   RELEASE_NAME:    jackpot-api
   HELM_CHART_PATH: ./deploy/helm/jackpot-api
   VALUES_FILE:     ./deploy/helm/jackpot-api/values-staging.yaml
+  SECRET_PREFIX:   ${{ vars.GCP_SECRET_PREFIX }}
 
 jobs:
   deploy:
@@ -64,9 +69,20 @@ jobs:
 
       - name: Resolve image tag
         id: tag
+        # IMAGE_TAG_INPUT is read from env, not from `${{ ... }}`
+        # interpolation, so a malicious workflow_dispatch caller cannot
+        # inject shell commands via the input value. Validated against
+        # an allow-list of safe characters before use.
+        env:
+          IMAGE_TAG_INPUT: ${{ inputs.image_tag }}
         run: |
-          if [[ -n "${{ inputs.image_tag }}" ]]; then
-            echo "tag=${{ inputs.image_tag }}" >> "$GITHUB_OUTPUT"
+          set -euo pipefail
+          if [[ -n "${IMAGE_TAG_INPUT}" ]]; then
+            if [[ ! "${IMAGE_TAG_INPUT}" =~ ^[A-Za-z0-9._-]+$ ]]; then
+              echo "::error::image_tag contains disallowed characters"
+              exit 1
+            fi
+            echo "tag=${IMAGE_TAG_INPUT}" >> "$GITHUB_OUTPUT"
           else
             echo "tag=$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
           fi
@@ -98,14 +114,26 @@ jobs:
         run: kubectl create namespace "$NAMESPACE" --dry-run=client -o yaml | kubectl apply -f -
 
       - name: Sync Kubernetes Secret from Secret Manager
+        env:
+          GCP_PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
         run: |
           set -euo pipefail
+          # Stage each secret value to a per-key temp file then read it
+          # back into the kubectl invocation via --from-file. This avoids
+          # shell-metacharacter expansion of secret values that contain
+          # `$()` or backticks, and prevents the value from appearing on
+          # any process command line.
           declare -a keys=(SECRET_KEY DATABASE_URL GOOGLE_OAUTH_CLIENT_ID GOOGLE_OAUTH_CLIENT_SECRET NCBI_API_KEY)
+          tmpdir=$(mktemp -d)
+          trap 'rm -rf "$tmpdir"' EXIT
           args=()
           for k in "${keys[@]}"; do
-            secret_name="jackpot-staging-$(echo "$k" | tr '[:upper:]_' '[:lower:]-')"
-            value=$(gcloud secrets versions access latest --secret="$secret_name" --project="${{ vars.GCP_PROJECT_ID }}")
-            args+=(--from-literal="$k=$value")
+            secret_name="${SECRET_PREFIX}-$(echo "$k" | tr '[:upper:]_' '[:lower:]-')"
+            gcloud secrets versions access latest \
+              --secret="$secret_name" \
+              --project="$GCP_PROJECT_ID" \
+              > "$tmpdir/$k"
+            args+=(--from-file="$k=$tmpdir/$k")
           done
           kubectl -n "$NAMESPACE" create secret generic jackpot-api-secrets \
             "${args[@]}" \

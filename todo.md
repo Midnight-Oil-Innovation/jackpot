@@ -534,74 +534,68 @@ Order is rough effort ascending. Do these opportunistically between bigger P0d c
 
 ### B-DMI-3: "Single-entry-point" framing in spec.md
 
-- [ ] Add a short subsection to spec.md §1 (or §3 depending on where the ingest-paths description lives now) documenting JACKPOT's six ingest paths as "the single entry point for genomic data into a public health agency." This is the framing from CDC's North Star "CDC Front Door" pattern, narrowed to JACKPOT's scope. Helps grant narratives.
-- [ ] Effort: half a session, ~30 min of writing.
+- [x] Add a short subsection to spec.md §1 (or §3 depending on where the ingest-paths description lives now) documenting JACKPOT's six ingest paths as "the single entry point for genomic data into a public health agency." (Landed in spec.md §1.1 in P0d.)
+- [x] Effort: half a session, ~30 min of writing.
 
 ### B-STLT-2: Layer-cake diagram in spec.md
 
-- [ ] Add the layer-cake diagram from `jackpot_cdc_dmi_stlt_overview.md` §9.1 to spec.md, positioning JACKPOT relative to NBS / eCR / LIMS / NCBI Pathogen Detection / Pathoplexus / Pathogenwatch / Nextstrain.
-- [ ] Frame as "JACKPOT integrates with these systems; it does not replace them" — important for STLT operator conversations and grant narratives.
-- [ ] Effort: 1 session.
+- [x] Add the layer-cake diagram from `jackpot_cdc_dmi_stlt_overview.md` §9.1 to spec.md. (Landed in spec.md §3.0 in P0d.)
+- [x] Frame as "JACKPOT integrates with these systems; it does not replace them."
+- [x] Effort: 1 session.
 
 ### B-GOV-1 + B-CARE-1: Governance directory with CARE Principles
 
-Combine these two items — they're the same act of writing.
+Combined — same act of writing.
 
-- [ ] Create `governance/` directory at repo root with:
-  - [ ] `charter.md` — why JACKPOT exists, what it's for, who it's for
-  - [ ] `coi-policy.md` — conflict-of-interest disclosure
-  - [ ] `jurisdiction-and-data-residency.md` — where the project is hosted, applicable law, data-residency commitments
-  - [ ] `benefits-sharing-framework.md` — how operators using JACKPOT share benefits (citations, collaborations, data-back-to-source)
-  - [ ] `access-grievance-procedure.md` — how to raise concerns about access decisions or governance
-  - [ ] `platform-shutdown-data-portability-plan.md` — what happens if Glen / Midnight-Oil stops maintaining JACKPOT — guarantee that data and code stay accessible
-  - [ ] `advisory-board.md` — forward-looking; how the project will add governance plurality as it grows
-  - [ ] `care-principles-and-tribal-data-sovereignty.md` — JACKPOT's formal commitment to Collective Benefit, Authority to Control, Responsibility, Ethics. Pair with FAIR. Documents how each CARE principle maps to specific JACKPOT architectural decisions (Scenario T, tombstone-and-vacuum, federation-aware deletion, no-auto-publish defaults)
-- [ ] Link from README.md and from spec.md.
-- [ ] Effort: 1 session of writing (Pathoplexus governance docs + CARE Principles literature provide templates; mostly synthesis work, not original).
+- [x] Create `governance/` directory at repo root with:
+  - [x] `charter.md`
+  - [x] `coi-policy.md`
+  - [x] `jurisdiction-and-data-residency.md`
+  - [x] `benefits-sharing-framework.md`
+  - [x] `access-grievance-procedure.md`
+  - [x] `platform-shutdown-data-portability-plan.md`
+  - [x] `advisory-board.md`
+  - [x] `care-principles-and-tribal-data-sovereignty.md`
+- [x] Link from README.md and from spec.md.
+- [x] Effort: 1 session of writing.
 
 ### B-CARE-2: Add Scenario T to spec.md scenarios list
 
-- [ ] Update spec.md §1 scenarios table from 6 entries to 7 — add **T (Tribal-sovereignty deployment)** as variant of A or E with sovereignty-aware defaults.
-- [ ] Brief mention in CLAUDE.md project header.
-- [ ] Effort: half a session (just spec edit).
+- [x] Update spec.md §1 scenarios table from 6 entries to 7 — added **T (Tribal-sovereignty deployment)** in the §1 pivot blockquote.
+- [x] Brief mention in CLAUDE.md project header. (Bumped from "6 install scenarios" to "7" with the T variant called out.)
+- [x] Effort: half a session.
 
 ### B-DMI-1: FHIR-translatable data model documentation
 
-- [ ] Add `docs/fhir-mapping.md` documenting how JACKPOT's LinkML schema entities map to FHIR R5 resources:
-  - JACKPOT Sample → FHIR `Specimen` + `MolecularSequence`
-  - JACKPOT pipeline_results → FHIR `Observation` + `Provenance`
-  - JACKPOT sequencing_lab → FHIR `Organization`
-  - **NEVER** map to FHIR `Patient` or `Practitioner` — JACKPOT does not store patient identifiers (DLP gate enforces this)
-- [ ] Pure documentation; no implementation. Sets up `B-DMI-2` (actual FHIR ingest router) for Year 2.
-- [ ] Effort: 2 sessions of writing.
+- [x] Add `docs/fhir-mapping.md` documenting how JACKPOT's LinkML schema entities map to FHIR R5 resources. (Landed in P0d.)
+- [x] Pure documentation; no implementation. Sets up `B-DMI-2` (actual FHIR ingest router) for Year 2.
+- [x] Effort: 2 sessions of writing.
 
 ### B-STLT-1: Five STLT deploy guides under `docs/deploy/stlt/`
 
-- [ ] `state-health-department.md` — Scenario C usually; sometimes B for smaller states
-- [ ] `territorial-health-agency.md` — Scenario B; Freely Associated States may need A
-- [ ] `local-health-department.md` — Scenario A or B; Big Cities Health Coalition: C
-- [ ] `tribal-authority.md` — Scenario T (this is the most important one)
-- [ ] `tribal-epidemiology-center.md` — Scenario E (federation hub for member Tribes)
+- [x] `state-health-department.md`
+- [x] `territorial-health-agency.md`
+- [x] `local-health-department.md`
+- [x] `tribal-authority.md`
+- [x] `tribal-epidemiology-center.md`
 
-Each guide covers: fit rationale, install steps, governance/data-handling defaults, federation options, funding sources (ELC/PHIG/PHEP/TECPHI/IHS/own-funds), workforce considerations, common pitfalls.
-
-- [ ] Effort: 1 session per guide = 5 sessions total. Spread across P0d sessions.
+- [x] Effort: 5 sessions total — landed in P0d alongside the monorepo work.
 
 ### B-STLT-3: Funding-source map in deploy guides
 
-- [ ] Add the funding-source map from `jackpot_cdc_dmi_stlt_overview.md` §10 to each STLT deploy guide.
-- [ ] Effort: rolled into B-STLT-1 sessions.
+- [x] Funding-source map from `jackpot_cdc_dmi_stlt_overview.md` §10 included in each STLT deploy guide.
+- [x] Effort: rolled into B-STLT-1.
 
 ### Phase 21.5 success criterion
 
 By the time P0d is otherwise complete:
 
-- [ ] `governance/` directory exists with all 8 markdown files
-- [ ] spec.md has Scenario T, layer-cake diagram, single-entry-point framing
-- [ ] `docs/deploy/stlt/` has all 5 STLT deploy guides
-- [ ] `docs/fhir-mapping.md` documents FHIR-translatable schema
-- [ ] CLAUDE.md mentions Scenario T in the project header
-- [ ] README.md links to governance/ directory
+- [x] `governance/` directory exists with all 8 markdown files
+- [x] spec.md has Scenario T, layer-cake diagram, single-entry-point framing
+- [x] `docs/deploy/stlt/` has all 5 STLT deploy guides
+- [x] `docs/fhir-mapping.md` documents FHIR-translatable schema
+- [x] CLAUDE.md mentions Scenario T in the project header
+- [x] README.md links to governance/ directory
 
 If any of these slip past P0d, that's fine — they're not gating. But if you're touching docs anyway during P0d, you should be touching these.
 

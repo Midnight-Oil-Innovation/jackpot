@@ -5,7 +5,7 @@ description = "JACKPOT LinkML metadata schema (data + helper module exposing sch
 readme = "README.md"
 requires-python = ">=3.11"
 license = { text = "AGPL-3.0-or-later" }
-authors = [{ name = "Glen Otero", email = "gotero@linuxprophet.com" }]
+authors = [{ name = "JACKPOT Maintainers" }]
 dependencies = []
 
 [project.optional-dependencies]

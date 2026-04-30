@@ -34,7 +34,16 @@ def load_mapping(mapping_name: str) -> dict:
     if mapping_name in _cache:
         return _cache[mapping_name]
 
-    path = _MAPPING_DIR / f"{mapping_name}.yaml"
+    # Reject any mapping_name that would escape the configs directory
+    # via path-segment trickery. Names are flat identifiers; anything
+    # else (slashes, parents, leading dots) is rejected as invalid.
+    if "/" in mapping_name or "\\" in mapping_name or mapping_name.startswith("."):
+        raise ValueError(f"Invalid mapping_name: {mapping_name!r}")
+
+    path = (_MAPPING_DIR / f"{mapping_name}.yaml").resolve()
+    if not path.is_relative_to(_MAPPING_DIR.resolve()):
+        raise ValueError(f"Invalid mapping_name: {mapping_name!r}")
+
     if not path.exists():
         raise FileNotFoundError(
             f"Mapping config '{mapping_name}' not found at {path}. "

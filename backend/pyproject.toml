@@ -5,7 +5,7 @@ description = "JACKPOT FastAPI backend — ingest, validation, pipelines, sample
 readme = "README.md"
 requires-python = ">=3.11"
 license = { text = "AGPL-3.0-or-later" }
-authors = [{ name = "Glen Otero", email = "gotero@linuxprophet.com" }]
+authors = [{ name = "JACKPOT Maintainers" }]
 dependencies = [
     "alembic==1.13.1",
     "apscheduler>=3.11.2",

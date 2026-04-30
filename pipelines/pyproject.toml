@@ -4,7 +4,8 @@ version = "0.1.0"
 description = "JACKPOT Nextflow plugin, pipeline wrappers, and shared parsers"
 readme = "README.md"
 requires-python = ">=3.11"
-authors = [{ name = "Glen Otero", email = "gotero@linuxprophet.com" }]
+license = { text = "AGPL-3.0-or-later" }
+authors = [{ name = "JACKPOT Maintainers" }]
 dependencies = [
     "httpx>=0.27",
     "pydantic>=2.7",

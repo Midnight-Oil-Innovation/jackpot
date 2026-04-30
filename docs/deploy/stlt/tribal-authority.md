@@ -2,7 +2,7 @@
 
 ## Who this is for
 
-Tribal nations that operate (or are building) public-health and
+Tribal authorities that operate (or are building) public-health and
 genomics capacity within the Tribe's own infrastructure and want
 sovereignty-respecting defaults from the platform itself, not bolted on
 afterward.
