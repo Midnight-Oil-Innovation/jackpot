@@ -1,0 +1,26 @@
+source_format: example_human_v1
+target_class: HumanSample
+column_mappings:
+  "Sample ID":          sample_id
+  "Collection Date":    date_collected
+  "Pathogen":           organism_name
+  "Sequencer":          sequencing_platform
+  "Protocol":           sequencing_protocol
+  "Age":                host_age
+  "Sex":                host_sex
+  "State":              collection_location_state
+  "Country":            collection_location_country
+  "External Case ID":   external_case_id
+  "Clinical Outcome":   clinical_outcome
+  "Strain":             strain
+  "Sequencing Lab":     sequencing_lab
+
+# File detection configuration
+# The ingest router calls detect_files() from file_detector.py on the
+# semicolon-split value of the files_column for each row.
+file_detection:
+  files_column:      "FASTQ files"   # semicolon-separated list of filenames
+  prefix_column:     "FASTQ prefix"  # fallback: scan staging bucket for prefix
+  separator:         ";"
+  auto_detect_pairs: true            # run detect_files() on result
+  allow_prefix_scan: true            # fall back to prefix scan if files_column empty

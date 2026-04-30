@@ -1,0 +1,145 @@
+<section class="module" id="module-1" style="background: var(--color-bg);">
+  <div class="module-content">
+
+    <!-- SCREEN 1: Hero -->
+    <div class="screen animate-in">
+      <div class="module-number">01</div>
+      <h1 class="module-title">Meet JACKPOT</h1>
+      <p class="module-subtitle">What happens from the moment a swab is collected to the moment a public health alert goes out — and the software that makes it possible.</p>
+
+      <div class="callout callout-info" style="margin-top: var(--space-8);">
+        <strong>JACKPOT</strong> stands for <em>Just Another Collection of Killer Pathogen ‘Omics Tools</em>. It's an open-source platform that any public health agency, academic lab, or research consortium can deploy to track infectious disease outbreaks using genomic sequencing.
+      </div>
+
+      <div class="pattern-cards" style="margin-top: var(--space-8);">
+        <div class="pattern-card">
+          <div class="pattern-card-icon">🦠</div>
+          <h4>What it tracks</h4>
+          <p>Viruses, bacteria, and other pathogens — from COVID-19 and flu to Salmonella and Valley fever</p>
+        </div>
+        <div class="pattern-card">
+          <div class="pattern-card-icon">🧬</div>
+          <h4>How it works</h4>
+          <p>By reading the <span class="tooltip" data-tip="The complete genetic code of a pathogen — like reading its entire instruction manual">genome</span> of each pathogen, it can tell whether two cases are related or coincidental</p>
+        </div>
+        <div class="pattern-card">
+          <div class="pattern-card-icon">🏥</div>
+          <h4>Who uses it</h4>
+          <p>Public health officials, academic researchers, and epidemiologists tracking disease spread across the host jurisdiction and beyond</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- SCREEN 2: The journey of a sample -->
+    <div class="screen animate-in">
+      <h2 class="screen-title">Imagine: A Patient Walks Into a Clinic</h2>
+      <p>A nurse takes a nasal swab. That swab kicks off a journey through labs, computers, and databases — eventually informing whether the host jurisdiction is seeing a new outbreak. Here's that journey:</p>
+
+      <div class="flow-animation" data-steps='[
+        {"highlight":"flow-actor-1","label":"A nurse collects a swab from a patient at a clinic"},
+        {"highlight":"flow-actor-2","label":"The clinical lab runs a PCR test — positive for Influenza A","packet":true,"from":"actor-1","to":"actor-2"},
+        {"highlight":"flow-actor-3","label":"The sample goes to a sequencing lab to read its full genome","packet":true,"from":"actor-2","to":"actor-3"},
+        {"highlight":"flow-actor-4","label":"A researcher uploads the data to JACKPOT via a spreadsheet","packet":true,"from":"actor-3","to":"actor-4"},
+        {"highlight":"flow-actor-5","label":"JACKPOT runs automated pipelines: lineage assignment, QC checks","packet":true,"from":"actor-4","to":"actor-5"},
+        {"highlight":"flow-actor-5","label":"The host operator sees: H3N2 clade, 3 identical genomes in San Diego County this week — possible cluster"}
+      ]'>
+        <div class="flow-actors">
+          <div class="flow-actor" id="flow-actor-1">
+            <div class="flow-actor-icon">🏥</div>
+            <span>Clinic</span>
+          </div>
+          <div class="flow-actor" id="flow-actor-2">
+            <div class="flow-actor-icon">🔬</div>
+            <span>Clinical Lab</span>
+          </div>
+          <div class="flow-actor" id="flow-actor-3">
+            <div class="flow-actor-icon">🧬</div>
+            <span>Sequencing Lab</span>
+          </div>
+          <div class="flow-actor" id="flow-actor-4">
+            <div class="flow-actor-icon">💻</div>
+            <span>JACKPOT Portal</span>
+          </div>
+          <div class="flow-actor" id="flow-actor-5">
+            <div class="flow-actor-icon">📊</div>
+            <span>Operator Dashboard</span>
+          </div>
+        </div>
+
+        <div class="flow-packet" id="flow-packet"></div>
+        <div class="flow-step-label" id="flow-label">Click "Next Step" to trace a sample's journey</div>
+
+        <div class="flow-controls">
+          <button class="btn flow-next-btn">Next Step</button>
+          <button class="btn flow-reset-btn">Restart</button>
+          <span class="flow-progress"></span>
+        </div>
+      </div>
+    </div>
+
+    <!-- SCREEN 3: Why genomics? -->
+    <div class="screen animate-in">
+      <h2 class="screen-title">Why Sequence the Genome at All?</h2>
+
+      <p>Traditional lab tests tell you <em>what</em> pathogen is present. Genomic sequencing tells you <em>which exact version</em> — and that difference is huge for outbreak detection.</p>
+
+      <div class="callout callout-highlight" style="margin: var(--space-6) 0;">
+        <strong>The postal code analogy:</strong> Knowing someone has COVID is like knowing they live in "California." Knowing their <span class="tooltip" data-tip="A named variant of a virus, identified by specific mutations in its genome — like BA.2.86 or JN.1 for SARS-CoV-2">lineage</span> is like knowing their exact street address. It lets you trace who infected whom.
+      </div>
+
+      <div class="step-cards">
+        <div class="step-card">
+          <div class="step-number">1</div>
+          <div class="step-content">
+            <h4>Cluster Detection</h4>
+            <p>When two patients have genomes that differ by only 1–2 mutations, they likely share a transmission chain. JACKPOT makes this comparison automatic.</p>
+          </div>
+        </div>
+        <div class="step-card">
+          <div class="step-number">2</div>
+          <div class="step-content">
+            <h4>Variant Tracking</h4>
+            <p>Which new variants are circulating in your jurisdiction? When did they arrive? Is this a local spread or travel-imported? The genome answers all of these.</p>
+          </div>
+        </div>
+        <div class="step-card">
+          <div class="step-number">3</div>
+          <div class="step-content">
+            <h4>National Reporting</h4>
+            <p>JACKPOT formats genomic data for <span class="tooltip" data-tip="National Center for Biotechnology Information — the US government database that archives all genomic sequence data publicly">NCBI</span>, <span class="tooltip" data-tip="Global Initiative on Sharing All Influenza Data — an international database for flu, COVID, and pox genomes">GISAID</span>, and CDC — so local data feeds into the global picture.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- SCREEN 4: What is this codebase? -->
+    <div class="screen animate-in">
+      <h2 class="screen-title">This Repository: The Data Blueprint</h2>
+      <p>The <code>jackpot-schema</code> repository doesn't run the platform — it <em>defines the shape of data</em> that the platform stores and shares. Think of it like an architect's floor plan for a building.</p>
+
+      <div class="arch-diagram">
+        <div class="arch-zone" style="border-color: var(--color-accent);">
+          <h4 class="arch-zone-label" style="color: var(--color-accent);">jackpot-schema repo</h4>
+          <div class="arch-component" data-desc="The master schema file — defines every field, type, and rule for all sample data. Written in LinkML (a language for describing data structures). ~700 lines." onclick="showArchDesc(this)">
+            <div class="arch-icon">📐</div>
+            <span>jackpot_schema.yaml</span>
+          </div>
+          <div class="arch-component" data-desc="Mapping configs — tell the platform how to translate incoming spreadsheets (from different labs) into the standard schema fields. One config per lab type." onclick="showArchDesc(this)">
+            <div class="arch-icon">🗺️</div>
+            <span>mapping_configs/</span>
+          </div>
+          <div class="arch-component" data-desc="Update scripts — Python scripts that safely evolve the schema from one version to the next (e.g. v4.3 → v4.4), applying changes as code rather than manual edits." onclick="showArchDesc(this)">
+            <div class="arch-icon">🔧</div>
+            <span>setup/update_schema_*.py</span>
+          </div>
+        </div>
+        <div class="arch-description" id="arch-desc">Click any component to learn what it does →</div>
+      </div>
+
+      <div class="callout callout-tip" style="margin-top: var(--space-8);">
+        <strong>Aha!</strong> A "schema" is the contract that all data in the system must follow. It's like a form with required fields — you can't submit a sample without filling in the pathogen name, collection date, and sequencing method. The schema enforces this.
+      </div>
+    </div>
+
+  </div>
+</section>

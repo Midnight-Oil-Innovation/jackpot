@@ -1,0 +1,2677 @@
+id: https://w3id.org/jackpot/schema
+name: jackpot_schema
+description: >
+  JACKPOT — Pathogen genomics platform for genomic epidemiology,
+  bioinformatics, and public health research.
+
+  Schema v4.1 — fully merged. Incorporates:
+    - All APGAP spreadsheet field definitions (All_Sequences, human_host,
+      wildlife_host, companion_animal, livestock, wastewater, water, air,
+      soil, surface, food_products, produce_ag, vectors)
+    - Reportable communicable diseases organism list (operator-configurable)
+    - Coccidioides spp. (Valley fever)
+    - metagenome for metagenomic samples
+    - Database-managed sequencing_lab controlled vocabulary design
+    - SampleAssociation cross-sample linkage table
+    - PipelineProvenance for FAIR R1.2 reusability
+    - Full ontology anchoring: GenEpiO, NCBI BioSample, MIxS, PHA4GE,
+      NWSS, GA4GH DUO/DRS, LOINC, SNOMED CT, ENVO, OBI, ELR
+
+  Compatible with:
+    - DataHarmonizer (PHA4GE templates; runs offline in browser)
+    - CDC TOSTADAS (NCBI SRA/BioSample/GenBank submission)
+    - GISAID EpiCoV / EpiFlu / EpiPox submission
+    - NMDC schema conventions
+    - FAIR: JSON-LD serializable via gen-jsonld
+
+version: "4.4"
+
+prefixes:
+  linkml:  https://w3id.org/linkml/
+  jackpot: https://w3id.org/jackpot/
+  genepio: http://purl.obolibrary.org/obo/GENEPIO_
+  ncbi:    https://www.ncbi.nlm.nih.gov/biosample/docs/attributes/
+  schema:  http://schema.org/
+  MIXS:    https://w3id.org/mixs/
+  ENVO:    http://purl.obolibrary.org/obo/ENVO_
+  OBI:     http://purl.obolibrary.org/obo/OBI_
+  DUO:     http://purl.obolibrary.org/obo/DUO_
+  LOINC:   http://loinc.org/
+  SNOMED:  http://snomed.info/sct/
+  GAX:     https://w3id.org/ga4gh/schema/
+  NWSS:    https://www.cdc.gov/nwss/
+
+default_prefix: jackpot
+default_range: string
+imports:
+  - linkml:types
+
+# ════════════════════════════════════════════════════════════════════════════
+# ORGANIZATIONAL CLASSES  (APGAP-compatible hierarchy)
+# ════════════════════════════════════════════════════════════════════════════
+
+classes:
+
+  Organization:
+    description: >
+      An institution (e.g. a public health agency, academic lab, NGO, or CDC). Maps to APGAP Organization model.
+    attributes:
+      display_name:
+        identifier: true
+        required: true
+      default_approve_analytical_dataset_requests:
+        range: boolean
+        description: "Auto-approve dataset access requests from this org"
+
+  Lab:
+    description: "A research lab or operational unit within an Organization."
+    attributes:
+      display_name: { identifier: true, required: true }
+      organization: { range: Organization, required: true }
+      description:  {}
+
+  Project:
+    description: "A specific study or surveillance effort within a Lab."
+    attributes:
+      display_name:   { identifier: true, required: true }
+      lab:            { range: Lab, required: true }
+      pathogen_scope: { multivalued: true }
+      status:         { range: ProjectStatusEnum }
+
+# ════════════════════════════════════════════════════════════════════════════
+# BASE SAMPLE CLASS
+# Fields from All_Sequences.xlsx plus cross-cutting fields from all other
+# sample type spreadsheets.
+# ════════════════════════════════════════════════════════════════════════════
+
+  Sample:
+    description: >
+      Base class for all sequenced samples. Pathogen-agnostic.
+      Fields derived from APGAP All_Sequences.xlsx.
+      Every URI maps to GenEpiO, NCBI BioSample, MIxS, or OBI where
+      a standard term exists.
+    attributes:
+
+      # ── Identity ────────────────────────────────────────────────────────
+      sample_id:
+        slot_uri: ncbi:host_subject_id
+        identifier: true
+        required: true
+        description: >
+          Unique alphanumeric identifier for this sample.
+          Must not already be in use in the system.
+          APGAP: 'Sample ID'. Validation: alphanumeric, unique.
+          Portal mints persistent URI at ingest:
+          https://data.jackpot.health/samples/{sample_id}
+
+      jackpot_uri:
+        description: >
+          Persistent URI minted at ingest for FAIR Findability (F1).
+          Format: https://data.jackpot.health/samples/{sample_id}
+          Stable before NCBI/GISAID accessions are assigned.
+
+      lab:      { required: true }
+      project:  { required: true }
+      owner:
+        description: "Email of the researcher who uploaded the sample"
+        required: true
+
+      source_type:
+        range: SourceTypeEnum
+        required: true
+        description: >
+          APGAP: 'Source type'. Determines which host-specific subclass
+          is required. Further required fields depend on this value.
+          Validation: match defined allowable entries.
+
+      # ── Pathogen ────────────────────────────────────────────────────────
+      organism_name:
+        slot_uri: ncbi:organism
+        range: OrganismNameEnum
+        required: true
+        description: >
+          NCBI organism name. Controlled vocabulary derived from the host
+          jurisdiction's reportable communicable diseases list, plus
+          Coccidioides spp. (Valley fever) and metagenome for metagenomic samples.
+          Platform Admins may add new values when novel pathogens emerge.
+          Researchers may request additions via the portal.
+          Use 'metagenome' when no specific organism is targeted.
+          APGAP: 'Pathogen/organism name (or metagenomic)'.
+
+      strain:
+        slot_uri: ncbi:strain
+        description: >
+          Pathogen strain designation.
+          Also used for: Influenza subtype (H1N1, H3N2),
+          Pango lineage pre-Pangolin-pipeline, rabies variant,
+          poliovirus type (wild vs. vaccine-derived).
+
+      isolate:
+        slot_uri: ncbi:isolate
+        description: >
+          APGAP: 'Isolate'. Identification or description of the specific
+          individual from which the sample was obtained.
+
+      serotype:
+        slot_uri: ncbi:serotype
+        description: >
+          Serotype of the pathogen isolate.
+          Use for: Salmonella serovar (e.g. Typhimurium, Enteritidis),
+          Dengue serotype (DENV-1 to DENV-4),
+          Poliovirus type (1, 2, 3),
+          Influenza subtype (H1N1, H3N2, H5N1).
+
+      # ── NCBI / GISAID Accessions (populated post-submission) ────────────
+      biosample_accession:
+        description: "NCBI BioSample accession (e.g. SAMN12345678)"
+      sra_accession:
+        description: "NCBI SRA accession (e.g. SRR12345678)"
+      genbank_accession:
+        description: "GenBank accession (e.g. OQ123456)"
+      gisaid_accession:
+        description: "GISAID EPI_ accession (e.g. EPI_ISL_1234567)"
+      bioproject_accession:
+        description: "NCBI BioProject accession (e.g. PRJNA123456)"
+
+      # ── Experiment and Sequencing ────────────────────────────────────────
+      type_of_experiment:
+        range: ExperimentTypeEnum
+        required: true
+        description: >
+          APGAP: 'Type of experiment'.
+          Validation: match defined allowable entries (one only).
+
+      nucleic_acid_extraction_method:
+        multivalued: true
+        required: true
+        description: >
+          APGAP: 'Nucleic acid extraction method'.
+          Multiple values permitted. Match defined allowable entries.
+
+      library_preparation_method:
+        required: true
+        description: >
+          APGAP: 'Nucleic acid library preparation method'.
+          Match defined allowable entries (one only).
+
+      sequencing_protocol:
+        slot_uri: genepio:0001243
+        required: true
+        description: >
+          APGAP: 'Sequencing protocol'. URL to protocol document.
+          Validation: URL format preferred
+          (e.g. https://www.protocols.io/view/artic-v4-1).
+
+      sequencing_platform:
+        slot_uri: genepio:0001239
+        range: SequencingPlatformEnum
+        required: true
+        description: >
+          APGAP: 'Sequencing instrument make and model'.
+          Validation: match defined allowable entries (one only).
+
+      sequencing_instrument:
+        slot_uri: genepio:0001241
+        description: >
+          Specific instrument model.
+          Examples: NextSeq 2000, MinION, Sequel IIe, Ion S5.
+
+      sequencing_lab:
+        required: true
+        description: >
+          APGAP: 'Sequencing lab (originating lab)'. The lab that
+          performed the sequencing. NOT a static enum — validated at
+          ingest against the sequencing_labs database table, which is
+          a Platform Admin-managed controlled vocabulary.
+          Seeded values: 'Sonora Quest Laboratories',
+          'Laboratory Corporation of America'.
+          Registered JACKPOT Labs are auto-added (APGAP backlog #42).
+          Unknown values trigger validation error directing Lab Director
+          to submit a sequencing lab addition request via the portal
+          (APGAP backlog #7).
+
+      date_collected:
+        slot_uri: ncbi:collection_date
+        range: date
+        required: true
+        description: >
+          APGAP: 'Date Collected'. ISO 8601 format (YYYY-MM-DD).
+          Validation: flag if >5 years in past; reject if future date.
+
+      date_sequenced:
+        range: date
+        required: true
+        description: >
+          APGAP: 'Date Sequenced'. ISO 8601 format.
+          Validation: must not be future date; must not precede
+          date_collected.
+
+      collection_facility:
+        slot_uri: ncbi:collected_by
+        required: true
+        description: >
+          APGAP: 'Collection facility'. Institution or facility where
+          the sample was collected. Match defined allowable entries.
+
+      purpose_for_collection:
+        multivalued: true
+        required: true
+        description: >
+          APGAP: 'Purpose for collection and sequencing'.
+          Multiple selections permitted. Match defined allowable entries.
+
+      # ── Geography ────────────────────────────────────────────────────────
+      collection_location_country:
+        slot_uri: genepio:0001181
+        required: true
+        description: >-
+          Country of sample collection. Free text — no controlled vocabulary
+          enforced at Tier 1 or Tier 2. At Tier 3 (SUBMITTABLE), must match
+          an INSDC-approved country name for BioSample submission via TOSTADAS
+          (e.g. "USA" not "United States", "United Kingdom" not "UK").
+          INSDC country list: https://www.insdc.org/submitting-standards/country-qualifier-vocabulary/
+          portal_to_tostadas.py validates against the INSDC list before
+          constructing the geo_loc_name field (format: Country:State:City).
+
+      collection_location_state:
+        slot_uri: genepio:0001182
+        description: >-
+          Sub-national administrative region of sample collection. Accepts
+          any equivalent administrative division regardless of country:
+          US state, Canadian province, Mexican estado, Australian state,
+          Brazilian estado, UK county/nation, German Bundesland, Japanese
+          prefecture, etc. Free text — not a controlled vocabulary since
+          administrative divisions vary by country. Used in NCBI BioSample
+          geo_loc_name construction (Country:State:City).
+
+      collection_location_county:
+        description: >-
+          County, district, or equivalent sub-state administrative region of
+          sample collection. US county, UK district, French département,
+          Australian local government area, etc. Free text. Optional — not
+          all countries use a county-level administrative division.
+
+      collection_location_zipcode:
+        description: >-
+          Postal code of collection location. Format varies by country and
+          is not validated — free text. Examples: US ZIP (85004), UK postcode
+          (SW1A 1AA), Canadian postal code (A1A 1A1), Australian postcode (2000),
+          German Postleitzahl (10115). Optional — many countries do not use
+          postal codes, and postal codes are not used in NCBI BioSample
+          geo_loc_name construction.
+
+      collection_location_city:
+        description: >-
+          City, town, municipality, or village of sample collection. Free text.
+          Used in NCBI BioSample geo_loc_name construction alongside
+          collection_location_country and collection_location_state:
+          format is "Country:State:City" (e.g. "USA:State:City").
+          Optional — omitted from geo_loc_name if not provided.
+
+      geo_lat:
+        range: float
+        description: "Decimal latitude (WGS84), e.g. 39.7392"
+
+      geo_lon:
+        range: float
+        description: "Decimal longitude (WGS84), e.g. -104.9903"
+
+      # MMWR epiweek (computed from date_collected at ingest)
+      mmwr_year:
+        range: integer
+        description: "CDC MMWR epiweek year (computed at ingest)"
+      mmwr_week:
+        range: integer
+        description: "CDC MMWR week number 1–53 (computed at ingest)"
+      iso_year:
+        range: integer
+        description: "ISO 8601 week-based year (computed at ingest)"
+      iso_week:
+        range: integer
+        description: "ISO week number 1–53 (computed at ingest)"
+
+      # ── Case Linkage (cross-sector epidemiological grouping) ──────────────
+      case_id:
+        description: >-
+          Generic public health case identifier. Links samples across sectors
+          (human, animal, environmental) that share an epidemiological
+          connection. HumanSample also provides external_case_id for an
+          operator-issued anonymized identifier where the operator has its
+          own case-management system. Other jurisdictions use this generic
+          case_id field: CalREDIE (CA), ECLRS (NY), NEDSS (CDC), etc.
+          Nullable — not all samples belong to a named case.
+
+      case_source_system:
+        description: >-
+          The surveillance system that issued the case_id.
+          Examples: MEDSIS, CalREDIE, ECLRS, NEDSS, ESSENCE.
+          Free text — not a controlled vocabulary since system names
+          vary by jurisdiction and evolve over time.
+
+      case_type:
+        range: CaseTypeEnum
+        description: >-
+          Classification of the epidemiological event this sample is
+          associated with. Only meaningful when case_id is populated.
+
+      # ── One Health Sector ─────────────────────────────────────────────────
+      sector:
+        range: SectorEnum
+        required: true
+        description: >-
+          One Health sector classification. Determines surveillance network
+          routing and tiered access control rules. Distinct from source_type
+          which describes the physical sample material.
+
+      # ── Surveillance Relevance ────────────────────────────────────────────
+      surveillance_relevant:
+        range: boolean
+        required: true
+        description: >-
+          Whether the host operator's public health oversight access applies to this sample.
+          Computed at ingest from organism_name against the reportable_organisms
+          table. TRUE if organism is reportable, FALSE otherwise.
+          For metagenomic samples (organism_name = metagenome): TRUE if any
+          target_organism is reportable, or TRUE by default if no targets
+          specified (conservative). Can be overridden — see
+          surveillance_relevant_override.
+
+      surveillance_relevant_override:
+        range: boolean
+        description: >-
+          TRUE if surveillance_relevant was manually overridden from its
+          organism-driven default. Triggers audit logging. TRUE → FALSE
+          overrides require governance board approval (status tracked via
+          surveillance_override_pending). FALSE → TRUE overrides are
+          self-declared by Lab Director.
+
+      surveillance_override_pending:
+        range: boolean
+        description: >-
+          TRUE when a TRUE → FALSE override has been submitted but not yet
+          approved by the governance board. surveillance_relevant stays TRUE
+          until approval. Cleared when override is approved or denied.
+
+      surveillance_override_category:
+        range: SurveillanceOverrideCategoryEnum
+        description: >-
+          Classification of the override reason. Determines whether governance
+          board approval is required.
+
+      surveillance_override_reason:
+        description: >-
+          Required when surveillance_relevant_override is TRUE. Justification
+          for the override, reviewed by governance board for TRUE → FALSE
+          changes.
+
+      surveillance_override_approved_by_id:
+        range: integer
+        description: >-
+          User ID of the governance board member who approved a TRUE → FALSE
+          override. NULL for FALSE → TRUE overrides (no approval required)
+          and for non-overridden samples.
+
+      surveillance_override_date:
+        range: date
+        description: "Date the override was approved by the governance board."
+
+      # ── Metagenomic Targeting ─────────────────────────────────────────────
+      target_organisms:
+        multivalued: true
+        range: OrganismNameEnum
+        description: >-
+          For metagenomic samples (organism_name = metagenome) — the
+          pathogen(s) the lab is specifically targeting or monitoring for.
+          Used to compute surveillance_relevant when organism_name is
+          'metagenome'. If empty (untargeted metagenomics),
+          surveillance_relevant defaults to TRUE conservatively.
+          Not applicable to isolate or consensus genome samples.
+
+      # ── Data Quality Tier ─────────────────────────────────────────────────
+      quality_status:
+        range: QualityStatusEnum
+        required: true
+        description: >-
+          Metadata completeness tier achieved at ingest. Determines which
+          platform features are available for this sample. PRELIMINARY = Tier 1
+          (ingestible, immediately available for pipeline runs). ANALYZABLE =
+          Tier 2 (eligible for time-series and geographic analyses).
+          SUBMITTABLE = Tier 3 (meets full NCBI/GISAID/NWSS requirements).
+          QC_FAILED = failed QC checks, retained for audit but excluded from
+          analyses. RETRACTED = previously released data withdrawn.
+
+      # ── Date Precision ────────────────────────────────────────────────────
+      date_collected_precision:
+        range: DatePrecisionEnum
+        description: >-
+          Precision of date_collected. When only a year or year-month is
+          known, set this field and store date_collected as YYYY-01-01 or
+          YYYY-MM-01 respectively. Epiweek computation is suppressed when
+          precision is year or month. Displayed to analysts so they understand
+          the resolution of time-series data.
+
+      # ── Sequencing Read Type ──────────────────────────────────────────────
+      read_type:
+        range: ReadTypeEnum
+        description: >-
+          Sequencing read length/technology category. Determines pipeline
+          compatibility and QC expectations. Distinct from sequencing_platform
+          (which captures the instrument make). A hybrid assembly uses both
+          short_read and long_read inputs for the same sample.
+
+      # ── Assembly Type ─────────────────────────────────────────────────────
+      assembly_type:
+        range: AssemblyTypeEnum
+        description: >-
+          Distinguishes isolate assemblies from metagenome-assembled genomes
+          (MAGs) and other assembly strategies. Drives QC threshold selection
+          and pipeline routing. MAG-specific QC fields (mag_completeness_pct,
+          mag_contamination_pct, etc.) are only meaningful when assembly_type
+          is mag or sag.
+
+      mag_completeness_pct:
+        range: float
+        description: >-
+          CheckM2 completeness percentage. Only applicable when
+          assembly_type = mag or sag. Range: [0, 100].
+
+      mag_contamination_pct:
+        range: float
+        description: >-
+          CheckM2 contamination percentage. Only applicable when
+          assembly_type = mag or sag. Range: [0, 100].
+
+      mag_strain_heterogeneity_pct:
+        range: float
+        description: >-
+          CheckM2 strain heterogeneity percentage. Indicates within-bin
+          strain diversity. Only applicable when assembly_type = mag.
+
+      mag_bin_size_bp:
+        range: integer
+        description: >-
+          MAG bin size in base pairs. Only applicable when assembly_type = mag.
+
+      # ── Provenance and Attribution (WHO Principle 6) ──────────────────────
+      originating_lab:
+        description: >-
+          Lab that collected the original sample. Maps to GISAID
+          "Originating lab" and NCBI BioSample originating_lab.
+          Required for WHO Principle 6 attribution. May differ from
+          sequencing_lab (who sequenced it) and submitting_lab (who
+          uploaded to JACKPOT).
+
+      submitting_lab:
+        description: >-
+          Lab that submitted data to JACKPOT. May differ from
+          originating_lab and sequencing_lab. Required for WHO Principle 6
+          credit tracking.
+
+      data_generator:
+        description: >-
+          Individual or organization that generated the sequence data.
+          Used for attribution in publications per WHO Principle 6.
+          Format: "Name, Institution" or ORCID URI.
+
+      # ── ENA Accession (international interoperability) ────────────────────
+      ena_accession:
+        description: >-
+          European Nucleotide Archive run accession (ERR prefix).
+          ENA and NCBI SRA mirror each other but submitting labs in
+          Europe and Asia may submit via ENA. Required for WHO Principle 9
+          interoperability with non-US partners.
+
+      # ── Data Use Terms (WHO Principles 6 and 8) ──────────────────────────
+      data_use_terms:
+        range: DataUseTermsEnum
+        description: >-
+          Conditions under which this data may be used, per WHO Principle 8
+          ("as open as possible, as closed as necessary"). Defaults to the
+          organization's policy. Overrides sharing_level for external
+          data use agreements.
+
+      embargo_release_date:
+        range: date
+        description: >-
+          Date after which data_use_terms = embargo data becomes openly
+          accessible. Only meaningful when data_use_terms = embargo.
+
+      citation_request:
+        description: >-
+          Free-text citation request from originating lab. Surfaced to
+          data users when they access or download this sample's data.
+          Per WHO Principle 6 — users should invite originating labs to
+          participate in research and publications.
+
+      # ── Turnaround Time Tracking (Rockefeller benchmarks) ─────────────────
+      date_received_lab:
+        range: date
+        description: >-
+          Date sample received at sequencing lab. Start of the turnaround
+          clock. Rockefeller benchmark: ≤10 days from receipt to consensus
+          genome upload.
+
+      date_sequence_uploaded:
+        range: date
+        description: >-
+          Date consensus genome uploaded to JACKPOT. Rockefeller target:
+          ≤10 days from date_received_lab.
+
+      date_lineage_assigned:
+        range: date
+        description: >-
+          Date lineage or sequence type assignment completed (Pangolin,
+          MLST, cgMLST). Rockefeller target: ≤48 hours from
+          date_sequence_uploaded.
+
+      date_phenotype_reported:
+        range: date
+        description: >-
+          Date phenotypic threat assessment (AMR profile, virulence) reported.
+          Rockefeller target: ≤21 days from date_sequence_uploaded.
+
+      # ── Cross-sample Linkage ──────────────────────────────────────────────
+      associated_sample_ids:
+        multivalued: true
+        description: >
+          APGAP: 'IDs of any associated samples'. Present in ALL sample
+          type spreadsheets. Links sequences from the same investigation
+          (e.g. pet and owner, food product and patient, vector and host).
+          Validation: each ID should match an existing sample_id in the
+          system. Flag (not reject) if linked sample not yet uploaded —
+          may arrive later. Bidirectional linkage confirmed at resolution.
+          Stored as directed pairs in the sample_associations table.
+
+      # ── Optional Clinical / Lab Testing ──────────────────────────────────
+      ct_value:
+        range: float
+        description: >
+          APGAP: 'Ct value'. PCR cycle threshold value.
+          Validation: numeric, range [0, 50].
+
+      other_testing_performed:
+        multivalued: true
+        description: >
+          APGAP: 'Other Testing Performed'. Multiple entries permitted.
+          Match defined allowable entries. Flag error if 'none' entered
+          alongside any other value.
+
+      lab_of_other_testing:
+        multivalued: true
+        description: >
+          APGAP: 'Lab of Other Testing'. Conditional: required if
+          other_testing_performed is not empty or 'none'.
+
+      intermediary_clinical_lab:
+        description: >
+          APGAP: 'Intermediary clinical lab name'. Optional.
+          Match defined allowable entries.
+
+      # ── Sequencing Results (auto-populated post-pipeline) ────────────────
+      assembly_method:
+        description: "e.g. SPAdes 3.15, IVAR 1.4, Flye 2.9, Unicycler 0.5"
+
+      coverage_depth:
+        range: float
+        description: "Mean sequencing depth (X)"
+
+      genome_completeness:
+        range: float
+        description: "Percentage of reference genome covered (0–100)"
+
+      # ── Viral Lineage / Clade (auto-populated by Pangolin + Nextclade) ────
+      pango_lineage:
+        description: "Pangolin lineage designation, e.g. JN.1, BA.2.86"
+      pango_lineage_version:
+        description: "Pangolin software version used for assignment"
+      pango_qc_status:
+        range: PangoQCStatusEnum
+        description: >-
+          Pangolin QC status for the lineage call. A 'fail' or 'ambiguous'
+          status means the lineage designation is uncertain and should not
+          drive surveillance decisions without manual review. WHO and CDC
+          both require confidence indicators in genomic surveillance reporting.
+          Populated automatically from Pangolin output at pipeline completion.
+      pango_conflict:
+        range: float
+        description: >-
+          Pangolin conflict score (0.0–1.0). Values >0.0 indicate ambiguity
+          between two or more lineage calls. High conflict (>0.5) indicates
+          the assignment is unreliable. Stored for downstream filtering —
+          surveillance dashboards should suppress or flag high-conflict calls.
+      nextstrain_clade:
+        description: "Nextstrain clade designation, e.g. 24A"
+      nextclade_qc_score:
+        range: float
+        description: "Nextclade QC score (0–100; higher is better quality)"
+      nextclade_version:
+        description: "Nextclade software version"
+
+      # ── VADR (required before NCBI submission) ────────────────────────────
+      vadr_status:
+        range: VADRStatusEnum
+        description: "NCBI VADR genome annotation validation result"
+      vadr_alerts:
+        multivalued: true
+        description: "VADR alert codes, e.g. CDS_HAS_STOP_CODON"
+
+      # ── AMR (bacterial samples, auto-populated post-pipeline) ────────────
+      mlst_scheme:
+        description: "MLST scheme, e.g. 'senterica', 'campylobacter'"
+      mlst_sequence_type:
+        description: "MLST sequence type, e.g. ST131"
+      mlst_confidence:
+        range: MLSTConfidenceEnum
+        description: >-
+          Confidence level of the MLST sequence type assignment.
+          Perfect = all alleles matched exactly. Good = all alleles matched
+          but some may be novel. Low = one or more alleles missing or novel.
+          Unknown = insufficient data. Surveillance reports should distinguish
+          confident from uncertain ST assignments — a novel allele can indicate
+          a genuinely new strain or a sequencing artefact.
+      amrfinder_genes:
+        multivalued: true
+        description: "AMR genes detected by NCBI AMRFinder"
+      card_aro_terms:
+        multivalued: true
+        description: "CARD Antibiotic Resistance Ontology terms detected"
+
+      # ── ELR / Clinical Coding ─────────────────────────────────────────────
+      loinc_code:
+        slot_uri: LOINC:CODE
+        description: >
+          LOINC code for the lab test performed.
+          e.g. 94500-6 (SARS-CoV-2 RNA, PCR, NP swab)
+      loinc_system:
+        description: "LOINC specimen/body site, e.g. 'Nasopharynx'"
+      snomed_clinical_finding:
+        slot_uri: SNOMED:FINDING
+        description: "SNOMED CT clinical finding code, e.g. 840539006"
+
+      # ── Submission Status ─────────────────────────────────────────────────
+      ncbi_submission_status:
+        range: SubmissionStatusEnum
+        description: "NCBI SRA/BioSample/GenBank submission status via TOSTADAS"
+      ncbi_submitted_at:
+        range: datetime
+      gisaid_submission_status:
+        range: SubmissionStatusEnum
+        description: "GISAID EpiCoV/EpiFlu/EpiPox submission status"
+      gisaid_submitted_at:
+        range: datetime
+
+      # ── File Locations ────────────────────────────────────────────────────
+      # fastq_r1_uri and fastq_r2_uri are CONVENIENCE FIELDS for the common
+      # 2-file paired-end case. The sample_files table is the canonical
+      # per-file registry for ALL cases (multi-lane, nanopore chunks,
+      # multiple unpaired reads, mixed extensions, etc.).
+      # These fields are populated automatically by the ingest router
+      # via file_detector.py → get_convenience_uris().
+      fastq_r1_uri:
+        required: false
+        description: >
+          Convenience field: URI of the primary (R1 or first) scrubbed read file.
+          Populated automatically for simple 2-file paired runs.
+          Supports gs:// (GCS) and drs:// (GA4GH DRS) schemes.
+          Accepted extensions: .fastq, .fq, .fasta, .fa, .fna
+          with optional .gz or .bz2 compression.
+          For all other cases (multi-lane, nanopore, multiple unpaired),
+          query the sample_files table for the complete file list.
+      fastq_r2_uri:
+        description: >
+          Convenience field: URI of the R2 FASTQ for simple paired runs.
+          NULL for single-end, multi-lane, or nanopore samples.
+          Query sample_files for the complete file list.
+      raw_fastq_uri:
+        description: >
+          Pre-scrub URI of primary read file — restricted to Lab Directors
+          and above. NULL after 30-day lifecycle deletion.
+      consensus_fasta_uri:
+        description: "Consensus/assembly FASTA URI (auto-populated post-pipeline)"
+      assembly_uri:
+        description: "Full assembly FASTA URI (auto-populated post-assembly pipeline)"
+
+      # ── Ingest / Lifecycle ────────────────────────────────────────────────
+      scrub_status:    { range: ScrubStatusEnum,   required: true }
+      pii_scan_status: { range: PIIScanStatusEnum, required: true }
+      ingest_method:   { range: IngestMethodEnum,  required: true }
+      sharing_level:   { range: SharingLevelEnum,  required: true }
+
+      # ── Administrative (all optional) ─────────────────────────────────────
+      pi_name:
+        description: >
+          APGAP: 'PI name'. Defaults to Lab Director.
+          Validation: must match existing user in the platform.
+      grant_number:
+        description: "APGAP: 'Grant number'. Alphanumeric."
+      contact_other:
+        description: >
+          APGAP: 'Contact (if other than user uploading data)'.
+          Email format. Phase 2: allow non-user contacts.
+      comments:
+        description: "Free text comments"
+
+# ════════════════════════════════════════════════════════════════════════════
+# HOST-SPECIFIC SUBCLASSES — HUMAN AND ANIMAL
+# ════════════════════════════════════════════════════════════════════════════
+
+  HumanSample:
+    is_a: Sample
+    description: >
+      Clinical or surveillance sample from a human host.
+      Fields from APGAP human_host.xlsx.
+      Maps to GA4GH Phenopacket Individual + Disease elements.
+    attributes:
+
+      external_case_id:
+        required: true
+        description: >
+          Operator-issued anonymized identifier or exemption code for a
+          human sample. Either (1) an anonymized ID linking to the host
+          jurisdiction's case-management system, or (2) an exemption code
+          obtained for the study if the sample does not originate from
+          surveillance.
+          Validation: cross-checked against the operator's authoritative
+          ID list when that list becomes available. Currently free text.
+          Distinct from case_id (used by samples whose case identifier
+          comes from a different surveillance system).
+
+
+      biospecimen_type:
+        range: BiospecimenTypeEnum
+        required: true
+        description: >
+          APGAP: 'Biospecimen type'. Type of biological specimen collected.
+
+      reason_for_collection:
+        multivalued: true
+        range: ReasonForCollectionEnum
+        required: true
+        description: >
+          APGAP: 'Reason for sample collection'.
+          Whether sample was obtained during clinical care or research study.
+
+      host_sex:
+        slot_uri: ncbi:host_sex
+        range: BiologicalSexEnum
+        description: >
+          APGAP: 'Sex'. Biological sex of the human host.
+
+      host_age:
+        slot_uri: ncbi:host_age
+        range: integer
+        description: >
+          APGAP: 'Age (years)'. Age at time of collection.
+          Validation: integer, range [0, 120]. Unit: years.
+
+      host_age_unit:
+        range: AgeUnitEnum
+        description: "Unit for host_age when age < 1 year"
+
+      host_species:
+        slot_uri: ncbi:host
+        description: >
+          Auto-populated as 'Homo sapiens' for HumanSample. Not user-entered.
+
+      host_disease:
+        slot_uri: ncbi:host_disease
+        multivalued: true
+        required: true
+        description: >
+          APGAP: 'Disease'. The disease caused by the pathogen (whether or
+          not the host is symptomatic). Match defined allowable entries.
+
+      isolation_source:
+        slot_uri: ncbi:isolation_source
+        description: >
+          Auto-populated as 'human clinical specimen' for HumanSample.
+
+      vaccination_status:
+        description: >
+          e.g. fully vaccinated, unvaccinated, boosted,
+          partially vaccinated, unknown.
+
+      clinical_outcome:
+        description: >
+          e.g. hospitalized, ICU, deceased, outpatient,
+          asymptomatic, unknown.
+
+      underlying_conditions:
+        multivalued: true
+        description: >
+          Relevant comorbidities, e.g. diabetes, immunocompromised,
+          chronic lung disease, obesity.
+
+      # ── Epidemiologically critical date fields ─────────────────────────────
+      date_of_symptom_onset:
+        range: date
+        description: >-
+          Date the patient first experienced symptoms of the disease.
+          Standard field on WHO case investigation forms, NNDSS reports,
+          and ArboNET surveillance. Distinct from date_collected (when the
+          sample was taken). The lag between these dates drives incubation
+          period estimates and time-to-detection metrics. ISO 8601 format.
+          Optional — not all cases are symptomatic (asymptomatic cases
+          may have no onset date).
+
+      # ── Travel history (WHO situation report standard) ─────────────────────
+      travel_history_country:
+        multivalued: true
+        description: >-
+          Countries visited by the patient in the 14 days before symptom
+          onset or sample collection (whichever is earlier). NCBI BioSample
+          standard field. WHO situation reports routinely distinguish
+          travel-linked from locally-acquired cases for internationally
+          relevant pathogens (MPOX, Ebola, cholera, H5N1, MERS-CoV).
+          Free text — INSDC country names preferred but not enforced here.
+          Multiple values permitted (multiple countries in travel history).
+
+      travel_history_days:
+        range: integer
+        description: >-
+          Days since return from travel when sample was collected.
+          Used alongside travel_history_country to calculate exposure window.
+          Integer. Optional — only populated when travel_history_country
+          is provided.
+
+      # ── Host age range (privacy-preserving surveillance reporting) ──────────
+      host_age_range:
+        range: AgeRangeEnum
+        description: >-
+          Age of the human host expressed as a decade bracket for
+          privacy-preserving public surveillance reporting. NNDSS, ArboNET,
+          and CDC public surveillance datasets use age brackets rather than
+          exact ages. host_age (exact integer) is retained for internal
+          analysis; host_age_range is the shareable tier.
+          Populated automatically from host_age at ingest. Reviewers and
+          external users see age range; Lab Directors and above see both.
+
+      # ── Collection method (PHA4GE + NCBI BioSample standard) ───────────────
+      collection_method:
+        range: CollectionMethodEnum
+        description: >-
+          Method used to collect the specimen. Different collection methods
+          for the same biospecimen type have different sensitivity profiles
+          (e.g. nasopharyngeal swab vs. saliva vs. mid-turbinate swab for
+          SARS-CoV-2; induced sputum vs. BAL fluid vs. gastric aspirate for TB).
+          Standard PHA4GE and NCBI BioSample field. Required for Tier 2
+          (ANALYZABLE) and above. Maps to NCBI collection_method attribute.
+
+  WildlifeSample:
+    is_a: Sample
+    description: >
+      Sample from a wild animal host.
+      Fields from APGAP wildlife_host.xlsx.
+    attributes:
+
+      host_species:
+        slot_uri: ncbi:host
+        required: true
+        description: >
+          APGAP: 'Host species'. Scientific name preferred (genus + species);
+          genus only acceptable. Match defined allowable entries.
+          Examples: Eptesicus fuscus, Canis latrans, Odocoileus virginianus.
+
+      wildlife_subject_id:
+        description: "Optional alphanumeric field identifier for the animal"
+
+      biospecimen_type:
+        range: BiospecimenTypeEnum
+        required: true
+
+      host_disease:
+        slot_uri: ncbi:host_disease
+        multivalued: true
+        required: true
+
+      isolation_source:
+        slot_uri: ncbi:isolation_source
+        description: "Auto-derived from host species + biospecimen type"
+
+      isolate:
+        slot_uri: ncbi:isolate
+
+      travel_origin_region:
+        description: >-
+          For migratory or translocated wildlife — the geographic region
+          of origin or most recent stopover before the animal was sampled.
+          Equivalent to travel_history for humans. Particularly relevant
+          for migratory bird HPAI (H5N1) surveillance where flyway routes
+          determine exposure risk. Free text. Examples: 'Atlantic Flyway',
+          'East Asia Pacific Flyway', 'Mongolia', 'Central Valley CA'.
+
+  CompanionAnimalSample:
+    is_a: Sample
+    description: >
+      Sample from a companion (pet) animal host.
+      Fields from APGAP Companion_animal_host.xlsx.
+    attributes:
+
+      host_species:
+        slot_uri: ncbi:host
+        required: true
+        description: >
+          APGAP: 'Host species'. Genus and species.
+          Examples: felis catus, canis familiaris.
+
+      companion_subject_id:
+        description: "Optional alphanumeric field identifier for the animal"
+
+      location_type:
+        range: CompanionAnimalLocationEnum
+        description: >
+          APGAP: 'Location type'. Animal's setting.
+
+      biospecimen_type:
+        range: BiospecimenTypeEnum
+        required: true
+
+      vaccine_status_against_pathogen:
+        range: VaccineStatusEnum
+        description: "APGAP: 'Vaccine status against pathogen'"
+
+      host_disease:
+        slot_uri: ncbi:host_disease
+        multivalued: true
+        required: true
+
+      symptomatic:
+        range: SymptomaticEnum
+        description: "Whether animal was symptomatic at time of collection"
+
+      isolation_source:
+        slot_uri: ncbi:isolation_source
+
+      isolate:
+        slot_uri: ncbi:isolate
+
+  LivestockSample:
+    is_a: Sample
+    description: >
+      Sample from a livestock or agricultural animal host.
+      Fields from APGAP Livestock_Ag_animal_host.xlsx.
+    attributes:
+
+      host_species:
+        slot_uri: ncbi:host
+        required: true
+        description: >
+          APGAP: 'Host species'. Scientific name of livestock species.
+          Examples: Gallus gallus domesticus, Sus domesticus, Lama glama.
+
+      livestock_subject_id:
+        description: "Optional field identifier for the individual animal"
+
+      biospecimen_type:
+        range: BiospecimenTypeEnum
+        required: true
+
+      livestock_products:
+        multivalued: true
+        range: LivestockProductEnum
+        required: true
+
+      location_type:
+        range: LivestockLocationEnum
+
+      distribution_scale:
+        multivalued: true
+        range: DistributionScaleEnum
+
+      antibiotic_use:
+        range: AntibioticUseEnum
+
+      host_disease:
+        slot_uri: ncbi:host_disease
+        multivalued: true
+        required: true
+
+      isolation_source:
+        slot_uri: ncbi:isolation_source
+
+      isolate:
+        slot_uri: ncbi:isolate
+
+  VectorSample:
+    is_a: Sample
+    description: >
+      Sample from a disease vector (arthropod).
+      Fields from APGAP vectors.xlsx.
+    attributes:
+
+      vector_species:
+        required: true
+        description: >
+          APGAP: 'Vector species'. Scientific name.
+          Examples: Aedes aegypti, Culex tarsalis,
+          Rhipicephalus sanguineus, Dermacentor andersoni.
+
+      vector_host_species:
+        slot_uri: ncbi:host
+        description: "Host animal the vector was collected from, if known"
+
+      biospecimen_type:
+        range: VectorBiospecimenTypeEnum
+        required: true
+
+      pool_size_min:
+        range: integer
+        description: >
+          Minimum number of individual arthropods in this pool.
+          For an exact count, set pool_size_min = pool_size_max.
+          Required when biospecimen_type = pooled_homogenate.
+          Used for Minimum Infection Rate (MIR) calculations.
+          CDC standard pool size is <= 50 arthropods.
+
+      pool_size_max:
+        range: integer
+        description: >
+          Maximum number of individual arthropods in this pool.
+          For an exact count, set pool_size_min = pool_size_max.
+          Required when biospecimen_type = pooled_homogenate.
+
+# ════════════════════════════════════════════════════════════════════════════
+# ENVIRONMENTAL SAMPLE SUBCLASSES
+# ════════════════════════════════════════════════════════════════════════════
+
+  EnvironmentalSample:
+    is_a: Sample
+    description: >
+      Base class for all environmental samples. Do not instantiate directly —
+      use the specific environmental subclasses below.
+
+  WastewaterSample:
+    is_a: EnvironmentalSample
+    description: >
+      Sample from a wastewater collection or treatment system.
+      Fields from APGAP wastewater_sample.xlsx, aligned with CDC NWSS
+      mandatory reporting fields.
+      Reference: https://www.cdc.gov/nwss/reporting.html
+    attributes:
+
+      wwtp_name:
+        description: >
+          APGAP: 'Location (sample_location_specify)'. NWSS: sample_location.
+          Wastewater facility name or upstream sewer location.
+          Examples: 'South Tempe Water Reclamation Facility',
+          'undisclosed sewer line upstream of 5th Ave'.
+
+      nwss_sewershed_id:
+        description: >-
+          CDC NWSS-assigned identifier for this wastewater sampling site.
+          Links JACKPOT wastewater data to CDC's authoritative sewershed
+          geometry layer (catchment area polygon, population denominator,
+          WWTP capacity). Enables unambiguous matching when JACKPOT data
+          is reported to CDC NWSS. Format: integer or NWSS site code.
+          Reference: https://www.cdc.gov/nwss/reporting.html
+          Optional — not all sites are registered in NWSS at time of
+          sample collection, but should be populated at Tier 2 and above.
+
+      sample_location_zipcode:
+        description: "US ZIP code of wastewater sampling location (5-digit)"
+
+      county_names:
+        multivalued: true
+        description: >
+          APGAP: 'Service area (county_names)'. NWSS: county_names.
+          Counties served by this sampling site, by name or FIPS code.
+          System cross-maps name ↔ FIPS. Multiple entries permitted.
+          Examples: 'Some County', '04013', 'Another County'.
+
+      population_served:
+        range: integer
+        required: true
+        description: >
+          APGAP/NWSS: 'Population served'. Estimated number of persons
+          served by this sampling site. Validation: positive integer.
+
+      sample_type:
+        range: WastewaterSampleTypeEnum
+        required: true
+        description: "APGAP/NWSS: 'Sample type'. e.g. grab, 24-hr composite"
+
+      sample_matrix:
+        range: SampleMatrixEnum
+        required: true
+        description: >
+          APGAP/NWSS: 'Sample matrix'. Wastewater matrix from which
+          the sample was collected.
+
+      pretreatment:
+        multivalued: true
+        range: PretreatmentEnum
+        required: true
+        description: >
+          APGAP: 'Pretreatment'. Treatment applied prior to collection.
+          Flag if 'none' co-occurs with any other value.
+
+      concentration_method:
+        range: ConcentrationMethodEnum
+        required: true
+
+      flow_rate_mgd:
+        range: float
+        required: true
+        description: >
+          APGAP: 'Flow rate (MGD)'. NWSS: flow_rate.
+          Wastewater volumetric flow rate in million gallons per day.
+          Validation: positive float. Unit: MGD.
+
+      sample_collect_time:
+        range: time
+        description: >
+          NWSS: 'sample_collect_time'. Local 24-hr time (HH:MM).
+          For composite samples: start time.
+
+      pcr_target:
+        description: >
+          NWSS: 'pcr_target'. PCR quantification target.
+          e.g. sars-cov-2, influenza-a, mpox, hMPXV Clade I.
+          See NWSS value set vs_pcr_target.
+
+      pcr_gene_target:
+        description: >
+          NWSS: 'pcr_gene_target'. PCR gene for quantification.
+          Must align with pcr_target selection.
+
+      pcr_gene_target_ref:
+        description: "NWSS: Publication or URL for the PCR gene target used"
+
+      pcr_type:
+        description: >
+          NWSS: 'pcr_type'. Type of PCR used.
+          Non-sars-cov-2/mpox targets must use a digital PCR type.
+
+      quant_stan_type:
+        description: "NWSS: Type of nucleic acid used as quantification standard"
+
+      stan_ref:
+        description: "NWSS: Publication/description of quantitative standard"
+
+      lod_ref:
+        description: "NWSS: Publication/description of limit of detection method"
+
+      inhibition_method:
+        description: "NWSS: Method to evaluate molecular inhibition; 'none' if not tested"
+
+      num_no_target_control:
+        range: integer
+        description: "NWSS: Number of no-template controls (NTC) per instrument run"
+
+      pasteurized:
+        range: boolean
+        description: "NWSS: Was the sample pasteurized?"
+
+      env_broad_scale:
+        slot_uri: MIXS:env_broad_scale
+        description: "MIxS required. ENVO term. e.g. ENVO:00002001 (wastewater)"
+
+      env_local_scale:
+        slot_uri: MIXS:env_local_scale
+        description: "MIxS required. ENVO term. e.g. ENVO:01000621 (municipal WWTP)"
+
+      env_medium:
+        slot_uri: MIXS:env_medium
+        description: "MIxS required. ENVO term. e.g. ENVO:00002040 (sewage)"
+
+  WaterSample:
+    is_a: EnvironmentalSample
+    description: >
+      Sample from a non-wastewater water source.
+      Fields from APGAP Water_sample.xlsx.
+    attributes:
+
+      water_source:
+        range: WaterSourceEnum
+        description: "APGAP: 'Water source'. Type of water body or supply."
+
+      water_temperature_c:
+        range: float
+        required: true
+        description: >
+          APGAP: 'Water temperature (C)'.
+          Validation: range [-36, 100]. Unit: °C.
+
+      turbidity_ntu:
+        range: float
+        required: true
+        description: >
+          APGAP: 'Turbidity (NTU)'. Nephelometric Turbidity Units.
+          Validation: range (0, 4000]; values above 4000 flagged for
+          confirmation (possible decimal point omission). Unit: NTU.
+
+      ph:
+        range: float
+        required: true
+        description: "APGAP: 'pH'. Validation: range [0, 14]."
+
+      salinity_ppm:
+        range: float
+        required: true
+        description: "APGAP: 'Salinity (ppm)'. Unit: ppm."
+
+      env_broad_scale:
+        slot_uri: MIXS:env_broad_scale
+      env_local_scale:
+        slot_uri: MIXS:env_local_scale
+      env_medium:
+        slot_uri: MIXS:env_medium
+
+  AirSample:
+    is_a: EnvironmentalSample
+    description: >
+      Airborne/aerosol sample.
+      Fields from APGAP Air.xlsx.
+    attributes:
+
+      air_source:
+        range: AirSourceEnum
+        required: true
+        description: >
+          APGAP: 'Source'. Origin of the air sample.
+          Examples: cooling tower, internal vent, urban, plane.
+
+      airflow_rate_m3_s:
+        range: float
+        required: true
+        description: "APGAP: 'Airflow rate (m³/s)'. Validation: positive float. Unit: m³/s."
+
+      pm25_ug_m3:
+        range: float
+        required: true
+        description: "APGAP: 'PM2.5 (µg/m³)'. Validation: positive float. Unit: µg/m³."
+
+      pm10_ug_m3:
+        range: float
+        required: true
+        description: "APGAP: 'PM10 (µg/m³)'. Validation: positive float. Unit: µg/m³."
+
+      env_broad_scale:
+        slot_uri: MIXS:env_broad_scale
+      env_local_scale:
+        slot_uri: MIXS:env_local_scale
+      env_medium:
+        slot_uri: MIXS:env_medium
+
+  SoilSample:
+    is_a: EnvironmentalSample
+    description: >
+      Sample from a soil matrix.
+      Fields from APGAP Soil_sample.xlsx.
+    attributes:
+
+      soil_site_type:
+        slot_uri: ncbi:isolation_source
+        required: true
+        description: >
+          APGAP: 'Type of soil site'. Characterization of the soil context.
+          Examples: rodent burrow, construction site, agricultural,
+          CAFO vicinity.
+
+      sample_depth_cm:
+        required: true
+        description: >
+          APGAP: 'Depth of sample (cm)'. Single value or range.
+          Examples: 5, [0, 2], [0, 10].
+          Validation: positive numeric, single value or range notation.
+
+      nitrogen_mg_kg:
+        range: float
+        description: "APGAP: 'Nitrogen (mg/kg)'. Unit: mg/kg."
+
+      soil_temperature_c:
+        range: float
+        description: >
+          APGAP: 'Temperature (C)'. Soil temperature.
+          Validation: range [-36, 100]. Unit: °C.
+
+      moisture_g_g:
+        range: float
+        description: "APGAP: 'Moisture (g/g)'. Gravimetric water content. Unit: g/g."
+
+      organic_carbon_g_kg:
+        range: float
+        description: "APGAP: 'Organic carbon (g/kg)'. Unit: g/kg."
+
+      soil_ph:
+        range: float
+        description: "APGAP: 'pH'. Validation: range [0, 14]."
+
+      soil_salinity_ppm:
+        range: float
+        description: "APGAP: 'Salinity (ppm)'. Unit: ppm."
+
+      env_broad_scale:
+        slot_uri: MIXS:env_broad_scale
+        description: >
+          MIxS required. ENVO term.
+          e.g. ENVO:00001998 (soil), ENVO:00000046 (agricultural soil)
+      env_local_scale:
+        slot_uri: MIXS:env_local_scale
+      env_medium:
+        slot_uri: MIXS:env_medium
+
+  SurfaceSample:
+    is_a: EnvironmentalSample
+    description: >
+      Surface swab sample (indoor or outdoor).
+      Fields from APGAP Surface.xlsx.
+      NCBI MIMS.me.built_environment package.
+    attributes:
+
+      indoor_space:
+        slot_uri: MIXS:indoor_space
+        required: true
+        description: >
+          APGAP/NCBI: 'indoor_space'. Distinguishable space within a structure.
+          Allowable: bedroom, office, bathroom, foyer, kitchen, locker room,
+          hallway, elevator, missing, not applicable, not collected,
+          not provided, restricted access.
+
+      indoor_surface:
+        slot_uri: MIXS:indoor_surface
+        required: true
+        description: >
+          APGAP/NCBI: 'indoor_surface'. Type of indoor surface.
+          Allowable: counter top, window, wall, cabinet, ceiling, door,
+          shelving, vent cover, missing, not applicable, not collected,
+          not provided, restricted access.
+
+      indoor_surface_subpart:
+        slot_uri: MIXS:indoor_surf_subpart
+        description: "APGAP/NCBI: 'indoor_surf_subpart'. Subpart of object swabbed."
+
+      surface_orientation:
+        multivalued: true
+        description: "APGAP/NCBI: 'surface_orientation'. e.g. underside, top, corner."
+
+      surface_material:
+        slot_uri: MIXS:surf_material
+        multivalued: true
+        required: true
+        description: >
+          APGAP/NCBI: 'surf_material'. Surface materials at sampling point.
+          Examples: concrete, wood, tile, plastic, glass, stainless steel.
+
+      surface_temperature_c:
+        slot_uri: MIXS:surf_temp
+        range: float
+        description: "APGAP/NCBI: 'surf_temp'. Surface temperature. Unit: °C."
+
+      surface_air_contaminants:
+        slot_uri: MIXS:surf_air_cont
+        multivalued: true
+        description: >
+          APGAP/NCBI: 'surf_air_cont'. Contaminant on surface.
+          Examples: dust, organic matter, particulate matter, VOCs.
+
+      surface_moisture_qualitative:
+        slot_uri: MIXS:samp_surf_moisture
+        description: >
+          APGAP/NCBI: 'samp_surf_moisture'. Qualitative moisture.
+          Values: intermittent moisture, not present, submerged.
+
+      surface_moisture_cm3_cm3:
+        slot_uri: MIXS:surf_moisture
+        range: float
+        description: "APGAP/NCBI: 'surf_moisture'. Numeric moisture. Unit: cm³/cm³."
+
+      surface_moisture_ph:
+        slot_uri: MIXS:surf_moisture_ph
+        range: float
+        description: "APGAP/NCBI: 'surf_moisture_ph'. pH of surface moisture. Range [0,14]."
+
+      surface_humidity_pct:
+        slot_uri: MIXS:surf_humidity
+        range: float
+        description: "APGAP/NCBI: 'surf_humidity'. Water activity. Unit: %."
+
+      wall_surface_treatment:
+        slot_uri: MIXS:wall_surf_treatment
+        multivalued: true
+        description: >
+          APGAP/NCBI: 'wall_surf_treatment'.
+          e.g. painted, wall paper, no treatment, stucco, fabric.
+
+      wall_texture:
+        slot_uri: MIXS:wall_texture
+        multivalued: true
+        description: >
+          APGAP/NCBI: 'wall_texture'.
+          e.g. smooth, popcorn, orange peel, knockdown, Santa-Fe texture.
+
+      wall_mold_signs:
+        slot_uri: MIXS:wall_water_mold
+        description: >
+          APGAP/NCBI: 'wall_water_mold'. Signs of mold/mildew.
+          Values: yes, no, unknown.
+
+      env_broad_scale:
+        slot_uri: MIXS:env_broad_scale
+        description: "MIxS required. ENVO term. e.g. ENVO:01000162 (built environment)"
+      env_local_scale:
+        slot_uri: MIXS:env_local_scale
+      env_medium:
+        slot_uri: MIXS:env_medium
+
+  FoodSample:
+    is_a: EnvironmentalSample
+    description: >
+      Sample from a food product.
+      Fields from APGAP Food-Products.xlsx.
+    attributes:
+
+      food_location_type:
+        range: FoodLocationTypeEnum
+        required: true
+        description: "APGAP: 'Location type'. Where the food sample was collected."
+
+      storage_temperature_setting:
+        description: >
+          APGAP: 'Storage temperature setting'. Numeric (°C) or descriptive string.
+          Examples: freezer, frozen, refrigerator, shelf, room temperature.
+          Validation: numeric OR match defined allowable entries.
+
+      product_temperature_c:
+        range: float
+        description: >
+          APGAP: 'Product temperature (C)'. Actual measured temperature.
+          Validation: range [-36, 100]. Unit: °C.
+
+      food_product_type:
+        range: FoodProductTypeEnum
+        required: true
+
+      env_broad_scale:
+        slot_uri: MIXS:env_broad_scale
+      env_local_scale:
+        slot_uri: MIXS:env_local_scale
+      env_medium:
+        slot_uri: MIXS:env_medium
+
+  ProduceAgSample:
+    is_a: EnvironmentalSample
+    description: >
+      Sample from an agricultural produce crop.
+      Fields from APGAP Produce_Ag.xlsx.
+    attributes:
+
+      plant_species:
+        required: true
+        description: >
+          APGAP: 'Plant species'. Scientific name of the agricultural plant.
+          Examples: Lactuca sativa var. longifolia, Allium cepa.
+
+      distribution_scale:
+        multivalued: true
+        range: DistributionScaleEnum
+
+      produce_water_source:
+        multivalued: true
+        range: ProduceWaterSourceEnum
+        required: true
+
+      fertilizer_type:
+        multivalued: true
+        range: FertilizerTypeEnum
+
+      near_animal_agriculture:
+        range: boolean
+        required: true
+        description: "Whether crop is downwind/downhill of animal ag operations"
+
+      washed_before_packing:
+        range: boolean
+
+      env_broad_scale:
+        slot_uri: MIXS:env_broad_scale
+      env_local_scale:
+        slot_uri: MIXS:env_local_scale
+      env_medium:
+        slot_uri: MIXS:env_medium
+
+# ════════════════════════════════════════════════════════════════════════════
+# CROSS-SAMPLE LINKAGE
+# ════════════════════════════════════════════════════════════════════════════
+
+  SampleAssociation:
+    description: >
+      Links two samples from the same investigation.
+      Derived from 'IDs of any associated samples' field present in ALL
+      APGAP sample type spreadsheets.
+      Stored as directed pairs in the sample_associations table.
+      Bidirectional: A→B implies B→A but stored as two records.
+    attributes:
+      source_sample_id: { required: true, identifier: true }
+      target_sample_id: { required: true }
+      association_type:
+        range: SampleAssociationTypeEnum
+      notes:
+        description: "Free text notes about the association"
+
+# ════════════════════════════════════════════════════════════════════════════
+# OUTBREAK INVESTIGATIONS
+# ════════════════════════════════════════════════════════════════════════════
+
+  OutbreakInvestigation:
+    description: >-
+      A named public health outbreak or cluster investigation. First-class
+      entity that samples link to via outbreak_investigation_id FK in the
+      samples table. Enables querying "all samples from Outbreak
+      AZ-Salmonella-2026-001", cross-sector investigation tracking (human +
+      food + environmental samples in the same investigation), and CDC/WHO
+      situation report generation without requiring aggregation from
+      case_type = outbreak on individual sample records.
+
+      Maps to: CDC NNDSS OutbreakNumber, WHO Situation Report investigation ID.
+    attributes:
+      outbreak_id:
+        identifier: true
+        required: true
+        description: >-
+          Unique identifier for this investigation. Platform-minted on creation.
+          Format: {STATE}-{PATHOGEN_CODE}-{YEAR}-{SEQUENTIAL}, e.g.
+          AZ-SALM-2026-001, AZ-SARS2-2026-042.
+
+      outbreak_name:
+        required: true
+        description: >-
+          Human-readable name for the investigation.
+          e.g. 'Some County Salmonella Typhimurium Cluster 2026'.
+
+      investigation_status:
+        range: OutbreakStatusEnum
+        required: true
+        description: "Current status of the investigation."
+
+      pathogen:
+        range: OrganismNameEnum
+        required: true
+        description: "Primary pathogen under investigation."
+
+      investigation_start_date:
+        range: date
+        required: true
+        description: "Date the investigation was formally opened."
+
+      investigation_close_date:
+        range: date
+        description: "Date the investigation was formally closed. NULL if ongoing."
+
+      reporting_jurisdiction:
+        required: true
+        description: >-
+          Primary public health jurisdiction responsible for this investigation.
+          e.g. 'State Health Dept', 'County DHS', 'CDC', 'WHO PAHO'.
+
+      sectors_involved:
+        multivalued: true
+        range: SectorEnum
+        description: >-
+          One Health sectors represented in this investigation.
+          A foodborne outbreak may involve clinical, agricultural, and
+          food samples under the same investigation.
+
+      case_count:
+        range: integer
+        description: "Current confirmed case count. Updated as investigation progresses."
+
+      nndss_outbreak_number:
+        description: >-
+          CDC NNDSS OutbreakNumber if this investigation has been reported
+          to NNDSS. Links JACKPOT investigation to national outbreak tracking.
+
+      notes:
+        description: "Free text investigation notes. Not displayed in catalog."
+
+# ════════════════════════════════════════════════════════════════════════════
+# FAIR PROVENANCE
+# ════════════════════════════════════════════════════════════════════════════
+
+  PipelineProvenance:
+    description: >
+      Structured provenance record for a pipeline run.
+      Required for FAIR Reusability (R1.2 — detailed provenance).
+      Serialized as JSON-LD alongside pipeline results in GCS.
+    attributes:
+      pipeline_run_id:  { identifier: true, required: true }
+      pipeline_name:    { required: true }
+      pipeline_version: {}
+      nextflow_version: {}
+      reference_databases:
+        multivalued: true
+        description: >
+          Reference databases and versions used.
+          e.g. 'Pangolin 4.3/pango-designation 1.2.161',
+          'CARD 3.2.9', 'NCBIAMRFinderPlus 2024-01-31.1'
+      container_versions:
+        multivalued: true
+        description: "Docker/Singularity container image URIs with SHA digests"
+      input_sample_ids:
+        multivalued: true
+      output_uris:
+        multivalued: true
+      completed_at:
+        range: datetime
+
+  SampleFile:
+    description: >
+      A single read file (FASTQ or FASTA) associated with a sample.
+      This is the canonical per-file registry and the source of truth
+      for all file tracking.
+
+      Replaces the flat fastq_r1_uri / fastq_r2_uri columns on Sample
+      as the complete file record. Those columns are kept as convenience
+      denormalized fields, populated automatically by file_detector.py
+      for the common 2-file paired-end case only.
+
+      Handles all real-world NGS file layouts:
+        - Simple paired-end (R1 + R2)
+        - Multi-lane Illumina (L001_R1, L001_R2, L002_R1, L002_R2 ...)
+        - Nanopore multi-chunk (sample_0.fq.gz, sample_1.fq.gz ...)
+        - Single-end / unpaired reads
+        - Mixed or non-standard naming
+
+      Supported extensions (case-insensitive):
+        .fastq, .fq                  with optional .gz or .bz2
+        .fasta, .fa, .fna            with optional .gz
+    attributes:
+      uri:
+        required: true
+        identifier: true
+        description: >
+          gs:// or drs:// URI of the scrubbed file. UNIQUE — the same
+          physical file cannot be registered twice.
+      raw_uri:
+        description: >
+          Pre-scrub URI. NULL after raw deletion (30-day lifecycle).
+          Accessible to Lab Directors only.
+      filename:
+        required: true
+        description: >
+          Original filename as uploaded.
+          Examples: covid-19_sample_18_R1.fastq.gz,
+          barcode01_0.fq.gz, wgs_L001_R1_001.fastq.gz
+      file_size_bytes: { range: integer }
+      md5:
+        description: "MD5 checksum populated post-upload for integrity verification"
+      file_type:
+        range: SampleFileTypeEnum
+        required: true
+        description: "FASTQ / FASTA / OTHER — derived from file extension"
+      library_layout:
+        range: SampleFileLayoutEnum
+        required: true
+        description: >
+          PAIRED = one of a paired-end pair (partner in paired_file_id).
+          SINGLE = paired-end read with missing partner.
+          UNPAIRED = genuinely single-end or nanopore chunk.
+      read_direction:
+        range: ReadDirectionEnum
+        description: >
+          R1 (forward) or R2 (reverse) for paired reads.
+          NULL for unpaired, single-end, or BAM files.
+      lane:
+        description: >
+          Illumina lane identifier, e.g. L001, L002.
+          NULL for non-multi-lane runs.
+      chunk_index:
+        range: integer
+        description: >
+          Nanopore/multi-file chunk index (0-based).
+          NULL for non-chunked data.
+      paired_file_id:
+        description: >
+          ID of the partner SampleFile for this read direction (R1↔R2).
+          NULL for unpaired files.
+      scrub_status:    { range: ScrubStatusEnum, required: true }
+      pii_scan_status: { range: PIIScanStatusEnum, required: true }
+      ingest_method:   { range: IngestMethodEnum, required: true }
+
+# ════════════════════════════════════════════════════════════════════════════
+# ENUMERATIONS
+# ════════════════════════════════════════════════════════════════════════════
+
+enums:
+
+  # ── Organism Names ─────────────────────────────────────────────────────────
+  # Source: configurable per host operator (typically the host
+  # jurisdiction's reportable communicable diseases list).
+  # Additions: Coccidioides spp. (Valley fever);
+  #            metagenome per NCBI convention.
+  # All names use NCBI Taxonomy format for NCBI submission compatibility.
+  # Platform Admins may add new values at runtime via the portal admin UI.
+
+  OrganismNameEnum:
+    description: >
+      Controlled vocabulary of pathogen organism names.
+      Derived from a configurable reportable communicable diseases list
+      (defaults to the host jurisdiction's official list).
+      Anchored to NCBI Taxonomy for BioSample/SRA/GenBank/GISAID compatibility.
+
+    permissible_values:
+
+      # ── Metagenomic / Unknown ──────────────────────────────────────────────
+      metagenome:
+        description: >
+          Use for metagenomic samples with no specific pathogen targeted
+          or identified. NCBI BioSample convention for metagenomics.
+
+      # ── Bacteria (23 species) ─────────────────────────────────────────────
+      Bacillus anthracis:
+        description: "Anthrax"
+
+      Bordetella pertussis:
+        description: "Pertussis (whooping cough)"
+
+      Borrelia hermsii:
+        description: "Relapsing fever — tick-borne (Southwest US)"
+
+      Borrelia turicatae:
+        description: "Relapsing fever — tick-borne (Southwest US)"
+
+      Brucella abortus:
+        description: "Brucellosis — bovine"
+
+      Brucella canis:
+        description: "Brucellosis — canine"
+
+      Brucella melitensis:
+        description: "Brucellosis — goat/sheep"
+
+      Brucella suis:
+        description: "Brucellosis — swine"
+
+      Burkholderia mallei:
+        description: "Glanders"
+
+      Burkholderia pseudomallei:
+        description: "Melioidosis"
+
+      Clostridium botulinum:
+        description: "Botulism"
+
+      Clostridium tetani:
+        description: "Tetanus"
+
+      Corynebacterium diphtheriae:
+        description: "Diphtheria"
+
+      Coxiella burnetii:
+        description: "Q fever"
+
+      Cronobacter sakazakii:
+        description: "Cronobacter infection (infant)"
+
+      Escherichia coli:
+        description: >
+          Shiga toxin-producing E. coli (STEC); hemolytic uremic syndrome.
+          Use serotype field for specific serovar (e.g. O157:H7, O111:H8).
+
+      Francisella tularensis:
+        description: "Tularemia"
+
+      Haemophilus ducreyi:
+        description: "Chancroid"
+
+      Haemophilus influenzae:
+        description: "Invasive Haemophilus influenzae disease"
+
+      Leptospira interrogans:
+        description: "Leptospirosis"
+
+      Listeria monocytogenes:
+        description: "Listeriosis"
+
+      Mycobacterium leprae:
+        description: "Hansen's disease (leprosy)"
+
+      Mycobacterium tuberculosis:
+        description: "Tuberculosis — active or latent"
+
+      Mycobacterium bovis:
+        description: "Tuberculosis — bovine-associated"
+
+      Neisseria gonorrhoeae:
+        description: "Gonorrhea"
+
+      Neisseria meningitidis:
+        description: "Invasive meningococcal disease"
+
+      Rickettsia prowazekii:
+        description: "Epidemic typhus"
+
+      Rickettsia rickettsii:
+        description: "Rocky Mountain spotted fever (RMSF)"
+
+      Rickettsia typhi:
+        description: "Murine (endemic) typhus"
+
+      Salmonella enterica:
+        description: >
+          Non-typhoidal Salmonella. Use serotype field for serovar
+          (e.g. Typhimurium, Enteritidis, Newport, Heidelberg).
+
+      Salmonella Typhi:
+        description: "Typhoid fever (Salmonella enterica serovar Typhi)"
+
+      Staphylococcus aureus:
+        description: "Toxic shock syndrome; MRSA — use strain field for MRSA/MSSA"
+
+      Streptococcus pyogenes:
+        description: "Streptococcal toxic shock syndrome; Group A Streptococcus"
+
+      Treponema pallidum:
+        description: "Syphilis"
+
+      Vibrio cholerae:
+        description: "Cholera"
+
+      Yersinia pestis:
+        description: "Plague — bubonic, septicemic, or pneumonic"
+
+      # ── Fungi (3 species) ──────────────────────────────────────────────────
+      Candida auris:
+        description: "Candida auris — multidrug-resistant fungal pathogen"
+
+      Coccidioides immitis:
+        description: >
+          Valley fever (coccidioidomycosis) — California strain.
+          Optional regional addition; not on the standard reportable list.
+
+      Coccidioides posadasii:
+        description: >
+          Valley fever (coccidioidomycosis) — Southwestern US strain.
+          Predominant species in arid regions.
+          Optional regional addition; not on the standard reportable list.
+
+      # ── Viruses (25 species/taxa) ──────────────────────────────────────────
+      Chikungunya virus:
+        description: "Chikungunya fever"
+
+      Crimean-Congo hemorrhagic fever orthonairovirus:
+        description: "Crimean-Congo hemorrhagic fever (CCHF)"
+
+      Dengue virus:
+        description: >
+          Dengue fever. Use serotype field for DENV-1 through DENV-4.
+
+      Ebola virus:
+        description: "Ebola virus disease (viral hemorrhagic fever)"
+
+      Hantavirus:
+        description: >
+          Hantavirus pulmonary syndrome (HPS) — unspecified hantavirus.
+          Use Sin Nombre orthohantavirus when species is confirmed.
+
+      Human immunodeficiency virus 1:
+        description: "HIV infection; HIV-1"
+
+      Human immunodeficiency virus 2:
+        description: "HIV infection; HIV-2"
+
+      Influenza A virus:
+        description: >
+          Influenza — type A. Use strain field for subtype (H1N1, H3N2, H5N1).
+
+      Influenza B virus:
+        description: >
+          Influenza — type B. Use strain field for lineage (Victoria, Yamagata).
+
+      Lassa virus:
+        description: "Lassa fever (viral hemorrhagic fever)"
+
+      Lymphocytic choriomeningitis virus:
+        description: "Lymphocytic choriomeningitis (LCM)"
+
+      Marburg virus:
+        description: "Marburg virus disease (viral hemorrhagic fever)"
+
+      Measles virus:
+        description: "Measles (rubeola)"
+
+      MERS-CoV:
+        description: "Middle East respiratory syndrome coronavirus"
+
+      Mpox virus:
+        description: >
+          Mpox (formerly monkeypox). Use strain field for clade
+          (hMPXV Clade I or hMPXV Clade II).
+
+      Mumps virus:
+        description: "Mumps"
+
+      Poliovirus:
+        description: >
+          Poliomyelitis. Use serotype field for type (1, 2, 3).
+          Use strain field for wild vs. vaccine-derived.
+
+      Rabies lyssavirus:
+        description: >
+          Rabies. Use strain field for variant
+          (e.g. bat variant, skunk variant, fox variant).
+
+      Respiratory syncytial virus:
+        description: >
+          RSV — typically included under 'Respiratory disease (outbreak)' on reportable lists.
+          Use strain field for RSV-A or RSV-B.
+
+      Rubella virus:
+        description: "Rubella (German measles)"
+
+      SARS-CoV:
+        description: "Severe acute respiratory syndrome (SARS, 2003)"
+
+      Severe acute respiratory syndrome coronavirus 2:
+        description: >
+          COVID-19 (novel coronavirus infection). NCBI standard name for SARS-CoV-2.
+          Use pango_lineage field for Pangolin lineage designation.
+
+      Sin Nombre orthohantavirus:
+        description: "Hantavirus pulmonary syndrome — Sin Nombre virus (Southwest US)"
+
+      St. Louis encephalitis virus:
+        description: "St. Louis encephalitis"
+
+      Vaccinia virus:
+        description: "Vaccinia-related adverse event (smallpox vaccine)"
+
+      Variola virus:
+        description: "Smallpox"
+
+      Varicella-zoster virus:
+        description: "Varicella (chickenpox); herpes zoster (shingles)"
+
+      West Nile virus:
+        description: "West Nile virus disease"
+
+      Yellow fever virus:
+        description: "Yellow fever"
+
+      Zika virus:
+        description: "Zika virus infection"
+
+      # ── Parasites (5 species) ──────────────────────────────────────────────
+      Naegleria fowleri:
+        description: >
+          Primary amoebic meningoencephalitis (PAM).
+          Free-living protozoan parasite found in warm freshwater.
+
+      Taenia saginata:
+        description: "Taeniasis — beef tapeworm"
+
+      Taenia solium:
+        description: "Taeniasis and cysticercosis — pork tapeworm"
+
+      Toxoplasma gondii:
+        description: "Toxoplasmosis; parasitic encephalitis"
+
+      Trichinella spiralis:
+        description: "Trichinosis"
+
+      # ── Novel / Emerging ──────────────────────────────────────────────────
+      novel pathogen:
+        description: >
+          Reportable category typically: 'Emerging or exotic disease'.
+          Use when a novel pathogen is identified but has no stable NCBI
+          Taxonomy name yet. Platform Admin assigns permanent name when
+          NCBI Taxonomy provides one.
+
+  # ── Source and Experiment Types ────────────────────────────────────────────
+
+  SourceTypeEnum:
+    permissible_values:
+      Human:          { description: "Clinical or surveillance sample from a human host" }
+      Wildlife:       { description: "Sample from a wild animal" }
+      CompanionAnimal: { description: "Sample from a pet or companion animal" }
+      Livestock:      { description: "Sample from a farm or agricultural animal" }
+      Vector:         { description: "Sample from a disease-transmitting arthropod" }
+      Wastewater:     { description: "Sample from a wastewater system" }
+      Water:          { description: "Sample from a non-wastewater water source" }
+      Air:            { description: "Airborne/aerosol sample" }
+      Soil:           { description: "Sample from a soil matrix" }
+      Surface:        { description: "Surface swab sample" }
+      Food:           { description: "Sample from a food product" }
+      ProduceAg:      { description: "Sample from an agricultural crop" }
+      Other:          {}
+
+  ExperimentTypeEnum:
+    permissible_values:
+      WGS:                     { description: "Whole genome sequencing" }
+      WES:                     { description: "Whole exome sequencing" }
+      RNAseq:                  { description: "RNA sequencing" }
+      shotgun_DNA_sequencing:  { description: "Shotgun metagenomic sequencing" }
+      amplicon_sequencing:     { description: "Targeted amplicon sequencing (16S, ARTIC, etc.)" }
+      targeted_sequencing:     { description: "Other targeted sequencing" }
+
+  # ── Case Linkage ──────────────────────────────────────────────────────────
+
+  CaseTypeEnum:
+    permissible_values:
+      outbreak:
+        description: "Part of a named outbreak investigation"
+      cluster:
+        description: "Genomic or epidemiological cluster, not yet a named outbreak"
+      sporadic:
+        description: "Single case with no known epidemiological links"
+      surveillance:
+        description: "Routine surveillance — no specific case being investigated"
+      contact_investigation:
+        description: "Sample collected as part of contact tracing"
+      sentinel:
+        description: "Sentinel surveillance site sample"
+
+  # ── One Health Sector ─────────────────────────────────────────────────────
+
+  SectorEnum:
+    permissible_values:
+      clinical:
+        description: "Human clinical diagnosis or treatment context"
+      veterinary:
+        description: "Animal health — companion, livestock, or zoo animals"
+      agricultural:
+        description: "Food production — crops, produce, food processing"
+      environmental:
+        description: "Environmental monitoring — water, soil, air, surfaces"
+      wastewater:
+        description: "Community-level wastewater surveillance (NWSS)"
+      wildlife:
+        description: "Wild animal surveillance"
+      research:
+        description: "Research sample not part of active public health surveillance"
+
+  # ── Surveillance Override Category ────────────────────────────────────────
+
+  SurveillanceOverrideCategoryEnum:
+    permissible_values:
+      reportable_organism_exception:
+        description: >-
+          Reportable organism present but sample is outside surveillance scope.
+          Requires governance board approval (TRUE → FALSE override).
+      untargeted_metagenome_research:
+        description: >-
+          Untargeted metagenome conservatively flagged TRUE, but sample is
+          confirmed research-only with no surveillance purpose.
+          Lab Director self-approval permitted.
+      voluntary_opt_in:
+        description: >-
+          Non-reportable organism or research sample voluntarily brought
+          under surveillance oversight (FALSE → TRUE override).
+          No approval required.
+
+  # ── Metadata Quality Tier ─────────────────────────────────────────────────
+
+  QualityStatusEnum:
+    permissible_values:
+      PRELIMINARY:
+        description: >-
+          Tier 1 — minimum viable metadata present. Sample is immediately
+          ingested and available for pipeline runs and basic search.
+          May lack date precision, geographic detail, or source-type fields.
+      ANALYZABLE:
+        description: >-
+          Tier 2 — sufficient metadata for epidemiological analysis including
+          time-series (date to at least month precision) and geographic
+          aggregation. Eligible for MMWR epiweek computation.
+      SUBMITTABLE:
+        description: >-
+          Tier 3 — meets full NCBI BioSample, GISAID, and NWSS requirements.
+          All required fields present, dates to full ISO 8601 day precision,
+          all source-type-specific fields populated. Automated submission
+          workflows enabled.
+      QC_FAILED:
+        description: >-
+          Failed automated or manual QC checks. Retained in the system for
+          audit purposes but excluded from analyses and not shown in the
+          catalog by default.
+      UNDER_REVIEW:
+        description: >-
+          Flagged for human review — automated QC result is inconclusive.
+          Excluded from analyses pending review outcome.
+      RETRACTED:
+        description: >-
+          Previously released data that has been withdrawn by the submitting
+          lab or Platform Admin. Not shown in catalog; audit record preserved.
+
+  # ── Date Precision ────────────────────────────────────────────────────────
+
+  DatePrecisionEnum:
+    permissible_values:
+      day:
+        description: >-
+          Full ISO 8601 date known (YYYY-MM-DD). Default when date is entered
+          in full. Required for Tier 3 (SUBMITTABLE) quality status.
+      month:
+        description: >-
+          Only year and month known. Store date_collected as YYYY-MM-01.
+          Epiweek computation uses mid-month estimate with warning.
+          Sufficient for Tier 2 (ANALYZABLE) monthly aggregation.
+      year:
+        description: >-
+          Only year known. Store date_collected as YYYY-01-01.
+          Epiweek computation suppressed. Sufficient for Tier 1 (PRELIMINARY)
+          annual surveillance counts.
+
+  # ── Read Type ─────────────────────────────────────────────────────────────
+
+  ReadTypeEnum:
+    permissible_values:
+      short_read:
+        description: "Illumina or Ion Torrent — reads <1000bp"
+      long_read:
+        description: "ONT or PacBio — reads >1000bp, typically 10–100kb"
+      hybrid:
+        description: >-
+          Combined short and long read data for the same sample.
+          Used for hybrid assembly pipelines (e.g. Unicycler, Dragonflye).
+      ultra_long:
+        description: "ONT ultra-long reads >100kb — used for complete chromosome assembly"
+
+  # ── Assembly Type ─────────────────────────────────────────────────────────
+
+  AssemblyTypeEnum:
+    permissible_values:
+      isolate:
+        description: >-
+          Single organism isolate — standard WGS assembly from pure culture.
+          Coverage depth and genome completeness QC apply.
+      mag:
+        description: >-
+          Metagenome-assembled genome — binned from metagenomic data.
+          CheckM2 completeness and contamination QC apply instead of
+          coverage/VADR metrics.
+      sag:
+        description: >-
+          Single-amplified genome — from single-cell genomics.
+          Lower completeness expected; CheckM2 QC applies.
+      consensus:
+        description: >-
+          Amplicon or reference-guided consensus genome (e.g. SARS-CoV-2
+          ARTIC protocol). VADR and Nextclade QC apply.
+      metatranscriptome:
+        description: "RNA-based metagenomic assembly — transcriptome from community."
+
+  # ── Data Use Terms ────────────────────────────────────────────────────────
+
+  DataUseTermsEnum:
+    permissible_values:
+      open_access:
+        description: >-
+          No restrictions — submitter does not retain rights. Data may be
+          freely used, shared, and republished with attribution.
+      controlled_access:
+        description: >-
+          Access subject to a Data Use Agreement (DUA). Submitter protections
+          apply. Users must agree to DUA terms before accessing data.
+      restricted:
+        description: >-
+          Internal use only — not for external sharing. Overrides sharing_level
+          for external requests.
+      embargo:
+        description: >-
+          Under publication embargo. Data is accessible internally but
+          embargo_release_date controls when external access is permitted.
+
+  # ── Sharing and Access ─────────────────────────────────────────────────────
+
+  SharingLevelEnum:
+    permissible_values:
+      PRIVATE:
+        description: "Owner and Lab Director only"
+      LAB:
+        description: "All members of the owning Lab"
+      DISCOVERABLE:
+        description: "Metadata visible to all authenticated users; files require an access request"
+      REGISTERED_ACCESS:
+        description: >-
+          Data available to any researcher who registers and agrees to the
+          data use agreement (DUA). More open than DISCOVERABLE (no per-request
+          approval), more controlled than PUBLIC (requires identity verification
+          and DUA acceptance). Compatible with GA4GH Passport-controlled access.
+          Appropriate for: multi-institution data sharing agreements, CDC/WHO
+          federated surveillance networks, international genomics consortia.
+          Access gate: authenticated user + accepted DUA. No Lab Director
+          approval required per-request, but terms must be accepted once.
+      PUBLIC:
+        description: "Metadata and files open to all authenticated users"
+
+  # ── Pipeline and Submission Status ────────────────────────────────────────
+
+  ScrubStatusEnum:
+    permissible_values:
+      PENDING:     {}
+      IN_PROGRESS: {}
+      COMPLETE:    {}
+      FAILED:      {}
+      SKIPPED:     { description: "Non-human sample; scrubber not applicable" }
+
+  PIIScanStatusEnum:
+    permissible_values:
+      PENDING:      {}
+      COMPLETE:     {}
+      PII_DETECTED: {}
+      FAILED:       {}
+
+  VADRStatusEnum:
+    permissible_values:
+      PASS:    { description: "Passes VADR — eligible for NCBI submission" }
+      FAIL:    { description: "Fails VADR — review alerts before submitting" }
+      SKIP:    { description: "Not applicable (non-viral or short amplicon)" }
+      PENDING: { description: "VADR not yet run" }
+
+  SubmissionStatusEnum:
+    permissible_values:
+      NOT_SUBMITTED: {}
+      PENDING:       {}
+      SUBMITTED:     {}
+      ACCEPTED:      {}
+      FAILED:        {}
+      WITHDRAWN:     {}
+
+  IngestMethodEnum:
+    permissible_values:
+      gui:    {}
+      csv:    {}
+      rsync:  {}
+      curl:   {}
+      globus: {}
+
+  ProjectStatusEnum:
+    permissible_values:
+      ACTIVE:   {}
+      ARCHIVED: {}
+
+  # ── Sequencing ─────────────────────────────────────────────────────────────
+
+  SequencingPlatformEnum:
+    permissible_values:
+      Illumina:        {}
+      Oxford_Nanopore: {}
+      PacBio:          {}
+      Ion_Torrent:     {}
+      Other:           {}
+
+  LibraryLayoutEnum:
+    permissible_values:
+      PAIRED: {}
+      SINGLE: {}
+
+  # ── Clinical / Host ────────────────────────────────────────────────────────
+
+  BiologicalSexEnum:
+    permissible_values:
+      Male:                           {}
+      Female:                         {}
+      Differences_of_Sex_Development: { description: "DSD" }
+      unknown:                        {}
+
+  AgeUnitEnum:
+    permissible_values:
+      years:  {}
+      months: {}
+      days:   {}
+
+  BiospecimenTypeEnum:
+    permissible_values:
+      nasopharyngeal_swab:          {}
+      oropharyngeal_swab:           {}
+      saliva:                       {}
+      blood:                        {}
+      serum:                        {}
+      plasma:                       {}
+      urine:                        {}
+      stool:                        {}
+      skin_biopsy:                  {}
+      tissue_biopsy:                {}
+      bronchoalveolar_lavage:       {}
+      lung_tissue:                  {}
+      cloacal_swab:                 { description: "For avian samples" }
+      feather:                      {}
+      homogenized:                  { description: "For vectors — whole arthropod homogenate" }
+      non_destructive_extraction:   { description: "For vectors — saliva/excreta" }
+      other:                        {}
+
+  ReasonForCollectionEnum:
+    permissible_values:
+      clinical:     { description: "Obtained during clinical care" }
+      research:     { description: "Collected as part of a research study" }
+      surveillance: { description: "Collected as part of public health surveillance" }
+
+  VaccineStatusEnum:
+    permissible_values:
+      never_vaccinated: {}
+      current:          {}
+      overdue:          {}
+      unknown:          {}
+
+  SymptomaticEnum:
+    permissible_values:
+      yes:      {}
+      no:       {}
+      uncertain: {}
+
+  # ── Animal-specific ────────────────────────────────────────────────────────
+
+  CompanionAnimalLocationEnum:
+    permissible_values:
+      residence_indoor:            {}
+      residence_outdoor_enclosure: {}
+      shelter:                     {}
+      roaming:                     {}
+      other:                       {}
+
+  LivestockLocationEnum:
+    permissible_values:
+      CAFO:         { description: "Concentrated Animal Feeding Operation" }
+      open_pasture: {}
+      broiler_house: {}
+      hoop_barn:    {}
+      free_range:   {}
+      feedlot:      {}
+      other:        {}
+
+  LivestockProductEnum:
+    permissible_values:
+      meat:           {}
+      dairy:          {}
+      eggs:           {}
+      textile_fibers: {}
+      other:          {}
+
+  AntibioticUseEnum:
+    permissible_values:
+      current: {}
+      recent:  {}
+      never:   {}
+      unknown: {}
+
+  VectorBiospecimenTypeEnum:
+    permissible_values:
+      homogenized:                { description: "Whole arthropod homogenate — single specimen" }
+      pooled_homogenate:          { description: "Multiple arthropods homogenized together as a surveillance pool (e.g. mosquito pool). Record number of individuals in pool_size_min/pool_size_max." }
+      non_destructive_extraction: { description: "Saliva/excreta without destroying specimen" }
+      other:                      {}
+
+  # ── Wastewater ─────────────────────────────────────────────────────────────
+
+  WastewaterSampleTypeEnum:
+    permissible_values:
+      grab:                         {}
+      composite_24hr_flow_weighted: {}
+      composite_24hr_time_weighted: {}
+      other:                        {}
+
+  SampleMatrixEnum:
+    permissible_values:
+      raw_wastewater:     {}
+      post_grit_removal:  {}
+      primary_sludge:     {}
+      primary_effluent:   {}
+      secondary_sludge:   {}
+      secondary_effluent: {}
+      septage:            {}
+      holding_tank:       {}
+
+  PretreatmentEnum:
+    permissible_values:
+      none:     {}
+      chlorine: {}
+      ozone:    {}
+      UV:       {}
+      other:    {}
+
+  ConcentrationMethodEnum:
+    permissible_values:
+      none:                              {}
+      ceres_nanotrap:                    {}
+      membrane_filtration_MgCl2:         {}
+      ultrafiltration:                   {}
+      polyethylene_glycol_precipitation: {}
+      ultracentrifugation:               {}
+      other:                             {}
+
+  # ── Water / Air / Soil / Food / Produce ────────────────────────────────────
+
+  WaterSourceEnum:
+    permissible_values:
+      municipal_tap:   {}
+      irrigation_line: {}
+      pond:            {}
+      lake:            {}
+      stream:          {}
+      canal:           {}
+      desert_wash:     {}
+      glacier:         {}
+      groundwater:     {}
+      reclaimed_water: {}
+      other:           {}
+
+  AirSourceEnum:
+    permissible_values:
+      cooling_tower: {}
+      internal_vent: {}
+      urban:         {}
+      plane:         {}
+      hospital_room: {}
+      HEPA_exhaust:  {}
+      other:         {}
+
+  FoodLocationTypeEnum:
+    permissible_values:
+      residence:           {}
+      store:               {}
+      in_transit:          {}
+      warehouse:           {}
+      manufacturing_plant: {}
+      restaurant:          {}
+      other:               {}
+
+  FoodProductTypeEnum:
+    permissible_values:
+      fresh_produce:   {}
+      meat:            {}
+      poultry:         {}
+      seafood:         {}
+      dairy_products:  {}
+      eggs:            {}
+      processed_foods: {}
+      deli_meats:      {}
+      grains:          {}
+      other:           {}
+
+  ProduceWaterSourceEnum:
+    permissible_values:
+      irrigation_lines: {}
+      reclaimed_water:  {}
+      freshwater:       {}
+      municipal:        {}
+      rainwater:        {}
+      other:            {}
+
+  FertilizerTypeEnum:
+    permissible_values:
+      organic:   {}
+      inorganic: {}
+      compost:   {}
+      manure:    {}
+      none:      {}
+
+  DistributionScaleEnum:
+    permissible_values:
+      local:         {}
+      county:        {}
+      state:         {}
+      national:      {}
+      global_export: {}
+
+  # ── Cross-sample Association ────────────────────────────────────────────────
+
+  SampleAssociationTypeEnum:
+    permissible_values:
+      same_household:         { description: "Both samples from same household" }
+      same_outbreak:          { description: "Both samples from same outbreak cluster" }
+      host_vector:            { description: "Vector sample and its host sample" }
+      human_pet:              { description: "Human sample and companion animal sample" }
+      food_source_clinical:   { description: "Food sample linked to clinical case" }
+      environmental_clinical: { description: "Environmental sample linked to human case" }
+      longitudinal:           { description: "Serial samples from the same host over time" }
+      other:                  {}
+
+  # ── Sample File Enums ──────────────────────────────────────────────────────
+
+  SampleFileTypeEnum:
+    description: "File type for sample_files table. Derived from file extension."
+    permissible_values:
+      FASTQ:
+        description: ".fastq or .fq (with optional .gz or .bz2 compression)"
+      FASTA:
+        description: ".fasta, .fa, or .fna (with optional .gz compression)"
+      OTHER:
+        description: "Any file type not covered by FASTQ or FASTA"
+
+  SampleFileLayoutEnum:
+    description: >
+      Read layout for an individual file in sample_files.
+      Distinct from the sample-level library_layout field.
+    permissible_values:
+      PAIRED:
+        description: >
+          This file is one of a paired-end pair.
+          The partner file is identified by paired_file_id.
+      SINGLE:
+        description: >
+          This file was expected to be part of a pair but no partner
+          was found. Treated as unpaired by downstream tools.
+      UNPAIRED:
+        description: >
+          Genuinely single-end read or a nanopore/multi-file chunk.
+          Not expected to have a partner.
+
+  ReadDirectionEnum:
+    description: "Read direction for paired-end files."
+    permissible_values:
+      R1:
+        description: >
+          Forward read. Detected from: _R1, _1, _reads_1, _forward
+          naming conventions (case-insensitive).
+      R2:
+        description: >
+          Reverse read. Detected from: _R2, _2, _reads_2, _reverse
+          naming conventions (case-insensitive).
+
+  # ── Age Range (privacy-preserving decade buckets) ─────────────────────────
+
+  AgeRangeEnum:
+    description: >-
+      Age expressed as a decade bracket for privacy-preserving surveillance
+      reporting. Populated automatically from host_age at ingest.
+      Standard CDC/NNDSS/ArboNET age grouping.
+    permissible_values:
+      "< 1 year":
+        description: "Infant — less than 12 months"
+      "1-4 years":
+        description: "Toddler/preschool"
+      "5-14 years":
+        description: "School age"
+      "15-24 years":
+        description: "Young adult"
+      "25-34 years": {}
+      "35-44 years": {}
+      "45-54 years": {}
+      "55-64 years": {}
+      "65-74 years": {}
+      "75-84 years": {}
+      "85+ years":
+        description: "Oldest old — highest risk for many pathogens"
+      unknown: {}
+
+  # ── Collection Method ─────────────────────────────────────────────────────
+
+  CollectionMethodEnum:
+    description: >-
+      Method used to collect the biological specimen. Standard PHA4GE
+      and NCBI BioSample field. Required for Tier 2 and above.
+    permissible_values:
+      nasopharyngeal_swab:
+        description: "NP swab — gold standard for respiratory pathogens"
+      nasal_swab:
+        description: "Anterior nares / mid-turbinate swab"
+      oropharyngeal_swab:
+        description: "Throat swab"
+      saliva:
+        description: "Saliva collection — lower sensitivity than NP for some pathogens"
+      bronchoalveolar_lavage:
+        description: "BAL fluid — lower respiratory tract"
+      induced_sputum:
+        description: "Standard for TB and other lower respiratory pathogens"
+      gastric_aspirate:
+        description: "Used for TB in children who cannot produce sputum"
+      blood:
+        description: "Venipuncture blood draw"
+      serum:
+        description: "Serum separated from whole blood"
+      csf:
+        description: "Cerebrospinal fluid — lumbar puncture"
+      urine:
+        description: "Urine culture or PCR"
+      stool:
+        description: "Stool sample — GI pathogens, polio surveillance"
+      rectal_swab:
+        description: "Alternative to stool for GI pathogens"
+      skin_lesion_swab:
+        description: "Swab of lesion — mpox, herpes, other dermotropic pathogens"
+      vesicle_fluid:
+        description: "Fluid from skin vesicle — mpox, varicella"
+      wound_swab:
+        description: "Wound or abscess swab"
+      tissue_biopsy:
+        description: "Tissue biopsy — post-mortem or surgical"
+      environmental_swab:
+        description: "Non-clinical environmental surface swab"
+      other:
+        description: "Collection method not listed — describe in comments"
+
+  # ── Pangolin QC Status ────────────────────────────────────────────────────
+
+  PangoQCStatusEnum:
+    description: >-
+      Pangolin lineage assignment QC status. Surveillance decisions should
+      not be made on 'fail' or 'ambiguous' calls without manual review.
+    permissible_values:
+      pass_qc:
+        description: "High confidence lineage assignment"
+      fail:
+        description: "Low confidence — do not use for surveillance without review"
+      ambiguous:
+        description: "Multiple equally valid lineage calls — pango_conflict > 0"
+      not_run:
+        description: "Pangolin not yet run or not applicable (non-SARS-CoV-2)"
+
+  # ── MLST Confidence ───────────────────────────────────────────────────────
+
+  MLSTConfidenceEnum:
+    description: >-
+      Confidence level of the MLST sequence type assignment.
+      Distinguishes confident surveillance-grade calls from uncertain ones.
+    permissible_values:
+      perfect:
+        description: "All alleles matched exactly — high confidence ST call"
+      good:
+        description: "All alleles matched but one or more may be novel alleles"
+      low:
+        description: "One or more alleles missing or novel — uncertain ST"
+      unknown:
+        description: "Insufficient data for MLST — not applicable or failed"
+
+  # ── Outbreak Investigation Status ─────────────────────────────────────────
+
+  OutbreakStatusEnum:
+    permissible_values:
+      active:
+        description: "Investigation ongoing — new cases still being identified"
+      contained:
+        description: "No new cases for ≥2 incubation periods — pending formal closure"
+      closed:
+        description: "Formally closed — investigation_close_date populated"
+      surveillance_only:
+        description: "Cluster resolved; enhanced surveillance continues"

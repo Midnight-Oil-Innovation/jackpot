@@ -1,0 +1,21 @@
+source_format: example_wildlife_v1
+target_class: WildlifeSample
+column_mappings:
+  "Sample ID":          sample_id
+  "Collection Date":    date_collected
+  "Pathogen":           organism_name
+  "Sequencer":          sequencing_platform
+  "Protocol":           sequencing_protocol
+  "Host Species":       host_species
+  "State":              collection_location_state
+  "Country":            collection_location_country
+  "Disease":            host_disease
+  "Strain":             strain
+  "Sequencing Lab":     sequencing_lab
+
+file_detection:
+  files_column:      "FASTQ files"
+  prefix_column:     "FASTQ prefix"
+  separator:         ";"
+  auto_detect_pairs: true
+  allow_prefix_scan: true

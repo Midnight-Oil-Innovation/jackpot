@@ -1,0 +1,18 @@
+source_format: ncbi_biosample_v1
+target_class: Sample
+column_mappings:
+  "host_subject_id":    sample_id
+  "collection_date":    date_collected
+  "organism":           organism_name
+  "sequencing_platform":sequencing_platform
+  "geo_loc_name":       collection_location_country
+  "host":               host_species
+  "isolation_source":   isolation_source
+  "strain":             strain
+  "isolate":            isolate
+
+file_detection:
+  files_column:      "fastq_files"
+  separator:         ";"
+  auto_detect_pairs: true
+  allow_prefix_scan: false
