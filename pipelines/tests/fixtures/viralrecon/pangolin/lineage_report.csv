@@ -1,0 +1,2 @@
+taxon,lineage,conflict,ambiguity_score,scorpio_call,scorpio_support,scorpio_conflict,scorpio_notes,version,pangolin_version,scorpio_version,constellation_version,is_designated,qc_status,qc_notes,note
+AZ-WW-001,BA.2.86,0.0,0.95,Omicron (BA.2-like),0.97,0.01,,PUSHER-v1.25,4.3.1,0.3.19,v0.1.12,False,pass,,

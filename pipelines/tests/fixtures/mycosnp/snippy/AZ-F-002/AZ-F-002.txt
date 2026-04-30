@@ -1,0 +1,5 @@
+DateTime	2026-04-17T12:05:00
+Reference	CandidaAurisB11205
+Software	snippy 4.6.0
+Variant-SNP	198
+VariantTotal	198

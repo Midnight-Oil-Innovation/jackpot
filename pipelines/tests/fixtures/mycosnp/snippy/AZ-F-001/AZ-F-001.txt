@@ -1,0 +1,9 @@
+DateTime	2026-04-17T12:00:00
+Reference	CandidaAurisB11205
+Software	snippy 4.6.0
+Variant-COMPLEX	2
+Variant-DEL	8
+Variant-INS	5
+Variant-MNP	3
+Variant-SNP	241
+VariantTotal	259

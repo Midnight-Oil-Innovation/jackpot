@@ -1,0 +1,44 @@
+[project]
+name = "jackpot-nf"
+version = "0.1.0"
+description = "JACKPOT Nextflow plugin, pipeline wrappers, and shared parsers"
+readme = "README.md"
+requires-python = ">=3.11"
+authors = [{ name = "Glen Otero", email = "gotero@linuxprophet.com" }]
+dependencies = [
+    "httpx>=0.27",
+    "pydantic>=2.7",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8",
+    "pytest-asyncio>=0.23",
+    "respx>=0.21",
+    "ruff>=0.4",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["shared"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+# Integration tests walk every pipeline against its fixture tree; slow
+# by design, opt-in only.  Run with `pytest -m integration` in the
+# dedicated CI job; default `pytest` runs skip them.
+markers = [
+    "integration: end-to-end parser pass across every wrapped pipeline (opt-in)",
+]
+addopts = "-m 'not integration'"
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP"]

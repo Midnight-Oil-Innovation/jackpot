@@ -1,0 +1,6 @@
+name	taxonomy_id	taxonomy_lvl	kraken_assigned_reads	added_reads	new_est_reads	fraction_total_reads
+Escherichia coli	562	S	36000	9000	45000	0.450
+Salmonella enterica	590	S	10000	3000	13000	0.130
+Klebsiella pneumoniae	573	S	8000	1500	9500	0.095
+Pseudomonas aeruginosa	287	S	5000	800	5800	0.058
+Bacteroides fragilis	817	S	4000	500	4500	0.045

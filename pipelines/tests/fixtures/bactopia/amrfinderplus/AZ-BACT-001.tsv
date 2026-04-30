@@ -1,0 +1,3 @@
+Name	Protein identifier	Contig id	Start	Stop	Strand	Gene symbol	Sequence name	Scope	Element type	Element subtype	Class	Subclass	Method	Target length	Reference sequence length	% Coverage of reference sequence	% Identity to reference sequence	Alignment length	Accession of closest sequence	Name of closest sequence
+AZ-BACT-001	WP_000027057.1	contig1	4012	5236	+	blaCTX-M-15	extended-spectrum beta-lactamase CTX-M-15	core	AMR	AMR	BETA-LACTAM	CEPHALOSPORIN	EXACTX	408	291	100.00	99.66	291	NG_048935.1	blaCTX-M-15
+AZ-BACT-001	WP_001082319.1	contig2	12100	12732	-	tet(A)	tetracycline efflux MFS transporter Tet(A)	core	AMR	AMR	TETRACYCLINE	TETRACYCLINE	ALLELEX	1200	1200	100.00	100.00	1200	NG_048158.1	tet(A)

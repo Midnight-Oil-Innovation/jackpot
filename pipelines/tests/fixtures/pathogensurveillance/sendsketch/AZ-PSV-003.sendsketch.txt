@@ -1,0 +1,2 @@
+Query: AZ-PSV-003.contigs.fa	Sketches: 1	DB: RefSeq
+WKID	KID	ANI	Complt	Contam	Matches	Unique	noHit	TaxID	gSize	gSeqs	taxName

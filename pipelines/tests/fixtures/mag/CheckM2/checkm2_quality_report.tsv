@@ -1,0 +1,4 @@
+Name	Completeness	Contamination	Completeness_Model_Used	Translation_Table_Used	Coding_Density	Contig_N50	Average_Gene_Length	Genome_Size	GC_Content	Total_Coding_Sequences	Total_Contigs	Max_Contig_Length	Additional_Notes
+AZ-META-001.MEGAHIT-MetaBAT2.1	98.42	1.23	General	11	88.34	145212	295.14	4876523	50.61	4421	58	321034	None
+AZ-META-001.MEGAHIT-MetaBAT2.2	72.15	5.88	General	11	82.17	31204	290.42	2341209	38.22	1983	120	54210	None
+AZ-META-002.MEGAHIT-DASTool.1	94.77	2.01	Specific	11	89.05	98231	301.88	5120344	67.41	4812	72	210854	None

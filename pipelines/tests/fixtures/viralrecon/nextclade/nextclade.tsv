@@ -1,0 +1,2 @@
+index	seqName	clade	qc.overallStatus	qc.overallScore	totalSubstitutions	totalDeletions	totalInsertions	totalMissing	totalNonACGTNs	totalFrameShifts	substitutions	aaSubstitutions	Nextclade_pango
+0	AZ-WW-001	23I (BA.2.86)	good	4.0	59	6	0	25	0	0	T670G	S:P681H	BA.2.86
