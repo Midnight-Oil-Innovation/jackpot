@@ -10,6 +10,7 @@ All upload commands use file_detector.py-compatible pairing logic:
   - FASTA-only (no raw reads — scrubber auto-skipped)
 One CSV row = one sample. Files are paired automatically from filenames.
 """
+
 from __future__ import annotations
 
 import json
@@ -20,7 +21,7 @@ from rich.console import Console
 from rich.table import Table
 
 from jackpot.cli.config import get_client_credentials
-from jackpot.core.client import JACKPOTClient, UPLOAD_TIMEOUT
+from jackpot.core.client import JACKPOTClient
 from jackpot.core.exceptions import ConfigError, ValidationError
 
 console = Console()
@@ -58,8 +59,14 @@ def _detect_files(directory: Path, pattern: str) -> list[dict]:
         # Derive sample_id from filename stem
         # e.g. AZ-2026-001_R1.fastq.gz → AZ-2026-001
         stem = r1.name
-        for suffix in ["_R1_001.fastq.gz", "_R1.fastq.gz", "_1.fastq.gz",
-                       "_R1_001.fq.gz", "_R1.fq.gz", "_1.fq.gz"]:
+        for suffix in [
+            "_R1_001.fastq.gz",
+            "_R1.fastq.gz",
+            "_1.fastq.gz",
+            "_R1_001.fq.gz",
+            "_R1.fq.gz",
+            "_1.fq.gz",
+        ]:
             if stem.endswith(suffix):
                 sample_id = stem[: -len(suffix)]
                 break
@@ -68,8 +75,14 @@ def _detect_files(directory: Path, pattern: str) -> list[dict]:
 
         # Find paired R2
         r2 = None
-        for r2_suffix in ["_R2_001.fastq.gz", "_R2.fastq.gz", "_2.fastq.gz",
-                          "_R2_001.fq.gz", "_R2.fq.gz", "_2.fq.gz"]:
+        for r2_suffix in [
+            "_R2_001.fastq.gz",
+            "_R2.fastq.gz",
+            "_2.fastq.gz",
+            "_R2_001.fq.gz",
+            "_R2.fq.gz",
+            "_2.fq.gz",
+        ]:
             candidate = r1.parent / r1.name.replace(
                 r1.name.split("_R1")[1] if "_R1" in r1.name else r1.name,
                 r2_suffix,
@@ -88,32 +101,65 @@ def _detect_files(directory: Path, pattern: str) -> list[dict]:
 
 # ── jackpot upload ──────────────────────────────────────────────────────────
 
+
 @click.command("upload")
-@click.option("--r1",           required=True, type=click.Path(exists=True),
-              help="Path to R1 FASTQ file (or FASTA for assembly-only upload)")
-@click.option("--r2",           type=click.Path(exists=True), default=None,
-              help="Path to R2 FASTQ file (omit for single-end or FASTA)")
-@click.option("--organism",     required=True,
-              help="Organism name (must match JACKPOT OrganismNameEnum)")
-@click.option("--source-type",  required=True,
-              help="Source type: isolate, wastewater, wildlife, environmental, etc.")
-@click.option("--sector",       required=True,
-              help="One Health sector: clinical, veterinary, environmental, wastewater, etc.")
-@click.option("--project",      type=int, default=None,
-              help="Project ID (optional — sample goes to unassigned pool if omitted)")
-@click.option("--lab",          type=int, default=None,
-              help="Lab ID (required if not inferable from your account)")
-@click.option("--date-collected", default=None,
-              help="Collection date: YYYY-MM-DD, YYYY-MM, or YYYY (year-only accepted at Tier 1)")
-@click.option("--sharing-level", default="LAB",
-              type=click.Choice(["PRIVATE", "LAB", "DISCOVERABLE", "PUBLIC"]),
-              help="Data sharing level (default: LAB)")
-@click.option("--skip-scrub",   is_flag=True, default=False,
-              help="Request to skip the human read scrubber (requires Lab Director approval)")
-@click.option("--skip-reason",  default=None,
-              help="Justification for scrub skip (required when --skip-scrub is used)")
-@click.option("--metadata",     default=None,
-              help="Additional metadata as a JSON string")
+@click.option(
+    "--r1",
+    required=True,
+    type=click.Path(exists=True),
+    help="Path to R1 FASTQ file (or FASTA for assembly-only upload)",
+)
+@click.option(
+    "--r2",
+    type=click.Path(exists=True),
+    default=None,
+    help="Path to R2 FASTQ file (omit for single-end or FASTA)",
+)
+@click.option(
+    "--organism", required=True, help="Organism name (must match JACKPOT OrganismNameEnum)"
+)
+@click.option(
+    "--source-type",
+    required=True,
+    help="Source type: isolate, wastewater, wildlife, environmental, etc.",
+)
+@click.option(
+    "--sector",
+    required=True,
+    help="One Health sector: clinical, veterinary, environmental, wastewater, etc.",
+)
+@click.option(
+    "--project",
+    type=int,
+    default=None,
+    help="Project ID (optional — sample goes to unassigned pool if omitted)",
+)
+@click.option(
+    "--lab", type=int, default=None, help="Lab ID (required if not inferable from your account)"
+)
+@click.option(
+    "--date-collected",
+    default=None,
+    help="Collection date: YYYY-MM-DD, YYYY-MM, or YYYY (year-only accepted at Tier 1)",
+)
+@click.option(
+    "--sharing-level",
+    default="LAB",
+    type=click.Choice(["PRIVATE", "LAB", "DISCOVERABLE", "PUBLIC"]),
+    help="Data sharing level (default: LAB)",
+)
+@click.option(
+    "--skip-scrub",
+    is_flag=True,
+    default=False,
+    help="Request to skip the human read scrubber (requires Lab Director approval)",
+)
+@click.option(
+    "--skip-reason",
+    default=None,
+    help="Justification for scrub skip (required when --skip-scrub is used)",
+)
+@click.option("--metadata", default=None, help="Additional metadata as a JSON string")
 def upload(
     r1: str,
     r2: str | None,
@@ -160,10 +206,10 @@ def upload(
 
     # Build metadata dict
     meta: dict = {
-        "organism_name":  organism,
-        "source_type":    source_type,
-        "sector":         sector,
-        "sharing_level":  sharing_level,
+        "organism_name": organism,
+        "source_type": source_type,
+        "sector": sector,
+        "sharing_level": sharing_level,
     }
     if project:
         meta["project_id"] = project
@@ -197,8 +243,9 @@ def upload(
             metadata=meta,
             files=files,
         )
-        click.echo(f"Uploaded: {result.get('sample_id')} "
-                   f"[quality_status={result.get('quality_status')}]")
+        click.echo(
+            f"Uploaded: {result.get('sample_id')} [quality_status={result.get('quality_status')}]"
+        )
 
         if result.get("tier2_missing"):
             click.echo(f"  To reach Tier 2: add {', '.join(result['tier2_missing'])}")
@@ -221,24 +268,34 @@ def upload(
 
 # ── jackpot upload-dir ──────────────────────────────────────────────────────
 
+
 @click.command("upload-dir")
 @click.argument("directory", type=click.Path(exists=True, file_okay=False))
-@click.option("--metadata-csv",  type=click.Path(exists=True), default=None,
-              help="CSV with per-sample metadata (one row per sample_id)")
-@click.option("--pattern",       default="*_R1*.fastq.gz",
-              help="Glob pattern for R1 files (default: *_R1*.fastq.gz)")
-@click.option("--organism",      default=None,
-              help="Shared organism for all samples (overridden by CSV)")
-@click.option("--source-type",   default=None,
-              help="Shared source type (overridden by CSV)")
-@click.option("--sector",        default=None,
-              help="Shared sector (overridden by CSV)")
-@click.option("--project",       type=int, default=None,
-              help="Project ID for all samples")
-@click.option("--sharing-level", default="LAB",
-              type=click.Choice(["PRIVATE", "LAB", "DISCOVERABLE", "PUBLIC"]))
-@click.option("--dry-run",       is_flag=True, default=False,
-              help="Show detected samples without uploading")
+@click.option(
+    "--metadata-csv",
+    type=click.Path(exists=True),
+    default=None,
+    help="CSV with per-sample metadata (one row per sample_id)",
+)
+@click.option(
+    "--pattern",
+    default="*_R1*.fastq.gz",
+    help="Glob pattern for R1 files (default: *_R1*.fastq.gz)",
+)
+@click.option(
+    "--organism", default=None, help="Shared organism for all samples (overridden by CSV)"
+)
+@click.option("--source-type", default=None, help="Shared source type (overridden by CSV)")
+@click.option("--sector", default=None, help="Shared sector (overridden by CSV)")
+@click.option("--project", type=int, default=None, help="Project ID for all samples")
+@click.option(
+    "--sharing-level",
+    default="LAB",
+    type=click.Choice(["PRIVATE", "LAB", "DISCOVERABLE", "PUBLIC"]),
+)
+@click.option(
+    "--dry-run", is_flag=True, default=False, help="Show detected samples without uploading"
+)
 def upload_dir(
     directory: str,
     metadata_csv: str | None,
@@ -283,6 +340,7 @@ def upload_dir(
     csv_metadata: dict[str, dict] = {}
     if metadata_csv:
         import csv
+
         with open(metadata_csv, newline="") as f:
             reader = csv.DictReader(f)
             for row in reader:
@@ -321,7 +379,7 @@ def upload_dir(
 
     client = _get_client()
     success = 0
-    failed  = 0
+    failed = 0
 
     for s in detected:
         sample_id = s["sample_id"]
@@ -329,10 +387,10 @@ def upload_dir(
         # Build metadata — CSV overrides shared CLI options
         row_meta = csv_metadata.get(sample_id, {})
         meta: dict = {
-            "sample_id":     sample_id,
+            "sample_id": sample_id,
             "organism_name": row_meta.get("organism_name") or organism,
-            "source_type":   row_meta.get("source_type") or source_type,
-            "sector":        row_meta.get("sector") or sector,
+            "source_type": row_meta.get("source_type") or source_type,
+            "sector": row_meta.get("sector") or sector,
             "sharing_level": row_meta.get("sharing_level") or sharing_level,
         }
         if project:
@@ -340,14 +398,10 @@ def upload_dir(
         meta = {k: v for k, v in meta.items() if v is not None}
 
         r1_path = s["r1"]
-        files = {
-            "fastq_r1": (r1_path.name, r1_path.open("rb"), "application/octet-stream")
-        }
+        files = {"fastq_r1": (r1_path.name, r1_path.open("rb"), "application/octet-stream")}
         if s["r2"]:
             r2_path = s["r2"]
-            files["fastq_r2"] = (
-                r2_path.name, r2_path.open("rb"), "application/octet-stream"
-            )
+            files["fastq_r2"] = (r2_path.name, r2_path.open("rb"), "application/octet-stream")
 
         try:
             # TODO: implement when POST /api/v1/ingest/upload is built
@@ -356,9 +410,7 @@ def upload_dir(
                 metadata=meta,
                 files=files,
             )
-            click.echo(
-                f"  ✓ {sample_id} [{result.get('quality_status', 'PRELIMINARY')}]"
-            )
+            click.echo(f"  ✓ {sample_id} [{result.get('quality_status', 'PRELIMINARY')}]")
             success += 1
         except ValidationError as e:
             click.echo(f"  ✗ {sample_id}: validation failed — {e}", err=True)
@@ -377,19 +429,28 @@ def upload_dir(
 
 # ── jackpot upload-globus ───────────────────────────────────────────────────
 
+
 @click.command("upload-globus")
-@click.option("--metadata-csv",     required=True, type=click.Path(exists=True),
-              help="CSV with per-sample metadata (one row per sample_id)")
-@click.option("--source-endpoint",  required=True,
-              help="Globus source endpoint name or UUID")
-@click.option("--source-path",      required=True,
-              help="Path on source endpoint (e.g. /scratch/otero/sequences/)")
-@click.option("--project",          type=int, default=None,
-              help="Project ID for all samples")
-@click.option("--lab",              type=int, default=None,
-              help="Lab ID (required if not inferable from your account)")
-@click.option("--dry-run",          is_flag=True, default=False,
-              help="Validate metadata and show transfer plan without executing")
+@click.option(
+    "--metadata-csv",
+    required=True,
+    type=click.Path(exists=True),
+    help="CSV with per-sample metadata (one row per sample_id)",
+)
+@click.option("--source-endpoint", required=True, help="Globus source endpoint name or UUID")
+@click.option(
+    "--source-path", required=True, help="Path on source endpoint (e.g. /scratch/otero/sequences/)"
+)
+@click.option("--project", type=int, default=None, help="Project ID for all samples")
+@click.option(
+    "--lab", type=int, default=None, help="Lab ID (required if not inferable from your account)"
+)
+@click.option(
+    "--dry-run",
+    is_flag=True,
+    default=False,
+    help="Validate metadata and show transfer plan without executing",
+)
 def upload_globus(
     metadata_csv: str,
     source_endpoint: str,

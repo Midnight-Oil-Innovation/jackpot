@@ -4,6 +4,7 @@ tests/test_cli.py
 Smoke tests for CLI commands.
 Verifies help text, error handling, and basic invocation.
 """
+
 import pytest
 from click.testing import CliRunner
 
@@ -55,19 +56,26 @@ class TestCLIHelp:
 class TestConfigSet:
     def test_config_set_writes_file(self, runner, tmp_path, monkeypatch):
         from jackpot.cli import config as cfg_module
-        config_dir  = tmp_path / ".jackpot"
+
+        config_dir = tmp_path / ".jackpot"
         config_file = config_dir / "config.toml"
-        monkeypatch.setattr(cfg_module, "CONFIG_DIR",  config_dir)
+        monkeypatch.setattr(cfg_module, "CONFIG_DIR", config_dir)
         monkeypatch.setattr(cfg_module, "CONFIG_FILE", config_file)
 
-        result = runner.invoke(cli, [
-            "config", "set",
-            "--api-url", "http://localhost:8000",
-        ])
+        result = runner.invoke(
+            cli,
+            [
+                "config",
+                "set",
+                "--api-url",
+                "http://localhost:8000",
+            ],
+        )
         assert result.exit_code == 0
         assert config_file.exists()
 
         import toml
+
         raw = toml.loads(config_file.read_text())
         assert raw["default"]["api_url"] == "http://localhost:8000"
 
@@ -76,9 +84,8 @@ class TestAuthStatus:
     def test_auth_status_not_configured(self, runner, tmp_path, monkeypatch):
         """Should exit non-zero when no config is present."""
         from jackpot.cli import config as cfg_module
-        monkeypatch.setattr(
-            cfg_module, "CONFIG_FILE", tmp_path / "nonexistent.toml"
-        )
+
+        monkeypatch.setattr(cfg_module, "CONFIG_FILE", tmp_path / "nonexistent.toml")
         result = runner.invoke(cli, ["auth", "status"])
         assert result.exit_code != 0
 
@@ -90,9 +97,14 @@ class TestAuthStatus:
 
 class TestUploadDirDryRun:
     def test_dry_run_no_files(self, runner, tmp_path):
-        result = runner.invoke(cli, [
-            "upload-dir", str(tmp_path), "--dry-run",
-        ])
+        result = runner.invoke(
+            cli,
+            [
+                "upload-dir",
+                str(tmp_path),
+                "--dry-run",
+            ],
+        )
         # Should exit non-zero when no files found
         assert result.exit_code != 0
         assert "No files" in result.output
@@ -104,8 +116,13 @@ class TestUploadDirDryRun:
         (tmp_path / "AZ-002_R1.fastq.gz").write_bytes(b"fake")
         (tmp_path / "AZ-002_R2.fastq.gz").write_bytes(b"fake")
 
-        result = runner.invoke(cli, [
-            "upload-dir", str(tmp_path), "--dry-run",
-        ])
+        result = runner.invoke(
+            cli,
+            [
+                "upload-dir",
+                str(tmp_path),
+                "--dry-run",
+            ],
+        )
         assert "2 samples" in result.output or "AZ-001" in result.output
         assert result.exit_code == 0

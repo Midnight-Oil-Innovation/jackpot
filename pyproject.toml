@@ -93,3 +93,18 @@ select = ["E", "F", "I", "N", "W", "UP", "B", "SIM"]
 "backend/db/migrations/versions/*.py"     = ["E501", "E402"]
 "backend/scripts/*.py"                    = ["E501"]
 "schema/setup/*.py"                       = ["E501"]
+# CLI SDK stubs — inherited from jackpot-cli; the methods build a
+# `params`/`client` dict and raise NotImplementedError. The unused
+# variables are placeholders that get used once the stub is filled in
+# against a real API endpoint. Listed in cli/pyproject.toml's coverage
+# omit list. Drop this ignore when the corresponding SDK method lands.
+"cli/jackpot/sdk/samples.py"              = ["F841"]
+"cli/jackpot/sdk/pipelines.py"            = ["F841"]
+"cli/jackpot/sdk/datasets.py"             = ["F841"]
+"cli/jackpot/sdk/sra.py"                  = ["F841"]
+"cli/jackpot/sdk/references.py"           = ["F841"]
+"cli/jackpot/sdk/session.py"              = ["F841"]
+"cli/jackpot/cli/auth.py"                 = ["F841"]
+"cli/jackpot/cli/upload.py"               = ["F841"]
+"cli/jackpot/cli/samples.py"              = ["F841"]
+"cli/jackpot/cli/pipelines.py"            = ["F841"]

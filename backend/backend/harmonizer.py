@@ -19,8 +19,8 @@ Mapping config format (see schema/schema/mapping_configs/example_human_v1.yaml):
 from typing import Any
 
 import yaml
-
 from jackpot_schema import MAPPING_CONFIGS_DIR as _MAPPING_DIR
+
 _cache: dict[str, dict] = {}
 
 

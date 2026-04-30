@@ -40,6 +40,17 @@ exclude = []
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP"]
 
+[tool.ruff.lint.per-file-ignores]
+# CLI/SDK stub modules — see cli/pyproject.toml [tool.coverage.run]
+# omit list. F841 unused-variable is the typical shape of a stub
+# method that builds a params/client dict and raises NotImplementedError.
+# Drop the per-file ignore once the corresponding stub is implemented.
+"jackpot/sdk/*.py" = ["F841"]
+"jackpot/cli/auth.py"      = ["F841"]
+"jackpot/cli/upload.py"    = ["F841"]
+"jackpot/cli/samples.py"   = ["F841"]
+"jackpot/cli/pipelines.py" = ["F841"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "--cov=jackpot --cov-report=term-missing --cov-fail-under=45"

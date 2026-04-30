@@ -560,7 +560,7 @@ def apply_changes(content: str) -> tuple[str, list[str]]:
         content = content.replace(old_version, new_version, 1)
         applied.append("Updated schema version: 4.1 → 4.2")
     else:
-        applied.append("WARNING: version string '4.1' not found — " "schema version not updated")
+        applied.append("WARNING: version string '4.1' not found — schema version not updated")
 
     return content, applied
 
@@ -648,16 +648,15 @@ def main() -> None:
     )
     print("  3. Regenerate models (from jackpot-backend/):")
     print(
-        "       uv run gen-pydantic schema/schema/jackpot_schema.yaml "
-        "> backend/models_generated.py"
+        "       uv run gen-pydantic schema/schema/jackpot_schema.yaml > backend/models_generated.py"
     )
     print(
         "       uv run gen-json-schema schema/schema/jackpot_schema.yaml "
         "> schema/schema/jackpot_schema.json"
     )
     print("  4. Create Alembic migration:")
-    print("       uv run alembic revision -m " '"schema_v4_2_case_sector_surveillance_quality"')
-    print("  5. Commit jackpot-schema, then update submodule pointer " "in jackpot-backend")
+    print('       uv run alembic revision -m "schema_v4_2_case_sector_surveillance_quality"')
+    print("  5. Commit jackpot-schema, then update submodule pointer in jackpot-backend")
 
 
 if __name__ == "__main__":

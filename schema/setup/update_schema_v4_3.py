@@ -191,7 +191,7 @@ def apply_changes(content: str) -> tuple[str, list[str]]:
         )
     content = content.replace(OLD_COUNTY, NEW_COUNTY)
     applied.append(
-        "Updated collection_location_county — internationally neutral, " "explicitly optional"
+        "Updated collection_location_county — internationally neutral, explicitly optional"
     )
 
     # 4. collection_location_zipcode
@@ -225,7 +225,7 @@ def apply_changes(content: str) -> tuple[str, list[str]]:
         content = content.replace(old_version, new_version, 1)
         applied.append("Updated schema version: 4.2 → 4.3")
     else:
-        applied.append("WARNING: version string '4.2' not found — " "schema version not updated")
+        applied.append("WARNING: version string '4.2' not found — schema version not updated")
 
     return content, applied
 
@@ -317,7 +317,7 @@ def main() -> None:
     print("     to geo_loc_name construction logic")
     print("  5. Update validator.py — add INSDC country name soft warning")
     print("     at Tier 2 and hard requirement at Tier 3")
-    print("  6. Commit jackpot-schema, then update submodule pointer " "in jackpot-backend")
+    print("  6. Commit jackpot-schema, then update submodule pointer in jackpot-backend")
 
 
 if __name__ == "__main__":

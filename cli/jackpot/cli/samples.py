@@ -8,6 +8,7 @@ Commands:
   jackpot samples get     — get a single sample
   jackpot samples search  — search across all visible samples
 """
+
 from __future__ import annotations
 
 import click
@@ -36,22 +37,43 @@ def samples() -> None:
 
 
 @samples.command("list")
-@click.option("--project",    type=int, default=None, help="Filter by project ID")
-@click.option("--lab",        type=int, default=None, help="Filter by lab ID")
-@click.option("--status",     default=None,
-              type=click.Choice(["PRELIMINARY", "ANALYZABLE", "SUBMITTABLE",
-                                 "QC_FAILED", "UNDER_REVIEW", "RETRACTED"]),
-              help="Filter by quality_status (metadata tier)")
-@click.option("--organism",   default=None, help="Filter by organism name")
-@click.option("--sector",     default=None,
-              type=click.Choice(["clinical", "veterinary", "agricultural",
-                                 "environmental", "wastewater", "wildlife", "research"]))
-@click.option("--surveillance-relevant", is_flag=True, default=False,
-              help="Show only surveillance-relevant samples")
-@click.option("--page",       type=int, default=1, help="Page number")
-@click.option("--per-page",   type=int, default=50, help="Results per page (max 200)")
-@click.option("--json",       "output_json", is_flag=True, default=False,
-              help="Output as JSON instead of a table")
+@click.option("--project", type=int, default=None, help="Filter by project ID")
+@click.option("--lab", type=int, default=None, help="Filter by lab ID")
+@click.option(
+    "--status",
+    default=None,
+    type=click.Choice(
+        ["PRELIMINARY", "ANALYZABLE", "SUBMITTABLE", "QC_FAILED", "UNDER_REVIEW", "RETRACTED"]
+    ),
+    help="Filter by quality_status (metadata tier)",
+)
+@click.option("--organism", default=None, help="Filter by organism name")
+@click.option(
+    "--sector",
+    default=None,
+    type=click.Choice(
+        [
+            "clinical",
+            "veterinary",
+            "agricultural",
+            "environmental",
+            "wastewater",
+            "wildlife",
+            "research",
+        ]
+    ),
+)
+@click.option(
+    "--surveillance-relevant",
+    is_flag=True,
+    default=False,
+    help="Show only surveillance-relevant samples",
+)
+@click.option("--page", type=int, default=1, help="Page number")
+@click.option("--per-page", type=int, default=50, help="Results per page (max 200)")
+@click.option(
+    "--json", "output_json", is_flag=True, default=False, help="Output as JSON instead of a table"
+)
 def samples_list(
     project: int | None,
     lab: int | None,
@@ -96,6 +118,7 @@ def samples_list(
 
     if output_json:
         import json
+
         click.echo(json.dumps(response, indent=2))
         return
 
@@ -130,8 +153,7 @@ def samples_list(
 
 @samples.command("get")
 @click.argument("sample_id")
-@click.option("--json", "output_json", is_flag=True, default=False,
-              help="Output as JSON")
+@click.option("--json", "output_json", is_flag=True, default=False, help="Output as JSON")
 def samples_get(sample_id: str, output_json: bool) -> None:
     """Get a single sample by ID.
 
@@ -150,26 +172,27 @@ def samples_get(sample_id: str, output_json: bool) -> None:
 
     if output_json:
         import json
+
         click.echo(json.dumps(result, indent=2))
         return
 
     # Pretty-print key fields
     for key, label in [
-        ("sample_id",           "Sample ID"),
-        ("organism_name",       "Organism"),
-        ("source_type",         "Source type"),
-        ("sector",              "Sector"),
-        ("quality_status",      "Quality tier"),
-        ("scrub_status",        "Scrub status"),
+        ("sample_id", "Sample ID"),
+        ("organism_name", "Organism"),
+        ("source_type", "Source type"),
+        ("sector", "Sector"),
+        ("quality_status", "Quality tier"),
+        ("scrub_status", "Scrub status"),
         ("surveillance_relevant", "Surveillance relevant"),
-        ("date_collected",      "Date collected"),
+        ("date_collected", "Date collected"),
         ("date_collected_precision", "Date precision"),
         ("collection_location_country", "Country"),
-        ("collection_location_state",   "State/Region"),
-        ("collection_location_city",    "City"),
-        ("sharing_level",       "Sharing level"),
-        ("project_id",          "Project"),
-        ("lab_id",              "Lab"),
+        ("collection_location_state", "State/Region"),
+        ("collection_location_city", "City"),
+        ("sharing_level", "Sharing level"),
+        ("project_id", "Project"),
+        ("lab_id", "Lab"),
     ]:
         val = result.get(key)
         if val is not None:
@@ -177,10 +200,10 @@ def samples_get(sample_id: str, output_json: bool) -> None:
 
 
 @samples.command("search")
-@click.option("--query",   required=True, help="Search query (organism, sample_id, etc.)")
+@click.option("--query", required=True, help="Search query (organism, sample_id, etc.)")
 @click.option("--project", type=int, default=None)
-@click.option("--page",    type=int, default=1)
-@click.option("--json",    "output_json", is_flag=True, default=False)
+@click.option("--page", type=int, default=1)
+@click.option("--json", "output_json", is_flag=True, default=False)
 def samples_search(
     query: str,
     project: int | None,
@@ -209,6 +232,7 @@ def samples_search(
 
     if output_json:
         import json
+
         click.echo(json.dumps(response, indent=2))
         return
 

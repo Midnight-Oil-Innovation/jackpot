@@ -8,6 +8,7 @@ Accessed via session.samples:
     sample = session.samples.get("AZ-2026-001")
     path = sample.download_fastq(r1=True)
 """
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -19,7 +20,7 @@ class Sample:
     """Represents a single JACKPOT sample record."""
 
     def __init__(self, data: dict, client: JACKPOTClient) -> None:
-        self._data   = data
+        self._data = data
         self._client = client
 
     def __getattr__(self, name: str):
@@ -65,7 +66,7 @@ class SamplesModule:
     """
 
     def __init__(self, client: JACKPOTClient, project_id: int | None) -> None:
-        self._client     = client
+        self._client = client
         self._project_id = project_id
 
     def search(
@@ -99,26 +100,25 @@ class SamplesModule:
             per_page: Results per page (max 200)
         """
         params = {
-            k: v for k, v in {
-                "organism_name":         organism,
-                "source_type":           source_type,
-                "sector":                sector,
-                "quality_status":        quality_status,
+            k: v
+            for k, v in {
+                "organism_name": organism,
+                "source_type": source_type,
+                "sector": sector,
+                "quality_status": quality_status,
                 "surveillance_relevant": surveillance_relevant,
-                "date_from":             date_from,
-                "date_to":               date_to,
-                "project_id":            project_id or self._project_id,
-                "lab_id":                lab_id,
-                "page":                  page,
-                "per_page":              per_page,
+                "date_from": date_from,
+                "date_to": date_to,
+                "project_id": project_id or self._project_id,
+                "lab_id": lab_id,
+                "page": page,
+                "per_page": per_page,
             }.items()
             if v is not None
         }
 
         # TODO: implement in Month 1 — calls GET /api/v1/samples/
-        raise NotImplementedError(
-            "search() will be implemented when GET /api/v1/samples/ is built"
-        )
+        raise NotImplementedError("search() will be implemented when GET /api/v1/samples/ is built")
 
     def get(self, sample_id: str) -> Sample:
         """
@@ -147,6 +147,5 @@ class SamplesModule:
         """
         # TODO: implement in Month 2 — calls POST /api/v1/ingest/workspace-promote
         raise NotImplementedError(
-            "register_from_workspace() will be implemented with the workspace "
-            "promotion endpoint"
+            "register_from_workspace() will be implemented with the workspace promotion endpoint"
         )

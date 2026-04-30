@@ -17,26 +17,27 @@ Config file format:
 
 The active profile is selected by JACKPOT_PROFILE env var (default: "default").
 """
+
 from __future__ import annotations
 
 import os
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 import toml
 
 from jackpot.core.exceptions import ConfigError, TokenExpiredError
 
-CONFIG_DIR  = Path.home() / ".jackpot"
+CONFIG_DIR = Path.home() / ".jackpot"
 CONFIG_FILE = CONFIG_DIR / "config.toml"
 
 # Environment variable overrides — checked before reading the config file.
 # These are pre-set in all JACKPOT workspace pods via context injection.
-ENV_API_URL    = "JACKPOT_API_URL"
-ENV_TOKEN      = "JACKPOT_API_TOKEN"
+ENV_API_URL = "JACKPOT_API_URL"
+ENV_TOKEN = "JACKPOT_API_TOKEN"
 ENV_PROJECT_ID = "JACKPOT_PROJECT_ID"
-ENV_LAB_ID     = "JACKPOT_LAB_ID"
-ENV_PROFILE    = "JACKPOT_PROFILE"
+ENV_LAB_ID = "JACKPOT_LAB_ID"
+ENV_PROFILE = "JACKPOT_PROFILE"
 
 
 def get_profile() -> str:
@@ -52,15 +53,15 @@ def load_config(profile: str | None = None) -> dict:
 
     # Environment variable overrides (workspace pod context injection)
     env_api_url = os.environ.get(ENV_API_URL)
-    env_token   = os.environ.get(ENV_TOKEN)
+    env_token = os.environ.get(ENV_TOKEN)
 
     if env_api_url and env_token:
         return {
-            "api_url":    env_api_url,
-            "token":      env_token,
+            "api_url": env_api_url,
+            "token": env_token,
             "project_id": os.environ.get(ENV_PROJECT_ID),
-            "lab_id":     os.environ.get(ENV_LAB_ID),
-            "source":     "environment",
+            "lab_id": os.environ.get(ENV_LAB_ID),
+            "source": "environment",
         }
 
     # Fall back to config file
@@ -91,7 +92,7 @@ def get_client_credentials() -> tuple[str, str]:
     """
     cfg = load_config()
     api_url = cfg.get("api_url")
-    token   = cfg.get("token")
+    token = cfg.get("token")
 
     if not api_url or not token:
         raise ConfigError(
@@ -105,8 +106,8 @@ def get_client_credentials() -> tuple[str, str]:
         try:
             exp_dt = datetime.fromisoformat(expires)
             if exp_dt.tzinfo is None:
-                exp_dt = exp_dt.replace(tzinfo=timezone.utc)
-            if datetime.now(timezone.utc) > exp_dt:
+                exp_dt = exp_dt.replace(tzinfo=UTC)
+            if datetime.now(UTC) > exp_dt:
                 raise TokenExpiredError(
                     "Your JACKPOT API token has expired.\n"
                     "Run `jackpot auth login` to get a new one."

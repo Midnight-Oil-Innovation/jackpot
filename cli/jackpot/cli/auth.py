@@ -9,6 +9,7 @@ Commands:
   jackpot auth status   — shows current auth state
   jackpot auth revoke   — revokes token on the server
 """
+
 from __future__ import annotations
 
 import webbrowser
@@ -88,7 +89,7 @@ def auth_status(profile: str | None) -> None:
         api_url, token = get_client_credentials()
         # Mask token for display
         masked = token[:8] + "..." + token[-4:] if len(token) > 12 else "***"
-        click.echo(f"Authenticated")
+        click.echo("Authenticated")
         click.echo(f"  API URL: {api_url}")
         click.echo(f"  Token:   {masked}")
 
@@ -109,8 +110,9 @@ def auth_status(profile: str | None) -> None:
 @click.option("--profile", default="default", help="Config profile to log out")
 def auth_logout(profile: str) -> None:
     """Remove stored credentials for a profile."""
-    from jackpot.cli.config import CONFIG_FILE
     import toml
+
+    from jackpot.cli.config import CONFIG_FILE
 
     if not CONFIG_FILE.exists():
         click.echo("No config file found — already logged out.")

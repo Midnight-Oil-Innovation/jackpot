@@ -9,6 +9,7 @@ All SDK modules and CLI commands use this client. It handles:
   - Error mapping to typed exceptions
   - Automatic retry on transient server errors (500, 503)
 """
+
 from __future__ import annotations
 
 import httpx
@@ -26,7 +27,7 @@ from jackpot.core.exceptions import (
 
 # Default timeout for all requests. Upload calls use a separate longer timeout.
 DEFAULT_TIMEOUT = httpx.Timeout(30.0)
-UPLOAD_TIMEOUT  = httpx.Timeout(300.0)  # 5 minutes for large file uploads
+UPLOAD_TIMEOUT = httpx.Timeout(300.0)  # 5 minutes for large file uploads
 
 
 class JACKPOTClient:
@@ -64,10 +65,10 @@ class JACKPOTClient:
         try:
             body = response.json()
             message = body.get("error", {}).get("message", response.text)
-            detail  = body.get("error", {}).get("detail", {})
+            detail = body.get("error", {}).get("detail", {})
         except Exception:
             message = response.text
-            detail  = {}
+            detail = {}
 
         status = response.status_code
 

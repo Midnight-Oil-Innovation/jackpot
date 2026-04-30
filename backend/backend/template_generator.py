@@ -19,7 +19,6 @@ from enum import Enum
 
 from jackpot_schema import SCHEMA_JSON_PATH as SCHEMA_PATH
 
-
 # ── Tier enum ─────────────────────────────────────────────────────────────
 
 

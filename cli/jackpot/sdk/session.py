@@ -16,6 +16,7 @@ Usage in a workspace notebook:
     # Work with a specific project (overrides JACKPOT_PROJECT_ID):
     session = Session(project_id=42)
 """
+
 from __future__ import annotations
 
 import os
@@ -57,7 +58,7 @@ class Session:
         # Resolve credentials
         if api_url and token:
             self._api_url = api_url
-            self._token   = token
+            self._token = token
         else:
             try:
                 self._api_url, self._token = get_client_credentials()
@@ -70,25 +71,19 @@ class Session:
                 )
 
         # Resolve project/lab context
-        self.project_id = (
-            project_id
-            or _int_env("JACKPOT_PROJECT_ID")
-        )
-        self.lab_id = (
-            lab_id
-            or _int_env("JACKPOT_LAB_ID")
-        )
+        self.project_id = project_id or _int_env("JACKPOT_PROJECT_ID")
+        self.lab_id = lab_id or _int_env("JACKPOT_LAB_ID")
 
         # Construct shared HTTP client
         self._client = JACKPOTClient(api_url=self._api_url, token=self._token)
 
         # Initialise SDK modules — lazy instantiation via properties below
-        self._samples    = None
-        self._pipelines  = None
-        self._datasets   = None
-        self._sra        = None
+        self._samples = None
+        self._pipelines = None
+        self._datasets = None
+        self._sra = None
         self._references = None
-        self._workspace  = None
+        self._workspace = None
 
     # ── Module accessors ────────────────────────────────────────────────────
 

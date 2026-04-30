@@ -3,6 +3,7 @@ tests/test_config.py
 ~~~~~~~~~~~~~~~~~~~~
 Tests for jackpot.cli.config — config file management.
 """
+
 import pytest
 import toml
 
@@ -22,9 +23,7 @@ class TestLoadConfig:
         assert cfg["token"] == "jk_test_abc123"
 
     def test_missing_config_raises_config_error(self, tmp_path, monkeypatch):
-        monkeypatch.setattr(
-            "jackpot.cli.config.CONFIG_FILE", tmp_path / "nonexistent.toml"
-        )
+        monkeypatch.setattr("jackpot.cli.config.CONFIG_FILE", tmp_path / "nonexistent.toml")
         with pytest.raises(ConfigError):
             load_config()
 
@@ -48,8 +47,9 @@ class TestGetClientCredentials:
         assert token == "jk_test_abc123"
 
     def test_expired_token_raises(self, mock_config, monkeypatch):
-        from jackpot.cli.config import CONFIG_FILE
         import toml
+
+        from jackpot.cli.config import CONFIG_FILE
 
         raw = toml.loads(CONFIG_FILE.read_text())
         raw["default"]["token_expires"] = "2000-01-01T00:00:00Z"  # past
@@ -62,7 +62,8 @@ class TestGetClientCredentials:
 class TestSaveConfig:
     def test_saves_new_profile(self, mock_config, tmp_path, monkeypatch):
         from jackpot.cli import config as cfg_module
-        monkeypatch.setattr(cfg_module, "CONFIG_DIR",  tmp_path / ".jackpot")
+
+        monkeypatch.setattr(cfg_module, "CONFIG_DIR", tmp_path / ".jackpot")
         monkeypatch.setattr(cfg_module, "CONFIG_FILE", tmp_path / ".jackpot" / "config.toml")
 
         save_config(
@@ -78,11 +79,12 @@ class TestSaveConfig:
 
     def test_config_file_has_restricted_permissions(self, mock_config, tmp_path, monkeypatch):
         import stat
+
         from jackpot.cli import config as cfg_module
 
-        config_dir  = tmp_path / ".jackpot"
+        config_dir = tmp_path / ".jackpot"
         config_file = config_dir / "config.toml"
-        monkeypatch.setattr(cfg_module, "CONFIG_DIR",  config_dir)
+        monkeypatch.setattr(cfg_module, "CONFIG_DIR", config_dir)
         monkeypatch.setattr(cfg_module, "CONFIG_FILE", config_file)
 
         save_config(api_url="http://x", token="tok", profile="default")

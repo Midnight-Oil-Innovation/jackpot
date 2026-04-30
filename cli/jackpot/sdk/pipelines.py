@@ -8,9 +8,8 @@ Accessed via session.pipelines:
     run.wait(poll_interval=30)
     results = run.results()
 """
-from __future__ import annotations
 
-import time
+from __future__ import annotations
 
 from jackpot.core.client import JACKPOTClient
 
@@ -19,7 +18,7 @@ class PipelineRun:
     """Represents a single JACKPOT pipeline run."""
 
     def __init__(self, data: dict, client: JACKPOTClient) -> None:
-        self._data   = data
+        self._data = data
         self._client = client
 
     @property
@@ -41,7 +40,7 @@ class PipelineRun:
             f"status={self.status!r})"
         )
 
-    def refresh(self) -> "PipelineRun":
+    def refresh(self) -> PipelineRun:
         """Refresh run status from the API."""
         # TODO: implement when GET /api/v1/pipelines/{run_id} is built
         raise NotImplementedError("refresh() not yet implemented")
@@ -50,7 +49,7 @@ class PipelineRun:
         self,
         poll_interval: int = 30,
         timeout: int = 86400,
-    ) -> "PipelineRun":
+    ) -> PipelineRun:
         """
         Block until the pipeline run reaches a terminal state.
 
@@ -91,7 +90,7 @@ class PipelinesModule:
     """
 
     def __init__(self, client: JACKPOTClient, project_id: int | None) -> None:
-        self._client     = client
+        self._client = client
         self._project_id = project_id
 
     def launch(
@@ -119,9 +118,7 @@ class PipelinesModule:
             PipelineRun object. Call .wait() to block until completion.
         """
         # TODO: implement when POST /api/v1/pipelines/launch is built
-        raise NotImplementedError(
-            "launch() will be implemented with the pipeline launch endpoint"
-        )
+        raise NotImplementedError("launch() will be implemented with the pipeline launch endpoint")
 
     def list(
         self,

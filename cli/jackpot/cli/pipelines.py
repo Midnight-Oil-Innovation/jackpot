@@ -9,6 +9,7 @@ Commands:
   jackpot pipelines status  — get status of a specific run
   jackpot pipelines cancel  — cancel a running pipeline
 """
+
 from __future__ import annotations
 
 import click
@@ -38,12 +39,14 @@ def pipelines() -> None:
 
 @pipelines.command("list")
 @click.option("--project", type=int, default=None, help="Filter by project ID")
-@click.option("--status",  default=None,
-              type=click.Choice(["queued", "submitted", "running",
-                                 "completed", "failed", "aborted"]),
-              help="Filter by run status")
-@click.option("--page",    type=int, default=1)
-@click.option("--json",    "output_json", is_flag=True, default=False)
+@click.option(
+    "--status",
+    default=None,
+    type=click.Choice(["queued", "submitted", "running", "completed", "failed", "aborted"]),
+    help="Filter by run status",
+)
+@click.option("--page", type=int, default=1)
+@click.option("--json", "output_json", is_flag=True, default=False)
 def pipelines_list(
     project: int | None,
     status: str | None,
@@ -74,6 +77,7 @@ def pipelines_list(
 
     if output_json:
         import json
+
         click.echo(json.dumps(response, indent=2))
         return
 
@@ -83,7 +87,7 @@ def pipelines_list(
         return
 
     table = Table(title="Pipeline runs")
-    table.add_column("run_id",   style="cyan")
+    table.add_column("run_id", style="cyan")
     table.add_column("pipeline")
     table.add_column("version")
     table.add_column("status")
@@ -106,18 +110,21 @@ def pipelines_list(
 
 
 @pipelines.command("launch")
-@click.option("--pipeline",    required=True,
-              help="Pipeline name (e.g. 'nf-core/viralrecon', 'GHRU assembly')")
-@click.option("--project",     type=int, default=None,
-              help="Project ID (uses JACKPOT_PROJECT_ID env var if not set)")
-@click.option("--samples",     default=None,
-              help="Comma-separated sample IDs (omit to use all project samples)")
-@click.option("--version",     default=None,
-              help="Pipeline version/revision (default: latest)")
-@click.option("--params",      default=None,
-              help="Pipeline parameters as JSON string")
-@click.option("--wait",        is_flag=True, default=False,
-              help="Block until pipeline completes")
+@click.option(
+    "--pipeline", required=True, help="Pipeline name (e.g. 'nf-core/viralrecon', 'GHRU assembly')"
+)
+@click.option(
+    "--project",
+    type=int,
+    default=None,
+    help="Project ID (uses JACKPOT_PROJECT_ID env var if not set)",
+)
+@click.option(
+    "--samples", default=None, help="Comma-separated sample IDs (omit to use all project samples)"
+)
+@click.option("--version", default=None, help="Pipeline version/revision (default: latest)")
+@click.option("--params", default=None, help="Pipeline parameters as JSON string")
+@click.option("--wait", is_flag=True, default=False, help="Block until pipeline completes")
 def pipelines_launch(
     pipeline: str,
     project: int | None,
@@ -181,9 +188,7 @@ def pipelines_launch(
         run_id = result.get("id")
         click.echo(f"Pipeline run started: run_id={run_id}")
         click.echo(f"Status: {result.get('status', 'queued')}")
-        click.echo(
-            f"Monitor: jackpot pipelines status {run_id}"
-        )
+        click.echo(f"Monitor: jackpot pipelines status {run_id}")
     except Exception as e:
         click.echo(f"Launch failed: {e}", err=True)
         raise SystemExit(1)
@@ -191,9 +196,8 @@ def pipelines_launch(
 
 @pipelines.command("status")
 @click.argument("run_id", type=int)
-@click.option("--tasks", is_flag=True, default=False,
-              help="Show per-task breakdown")
-@click.option("--json",  "output_json", is_flag=True, default=False)
+@click.option("--tasks", is_flag=True, default=False, help="Show per-task breakdown")
+@click.option("--json", "output_json", is_flag=True, default=False)
 def pipelines_status(run_id: int, tasks: bool, output_json: bool) -> None:
     """Get the status of a pipeline run.
 
@@ -213,6 +217,7 @@ def pipelines_status(run_id: int, tasks: bool, output_json: bool) -> None:
 
     if output_json:
         import json
+
         click.echo(json.dumps(result, indent=2))
         return
 
@@ -230,9 +235,9 @@ def pipelines_status(run_id: int, tasks: bool, output_json: bool) -> None:
             for t in task_list:
                 status_icon = {
                     "COMPLETED": "✓",
-                    "FAILED":    "✗",
-                    "CACHED":    "↩",
-                    "RUNNING":   "⟳",
+                    "FAILED": "✗",
+                    "CACHED": "↩",
+                    "RUNNING": "⟳",
                 }.get(t.get("status", ""), "?")
                 click.echo(
                     f"  {status_icon} {t.get('process_name', ''):<50} "

@@ -5,6 +5,7 @@ SRAModule — fetch SRA accessions to workspace or import into JACKPOT.
 
 Accessed via session.sra.
 """
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -38,9 +39,7 @@ class SRAModule:
         """
         # TODO: implement in Month 2 — shells out to fasterq-dump
         # which is available in the Bioinformatician workspace profile
-        raise NotImplementedError(
-            "fetch() will be implemented with workspace SDK in Month 2"
-        )
+        raise NotImplementedError("fetch() will be implemented with workspace SDK in Month 2")
 
     def import_to_jackpot(
         self,

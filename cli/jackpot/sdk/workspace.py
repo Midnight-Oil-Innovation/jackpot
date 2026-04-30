@@ -5,6 +5,7 @@ WorkspaceModule — workspace pod utilities.
 
 Accessed via session.workspace.
 """
+
 from __future__ import annotations
 
 from jackpot.core.client import JACKPOTClient
@@ -28,8 +29,8 @@ class WorkspaceModule:
         Example:
             session.workspace.add_package("biopython==1.83")
         """
-        from pathlib import Path
         import subprocess
+        from pathlib import Path
 
         req_file = Path.home() / "requirements.txt"
 
@@ -44,9 +45,7 @@ class WorkspaceModule:
             text=True,
         )
         if result.returncode != 0:
-            raise RuntimeError(
-                f"Failed to install {package}:\n{result.stderr}"
-            )
+            raise RuntimeError(f"Failed to install {package}:\n{result.stderr}")
         print(f"Installed {package} and added to ~/requirements.txt")
 
     def session_info(self) -> dict:
@@ -55,9 +54,10 @@ class WorkspaceModule:
         Includes project_id, lab_id, pod profile, and API URL.
         """
         import os
+
         return {
-            "api_url":    self._client.api_url,
+            "api_url": self._client.api_url,
             "project_id": os.environ.get("JACKPOT_PROJECT_ID"),
-            "lab_id":     os.environ.get("JACKPOT_LAB_ID"),
-            "profile":    os.environ.get("JACKPOT_WORKSPACE_PROFILE", "unknown"),
+            "lab_id": os.environ.get("JACKPOT_LAB_ID"),
+            "profile": os.environ.get("JACKPOT_WORKSPACE_PROFILE", "unknown"),
         }

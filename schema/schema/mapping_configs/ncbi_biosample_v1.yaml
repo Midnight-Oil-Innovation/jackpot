@@ -4,7 +4,7 @@ column_mappings:
   "host_subject_id":    sample_id
   "collection_date":    date_collected
   "organism":           organism_name
-  "sequencing_platform":sequencing_platform
+  "sequencing_platform": sequencing_platform
   "geo_loc_name":       collection_location_country
   "host":               host_species
   "isolation_source":   isolation_source

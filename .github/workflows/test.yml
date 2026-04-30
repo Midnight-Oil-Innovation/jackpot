@@ -61,11 +61,10 @@ jobs:
         run: uv sync --frozen
 
       - name: Run pre-commit hooks
+        # .pre-commit-config.yaml lives at the workspace root (moved
+        # from backend/ during the P0d follow-up). The pre-commit binary
+        # comes from backend's dev dependency group via uv sync.
         run: uv run pre-commit run --all-files
-        # backend's .pre-commit-config.yaml drives this; the workspace
-        # picked up the pre-commit binary via backend's dev dependency
-        # group. If pre-commit configuration moves to the root in a
-        # later phase, just delete this comment.
 
       - name: Run Alembic migrations against the CI Postgres
         env:
@@ -116,9 +115,9 @@ jobs:
         with:
           python-version: "3.11"
 
-      - name: Install pipelines dependencies (member-local lock)
+      - name: Install pipelines dependencies (member-local lock + dev extras)
         working-directory: pipelines
-        run: uv sync
+        run: uv sync --extra dev
 
       - name: Run pipelines pytest (excludes integration markers)
         working-directory: pipelines

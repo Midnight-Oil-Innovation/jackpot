@@ -7,6 +7,7 @@ Accessed via session.references.
 Reference genomes are stored on a lab-shared read-only GCS volume
 mounted at /ref/{org_slug}/{lab_slug}/ in all workspace pods.
 """
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -57,9 +58,7 @@ class ReferencesModule:
         """
         # TODO: implement in Month 2 — check lab-shared volume first,
         # then fall back to downloading from GCS via presigned URL
-        raise NotImplementedError(
-            "download() will be implemented with workspace SDK in Month 2"
-        )
+        raise NotImplementedError("download() will be implemented with workspace SDK in Month 2")
 
     def get_path(self, accession: str) -> Path | None:
         """

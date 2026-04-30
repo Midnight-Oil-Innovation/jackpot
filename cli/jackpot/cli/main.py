@@ -6,6 +6,7 @@ JACKPOT CLI entry point.
 Registered as `jackpot` console script via pyproject.toml.
 All commands are defined in submodules and registered here.
 """
+
 import click
 
 from jackpot.cli.auth import auth
@@ -29,6 +30,7 @@ def cli() -> None:
 
 # ── Config commands ─────────────────────────────────────────────────────────
 
+
 @cli.group()
 def config() -> None:
     """Manage local JACKPOT configuration (~/.jackpot/config.toml)."""
@@ -44,8 +46,9 @@ def config_set(api_url: str, profile: str) -> None:
     Example:
       jackpot config set --api-url https://api.jackpot.adhs.az.gov
     """
-    from jackpot.cli.config import CONFIG_FILE, CONFIG_DIR
     import toml
+
+    from jackpot.cli.config import CONFIG_DIR, CONFIG_FILE
 
     CONFIG_DIR.mkdir(parents=True, exist_ok=True)
     CONFIG_DIR.chmod(0o700)
@@ -71,8 +74,9 @@ def config_set(api_url: str, profile: str) -> None:
 @click.option("--profile", default=None, help="Profile to show")
 def config_show(profile: str | None) -> None:
     """Show current configuration (token is masked)."""
-    from jackpot.cli.config import show_config
     from rich import print as rprint
+
+    from jackpot.cli.config import show_config
 
     try:
         cfg = show_config(profile)

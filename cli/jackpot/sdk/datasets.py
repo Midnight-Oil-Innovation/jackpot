@@ -5,6 +5,7 @@ DatasetsModule — create, manage, and register datasets.
 
 Accessed via session.datasets.
 """
+
 from __future__ import annotations
 
 from jackpot.core.client import JACKPOTClient
@@ -14,7 +15,7 @@ class DatasetsModule:
     """SDK module for dataset operations."""
 
     def __init__(self, client: JACKPOTClient, project_id: int | None) -> None:
-        self._client     = client
+        self._client = client
         self._project_id = project_id
 
     def register_from_notebook(
