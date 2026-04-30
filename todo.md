@@ -1,10 +1,16 @@
 # JACKPOT — To-Do List
 
-**Last updated:** 2026-04-28 (post-Pathoplexus/Loculus comparative analysis session)
+**Last updated:** 2026-04-28 (post-CDC DMI / STLT / CARE Principles overview)
 **Baseline:** 477 tests passing, 86.99% coverage — Session S (projects + dataharmonizer) complete, Session 5 staging deploy work landed on top
-**Active sprint:** Phase 21 (UI page triage) + Phase 20 (Session 5 debt)
+**Active sprint:** Phase 21 (UI page triage close-out) → **P0d monorepo migration starting now**
 
-**Project context as of 2026-04-28:** JACKPOT pivoted to an independent project under `Midnight-Oil-Innovation/jackpot` (no longer ADHS/ASU-coupled, no longer the APGAP successor). License flipped from Apache 2.0 to **AGPL-3.0**. New multi-deployment-target architecture covers 6 install scenarios (A laptop, B single-org cloud, C multi-lab agency, D hosted SaaS, E federation member, F CI test). Cleanup A through J COMPLETE → P0d (monorepo migration) → P0e (jackpot init CLI) → P0b/c (multi-tenancy schema + middleware) → P1–P5. See `jackpot_pathoplexus_loculus_overview.md` for the full comparative analysis driving Phase 26 below.
+**Project context as of 2026-04-28:** JACKPOT pivoted to an independent project under `Midnight-Oil-Innovation/jackpot` (no longer ADHS/ASU-coupled, no longer the APGAP successor). License flipped from Apache 2.0 to **AGPL-3.0**. New multi-deployment-target architecture covers 7 install scenarios (A laptop, B single-org cloud, C multi-lab agency, D hosted SaaS, E federation member, F CI test, **T Tribal-sovereignty deployment**). Cleanup A through J COMPLETE → P0d (monorepo migration, **starting now**) → P0e (jackpot init CLI) → **P0f (BYOP infrastructure)** → P0b/c (multi-tenancy schema + middleware, **gated on Phase 24.5 sovereignty design** AND **must include BYOP + eukaryotic schema additions**) → P1–P5. See `jackpot_pathoplexus_loculus_overview.md`, `jackpot_cdc_dmi_stlt_overview.md`, and `jackpot_byop_and_eukaryotic_design.md` for the analyses driving Phases 26, 27, P0f, and 28.
+
+**Priority shift (2026-04-28):** With CARE Principles, STLT alignment, and DMI/North Star analysis in scope, several items that were "Year 2 stretch" deserve to land *during* P0d (governance docs, deploy guide reorganization, layer-cake framing) because P0d is already touching exactly those files. The architectural design for delete-on-request (B-CARE-3) is now **Phase 24.5** — must lock in *before* P0b schema work to avoid retrofit.
+
+**Phasing decision for BYOP and eukaryotic pipelines (2026-04-29):** The 25 backlog items from `jackpot_byop_and_eukaryotic_design.md` are NOT homogeneously deferrable to a single late phase. They split three ways: (1) **schema items move to P0b** alongside the existing Schema v5.0 work — otherwise we migrate twice. The 4 schema items (B-BYOP-9, B-EUK-1, B-EUK-2, B-EUK-3) are now bundled into Phase 24.5's design-lockdown deliverables. (2) **BYOP infrastructure (10 items) gets a new P0f phase** between P0e and P0b/c, because eukaryotic pipelines need BYOP to land first, and BYOP can't wait for P1. (3) **Default eukaryotic pipelines + parsers + dashboards (11 items) stay in Phase 28** but are internally tier-prioritized: Tier 1 (Plasmodium, Crypto/Giardia) ships first.
+
+Phase 21 UI triage stays where it is — Session 5 debt, ship-blocker, not displaceable.
 
 Instructions for Claude Code: Work through items in order within each phase.
 Check off each item only after `uv run pytest` passes. Never skip an item —
@@ -520,6 +526,87 @@ Upload page triage". Two real backend bugs found and fixed at root.
 
 ---
 
+## Phase 21.5 — Interstitial During-P0d Quick Wins
+
+**Why now, not later:** P0d is already touching the docs tree, the repo structure, the README, and the directory layout. These items are pure-documentation or near-pure-documentation work that ride along naturally with the monorepo migration. Doing them as part of P0d is more efficient than scheduling them as separate phases — the alternative is reopening the same files later. None of these add engineering scope; they all add clarity / governance / grant-narrative quality.
+
+Order is rough effort ascending. Do these opportunistically between bigger P0d chunks; none gates anything.
+
+### B-DMI-3: "Single-entry-point" framing in spec.md
+
+- [ ] Add a short subsection to spec.md §1 (or §3 depending on where the ingest-paths description lives now) documenting JACKPOT's six ingest paths as "the single entry point for genomic data into a public health agency." This is the framing from CDC's North Star "CDC Front Door" pattern, narrowed to JACKPOT's scope. Helps grant narratives.
+- [ ] Effort: half a session, ~30 min of writing.
+
+### B-STLT-2: Layer-cake diagram in spec.md
+
+- [ ] Add the layer-cake diagram from `jackpot_cdc_dmi_stlt_overview.md` §9.1 to spec.md, positioning JACKPOT relative to NBS / eCR / LIMS / NCBI Pathogen Detection / Pathoplexus / Pathogenwatch / Nextstrain.
+- [ ] Frame as "JACKPOT integrates with these systems; it does not replace them" — important for STLT operator conversations and grant narratives.
+- [ ] Effort: 1 session.
+
+### B-GOV-1 + B-CARE-1: Governance directory with CARE Principles
+
+Combine these two items — they're the same act of writing.
+
+- [ ] Create `governance/` directory at repo root with:
+  - [ ] `charter.md` — why JACKPOT exists, what it's for, who it's for
+  - [ ] `coi-policy.md` — conflict-of-interest disclosure
+  - [ ] `jurisdiction-and-data-residency.md` — where the project is hosted, applicable law, data-residency commitments
+  - [ ] `benefits-sharing-framework.md` — how operators using JACKPOT share benefits (citations, collaborations, data-back-to-source)
+  - [ ] `access-grievance-procedure.md` — how to raise concerns about access decisions or governance
+  - [ ] `platform-shutdown-data-portability-plan.md` — what happens if Glen / Midnight-Oil stops maintaining JACKPOT — guarantee that data and code stay accessible
+  - [ ] `advisory-board.md` — forward-looking; how the project will add governance plurality as it grows
+  - [ ] `care-principles-and-tribal-data-sovereignty.md` — JACKPOT's formal commitment to Collective Benefit, Authority to Control, Responsibility, Ethics. Pair with FAIR. Documents how each CARE principle maps to specific JACKPOT architectural decisions (Scenario T, tombstone-and-vacuum, federation-aware deletion, no-auto-publish defaults)
+- [ ] Link from README.md and from spec.md.
+- [ ] Effort: 1 session of writing (Pathoplexus governance docs + CARE Principles literature provide templates; mostly synthesis work, not original).
+
+### B-CARE-2: Add Scenario T to spec.md scenarios list
+
+- [ ] Update spec.md §1 scenarios table from 6 entries to 7 — add **T (Tribal-sovereignty deployment)** as variant of A or E with sovereignty-aware defaults.
+- [ ] Brief mention in CLAUDE.md project header.
+- [ ] Effort: half a session (just spec edit).
+
+### B-DMI-1: FHIR-translatable data model documentation
+
+- [ ] Add `docs/fhir-mapping.md` documenting how JACKPOT's LinkML schema entities map to FHIR R5 resources:
+  - JACKPOT Sample → FHIR `Specimen` + `MolecularSequence`
+  - JACKPOT pipeline_results → FHIR `Observation` + `Provenance`
+  - JACKPOT sequencing_lab → FHIR `Organization`
+  - **NEVER** map to FHIR `Patient` or `Practitioner` — JACKPOT does not store patient identifiers (DLP gate enforces this)
+- [ ] Pure documentation; no implementation. Sets up `B-DMI-2` (actual FHIR ingest router) for Year 2.
+- [ ] Effort: 2 sessions of writing.
+
+### B-STLT-1: Five STLT deploy guides under `docs/deploy/stlt/`
+
+- [ ] `state-health-department.md` — Scenario C usually; sometimes B for smaller states
+- [ ] `territorial-health-agency.md` — Scenario B; Freely Associated States may need A
+- [ ] `local-health-department.md` — Scenario A or B; Big Cities Health Coalition: C
+- [ ] `tribal-authority.md` — Scenario T (this is the most important one)
+- [ ] `tribal-epidemiology-center.md` — Scenario E (federation hub for member Tribes)
+
+Each guide covers: fit rationale, install steps, governance/data-handling defaults, federation options, funding sources (ELC/PHIG/PHEP/TECPHI/IHS/own-funds), workforce considerations, common pitfalls.
+
+- [ ] Effort: 1 session per guide = 5 sessions total. Spread across P0d sessions.
+
+### B-STLT-3: Funding-source map in deploy guides
+
+- [ ] Add the funding-source map from `jackpot_cdc_dmi_stlt_overview.md` §10 to each STLT deploy guide.
+- [ ] Effort: rolled into B-STLT-1 sessions.
+
+### Phase 21.5 success criterion
+
+By the time P0d is otherwise complete:
+
+- [ ] `governance/` directory exists with all 8 markdown files
+- [ ] spec.md has Scenario T, layer-cake diagram, single-entry-point framing
+- [ ] `docs/deploy/stlt/` has all 5 STLT deploy guides
+- [ ] `docs/fhir-mapping.md` documents FHIR-translatable schema
+- [ ] CLAUDE.md mentions Scenario T in the project header
+- [ ] README.md links to governance/ directory
+
+If any of these slip past P0d, that's fine — they're not gating. But if you're touching docs anyway during P0d, you should be touching these.
+
+---
+
 ## Phase 22 — Periodic Review Checkpoint
 
 After every ~20 completed tasks, pause and run this review:
@@ -581,6 +668,180 @@ harness), UI-B (Upload page working), UI-F pipelines-page entry.
 
 ---
 
+## Phase 24.5 — Architectural Design Lockdown Before P0b Schema Work
+
+**Why this phase exists:** P0b will land Schema v5.0 (instances/tenants/federated_peers). If P0b ships without thinking through these architectural decisions, the schema will need to be retrofitted later — meaning another migration, another data-handling review, another round of operator-deploy churn. Two distinct architectural gates must be locked in before P0b touches the schema:
+
+1. **Sovereignty-compliant deletion** (CARE Principle "Authority to Control" requires withdrawn-consent data to actually leave the system, not just get soft-deleted)
+2. **BYOP + eukaryotic schema additions** (the BYOP `byop_pipelines` table and `pipeline_results` FK additions, plus the eukaryotic OrganismNameEnum/samples-column/8-pipeline-result-table additions, all need to land *with* P0b — otherwise they require a second schema migration cycle)
+
+This is a **design + schema-spec phase**. Implementation of the deletion logic lands in P0c. Implementation of BYOP infrastructure lands in P0f. Implementation of eukaryotic pipelines lands in Phase 28. But the schema decisions for all three land here.
+
+### Design tasks
+
+- [ ] **B-CARE-3-DESIGN**: Write `docs/architecture/sovereignty-compliant-deletion.md` covering:
+  - [ ] `samples.deletion_status` enum: `ACTIVE | DELETION_REQUESTED | TOMBSTONED | VACUUMED`
+  - [ ] State machine — who can request, who can approve, what triggers vacuum
+  - [ ] Tombstone vs vacuum distinction — tombstone seals derivative rows, vacuum physically removes content
+  - [ ] What gets vacuumed: file URIs in samples, GCS/MinIO objects, `pipeline_results.result_data` JSONB, cached intermediate artifacts, dataset memberships
+  - [ ] What survives vacuum: audit log records of *what happened* (sample existed, was tombstoned at T1, vacuumed at T2 by user U), but NOT the deleted content itself
+  - [ ] Vacuum cadence: configurable per operator policy; Scenario T defaults to 24 hours; other scenarios may default to 30 days
+  - [ ] Derivative-analysis policy: cluster recompute (Scenario T default) vs cluster-with-asterisk (other scenarios) vs mark-stale-and-recompute-on-schedule
+  - [ ] Already-published handling: pre-publish CARE confirmation checklist; "previously published" tag persists past vacuum; cannot retract from external party but system is honest about what's still in the wild
+  - [ ] Federation propagation requirements (deferred to B-CARE-4 implementation): tombstone events pushed to peers, signed receipts, SLA, non-compliance flagging
+  - [ ] Auth model: who can request deletion (sample submitter? lab director? platform admin?), who must approve (defaults: lab director for own-lab samples; platform admin for cross-lab; Tribal authority designee for Scenario T)
+  - [ ] Edge cases: deletion during pipeline run (cancel pipeline?), deletion during pending submission to NCBI (block submission), deletion of sample that's part of an active outbreak investigation (require override)
+
+- [ ] **Schema constraints from this design** that P0b must honor:
+  - [ ] `samples.deletion_status` column with the 4-value enum
+  - [ ] `samples.deletion_requested_at`, `deletion_requested_by_user_id`, `deletion_reason` columns
+  - [ ] `samples.tombstoned_at`, `vacuumed_at` timestamp columns
+  - [ ] `audit_log.event_type` enum extension: `sample_deletion_requested`, `sample_tombstoned`, `sample_vacuumed`
+  - [ ] `pipeline_results` rows need a `tombstoned` boolean (cheaper than chasing every JSONB blob to mark it)
+  - [ ] Foreign key from `pipeline_results.sample_id` should NOT cascade-delete on sample deletion (we want to keep tombstone records; the actual JSONB content is what gets vacuumed)
+
+- [ ] **Implementation handoff to P0c**: docs/architecture/sovereignty-compliant-deletion.md is the spec for the implementation work in P0c. Tagged in P0c work as `B-CARE-3` (the actual implementation, after schema is in place).
+
+- [ ] Review with anyone consulted on Tribal-authority deployment scenarios (NPAIHB outreach per B-CARE-6 should happen in parallel — their input on the design before locking is high-value).
+
+### Schema additions for BYOP + eukaryotic pathogen support (must land with P0b)
+
+These are not separate design work — the design exists in `jackpot_byop_and_eukaryotic_design.md`. They are **schema migration items** that must land in the same P0b migration cycle as the sovereignty additions and the existing v5.0 plan. Splitting them into a later migration creates double-migrate operator churn.
+
+- [ ] **B-BYOP-9** Add `byop_pipelines` table per `jackpot_byop_and_eukaryotic_design.md` §7. Includes 27 columns covering manifest content, source type, lifecycle status, validation/sandbox logs, license, citation, cost estimate. Plus 4 new enums: `PipelineEngineEnum`, `PipelineSourceTypeEnum`, `PipelineStatusEnum`, `DataTypeEnum`. (1 session, P0b)
+
+- [ ] **B-BYOP-9b** Add `byop_pipeline_id` and `byop_pipeline_version` foreign-key columns to existing `pipeline_results` table. (Half session, P0b — bundle with B-BYOP-9.)
+
+- [ ] **B-EUK-1** Add ~25 OrganismNameEnum values for eukaryotic pathogens per `jackpot_byop_and_eukaryotic_design.md` §12.1: 6 *Plasmodium*, 6 *Leishmania*, 5 *Trypanosoma*, 5 *Schistosoma*, 7 STH, 3 filarial, 4 protozoa (*Crypto*/*Giardia*), 3 *Toxo*/*Entamoeba*. Plus new `ParasiteDevelopmentalStageEnum` and `SamplePreservationMethodEnum`. Plus new `samples` columns: `parasite_developmental_stage`, `sample_preservation_method`, `parasitemia_percent`, `multiplicity_of_infection`, `coinfection_organisms`. (1 session, P0b)
+
+- [ ] **B-EUK-2** Add 8 new pipeline-result tables per `jackpot_byop_and_eukaryotic_design.md` §12.3: `plasmodium_drug_resistance_results`, `leishmania_typing_results`, `trypanosoma_typing_results`, `schistosoma_typing_results`, `helminth_drug_resistance_results`, `filarial_typing_results`, `cryptogiardia_typing_results`, `toxo_entamoeba_typing_results`. Plus supporting enums: `TcDTUEnum`, `GiardiaAssemblageEnum`, `ToxoClonalLineageEnum`, `EhVsEdEnum`, `WolbachiaStatusEnum`, `ResistanceCallEnum`. (1-2 sessions, P0b)
+
+- [ ] **B-EUK-3** Update `validator.py` for eukaryotic-aware tier rules: new tier-2 fields (developmental stage, preservation method), new tier-3 fields (parasitemia, MOI, coinfection). Update `compute_surveillance_relevant()` to include eukaryotic pathogens by default. (1 session, P0b — bundle with B-EUK-1.)
+
+### Phase 24.5 success criterion
+
+- [ ] `docs/architecture/sovereignty-compliant-deletion.md` exists, is reviewable
+- [ ] P0b schema design has accommodated the sovereignty columns + enum extensions (sovereignty block above)
+- [ ] P0b schema design has accommodated `byop_pipelines` table, `pipeline_results` FK, eukaryotic OrganismNameEnum additions, eukaryotic samples columns, 8 eukaryotic pipeline-result tables, and supporting enums (BYOP/eukaryotic block above)
+- [ ] Implementation tasks are queued: `B-CARE-3` for P0c (sovereignty deletion), `B-BYOP-1` through `B-BYOP-10` for P0f (BYOP infrastructure), `B-EUK-PLAS-*` through `B-EUK-TOXO-*` for Phase 28 (default eukaryotic pipelines)
+
+**Effort:** 1 session for the sovereignty design doc + 1-2 sessions for the BYOP + eukaryotic schema migration work + half a session of P0b integration discussion. Total: 3-4 sessions for Phase 24.5.
+
+**Phase placement justification:** All these schema decisions must be locked before P0b touches the schema. Doing them now means P0b is one migration, not three. Implementation work for the deletion logic, BYOP infrastructure, and default eukaryotic pipelines all happens in later phases (P0c, P0f, Phase 28 respectively) — but the *schema* lands in P0b alongside the existing v5.0 work.
+
+---
+
+## Phase 24.7 — P0f BYOP Infrastructure
+
+**Why this phase exists:** BYOP (Bring Your Own Pipeline) infrastructure is the prerequisite for shipping default eukaryotic pathogen pipelines (Phase 28) AND for any operator wanting to register a custom workflow. It can't wait for P1 because eukaryotic coverage depends on it. It can't land in P0b because that's schema-only. P0f sits between P0e (where `jackpot init` becomes real and operator config is structured) and P0b/c (multi-tenancy schema + middleware), so BYOP allowed-registries / allowed-licenses / sandbox-resource-limits are install-time questions that `jackpot init` can prompt for.
+
+**Source:** `jackpot_byop_and_eukaryotic_design.md` Part I (Sections 1-10). Schema migration items already covered in Phase 24.5 (B-BYOP-9, B-BYOP-9b).
+
+**Phase placement justification:** P0e finishes the install-CLI work (operator config gets structured). P0f adds BYOP infrastructure that uses that operator config. Then P0b/c handles multi-tenancy schema + middleware. Then P1 handles operator-type configurability of the now-real BYOP system.
+
+### N. BYOP architecture (overview §1-10 of `jackpot_byop_and_eukaryotic_design.md`)
+
+```text
+[ ] B-BYOP-1   Implement jackpot-pipeline.yaml manifest schema. Create
+               schema/byop-pipeline-manifest.schema.json. Document under
+               docs/byop/manifest.md. Specifies the 9-section YAML format:
+               api_version, kind, metadata, engine, applicability,
+               resources, reference_data, containers, inputs, outputs,
+               permissions, cost. (1-2 sessions, P0f start)
+
+[ ] B-BYOP-2   Implement backend/services/byop_validator.py — Stage 1
+               static validation. Per-engine syntax checks (nextflow
+               inspect, snakemake --lint, miniwdl check, bash -n / python
+               -c), container resolution (registry reachability, tag
+               existence, digest verification), reference data resolution
+               (HTTP HEAD + checksum), license compatibility (SPDX
+               against operator allowlist), permissions sanity (egress
+               allowlist, GPU availability, internet_required vs
+               Scenario T policy). (3-4 sessions, P0f)
+
+[ ] B-BYOP-3   Implement backend/services/byop_sandbox.py — Stage 2
+               sandbox dry-run with isolation. Per-engine dry-run
+               mechanic: nextflow -stub-run, snakemake -n,
+               miniwdl --task-only-resources, manifest engine via
+               JACKPOT_DRY_RUN=1 env var with 60s fallback timeout.
+               Kubernetes-namespace isolation for cloud, Docker-network
+               isolation for local. Egress restricted to operator
+               allowlist. 5-minute hard timeout. 2 CPU / 4 GB RAM /
+               10 GB storage cap. Synthetic test inputs from
+               backend/test_data/byop_sandbox/. (1 week, P0f — most
+               complex item in the phase)
+
+[ ] B-BYOP-4   Implement backend/routers/byop.py — full CRUD API.
+               POST /api/v1/byop/pipelines (register), GET (list),
+               GET /{id} (detail), PATCH /{id}, POST /{id}/revalidate,
+               POST /{id}/deactivate, DELETE /{id} (move to ARCHIVED),
+               GET /{id}/manifest, GET /{id}/validation,
+               GET /api/v1/byop/manifest-schema,
+               GET /api/v1/byop/test-data. Existing
+               /api/v1/pipelines/launch accepts byop_pipeline_id
+               alongside pipeline_zoo_id. (2-3 sessions, P0f)
+
+[ ] B-BYOP-5   Implement engine launchers — 4 sub-items in parallel.
+               (a) backend/services/nextflow_launcher.py — harden
+                   existing path, auto-inject -weblog, enable -resume
+                   with JACKPOT-managed work directory.
+               (b) backend/services/snakemake_launcher.py — new.
+                   Read Snakefile, resolve singularity:/container:/
+                   conda: directives, wrap with event-streaming script
+                   that polls --report JSON every 30s.
+               (c) backend/services/wdl_launcher.py — new. Support
+                   both Cromwell (heavyweight) and miniwdl (lightweight)
+                   via JACKPOT_WDL_BACKEND. Populate inputs.json from
+                   manifest. Poll Cromwell metadata API or parse
+                   miniwdl structured logs.
+               (d) backend/services/manifest_launcher.py — new.
+                   Docker run wrapper for the manifest engine. Single
+                   container, single command, structured timing and
+                   exit-code event emission.
+               (2-3 sessions per launcher = 1.5-2 weeks total, P0f)
+
+[ ] B-BYOP-6   Implement backend/services/byop_quarterly_revalidation.py
+               background job. Re-runs Stage 1 + Stage 2 against
+               registered pipelines on configurable cadence (default
+               90 days) to catch silently-broken upstream containers
+               or moved Git refs. Failed re-validation transitions
+               pipeline to DEACTIVATED with notification. (1 session, P0f)
+
+[ ] B-BYOP-7   Implement Streamlit BYOP registration wizard (new page).
+               6-step wizard: source type → source details → manifest
+               preview → validation status (live updates via polling)
+               → sandbox status → activated. Per-source-type forms
+               (public Git, private Git with deploy key gen, tarball
+               upload, Docker image). (2-3 sessions, P0f)
+
+[ ] B-BYOP-8   Implement Streamlit BYOP catalog tab on the Pipelines
+               page. List registered BYOP pipelines with status badges,
+               filter by engine/organism/status, link to detail view.
+               Sample-detail-page launch dropdown shows BYOP pipelines
+               whose applicability.organism_names matches the sample's
+               organism. (1-2 sessions, P0f)
+
+[ ] B-BYOP-10  Implement BYOP telemetry — aggregated success rate,
+               walltime, peak memory, cost per run for each registered
+               pipeline. Auto-deactivate pipelines whose success rate
+               drops below operator-configured threshold (default 50%)
+               with platform admin notification. (1-2 sessions, P0f)
+```
+
+### Phase 24.7 / P0f success criterion
+
+- [ ] All 4 engine types (Nextflow, Snakemake, WDL, manifest) can register a pipeline through the API
+- [ ] Two-stage validation gates work end-to-end on a real test pipeline per engine
+- [ ] Streamlit registration wizard works for all 4 source types
+- [ ] BYOP catalog tab shows registered pipelines correctly
+- [ ] At least one example BYOP pipeline per engine type is documented and tested
+- [ ] Quarterly revalidation job runs on schedule
+- [ ] Telemetry surface in catalog UI
+
+**Total effort:** ~3-4 weeks of full-time engineering work, parallelizable across 2-3 contributors.
+
+---
+
 ## Phase 25 — Month 3 Stretch Goals (Tracked, Not Scheduled)
 
 - [ ] Streamlit admin pages: `lab_director.py`, `platform_admin.py`,
@@ -588,16 +849,16 @@ harness), UI-B (Upload page working), UI-F pipelines-page entry.
 - [ ] JupyterHub workspace with all three profiles (Analyst,
       Bioinformatician, Developer)
 - [ ] BYOP full wire-up: fetch `nextflow_schema.json` from registered
-      repo, validate, enable launching
+      repo, validate, enable launching — *largely superseded by Phase 24.7 / P0f (BYOP infrastructure with multi-engine support, manifest schema, two-stage validation). This Phase 25 stretch goal becomes "remaining UI polish" once P0f lands.*
 - [ ] GCP production deployment
-- [ ] `ncbi_submissions` router (TOSTADAS integration)
+- [ ] `ncbi_submissions` router (TOSTADAS integration) — *see also `B-LOC-1` Phase 26 (lift Loculus `ena-submission/` as the ENA broker, AGPL-3.0 → AGPL-3.0 frictionless)*
 - [ ] `datasets` router (table exists, router stub)
 - [ ] `archive_requests` router
 - [ ] `saved_searches` router
 - [ ] `notifications` router (full — currently placeholder in UI)
 - [ ] Remaining parsers if any pipelines were deferred
 - [ ] External database search (`/api/v1/external-search/` — NCBI, ENA,
-      GISAID proxy)
+      GISAID proxy) — *see also `B-EB-3` Phase 26 (daily SRA auto-scan pipeline pattern from EnteroBase, complementary to one-shot search)*
 - [ ] Re-enable detect-secrets in pre-commit
 - [ ] Playwright end-to-end UI tests
 - [ ] US-states controlled vocabulary for `collection_location_state`
@@ -681,6 +942,190 @@ If grabbing low-effort high-ROI items between sprints:
 3. **B-PW-3** AMR libraries vendored (1 session) — curated reference data
 4. **B-GS-2** URL-encoded query state (1-2 sessions) — shareable views
 5. **B-GISAID-1** Auto-Acknowledgments on export (1-2 sessions) — submission-incentive loop
+
+---
+
+## Phase 27 — CDC DMI / North Star / STLT Alignment Backlog (Tracked, Not Scheduled)
+
+**Source:** `jackpot_cdc_dmi_stlt_overview.md` (April 2026 working session). This is parallel to Phase 26 — different lens. Where Phase 26 covers "things lifted from open-source peer platforms" (Loculus, Pathogenwatch, etc.), Phase 27 covers "things adapted from US public-health-data ecosystem" (CDC DMI, North Star Architecture, STLT operator needs, CARE Principles for Indigenous Data Sovereignty). 14 items total across 3 groups.
+
+**Already moved to other phases:**
+
+- `B-DMI-3`, `B-STLT-2`, `B-GOV-1` (combined with `B-CARE-1`), `B-CARE-2`, `B-DMI-1`, `B-STLT-1`, `B-STLT-3` are in **Phase 21.5** (Interstitial During-P0d Quick Wins) since they ride along with monorepo / docs work
+- `B-CARE-3-DESIGN` is in **Phase 24.5** (Architectural Design Lockdown) since it gates P0b schema work
+
+The items below are the ones that don't fit those interstitial buckets — implementation items, larger work, or pure outreach.
+
+### K. Tribal sovereignty / CARE Principles (overview §11-12 of `jackpot_cdc_dmi_stlt_overview.md`)
+
+- [ ] **B-CARE-3** (implementation) Implement true delete-on-request via tombstone-and-vacuum lifecycle per the design from Phase 24.5. Code: `samples.deletion_status` enum migration, tombstone-marking logic, vacuum background job, audit log integration, GCS/MinIO object deletion, JSONB content scrubbing. (2-3 sessions, **P0c — multi-tenancy middleware**)
+- [ ] **B-CARE-4** Federation-aware deletion propagation. Tombstone events pushed to peers; signed receipts; SLA tracking; non-compliance flagging. Depends on B-CARE-3 + Scenario E federation work. (1 week, Year 2)
+- [ ] **B-CARE-5** Pre-publish review checklist with CARE-Principle confirmation. Scenario T defaults to no-auto-publish; explicit per-sample approval required. "Previously published" tag persists past vacuum. (1-2 sessions, with B-CARE-3 implementation in P0c)
+- [ ] **B-CARE-6** Reach out to NPAIHB / Northwest TEC about Scenario T pilot. Highest-fit Tribal Epidemiology Center based on existing data-modernization work. **Do this in parallel with Phase 24.5 design** so their input lands before the design is locked. (1 email + 1 call, **now**)
+
+### L. STLT-tier alignment (overview §6, §10 of `jackpot_cdc_dmi_stlt_overview.md`)
+
+(Most STLT items are in Phase 21.5 — they're documentation that rides along with P0d. The implementation-shape items below are separate.)
+
+- [ ] **B-STLT-4** (NEW) Build a **scenario detector** in `jackpot init` that asks operator-type questions (state? local? Tribal? academic?) and selects appropriate scenario defaults (Scenario A vs B vs C vs T) plus seeds appropriate config. (1-2 sessions, **P0e** with `jackpot init` work)
+
+### M. CDC DMI / North Star alignment (overview §3-5 of `jackpot_cdc_dmi_stlt_overview.md`)
+
+- [ ] **B-DMI-2** Build `backend/routers/fhir.py` for FHIR `Specimen` + `MolecularSequence` ingest, `Observation` + `Provenance` emit. Gated on operator demand — don't build speculatively. (1-2 weeks, Year 2)
+- [ ] **B-DMI-4** APHL Communities of Practice engagement — propose a JACKPOT presentation at the AMD CoP or Bioinformatics and Molecular Epidemiology fellowship cohort. Awareness-building. (1 email + 1 talk preparation, opportunistic)
+- [ ] **B-DMI-5** Investigate APHL AMD National Bioinformatics Platform for partner-vs-peer relationship. Could be parallel to JACKPOT, could be complementary, could share components. Worth a fact-finding call before assuming the relationship. (1 fact-finding call, opportunistic)
+
+### Phase 27 quick-win priority order
+
+The highest-leverage items have *already moved* to Phase 21.5 (governance docs, layer-cake, deploy guides) and Phase 24.5 (sovereignty design). What's left in Phase 27 proper is a mix of larger implementation work and outreach. The two items worth doing soonest:
+
+1. **B-CARE-6** (NPAIHB outreach) — must happen *before* Phase 24.5 design is locked, so their input shapes it. **This is technically in this list but should be acted on as soon as Phase 24.5 starts.**
+2. **B-DMI-5** (APHL AMD fact-finding) — opportunistic; sets up future positioning. Can happen anytime.
+
+The rest is implementation work that gates on P0b/c/e or Year 2.
+
+---
+
+## Phase 28 — Default Eukaryotic Pathogen Pipelines (Tracked, Tier-Prioritized)
+
+**Source:** `jackpot_byop_and_eukaryotic_design.md` Part II (Sections 11-16). Schema work for these pipelines already in Phase 24.5 (B-EUK-1, B-EUK-2, B-EUK-3). BYOP infrastructure required to register them as zoo entries already in Phase 24.7 / P0f. This phase is the actual pipeline implementations + parsers + dashboards.
+
+**11 implementation items** organized into **3 tier-prioritized groups** by global disease burden, surveillance utility, and community tooling availability. Each pipeline ships with its parser; dashboards group two pathogen groups per page.
+
+**All pipelines:** AGPL-3.0, hosted under `Midnight-Oil-Innovation/jackpot-pipelines-eukaryotic` (single repo, one subdirectory per pipeline), registered as Level-1 zoo entries via P0f BYOP infrastructure.
+
+### Phase 28 Tier 1 — ship first (highest priority)
+
+Highest global disease burden + most active surveillance community + largest existing tooling base. Builds JACKPOT credibility for global infectious disease surveillance work.
+
+```text
+[ ] B-EUK-PLAS-1  jackpot-plasmodium-typer pipeline (Nextflow). Drug
+                  resistance loci genotyping (pfk13, pfdhfr, pfdhps,
+                  pfcrt, pfmdr1) + HRP2/HRP3 deletion detection +
+                  lineage assignment. Wraps bcftools for SNP calling
+                  against PlasmoDB references. (1-2 weeks, post-P0f)
+
+[ ] B-EUK-CRYP-1  jackpot-cryptogiardia-typer pipeline (Nextflow).
+                  GP60 subtyping for Cryptosporidium (gold-standard
+                  outbreak typing) + Giardia assemblage assignment +
+                  WGS SNP outbreak clustering. US-relevant for
+                  waterborne outbreak surveillance. Smallest eukaryotic
+                  genome → fastest pipeline. (1-2 weeks, post-P0f)
+
+[ ] B-EUK-PARSE-T1  Parsers for Tier 1 pipelines:
+                    plasmodium_drug_resistance_results parser,
+                    cryptogiardia_typing_results parser. Follow
+                    existing pattern in backend/parsers/.
+                    (1 session per parser, post-P0f)
+
+[ ] B-EUK-DASH-T1   Streamlit dashboard pages for Tier 1:
+                    Malaria dashboard (drug resistance prevalence by
+                    region/year, pfk13 SNP frequency, HRP deletion
+                    prevalence, MOI distribution),
+                    Crypto/Giardia dashboard (outbreak cluster map,
+                    GP60 subtype trends, assemblage distribution).
+                    (2-3 sessions per dashboard, post-pipelines)
+```
+
+### Phase 28 Tier 2
+
+Medium-priority pathogens with significant disease burden but less active surveillance community or smaller existing tooling base.
+
+```text
+[ ] B-EUK-LEIS-1  jackpot-leishmania-typer pipeline (Nextflow).
+                  Species discrimination + MLST + drug resistance
+                  (antimony, miltefosine, paromomycin). Maps against
+                  TriTrypDB references. (1-2 weeks, post-Tier-1)
+
+[ ] B-EUK-TRYP-1  jackpot-trypanosoma-dtu-caller pipeline (Nextflow).
+                  DTU assignment for T. cruzi (TcI through TcVI) +
+                  drug resistance for T. brucei spp. Handles the
+                  high heterozygosity / aneuploidy of T. cruzi.
+                  (1-2 weeks, post-Tier-1)
+
+[ ] B-EUK-SCHI-1  jackpot-schistosoma-barcode pipeline (Snakemake —
+                  first non-Nextflow default pipeline, exercises P0f
+                  Snakemake launcher). cox1/nad1/ITS markers +
+                  hybrid detection (S. haematobium × S. bovis).
+                  (1 week, post-Tier-1)
+
+[ ] B-EUK-PARSE-T2  Parsers for Tier 2 pipelines:
+                    leishmania_typing_results,
+                    trypanosoma_typing_results,
+                    schistosoma_typing_results.
+                    (1 session per parser, with each pipeline)
+
+[ ] B-EUK-DASH-T2   Streamlit dashboard pages for Tier 2:
+                    Leishmania dashboard (species distribution, drug
+                    resistance trends, HIV co-infection cases),
+                    Trypanosoma dashboard (DTU geographic distribution,
+                    treatment-outcome correlation),
+                    Schistosoma dashboard (hybrid detection map, PZQ
+                    resistance, cox1 haplotype trees).
+                    (2-3 sessions per dashboard, post-pipelines)
+```
+
+### Phase 28 Tier 3
+
+Lower-priority for sequencing-based surveillance (most STH and filarial work is amplicon/PCR rather than WGS), but completes the eukaryotic coverage picture.
+
+```text
+[ ] B-EUK-STH-1   jackpot-sth-nemabiome pipeline (Nextflow). Wraps
+                  existing nemabiome amplicon analysis from Tasmania.
+                  Species ID + β-tubulin codon 167/198/200 SNPs
+                  (benzimidazole resistance markers). (3-5 sessions,
+                  post-Tier-2)
+
+[ ] B-EUK-STH-2   jackpot-sth-wgs pipeline (Nextflow). WGS-based SNP +
+                  resistance + population structure for soil-
+                  transmitted helminths. For labs with WGS rather
+                  than amplicon capacity. (1-2 weeks, post-Tier-2)
+
+[ ] B-EUK-FILA-1  jackpot-filarial-typer pipeline (Nextflow). Species
+                  ID (W. bancrofti, B. malayi, B. timori) + Wolbachia
+                  endosymbiont status (basis for doxycycline therapy)
+                  + ivermectin resistance. (1-2 weeks, post-Tier-2)
+
+[ ] B-EUK-TOXO-1  jackpot-toxo-entamoeba-typer pipeline (Nextflow).
+                  Toxoplasma 15-marker MLST + clonal lineage
+                  assignment (Type I/II/III + atypical) +
+                  Entamoeba histolytica vs E. dispar discrimination
+                  (most "histolytica" in microscopy is dispar — no
+                  treatment needed). (1 week, post-Tier-2)
+
+[ ] B-EUK-PLAS-2  jackpot-plasmodium-mippy pipeline (Nextflow). Wraps
+                  existing mippy for amplicon-based malaria surveillance.
+                  For labs running amplicon panels rather than WGS.
+                  (3-5 sessions, post-Tier-2)
+
+[ ] B-EUK-PARSE-T3  Parsers for Tier 3 pipelines:
+                    helminth_drug_resistance_results,
+                    filarial_typing_results,
+                    toxo_entamoeba_typing_results.
+                    (1 session per parser, with each pipeline)
+
+[ ] B-EUK-DASH-T3   Streamlit dashboard pages for Tier 3:
+                    STH dashboard (β-tubulin SNP prevalence, species
+                    map),
+                    Filarial dashboard (elimination program tracking,
+                    ivermectin resistance, Wolbachia status),
+                    Toxo/Entamoeba dashboard (lineage geographic
+                    distribution, E. histolytica vs E. dispar
+                    differential).
+                    (2-3 sessions per dashboard, post-pipelines)
+```
+
+### Phase 28 success criterion
+
+- [ ] All 10 default eukaryotic pipelines registered as Level-1 zoo entries via P0f BYOP infrastructure
+- [ ] All 8 dashboard pages live in Streamlit researcher view
+- [ ] All 8 pipeline-result tables receiving data from real pipeline runs
+- [ ] At least one end-to-end test sample per pathogen group with verified results
+- [ ] Documentation under `docs/pipelines/eukaryotic/` describing each pipeline
+
+**Total effort:** ~10-15 weeks if sequential, ~4-6 weeks if parallelized across 3 contributors. Each pipeline is genuinely independent work.
+
+**Phase placement justification:** Cannot start until P0f (BYOP infrastructure) is real, since these pipelines register *via* BYOP. Schema is ready in P0b. Internal tier-priority orders the actual implementation order based on global health impact and tooling availability.
 
 ---
 

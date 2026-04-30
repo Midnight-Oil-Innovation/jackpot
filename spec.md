@@ -1,15 +1,15 @@
 # JACKPOT — Project Specification
 
-**Version:** 2.1
-**Last updated:** 2026-04-28 (post-Pathoplexus/Loculus comparative analysis session)
-**Status:** Month 1 + most of Month 2 complete — active sprint on Session 5 debt and UI page triage. Pivot to independence + AGPL-3.0 + multi-deployment-target architecture decided April 2026; cleanup phases (6.1–11) in progress before P0d monorepo migration.
+**Version:** 2.2
+**Last updated:** 2026-04-29 (post-BYOP and eukaryotic pipelines design session)
+**Status:** Month 1 + most of Month 2 complete — Phase 21 UI page triage closing out, P0d monorepo migration starting now. Pivot to independence + AGPL-3.0 + multi-deployment-target architecture decided April 2026; cleanup phases (6.1–11) complete. Three architectural design documents now drive the post-P0d roadmap: `jackpot_pathoplexus_loculus_overview.md` (peer-platform adoption — Phase 26), `jackpot_cdc_dmi_stlt_overview.md` (US public-health-data ecosystem alignment — Phase 27), `jackpot_byop_and_eukaryotic_design.md` (BYOP infrastructure for P0f, eukaryotic pathogen pipelines for Phase 28).
 **Audience:** Claude Code autonomous agent + the maintainer
 
 ---
 
 ## 1. Project Goal
 
-> **Pivot context (April 2026):** JACKPOT is now an **independent project** under `Midnight-Oil-Innovation/jackpot`, no longer ADHS/ASU-coupled and no longer specifically the APGAP successor. License flipped from Apache 2.0 to **AGPL-3.0**. The platform is now **multi-deployment-target by design**, with 6 install scenarios:
+> **Pivot context (April 2026):** JACKPOT is now an **independent project** under `Midnight-Oil-Innovation/jackpot`, no longer ADHS/ASU-coupled and no longer specifically the APGAP successor. License flipped from Apache 2.0 to **AGPL-3.0**. The platform is now **multi-deployment-target by design**, with 7 install scenarios:
 >
 > - **A** Single academic lab on a laptop (first priority — designed in P0e)
 > - **B** Single org on cloud (GCP/AWS/Azure)
@@ -17,10 +17,17 @@
 > - **D** Hosted multi-tenant SaaS
 > - **E** Federation member (peers with other JACKPOT instances)
 > - **F** CI / e2e test harness
+> - **T** Tribal-sovereignty deployment (variant of A or E with sovereignty-aware defaults: deletion-on-request, no auto-publish, federation off-by-default, CARE Principles compliance)
 >
 > Production code knows nothing about Glen, Midnight-Oil-Innovation, or any specific operator. Only the operator-bootstrap layer (`jackpot init` CLI, P0e) does, and it learns those names at install time. APGAP-compatibility constraints below are now **historical** — kept here for any operator continuing to migrate from APGAP. New deployments don't need APGAP compatibility.
 >
-> See `jackpot_pathoplexus_loculus_overview.md` for the full comparative analysis driving this pivot, including peer-platform landscape and a 34-item adoption backlog (Phase 26 in `todo.md`).
+> **Phase chain:** Phase 21 (UI close-out) → P0d (monorepo migration, in progress) → P0e (jackpot init CLI) → Phase 24.5 (architectural design lockdown — sovereignty deletion + BYOP/eukaryotic schema decisions before P0b) → P0f (BYOP infrastructure — Phase 24.7 in todo.md) → P0b (Schema v5.0 with all 24.5 lockdowns + instances/tenants/federated_peers) → P0c (multi-tenancy middleware + sovereignty deletion implementation) → P1–P5 (operator-type configurability, federation, governance, reference deployments, new-needs integration). Tracked-but-not-scheduled: Phase 25 (Month 3 stretch — admin UI, JupyterHub, GCP prod), Phase 26 (Pathoplexus/Loculus 34-item adoption backlog), Phase 27 (CDC DMI / STLT / CARE 14-item alignment backlog), Phase 28 (10 default eukaryotic pipelines + parsers + dashboards, internally tier-prioritized).
+>
+> **Source-of-truth design documents:**
+>
+> - `jackpot_pathoplexus_loculus_overview.md` — comparative analysis between JACKPOT and the open-source pathogen-genomics ecosystem (Pathoplexus/Loculus + 8 peer platforms). Drives Phase 26.
+> - `jackpot_cdc_dmi_stlt_overview.md` — alignment with US public-health-data ecosystem (CDC DMI / North Star Architecture, STLT operators, CARE Principles for Tribal data sovereignty). Drives Phase 27 and Scenario T defaults.
+> - `jackpot_byop_and_eukaryotic_design.md` — multi-engine BYOP architecture (Nextflow + Snakemake + WDL + manifest-wrapped scripts) with two-stage validation gating, plus full-parity eukaryotic pathogen support across 8 pathogen groups. Drives P0f and Phase 28.
 
 Build **JACKPOT** — a pathogen genomics platform for genomic epidemiology,
 bioinformatics, and public health research — for the host operator. JACKPOT is the successor to APGAP
@@ -1362,15 +1369,15 @@ All in `~/jackpot/docs/` unless noted:
   the running engineering log (v2.4 includes Phase 26 backlog)
 - `jackpot_schema.yaml` — LinkML schema source of truth
 
-### Comparative analysis (April 2026)
+### Comparative analysis and architectural design documents (April 2026)
 
-- `jackpot_pathoplexus_loculus_overview.md` — 1,873-line comparative
-  analysis between JACKPOT and the Pathoplexus/Loculus stack plus 8
-  other peer platforms (GenSpectrum/LAPIS, Pathogenwatch, EnteroBase,
-  NCBI Pathogen Detection on GCP, BV-BRC, Solu, RT-MetA, GISAID).
-  Sources of truth for: AGPL-3.0 license decision rationale, multi-
-  deployment-target architecture, 34-item B-XXX adoption backlog
-  (Phase 26 in `todo.md`).
+These three documents are the source of truth for the post-P0d roadmap. Cross-referenced throughout `todo.md` for B-XXX backlog item provenance.
+
+- **`jackpot_pathoplexus_loculus_overview.md`** (1,873 lines, 2026-04-28) — Comparative analysis between JACKPOT and the Pathoplexus/Loculus stack plus 8 peer platforms (GenSpectrum/LAPIS, Pathogenwatch, EnteroBase, NCBI Pathogen Detection on GCP, BV-BRC, Solu, RT-MetA, GISAID). Source of truth for: AGPL-3.0 license decision rationale (§3), peer-platform landscape (§4), JACKPOT vs Loculus architectural divergence (§6-10), two-PII-gate architecture documentation (§9), code adoption recommendations A1-A6 (§11), federation tiers (§12), Phase 26 backlog of 34 items grouped A-J by source platform (§16.10).
+
+- **`jackpot_cdc_dmi_stlt_overview.md`** (816 lines, 2026-04-28) — Alignment with US public-health-data ecosystem. Source of truth for: CDC DMI history and North Star Architecture goals (§1), STLT public health landscape with extra weight on Tribal sovereignty (§2), CARE Principles formal adoption (§2.3c), seven install scenarios with Scenario T addition (§6), tombstone-and-vacuum architectural pattern for sovereignty-compliant deletion (§7), Tribal Epidemiology Center federation pattern (§8), JACKPOT vs NBS/eCR/AIMS layer-cake (§9), funding-source map for STLT operators (§10), Phase 27 backlog of 14 items grouped K-M.
+
+- **`jackpot_byop_and_eukaryotic_design.md`** (1,456 lines, 2026-04-29) — Multi-engine BYOP infrastructure plus full-parity eukaryotic pathogen support. Source of truth for: four-engine BYOP architecture — Nextflow, Snakemake, WDL, manifest-wrapped scripts (§1-3), `jackpot-pipeline.yaml` manifest schema (§2), four source types — public/private Git, tarball upload, Docker image (§4), two-stage validation gating with sandbox dry-run isolation (§5), pipeline lifecycle state machine (§6), schema additions for `byop_pipelines` table and 8 eukaryotic pipeline-result tables (§7, §12), 8 default eukaryotic pathogen pipelines (§13), 25 backlog items split across Phase 24.5 schema lockdown (4 items), Phase 24.7 / P0f BYOP infrastructure (10 items), Phase 28 default eukaryotic pipelines + parsers + dashboards (11 items, internally tier-prioritized).
 
 ### Operational runbooks
 
@@ -1396,9 +1403,20 @@ All in `~/jackpot/docs/` unless noted:
 
 - **License flipped Apache 2.0 → AGPL-3.0.** Strategic, not legal. Closes the SaaS loophole via §13. Joins the European public-health pathogen-genomics cluster (Loculus, GenSpectrum/LAPIS, SILO, dashboard-components — all AGPL-3.0). Anti-GISAID-capture stance. Unblocks direct code adoption from the entire Loculus stack. See `jackpot_pathoplexus_loculus_overview.md` Section 3 for the full rationale.
 - **JACKPOT is independent.** No longer ADHS-contracted, no longer ASU-affiliated, no longer specifically the APGAP successor. Single-owner project under `Midnight-Oil-Innovation/jackpot`.
-- **Multi-deployment-target architecture.** 6 install scenarios (A–F). Production code is operator-agnostic; `jackpot init` (P0e) handles per-operator bootstrap.
-- **Phasing post-Phase-11.** Phases 6.1–11 cosmetic genericization → P0d (monorepo migration) → P0e (install/CLI architecture) → P0b (Schema v5.0 — instances/tenants/federated_peers) → P0c (multi-tenancy middleware) → P1–P5 (operator-type configurability, federation, governance, reference deployments, new-needs integration).
+- **Multi-deployment-target architecture.** 7 install scenarios (A–F + T). Production code is operator-agnostic; `jackpot init` (P0e) handles per-operator bootstrap.
+- **Phasing post-Phase-11.** Phases 6.1–11 cosmetic genericization → P0d (monorepo migration) → P0e (install/CLI architecture) → Phase 24.5 (architectural design lockdown) → P0f (BYOP infrastructure) → P0b (Schema v5.0 — instances/tenants/federated_peers + BYOP/eukaryotic schema) → P0c (multi-tenancy middleware + sovereignty deletion) → P1–P5 (operator-type configurability, federation, governance, reference deployments, new-needs integration).
 - **Don't replace existing ingest gates.** `file_detector.py`, `validator.py`, `dlp_scanner.py`, and the `sra-human-scrubber` Nextflow integration collectively constitute a more thorough ingest pipeline than anything in Loculus's preprocessing for JACKPOT's surveillance-focused operating model. The recommendation is to expose the Loculus pluggable preprocessing HTTP contract (`/extract-unprocessed-data`, `/submit-processed-data`) as an *opt-in* for sophisticated operators while keeping in-process validation as the default.
+- **Scenario T (Tribal-sovereignty deployment) added** as a variant of A or E with sovereignty-aware defaults: deletion-on-request that actually removes the data (tombstone-and-vacuum lifecycle, not soft-delete), no auto-publish to NCBI/INSDC, federation off-by-default, CARE Principles compliance documented in `governance/care-principles-and-tribal-data-sovereignty.md`. See `jackpot_cdc_dmi_stlt_overview.md` Section 6 for the full design.
+- **CARE Principles formally adopted** alongside FAIR. Indigenous Data Sovereignty (Collective Benefit, Authority to Control, Responsibility, Ethics) becomes a first-class design constraint for Scenario T deployments.
+- **Layer-cake positioning.** JACKPOT is the genomics layer between LIMS and downstream analysis platforms (NCBI Pathogen Detection, Pathoplexus, Pathogenwatch, Nextstrain). It integrates with NBS/eCR/AIMS — does not replace them. See `jackpot_cdc_dmi_stlt_overview.md` Section 9.
+
+### April 2026 — BYOP and eukaryotic pipelines decisions
+
+- **BYOP supports four workflow engines:** Nextflow, Snakemake, WDL, and manifest-wrapped scripts (Bash/Python). The fourth engine is JACKPOT-specific — for users with a working script who don't want to learn a workflow language. Trades workflow-engine features (parallelization, resume, multi-container) for simplicity.
+- **BYOP supports four source types:** public Git URL (with tag/branch/SHA), private Git with deploy keys (per-pipeline keys stored in operator's secret manager), uploaded tar.gz (max 500 MB compressed), Docker image with manifest path. Each source type has explicit constraints documented in §4 of the design doc.
+- **Two-stage validation gating:** static checks (manifest schema, engine syntax, container/reference resolution, license, permissions) + sandbox dry-run (isolated namespace/network, 5-minute timeout, synthetic test inputs). Both must pass before pipeline activates. Re-validation runs quarterly to catch upstream rot. Static-only would let runtime bugs through; sandbox-only would miss easy structural problems; full Lab Director approval would discourage adoption. Two-stage is the right balance.
+- **Full-parity eukaryotic pathogen support** across 8 pathogen groups (Plasmodium, Leishmania, Trypanosoma, Schistosoma, soil-transmitted helminths, filarial nematodes, Cryptosporidium/Giardia, Toxoplasma/Entamoeba). Includes 25 OrganismNameEnum additions, 8 dedicated pipeline-result tables, 10 default zoo pipelines, 8 dashboard pages, eukaryotic-aware tier-validation rules.
+- **BYOP/eukaryotic phasing decision (2026-04-29).** The 25 backlog items split three ways rather than landing in one homogeneous phase: (1) **schema items (4) move to Phase 24.5** — must lock before P0b touches the schema, otherwise double-migrate. (2) **BYOP infrastructure (10) gets new P0f phase** between P0e and P0b/c — eukaryotic pipelines can't land without it, and P1 is too late. (3) **Default eukaryotic pipelines + parsers + dashboards (11) stay in Phase 28** but internally tier-prioritized: Tier 1 (Plasmodium, Crypto/Giardia) ships first.
 
 ### Carried over
 
