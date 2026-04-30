@@ -8,11 +8,18 @@ and public health research.
 **Project context (April 2026 pivot):** JACKPOT is an independent project under
 `Midnight-Oil-Innovation/jackpot`, licensed AGPL-3.0. The platform is
 multi-deployment-target by design — production code is operator-agnostic and
-serves 6 install scenarios (A laptop, B single-org cloud, C multi-lab agency,
-D hosted SaaS, E federation member, F CI test). The `jackpot init` CLI
-(coming in P0e) handles per-operator bootstrap. Phasing: cleanup phases 6.1–11
-→ P0d (monorepo migration) → P0e (install/CLI) → P0b (Schema v5.0 with
-instances/tenants/federated_peers) → P0c (multi-tenancy middleware) → P1–P5.
+serves **7** install scenarios (A laptop, B single-org cloud, C multi-lab
+agency, D hosted SaaS, E federation member, F CI test, **T Tribal-sovereignty
+deployment** — variant of A or E with sovereignty-aware defaults: deletion-
+on-request, no auto-publish, federation off-by-default, CARE Principles
+compliance documented in
+`governance/care-principles-and-tribal-data-sovereignty.md`). The
+`jackpot init` CLI (coming in P0e) handles per-operator bootstrap. Phasing:
+cleanup phases 6.1–11 → P0d (monorepo migration, in progress) →
+P0e (install/CLI) → Phase 24.5 (architectural design lockdown) →
+P0f (BYOP infrastructure) → P0b (Schema v5.0 with instances/tenants/
+federated_peers + BYOP/eukaryotic schema) → P0c (multi-tenancy middleware
++ sovereignty deletion) → P1–P5.
 
 ---
 

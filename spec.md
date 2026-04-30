@@ -44,6 +44,33 @@ The platform enables public health labs to:
 - Search, filter, and analyze samples across the platform
 - Control data access with a fine-grained sharing and governance model
 
+### 1.1 Single entry point for genomic data into a public-health agency
+
+JACKPOT exposes a small, fixed set of ingest paths and treats them as
+**the single entry point for genomic data into a public-health agency**.
+This is JACKPOT's narrowing of the CDC North Star Architecture's "CDC
+Front Door" pattern to the genomics domain — instead of every
+sequencing lab inventing its own routing into the agency's data
+estate, every operator has the same six paths in:
+
+1. **GUI single upload** — Streamlit researcher upload page
+2. **CSV batch ingest** — schema-validated CSV with semicolon-
+   delimited file references per sample (`POST /api/v1/ingest/csv`)
+3. **Globus endpoint sync** — operator-configured Globus collection
+4. **API direct upload** — `POST /api/v1/ingest/upload` with signed
+   URL handoff to the operator's storage backend
+5. **CLI/SDK programmatic ingest** — the `jackpot` CLI and SDK at
+   `cli/`
+6. **External-repo import** — SRA / ENA pull via `pipelines/insdc-
+   ingest/` (Phase 26 backlog item B-LOC-2)
+
+All six paths converge at the same gate: `validator.py` →
+`epiweek.py` → `dlp_scanner.py` → `file_detector.py` → `storage.py`
+write → audit log entry. The operator gets one place to enforce
+policy, one audit surface, and one schema to keep current. Grant
+narratives that reference North Star alignment can point at this
+section.
+
 ---
 
 ## 2. Current Baseline (end of Session 5)
@@ -69,6 +96,58 @@ The platform enables public health labs to:
 ## 3. Architecture Constraints
 
 These constraints are non-negotiable. Every implementation must respect them.
+
+### 3.0 Layer-cake positioning — JACKPOT integrates, does not replace
+
+```text
+┌─────────────────────────────────────────────────────────────┐
+│  CASE-LEVEL EPIDEMIOLOGY                                    │
+│  NBS, MAVEN, Trisano (state-specific)                       │
+│  Receives: case reports, lab results, demographic data      │
+│  Owns: the case as the epidemiologic unit                   │
+└─────────────────────────────────────────────────────────────┘
+                            ▲
+                            │ ECR/ELR via TEFCA
+                            │
+┌─────────────────────────────────────────────────────────────┐
+│  ELECTRONIC CASE REPORTING / LAB REPORTING ROUTING          │
+│  eCR via APHL AIMS, ELR via state systems                   │
+│  Routes structured FHIR/HL7 messages from healthcare to PHA │
+└─────────────────────────────────────────────────────────────┘
+                            ▲
+                            │ HL7 / FHIR
+                            │
+┌─────────────────────────────────────────────────────────────┐
+│  PUBLIC HEALTH LABORATORY OPERATIONAL SYSTEMS               │
+│  LIMS (LabWare, STARLIMS, etc.)                             │
+│  Owns: the specimen as the operational unit                 │
+└─────────────────────────────────────────────────────────────┘
+                            ▲
+                            │ specimen → sequencing
+                            │
+┌─────────────────────────────────────────────────────────────┐
+│  ★ JACKPOT ★                                                │
+│  Pathogen genomics platform                                 │
+│  Owns: the sample (specimen + sequencing run + analyses)    │
+│  Provides: typing, AMR, phylogeny, outbreak detection       │
+└─────────────────────────────────────────────────────────────┘
+                            ▲
+                            │ pipeline results
+                            │
+┌─────────────────────────────────────────────────────────────┐
+│  DOWNSTREAM REPOSITORIES + ANALYSIS                         │
+│  NCBI Pathogen Detection, GISAID/ENA, Pathoplexus,          │
+│  Pathogenwatch, Nextstrain, GenSpectrum                     │
+└─────────────────────────────────────────────────────────────┘
+```
+
+JACKPOT lives between the LIMS layer and the downstream-analysis
+layer. It is **fed by** the LIMS and **feeds** the downstream
+platforms. JACKPOT integrates with NBS, eCR, AIMS, and the rest of
+the public-health-data stack; it does not try to absorb any of their
+scope. See `docs/jackpot_cdc_dmi_stlt_overview.md §9` for the
+full positioning rationale, including why APHL AIMS in particular is
+a peer system at a different layer (not a competitor).
 
 ### Language and Tools
 
