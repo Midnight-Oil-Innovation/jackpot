@@ -3,5 +3,5 @@ import streamlit as st
 
 def render(api_base: str, user_email: str, me: dict) -> None:
     """Stub — implement in Month 1 sprint."""
-    st.title("Org Admin")
+    st.title("Lab Director")
     st.info("This page is not yet implemented.")
