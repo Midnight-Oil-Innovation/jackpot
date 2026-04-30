@@ -2,7 +2,7 @@
 JACKPOT template generator.
 
 Generates tier-aware CSV metadata templates from the LinkML-generated JSON Schema.
-Single source of truth: schema/schema/jackpot_schema.yaml → jackpot_schema.json
+Single source of truth: jackpot_schema.SCHEMA_JSON_PATH (workspace package).
 
 Usage:
     API:  GET /api/v1/templates/?source_type=human&tier=ANALYZABLE&format=csv
@@ -16,9 +16,8 @@ import csv
 import io
 import json
 from enum import Enum
-from pathlib import Path
 
-SCHEMA_PATH = Path(__file__).parent.parent / "schema" / "schema" / "jackpot_schema.json"
+from jackpot_schema import SCHEMA_JSON_PATH as SCHEMA_PATH
 
 
 # ── Tier enum ─────────────────────────────────────────────────────────────

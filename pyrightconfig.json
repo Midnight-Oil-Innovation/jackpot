@@ -1,14 +1,16 @@
 {
   "venvPath": ".",
   "venv": ".venv",
-  "include": ["backend", "tests"],
+  "include": ["backend/backend", "cli/jackpot", "schema/jackpot_schema", "tests"],
   "exclude": [
-    "backend/models_generated.py",
+    "backend/backend/models_generated.py",
+    "backend/db/migrations/versions",
     ".venv",
     "**/__pycache__",
-    "db/migrations/versions",
-    "nf",
-    "schema"
+    "**/.pytest_cache",
+    "**/.ruff_cache",
+    "pipelines",
+    "deploy"
   ],
   "pythonVersion": "3.11",
   "pythonPlatform": "All",

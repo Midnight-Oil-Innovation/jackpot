@@ -5,7 +5,7 @@ Maps raw CSV column names to JACKPOT schema field names using a
 mapping_config YAML file. Called by the batch ingest router before
 validate_sample().
 
-Mapping config format (see schema/mapping_configs/example_human_v1.yaml):
+Mapping config format (see schema/schema/mapping_configs/example_human_v1.yaml):
     source_format: example_human_v1
     target_class: HumanSample
     column_mappings:
@@ -16,12 +16,11 @@ Mapping config format (see schema/mapping_configs/example_human_v1.yaml):
       auto_detect_pairs: true
 """
 
-from pathlib import Path
 from typing import Any
 
 import yaml
 
-_MAPPING_DIR = Path("schema/schema/mapping_configs")
+from jackpot_schema import MAPPING_CONFIGS_DIR as _MAPPING_DIR
 _cache: dict[str, dict] = {}
 
 

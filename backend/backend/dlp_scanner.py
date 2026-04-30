@@ -16,12 +16,11 @@ import json
 import logging
 import time
 from dataclasses import dataclass, field
-from pathlib import Path
 from typing import Any
 
-logger = logging.getLogger(__name__)
+from jackpot_schema import SCHEMA_JSON_PATH as SCHEMA_PATH
 
-SCHEMA_PATH = Path("schema/schema/jackpot_schema.json")
+logger = logging.getLogger(__name__)
 
 # DLP infoTypes to detect
 SCAN_INFO_TYPES = [

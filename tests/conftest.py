@@ -1,5 +1,6 @@
 import os
 import subprocess
+from pathlib import Path
 
 import pytest
 import pytest_asyncio
@@ -9,6 +10,10 @@ from testcontainers.postgres import PostgresContainer
 from backend.config import get_settings
 from backend.database import reset_engine
 from backend.main import app
+
+# Backend directory holds alembic.ini and db/migrations/. Resolved from
+# this file's path so the suite runs from any cwd in the workspace.
+_BACKEND_DIR = Path(__file__).resolve().parent.parent / "backend"
 
 
 @pytest.fixture(scope="session")
@@ -29,6 +34,7 @@ def initialize_test_db(test_db_url):
     result = subprocess.run(
         ["uv", "run", "alembic", "upgrade", "head"],
         env=env,
+        cwd=_BACKEND_DIR,
         capture_output=True,
         text=True,
     )

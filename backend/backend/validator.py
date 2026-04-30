@@ -22,10 +22,8 @@ This is by design: NCBI/GISAID accept YYYY dates; epiweeks require day/month.
 
 from dataclasses import dataclass, field
 from datetime import date
-from pathlib import Path
 
-# Schema path — relative to where the API process runs (jackpot-backend/)
-SCHEMA_PATH = Path("schema/schema/jackpot_schema.yaml")
+from jackpot_schema import SCHEMA_YAML_PATH as SCHEMA_PATH
 
 # ── Tier 1 (PRELIMINARY) — hard errors if absent ──────────────────────────
 # Minimum to identify the sample, its pathogen, its origin, and its
