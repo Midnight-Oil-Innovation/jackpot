@@ -1,0 +1,26 @@
+# Month 3 — fill in once production project is provisioned.
+# Then uncomment the modules in main.tf and outputs.tf and run:
+#
+#   ../../scripts/bootstrap_project.sh <project-id> us-central1 production
+#   terraform init && terraform plan && terraform apply
+
+project_id  = "TBD"
+region      = "us-central1"
+environment = "production"
+
+backups_region = "us-east1"
+
+# Rotate after apply via: gcloud sql users set-password jackpot --instance=jackpot-production-db --password=...
+db_password = "CHANGE_ME_BEFORE_APPLY"
+
+# Production cluster must have master_authorized_networks populated.
+master_authorized_networks = [
+  # { cidr_block = "x.x.x.x/32", display_name = "office" },
+  # { cidr_block = "x.x.x.x/24", display_name = "gh-actions-nat" },
+]
+
+deletion_protection = true
+
+# Production sizing — override defaults inherited from the cloud-sql module.
+cloud_sql_tier         = "db-custom-2-7680"
+cloud_sql_disk_size_gb = 100

@@ -1,0 +1,659 @@
+<!DOCTYPE html>
+<!-- saved from url=(0064)file:///Users/glen/Downloads/jackpot_gcp_staging_deployment.html -->
+<html lang="en"><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>JACKPOT — GCP Staging Deployment (as of 2026-04-18)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com/">
+<link rel="preconnect" href="https://fonts.gstatic.com/" crossorigin="">
+<link href="./jackpot_assessment_files/css2" rel="stylesheet">
+<style>
+:root {
+  --bg: #f8f7f4;
+  --surface: #ffffff;
+  --border: #e2ddd5;
+  --text: #1a1714;
+  --muted: #6b6560;
+  --light: #9b9490;
+  --schema: #1e6b4a; --schema-bg: #e8f5ee; --schema-b: #a8d5bc;
+  --gen: #1a4a7a;    --gen-bg: #e8f0f9;    --gen-b: #a8c4e0;
+  --art: #7a3a1a;    --art-bg: #f9f0e8;    --art-b: #e0c4a8;
+  --con: #4a1a7a;    --con-bg: #f0e8f9;    --con-b: #c4a8e0;
+  --alb: #7a1a2a;    --alb-bg: #f9e8ec;    --alb-b: #e0a8b4;
+  --accent: #d4500a;
+  --arrow: #4a4540;
+  --font-sans: 'IBM Plex Sans', system-ui, sans-serif;
+  --font-mono: 'IBM Plex Mono', 'Courier New', monospace;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  background: var(--bg);
+  padding: 40px;
+  max-width: 1260px;
+  margin: 0 auto;
+  font-family: var(--font-sans);
+  color: var(--text);
+}
+h1 {
+  font-size: 24px;
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+.subtitle {
+  color: var(--muted);
+  font-size: 13px;
+  margin-bottom: 40px;
+}
+.diagram-wrapper {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 24px;
+  margin-bottom: 36px;
+}
+</style>
+</head>
+<body>
+
+<h1>JACKPOT — GCP Staging Deployment</h1>
+<p class="subtitle">
+  Project <code>gotero3-acdp-488517</code> · region <code>us-central1</code> · as of 2026-04-18 (post-Session 5)
+</p>
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<!-- DIAGRAM A: INFRASTRUCTURE REFERENCE (APGAP-STYLE)                      -->
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<div class="diagram-wrapper">
+
+<svg width="100%" viewBox="0 0 1200 960" xmlns="http://www.w3.org/2000/svg" style="display: block;">
+<defs>
+<marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+  <path d="M1 2L8 5L1 8" fill="none" stroke="#6b6560" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path>
+</marker>
+<marker id="arr-data" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+  <path d="M1 2L8 5L1 8" fill="none" stroke="#1a4a7a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path>
+</marker>
+</defs>
+
+<text x="600" y="26" text-anchor="middle" font-family="IBM Plex Sans, sans-serif" font-size="20" font-weight="600" fill="#1a1714">
+  A. Infrastructure reference — what's deployed in <tspan font-family="IBM Plex Mono, monospace" font-size="16">gotero3-acdp-488517</tspan>
+</text>
+<text x="600" y="46" text-anchor="middle" font-family="IBM Plex Sans, sans-serif" font-size="12" fill="#6b6560">
+  All resources managed by <tspan font-family="IBM Plex Mono, monospace">jackpot-iac/terraform/staging/</tspan> — single GCP project, regional GKE, private Cloud SQL
+</text>
+
+<!-- ── CI/CD TRIGGER (top-left) ──────────────────────────────────────── -->
+<rect x="20" y="70" width="300" height="172" rx="10" fill="#f9e8ec" stroke="#e0a8b4" stroke-width="1.5"></rect>
+<rect x="20" y="70" width="6" height="172" rx="3" fill="#7a1a2a"></rect>
+<text x="38" y="89" font-family="IBM Plex Sans" font-size="10" font-weight="700" fill="#7a1a2a" letter-spacing="1.5">CI/CD TRIGGER</text>
+
+<rect x="36" y="100" width="268" height="60" rx="8" fill="white" stroke="#e0a8b4" stroke-width="1.5"></rect>
+<text x="170" y="121" text-anchor="middle" font-family="IBM Plex Sans" font-size="13" font-weight="600" fill="#7a1a2a">GitHub Actions</text>
+<text x="170" y="139" text-anchor="middle" font-family="IBM Plex Mono" font-size="10" fill="#6b6560">deploy-staging.yml</text>
+<text x="170" y="153" text-anchor="middle" font-family="IBM Plex Sans" font-size="10" fill="#6b6560">push to staging branch</text>
+
+<rect x="36" y="170" width="128" height="60" rx="8" fill="white" stroke="#e0a8b4" stroke-width="1.5"></rect>
+<text x="100" y="191" text-anchor="middle" font-family="IBM Plex Sans" font-size="11" font-weight="600" fill="#7a1a2a">gotero/</text>
+<text x="100" y="206" text-anchor="middle" font-family="IBM Plex Mono" font-size="10" fill="#6b6560">jackpot-iac</text>
+<text x="100" y="220" text-anchor="middle" font-family="IBM Plex Sans" font-size="9" fill="#6b6560">workflow home</text>
+
+<rect x="176" y="170" width="128" height="60" rx="8" fill="white" stroke="#e0a8b4" stroke-width="1.5"></rect>
+<text x="240" y="191" text-anchor="middle" font-family="IBM Plex Sans" font-size="11" font-weight="600" fill="#7a1a2a">gotero/</text>
+<text x="240" y="206" text-anchor="middle" font-family="IBM Plex Mono" font-size="10" fill="#6b6560">jackpot-backend</text>
+<text x="240" y="220" text-anchor="middle" font-family="IBM Plex Sans" font-size="9" fill="#6b6560">+ nf, schema submods</text>
+
+<!-- Arrow: GitHub -> WIF -->
+<line x1="320" y1="156" x2="350" y2="156" stroke="#4a4540" stroke-width="1.5" marker-end="url(#arr)"></line>
+<text x="335" y="150" text-anchor="middle" font-family="IBM Plex Sans" font-size="9" fill="#6b6560">OIDC</text>
+
+<!-- ── IAM & WIF (top-middle) ──────────────────────────────────────── -->
+<rect x="350" y="70" width="240" height="172" rx="10" fill="#f9f0e8" stroke="#e0c4a8" stroke-width="1.5"></rect>
+<rect x="350" y="70" width="6" height="172" rx="3" fill="#7a3a1a"></rect>
+<text x="368" y="89" font-family="IBM Plex Sans" font-size="10" font-weight="700" fill="#7a3a1a" letter-spacing="1.5">IAM &amp; WORKLOAD IDENTITY</text>
+
+<rect x="366" y="100" width="208" height="50" rx="8" fill="white" stroke="#e0c4a8" stroke-width="1.5"></rect>
+<text x="470" y="119" text-anchor="middle" font-family="IBM Plex Sans" font-size="12" font-weight="600" fill="#7a3a1a">WIF Pool</text>
+<text x="470" y="136" text-anchor="middle" font-family="IBM Plex Mono" font-size="9" fill="#6b6560">github-actions-pool</text>
+
+<rect x="366" y="156" width="208" height="36" rx="6" fill="white" stroke="#e0c4a8" stroke-width="1"></rect>
+<text x="470" y="172" text-anchor="middle" font-family="IBM Plex Mono" font-size="9.5" font-weight="500" fill="#7a3a1a">deploy-sa@...iam</text>
+<text x="470" y="184" text-anchor="middle" font-family="IBM Plex Sans" font-size="8.5" fill="#6b6560">CI deploy identity</text>
+
+<rect x="366" y="198" width="100" height="36" rx="6" fill="white" stroke="#e0c4a8" stroke-width="1"></rect>
+<text x="416" y="214" text-anchor="middle" font-family="IBM Plex Mono" font-size="9" font-weight="500" fill="#7a3a1a">jackpot-api-sa</text>
+<text x="416" y="225" text-anchor="middle" font-family="IBM Plex Sans" font-size="8" fill="#6b6560">K8s WI bound</text>
+
+<rect x="474" y="198" width="100" height="36" rx="6" fill="white" stroke="#e0c4a8" stroke-width="1"></rect>
+<text x="524" y="214" text-anchor="middle" font-family="IBM Plex Mono" font-size="9" font-weight="500" fill="#7a3a1a">scrubber-sa</text>
+<text x="524" y="225" text-anchor="middle" font-family="IBM Plex Sans" font-size="8" fill="#6b6560">DLP + scrub</text>
+
+<!-- Arrow: IAM -> Artifact Registry -->
+<line x1="590" y1="140" x2="620" y2="140" stroke="#4a4540" stroke-width="1.5" marker-end="url(#arr)"></line>
+
+<!-- ── ARTIFACT REGISTRY + SECRETS (top-right) ──────────────────────────── -->
+<rect x="620" y="70" width="290" height="172" rx="10" fill="#f0e8f9" stroke="#c4a8e0" stroke-width="1.5"></rect>
+<rect x="620" y="70" width="6" height="172" rx="3" fill="#4a1a7a"></rect>
+<text x="638" y="89" font-family="IBM Plex Sans" font-size="10" font-weight="700" fill="#4a1a7a" letter-spacing="1.5">BUILD &amp; SECRETS</text>
+
+<rect x="636" y="100" width="258" height="56" rx="8" fill="white" stroke="#c4a8e0" stroke-width="1.5"></rect>
+<text x="765" y="120" text-anchor="middle" font-family="IBM Plex Sans" font-size="12" font-weight="600" fill="#4a1a7a">Artifact Registry</text>
+<text x="765" y="137" text-anchor="middle" font-family="IBM Plex Mono" font-size="9" fill="#6b6560">us-central1-docker.pkg.dev/</text>
+<text x="765" y="149" text-anchor="middle" font-family="IBM Plex Mono" font-size="9" fill="#6b6560">.../jackpot/jackpot-api</text>
+
+<rect x="636" y="166" width="258" height="66" rx="8" fill="white" stroke="#c4a8e0" stroke-width="1.5"></rect>
+<text x="765" y="185" text-anchor="middle" font-family="IBM Plex Sans" font-size="12" font-weight="600" fill="#4a1a7a">Secret Manager — 5 secrets</text>
+<text x="650" y="202" font-family="IBM Plex Mono" font-size="8.5" fill="#6b6560">jackpot-staging-secret-key</text>
+<text x="650" y="214" font-family="IBM Plex Mono" font-size="8.5" fill="#6b6560">jackpot-staging-database-url</text>
+<text x="650" y="226" font-family="IBM Plex Mono" font-size="8.5" fill="#6b6560">...-google-oauth-client-{id,secret}</text>
+
+<!-- ── GITHUB SECRETS (far right) ───────────────────────────────────────── -->
+<rect x="940" y="70" width="240" height="172" rx="10" fill="#f9e8ec" stroke="#e0a8b4" stroke-width="1.5"></rect>
+<rect x="940" y="70" width="6" height="172" rx="3" fill="#7a1a2a"></rect>
+<text x="958" y="89" font-family="IBM Plex Sans" font-size="10" font-weight="700" fill="#7a1a2a" letter-spacing="1.5">GH ACTIONS SECRETS</text>
+
+<rect x="956" y="100" width="208" height="50" rx="8" fill="white" stroke="#e0a8b4" stroke-width="1"></rect>
+<text x="1060" y="120" text-anchor="middle" font-family="IBM Plex Mono" font-size="10" font-weight="500" fill="#7a1a2a">CROSS_REPO_PAT</text>
+<text x="1060" y="136" text-anchor="middle" font-family="IBM Plex Sans" font-size="9" fill="#6b6560">fine-grained GitHub PAT</text>
+
+<rect x="956" y="156" width="208" height="36" rx="6" fill="white" stroke="#e0a8b4" stroke-width="1"></rect>
+<text x="1060" y="172" text-anchor="middle" font-family="IBM Plex Mono" font-size="9" fill="#7a1a2a">GCP_WIF_PROVIDER</text>
+<text x="1060" y="184" text-anchor="middle" font-family="IBM Plex Sans" font-size="8.5" fill="#6b6560">resource name (vars.)</text>
+
+<rect x="956" y="198" width="208" height="36" rx="6" fill="white" stroke="#e0a8b4" stroke-width="1"></rect>
+<text x="1060" y="214" text-anchor="middle" font-family="IBM Plex Mono" font-size="9" fill="#7a1a2a">GCP_DEPLOY_SA</text>
+<text x="1060" y="225" text-anchor="middle" font-family="IBM Plex Sans" font-size="8.5" fill="#6b6560">deploy-sa email (vars.)</text>
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<!-- GCP PROJECT BOUNDARY                                                     -->
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+
+<rect x="20" y="268" width="1160" height="572" rx="12" fill="none" stroke="#1a4a7a" stroke-width="2" stroke-dasharray="6 3" opacity="0.4"></rect>
+<text x="35" y="285" font-family="IBM Plex Sans" font-size="11" font-weight="700" fill="#1a4a7a" letter-spacing="1.5">GCP PROJECT</text>
+<text x="130" y="285" font-family="IBM Plex Mono" font-size="11" font-weight="500" fill="#1a4a7a">gotero3-acdp-488517</text>
+<text x="340" y="285" font-family="IBM Plex Sans" font-size="10" fill="#6b6560">region: us-central1</text>
+
+<!-- ── VPC boundary ────────────────────────────────────────────────────── -->
+<rect x="40" y="300" width="1120" height="360" rx="10" fill="none" stroke="#1a4a7a" stroke-width="1.5" opacity="0.5"></rect>
+<text x="55" y="316" font-family="IBM Plex Sans" font-size="10" font-weight="700" fill="#1a4a7a" letter-spacing="1.2">VPC · jackpot-staging-vpc</text>
+<text x="245" y="316" font-family="IBM Plex Sans" font-size="9" fill="#6b6560">+ Cloud NAT, Cloud Router, Private Service Connect</text>
+
+<!-- ── GKE CLUSTER ─────────────────────────────────────────────────────── -->
+<rect x="60" y="330" width="660" height="316" rx="10" fill="#e8f0f9" stroke="#a8c4e0" stroke-width="1.5"></rect>
+<rect x="60" y="330" width="6" height="316" rx="3" fill="#1a4a7a"></rect>
+<text x="78" y="349" font-family="IBM Plex Sans" font-size="10" font-weight="700" fill="#1a4a7a" letter-spacing="1.2">GKE · jackpot-staging-gke</text>
+<text x="280" y="349" font-family="IBM Plex Sans" font-size="9" fill="#6b6560">regional · private cluster · VPC-native</text>
+
+<!-- Node pools -->
+<rect x="76" y="358" width="196" height="60" rx="8" fill="white" stroke="#a8c4e0" stroke-width="1"></rect>
+<text x="174" y="376" text-anchor="middle" font-family="IBM Plex Mono" font-size="11" font-weight="600" fill="#1a4a7a">api-pool</text>
+<text x="174" y="392" text-anchor="middle" font-family="IBM Plex Sans" font-size="9" fill="#6b6560">n2-standard-4</text>
+<text x="174" y="405" text-anchor="middle" font-family="IBM Plex Sans" font-size="9" fill="#6b6560">min=1 max=3 · running=2</text>
+
+<rect x="280" y="358" width="196" height="60" rx="8" fill="white" stroke="#a8c4e0" stroke-width="1"></rect>
+<text x="378" y="376" text-anchor="middle" font-family="IBM Plex Mono" font-size="11" font-weight="600" fill="#1a4a7a">scrubber-pool</text>
+<text x="378" y="392" text-anchor="middle" font-family="IBM Plex Sans" font-size="9" fill="#6b6560">n2-highmem-4 · spot</text>
+<text x="378" y="405" text-anchor="middle" font-family="IBM Plex Sans" font-size="9" fill="#6b6560">min=0 max=3 · running=0</text>
+
+<rect x="484" y="358" width="220" height="60" rx="8" fill="white" stroke="#a8c4e0" stroke-width="1"></rect>
+<text x="594" y="376" text-anchor="middle" font-family="IBM Plex Mono" font-size="11" font-weight="600" fill="#1a4a7a">workspace-pool</text>
+<text x="594" y="392" text-anchor="middle" font-family="IBM Plex Sans" font-size="9" fill="#6b6560">n2-standard-8</text>
+<text x="594" y="405" text-anchor="middle" font-family="IBM Plex Sans" font-size="9" fill="#6b6560">min=0 max=2 · running=0</text>
+
+<!-- Namespace jackpot -->
+<rect x="76" y="430" width="628" height="208" rx="8" fill="white" stroke="#a8c4e0" stroke-width="1"></rect>
+<text x="86" y="446" font-family="IBM Plex Mono" font-size="10" font-weight="600" fill="#1a4a7a">ns: jackpot</text>
+
+<!-- Helm release pieces -->
+<rect x="92" y="456" width="220" height="52" rx="6" fill="#e8f0f9" stroke="#a8c4e0" stroke-width="1"></rect>
+<text x="202" y="473" text-anchor="middle" font-family="IBM Plex Sans" font-size="11" font-weight="600" fill="#1a4a7a">Deployment</text>
+<text x="202" y="488" text-anchor="middle" font-family="IBM Plex Mono" font-size="9" fill="#6b6560">jackpot-api · 2/2 Ready</text>
+<text x="202" y="500" text-anchor="middle" font-family="IBM Plex Sans" font-size="8.5" fill="#6b6560">image tag: 535dcdb</text>
+
+<rect x="322" y="456" width="180" height="52" rx="6" fill="#e8f0f9" stroke="#a8c4e0" stroke-width="1"></rect>
+<text x="412" y="473" text-anchor="middle" font-family="IBM Plex Sans" font-size="11" font-weight="600" fill="#1a4a7a">Service</text>
+<text x="412" y="488" text-anchor="middle" font-family="IBM Plex Mono" font-size="9" fill="#6b6560">jackpot-api</text>
+<text x="412" y="500" text-anchor="middle" font-family="IBM Plex Sans" font-size="8.5" fill="#6b6560">ClusterIP :80</text>
+
+<rect x="512" y="456" width="180" height="52" rx="6" fill="#e8f0f9" stroke="#a8c4e0" stroke-width="1"></rect>
+<text x="602" y="473" text-anchor="middle" font-family="IBM Plex Sans" font-size="11" font-weight="600" fill="#1a4a7a">ConfigMap</text>
+<text x="602" y="488" text-anchor="middle" font-family="IBM Plex Mono" font-size="9" fill="#6b6560">jackpot-api-config</text>
+<text x="602" y="500" text-anchor="middle" font-family="IBM Plex Sans" font-size="8.5" fill="#6b6560">env vars, non-secret</text>
+
+<rect x="92" y="518" width="220" height="52" rx="6" fill="#e8f0f9" stroke="#a8c4e0" stroke-width="1"></rect>
+<text x="202" y="535" text-anchor="middle" font-family="IBM Plex Sans" font-size="11" font-weight="600" fill="#1a4a7a">Secret</text>
+<text x="202" y="550" text-anchor="middle" font-family="IBM Plex Mono" font-size="9" fill="#6b6560">jackpot-api-secrets</text>
+<text x="202" y="562" text-anchor="middle" font-family="IBM Plex Sans" font-size="8.5" fill="#6b6560">synced every deploy</text>
+
+<rect x="322" y="518" width="180" height="52" rx="6" fill="#e8f0f9" stroke="#a8c4e0" stroke-width="1"></rect>
+<text x="412" y="535" text-anchor="middle" font-family="IBM Plex Sans" font-size="11" font-weight="600" fill="#1a4a7a">ServiceAccount</text>
+<text x="412" y="550" text-anchor="middle" font-family="IBM Plex Mono" font-size="9" fill="#6b6560">jackpot-api</text>
+<text x="412" y="562" text-anchor="middle" font-family="IBM Plex Sans" font-size="8.5" fill="#6b6560">WI → jackpot-api-sa</text>
+
+<rect x="512" y="518" width="180" height="52" rx="6" fill="#e8f0f9" stroke="#a8c4e0" stroke-width="1"></rect>
+<text x="602" y="535" text-anchor="middle" font-family="IBM Plex Sans" font-size="11" font-weight="600" fill="#1a4a7a">Job (pre-upgrade)</text>
+<text x="602" y="550" text-anchor="middle" font-family="IBM Plex Mono" font-size="9" fill="#6b6560">alembic upgrade head</text>
+<text x="602" y="562" text-anchor="middle" font-family="IBM Plex Sans" font-size="8.5" fill="#6b6560">self-deletes on success</text>
+
+<rect x="92" y="580" width="600" height="46" rx="6" fill="#fef7f0" stroke="#d4500a" stroke-width="1" stroke-dasharray="3 2"></rect>
+<text x="392" y="596" text-anchor="middle" font-family="IBM Plex Sans" font-size="10" font-weight="600" fill="#7a3a1a">Helm release</text>
+<text x="392" y="611" text-anchor="middle" font-family="IBM Plex Mono" font-size="9" fill="#6b6560">jackpot-api · rev 12 · deployed · chart: ./helm/jackpot-api</text>
+
+<!-- ── CLOUD SQL ───────────────────────────────────────────────────────── -->
+<rect x="740" y="330" width="280" height="140" rx="10" fill="#f0e8f9" stroke="#c4a8e0" stroke-width="1.5"></rect>
+<rect x="740" y="330" width="6" height="140" rx="3" fill="#4a1a7a"></rect>
+<text x="758" y="349" font-family="IBM Plex Sans" font-size="10" font-weight="700" fill="#4a1a7a" letter-spacing="1.2">CLOUD SQL</text>
+
+<rect x="756" y="358" width="248" height="54" rx="8" fill="white" stroke="#c4a8e0" stroke-width="1"></rect>
+<text x="880" y="377" text-anchor="middle" font-family="IBM Plex Mono" font-size="11" font-weight="600" fill="#4a1a7a">jackpot-staging-db</text>
+<text x="880" y="393" text-anchor="middle" font-family="IBM Plex Sans" font-size="9" fill="#6b6560">PostgreSQL 16 · db-custom-1-3840</text>
+<text x="880" y="405" text-anchor="middle" font-family="IBM Plex Sans" font-size="9" fill="#6b6560">private IP 10.188.230.3</text>
+
+<rect x="756" y="418" width="248" height="44" rx="8" fill="white" stroke="#c4a8e0" stroke-width="1"></rect>
+<text x="880" y="435" text-anchor="middle" font-family="IBM Plex Mono" font-size="11" font-weight="600" fill="#4a1a7a">jackpot_db</text>
+<text x="880" y="451" text-anchor="middle" font-family="IBM Plex Sans" font-size="9" fill="#6b6560">alembic head: c536de6329e0</text>
+
+<!-- ── GCS BUCKETS ─────────────────────────────────────────────────────── -->
+<rect x="740" y="480" width="280" height="166" rx="10" fill="#e8f5ee" stroke="#a8d5bc" stroke-width="1.5"></rect>
+<rect x="740" y="480" width="6" height="166" rx="3" fill="#1e6b4a"></rect>
+<text x="758" y="499" font-family="IBM Plex Sans" font-size="10" font-weight="700" fill="#1e6b4a" letter-spacing="1.2">GCS BUCKETS</text>
+<text x="862" y="499" font-family="IBM Plex Sans" font-size="9" fill="#6b6560">all prefixed jackpot-staging-</text>
+
+<rect x="756" y="510" width="116" height="28" rx="6" fill="white" stroke="#a8d5bc" stroke-width="1"></rect>
+<text x="814" y="528" text-anchor="middle" font-family="IBM Plex Mono" font-size="10" fill="#1e6b4a">sequences</text>
+
+<rect x="880" y="510" width="124" height="28" rx="6" fill="white" stroke="#a8d5bc" stroke-width="1"></rect>
+<text x="942" y="528" text-anchor="middle" font-family="IBM Plex Mono" font-size="10" fill="#1e6b4a">staging</text>
+
+<rect x="756" y="544" width="116" height="28" rx="6" fill="white" stroke="#a8d5bc" stroke-width="1"></rect>
+<text x="814" y="562" text-anchor="middle" font-family="IBM Plex Mono" font-size="10" fill="#1e6b4a">references</text>
+
+<rect x="880" y="544" width="124" height="28" rx="6" fill="white" stroke="#a8d5bc" stroke-width="1"></rect>
+<text x="942" y="562" text-anchor="middle" font-family="IBM Plex Mono" font-size="10" fill="#1e6b4a">results</text>
+
+<rect x="756" y="578" width="116" height="28" rx="6" fill="white" stroke="#a8d5bc" stroke-width="1"></rect>
+<text x="814" y="596" text-anchor="middle" font-family="IBM Plex Mono" font-size="10" fill="#1e6b4a">work</text>
+
+<rect x="880" y="578" width="124" height="28" rx="6" fill="white" stroke="#a8d5bc" stroke-width="1"></rect>
+<text x="942" y="596" text-anchor="middle" font-family="IBM Plex Mono" font-size="10" fill="#1e6b4a">backups</text>
+
+<rect x="756" y="612" width="248" height="28" rx="6" fill="white" stroke="#a8d5bc" stroke-width="1"></rect>
+<text x="880" y="630" text-anchor="middle" font-family="IBM Plex Mono" font-size="10" fill="#1e6b4a">portal-exports</text>
+
+<!-- ── OUTSIDE VPC: GCP Batch (future), Ingress (future) ──────────────── -->
+<rect x="1040" y="330" width="120" height="140" rx="10" fill="white" stroke="#c4a8e0" stroke-width="1" stroke-dasharray="4 3" opacity="0.7"></rect>
+<text x="1100" y="354" text-anchor="middle" font-family="IBM Plex Sans" font-size="10" font-weight="700" fill="#4a1a7a" letter-spacing="1">GCP BATCH</text>
+<text x="1100" y="370" text-anchor="middle" font-family="IBM Plex Sans" font-size="9" fill="#6b6560">pipeline runs</text>
+<text x="1100" y="384" text-anchor="middle" font-family="IBM Plex Sans" font-size="9" fill="#6b6560">(not yet used)</text>
+<text x="1100" y="410" text-anchor="middle" font-family="IBM Plex Mono" font-size="9" fill="#6b6560">PIPELINE_</text>
+<text x="1100" y="422" text-anchor="middle" font-family="IBM Plex Mono" font-size="9" fill="#6b6560">EXECUTOR=</text>
+<text x="1100" y="434" text-anchor="middle" font-family="IBM Plex Mono" font-size="9" fill="#6b6560">gcp_batch</text>
+
+<rect x="1040" y="480" width="120" height="140" rx="10" fill="white" stroke="#a8d5bc" stroke-width="1" stroke-dasharray="4 3" opacity="0.7"></rect>
+<text x="1100" y="504" text-anchor="middle" font-family="IBM Plex Sans" font-size="10" font-weight="700" fill="#1e6b4a" letter-spacing="1">INGRESS</text>
+<text x="1100" y="522" text-anchor="middle" font-family="IBM Plex Sans" font-size="9" fill="#6b6560">+ Cloud DNS</text>
+<text x="1100" y="534" text-anchor="middle" font-family="IBM Plex Sans" font-size="9" fill="#6b6560">+ managed cert</text>
+<text x="1100" y="556" text-anchor="middle" font-family="IBM Plex Sans" font-size="9" fill="#d4500a">TODO P1.3</text>
+<text x="1100" y="572" text-anchor="middle" font-family="IBM Plex Sans" font-size="8.5" fill="#6b6560">no public URL yet;</text>
+<text x="1100" y="584" text-anchor="middle" font-family="IBM Plex Sans" font-size="8.5" fill="#6b6560">smoke test uses</text>
+<text x="1100" y="596" text-anchor="middle" font-family="IBM Plex Mono" font-size="8.5" fill="#6b6560">kubectl port-fwd</text>
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<!-- DATA FLOW ARROWS (deploy path)                                           -->
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+
+<!-- Arrow: deploy-sa pushes image to Artifact Registry -->
+<path d="M 590 140 Q 605 140 620 140" fill="none" stroke="#4a4540" stroke-width="1.5" marker-end="url(#arr)"></path>
+<text x="605" y="134" text-anchor="middle" font-family="IBM Plex Sans" font-size="9" fill="#6b6560">push</text>
+
+<!-- Arrow: Artifact Registry -> GKE (image pull) -->
+<path d="M 720 215 Q 720 270 390 325" fill="none" stroke="#1a4a7a" stroke-width="1.5" marker-end="url(#arr-data)" opacity="0.7"></path>
+<text x="560" y="270" text-anchor="middle" font-family="IBM Plex Sans" font-size="9" fill="#1a4a7a">image pull</text>
+
+<!-- Arrow: Secret Manager -> jackpot-api-secrets -->
+<path d="M 760 215 Q 250 240 200 515" fill="none" stroke="#4a1a7a" stroke-width="1.5" marker-end="url(#arr)" opacity="0.6"></path>
+<text x="195" y="320" font-family="IBM Plex Sans" font-size="9" fill="#4a1a7a">synced on deploy</text>
+
+<!-- Arrow: API pods -> Cloud SQL (runtime DB connection) -->
+<path d="M 312 482 Q 520 482 755 390" fill="none" stroke="#1e6b4a" stroke-width="1.5" marker-end="url(#arr-data)"></path>
+<text x="530" y="476" text-anchor="middle" font-family="IBM Plex Sans" font-size="9" fill="#1e6b4a">private IP PSC</text>
+
+<!-- Arrow: API pods -> GCS (via jackpot-api-sa WI) -->
+<path d="M 312 495 Q 600 560 755 560" fill="none" stroke="#1e6b4a" stroke-width="1.5" marker-end="url(#arr-data)"></path>
+<text x="580" y="580" text-anchor="middle" font-family="IBM Plex Sans" font-size="9" fill="#1e6b4a">GCS read/write (WI)</text>
+
+<!-- Arrow: Backend repo -> Artifact Registry via GitHub Actions -->
+<path d="M 240 242 Q 430 250 700 100" fill="none" stroke="#7a1a2a" stroke-width="1.5" marker-end="url(#arr)" opacity="0.4"></path>
+
+<!-- ── DEVELOPER / API CONSUMER (bottom) ──────────────────────────────── -->
+<rect x="60" y="680" width="660" height="140" rx="10" fill="#f9e8ec" stroke="#e0a8b4" stroke-width="1.5"></rect>
+<rect x="60" y="680" width="6" height="140" rx="3" fill="#7a1a2a"></rect>
+<text x="78" y="699" font-family="IBM Plex Sans" font-size="10" font-weight="700" fill="#7a1a2a" letter-spacing="1.2">ACCESS (TODAY)</text>
+
+<rect x="76" y="712" width="196" height="96" rx="8" fill="white" stroke="#e0a8b4" stroke-width="1"></rect>
+<text x="174" y="735" text-anchor="middle" font-family="IBM Plex Sans" font-size="12" font-weight="600" fill="#7a1a2a">Developer laptop</text>
+<text x="174" y="756" text-anchor="middle" font-family="IBM Plex Mono" font-size="9" fill="#6b6560">kubectl port-forward</text>
+<text x="174" y="770" text-anchor="middle" font-family="IBM Plex Mono" font-size="9" fill="#6b6560">svc/jackpot-api</text>
+<text x="174" y="784" text-anchor="middle" font-family="IBM Plex Mono" font-size="9" fill="#6b6560">8080:80</text>
+<text x="174" y="800" text-anchor="middle" font-family="IBM Plex Sans" font-size="9" fill="#6b6560">→ localhost:8080</text>
+
+<rect x="284" y="712" width="196" height="96" rx="8" fill="white" stroke="#e0a8b4" stroke-width="1"></rect>
+<text x="382" y="735" text-anchor="middle" font-family="IBM Plex Sans" font-size="12" font-weight="600" fill="#7a1a2a">Cloud SQL Proxy</text>
+<text x="382" y="756" text-anchor="middle" font-family="IBM Plex Mono" font-size="9" fill="#6b6560">cloud-sql-proxy</text>
+<text x="382" y="770" text-anchor="middle" font-family="IBM Plex Sans" font-size="9" fill="#6b6560">for local DB access</text>
+<text x="382" y="788" text-anchor="middle" font-family="IBM Plex Sans" font-size="9" fill="#6b6560">127.0.0.1:5432</text>
+<text x="382" y="802" text-anchor="middle" font-family="IBM Plex Sans" font-size="9" fill="#6b6560">→ jackpot_db</text>
+
+<rect x="492" y="712" width="212" height="96" rx="8" fill="white" stroke="#e0a8b4" stroke-width="1"></rect>
+<text x="598" y="735" text-anchor="middle" font-family="IBM Plex Sans" font-size="12" font-weight="600" fill="#7a1a2a">Smoke test (CI)</text>
+<text x="598" y="756" text-anchor="middle" font-family="IBM Plex Mono" font-size="9" fill="#6b6560">staging_smoke_test.sh</text>
+<text x="598" y="770" text-anchor="middle" font-family="IBM Plex Sans" font-size="9" fill="#6b6560">runs on GH Actions runner</text>
+<text x="598" y="788" text-anchor="middle" font-family="IBM Plex Sans" font-size="9" fill="#6b6560">in-cluster port-forward</text>
+<text x="598" y="802" text-anchor="middle" font-family="IBM Plex Sans" font-size="9" fill="#6b6560">→ localhost:8080</text>
+
+<!-- ── COST PROFILE (bottom-right) ──────────────────────────────────────── -->
+<rect x="740" y="680" width="420" height="140" rx="10" fill="#f9f0e8" stroke="#e0c4a8" stroke-width="1.5"></rect>
+<rect x="740" y="680" width="6" height="140" rx="3" fill="#7a3a1a"></rect>
+<text x="758" y="699" font-family="IBM Plex Sans" font-size="10" font-weight="700" fill="#7a3a1a" letter-spacing="1.2">MONTHLY COST · 24/7 RUN-RATE</text>
+
+<text x="760" y="722" font-family="IBM Plex Sans" font-size="10" fill="#1a1714">GKE management (regional, no free tier)</text>
+<text x="1148" y="722" text-anchor="end" font-family="IBM Plex Mono" font-size="10" font-weight="500" fill="#7a3a1a">~$73</text>
+
+<text x="760" y="740" font-family="IBM Plex Sans" font-size="10" fill="#1a1714">api-pool · 2× n2-standard-4</text>
+<text x="1148" y="740" text-anchor="end" font-family="IBM Plex Mono" font-size="10" font-weight="500" fill="#7a3a1a">~$284</text>
+
+<text x="760" y="758" font-family="IBM Plex Sans" font-size="10" fill="#1a1714">Cloud SQL (db-custom-1-3840 zonal)</text>
+<text x="1148" y="758" text-anchor="end" font-family="IBM Plex Mono" font-size="10" font-weight="500" fill="#7a3a1a">~$55</text>
+
+<text x="760" y="776" font-family="IBM Plex Sans" font-size="10" fill="#1a1714">GCS, Artifact Registry, Logging</text>
+<text x="1148" y="776" text-anchor="end" font-family="IBM Plex Mono" font-size="10" font-weight="500" fill="#7a3a1a">~$10</text>
+
+<line x1="758" y1="786" x2="1148" y2="786" stroke="#7a3a1a" stroke-width="0.8" opacity="0.4"></line>
+<text x="760" y="804" font-family="IBM Plex Sans" font-size="11" font-weight="600" fill="#7a3a1a">Total</text>
+<text x="1148" y="804" text-anchor="end" font-family="IBM Plex Mono" font-size="11" font-weight="600" fill="#7a3a1a">~$420/mo</text>
+
+<!-- ── LEGEND ──────────────────────────────────────────────────────────── -->
+<rect x="20" y="860" width="1160" height="80" rx="8" fill="white" stroke="#e2ddd5" stroke-width="1"></rect>
+<text x="34" y="880" font-family="IBM Plex Sans" font-size="10" font-weight="700" fill="#1a1714" letter-spacing="1.5">LEGEND</text>
+
+<rect x="34" y="890" width="16" height="12" rx="2" fill="#e8f5ee" stroke="#a8d5bc" stroke-width="1"></rect>
+<text x="58" y="900" font-family="IBM Plex Sans" font-size="10" fill="#6b6560">GCS / storage</text>
+
+<rect x="170" y="890" width="16" height="12" rx="2" fill="#e8f0f9" stroke="#a8c4e0" stroke-width="1"></rect>
+<text x="194" y="900" font-family="IBM Plex Sans" font-size="10" fill="#6b6560">compute / K8s</text>
+
+<rect x="300" y="890" width="16" height="12" rx="2" fill="#f9f0e8" stroke="#e0c4a8" stroke-width="1"></rect>
+<text x="324" y="900" font-family="IBM Plex Sans" font-size="10" fill="#6b6560">identity / IAM</text>
+
+<rect x="430" y="890" width="16" height="12" rx="2" fill="#f0e8f9" stroke="#c4a8e0" stroke-width="1"></rect>
+<text x="454" y="900" font-family="IBM Plex Sans" font-size="10" fill="#6b6560">database / secrets</text>
+
+<rect x="570" y="890" width="16" height="12" rx="2" fill="#f9e8ec" stroke="#e0a8b4" stroke-width="1"></rect>
+<text x="594" y="900" font-family="IBM Plex Sans" font-size="10" fill="#6b6560">CI/CD &amp; external access</text>
+
+<line x1="750" y1="896" x2="784" y2="896" stroke="#1a4a7a" stroke-width="1.5" marker-end="url(#arr-data)"></line>
+<text x="792" y="900" font-family="IBM Plex Sans" font-size="10" fill="#6b6560">data flow</text>
+
+<line x1="880" y1="896" x2="914" y2="896" stroke="#4a4540" stroke-width="1.5" marker-end="url(#arr)"></line>
+<text x="922" y="900" font-family="IBM Plex Sans" font-size="10" fill="#6b6560">control / auth</text>
+
+<rect x="1020" y="890" width="16" height="12" rx="2" fill="white" stroke="#c4a8e0" stroke-width="1" stroke-dasharray="3 2"></rect>
+<text x="1044" y="900" font-family="IBM Plex Sans" font-size="10" fill="#6b6560">planned / not yet deployed</text>
+
+<text x="34" y="925" font-family="IBM Plex Sans" font-size="9" font-style="italic" fill="#6b6560">
+  Arrows show the primary data and control paths. Not every interaction is drawn — e.g. gcloud, kubectl, and Helm flows omitted for clarity.
+</text>
+</svg>
+
+</div>
+
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<!-- DIAGRAM B: MENTAL MODEL (LAYERED WITH CALLOUTS)                        -->
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<div class="diagram-wrapper">
+
+<svg width="100%" viewBox="0 0 960 920" xmlns="http://www.w3.org/2000/svg" style="display: block;">
+<defs>
+<marker id="arb" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+  <path d="M1 2L8 5L1 8" fill="none" stroke="#6b6560" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path>
+</marker>
+</defs>
+
+<text x="480" y="26" text-anchor="middle" font-family="IBM Plex Sans" font-size="19" font-weight="600" fill="#1a1714">B. GCP staging — mental model</text>
+<text x="480" y="46" text-anchor="middle" font-family="IBM Plex Sans" font-size="12" fill="#6b6560">
+  Seven layers from push-to-staging through to a <tspan font-family="IBM Plex Mono">/health</tspan> response · callouts mark Session 5 quirks
+</text>
+
+<!-- ── LAYER 1: TRIGGER ─────────────────────────────────────────────────── -->
+<rect x="20" y="60" width="920" height="78" rx="10" fill="#f9e8ec" stroke="#e0a8b4" stroke-width="1.5"></rect>
+<rect x="20" y="60" width="6" height="78" rx="3" fill="#7a1a2a"></rect>
+<text x="38" y="78" font-family="IBM Plex Sans" font-size="10" font-weight="700" fill="#7a1a2a" letter-spacing="1.8">TRIGGER</text>
+
+<rect x="34" y="86" width="290" height="46" rx="8" fill="white" stroke="#e0a8b4" stroke-width="1.5"></rect>
+<text x="179" y="106" text-anchor="middle" font-family="IBM Plex Sans" font-size="13" font-weight="600" fill="#7a1a2a">git push origin staging</text>
+<text x="179" y="122" text-anchor="middle" font-family="IBM Plex Mono" font-size="10" fill="#6b6560">jackpot-iac</text>
+
+<rect x="338" y="86" width="290" height="46" rx="8" fill="white" stroke="#e0a8b4" stroke-width="1.5"></rect>
+<text x="483" y="106" text-anchor="middle" font-family="IBM Plex Sans" font-size="13" font-weight="600" fill="#7a1a2a">deploy-staging.yml</text>
+<text x="483" y="122" text-anchor="middle" font-family="IBM Plex Sans" font-size="10" fill="#6b6560">GitHub Actions workflow fires</text>
+
+<rect x="642" y="86" width="284" height="46" rx="8" fill="white" stroke="#e0a8b4" stroke-width="1.5"></rect>
+<text x="784" y="106" text-anchor="middle" font-family="IBM Plex Sans" font-size="13" font-weight="600" fill="#7a1a2a">workflow_dispatch</text>
+<text x="784" y="122" text-anchor="middle" font-family="IBM Plex Sans" font-size="10" fill="#6b6560">manual alt via <tspan font-family="IBM Plex Mono">gh workflow run</tspan></text>
+
+<line x1="480" y1="138" x2="480" y2="156" stroke="#6b6560" stroke-width="1.5" marker-end="url(#arb)"></line>
+
+<!-- ── LAYER 2: CHECKOUT & BUILD ────────────────────────────────────────── -->
+<rect x="20" y="160" width="920" height="108" rx="10" fill="#f9f0e8" stroke="#e0c4a8" stroke-width="1.5"></rect>
+<rect x="20" y="160" width="6" height="108" rx="3" fill="#7a3a1a"></rect>
+<text x="38" y="178" font-family="IBM Plex Sans" font-size="10" font-weight="700" fill="#7a3a1a" letter-spacing="1.8">CHECKOUT &amp; BUILD</text>
+
+<rect x="34" y="188" width="220" height="70" rx="8" fill="white" stroke="#e0c4a8" stroke-width="1.5"></rect>
+<text x="144" y="209" text-anchor="middle" font-family="IBM Plex Mono" font-size="12" font-weight="600" fill="#7a3a1a">checkout@v4</text>
+<text x="144" y="226" text-anchor="middle" font-family="IBM Plex Sans" font-size="10" fill="#6b6560">primary: jackpot-backend</text>
+<text x="144" y="240" text-anchor="middle" font-family="IBM Plex Sans" font-size="10" fill="#6b6560">persist-credentials: false</text>
+<text x="144" y="253" text-anchor="middle" font-family="IBM Plex Sans" font-size="10" fill="#6b6560">no submodules</text>
+
+<rect x="266" y="188" width="220" height="70" rx="8" fill="white" stroke="#e0c4a8" stroke-width="1.5"></rect>
+<text x="376" y="209" text-anchor="middle" font-family="IBM Plex Mono" font-size="12" font-weight="600" fill="#7a3a1a">submodule init</text>
+<text x="376" y="226" text-anchor="middle" font-family="IBM Plex Sans" font-size="10" fill="#6b6560">insteadOf PAT injection</text>
+<text x="376" y="240" text-anchor="middle" font-family="IBM Plex Mono" font-size="10" fill="#6b6560">nf/, schema/</text>
+<text x="376" y="253" text-anchor="middle" font-family="IBM Plex Sans" font-size="10" fill="#6b6560">scrub after clone</text>
+
+<rect x="498" y="188" width="220" height="70" rx="8" fill="white" stroke="#e0c4a8" stroke-width="1.5"></rect>
+<text x="608" y="209" text-anchor="middle" font-family="IBM Plex Mono" font-size="12" font-weight="600" fill="#7a3a1a">docker build</text>
+<text x="608" y="226" text-anchor="middle" font-family="IBM Plex Sans" font-size="10" fill="#6b6560">Dockerfile.api</text>
+<text x="608" y="240" text-anchor="middle" font-family="IBM Plex Mono" font-size="10" fill="#6b6560">COPY nf/ ./nf/</text>
+<text x="608" y="253" text-anchor="middle" font-family="IBM Plex Sans" font-size="10" fill="#6b6560">tag = short git SHA</text>
+
+<rect x="730" y="188" width="196" height="70" rx="8" fill="white" stroke="#e0c4a8" stroke-width="1.5"></rect>
+<text x="828" y="209" text-anchor="middle" font-family="IBM Plex Mono" font-size="12" font-weight="600" fill="#7a3a1a">docker push</text>
+<text x="828" y="226" text-anchor="middle" font-family="IBM Plex Sans" font-size="10" fill="#6b6560">Artifact Registry</text>
+<text x="828" y="240" text-anchor="middle" font-family="IBM Plex Sans" font-size="10" fill="#6b6560">us-central1</text>
+
+<!-- Callout 2 on submodule init -->
+<circle cx="486" cy="188" r="11" fill="#d4500a" stroke="white" stroke-width="2.5"></circle>
+<text x="486" y="192" text-anchor="middle" font-family="IBM Plex Sans" font-size="11" font-weight="700" fill="white">2</text>
+
+<!-- Callout 3 on docker build -->
+<circle cx="718" cy="188" r="11" fill="#d4500a" stroke="white" stroke-width="2.5"></circle>
+<text x="718" y="192" text-anchor="middle" font-family="IBM Plex Sans" font-size="11" font-weight="700" fill="white">3</text>
+
+<line x1="480" y1="268" x2="480" y2="286" stroke="#6b6560" stroke-width="1.5" marker-end="url(#arb)"></line>
+
+<!-- ── LAYER 3: GKE AUTH & K8S SECRETS SYNC ─────────────────────────────── -->
+<rect x="20" y="290" width="920" height="78" rx="10" fill="#f0e8f9" stroke="#c4a8e0" stroke-width="1.5"></rect>
+<rect x="20" y="290" width="6" height="78" rx="3" fill="#4a1a7a"></rect>
+<text x="38" y="308" font-family="IBM Plex Sans" font-size="10" font-weight="700" fill="#4a1a7a" letter-spacing="1.8">GCP AUTH &amp; SECRET SYNC</text>
+
+<rect x="34" y="316" width="290" height="46" rx="8" fill="white" stroke="#c4a8e0" stroke-width="1.5"></rect>
+<text x="179" y="336" text-anchor="middle" font-family="IBM Plex Sans" font-size="12" font-weight="600" fill="#4a1a7a">Workload Identity Federation</text>
+<text x="179" y="352" text-anchor="middle" font-family="IBM Plex Sans" font-size="10" fill="#6b6560">OIDC token → deploy-sa</text>
+
+<rect x="338" y="316" width="290" height="46" rx="8" fill="white" stroke="#c4a8e0" stroke-width="1.5"></rect>
+<text x="483" y="336" text-anchor="middle" font-family="IBM Plex Sans" font-size="12" font-weight="600" fill="#4a1a7a">get-gke-credentials</text>
+<text x="483" y="352" text-anchor="middle" font-family="IBM Plex Sans" font-size="10" fill="#6b6560">kubectl context set</text>
+
+<rect x="642" y="316" width="284" height="46" rx="8" fill="white" stroke="#c4a8e0" stroke-width="1.5"></rect>
+<text x="784" y="336" text-anchor="middle" font-family="IBM Plex Sans" font-size="12" font-weight="600" fill="#4a1a7a">Secret Manager → K8s Secret</text>
+<text x="784" y="352" text-anchor="middle" font-family="IBM Plex Mono" font-size="9" fill="#6b6560">5 keys synced to jackpot-api-secrets</text>
+
+<line x1="480" y1="368" x2="480" y2="386" stroke="#6b6560" stroke-width="1.5" marker-end="url(#arb)"></line>
+
+<!-- ── LAYER 4: HELM UPGRADE ───────────────────────────────────────────── -->
+<rect x="20" y="390" width="920" height="108" rx="10" fill="#e8f0f9" stroke="#a8c4e0" stroke-width="1.5"></rect>
+<rect x="20" y="390" width="6" height="108" rx="3" fill="#1a4a7a"></rect>
+<text x="38" y="408" font-family="IBM Plex Sans" font-size="10" font-weight="700" fill="#1a4a7a" letter-spacing="1.8">HELM UPGRADE (pre-upgrade hook → rollout)</text>
+
+<rect x="34" y="418" width="290" height="70" rx="8" fill="white" stroke="#a8c4e0" stroke-width="1.5"></rect>
+<text x="179" y="439" text-anchor="middle" font-family="IBM Plex Mono" font-size="12" font-weight="600" fill="#1a4a7a">pre-upgrade Job</text>
+<text x="179" y="457" text-anchor="middle" font-family="IBM Plex Sans" font-size="10" fill="#6b6560">alembic upgrade head</text>
+<text x="179" y="471" text-anchor="middle" font-family="IBM Plex Sans" font-size="10" fill="#6b6560">Cloud SQL private IP</text>
+<text x="179" y="484" text-anchor="middle" font-family="IBM Plex Sans" font-size="9" fill="#6b6560">must reach empty-DB head</text>
+
+<rect x="338" y="418" width="290" height="70" rx="8" fill="white" stroke="#a8c4e0" stroke-width="1.5"></rect>
+<text x="483" y="439" text-anchor="middle" font-family="IBM Plex Mono" font-size="12" font-weight="600" fill="#1a4a7a">Deployment rollout</text>
+<text x="483" y="457" text-anchor="middle" font-family="IBM Plex Sans" font-size="10" fill="#6b6560">2 pods · n2-standard-4</text>
+<text x="483" y="471" text-anchor="middle" font-family="IBM Plex Sans" font-size="10" fill="#6b6560">image from Artifact Registry</text>
+<text x="483" y="484" text-anchor="middle" font-family="IBM Plex Sans" font-size="9" fill="#6b6560">readiness = /health 200</text>
+
+<rect x="642" y="418" width="284" height="70" rx="8" fill="white" stroke="#a8c4e0" stroke-width="1.5"></rect>
+<text x="784" y="439" text-anchor="middle" font-family="IBM Plex Mono" font-size="12" font-weight="600" fill="#1a4a7a">--wait --timeout 10m</text>
+<text x="784" y="457" text-anchor="middle" font-family="IBM Plex Sans" font-size="10" fill="#6b6560">holds until 2/2 Ready</text>
+<text x="784" y="471" text-anchor="middle" font-family="IBM Plex Sans" font-size="10" fill="#6b6560">timeout → stuck release</text>
+<text x="784" y="484" text-anchor="middle" font-family="IBM Plex Sans" font-size="9" fill="#6b6560">(see callout 6)</text>
+
+<!-- Callout 1 on pre-upgrade Job -->
+<circle cx="34" cy="418" r="11" fill="#d4500a" stroke="white" stroke-width="2.5"></circle>
+<text x="34" y="422" text-anchor="middle" font-family="IBM Plex Sans" font-size="11" font-weight="700" fill="white">1</text>
+
+<!-- Callout 6 on --wait block -->
+<circle cx="926" cy="418" r="11" fill="#d4500a" stroke="white" stroke-width="2.5"></circle>
+<text x="926" y="422" text-anchor="middle" font-family="IBM Plex Sans" font-size="11" font-weight="700" fill="white">6</text>
+
+<line x1="480" y1="498" x2="480" y2="516" stroke="#6b6560" stroke-width="1.5" marker-end="url(#arb)"></line>
+
+<!-- ── LAYER 5: RUNTIME POD ─────────────────────────────────────────────── -->
+<rect x="20" y="520" width="920" height="128" rx="10" fill="#e8f5ee" stroke="#a8d5bc" stroke-width="1.5"></rect>
+<rect x="20" y="520" width="6" height="128" rx="3" fill="#1e6b4a"></rect>
+<text x="38" y="538" font-family="IBM Plex Sans" font-size="10" font-weight="700" fill="#1e6b4a" letter-spacing="1.8">RUNTIME — jackpot-api pod</text>
+
+<rect x="34" y="548" width="290" height="90" rx="8" fill="white" stroke="#a8d5bc" stroke-width="1.5"></rect>
+<text x="179" y="569" text-anchor="middle" font-family="IBM Plex Sans" font-size="13" font-weight="600" fill="#1e6b4a">uvicorn backend.main:app</text>
+<text x="179" y="586" text-anchor="middle" font-family="IBM Plex Sans" font-size="10" fill="#6b6560">:8000 inside pod</text>
+<text x="179" y="602" text-anchor="middle" font-family="IBM Plex Sans" font-size="10" fill="#6b6560">Settings loaded from env</text>
+<text x="179" y="618" text-anchor="middle" font-family="IBM Plex Sans" font-size="10" fill="#6b6560">21 routers registered</text>
+<text x="179" y="632" text-anchor="middle" font-family="IBM Plex Sans" font-size="9" fill="#6b6560">RequestID + CORS middleware</text>
+
+<rect x="338" y="548" width="290" height="90" rx="8" fill="white" stroke="#a8d5bc" stroke-width="1.5"></rect>
+<text x="483" y="569" text-anchor="middle" font-family="IBM Plex Sans" font-size="13" font-weight="600" fill="#1e6b4a">pipelines.py import path</text>
+<text x="483" y="586" text-anchor="middle" font-family="IBM Plex Mono" font-size="10" fill="#6b6560">sys.path.insert(0, "/app/nf")</text>
+<text x="483" y="602" text-anchor="middle" font-family="IBM Plex Mono" font-size="10" fill="#6b6560">from shared.schemas import</text>
+<text x="483" y="618" text-anchor="middle" font-family="IBM Plex Mono" font-size="10" fill="#6b6560">RESULT_SCHEMAS</text>
+<text x="483" y="632" text-anchor="middle" font-family="IBM Plex Sans" font-size="9" fill="#6b6560">10 endpoints, fragile wiring</text>
+
+<rect x="642" y="548" width="284" height="90" rx="8" fill="white" stroke="#a8d5bc" stroke-width="1.5"></rect>
+<text x="784" y="569" text-anchor="middle" font-family="IBM Plex Sans" font-size="13" font-weight="600" fill="#1e6b4a">Workload Identity</text>
+<text x="784" y="586" text-anchor="middle" font-family="IBM Plex Sans" font-size="10" fill="#6b6560">pod SA → GCP SA</text>
+<text x="784" y="602" text-anchor="middle" font-family="IBM Plex Mono" font-size="9.5" fill="#6b6560">jackpot-api → jackpot-api-sa</text>
+<text x="784" y="618" text-anchor="middle" font-family="IBM Plex Sans" font-size="10" fill="#6b6560">GCS + Secret Manager access</text>
+<text x="784" y="632" text-anchor="middle" font-family="IBM Plex Sans" font-size="9" fill="#6b6560">no keys on disk</text>
+
+<!-- Callout 4 on pipelines.py import path -->
+<circle cx="628" cy="548" r="11" fill="#d4500a" stroke="white" stroke-width="2.5"></circle>
+<text x="628" y="552" text-anchor="middle" font-family="IBM Plex Sans" font-size="11" font-weight="700" fill="white">4</text>
+
+<line x1="480" y1="648" x2="480" y2="666" stroke="#6b6560" stroke-width="1.5" marker-end="url(#arb)"></line>
+
+<!-- ── LAYER 6: EXTERNAL SYSTEMS ────────────────────────────────────────── -->
+<rect x="20" y="670" width="920" height="88" rx="10" fill="#f0e8f9" stroke="#c4a8e0" stroke-width="1.5"></rect>
+<rect x="20" y="670" width="6" height="88" rx="3" fill="#4a1a7a"></rect>
+<text x="38" y="688" font-family="IBM Plex Sans" font-size="10" font-weight="700" fill="#4a1a7a" letter-spacing="1.8">EXTERNAL (inside VPC / via PSC)</text>
+
+<rect x="34" y="696" width="290" height="56" rx="8" fill="white" stroke="#c4a8e0" stroke-width="1.5"></rect>
+<text x="179" y="716" text-anchor="middle" font-family="IBM Plex Mono" font-size="12" font-weight="600" fill="#4a1a7a">Cloud SQL · jackpot_db</text>
+<text x="179" y="732" text-anchor="middle" font-family="IBM Plex Sans" font-size="10" fill="#6b6560">private IP 10.188.230.3:5432</text>
+<text x="179" y="745" text-anchor="middle" font-family="IBM Plex Sans" font-size="9" fill="#6b6560">alembic head: c536de6329e0</text>
+
+<rect x="338" y="696" width="290" height="56" rx="8" fill="white" stroke="#c4a8e0" stroke-width="1.5"></rect>
+<text x="483" y="716" text-anchor="middle" font-family="IBM Plex Mono" font-size="12" font-weight="600" fill="#4a1a7a">GCS (7 buckets)</text>
+<text x="483" y="732" text-anchor="middle" font-family="IBM Plex Sans" font-size="10" fill="#6b6560">jackpot-staging-* prefix</text>
+<text x="483" y="745" text-anchor="middle" font-family="IBM Plex Sans" font-size="9" fill="#6b6560">sequences · staging · work · results · …</text>
+
+<rect x="642" y="696" width="284" height="56" rx="8" fill="white" stroke="#c4a8e0" stroke-width="1.5"></rect>
+<text x="784" y="716" text-anchor="middle" font-family="IBM Plex Mono" font-size="12" font-weight="600" fill="#4a1a7a">GCP Batch (future)</text>
+<text x="784" y="732" text-anchor="middle" font-family="IBM Plex Sans" font-size="10" fill="#6b6560">PIPELINE_EXECUTOR=gcp_batch</text>
+<text x="784" y="745" text-anchor="middle" font-family="IBM Plex Sans" font-size="9" fill="#6b6560">wired, not yet exercised</text>
+
+<line x1="480" y1="758" x2="480" y2="776" stroke="#6b6560" stroke-width="1.5" marker-end="url(#arb)"></line>
+
+<!-- ── LAYER 7: ACCESS ──────────────────────────────────────────────────── -->
+<rect x="20" y="780" width="920" height="78" rx="10" fill="#f9e8ec" stroke="#e0a8b4" stroke-width="1.5"></rect>
+<rect x="20" y="780" width="6" height="78" rx="3" fill="#7a1a2a"></rect>
+<text x="38" y="798" font-family="IBM Plex Sans" font-size="10" font-weight="700" fill="#7a1a2a" letter-spacing="1.8">ACCESS (TODAY)</text>
+
+<rect x="34" y="806" width="440" height="46" rx="8" fill="white" stroke="#e0a8b4" stroke-width="1.5"></rect>
+<text x="254" y="826" text-anchor="middle" font-family="IBM Plex Sans" font-size="12" font-weight="600" fill="#7a1a2a">In-cluster only</text>
+<text x="254" y="842" text-anchor="middle" font-family="IBM Plex Mono" font-size="10" fill="#6b6560">kubectl port-forward svc/jackpot-api 8080:80</text>
+
+<rect x="488" y="806" width="438" height="46" rx="8" fill="white" stroke="#e0a8b4" stroke-width="1.5" stroke-dasharray="4 3"></rect>
+<text x="707" y="826" text-anchor="middle" font-family="IBM Plex Sans" font-size="12" font-weight="600" fill="#d4500a">Public URL — not yet provisioned</text>
+<text x="707" y="842" text-anchor="middle" font-family="IBM Plex Sans" font-size="10" fill="#6b6560">Ingress + DNS + cert = TODO P1.3</text>
+
+<!-- Callout 5 on public URL -->
+<circle cx="488" cy="806" r="11" fill="#d4500a" stroke="white" stroke-width="2.5"></circle>
+<text x="488" y="810" text-anchor="middle" font-family="IBM Plex Sans" font-size="11" font-weight="700" fill="white">5</text>
+
+<!-- ── LEGEND ──────────────────────────────────────────────────────────── -->
+<rect x="20" y="876" width="920" height="32" rx="8" fill="white" stroke="#e2ddd5" stroke-width="1"></rect>
+
+<circle cx="36" cy="892" r="9" fill="#d4500a"></circle>
+<text x="36" y="896" text-anchor="middle" font-family="IBM Plex Sans" font-size="10" font-weight="700" fill="white">1</text>
+<text x="52" y="896" font-family="IBM Plex Sans" font-size="10.5" fill="#1a1714">Alembic must reach head from empty</text>
+
+<circle cx="260" cy="892" r="9" fill="#d4500a"></circle>
+<text x="260" y="896" text-anchor="middle" font-family="IBM Plex Sans" font-size="10" font-weight="700" fill="white">2</text>
+<text x="276" y="896" font-family="IBM Plex Sans" font-size="10.5" fill="#1a1714">PAT must allow submodule access</text>
+
+<circle cx="488" cy="892" r="9" fill="#d4500a"></circle>
+<text x="488" y="896" text-anchor="middle" font-family="IBM Plex Sans" font-size="10" font-weight="700" fill="white">3</text>
+<text x="504" y="896" font-family="IBM Plex Sans" font-size="10.5" fill="#1a1714"><tspan font-family="IBM Plex Mono">COPY nf/</tspan> required in image</text>
+
+<circle cx="708" cy="892" r="9" fill="#d4500a"></circle>
+<text x="708" y="896" text-anchor="middle" font-family="IBM Plex Sans" font-size="10" font-weight="700" fill="white">4</text>
+<text x="724" y="896" font-family="IBM Plex Sans" font-size="10.5" fill="#1a1714"><tspan font-family="IBM Plex Mono">sys.path</tspan> hack is fragile</text>
+
+</svg>
+
+</div>
+
+<!-- ─────────── CALLOUT EXPLANATIONS (narrative under diagram B) ─────────── -->
+<div class="diagram-wrapper" style="padding: 28px 36px;">
+<h2 style="font-size: 15px; font-weight: 600; margin-bottom: 16px; color: var(--text);">Session 5 quirks — the six things to remember</h2>
+
+<div style="display: grid; grid-template-columns: auto 1fr; gap: 10px 14px; font-size: 13px; line-height: 1.55; color: var(--text);">
+
+<div style="display: flex; align-items: center; justify-content: center; width: 24px; height: 24px; background: #d4500a; color: white; border-radius: 50%; font-weight: 700; font-size: 12px;">1</div>
+<div><strong>Alembic must reach head from an empty DB.</strong> Fresh Cloud SQL instances have no <code>db/init.sql</code> run. The migration Job assumes tables created there already exist. Workaround: one-off bootstrap Job (see <code>docs/staging_access.md</code> §6). Permanent fix: <a href="file:///Users/glen/Downloads/jackpot_gcp_staging_deployment.html#">TODO P0.1</a> — baseline migration.</div>
+
+<div style="display: flex; align-items: center; justify-content: center; width: 24px; height: 24px; background: #d4500a; color: white; border-radius: 50%; font-weight: 700; font-size: 12px;">2</div>
+<div><strong>PAT must allow submodule access.</strong> <code>CROSS_REPO_PAT</code> (fine-grained) needs Contents: Read on <em>all three</em> repos: <code>jackpot-backend</code>, <code>jackpot-nf</code>, <code>jackpot-schema</code>. Never cross-paste with Google OAuth secrets (<code>GOCSPX-</code> prefix is NOT a GitHub PAT). See CLAUDE.md Rule 45.</div>
+
+<div style="display: flex; align-items: center; justify-content: center; width: 24px; height: 24px; background: #d4500a; color: white; border-radius: 50%; font-weight: 700; font-size: 12px;">3</div>
+<div><strong><code>COPY nf/</code> required in the image.</strong> <code>Dockerfile.api</code> must include <code>nf/</code> so <code>backend/routers/pipelines.py</code> can import <code>RESULT_SCHEMAS</code>. Without it, the whole FastAPI app crashes at startup with <code>ModuleNotFoundError</code>.</div>
+
+<div style="display: flex; align-items: center; justify-content: center; width: 24px; height: 24px; background: #d4500a; color: white; border-radius: 50%; font-weight: 700; font-size: 12px;">4</div>
+<div><strong><code>sys.path</code> hack is fragile.</strong> <code>pipelines.py</code> does <code>sys.path.insert(0, "/app/nf")</code> at import time. Any tool that evaluates the router without <code>nf/</code> available (linting, tests) breaks. Permanent fix: TODO P0.3 — move <code>RESULT_SCHEMAS</code> into the backend package.</div>
+
+<div style="display: flex; align-items: center; justify-content: center; width: 24px; height: 24px; background: #d4500a; color: white; border-radius: 50%; font-weight: 700; font-size: 12px;">5</div>
+<div><strong>No public URL yet.</strong> Smoke test uses <code>kubectl port-forward</code>. Google OAuth flow can't be tested end-to-end until Ingress + DNS + managed cert land. TODO P1.3.</div>
+
+<div style="display: flex; align-items: center; justify-content: center; width: 24px; height: 24px; background: #d4500a; color: white; border-radius: 50%; font-weight: 700; font-size: 12px;">6</div>
+<div><strong>Helm <code>--wait</code> timeouts wedge the release.</strong> If <code>helm upgrade --wait --timeout 10m</code> hits its timeout, the release sits at <code>pending-upgrade</code> forever, blocking all subsequent deploys. Recovery: <code>helm rollback &lt;release&gt; &lt;last-good-rev&gt;</code>. TODO P1.4 — evaluate <code>--atomic</code>.</div>
+
+</div>
+</div>
+
+
+
+</body></html>

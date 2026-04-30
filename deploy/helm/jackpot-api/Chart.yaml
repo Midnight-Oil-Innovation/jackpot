@@ -1,0 +1,10 @@
+apiVersion: v2
+name: jackpot-api
+description: JACKPOT FastAPI backend + Alembic migration Job.
+type: application
+version: 0.1.0
+appVersion: "5.0.0"
+icon: https://raw.githubusercontent.com/linuxprophet/jackpot-backend/main/docs/logo.png
+maintainers:
+  - name: Glen Otero
+    email: gotero@linuxprophet.com

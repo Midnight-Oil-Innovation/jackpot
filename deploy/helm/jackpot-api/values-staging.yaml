@@ -1,0 +1,41 @@
+# Staging overrides. Values marked ${...} are interpolated by the CI pipeline
+# from Terraform outputs and GitHub Actions repo variables.
+
+image:
+  repository: us-central1-docker.pkg.dev/gotero3-acdp-488517/jackpot/jackpot-api
+  # tag injected by the deploy workflow
+
+replicaCount: 2
+
+serviceAccount:
+  gcpServiceAccountEmail: jackpot-api@gotero3-acdp-488517.iam.gserviceaccount.com
+
+env:
+  ENV: "gcp"
+  SCHEDULER_ENABLED: "false"
+  STORAGE_BACKEND: "gcs"
+  PIPELINE_EXECUTOR: "gcp_batch"
+  DLP_ENABLED: "true"
+  GCP_PROJECT_ID: "gotero3-acdp-488517"
+  GCP_REGION: "us-central1"
+  ADHS_ORGANIZATION_NAME: "ADHS"
+  GOOGLE_OAUTH_REDIRECT_URL: "postmessage"
+  JACKPOT_API_URL: "https://api.staging.jackpot.example.org"
+  CORS_ORIGINS: "https://staging.jackpot.example.org,http://localhost:8501"
+
+buckets:
+  STORAGE_BUCKET_SEQUENCES: jackpot-staging-sequences
+  STORAGE_BUCKET_RAW: jackpot-staging-staging
+  STORAGE_BUCKET_STAGING: jackpot-staging-staging
+  STORAGE_BUCKET_DATASETS: jackpot-staging-references
+  STORAGE_BUCKET_SUBMISSIONS: jackpot-staging-portal-exports
+  WORK_BUCKET: jackpot-staging-work
+  RESULTS_BUCKET: jackpot-staging-results
+
+resources:
+  requests:
+    cpu: 500m
+    memory: 1Gi
+  limits:
+    cpu: 2
+    memory: 4Gi

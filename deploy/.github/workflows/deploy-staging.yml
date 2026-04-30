@@ -1,0 +1,146 @@
+name: deploy-staging
+
+on:
+  push:
+    branches: [staging]
+  workflow_dispatch:
+    inputs:
+      image_tag:
+        description: "Image tag to deploy (defaults to commit SHA)"
+        required: false
+        default: ""
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: deploy-staging
+  cancel-in-progress: false
+
+env:
+  CLUSTER_NAME: jackpot-staging-gke
+  NAMESPACE: jackpot
+  RELEASE_NAME: jackpot-api
+  HELM_CHART_PATH: ./helm/jackpot-api
+  VALUES_FILE: ./helm/jackpot-api/values-staging.yaml
+
+jobs:
+  deploy:
+    name: Build, migrate, and deploy to staging
+    runs-on: ubuntu-latest
+    environment:
+      name: staging
+      url: https://api.staging.jackpot.example.org
+    steps:
+      - name: Checkout jackpot-iac
+        uses: actions/checkout@v4
+
+      - name: Checkout jackpot-backend (without submodules)
+        uses: actions/checkout@v4
+        with:
+          repository: gotero/jackpot-backend
+          path: jackpot-backend
+          ref: staging
+          token: ${{ secrets.CROSS_REPO_PAT }}
+          persist-credentials: false
+
+      - name: Initialise jackpot-backend submodules
+        working-directory: jackpot-backend
+        env:
+          GH_PAT: ${{ secrets.CROSS_REPO_PAT }}
+        run: |
+          set -euo pipefail
+          # Inject the PAT into every github.com URL for submodule clones.
+          # This is scoped to this job's runner and discarded at job end.
+          git config --global url."https://x-access-token:${GH_PAT}@github.com/".insteadOf "https://github.com/"
+          git config --global url."https://x-access-token:${GH_PAT}@github.com/".insteadOf "git@github.com:"
+          git submodule update --init --recursive
+          # Scrub the token out of the global config as soon as we're done.
+          git config --global --unset-all url."https://x-access-token:${GH_PAT}@github.com/".insteadOf || true
+
+      - name: Authenticate to GCP (Workload Identity Federation)
+        id: auth
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.GCP_DEPLOY_SA }}
+
+      - name: Set up gcloud
+        uses: google-github-actions/setup-gcloud@v2
+        with:
+          project_id: ${{ vars.GCP_PROJECT_ID }}
+
+      - name: Configure Docker for Artifact Registry
+        run: gcloud auth configure-docker ${{ vars.GCP_REGION }}-docker.pkg.dev --quiet
+
+      - name: Resolve image tag
+        id: tag
+        run: |
+          if [[ -n "${{ inputs.image_tag }}" ]]; then
+            echo "tag=${{ inputs.image_tag }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "tag=$(git -C jackpot-backend rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Build API image
+        run: |
+          IMAGE="${{ vars.GCP_REGION }}-docker.pkg.dev/${{ vars.GCP_PROJECT_ID }}/jackpot/jackpot-api:${{ steps.tag.outputs.tag }}"
+          echo "IMAGE=$IMAGE" >> "$GITHUB_ENV"
+          docker build -f jackpot-backend/Dockerfile.api -t "$IMAGE" jackpot-backend
+
+      - name: Push API image
+        run: docker push "$IMAGE"
+
+      - name: Get GKE credentials
+        uses: google-github-actions/get-gke-credentials@v2
+        with:
+          cluster_name: ${{ env.CLUSTER_NAME }}
+          location: ${{ vars.GCP_REGION }}
+
+      - name: Set up Helm
+        uses: azure/setup-helm@v4
+        with:
+          version: v3.15.2
+
+      - name: Ensure namespace exists
+        run: kubectl create namespace "$NAMESPACE" --dry-run=client -o yaml | kubectl apply -f -
+
+      - name: Sync Kubernetes Secret from Secret Manager
+        run: |
+          set -euo pipefail
+          declare -a keys=(SECRET_KEY DATABASE_URL GOOGLE_OAUTH_CLIENT_ID GOOGLE_OAUTH_CLIENT_SECRET NCBI_API_KEY)
+          args=()
+          for k in "${keys[@]}"; do
+            secret_name="jackpot-staging-$(echo "$k" | tr '[:upper:]_' '[:lower:]-')"
+            value=$(gcloud secrets versions access latest --secret="$secret_name" --project="${{ vars.GCP_PROJECT_ID }}")
+            args+=(--from-literal="$k=$value")
+          done
+          kubectl -n "$NAMESPACE" create secret generic jackpot-api-secrets \
+            "${args[@]}" \
+            --dry-run=client -o yaml | kubectl apply -f -
+
+      - name: Helm upgrade (runs alembic as pre-upgrade hook, then rolls Deployment)
+        run: |
+          helm upgrade --install "$RELEASE_NAME" "$HELM_CHART_PATH" \
+            --namespace "$NAMESPACE" \
+            --values "$VALUES_FILE" \
+            --set image.tag="${{ steps.tag.outputs.tag }}" \
+            --wait --timeout 10m
+
+      - name: Smoke test (via kubectl port-forward)
+        run: |
+          set -euo pipefail
+          kubectl -n "$NAMESPACE" port-forward svc/jackpot-api 8080:80 >/tmp/pf.log 2>&1 &
+          PF_PID=$!
+          trap 'kill "$PF_PID" 2>/dev/null || true' EXIT
+          # Wait for the tunnel to become usable
+          for i in $(seq 1 30); do
+            if curl -s -o /dev/null --max-time 2 http://localhost:8080/health; then
+              break
+            fi
+            sleep 1
+          done
+          bash ./scripts/staging_smoke_test.sh
+        env:
+          JACKPOT_API_URL: http://localhost:8080
