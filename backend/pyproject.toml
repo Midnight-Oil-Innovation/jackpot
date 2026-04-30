@@ -1,14 +1,18 @@
 [project]
 name = "jackpot-backend"
 version = "0.1.0"
-description = "Add your description here"
+description = "JACKPOT FastAPI backend — ingest, validation, pipelines, sample access"
 readme = "README.md"
 requires-python = ">=3.11"
+license = { text = "AGPL-3.0-or-later" }
+authors = [{ name = "Glen Otero", email = "gotero@linuxprophet.com" }]
 dependencies = [
     "alembic==1.13.1",
     "apscheduler>=3.11.2",
     "boto3==1.34.100",
     "epiweeks==2.1.4",
+    "google-cloud-storage>=2.18,<3",
+    "jackpot-schema",
     "fastapi==0.111.0",
     "httpx==0.27.0",
     "linkml==1.7.4",
@@ -45,40 +49,19 @@ dev = [
     "types-pyyaml>=6.0.12.20250915",
 ]
 
-[tool.pytest.ini_options]
-asyncio_mode  = "auto"
-testpaths     = ["tests"]
-pythonpath    = [".", "backend"]
-addopts       = "--cov=backend --cov-report=term-missing --cov-fail-under=60"
+[tool.uv.sources]
+jackpot-schema = { workspace = true }
 
-[tool.coverage.run]
-omit = [
-    "backend/models_generated.py",
-    "backend/storage.py",
-    "backend/auth/oauth.py",
-    "backend/auth/dependencies.py",
-    "backend/audit.py",
-    "backend/notifications.py",
-    "backend/pagination.py",
-    "backend/responses.py",
-    "backend/routers/archive_requests.py",
-    "backend/routers/auth.py",
-    "backend/routers/billing.py",
-    "backend/routers/dataset_access.py",
-    "backend/routers/datasets.py",
-    "backend/routers/ncbi_submissions.py",
-    "backend/routers/notifications.py",
-    "backend/routers/pipelines.py",
-    "backend/routers/saved_searches.py",
-    "tests/*",
-    "scripts/*",
-    "db/migrations/*",
-]
+[build-system]
+requires      = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["backend"]
 
 [tool.ruff]
 exclude = [
     "backend/models_generated.py",
-    "nf/",
 ]
 line-length    = 100
 target-version = "py311"

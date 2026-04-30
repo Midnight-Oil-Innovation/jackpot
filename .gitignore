@@ -1,0 +1,63 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg
+*.egg-info/
+.eggs/
+build/
+dist/
+wheels/
+
+# uv / virtualenvs
+.venv/
+.uv-cache/
+venv/
+env/
+.python-version-local
+
+# Editors / OS
+.DS_Store
+.idea/
+.vscode/
+*.swp
+*~
+
+# Test / coverage
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+coverage.xml
+.tox/
+.nox/
+.mypy_cache/
+.ruff_cache/
+.hypothesis/
+
+# Streamlit / Jupyter
+.streamlit/secrets.toml
+.ipynb_checkpoints/
+
+# Local secrets (per Critical Rule 55 — only operator config files,
+# never committed)
+config/operator.yaml
+config/operator.local.yaml
+*.env
+*.env.local
+!*.env.example
+
+# Terraform
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfvars
+!*.tfvars.example
+
+# Nextflow
+.nextflow*
+work/
+
+# Generated artefacts
+node_modules/

@@ -4,7 +4,7 @@ version = "0.1.0"
 description = "JACKPOT SDK and CLI — programmatic access to the JACKPOT pathogen genomics platform"
 readme = "README.md"
 requires-python = ">=3.11"
-license = { text = "MIT" }
+license = { text = "AGPL-3.0-or-later" }
 authors = [
     { name = "Glen Otero", email = "gotero@linuxprophet.com" },
 ]
@@ -18,7 +18,7 @@ dependencies = [
     "python-dateutil>=2.9.0",
 ]
 
-[project.optional-dependencies]
+[dependency-groups]
 dev = [
     "pytest>=8.0.0",
     "pytest-httpx>=0.30.0",

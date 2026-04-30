@@ -1,0 +1,96 @@
+# JACKPOT monorepo — workspace root
+#
+# This is a uv "virtual workspace" — the root is not itself a package,
+# it just declares the members. Run `uv sync` from this directory to
+# resolve and install all member packages together. The single
+# `uv.lock` at the root captures the unified resolution.
+#
+# Workspace members:
+#   backend/   FastAPI service, Streamlit UI, validators, ingest pipeline
+#   cli/       jackpot CLI + SDK (programmatic access to the API)
+#   schema/    LinkML metadata schema + helper module exposing schema paths
+#
+# Excluded from the workspace by design (per P0d plan):
+#   pipelines/  Nextflow workflows + parsers — has its own pyproject.toml
+#               that may be folded into the workspace in a future phase
+#               once Phase E import-path rewrites confirm the boundary.
+#   deploy/     Terraform + Helm — no Python.
+#   docs/       Documentation only.
+#   governance/ Documentation only.
+#   tests/      Integration tests at the monorepo level — exercised by
+#               backend's pytest config which adds it to testpaths.
+
+[tool.uv.workspace]
+members = ["backend", "cli", "schema"]
+
+# Pytest config lives at the workspace root so `uv run pytest` from
+# anywhere uses one canonical configuration. Backend's tests live at
+# top-level `tests/` (promoted during P0d filter-repo); cli has its own
+# `cli/tests/`; pipelines has `pipelines/tests/` but is not a workspace
+# member, so its tests are run separately by the pipelines CI job.
+[tool.pytest.ini_options]
+asyncio_mode  = "auto"
+testpaths     = ["tests", "cli/tests"]
+pythonpath    = [".", "backend"]
+addopts       = "--cov=backend --cov=cli/jackpot --cov-report=term-missing --cov-fail-under=60"
+markers       = [
+    "integration: end-to-end tests that require Docker (testcontainers)",
+]
+
+[tool.coverage.run]
+# Paths are relative to the workspace root.
+omit = [
+    "backend/backend/models_generated.py",
+    "backend/backend/storage.py",
+    "backend/backend/auth/oauth.py",
+    "backend/backend/auth/dependencies.py",
+    "backend/backend/audit.py",
+    "backend/backend/notifications.py",
+    "backend/backend/pagination.py",
+    "backend/backend/responses.py",
+    "backend/backend/routers/archive_requests.py",
+    "backend/backend/routers/auth.py",
+    "backend/backend/routers/billing.py",
+    "backend/backend/routers/dataset_access.py",
+    "backend/backend/routers/datasets.py",
+    "backend/backend/routers/ncbi_submissions.py",
+    "backend/backend/routers/notifications.py",
+    "backend/backend/routers/pipelines.py",
+    "backend/backend/routers/saved_searches.py",
+    "backend/db/migrations/*",
+    "backend/scripts/*",
+    "cli/jackpot/sdk/samples.py",
+    "cli/jackpot/sdk/pipelines.py",
+    "cli/jackpot/sdk/datasets.py",
+    "cli/jackpot/sdk/sra.py",
+    "cli/jackpot/sdk/references.py",
+    "cli/jackpot/sdk/session.py",
+    "cli/jackpot/cli/pipelines.py",
+    "cli/jackpot/cli/samples.py",
+    "cli/jackpot/cli/auth.py",
+    "cli/jackpot/cli/upload.py",
+    "tests/*",
+]
+
+[tool.ruff]
+line-length    = 100
+target-version = "py311"
+extend-exclude = [
+    "backend/backend/models_generated.py",
+    "backend/db/migrations/versions/*.py",
+    "pipelines/",
+    "deploy/",
+    "schema/schema/jackpot_schema.json",
+    "**/.venv",
+    "**/build",
+    "**/dist",
+]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "N", "W", "UP", "B", "SIM"]
+
+[tool.ruff.lint.per-file-ignores]
+"backend/setup/*.py"                      = ["E501"]
+"backend/db/migrations/versions/*.py"     = ["E501", "E402"]
+"backend/scripts/*.py"                    = ["E501"]
+"schema/setup/*.py"                       = ["E501"]
