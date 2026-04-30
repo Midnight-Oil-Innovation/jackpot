@@ -1,0 +1,322 @@
+<section class="module" id="module-3" style="background: var(--color-bg)">
+  <div class="module-content">
+    <header class="module-header animate-in">
+      <span class="module-number">03</span>
+      <h1 class="module-title">The Gatekeepers</h1>
+      <p class="module-subtitle">Google OAuth, JWT cookies, and the three-tier permission system that controls who sees what</p>
+    </header>
+
+    <div class="module-body">
+
+      <!-- Screen 1: The login flow -->
+      <section class="screen animate-in">
+        <h2 class="screen-heading">Logging In — The Hotel Keycard System</h2>
+        <p>
+          Think of JACKPOT&apos;s login system like a hotel. The front desk (<span class="term" data-definition="Google OAuth is a login system that lets users sign in with their Google account. Instead of JACKPOT storing passwords, Google verifies the user's identity and sends JACKPOT a short-lived authorization code.">Google OAuth</span>) checks your ID and hands you a keycard (<span class="term" data-definition="A JWT (JSON Web Token) is a small, signed digital token — like a hotel keycard — that proves who you are. It contains your user ID and expiry time, signed with a secret key. Every request after login includes this token so the server knows who you are without looking you up in the database every time.">JWT</span>). That keycard opens specific doors based on your role. When it expires, you get a new one from the front desk without re-checking your ID.
+        </p>
+
+        <div class="flow-animation" data-steps='[
+          {"highlight":"flow-actor-1","label":"User clicks Sign In with Google on the JACKPOT frontend"},
+          {"highlight":"flow-actor-2","label":"Google verifies the user identity and returns a one-time auth code","packet":true,"from":"actor-1","to":"actor-2"},
+          {"highlight":"flow-actor-3","label":"Frontend sends that code to POST /api/v1/auth/google/login","packet":true,"from":"actor-2","to":"actor-3"},
+          {"highlight":"flow-actor-4","label":"JACKPOT checks the domain whitelist — is this email domain approved?","packet":true,"from":"actor-3","to":"actor-4"},
+          {"highlight":"flow-actor-4","label":"Looks up the user in PostgreSQL — must exist before login is allowed"},
+          {"highlight":"flow-actor-3","label":"Issues two JWT cookies: access token (15 min) + refresh token (7 days)","packet":true,"from":"actor-4","to":"actor-3"},
+          {"highlight":"flow-actor-1","label":"Browser stores the cookies — all future requests carry them automatically","packet":true,"from":"actor-3","to":"actor-1"},
+          {"highlight":"flow-actor-1","label":"User is now logged in. Every API call includes the access cookie."}
+        ]'>
+          <div class="flow-actors">
+            <div class="flow-actor" id="flow-actor-1">
+              <div class="flow-actor-icon">🧑</div>
+              <span>Browser</span>
+            </div>
+            <div class="flow-actor" id="flow-actor-2">
+              <div class="flow-actor-icon">G</div>
+              <span>Google</span>
+            </div>
+            <div class="flow-actor" id="flow-actor-3">
+              <div class="flow-actor-icon">⚡</div>
+              <span>JACKPOT API</span>
+            </div>
+            <div class="flow-actor" id="flow-actor-4">
+              <div class="flow-actor-icon">🗄️</div>
+              <span>PostgreSQL</span>
+            </div>
+          </div>
+          <div class="flow-packet" id="flow-packet"></div>
+          <div class="flow-step-label" id="flow-label">Click &ldquo;Next Step&rdquo; to trace a login</div>
+          <div class="flow-controls">
+            <button class="btn flow-next-btn">Next Step</button>
+            <button class="btn flow-reset-btn">Restart</button>
+            <span class="flow-progress"></span>
+          </div>
+        </div>
+
+        <div class="callout callout-info">
+          <div class="callout-icon">🍪</div>
+          <div class="callout-content">
+            <strong class="callout-title">Why HTTP-only cookies, not localStorage?</strong>
+            <p>JACKPOT sets JWT tokens as <span class="term" data-definition="An HttpOnly cookie is a browser cookie that JavaScript cannot read — only the browser can send it. This means a malicious script injected into the page cannot steal the token and impersonate the user. It is the most secure way to store authentication tokens in a web app.">HttpOnly cookies</span>, not in browser localStorage. This means JavaScript on the page cannot access the tokens — a stolen script cannot steal your session. The browser sends them automatically on every request.</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- Screen 2: Code translation — guards.py -->
+      <section class="screen animate-in">
+        <h2 class="screen-heading">How Every Request Gets Verified</h2>
+        <p>Every <span class="term" data-definition="A protected endpoint is an API route that requires authentication. Before running the actual logic, it checks whether the request includes a valid token. If not, it returns a 401 Unauthorized error.">protected endpoint</span> calls <code>get_current_user()</code> first. Here is the real code from <code>guards.py</code>:</p>
+
+        <div class="translation-block animate-in">
+          <div class="translation-code">
+            <span class="translation-label">CODE — backend/auth/guards.py</span>
+            <pre><code>
+<span class="code-line"><span class="code-keyword">def</span> <span class="code-function">get_current_user</span>(request: <span class="code-function">Request</span>) -> <span class="code-function">dict</span>:</span>
+<span class="code-line">    settings = <span class="code-function">get_settings</span>()</span>
+<span class="code-line">    <span class="code-keyword">if</span> settings.env == <span class="code-string">"local"</span>:</span>
+<span class="code-line">        rows = <span class="code-function">execute_query</span>(</span>
+<span class="code-line">            <span class="code-string">"SELECT * FROM users WHERE email = :e"</span>,</span>
+<span class="code-line">            {<span class="code-string">"e"</span>: settings.mock_user_email},</span>
+<span class="code-line">        )</span>
+<span class="code-line">        <span class="code-keyword">return</span> rows[<span class="code-number">0</span>] <span class="code-keyword">if</span> rows <span class="code-keyword">else</span> {<span class="code-string">"id"</span>: <span class="code-number">1</span>, ...}</span>
+<span class="code-line">    token = request.cookies.<span class="code-function">get</span>(<span class="code-string">"access"</span>)</span>
+<span class="code-line">    <span class="code-keyword">if not</span> token:</span>
+<span class="code-line">        <span class="code-keyword">raise</span> <span class="code-function">HTTPException</span>(status_code=<span class="code-number">401</span>, detail=<span class="code-string">"Not authenticated."</span>)</span>
+<span class="code-line">    payload = jwt.<span class="code-function">decode</span>(token, settings.secret_key, ...)</span>
+<span class="code-line">    rows = <span class="code-function">execute_query</span>(<span class="code-string">"SELECT ... FROM users WHERE id = :uid"</span>, ...)</span>
+<span class="code-line">    <span class="code-keyword">return</span> rows[<span class="code-number">0</span>]</span>
+            </code></pre>
+          </div>
+          <div class="translation-english">
+            <span class="translation-label">PLAIN ENGLISH</span>
+            <div class="translation-lines">
+              <p class="tl">Define a function that takes an HTTP request and returns a user dictionary.</p>
+              <p class="tl">Load the app settings (database URL, secret key, etc.) from environment variables.</p>
+              <p class="tl">If we are running locally (not in production)...</p>
+              <p class="tl">...look up the mock user defined in docker-compose.yml by their email address...</p>
+              <p class="tl">(using a safe parameterized query so nobody can inject SQL)</p>
+              <p class="tl">...and return them as the logged-in user. This lets developers work without real Google login.</p>
+              <p class="tl">In production: read the &ldquo;access&rdquo; cookie from the request.</p>
+              <p class="tl">If there is no cookie, reject the request with HTTP 401 — Unauthorized.</p>
+              <p class="tl">Decode and verify the JWT using the app&apos;s secret key.</p>
+              <p class="tl">Look the user up in the database to confirm they still exist and are active.</p>
+              <p class="tl">Return the user&apos;s data — the router can now use it for permission checks.</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Screen 3: The 3-tier permission system -->
+      <section class="screen animate-in">
+        <h2 class="screen-heading">Three Levels of Power</h2>
+        <p>
+          JACKPOT inherits its permission model from APGAP (its predecessor). There are three tiers, each more powerful than the last. The <span class="term" data-definition="PermissionGroups is a Python enum whose string values must exactly match those in the old APGAP system. Changing them would break backwards compatibility with labs that already have data in APGAP.">PermissionGroups</span> enum values are sacred — they cannot be renamed without breaking the legacy system.
+        </p>
+
+        <div class="arch-diagram">
+          <div class="arch-zone">
+            <h4 class="arch-zone-label">Permission Tiers — click any role to learn more</h4>
+            <div style="display: flex; gap: var(--space-4); flex-wrap: wrap; justify-content: center;">
+              <div class="arch-component"
+                   data-desc="Platform Admin — the superuser role. Can see and modify everything across all organizations, labs, and users. Sets up the domain whitelist, creates organizations, and approves scrub-skip requests. There is no action a Platform Admin cannot take."
+                   onclick="showArchDesc(this)">
+                <div class="arch-icon">👑</div>
+                <span>Platform Admin</span>
+              </div>
+              <div class="arch-component"
+                   data-desc="Lab Director — manages a single lab. Can add and remove lab members, change their roles, and manage the lab's sequencing assignments. Has full access to the lab's samples and projects. Cannot touch other labs or platform-level settings."
+                   onclick="showArchDesc(this)">
+                <div class="arch-icon">🔬</div>
+                <span>Lab Director</span>
+              </div>
+              <div class="arch-component"
+                   data-desc="Lab Member — a scientist or technician with access to one or more labs. Can upload samples, run pipelines, and export data — but only within their assigned labs and projects. Cannot change who has access or modify lab settings."
+                   onclick="showArchDesc(this)">
+                <div class="arch-icon">🧑‍🔬</div>
+                <span>Lab Member</span>
+              </div>
+              <div class="arch-component"
+                   data-desc="Data Analyst — a read-only cross-lab role. Can query and analyze samples across all labs they have been granted access to, but cannot upload or modify data. Useful for epidemiologists who need to see patterns across multiple labs."
+                   onclick="showArchDesc(this)">
+                <div class="arch-icon">📊</div>
+                <span>Data Analyst</span>
+              </div>
+            </div>
+            <div class="arch-description" id="arch-desc">Click any role above to see what it can do</div>
+          </div>
+        </div>
+
+        <div class="badge-list animate-in">
+          <div class="badge-item">
+            <code class="badge-code">require_platform_admin()</code>
+            <span class="badge-desc">Raises HTTP 403 if the current user does not have is_platform_admin = TRUE</span>
+          </div>
+          <div class="badge-item">
+            <code class="badge-code">require_lab_director()</code>
+            <span class="badge-desc">Platform Admins pass automatically; others must be the lab director of that specific lab</span>
+          </div>
+          <div class="badge-item">
+            <code class="badge-code">require_lab_access()</code>
+            <span class="badge-desc">Checks lab_membership AND project_membership — multiple paths to access</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- Screen 4: Group chat — auth conversation between router and guards -->
+      <section class="screen animate-in">
+        <h2 class="screen-heading">The Permission Check in Action</h2>
+        <p>A regular lab member tries to delete an organization. Here is what happens inside the server.</p>
+
+        <div class="chat-window" id="chat-module3">
+          <div class="chat-messages">
+            <div class="chat-message" data-msg="0" data-sender="router" style="display:none">
+              <div class="chat-avatar" style="background: var(--color-actor-1)">⚡</div>
+              <div class="chat-bubble">
+                <span class="chat-sender" style="color: var(--color-actor-1)">Organizations Router</span>
+                <p>DELETE /api/v1/organizations/7 — someone wants to delete org #7.</p>
+              </div>
+            </div>
+            <div class="chat-message" data-msg="1" data-sender="guards" style="display:none">
+              <div class="chat-avatar" style="background: var(--color-actor-2)">🔐</div>
+              <div class="chat-bubble">
+                <span class="chat-sender" style="color: var(--color-actor-2)">get_current_user</span>
+                <p>Cookie found. JWT decoded. Looking up user in the database... User is user@example.org, is_platform_admin = FALSE.</p>
+              </div>
+            </div>
+            <div class="chat-message" data-msg="2" data-sender="router" style="display:none">
+              <div class="chat-avatar" style="background: var(--color-actor-1)">⚡</div>
+              <div class="chat-bubble">
+                <span class="chat-sender" style="color: var(--color-actor-1)">Organizations Router</span>
+                <p>Got the user. Now I need to check: is Sarah a Platform Admin? Calling require_platform_admin()...</p>
+              </div>
+            </div>
+            <div class="chat-message" data-msg="3" data-sender="guards" style="display:none">
+              <div class="chat-avatar" style="background: var(--color-actor-2)">🔐</div>
+              <div class="chat-bubble">
+                <span class="chat-sender" style="color: var(--color-actor-2)">require_platform_admin</span>
+                <p>is_platform_admin = FALSE. Raising HTTPException 403 — Forbidden.</p>
+              </div>
+            </div>
+            <div class="chat-message" data-msg="4" data-sender="browser" style="display:none">
+              <div class="chat-avatar" style="background: var(--color-actor-4)">🧑</div>
+              <div class="chat-bubble">
+                <span class="chat-sender" style="color: var(--color-actor-4)">Browser (Sarah)</span>
+                <p>Received HTTP 403 — &ldquo;Platform Admin required.&rdquo; The delete button grays out.</p>
+              </div>
+            </div>
+          </div>
+          <div class="chat-typing" id="chat-module3-typing" style="display:none">
+            <div class="chat-avatar" id="chat-module3-typing-avatar">?</div>
+            <div class="chat-typing-dots">
+              <span class="typing-dot"></span>
+              <span class="typing-dot"></span>
+              <span class="typing-dot"></span>
+            </div>
+          </div>
+          <div class="chat-controls">
+            <button class="btn chat-next-btn">Next Message</button>
+            <button class="btn chat-all-btn">Play All</button>
+            <button class="btn chat-reset-btn">Replay</button>
+            <span class="chat-progress"></span>
+          </div>
+        </div>
+
+        <div class="callout callout-accent">
+          <div class="callout-icon">💡</div>
+          <div class="callout-content">
+            <strong class="callout-title">403 vs 401 — two very different errors</strong>
+            <p><strong>401 Unauthorized</strong> means &ldquo;I don&apos;t know who you are — please log in.&rdquo; <strong>403 Forbidden</strong> means &ldquo;I know exactly who you are, and you are not allowed to do this.&rdquo; When you see a 403 in JACKPOT, look for a missing <code>require_*</code> guard call or an incorrect role assignment.</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- Screen 5: Quiz -->
+      <section class="screen animate-in">
+        <h2 class="screen-heading">Check Your Understanding</h2>
+
+        <div class="quiz-container" id="quiz-module3">
+          <div class="quiz-question-block"
+               data-correct="option-b"
+               data-explanation-right="Right — the domain whitelist is checked during login, before a JWT is ever issued. If the domain is not approved, the user cannot get a token at all."
+               data-explanation-wrong="The domain whitelist check happens inside the Google login endpoint, before any JWT is issued. The user never gets past the front desk.">
+            <h3 class="quiz-question">A researcher at a university hospital tries to log in with their @university.edu email. Their domain is not in the whitelist. What does JACKPOT return?</h3>
+            <div class="quiz-options">
+              <button class="quiz-option" data-value="option-a" onclick="selectOption(this)">
+                <div class="quiz-option-radio"></div>
+                <span>HTTP 401 — they get a JWT but it does not have any lab access</span>
+              </button>
+              <button class="quiz-option" data-value="option-b" onclick="selectOption(this)">
+                <div class="quiz-option-radio"></div>
+                <span>HTTP 403 — their domain is not authorized, no JWT is issued</span>
+              </button>
+              <button class="quiz-option" data-value="option-c" onclick="selectOption(this)">
+                <div class="quiz-option-radio"></div>
+                <span>HTTP 200 — they log in successfully but with read-only access</span>
+              </button>
+              <button class="quiz-option" data-value="option-d" onclick="selectOption(this)">
+                <div class="quiz-option-radio"></div>
+                <span>HTTP 404 — their email is not in the users table</span>
+              </button>
+            </div>
+            <div class="quiz-feedback"></div>
+          </div>
+
+          <div class="quiz-question-block"
+               data-correct="option-d"
+               data-explanation-right="Exactly. In local dev (env=local), get_current_user looks up the MOCK_USER_EMAIL from docker-compose.yml instead of reading a JWT cookie. This lets developers call every endpoint without running a Google OAuth flow."
+               data-explanation-wrong="In local dev mode, guards.py skips the JWT check entirely and looks up MOCK_USER_EMAIL from the environment. No browser, no Google, no token needed.">
+            <h3 class="quiz-question">You are developing JACKPOT locally and want to test a protected endpoint without going through Google login. How does JACKPOT handle this?</h3>
+            <div class="quiz-options">
+              <button class="quiz-option" data-value="option-a" onclick="selectOption(this)">
+                <div class="quiz-option-radio"></div>
+                <span>You must create a real Google OAuth app and configure it locally</span>
+              </button>
+              <button class="quiz-option" data-value="option-b" onclick="selectOption(this)">
+                <div class="quiz-option-radio"></div>
+                <span>You must manually generate a JWT token and paste it into your browser</span>
+              </button>
+              <button class="quiz-option" data-value="option-c" onclick="selectOption(this)">
+                <div class="quiz-option-radio"></div>
+                <span>Protected endpoints are disabled in local mode</span>
+              </button>
+              <button class="quiz-option" data-value="option-d" onclick="selectOption(this)">
+                <div class="quiz-option-radio"></div>
+                <span>guards.py checks env=local and looks up MOCK_USER_EMAIL from docker-compose.yml instead</span>
+              </button>
+            </div>
+            <div class="quiz-feedback"></div>
+          </div>
+
+          <div class="quiz-question-block"
+               data-correct="option-a"
+               data-explanation-right="Correct. require_lab_access() checks both lab_membership and project_membership. A user with only project access (no direct lab membership) still passes the guard. This is deliberate — project collaborators need to see lab data."
+               data-explanation-wrong="require_lab_access() is more flexible than require_lab_director(). It checks both lab_membership AND project_membership — if a user belongs to any project within the lab, they pass.">
+            <h3 class="quiz-question">A visiting researcher has no direct lab membership but is a member of a project inside Lab 5. They call GET /api/v1/labs/5/samples. Does require_lab_access() block them?</h3>
+            <div class="quiz-options">
+              <button class="quiz-option" data-value="option-a" onclick="selectOption(this)">
+                <div class="quiz-option-radio"></div>
+                <span>No — require_lab_access() also checks project_membership, so they pass</span>
+              </button>
+              <button class="quiz-option" data-value="option-b" onclick="selectOption(this)">
+                <div class="quiz-option-radio"></div>
+                <span>Yes — they need direct lab_membership to access any lab endpoint</span>
+              </button>
+              <button class="quiz-option" data-value="option-c" onclick="selectOption(this)">
+                <div class="quiz-option-radio"></div>
+                <span>Yes — only Platform Admins and Lab Directors can list samples</span>
+              </button>
+              <button class="quiz-option" data-value="option-d" onclick="selectOption(this)">
+                <div class="quiz-option-radio"></div>
+                <span>It depends on whether the project is marked as public</span>
+              </button>
+            </div>
+            <div class="quiz-feedback"></div>
+          </div>
+
+          <button class="quiz-check-btn" onclick="checkQuiz('quiz-module3')">Check Answers</button>
+          <button class="quiz-reset-btn" onclick="resetQuiz('quiz-module3')">Try Again</button>
+        </div>
+      </section>
+
+    </div>
+  </div>
+</section>

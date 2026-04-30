@@ -1,0 +1,11 @@
+FROM python:3.11-slim
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
+ENV UV_PROJECT_ENVIRONMENT=/opt/venv
+WORKDIR /app
+COPY pyproject.toml uv.lock alembic.ini ./
+COPY db/ ./db/
+RUN uv sync --frozen --no-dev
+COPY backend/ ./backend/
+RUN install -m 0755 backend/entrypoint.sh /usr/local/bin/jackpot-entrypoint.sh
+EXPOSE 8000
+CMD ["/usr/local/bin/jackpot-entrypoint.sh"]

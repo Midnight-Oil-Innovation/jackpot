@@ -1,0 +1,313 @@
+<section class="module" id="module-4" style="background: var(--color-bg-warm)">
+  <div class="module-content">
+    <header class="module-header animate-in">
+      <span class="module-number">04</span>
+      <h1 class="module-title">The Quality Engine</h1>
+      <p class="module-subtitle">The 3-tier validator, the file detective, and the privacy scrubber that protect every sample</p>
+    </header>
+
+    <div class="module-body">
+
+      <!-- Screen 1: The 3-tier system -->
+      <section class="screen animate-in">
+        <h2 class="screen-heading">Not All Data Is Created Equal</h2>
+        <p>
+          Think of JACKPOT&apos;s quality system like passport control at an airport. Every traveler gets through security (Tier 1). Only those with the right visas can board international flights (Tier 3). Getting through is not binary — it is a spectrum.
+        </p>
+        <p>
+          The key insight: <strong>missing fields do not block ingest</strong>. A sample with incomplete metadata is still stored — it just cannot be used for certain purposes. The validator tells you exactly what you need to add to unlock each tier.
+        </p>
+
+        <div class="pattern-cards stagger-children" style="margin-top: var(--space-8)">
+          <div class="pattern-card animate-in" style="border-top-color: var(--color-actor-5)">
+            <div class="pattern-icon" style="background: var(--color-success-light)">🟢</div>
+            <h4 class="pattern-title">Tier 1 — PRELIMINARY</h4>
+            <p class="pattern-desc">The minimum to identify who, what, where, and when. <code>sample_id</code>, <code>organism_name</code>, <code>source_type</code>, <code>date_collected</code>, and 3 more required fields. Pipelines can launch immediately.</p>
+          </div>
+          <div class="pattern-card animate-in" style="border-top-color: var(--color-actor-4)">
+            <div class="pattern-icon" style="background: #FDF5E0">🟡</div>
+            <h4 class="pattern-title">Tier 2 — ANALYZABLE</h4>
+            <p class="pattern-desc">Adds epidemiological context: which lab sequenced it, the preparation method, the sequenced date. Required for epiweek calculations, time-series analysis, and external database indexing.</p>
+          </div>
+          <div class="pattern-card animate-in" style="border-top-color: var(--color-actor-1)">
+            <div class="pattern-icon" style="background: var(--color-accent-light)">🔵</div>
+            <h4 class="pattern-title">Tier 3 — SUBMITTABLE</h4>
+            <p class="pattern-desc">Adds the fields GISAID and NCBI require: sequencing protocol, originating lab, submitting lab, county. Unlocks GISAID CSV export and NCBI BioSample/SRA submission.</p>
+          </div>
+        </div>
+
+        <div class="callout callout-info">
+          <div class="callout-icon">🔬</div>
+          <div class="callout-content">
+            <strong class="callout-title">A sample can be SUBMITTABLE but not ANALYZABLE</strong>
+            <p>If a sample has all Tier 3 fields but only a year-precision date (YYYY, no month), it skips Tier 2 and jumps to Tier 3. NCBI and GISAID accept year-only dates; <span class="term" data-definition="An epiweek (epidemiological week) is a standardized week used by the CDC for disease surveillance. Week 1 starts on the first Sunday of the year. Calculating an epiweek requires at minimum a day and month — year-only dates cannot produce one.">epiweeks</span> require day and month precision. Both pathways are deliberately supported.</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- Screen 2: Code translation — validate_sample structure -->
+      <section class="screen animate-in">
+        <h2 class="screen-heading">Inside the Validator</h2>
+        <p>The validator checks metadata in a specific order — base fields first, then source-type-specific fields, then tier 2, then tier 3. Here is the structure from the real code:</p>
+
+        <div class="translation-block animate-in">
+          <div class="translation-code">
+            <span class="translation-label">CODE — backend/validator.py</span>
+            <pre><code>
+<span class="code-line">BASE_REQUIRED = [</span>
+<span class="code-line">    <span class="code-string">"sample_id"</span>,</span>
+<span class="code-line">    <span class="code-string">"organism_name"</span>,</span>
+<span class="code-line">    <span class="code-string">"source_type"</span>,</span>
+<span class="code-line">    <span class="code-string">"date_collected"</span>,</span>
+<span class="code-line">    <span class="code-string">"collection_location_country"</span>,</span>
+<span class="code-line">    <span class="code-string">"sequencing_platform"</span>,</span>
+<span class="code-line">    <span class="code-string">"type_of_experiment"</span>,</span>
+<span class="code-line">]</span>
+<span class="code-line"></span>
+<span class="code-line">SOURCE_REQUIRED: <span class="code-function">dict</span>[<span class="code-function">str</span>, <span class="code-function">list</span>] = {</span>
+<span class="code-line">    <span class="code-string">"Human"</span>: [<span class="code-string">"external_case_id"</span>, <span class="code-string">"biospecimen_type"</span>, ...],</span>
+<span class="code-line">    <span class="code-string">"Wastewater"</span>: [<span class="code-string">"population_served"</span>, <span class="code-string">"sample_type"</span>, ...],</span>
+<span class="code-line">    <span class="code-string">"Wildlife"</span>: [<span class="code-string">"host_species"</span>, <span class="code-string">"biospecimen_type"</span>, ...],</span>
+<span class="code-line">    <span class="code-string">"Isolate"</span>: [],  <span class="code-comment"># no extra fields needed</span></span>
+<span class="code-line">}</span>
+            </code></pre>
+          </div>
+          <div class="translation-english">
+            <span class="translation-label">PLAIN ENGLISH</span>
+            <div class="translation-lines">
+              <p class="tl">BASE_REQUIRED: these 7 fields must be present on <em>every</em> sample, regardless of type. Missing any one = hard error, ingest rejected.</p>
+              <p class="tl"><code>sample_id</code> — the lab-assigned identifier for this sample</p>
+              <p class="tl"><code>organism_name</code> — which pathogen (e.g., &ldquo;SARS-CoV-2&rdquo;)</p>
+              <p class="tl"><code>source_type</code> — where was this collected: Human, Wastewater, Wildlife, etc.</p>
+              <p class="tl"><code>date_collected</code> — when the sample was taken from its source</p>
+              <p class="tl">...plus country, sequencing platform, and experiment type.</p>
+              <p class="tl">SOURCE_REQUIRED: each source type has <em>additional</em> required fields on top of the base 7.</p>
+              <p class="tl">Human samples require an external case identifier (external_case_id) and specimen type.</p>
+              <p class="tl">Wastewater requires flow rate, population served, and sampling method.</p>
+              <p class="tl">Wildlife requires the host species and specimen type.</p>
+              <p class="tl">Isolate has no extra requirements — it is the simplest source type.</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Screen 3: The file detector -->
+      <section class="screen animate-in">
+        <h2 class="screen-heading">The File Detective — Content Over Names</h2>
+        <p>
+          A sequencing file called <code>sample.fastq</code> is not automatically a FASTQ file. Someone might have renamed it by accident. JACKPOT&apos;s <code>file_detector.py</code> reads the actual bytes inside the file to confirm — and then pairs up R1 and R2 reads automatically.
+        </p>
+
+        <div class="flow-steps animate-in">
+          <div class="flow-step">
+            <div class="flow-step-num">1</div>
+            <p>Read the first few bytes of the file</p>
+          </div>
+          <div class="flow-arrow">→</div>
+          <div class="flow-step">
+            <div class="flow-step-num">2</div>
+            <p>FASTQ starts with <code>@</code>, FASTA starts with <code>&gt;</code> — check the signature</p>
+          </div>
+          <div class="flow-arrow">→</div>
+          <div class="flow-step">
+            <div class="flow-step-num">3</div>
+            <p>Scan filenames with <span class="term" data-definition="A regex (regular expression) is a pattern for matching text. JACKPOT uses regexes like _R1_, _R2_, _1, _2, forward, reverse to identify which file in a pair is the forward read and which is the reverse read.">regex patterns</span> to find R1/R2 pairs</p>
+          </div>
+          <div class="flow-arrow">→</div>
+          <div class="flow-step">
+            <div class="flow-step-num">4</div>
+            <p>Group paired files together, flag unpaired or orphaned reads with warnings</p>
+          </div>
+          <div class="flow-arrow">→</div>
+          <div class="flow-step">
+            <div class="flow-step-num">5</div>
+            <p>Return a <code>DetectionResult</code> with file types, read directions, and lane info</p>
+          </div>
+        </div>
+
+        <div class="badge-list animate-in" style="margin-top: var(--space-8)">
+          <div class="badge-item">
+            <code class="badge-code">sample_R1.fastq.gz</code>
+            <span class="badge-desc">Paired read, forward direction (R1), gzip-compressed</span>
+          </div>
+          <div class="badge-item">
+            <code class="badge-code">sample_R2.fastq.gz</code>
+            <span class="badge-desc">Paired read, reverse direction (R2), gzip-compressed</span>
+          </div>
+          <div class="badge-item">
+            <code class="badge-code">sample_L001_R1_001.fastq.gz</code>
+            <span class="badge-desc">Multi-lane format: Lane 1, R1 — grouped with matching L001_R2</span>
+          </div>
+          <div class="badge-item">
+            <code class="badge-code">isolate.fasta</code>
+            <span class="badge-desc">Assembly-only FASTA — no human reads, scrub_status = SKIPPED automatically</span>
+          </div>
+        </div>
+
+        <div class="callout callout-warning">
+          <div class="callout-icon">⚠️</div>
+          <div class="callout-content">
+            <strong class="callout-title">FASTA files skip scrubbing automatically</strong>
+            <p>If a sample has only FASTA files (no raw FASTQ reads), the human-read scrubbing step is automatically skipped — <code>scrub_status = SKIPPED</code>. FASTA files are assembled sequences with human reads already removed by the sequencer. Only the validator (not the router) is allowed to set this status.</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- Screen 4: Group chat — validator talking through a sample -->
+      <section class="screen animate-in">
+        <h2 class="screen-heading">The Validator Thinking Out Loud</h2>
+        <p>A Human sample arrives. Here is the validation conversation — what the system checks and in what order.</p>
+
+        <div class="chat-window" id="chat-module4">
+          <div class="chat-messages">
+            <div class="chat-message" data-msg="0" data-sender="router" style="display:none">
+              <div class="chat-avatar" style="background: var(--color-actor-1)">⚡</div>
+              <div class="chat-bubble">
+                <span class="chat-sender" style="color: var(--color-actor-1)">Ingest Router</span>
+                <p>New sample from Lab 3. Source type: Human. Let me send it to the validator.</p>
+              </div>
+            </div>
+            <div class="chat-message" data-msg="1" data-sender="validator" style="display:none">
+              <div class="chat-avatar" style="background: var(--color-actor-3)">🔬</div>
+              <div class="chat-bubble">
+                <span class="chat-sender" style="color: var(--color-actor-3)">Validator</span>
+                <p>Checking the 7 base required fields... sample_id: present. organism_name: present. source_type: &ldquo;Human&rdquo; — valid. All 7 base fields: PASS. Moving on.</p>
+              </div>
+            </div>
+            <div class="chat-message" data-msg="2" data-sender="validator" style="display:none">
+              <div class="chat-avatar" style="background: var(--color-actor-3)">🔬</div>
+              <div class="chat-bubble">
+                <span class="chat-sender" style="color: var(--color-actor-3)">Validator</span>
+                <p>Source is Human. Checking Human-specific required fields... external_case_id: present. biospecimen_type: present. All Human-specific fields: PASS. Tier 1 achieved.</p>
+              </div>
+            </div>
+            <div class="chat-message" data-msg="3" data-sender="validator" style="display:none">
+              <div class="chat-avatar" style="background: var(--color-actor-3)">🔬</div>
+              <div class="chat-bubble">
+                <span class="chat-sender" style="color: var(--color-actor-3)">Validator</span>
+                <p>Checking Tier 2 fields... sequencing_lab: MISSING. date_sequenced: MISSING. Storing these in tier2_missing — ingest can still proceed at Tier 1.</p>
+              </div>
+            </div>
+            <div class="chat-message" data-msg="4" data-sender="validator" style="display:none">
+              <div class="chat-avatar" style="background: var(--color-actor-3)">🔬</div>
+              <div class="chat-bubble">
+                <span class="chat-sender" style="color: var(--color-actor-3)">Validator</span>
+                <p>Returning: valid=True, tier=1, tier2_missing=[&ldquo;sequencing_lab&rdquo;, &ldquo;date_sequenced&rdquo;]. Also auto-derived sector: &ldquo;clinical&rdquo; from source_type=Human.</p>
+              </div>
+            </div>
+            <div class="chat-message" data-msg="5" data-sender="router" style="display:none">
+              <div class="chat-avatar" style="background: var(--color-actor-1)">⚡</div>
+              <div class="chat-bubble">
+                <span class="chat-sender" style="color: var(--color-actor-1)">Ingest Router</span>
+                <p>Sample accepted at PRELIMINARY. Writing to database with quality_status=PRELIMINARY and the tier2_missing list stored for the lab to see.</p>
+              </div>
+            </div>
+          </div>
+          <div class="chat-typing" id="chat-module4-typing" style="display:none">
+            <div class="chat-avatar" id="chat-module4-typing-avatar">?</div>
+            <div class="chat-typing-dots">
+              <span class="typing-dot"></span>
+              <span class="typing-dot"></span>
+              <span class="typing-dot"></span>
+            </div>
+          </div>
+          <div class="chat-controls">
+            <button class="btn chat-next-btn">Next Message</button>
+            <button class="btn chat-all-btn">Play All</button>
+            <button class="btn chat-reset-btn">Replay</button>
+            <span class="chat-progress"></span>
+          </div>
+        </div>
+      </section>
+
+      <!-- Screen 5: Quiz -->
+      <section class="screen animate-in">
+        <h2 class="screen-heading">Check Your Understanding</h2>
+
+        <div class="quiz-container" id="quiz-module4">
+          <div class="quiz-question-block"
+               data-correct="option-c"
+               data-explanation-right="Correct. external_case_id is in SOURCE_REQUIRED for Human. It is a Tier 1 hard error, not a Tier 2 warning. The ingest is rejected — the lab must add this field and resubmit."
+               data-explanation-wrong="external_case_id is in SOURCE_REQUIRED[Human] — that means it is part of Tier 1, not Tier 2. Tier 1 errors are hard blocks. The sample is not stored.">
+            <h3 class="quiz-question">A lab submits a Human sample without an <code>external_case_id</code>. What does JACKPOT do?</h3>
+            <div class="quiz-options">
+              <button class="quiz-option" data-value="option-a" onclick="selectOption(this)">
+                <div class="quiz-option-radio"></div>
+                <span>Store the sample at PRELIMINARY with external_case_id in tier2_missing</span>
+              </button>
+              <button class="quiz-option" data-value="option-b" onclick="selectOption(this)">
+                <div class="quiz-option-radio"></div>
+                <span>Store the sample but block it from GISAID export</span>
+              </button>
+              <button class="quiz-option" data-value="option-c" onclick="selectOption(this)">
+                <div class="quiz-option-radio"></div>
+                <span>Reject the ingest entirely — external_case_id is a Tier 1 hard error for Human samples</span>
+              </button>
+              <button class="quiz-option" data-value="option-d" onclick="selectOption(this)">
+                <div class="quiz-option-radio"></div>
+                <span>Accept it but flag it for manual review by a Platform Admin</span>
+              </button>
+            </div>
+            <div class="quiz-feedback"></div>
+          </div>
+
+          <div class="quiz-question-block"
+               data-correct="option-b"
+               data-explanation-right="Right. The file detector reads the first byte of the file. If the extension says .fastq but the content starts with > (FASTA signature), it raises a FileDetectorError and the upload is rejected."
+               data-explanation-wrong="file_detector.py does content sniffing — it does not just trust the filename extension. It reads the first byte to confirm. A FASTA file named .fastq will be caught and rejected.">
+            <h3 class="quiz-question">A technician accidentally uploads a FASTA file but names it <code>sample.fastq</code>. What does JACKPOT do?</h3>
+            <div class="quiz-options">
+              <button class="quiz-option" data-value="option-a" onclick="selectOption(this)">
+                <div class="quiz-option-radio"></div>
+                <span>Accept it — the filename says .fastq so it is treated as FASTQ</span>
+              </button>
+              <button class="quiz-option" data-value="option-b" onclick="selectOption(this)">
+                <div class="quiz-option-radio"></div>
+                <span>Reject it — the file content starts with &gt; (FASTA signature), which contradicts the .fastq extension</span>
+              </button>
+              <button class="quiz-option" data-value="option-c" onclick="selectOption(this)">
+                <div class="quiz-option-radio"></div>
+                <span>Accept it as FASTA and automatically rename the file</span>
+              </button>
+              <button class="quiz-option" data-value="option-d" onclick="selectOption(this)">
+                <div class="quiz-option-radio"></div>
+                <span>Accept it but mark the sample with a content_warning flag</span>
+              </button>
+            </div>
+            <div class="quiz-feedback"></div>
+          </div>
+
+          <div class="quiz-question-block"
+               data-correct="option-d"
+               data-explanation-right="Exactly. The sector field is derived from source_type automatically — Human maps to clinical. The researcher only needs to supply sector explicitly if they want to override it (e.g., mark a Human sample as research instead of clinical)."
+               data-explanation-wrong="Look at SECTOR_FROM_SOURCE_TYPE in validator.py. Human always maps to clinical automatically. The researcher does not need to specify it.">
+            <h3 class="quiz-question">A lab adds a new Human sample but does not fill in the <code>sector</code> field. What happens?</h3>
+            <div class="quiz-options">
+              <button class="quiz-option" data-value="option-a" onclick="selectOption(this)">
+                <div class="quiz-option-radio"></div>
+                <span>Ingest fails — sector is a required Tier 1 field</span>
+              </button>
+              <button class="quiz-option" data-value="option-b" onclick="selectOption(this)">
+                <div class="quiz-option-radio"></div>
+                <span>The sample is stored with sector=null and must be corrected later</span>
+              </button>
+              <button class="quiz-option" data-value="option-c" onclick="selectOption(this)">
+                <div class="quiz-option-radio"></div>
+                <span>sector is added to tier2_missing and the sample lands at PRELIMINARY</span>
+              </button>
+              <button class="quiz-option" data-value="option-d" onclick="selectOption(this)">
+                <div class="quiz-option-radio"></div>
+                <span>sector is auto-derived as &ldquo;clinical&rdquo; because source_type is Human</span>
+              </button>
+            </div>
+            <div class="quiz-feedback"></div>
+          </div>
+
+          <button class="quiz-check-btn" onclick="checkQuiz('quiz-module4')">Check Answers</button>
+          <button class="quiz-reset-btn" onclick="resetQuiz('quiz-module4')">Try Again</button>
+        </div>
+      </section>
+
+    </div>
+  </div>
+</section>

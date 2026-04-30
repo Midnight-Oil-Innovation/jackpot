@@ -1,0 +1,40 @@
+# jackpot-nf submodule — backend vendors what it needs from
+# nf/shared/schemas/ into backend/pipeline_schemas/ (Critical Rule 54).
+# Including nf/ in the build context bloats the image with parsers,
+# plugins, tests, and another pyproject.toml that the API never uses.
+nf/
+
+# Repo metadata
+.git/
+.github/
+
+# Dev environments
+.venv/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+__pycache__/
+*.pyc
+*.pyo
+.coverage
+htmlcov/
+
+# Editor / OS
+.DS_Store
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Local-only / secrets (defence in depth — don't bake into images)
+.env
+.env.local
+.env.*.local
+*.secrets
+
+# Note: .dockerignore is build-context-wide, not Dockerfile-specific.
+# Don't add `frontend/` here — Dockerfile.ui shares this context and
+# needs it. Same applies to `backend/`, `db/`, `schema/`.
+
+# Plan/scratch
+/.claude/

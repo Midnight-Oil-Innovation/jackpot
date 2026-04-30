@@ -1,0 +1,104 @@
+[project]
+name = "jackpot-backend"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "alembic==1.13.1",
+    "apscheduler>=3.11.2",
+    "boto3==1.34.100",
+    "epiweeks==2.1.4",
+    "fastapi==0.111.0",
+    "httpx==0.27.0",
+    "linkml==1.7.4",
+    "linkml-runtime==1.7.2",
+    "pandas==2.2.2",
+    "psycopg2-binary==2.9.9",
+    "pydantic==2.7.1",
+    "pydantic-settings>=2.3.0,<3",
+    "python-jose[cryptography]==3.3.0",
+    "python-multipart==0.0.9",
+    "pyyaml==6.0.1",
+    "requests==2.32.2",
+    "sqlalchemy==2.0.30",
+    "streamlit==1.35.0",
+    "urllib3>=1.21.1,<2.4",
+    "uvicorn[standard]==0.29.0",
+]
+
+[dependency-groups]
+dev = [
+    "detect-secrets==1.4.0",
+    "factory-boy==3.3.0",
+    "freezegun==1.5.0",
+    "hypothesis==6.103.0",
+    "moto[s3]==5.0.10",
+    "mypy==1.10.0",
+    "pre-commit==3.7.1",
+    "pytest==8.2.0",
+    "pytest-asyncio==0.23.7",
+    "pytest-cov==5.0.0",
+    "respx==0.21.1",
+    "ruff==0.4.4",
+    "testcontainers==4.5.1",
+    "types-pyyaml>=6.0.12.20250915",
+]
+
+[tool.pytest.ini_options]
+asyncio_mode  = "auto"
+testpaths     = ["tests"]
+pythonpath    = [".", "backend"]
+addopts       = "--cov=backend --cov-report=term-missing --cov-fail-under=60"
+
+[tool.coverage.run]
+omit = [
+    "backend/models_generated.py",
+    "backend/storage.py",
+    "backend/auth/oauth.py",
+    "backend/auth/dependencies.py",
+    "backend/audit.py",
+    "backend/notifications.py",
+    "backend/pagination.py",
+    "backend/responses.py",
+    "backend/routers/archive_requests.py",
+    "backend/routers/auth.py",
+    "backend/routers/billing.py",
+    "backend/routers/dataset_access.py",
+    "backend/routers/datasets.py",
+    "backend/routers/ncbi_submissions.py",
+    "backend/routers/notifications.py",
+    "backend/routers/pipelines.py",
+    "backend/routers/saved_searches.py",
+    "tests/*",
+    "scripts/*",
+    "db/migrations/*",
+]
+
+[tool.ruff]
+exclude = [
+    "backend/models_generated.py",
+    "nf/",
+]
+line-length    = 100
+target-version = "py311"
+
+[tool.ruff.lint.per-file-ignores]
+"setup/*.py" = ["E501"]
+"db/migrations/versions/*.py" = ["E501", "E402"]
+"scripts/*.py" = ["E501"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "N", "W", "UP", "B", "SIM"]
+
+[tool.mypy]
+python_version         = "3.11"
+ignore_missing_imports = true
+explicit_package_bases = true
+exclude                = ["db/migrations/", "scripts/", "tests/",]
+
+# Useful checks without full strict mode
+warn_unused_ignores    = true
+warn_return_any        = false
+disallow_untyped_defs  = false
+check_untyped_defs     = true

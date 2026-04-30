@@ -1,0 +1,24 @@
+{
+  "venvPath": ".",
+  "venv": ".venv",
+  "include": ["backend", "tests"],
+  "exclude": [
+    "backend/models_generated.py",
+    ".venv",
+    "**/__pycache__",
+    "db/migrations/versions",
+    "nf",
+    "schema"
+  ],
+  "pythonVersion": "3.11",
+  "pythonPlatform": "All",
+  "typeCheckingMode": "basic",
+  "reportMissingImports": "error",
+  "reportMissingTypeStubs": "none",
+  "reportUnknownParameterType": "none",
+  "reportUnknownVariableType": "none",
+  "reportUnknownMemberType": "none",
+  "reportGeneralTypeIssues": "warning",
+  "reportOptionalMemberAccess": "warning",
+  "reportUntypedFunctionDecorator": "none"
+}

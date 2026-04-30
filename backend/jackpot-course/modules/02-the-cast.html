@@ -1,0 +1,298 @@
+<section class="module" id="module-2" style="background: var(--color-bg-warm)">
+  <div class="module-content">
+    <header class="module-header animate-in">
+      <span class="module-number">02</span>
+      <h1 class="module-title">The Cast</h1>
+      <p class="module-subtitle">Meet the 21 routers, one database, and the storage layer that holds it all together</p>
+    </header>
+
+    <div class="module-body">
+
+      <!-- Screen 1: Architecture overview -->
+      <section class="screen animate-in">
+        <h2 class="screen-heading">Five Layers, One Platform</h2>
+        <p>
+          Think of JACKPOT like a hospital. The <span class="term" data-definition="FastAPI is the Python web framework that powers JACKPOT. It handles incoming HTTP requests, routes them to the right function, validates inputs with Pydantic, and generates the response. FastAPI is to JACKPOT what the front desk is to a hospital.">FastAPI</span> server is the front desk. The routers are the individual departments. The database is the records room. Storage is the physical file archive.
+        </p>
+
+        <div class="icon-rows stagger-children">
+          <div class="icon-row animate-in">
+            <div class="icon-circle" style="background: var(--color-actor-1)">⚡</div>
+            <div>
+              <strong>FastAPI (main.py)</strong>
+              <p>The <span class="term" data-definition="An entry point is the file Python runs first when you start the application. Everything else is registered from here — routers, middleware, scheduled jobs.">entry point</span>. Registers all 21 routers, wires up the CORS policy, starts the background scheduler, and serves the /health endpoint.</p>
+            </div>
+          </div>
+          <div class="icon-row animate-in">
+            <div class="icon-circle" style="background: var(--color-actor-2)">🗂️</div>
+            <div>
+              <strong>21 Routers (backend/routers/)</strong>
+              <p>Each router owns a domain: <code>auth</code>, <code>ingest</code>, <code>samples</code>, <code>gisaid</code>, <code>users</code>, <code>organizations</code>, and 15 more. Fully implemented: <code>auth</code> and <code>gisaid</code>. The rest are stubs returning <code>{"status":"not implemented"}</code>.</p>
+            </div>
+          </div>
+          <div class="icon-row animate-in">
+            <div class="icon-circle" style="background: var(--color-actor-3)">🗄️</div>
+            <div>
+              <strong>PostgreSQL + SQLAlchemy (backend/database.py)</strong>
+              <p>All 27 tables live here. <span class="term" data-definition="SQLAlchemy is a Python library that manages database connections and lets you write SQL as Python strings rather than raw drivers. It handles connection pooling — keeping a set of ready connections so the app does not reconnect for every request.">SQLAlchemy</span> manages the connection pool. Every query goes through <code>execute_query()</code> or <code>execute_write()</code> — routers never touch the database driver directly.</p>
+            </div>
+          </div>
+          <div class="icon-row animate-in">
+            <div class="icon-circle" style="background: var(--color-actor-4)">📦</div>
+            <div>
+              <strong>MinIO / GCS (backend/storage.py)</strong>
+              <p>Sequencing files are too large for a database. They live in an <span class="term" data-definition="S3-compatible storage means any object store that speaks the same API as Amazon S3. MinIO runs locally in Docker; Google Cloud Storage (GCS) runs in production. The same Python code works with both because storage.py hides the difference.">S3-compatible bucket</span>. Locally that is MinIO (in Docker); in production it is Google Cloud Storage.</p>
+            </div>
+          </div>
+          <div class="icon-row animate-in">
+            <div class="icon-circle" style="background: var(--color-actor-5)">⏰</div>
+            <div>
+              <strong>APScheduler / Cloud Scheduler (backend/jobs.py)</strong>
+              <p>Background jobs run on a schedule: the scrubber queue every 60 seconds, and access-request expiry every night at 2 AM. Locally this uses <span class="term" data-definition="APScheduler is a Python library for scheduling tasks. Think of it as a built-in cron job manager that runs inside the application process, no separate worker service needed.">APScheduler</span>; in production it uses Google Cloud Scheduler.</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Screen 2: File tree -->
+      <section class="screen animate-in">
+        <h2 class="screen-heading">Where Things Live in the Code</h2>
+        <p>Every file has a single job. Here is the map:</p>
+
+        <div class="file-tree animate-in">
+          <div class="ft-folder open">
+            <span class="ft-name">backend/</span>
+            <span class="ft-desc">The entire server application</span>
+            <div class="ft-children">
+              <div class="ft-file"><span class="ft-name">main.py</span><span class="ft-desc">App entry point — registers all routers and middleware</span></div>
+              <div class="ft-file"><span class="ft-name">config.py</span><span class="ft-desc">All environment variables (DB URL, secret key, storage credentials)</span></div>
+              <div class="ft-file"><span class="ft-name">database.py</span><span class="ft-desc">PostgreSQL connection pool + execute_query / execute_write helpers</span></div>
+              <div class="ft-file"><span class="ft-name">validator.py</span><span class="ft-desc">The 3-tier metadata quality engine — heart of the platform</span></div>
+              <div class="ft-file"><span class="ft-name">file_detector.py</span><span class="ft-desc">FASTQ/FASTA sniffing, R1/R2 pairing — single source of truth for files</span></div>
+              <div class="ft-file"><span class="ft-name">storage.py</span><span class="ft-desc">MinIO/GCS abstraction — routers never call boto3 directly</span></div>
+              <div class="ft-file"><span class="ft-name">audit.py</span><span class="ft-desc">Immutable audit log — every write gets recorded here</span></div>
+              <div class="ft-file"><span class="ft-name">jobs.py</span><span class="ft-desc">Background jobs: scrubber queue + access-request expiry</span></div>
+              <div class="ft-file"><span class="ft-name">responses.py</span><span class="ft-desc">Standard JSON response helpers: success(), error(), success_list()</span></div>
+              <div class="ft-file"><span class="ft-name">pagination.py</span><span class="ft-desc">Cursor-based pagination — used by all list endpoints</span></div>
+              <div class="ft-folder">
+                <span class="ft-name">auth/</span>
+                <span class="ft-desc">JWT issuance, Google OAuth, permission guards</span>
+              </div>
+              <div class="ft-folder">
+                <span class="ft-name">routers/</span>
+                <span class="ft-desc">21 route handlers — one file per domain</span>
+              </div>
+            </div>
+          </div>
+          <div class="ft-folder">
+            <span class="ft-name">schema/</span>
+            <span class="ft-desc">LinkML YAML schema — the canonical definition of all sample fields</span>
+          </div>
+          <div class="ft-folder">
+            <span class="ft-name">tests/</span>
+            <span class="ft-desc">316 tests at 76% coverage — pytest with a real PostgreSQL test DB</span>
+          </div>
+        </div>
+
+        <div class="callout callout-info">
+          <div class="callout-icon">🗺️</div>
+          <div class="callout-content">
+            <strong class="callout-title">Why this layout matters for steering AI</strong>
+            <p>When you ask an AI coding agent to &ldquo;add a new field to sample uploads,&rdquo; you now know the exact files to mention: <code>validator.py</code> (add the field to the tier rules), <code>routers/ingest.py</code> (accept it in the payload), and <code>schema/</code> (update the canonical schema). Vague instructions get vague results — specific file paths get precise changes.</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- Screen 3: Group chat — request lifecycle -->
+      <section class="screen animate-in">
+        <h2 class="screen-heading">A Request as a Group Conversation</h2>
+        <p>When a lab technician creates a new organization, here is the conversation happening inside the server — in milliseconds.</p>
+
+        <div class="chat-window" id="chat-module2">
+          <div class="chat-messages">
+            <div class="chat-message" data-msg="0" data-sender="browser" style="display:none">
+              <div class="chat-avatar" style="background: var(--color-actor-4)">🧑</div>
+              <div class="chat-bubble">
+                <span class="chat-sender" style="color: var(--color-actor-4)">Browser</span>
+                <p>POST /api/v1/organizations/ — here&apos;s the new org name and details</p>
+              </div>
+            </div>
+            <div class="chat-message" data-msg="1" data-sender="fastapi" style="display:none">
+              <div class="chat-avatar" style="background: var(--color-actor-1)">⚡</div>
+              <div class="chat-bubble">
+                <span class="chat-sender" style="color: var(--color-actor-1)">FastAPI Router</span>
+                <p>Got it. First, let me check the JWT cookie — who is making this request?</p>
+              </div>
+            </div>
+            <div class="chat-message" data-msg="2" data-sender="guards" style="display:none">
+              <div class="chat-avatar" style="background: var(--color-actor-2)">🔐</div>
+              <div class="chat-bubble">
+                <span class="chat-sender" style="color: var(--color-actor-2)">Auth Guards</span>
+                <p>Token is valid. User is admin@example.org, is_platform_admin = TRUE. Access granted.</p>
+              </div>
+            </div>
+            <div class="chat-message" data-msg="3" data-sender="fastapi" style="display:none">
+              <div class="chat-avatar" style="background: var(--color-actor-1)">⚡</div>
+              <div class="chat-bubble">
+                <span class="chat-sender" style="color: var(--color-actor-1)">FastAPI Router</span>
+                <p>Good. Pydantic validated the request body. Running the INSERT now...</p>
+              </div>
+            </div>
+            <div class="chat-message" data-msg="4" data-sender="db" style="display:none">
+              <div class="chat-avatar" style="background: var(--color-actor-3)">🗄️</div>
+              <div class="chat-bubble">
+                <span class="chat-sender" style="color: var(--color-actor-3)">PostgreSQL</span>
+                <p>INSERT INTO organizations ... RETURNING * — here is the new row with its generated ID.</p>
+              </div>
+            </div>
+            <div class="chat-message" data-msg="5" data-sender="fastapi" style="display:none">
+              <div class="chat-avatar" style="background: var(--color-actor-1)">⚡</div>
+              <div class="chat-bubble">
+                <span class="chat-sender" style="color: var(--color-actor-1)">FastAPI Router</span>
+                <p>Also writing an audit log entry to the same transaction — CREATE_ORG, actor=glen, resource=org_id_42.</p>
+              </div>
+            </div>
+            <div class="chat-message" data-msg="6" data-sender="db" style="display:none">
+              <div class="chat-avatar" style="background: var(--color-actor-3)">🗄️</div>
+              <div class="chat-bubble">
+                <span class="chat-sender" style="color: var(--color-actor-3)">PostgreSQL</span>
+                <p>Both writes committed. Transaction closed.</p>
+              </div>
+            </div>
+            <div class="chat-message" data-msg="7" data-sender="browser" style="display:none">
+              <div class="chat-avatar" style="background: var(--color-actor-4)">🧑</div>
+              <div class="chat-bubble">
+                <span class="chat-sender" style="color: var(--color-actor-4)">Browser</span>
+                <p>Got {"status":"success","data":{...}} — new organization is live!</p>
+              </div>
+            </div>
+          </div>
+          <div class="chat-typing" id="chat-module2-typing" style="display:none">
+            <div class="chat-avatar" id="chat-module2-typing-avatar">?</div>
+            <div class="chat-typing-dots">
+              <span class="typing-dot"></span>
+              <span class="typing-dot"></span>
+              <span class="typing-dot"></span>
+            </div>
+          </div>
+          <div class="chat-controls">
+            <button class="btn chat-next-btn">Next Message</button>
+            <button class="btn chat-all-btn">Play All</button>
+            <button class="btn chat-reset-btn">Replay</button>
+            <span class="chat-progress"></span>
+          </div>
+        </div>
+      </section>
+
+      <!-- Screen 4: Code translation — execute_write with RETURNING -->
+      <section class="screen animate-in">
+        <h2 class="screen-heading">The Database Helper That Powers Every Write</h2>
+        <p>Every INSERT, UPDATE, and DELETE in JACKPOT goes through <code>execute_write()</code>. Here is the key part of it — with one pattern you will see everywhere.</p>
+
+        <div class="translation-block animate-in">
+          <div class="translation-code">
+            <span class="translation-label">CODE — backend/database.py</span>
+            <pre><code>
+<span class="code-line"><span class="code-keyword">def</span> <span class="code-function">execute_write</span>(</span>
+<span class="code-line">    query: <span class="code-function">str</span>,</span>
+<span class="code-line">    params: <span class="code-function">dict</span> | <span class="code-keyword">None</span> = <span class="code-keyword">None</span>,</span>
+<span class="code-line">    conn=<span class="code-keyword">None</span>,</span>
+<span class="code-line">) -> <span class="code-function">list</span>[<span class="code-function">dict</span>]:</span>
+<span class="code-line">    <span class="code-keyword">if</span> conn <span class="code-keyword">is not None</span>:</span>
+<span class="code-line">        result = conn.<span class="code-function">execute</span>(<span class="code-function">text</span>(query), params <span class="code-keyword">or</span> {})</span>
+<span class="code-line">        <span class="code-keyword">if</span> result.returns_rows:</span>
+<span class="code-line">            cols = result.<span class="code-function">keys</span>()</span>
+<span class="code-line">            <span class="code-keyword">return</span> [<span class="code-function">dict</span>(<span class="code-function">zip</span>(cols, row)) <span class="code-keyword">for</span> row <span class="code-keyword">in</span> result.<span class="code-function">fetchall</span>()]</span>
+<span class="code-line">        <span class="code-keyword">return</span> []</span>
+            </code></pre>
+          </div>
+          <div class="translation-english">
+            <span class="translation-label">PLAIN ENGLISH</span>
+            <div class="translation-lines">
+              <p class="tl">Define a function that writes to the database. It takes a SQL string, optional parameters, and an optional database connection.</p>
+              <p class="tl">The SQL query to run — written as a plain string like <code>"INSERT INTO orgs ..."</code></p>
+              <p class="tl">Values to substitute safely into the query — prevents SQL injection attacks.</p>
+              <p class="tl">An existing database session to join, so multiple writes share one transaction.</p>
+              <p class="tl">If a connection was passed in, use it (we are inside a bigger transaction)...</p>
+              <p class="tl">...run the query using that connection.</p>
+              <p class="tl">If the query returned rows (e.g., INSERT ... RETURNING *)...</p>
+              <p class="tl">...get the column names, then zip each row into a dictionary and return them all.</p>
+              <p class="tl">If nothing was returned (e.g., a DELETE with no RETURNING), return an empty list.</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="callout callout-accent">
+          <div class="callout-icon">💡</div>
+          <div class="callout-content">
+            <strong class="callout-title">RETURNING * — never SELECT after write</strong>
+            <p>PostgreSQL lets you add <code>RETURNING *</code> to an INSERT or UPDATE to get the saved row back immediately. JACKPOT uses this everywhere instead of running a separate SELECT query. One round-trip instead of two — and you always get the database-generated values like auto-increment IDs and timestamps.</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- Screen 5: Quiz -->
+      <section class="screen animate-in">
+        <h2 class="screen-heading">Check Your Understanding</h2>
+
+        <div class="quiz-container" id="quiz-module2">
+          <div class="quiz-question-block"
+               data-correct="option-b"
+               data-explanation-right="Correct — storage.py is the abstraction layer. Routers call stage_file() and move_to_sequences(), never boto3 directly. This means swapping MinIO for S3 or GCS requires changing only storage.py."
+               data-explanation-wrong="Routers in JACKPOT are not allowed to call boto3 directly. There is a deliberate abstraction layer: storage.py. This makes it easy to swap storage backends without touching every router.">
+            <h3 class="quiz-question">You need to change JACKPOT from MinIO to Amazon S3 for file storage. Which file do you change?</h3>
+            <div class="quiz-options">
+              <button class="quiz-option" data-value="option-a" onclick="selectOption(this)">
+                <div class="quiz-option-radio"></div>
+                <span>Every router file that handles file uploads</span>
+              </button>
+              <button class="quiz-option" data-value="option-b" onclick="selectOption(this)">
+                <div class="quiz-option-radio"></div>
+                <span>backend/storage.py — the single storage abstraction layer</span>
+              </button>
+              <button class="quiz-option" data-value="option-c" onclick="selectOption(this)">
+                <div class="quiz-option-radio"></div>
+                <span>backend/database.py — where all data is stored</span>
+              </button>
+              <button class="quiz-option" data-value="option-d" onclick="selectOption(this)">
+                <div class="quiz-option-radio"></div>
+                <span>backend/config.py only — environment variables handle storage backends</span>
+              </button>
+            </div>
+            <div class="quiz-feedback"></div>
+          </div>
+
+          <div class="quiz-question-block"
+               data-correct="option-c"
+               data-explanation-right="Exactly. The conn parameter threads a single database session through the router, execute_write, and log_audit. All three writes commit or roll back together."
+               data-explanation-wrong="The conn parameter is key here. When you pass the same conn to execute_write and log_audit, they share one transaction. If either fails, both are rolled back.">
+            <h3 class="quiz-question">A router creates a sample and logs an audit entry. The audit log write fails halfway through. What happens to the sample record?</h3>
+            <div class="quiz-options">
+              <button class="quiz-option" data-value="option-a" onclick="selectOption(this)">
+                <div class="quiz-option-radio"></div>
+                <span>The sample is saved, but the audit log entry is skipped</span>
+              </button>
+              <button class="quiz-option" data-value="option-b" onclick="selectOption(this)">
+                <div class="quiz-option-radio"></div>
+                <span>Both writes succeed — audit failures are silently ignored</span>
+              </button>
+              <button class="quiz-option" data-value="option-c" onclick="selectOption(this)">
+                <div class="quiz-option-radio"></div>
+                <span>Both are rolled back — they share the same transaction via the conn parameter</span>
+              </button>
+              <button class="quiz-option" data-value="option-d" onclick="selectOption(this)">
+                <div class="quiz-option-radio"></div>
+                <span>The sample is deleted separately by a cleanup job</span>
+              </button>
+            </div>
+            <div class="quiz-feedback"></div>
+          </div>
+
+          <button class="quiz-check-btn" onclick="checkQuiz('quiz-module2')">Check Answers</button>
+          <button class="quiz-reset-btn" onclick="resetQuiz('quiz-module2')">Try Again</button>
+        </div>
+      </section>
+
+    </div>
+  </div>
+</section>
