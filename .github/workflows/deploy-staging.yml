@@ -3,6 +3,14 @@ name: deploy-staging
 on:
   push:
     branches: [staging]
+    paths:
+      - 'backend/**'
+      - 'deploy/**'
+      - 'pipelines/**'
+      - 'schema/**'
+      - 'pyproject.toml'
+      - 'uv.lock'
+      - '.github/workflows/deploy-staging.yml'
   workflow_dispatch:
     inputs:
       image_tag:
@@ -19,11 +27,11 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  CLUSTER_NAME: jackpot-staging-gke
-  NAMESPACE: jackpot
-  RELEASE_NAME: jackpot-api
-  HELM_CHART_PATH: ./helm/jackpot-api
-  VALUES_FILE: ./helm/jackpot-api/values-staging.yaml
+  CLUSTER_NAME:    jackpot-staging-gke
+  NAMESPACE:       jackpot
+  RELEASE_NAME:    jackpot-api
+  HELM_CHART_PATH: ./deploy/helm/jackpot-api
+  VALUES_FILE:     ./deploy/helm/jackpot-api/values-staging.yaml
 
 jobs:
   deploy:
@@ -33,31 +41,11 @@ jobs:
       name: staging
       url: https://api.staging.jackpot.example.org
     steps:
-      - name: Checkout jackpot-iac
-        uses: actions/checkout@v4
-
-      - name: Checkout jackpot-backend (without submodules)
-        uses: actions/checkout@v4
-        with:
-          repository: gotero/jackpot-backend
-          path: jackpot-backend
-          ref: staging
-          token: ${{ secrets.CROSS_REPO_PAT }}
-          persist-credentials: false
-
-      - name: Initialise jackpot-backend submodules
-        working-directory: jackpot-backend
-        env:
-          GH_PAT: ${{ secrets.CROSS_REPO_PAT }}
-        run: |
-          set -euo pipefail
-          # Inject the PAT into every github.com URL for submodule clones.
-          # This is scoped to this job's runner and discarded at job end.
-          git config --global url."https://x-access-token:${GH_PAT}@github.com/".insteadOf "https://github.com/"
-          git config --global url."https://x-access-token:${GH_PAT}@github.com/".insteadOf "git@github.com:"
-          git submodule update --init --recursive
-          # Scrub the token out of the global config as soon as we're done.
-          git config --global --unset-all url."https://x-access-token:${GH_PAT}@github.com/".insteadOf || true
+      # Single checkout — the monorepo holds backend, deploy, schema,
+      # pipelines, and cli together. The pre-P0d cross-repo checkout +
+      # PAT-injected submodule init is no longer needed (P0d retired
+      # the submodule layout in favour of subtree merges).
+      - uses: actions/checkout@v4
 
       - name: Authenticate to GCP (Workload Identity Federation)
         id: auth
@@ -80,14 +68,17 @@ jobs:
           if [[ -n "${{ inputs.image_tag }}" ]]; then
             echo "tag=${{ inputs.image_tag }}" >> "$GITHUB_OUTPUT"
           else
-            echo "tag=$(git -C jackpot-backend rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
+            echo "tag=$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Build API image
         run: |
           IMAGE="${{ vars.GCP_REGION }}-docker.pkg.dev/${{ vars.GCP_PROJECT_ID }}/jackpot/jackpot-api:${{ steps.tag.outputs.tag }}"
           echo "IMAGE=$IMAGE" >> "$GITHUB_ENV"
-          docker build -f jackpot-backend/Dockerfile.api -t "$IMAGE" jackpot-backend
+          # Build context is the backend/ subtree so backend/Dockerfile.api
+          # finds its sibling files (backend/, db/, alembic.ini) at the
+          # paths it already expects.
+          docker build -f backend/Dockerfile.api -t "$IMAGE" backend
 
       - name: Push API image
         run: docker push "$IMAGE"
@@ -134,13 +125,12 @@ jobs:
           kubectl -n "$NAMESPACE" port-forward svc/jackpot-api 8080:80 >/tmp/pf.log 2>&1 &
           PF_PID=$!
           trap 'kill "$PF_PID" 2>/dev/null || true' EXIT
-          # Wait for the tunnel to become usable
           for i in $(seq 1 30); do
             if curl -s -o /dev/null --max-time 2 http://localhost:8080/health; then
               break
             fi
             sleep 1
           done
-          bash ./scripts/staging_smoke_test.sh
+          bash ./deploy/scripts/staging_smoke_test.sh
         env:
           JACKPOT_API_URL: http://localhost:8080

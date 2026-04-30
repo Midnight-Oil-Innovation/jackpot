@@ -1,0 +1,125 @@
+name: Test & Lint
+
+on:
+  push:
+    branches: [main, development]
+    paths:
+      - 'backend/**'
+      - 'cli/**'
+      - 'schema/**'
+      - 'tests/**'
+      - 'pyproject.toml'
+      - 'uv.lock'
+      - '.github/workflows/test.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'backend/**'
+      - 'cli/**'
+      - 'schema/**'
+      - 'tests/**'
+      - 'pyproject.toml'
+      - 'uv.lock'
+      - '.github/workflows/test.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: test-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Backend + workspace tests
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER:     jackpot
+          POSTGRES_PASSWORD: jackpot
+          POSTGRES_DB:       jackpot_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          python-version: "3.11"
+
+      - name: Install workspace dependencies
+        run: uv sync --frozen
+
+      - name: Run pre-commit hooks
+        run: uv run pre-commit run --all-files
+        # backend's .pre-commit-config.yaml drives this; the workspace
+        # picked up the pre-commit binary via backend's dev dependency
+        # group. If pre-commit configuration moves to the root in a
+        # later phase, just delete this comment.
+
+      - name: Run Alembic migrations against the CI Postgres
+        env:
+          DATABASE_URL: postgresql://jackpot:jackpot@localhost:5432/jackpot_test
+        working-directory: backend
+        run: uv run alembic upgrade head
+
+      - name: Run pytest
+        env:
+          DATABASE_URL: postgresql://jackpot:jackpot@localhost:5432/jackpot_test
+          ENV: local
+        run: uv run pytest --cov=backend --cov-report=xml
+
+      - name: Upload coverage
+        uses: codecov/codecov-action@v4
+        with:
+          file: coverage.xml
+
+  cli-test:
+    name: CLI tests (separate coverage scope)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          python-version: "3.11"
+
+      - name: Install workspace dependencies
+        run: uv sync --frozen
+
+      - name: Run cli tests
+        working-directory: cli
+        run: uv run pytest --cov=jackpot --cov-fail-under=45
+
+  pipelines-test:
+    name: Pipelines parser tests (jackpot-nf)
+    runs-on: ubuntu-latest
+    # pipelines/ keeps its own pyproject.toml outside the workspace per
+    # the P0d plan. Run its tests in their own job so a parser change
+    # does not need to flow through the backend test matrix.
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          python-version: "3.11"
+
+      - name: Install pipelines dependencies (member-local lock)
+        working-directory: pipelines
+        run: uv sync
+
+      - name: Run pipelines pytest (excludes integration markers)
+        working-directory: pipelines
+        run: uv run pytest
