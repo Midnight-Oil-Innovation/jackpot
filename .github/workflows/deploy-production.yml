@@ -1,0 +1,148 @@
+name: deploy-production
+
+# Production deploys are gated behind the GitHub Actions `production`
+# environment, which is configured in the repo Settings → Environments
+# UI to require manual approval from one or more named reviewers BEFORE
+# this job's first step runs. The workflow itself never bypasses the
+# approval — the runner waits for a human "Approve" click. See
+# docs/deploy/production-deploy.md for the operator runbook.
+#
+# Trigger model: workflow_dispatch only. There is no `push:` trigger
+# because a production deploy is a deliberate, named act, never a
+# side-effect of merging to main.
+
+on:
+  workflow_dispatch:
+    inputs:
+      image_tag:
+        description: "Image tag to deploy (must already be built + pushed by the staging workflow)"
+        required: true
+      reason:
+        description: "Why are we deploying right now? (visible in the audit log)"
+        required: true
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+env:
+  CLUSTER_NAME:    ${{ vars.GCP_CLUSTER_NAME }}
+  NAMESPACE:       ${{ vars.GCP_NAMESPACE }}
+  RELEASE_NAME:    jackpot-api
+  HELM_CHART_PATH: ./deploy/helm/jackpot-api
+  VALUES_FILE:     ./deploy/helm/jackpot-api/values-production.yaml
+  SECRET_PREFIX:   ${{ vars.GCP_SECRET_PREFIX }}
+
+jobs:
+  deploy:
+    name: Deploy to production
+    runs-on: ubuntu-latest
+
+    # `environment: name: production` is the approval gate. The repo's
+    # production environment must be configured in the GitHub UI with at
+    # least one Required Reviewer; the job will block at "Waiting for
+    # review" until a reviewer approves it. Operator-agnostic: the list
+    # of approved reviewers is a per-instance UI configuration, not
+    # something this workflow encodes.
+    environment:
+      name: production
+      url: https://api.jackpot.example.org
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Record deploy reason
+        run: |
+          echo "::notice::Production deploy of image_tag=${{ inputs.image_tag }} requested by ${{ github.actor }}"
+          echo "::notice::Reason: ${{ inputs.reason }}"
+
+      - name: Validate image_tag
+        env:
+          IMAGE_TAG_INPUT: ${{ inputs.image_tag }}
+        run: |
+          set -euo pipefail
+          if [[ ! "${IMAGE_TAG_INPUT}" =~ ^[A-Za-z0-9._-]+$ ]]; then
+            echo "::error::image_tag contains disallowed characters"
+            exit 1
+          fi
+
+      - name: Authenticate to GCP (Workload Identity Federation)
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.GCP_DEPLOY_SA }}
+
+      - name: Set up gcloud
+        uses: google-github-actions/setup-gcloud@v2
+        with:
+          project_id: ${{ vars.GCP_PROJECT_ID }}
+
+      - name: Verify image exists in Artifact Registry
+        run: |
+          IMAGE="${{ vars.GCP_REGION }}-docker.pkg.dev/${{ vars.GCP_PROJECT_ID }}/jackpot/jackpot-api:${{ inputs.image_tag }}"
+          gcloud artifacts docker images describe "$IMAGE" \
+            --project="${{ vars.GCP_PROJECT_ID }}" >/dev/null
+          echo "IMAGE=$IMAGE" >> "$GITHUB_ENV"
+
+      - name: Get GKE credentials
+        uses: google-github-actions/get-gke-credentials@v2
+        with:
+          cluster_name: ${{ env.CLUSTER_NAME }}
+          location: ${{ vars.GCP_REGION }}
+
+      - name: Set up Helm
+        uses: azure/setup-helm@v4
+        with:
+          version: v3.15.2
+
+      - name: Ensure namespace exists
+        run: kubectl create namespace "$NAMESPACE" --dry-run=client -o yaml | kubectl apply -f -
+
+      - name: Sync Kubernetes Secret from Secret Manager
+        env:
+          GCP_PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
+        run: |
+          set -euo pipefail
+          declare -a keys=(SECRET_KEY DATABASE_URL GOOGLE_OAUTH_CLIENT_ID GOOGLE_OAUTH_CLIENT_SECRET NCBI_API_KEY)
+          tmpdir=$(mktemp -d)
+          trap 'rm -rf "$tmpdir"' EXIT
+          args=()
+          for k in "${keys[@]}"; do
+            secret_name="${SECRET_PREFIX}-$(echo "$k" | tr '[:upper:]_' '[:lower:]-')"
+            gcloud secrets versions access latest \
+              --secret="$secret_name" \
+              --project="$GCP_PROJECT_ID" \
+              > "$tmpdir/$k"
+            args+=(--from-file="$k=$tmpdir/$k")
+          done
+          kubectl -n "$NAMESPACE" create secret generic jackpot-api-secrets \
+            "${args[@]}" \
+            --dry-run=client -o yaml | kubectl apply -f -
+
+      - name: Helm upgrade (alembic pre-upgrade hook + Deployment roll)
+        run: |
+          helm upgrade --install "$RELEASE_NAME" "$HELM_CHART_PATH" \
+            --namespace "$NAMESPACE" \
+            --values "$VALUES_FILE" \
+            --set image.tag="${{ inputs.image_tag }}" \
+            --wait --timeout 15m
+
+      - name: Smoke test
+        run: |
+          set -euo pipefail
+          kubectl -n "$NAMESPACE" port-forward svc/jackpot-api 8080:80 >/tmp/pf.log 2>&1 &
+          PF_PID=$!
+          trap 'kill "$PF_PID" 2>/dev/null || true' EXIT
+          for i in $(seq 1 30); do
+            if curl -s -o /dev/null --max-time 2 http://localhost:8080/health; then
+              break
+            fi
+            sleep 1
+          done
+          bash ./deploy/scripts/staging_smoke_test.sh
+        env:
+          JACKPOT_API_URL: http://localhost:8080
