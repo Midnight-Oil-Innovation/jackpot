@@ -165,9 +165,10 @@ def gcs_bucket(fake_gcs_endpoint: str) -> Generator[tuple[str, str, str], None, 
     create_url = f"{fake_gcs_endpoint}/storage/v1/b?project={project}"
 
     resp = requests.post(create_url, json={"name": bucket_name}, timeout=5)
-    assert resp.status_code in (200, 409), (
-        f"Could not create bucket: {resp.status_code} {resp.text}"
-    )
+    assert resp.status_code in (
+        200,
+        409,
+    ), f"Could not create bucket: {resp.status_code} {resp.text}"
 
     try:
         yield bucket_name, project, fake_gcs_endpoint
