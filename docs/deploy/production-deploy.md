@@ -162,7 +162,10 @@ deploys happened.
 
 - `docs/deploy/pitr-restore-drill.md` (DEPLOY-2) — quarterly restore
   drill that the production gate references.
-- `deploy/docs/staging_access.md` — staging environment troubleshooting
-  (separate file because staging predates this runbook).
+- `docs/staging_access.md` — staging environment troubleshooting
+  (the operator-agnostic version linked from the README runbook
+  table; an older, narrower file at `deploy/docs/staging_access.md`
+  remains for historical reference but should not be referenced for
+  new operators).
 - `.github/workflows/deploy-production.yml` — the workflow this runbook
   documents.

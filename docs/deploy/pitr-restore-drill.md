@@ -106,6 +106,12 @@ gcloud sql operations list \
 Wait for the clone operation to show `STATUS: DONE`. Typical wall
 time is 20–60 minutes depending on database size.
 
+**Note on credentials:** a Cloud SQL clone inherits all DB users and
+their passwords from the source instance. The `postgres` user
+password and any application-role passwords are identical to
+production. Do not rotate them on the clone — that's pointless and
+wastes the drill window — just dispose of the clone in step 6.
+
 ### Step 4 — Verify the restored instance is reachable
 
 ```bash

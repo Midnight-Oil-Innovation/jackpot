@@ -30,7 +30,7 @@ federated_peers + BYOP/eukaryotic schema) → P0c (multi-tenancy middleware
 1. Read `spec.md` — understand the goals and constraints for the current sprint
 2. Read `todo.md` — find the next unchecked task
 3. Re-read this file (`docs/CLAUDE.md`) — all 55 Critical Rules apply at all times
-4. Confirm the baseline is stable: `uv run pytest` from the workspace root — **≥639 tests passing, ≥35% coverage** (post-P0d interim; the 60% bar will be restored once the workspace pytest-cov measurement gap is fixed — Phase 21.5 follow-up)
+4. Confirm the baseline is stable: `uv run pytest` from the workspace root — **≥614 tests passing, ≥35% coverage** (post-Phase-22 baseline). The post-P0d coverage drop from 86.99% → ~40% is **organic dilution** from Sessions I–Q routers, NOT a measurement artifact (Phase 22A agent 3 disproved the "measurement gap" hypothesis — see `docs/learnings.md` Phase 22 entry). Restoring the 60% bar requires writing tests for Sessions I–Q code, tracked as action item 15 in `docs/review_log.md`.
 
 ### Work Loop
 
@@ -139,7 +139,7 @@ six-repo + git-submodule arrangement is gone; what used to be submodules
 │   │   ├── harmonizer.py            CSV column mapper — uses jackpot_schema.MAPPING_CONFIGS_DIR
 │   │   ├── file_detector.py         NGS file pairing — only place for this logic
 │   │   ├── audit.py / notifications.py / storage/ / responses.py / pagination.py
-│   │   ├── epiweek.py / middleware.py / logging_config.py / cache.py / jobs.py
+│   │   ├── epiweek.py / middleware.py / logging_config.py / cache.py / jobs.py / rate_limit.py
 │   │   ├── pipeline_config.py / pipeline_results_loader.py / pipeline_schemas/
 │   │   ├── models_generated.py    LinkML-generated; never edit manually (Critical Rule 20)
 │   │   ├── auth/                  guards.py / dependencies.py / oauth.py
@@ -183,7 +183,7 @@ six-repo + git-submodule arrangement is gone; what used to be submodules
 ├── pyrightconfig.json             Pyright config for the whole workspace
 ├── uv.lock                        Single workspace-wide lock
 ├── README.md / spec.md / todo.md / NOTICE / COPYRIGHT / LICENSE (AGPL-3.0)
-└── .github/workflows/             test.yml + deploy-staging.yml (consolidated in P0d)
+└── .github/workflows/             test.yml + deploy-staging.yml + deploy-production.yml (production gated by GitHub environment Required Reviewers — Phase 22)
 ```
 
 **Why the doubled `schema/schema/` path?** Historical: pre-P0d the
@@ -1020,8 +1020,14 @@ The default 62-value enum was originally derived from a specific jurisdiction's 
 
 **Post-P0d interim:** 35% coverage minimum enforced in CI
 (`pytest --cov-fail-under=35`, set in workspace `pyproject.toml`).
-The historical 60% bar applies once the workspace pytest-cov
-measurement gap is fixed — see Current Baseline above.
+The historical 60% bar applies once Sessions I–Q routers
+(`sample_access`, expanded `ingest`, `pipeline_results_loader`,
+`labs`, `template_generator`, `validator`) gain integration tests.
+The drop is organic dilution, not a measurement artifact — Phase
+22A agent 3 verified pytest-cov correctly instruments
+`backend/backend/*.py`. See `docs/learnings.md` Phase 22 entry for
+the diagnosis and `docs/review_log.md` action item 15 for the
+restoration plan.
 Priority order for new tests:
 
 1. `backend/validator.py` — every required field, every enum value, date checks
