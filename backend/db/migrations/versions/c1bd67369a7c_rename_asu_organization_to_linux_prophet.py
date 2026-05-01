@@ -13,6 +13,13 @@ WHERE matches by old value rather than by id so the migration is
 portable across forks/clones and idempotent (re-running on an
 already-renamed DB is a no-op). display_name has a UNIQUE constraint
 so the match is unambiguous.
+
+P0e A.3 (Critical Rule 55): HISTORICAL — no-op on fresh installs.
+The baseline migration `5adf11b77c19` was edited in P0e to seed
+`Example Org` directly, so on a fresh `alembic upgrade head` no row
+named `ASU` exists for this migration to update. The UPDATE statements
+still execute but match zero rows. This file remains in the chain for
+any deployed environment that was at this revision before the P0e edit.
 """
 
 from collections.abc import Sequence

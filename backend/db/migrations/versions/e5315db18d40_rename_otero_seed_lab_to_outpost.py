@@ -8,6 +8,14 @@ UI-B: the local-dev seed lab is "Otero Outpost", not "Otero Lab".
 Update both the JACKPOT lab row and the linked sequencing-lab row.
 Idempotent — only renames when the old name is still present so it's
 safe to re-run on environments that already adopted the new name.
+
+P0e A.3 (Critical Rule 55): HISTORICAL — no-op on fresh installs.
+The baseline migration `5adf11b77c19` was edited in P0e to seed
+`Example Lab` directly, so on a fresh `alembic upgrade head` no row
+named `Otero Lab` exists for this migration to update. The UPDATE
+statements still execute but match zero rows, which is harmless
+(idempotent by design). This file remains in the chain for any
+deployed environment that was at this revision before the P0e edit.
 """
 
 from collections.abc import Sequence

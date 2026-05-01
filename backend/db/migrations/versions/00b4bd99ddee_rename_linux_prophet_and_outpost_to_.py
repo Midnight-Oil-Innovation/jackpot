@@ -15,6 +15,14 @@ real operator values at install time.
 WHERE matches by old value rather than by id so the migration is
 portable across forks/clones and idempotent (re-running on an
 already-renamed DB is a no-op).
+
+P0e A.3 (Critical Rule 55): HISTORICAL — no-op on fresh installs.
+The baseline migration `5adf11b77c19` was edited in P0e to seed the
+`Example Org` / `Example Lab` / `admin@example.org` /
+`Example Sequencing Lab` / `Example Reference Lab` end-state values
+directly, so this rename now matches zero rows on a fresh install.
+This file remains in the chain for any deployed environment that
+was at the pre-P0e revision before the baseline edit landed.
 """
 
 from collections.abc import Sequence

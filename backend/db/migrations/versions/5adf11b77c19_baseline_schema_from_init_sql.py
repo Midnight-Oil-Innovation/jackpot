@@ -14,6 +14,18 @@ revision. Idempotent (CREATE TABLE IF NOT EXISTS, ON CONFLICT DO
 NOTHING) so re-running on a populated DB is safe — useful for the
 one-time `alembic stamp 5adf11b77c19` flow on environments deployed
 before Q-9 (see docs/staging_access.md §6).
+
+P0e A.3 (Critical Rule 55): the seed-data INSERTs at the bottom of the
+DDL block originally hardcoded operator-specific names (Sonora Quest /
+LabCorp / ASU / ADHS / Otero Lab / gotero@linuxprophet.com). They have
+been edited in-place to use operator-agnostic dev-fixture values
+(Example Sequencing Lab / Example Reference Lab / Example Org /
+Example Lab / admin@example.org / Example Admin). The three follow-on
+rename migrations (e5315db18d40, c1bd67369a7c, 00b4bd99ddee) become
+no-ops on fresh installs (their UPDATE WHERE clauses match no rows)
+but stay functional for any DB deployed before this edit landed.
+Operator-customized seed data goes through `jackpot init` (P0e),
+not migrations.
 """
 
 from collections.abc import Sequence
@@ -56,8 +68,8 @@ CREATE TABLE IF NOT EXISTS sequencing_labs (
 );
 
 INSERT INTO sequencing_labs (name, organization, is_external) VALUES
-    ('Sonora Quest Laboratories',         'Sonora Quest', TRUE),
-    ('Laboratory Corporation of America', 'LabCorp',      TRUE)
+    ('Example Sequencing Lab',  'Example Sequencing Lab', TRUE),
+    ('Example Reference Lab',   'Example Reference Lab',  TRUE)
 ON CONFLICT DO NOTHING;
 
 CREATE TABLE IF NOT EXISTS sequencing_lab_requests (
@@ -606,20 +618,20 @@ CREATE TABLE IF NOT EXISTS saved_searches (
 );
 
 INSERT INTO domain_whitelist (domain, description)
-VALUES ('asu.edu', 'Arizona State University'),
-       ('gmail.com', 'Local dev — REMOVE IN PRODUCTION')
+VALUES ('example.org', 'Example Org'),
+       ('gmail.com',   'Local dev — REMOVE IN PRODUCTION')
 ON CONFLICT DO NOTHING;
 
 INSERT INTO organizations (display_name)
-VALUES ('ASU'), ('ADHS')
+VALUES ('Example Org')
 ON CONFLICT DO NOTHING;
 
 INSERT INTO users (email, name, organization_id, is_platform_admin)
-VALUES ('gotero@linuxprophet.com', 'Glen Otero', 1, TRUE)
+VALUES ('admin@example.org', 'Example Admin', 1, TRUE)
 ON CONFLICT DO NOTHING;
 
 INSERT INTO labs (organization_id, display_name, description, created_by_id)
-VALUES (1, 'Otero Lab', 'Local dev seed lab', 1)
+VALUES (1, 'Example Lab', 'Local dev seed lab', 1)
 ON CONFLICT DO NOTHING;
 
 INSERT INTO lab_membership (user_id, lab_id, permission_group_id, is_lab_director, granted_by_id)
@@ -633,7 +645,7 @@ VALUES (1, 'Dev Project', 'Local dev seed project', 1,
 ON CONFLICT DO NOTHING;
 
 INSERT INTO sequencing_labs (name, organization, lab_id, is_external)
-VALUES ('Otero Lab', 'ASU', 1, FALSE)
+VALUES ('Example Lab', 'Example Org', 1, FALSE)
 ON CONFLICT DO NOTHING;
 """
 
