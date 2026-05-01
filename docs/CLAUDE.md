@@ -30,7 +30,7 @@ federated_peers + BYOP/eukaryotic schema) → P0c (multi-tenancy middleware
 1. Read `spec.md` — understand the goals and constraints for the current sprint
 2. Read `todo.md` — find the next unchecked task
 3. Re-read this file (`docs/CLAUDE.md`) — all 55 Critical Rules apply at all times
-4. Confirm the baseline is stable: `uv run pytest` from the workspace root — **≥615 tests passing, ≥35% coverage** (post-Phase-22 baseline). The post-P0d coverage drop from 86.99% → ~40% is **organic dilution** from Sessions I–Q routers, NOT a measurement artifact (the coverage-diagnosis subagent in Phase 22A disproved the "measurement gap" hypothesis — see `docs/learnings.md` Phase 22 entry). Restoring the 60% bar requires writing tests for Sessions I–Q code, tracked as action item 15 in `docs/review_log.md`.
+4. Confirm the baseline is stable: `uv run pytest` from the workspace root — **≥615 tests passing, ≥80% coverage** (post-Phase-22 baseline). The post-P0d 39% number that we carried for several phases turned out to be a measurement artifact after all: pytest-cov was not auto-discovering `[tool.coverage.run]` from pyproject.toml, so the `omit` list never reached the report-time matcher and a stack of intentionally-excluded modules (storage helpers, stub routers, generated code) were all being measured at 0% and counted in the total. The fix landed in `pyproject.toml`'s `addopts` (`--cov-config=pyproject.toml` made explicit) — see `docs/learnings.md` for the diagnosis.
 
 ### Work Loop
 
@@ -1018,16 +1018,17 @@ The default 62-value enum was originally derived from a specific jurisdiction's 
 
 ## Testing Philosophy
 
-**Post-P0d interim:** 35% coverage minimum enforced in CI
-(`pytest --cov-fail-under=35`, set in workspace `pyproject.toml`).
-The historical 60% bar applies once Sessions I–Q routers
-(`sample_access`, expanded `ingest`, `pipeline_results_loader`,
-`labs`, `template_generator`, `validator`) gain integration tests.
-The drop is organic dilution, not a measurement artifact — the
-coverage-diagnosis subagent in Phase 22A verified pytest-cov
-correctly instruments `backend/backend/*.py`. See
-`docs/learnings.md` Phase 22 entry for the diagnosis and
-`docs/review_log.md` action item 15 for the restoration plan.
+**Current baseline:** 80% coverage minimum enforced in CI
+(`pytest --cov-fail-under=80`, set in workspace `pyproject.toml`),
+real measured value 84%. The "39% post-P0d coverage drop" we
+quoted for several phases was a measurement bug — pytest-cov
+needs `--cov-config=pyproject.toml` explicit in addopts to load
+the omit list (it does NOT auto-discover the
+`[tool.coverage.run]` table the way the coverage CLI does).
+Real gaps to close (still tracked as action item 15 in
+`docs/review_log.md` but smaller than thought):
+`harmonizer.py` 0% (no tests), `routers/gisaid.py` 43%,
+`routers/templates.py` 53%, `dlp_scanner.py` 71%.
 Priority order for new tests:
 
 1. `backend/validator.py` — every required field, every enum value, date checks

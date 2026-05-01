@@ -2365,3 +2365,79 @@ The bad commit (5dd4806) stays in history rather than being reverted — its pre
 ```
 
 **The pause-for-review pattern from `/automode`:** Phase 22 was a textbook fit for spawn-N-parallel-agents, synthesize, then sequential commits. The four review agents shared no state, each took ~5–40 minutes, and the orchestrator synthesizing their outputs took roughly the same wall time as one agent. Net: ~80 minutes of agent work compressed into ~40 wall-clock minutes. Reuse this pattern at every "after-P0X" review checkpoint.
+
+---
+
+## Coverage measurement bug — what we got wrong — 2026-05-01 (post-Phase-22)
+
+**What was built:** The diagnosis and fix for a coverage-measurement misconfiguration that we carried wrong through P0d, the P0d.1 cleanup, all of Phase 22, and three `/ultrareview` passes. The "39% coverage post-P0d" number we quoted in `docs/CLAUDE.md`, `docs/learnings.md`, `docs/review_log.md`, `todo.md`, and the Phase 22 commit log was wrong by ~45 percentage points. Real coverage was 84% the whole time. Two `pyproject.toml` lines fix it.
+
+**The bug:**
+
+`pyproject.toml` had:
+
+```toml
+[tool.pytest.ini_options]
+addopts = "--cov=backend --cov-report=term-missing --cov-fail-under=35"
+
+[tool.coverage.run]
+omit = [
+    "**/backend/storage/**",
+    "**/backend/routers/pipelines.py",
+    ... 16 more entries ...
+]
+```
+
+Two interacting problems:
+
+1. **`--cov=backend` is a path-based source spec** that bypasses `[tool.coverage.run].omit`. When pytest-cov sees `--cov=<path>`, it treats the value as a directory to measure but does not also auto-load the `omit` list from pyproject.toml.
+2. **pytest-cov does NOT auto-discover `[tool.coverage.run]` from pyproject.toml the way the `coverage` CLI does.** It needs `--cov-config=pyproject.toml` explicitly in addopts. Without it, the omit list is parsed (and `coverage.Coverage().load()` confirms it's there) but never reaches the report-time matcher.
+
+Net effect: 17 large modules that were intentionally omit-listed (pre-implementation stubs, generated code, storage helpers, frontend/, migrations/) were all being measured at 0% and counted in the denominator. Real coverage was 84%; reported coverage was 39%.
+
+**The fix (two `pyproject.toml` lines):**
+
+```toml
+addopts = "--cov --cov-config=pyproject.toml --cov-report=term-missing --cov-fail-under=80"
+
+[tool.coverage.run]
+source_pkgs = ["backend"]
+omit = [...same list, plus tightened a few patterns...]
+```
+
+- `--cov` (bare, no path) reads source from `[tool.coverage.run].source_pkgs`.
+- `--cov-config=pyproject.toml` makes pytest-cov load the omit list.
+- `source_pkgs = ["backend"]` is the importable package name (more precise than a path-based source).
+- Threshold restored from `35` to `80` — the real value.
+
+**Verification:**
+
+```
+$ uv run pytest tests/
+  Required test coverage of 80% reached. Total coverage: 84.09%
+  615 passed, 1 skipped
+```
+
+**How we got it wrong (the meta-lesson):**
+
+The Phase 22A coverage diagnosis subagent (the agent that wrote `/tmp/phase22_agent3_coverage.md`) ran `uv run pytest --cov=backend --cov-report=term-missing` to investigate — exactly the broken form. It correctly observed that the `.coverage` data file contained the right files, that `import backend` resolved to the right path, and that pytest-cov was instrumenting `backend/backend/*.py`. It then jumped to the wrong conclusion — "the 47-point drop is organic dilution from Sessions I–Q" — without testing the omit-list behavior. The hypothesis was plausible (Sessions I–Q DID add new code) and self-consistent (coverage IS measuring what it instruments), but it didn't match the numbers when you looked at any single module: `samples.py` showed 88%, `validator.py` 90%, `tokens.py` 100% — these are not "low coverage" numbers. The drag was concentrated in a small number of modules at exactly 0%, which is a measurement-bug signature, not a tested-poorly signature.
+
+The user surfaced the discrepancy by asking "Why is the test coverage so low?" — and pulling on that thread for one minute revealed the real answer. **Lesson: when a coverage diagnosis agent reports a wide-spread drop, run the same `--cov` command both with and without an explicit path argument.** If the numbers diverge, the omit list is being ignored in one of them.
+
+**Watch out for:**
+
+- `pytest --cov=<path>` and `pytest --cov` (bare) produce different numbers when an omit list exists. Pick one form deliberately and write down which.
+- The `[tool.coverage.run]` table in pyproject.toml is read by the `coverage` CLI but NOT by `pytest-cov` automatically. Always add `--cov-config=pyproject.toml` to addopts in pytest projects, or duplicate the omit list in a `.coveragerc`.
+- A coverage report that shows multiple critical modules at exactly 0% with no missing-line ranges is a measurement signature, not a coverage signature. Tests that exist but contribute zero are not "weak tests" — they're not being credited.
+- The `--cov-fail-under` threshold can make a misconfigured coverage measurement *passively LGTM* — we passed `35%` for weeks while the real number was `84%`. Set the threshold to the real expected value so a misconfiguration produces a noticeable failure.
+
+**Documents that needed corrections:**
+
+- `docs/CLAUDE.md` — line 33 ("≥615 tests, ≥35% coverage") and the Testing Philosophy block ("Post-P0d interim: 35%")
+- `todo.md` Baseline line ("39.74% coverage")
+- `docs/review_log.md` Test coverage health section (preserved as historical record; superseded by this entry)
+
+**Related deferrals to revisit:**
+
+- Action item 15 in `review_log.md` ("Restore 60% coverage by writing tests for Sessions I–Q") is partially obsolete — coverage is already 84%. The real remaining gaps are smaller and more specific: `harmonizer.py` 0%, `gisaid.py` 43%, `templates.py` 53%, `dlp_scanner.py` 71%. The "~100 new tests for Sessions I–Q" estimate was based on the wrong baseline; ~20 targeted tests against those four modules would close the meaningful gaps.
+- Action item 5 (fix `learnings.md` + `CLAUDE.md` "0% storage" / "measurement gap" claims) is now fully resolved — the framing was wrong, and this entry retires it.

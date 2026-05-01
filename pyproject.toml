@@ -32,19 +32,33 @@ members = ["backend", "cli", "schema"]
 asyncio_mode  = "auto"
 testpaths     = ["tests", "cli/tests"]
 pythonpath    = [".", "backend"]
-addopts       = "--cov=backend --cov-report=term-missing --cov-fail-under=35"
+# --cov: bare flag (no path arg) reads `[tool.coverage.run]` from
+# pyproject.toml. The previous `--cov=backend` form was a path-based
+# source spec that silently bypassed the omit list, producing a
+# misleading 39% number (omit-listed modules were measured at 0% and
+# counted against the total). --cov-config=pyproject.toml is required
+# explicitly because pytest-cov does not auto-discover the
+# `[tool.coverage.run]` block from pyproject.toml; without it the
+# omit list never reaches the report-time matcher. With the fix in
+# place the real baseline is ~84%.
+addopts       = "--cov --cov-config=pyproject.toml --cov-report=term-missing --cov-fail-under=80"
 markers       = [
     "integration: end-to-end tests that require Docker (testcontainers)",
 ]
 
 [tool.coverage.run]
+# Source is the importable Python package name (NOT the directory
+# path). This restricts measurement to files inside the `backend`
+# package only — sibling directories like `backend/db/migrations/`
+# get instrumented when alembic loads them but are filtered out at
+# report time. A directory-form source like `backend/backend` would
+# pull in everything under that path including transient measurements
+# of migration files.
+source_pkgs = ["backend"]
 # Glob patterns; coverage matches against the path it observes at
 # runtime. Use ** wildcards so we don't depend on the cwd.
 omit = [
     "**/backend/models_generated.py",
-    "**/backend/storage/**",
-    "**/backend/auth/oauth.py",
-    "**/backend/auth/dependencies.py",
     "**/backend/audit.py",
     "**/backend/notifications.py",
     "**/backend/pagination.py",
@@ -56,20 +70,20 @@ omit = [
     "**/backend/routers/datasets.py",
     "**/backend/routers/ncbi_submissions.py",
     "**/backend/routers/notifications.py",
-    "**/backend/routers/pipelines.py",
     "**/backend/routers/saved_searches.py",
     "**/backend/frontend/**",
-    "**/db/migrations/**",
-    "**/scripts/**",
+    "**/backend/db/**",
+    "**/backend/scripts/**",
+    "**/backend/setup/**",
     "**/tests/**",
 ]
-# Threshold is 35% (down from CLAUDE.md's 60%) as an interim P0d
-# regression. The original 86.99% baseline was measured by `cd
-# jackpot-backend && uv run pytest`. After the monorepo workspace,
-# pytest-cov via the editable install shows ~40%; investigation of the
-# tooling gap is a Phase 21.5 follow-up. Tests themselves all pass
-# (639 passed, 1 skipped). Restore to 60% once measurement is fixed.
-# CLI coverage is tracked separately by `cd cli && uv run pytest`.
+# Removed from omit (UR follow-up): `backend/storage/**` (42 tests in
+# tests/storage/), `backend/routers/pipelines.py` (29 tests in
+# test_pipelines_router_api.py), `backend/auth/oauth.py` and
+# `backend/auth/dependencies.py` (exercised via the Google login
+# integration tests). These were vestigial pre-implementation omits
+# carried through P0d. CLI coverage is tracked separately by
+# `cd cli && uv run pytest`.
 
 [tool.ruff]
 line-length    = 100
