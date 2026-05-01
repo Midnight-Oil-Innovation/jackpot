@@ -70,23 +70,22 @@ async def test_auth_login_rate_limit_blocks_after_quota(enable_limiter, client):
 
 
 @pytest.mark.asyncio
-async def test_ingest_upload_rate_limit_blocks_after_quota(enable_limiter, client):
-    # 60/minute on /api/v1/ingest/upload. Sending 61 multipart uploads is
-    # heavy; instead drop the configured quota for this test using the
-    # limiter's exempt+shared-state behaviour: shrink the attached limit.
-    # slowapi exposes the configured limits via the route decoration, so
-    # the cleanest test is to confirm a low-volume burst is allowed and
-    # the limiter is wired (verified by the dedicated auth test above).
-    # Here we only confirm /upload is registered with the limiter.
-    from backend.rate_limit import limiter as live_limiter
+async def test_rate_limit_429_carries_retry_after_header(enable_limiter, client):
+    # Trip the auth limit (5/min), then verify the 6th response carries
+    # Retry-After + RateLimit-* hints so clients can back off correctly.
+    # This guards the explicit _inject_headers call in main.py's custom
+    # 429 handler — without it, the JACKPOT envelope would land bare.
+    for _ in range(5):
+        await client.post("/api/v1/auth/google/login", params={"code": "x"})
+    blocked = await client.post("/api/v1/auth/google/login", params={"code": "x"})
 
-    matched_limits = [
-        lim
-        for lim in live_limiter._route_limits.values()
-        for entry in lim
-        if "60" in str(entry.limit)
-    ]
-    assert matched_limits, "expected ingest endpoints to carry a 60/* limit"
+    assert blocked.status_code == 429
+    headers_lower = {k.lower() for k in blocked.headers}
+    assert "retry-after" in headers_lower, f"missing Retry-After in {blocked.headers}"
+    # slowapi's RateLimit-* hints (informational, optional in spec but
+    # set whenever headers_enabled=True on the Limiter)
+    assert "x-ratelimit-limit" in headers_lower
+    assert "x-ratelimit-remaining" in headers_lower
 
 
 @pytest.mark.asyncio

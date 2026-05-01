@@ -153,12 +153,19 @@ async def _http_exception_to_envelope(request: Request, exc: HTTPException) -> J
 async def _rate_limit_to_envelope(request: Request, exc: RateLimitExceeded) -> JSONResponse:
     # Critical Rule 24: surface rate-limit rejections through the JACKPOT
     # envelope so the frontend ApiClient gets a uniform shape. slowapi's
-    # default handler returns a bare {"error": "..."} dict.
-    return error(
+    # default handler returns a bare {"error": "..."} dict and would skip
+    # the envelope. We hand the JSONResponse to slowapi's _inject_headers
+    # afterwards so clients still receive Retry-After + RateLimit-* hints
+    # (slowapi sets request.state.view_rate_limit before raising).
+    response = error(
         code="HTTP_429",
         message=f"Rate limit exceeded: {exc.detail}",
         status_code=429,
     )
+    view_limit = getattr(request.state, "view_rate_limit", None)
+    if view_limit is not None:
+        request.app.state.limiter._inject_headers(response, view_limit)
+    return response
 
 
 @app.exception_handler(RequestValidationError)
