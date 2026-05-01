@@ -661,10 +661,11 @@ Named deliverables, all done:
 Action items deferred to later phases (numbered per `docs/review_log.md`):
 
 - **P0e (next sprint) absorbs:**
-  - 5: Fix coverage docs in `learnings.md` + `CLAUDE.md` (drop the "0% storage"
-    + "measurement gap" claims; describe the organic dilution)
-  - 6: Change `--cov=backend` → `--cov=backend/backend` in `pyproject.toml`
-    (eliminates a fragile directory-vs-package ambiguity)
+  - 5: ~~Fix coverage docs~~ — RESOLVED post-Phase-22 by commit `863fd18` once
+    the real measurement bug was identified (the framing was wrong, not the docs).
+  - 6: ~~Change `--cov=backend` → `--cov=backend/backend`~~ — RESOLVED post-Phase-22
+    by commit `863fd18` with the correct fix (`--cov` bare + explicit
+    `--cov-config=pyproject.toml` + `source_pkgs = ["backend"]`).
   - 7: Remove 9 stale CLI TODO comments
   - 8: Wire 3 SDK methods (`Sample.download_fastq`, `SamplesModule.search/get`)
     — backend endpoints already live
@@ -674,23 +675,27 @@ Action items deferred to later phases (numbered per `docs/review_log.md`):
     archive_requests, saved_searches, billing, dataset_access, ncbi_submissions)
   - 11: Fix 5 inherited Rule 55 CRITICAL violations (`backend/setup/write_files*.py`,
     baseline migration `5adf11b77c19`, `Chart.yaml`, `bootstrap_project.sh`) — these
-    block any non-Glen operator deploys
+    block any non-Glen operator deploys. Also fold in the 6 inherited Rule 55
+    violations in `deploy/helm/jackpot-api/values-staging.yaml` (project ID, SA
+    email, `JACKPOT_API_URL`, `CORS_ORIGINS`, dead `ADHS_ORGANIZATION_NAME`)
+    flagged by UR pass-3 — `jackpot init` is the natural operator-bootstrap
+    point for all of these.
   - 12: Implement `POST /api/v1/auth/refresh` OR remove the spec claim that it exists
   - 13: Resolve `backend/backend/storage/*.py` SPDX `Apache-2.0` vs project AGPL-3.0
     (needs human decision on whether storage module was adapted from Apache source)
-  - 14: Update spec — replace 60% coverage with interim 35% + restoration plan;
-    update §10 frontend path; close Q-10/Q-11; update §3 `STORAGE_BACKEND` to
-    `STORAGE_ENDPOINT`
-
-- **Pre-Phase-26 (was Phase 21.5 follow-up):**
-  - 15: Restore 60% coverage by writing tests for Sessions I–Q routers (~100 new tests)
-
-- **Refactor pass alongside Phase 24:**
-  - 18: Move Rule 18 violation in `ingest.py:288` (FASTA scrub_status logic) into
-    `validator.py.ValidationResult`
-
-- **Month 2 / P0e or after:**
+  - 14: Update spec — drop the 60% coverage claim conflict (post-fix: real coverage
+    is 84%, threshold restored to 80%); update §10 frontend path; close Q-10/Q-11;
+    update §3 `STORAGE_BACKEND` to `STORAGE_ENDPOINT`
+  - 15 (revised): Close the 4 real coverage gaps surfaced by the post-Phase-22
+    measurement fix — `harmonizer.py` 0% (no tests), `routers/gisaid.py` 43%
+    (~17 missing stmts in lines 57-116), `routers/templates.py` 53% (~9 missing
+    stmts in lines 58-68, 97-104), `dlp_scanner.py` 71% (~34 missing stmts).
+    Estimate: ~20 targeted tests, not the ~100 we previously planned. Lifts
+    coverage from 84% → ~90% if all four gaps close.
   - 16: Implement `jackpot auth login` OAuth flow + backend `/auth/cli-login-url`
+  - 18: Move Rule 18 violation in `ingest.py:288` (FASTA scrub_status logic) into
+    `validator.py.ValidationResult` (lighter than expected — was tagged "Phase 24
+    refactor" but fits naturally with P0e's CLI-touches-ingest work)
 
 - **Month 3 / Phase 24+:**
   - 17: Build out 7 stub routers (datasets, notifications, archive_requests,
