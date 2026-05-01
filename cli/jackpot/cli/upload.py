@@ -439,7 +439,9 @@ def upload_dir(
 )
 @click.option("--source-endpoint", required=True, help="Globus source endpoint name or UUID")
 @click.option(
-    "--source-path", required=True, help="Path on source endpoint (e.g. /scratch/otero/sequences/)"
+    "--source-path",
+    required=True,
+    help="Path on source endpoint (e.g. /your/sequencing/data/path/)",
 )
 @click.option("--project", type=int, default=None, help="Project ID for all samples")
 @click.option(
@@ -471,18 +473,18 @@ def upload_globus(
 
     \b
     Examples:
-      # Transfer from ASU Sol HPC
+      # Transfer from your sequencing facility's Globus endpoint
       jackpot upload-globus \\
           --metadata-csv metadata.csv \\
-          --source-endpoint asu-sol \\
-          --source-path /scratch/otero/sequences/ \\
+          --source-endpoint your-hpc-cluster \\
+          --source-path /your/sequencing/data/path/ \\
           --project 42
 
       # Preview transfer plan
       jackpot upload-globus \\
           --metadata-csv metadata.csv \\
-          --source-endpoint asu-sol \\
-          --source-path /scratch/otero/sequences/ \\
+          --source-endpoint your-hpc-cluster \\
+          --source-path /your/sequencing/data/path/ \\
           --dry-run
     """
     import csv
