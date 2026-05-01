@@ -30,7 +30,7 @@ federated_peers + BYOP/eukaryotic schema) → P0c (multi-tenancy middleware
 1. Read `spec.md` — understand the goals and constraints for the current sprint
 2. Read `todo.md` — find the next unchecked task
 3. Re-read this file (`docs/CLAUDE.md`) — all 55 Critical Rules apply at all times
-4. Confirm the baseline is stable: `uv run pytest` from the workspace root — **≥614 tests passing, ≥35% coverage** (post-Phase-22 baseline). The post-P0d coverage drop from 86.99% → ~40% is **organic dilution** from Sessions I–Q routers, NOT a measurement artifact (Phase 22A agent 3 disproved the "measurement gap" hypothesis — see `docs/learnings.md` Phase 22 entry). Restoring the 60% bar requires writing tests for Sessions I–Q code, tracked as action item 15 in `docs/review_log.md`.
+4. Confirm the baseline is stable: `uv run pytest` from the workspace root — **≥615 tests passing, ≥35% coverage** (post-Phase-22 baseline). The post-P0d coverage drop from 86.99% → ~40% is **organic dilution** from Sessions I–Q routers, NOT a measurement artifact (the coverage-diagnosis subagent in Phase 22A disproved the "measurement gap" hypothesis — see `docs/learnings.md` Phase 22 entry). Restoring the 60% bar requires writing tests for Sessions I–Q code, tracked as action item 15 in `docs/review_log.md`.
 
 ### Work Loop
 
@@ -1023,11 +1023,11 @@ The default 62-value enum was originally derived from a specific jurisdiction's 
 The historical 60% bar applies once Sessions I–Q routers
 (`sample_access`, expanded `ingest`, `pipeline_results_loader`,
 `labs`, `template_generator`, `validator`) gain integration tests.
-The drop is organic dilution, not a measurement artifact — Phase
-22A agent 3 verified pytest-cov correctly instruments
-`backend/backend/*.py`. See `docs/learnings.md` Phase 22 entry for
-the diagnosis and `docs/review_log.md` action item 15 for the
-restoration plan.
+The drop is organic dilution, not a measurement artifact — the
+coverage-diagnosis subagent in Phase 22A verified pytest-cov
+correctly instruments `backend/backend/*.py`. See
+`docs/learnings.md` Phase 22 entry for the diagnosis and
+`docs/review_log.md` action item 15 for the restoration plan.
 Priority order for new tests:
 
 1. `backend/validator.py` — every required field, every enum value, date checks

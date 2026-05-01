@@ -1,5 +1,16 @@
 # Staging overrides. Values marked ${...} are interpolated by the CI pipeline
 # from Terraform outputs and GitHub Actions repo variables.
+#
+# Critical Rule 55 status: this file currently contains operator-specific
+# values inherited from the pre-multi-tenancy snapshot — GCP project ID
+# (lines 5, 11, 19), service account email, the dead ADHS_ORGANIZATION_NAME
+# env var (line 21 — backend reads `host_organization_name` instead),
+# JACKPOT_API_URL, and CORS_ORIGINS. None are read by production code in
+# the operator-agnostic sense — they all become per-instance configuration
+# in P0e (`jackpot init` CLI) and migrate to env-scoped GitHub Actions vars
+# / `--set env.*` arguments at deploy time. Tracked as `docs/review_log.md`
+# action item 11. Until then this file is Glen's-staging-only and is not
+# safe to copy as a template for another operator.
 
 image:
   repository: us-central1-docker.pkg.dev/gotero3-acdp-488517/jackpot/jackpot-api

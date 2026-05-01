@@ -22,10 +22,11 @@ def _key_func(request) -> str:
 
 
 # swallow_errors: if the rate-limit storage backend is ever unavailable
-# (e.g. when we move to Redis and Memorystore is briefly unreachable), a
-# raised storage exception inside _inject_headers would otherwise turn
-# the 429 into a 500 — strictly worse than just sending 429 without the
-# Retry-After hint.
+# (in-memory today; a shared backend later for multi-pod), a raised
+# storage exception inside _inject_headers would otherwise turn the 429
+# into a 500 — strictly worse than just sending 429 without the
+# Retry-After hint. Swallowed exceptions still surface via
+# logger.exception, so a misconfigured backend is observable.
 limiter = Limiter(
     key_func=_key_func,
     enabled=get_settings().rate_limit_enabled,
