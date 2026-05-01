@@ -2682,3 +2682,52 @@ After 4 cleanup commits between `p0d-complete` (d32f40a) and `p0d-validated`:
 JACKPOT now has a working monorepo at Midnight-Oil-Innovation/jackpot. Local dev runs from `docker compose up`. The post-P0d phases (P0e jackpot init CLI, Phase 24.5 design lockdown, P0f BYOP infrastructure, P0b Schema v5.0, P0c multi-tenancy middleware) are unblocked. The five planning documents (`spec.md`, `todo.md`, `CLAUDE.md`, this file, `learnings.md`) plus the four design documents (Pathoplexus/Loculus, CDC DMI/STLT, BYOP/Eukaryotic, Claude Code Playbook) plus the new repo-level docs (governance/, deploy/stlt/, fhir-mapping.md, monorepo README) constitute the post-P0d documentation baseline.
 
 The next session work should resume on Phase 22 (Periodic review checkpoint, the original "after P0d" milestone) or jump directly into P0e per the agreed phase chain.
+
+---
+
+# Session 13 — 2026-05-01 (Phase 22 Periodic Review Checkpoint)
+
+## What we covered
+
+Phase 22 — the post-P0d periodic review checkpoint that surfaces drift, regressions, and incomplete work between major implementation phases. Four parallel review subagents fanned out across the codebase, then four named security/deploy deliverables landed as commits.
+
+## Part A — Phase 22A: Four-agent parallel review
+
+Four subagents ran read-only audits in parallel against the post-P0d working tree:
+
+- **Agent 1 — Critical Rules compliance.** Audited all 55 rules from `docs/CLAUDE.md`. Verified 44 clean. Confirmed 5 inherited Rule 55 violations (`backend/setup/write_files*.py`, baseline migration `5adf11b77c19`, `Chart.yaml`, `bootstrap_project.sh`) plus 2 NEW HIGH violations introduced in P0d's CLI work (`cli/jackpot/cli/upload.py:442` operator paths, `cli/jackpot/cli/main.py:25,47` ADHS URL example, plus dead `ADHS_ORGANIZATION_NAME` env var in Helm values). 3 medium + 2 low Rule 18/24/54 findings. Production `backend/backend/` core verified clean.
+
+- **Agent 2 — Spec→implementation drift.** Audited spec.md §1, §3, §4, §5 (router endpoint lists), §10, §11, §12, §13. 8 spec-says-code-doesn't items (notable: `POST /api/v1/auth/refresh` declared complete but missing; `STORAGE_BACKEND` env var documented but not in `config.py` — factory infers from `storage_endpoint`; spec §10 frontend path is pre-P0d). 7 code-not-in-spec items (`permissions.py`, `middleware.py`, `logging_config.py`, `version.py`, `pipeline_schemas/` package, `harmonizer.py`, undocumented `GET /api/v1/pipelines/`). 3 decisions-log conflicts — most concerning: `backend/backend/storage/*.py` SPDX headers say `Apache-2.0` while project flipped to AGPL-3.0.
+
+- **Agent 3 — Test coverage diagnosis.** Disproved the "measurement artifact" hypothesis we'd been carrying since P0d. Coverage IS correctly instrumenting `backend/backend/*.py`. The 47-point drop from the 86.99% Session-H baseline is **organic dilution** — Sessions I–Q added ~660 statements with low/no coverage (sample_access at 23%, expanded ingest at 19%, pipeline_results_loader at 18%). Restoring 60% requires writing ~100 tests for those modules, not fixing tooling. Also flagged: `learnings.md` and `CLAUDE.md` mis-describe storage as "0% measured" when it's omit-listed (intentional).
+
+- **Agent 4 — TODO/placeholder hunt.** 44 markers total. Auth/migrations/router production logic CLEAN. 11 real-work items (most notably 7 stub routers returning HTTP 200 with `{"status": "not implemented"}` — silent-failure risk; SDK `Sample.download_fastq()`, `SamplesModule.search/get` raise `NotImplementedError` despite live backend endpoints; `jackpot auth login`/`auth revoke`/`upload-globus` are CLI stubs). 9 stale CLI TODO comments lying about commands that already work end-to-end.
+
+All four findings synthesized into `docs/review_log.md` (commit `8cbb993`). Path-case correction: agent 3 typed `/Users/glen/projects/...` lowercase three times; macOS APFS resolved them to the same files; codebase itself was confirmed clean of any `/Users/glen/projects` (lowercase or uppercase) developer-path references.
+
+## Part B — Phase 22C: Named deliverables
+
+Four commits, all green tests:
+
+1. **SEC-1** (`cea62b6`) — `backend/backend/main.py` CORSMiddleware tightened from `allow_methods=["*"]` / `allow_headers=["*"]` to explicit lists: methods `[GET, POST, PATCH, DELETE, OPTIONS]`; headers `[Authorization, Content-Type, X-Requested-With, Accept, Origin, X-Mock-User-Email, X-Request-ID]`. The two custom headers (`X-Mock-User-Email`, `X-Request-ID`) verified in use by frontend ApiClient and RequestIDMiddleware respectively.
+
+2. **SEC-2** (`a1ed4ab`) — slowapi==0.1.9 added; new `backend/backend/rate_limit.py` exposes a `Limiter` with X-Forwarded-For-aware key function. `5/minute` on `/api/v1/auth/google/login`; `60/minute` on `/api/v1/ingest/upload`, `/csv`, `/globus`. Limits configurable via `RATE_LIMIT_AUTH` / `RATE_LIMIT_INGEST` env vars; whole limiter can be disabled via `RATE_LIMIT_ENABLED=false` (default in test `conftest.py`). Rate-limit rejections route through `responses.error()` for envelope consistency (Critical Rule 24). 3 new tests in `tests/test_rate_limiting.py` (608 total now).
+
+3. **DEPLOY-1** (`f7680ea`) — new `.github/workflows/deploy-production.yml` triggered by `workflow_dispatch` only (never on push). Declares `environment: name: production`; the per-environment Required Reviewers list is configured in the GitHub UI (cannot be expressed in YAML). Workflow accepts an `image_tag` (must already be built+pushed by staging) plus a mandatory `reason` input. Verifies image existence in Artifact Registry before applying. Companion runbook at `docs/deploy/production-deploy.md` documents one-time setup (env creation, env-scoped vars, values-production.yaml stub), per-deploy approver checklist, cancel-mid-flight procedure, rollback procedure (Helm + alembic downgrade), audit trail.
+
+4. **DEPLOY-2** (`6d35d20`) — `docs/deploy/pitr-restore-drill.md` documents the Cloud SQL point-in-time recovery drill. Required permissions, pre-drill Terraform check, 6-step drill procedure (pick target time → confirm PITR enabled → clone to NEW instance → wait for RUNNABLE → connect via Cloud SQL Auth Proxy and run row-count + alembic-version verification queries → tear down). Pass criteria explicit (row counts ±1% of production, latest-sample timestamp ≤ target, alembic_version matches). Operator-agnostic — uses placeholder values throughout. README.md gained a new "Operations runbooks" section linking both deploy docs and the existing staging access doc.
+
+## Decisions
+
+- *Coverage measurement IS working.* The "measurement gap" framing in `learnings.md` and `CLAUDE.md` is wrong and should be retired. Real action: write tests for Sessions I–Q routers to lift coverage from 39% back toward 60%. Tracked as action item 15 in review_log.md.
+- *Stub routers should return 501, not 200.* Tracked as action item 10 for P0e. Not in scope for Phase 22.
+- *5 inherited Rule 55 violations stay deferred to P0e.* They block multi-operator deploys (any operator other than Glen would inherit `gotero@linuxprophet.com`, `linuxprophet` WIF condition, etc.) but don't block local dev or Glen-only staging. P0e is the natural place since `jackpot init` is the operator-bootstrap mechanism.
+- *Rate-limit storage is in-memory.* Adequate for staging single-pod and for local dev; production multi-pod will need Redis storage backend (slowapi supports it via `storage_uri`). Tracked implicitly under SEC-2 follow-ups.
+
+## Outcome
+
+Phase 22 produces three durable artifacts: `docs/review_log.md` (the findings), `docs/deploy/production-deploy.md` (DEPLOY-1 runbook), `docs/deploy/pitr-restore-drill.md` (DEPLOY-2 runbook). It also lands two security improvements (SEC-1, SEC-2) and one workflow asset (`.github/workflows/deploy-production.yml`) that turn on a production deploy gate.
+
+After Phase 22, the post-P0d health summary: backend core clean, security defensive layer present (CORS + rate limit), production deploy guarded behind required-reviewer approval, PITR restore procedure documented and ready to drill. Outstanding: 5 inherited Rule 55 violations, 7 stub routers returning misleading 200s, 3 SDK methods raising NotImplementedError despite live endpoints, 9 stale CLI TODOs, and ~25 percentage points of coverage debt to recover. None of these block the next phase.
+
+The next session should jump into P0e (jackpot init CLI), folding action items 7 (stale TODOs), 8 (SDK wires), 9 (CLI Rule 55 fixes), 10 (501 stubs), 11 (inherited Rule 55), 12 (auth refresh decision), and 14 (spec updates) into its scope.

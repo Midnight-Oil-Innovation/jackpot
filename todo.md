@@ -1,8 +1,8 @@
 # JACKPOT — To-Do List
 
-**Last updated:** 2026-05-01 (post-P0d execution + post-execution cleanup)
-**Baseline:** 639 tests passing, 1 skipped, 39% coverage (interim post-monorepo threshold; restore to 60% once measurement gap fixed) — Session S (projects + dataharmonizer) complete, Session 5 staging deploy work landed on top, P0d monorepo migration done and validated
-**Active sprint:** Phase 22 (Periodic review checkpoint) → P0e (jackpot init CLI). P0d is COMPLETE and VALIDATED — see Session 12 in jackpot_session_summary_and_backlog.md and the P0d.1 cleanup entry in learnings.md.
+**Last updated:** 2026-05-01 (post-Phase-22 review checkpoint)
+**Baseline:** 608 backend tests passing, 1 skipped, 39.66% coverage (interim post-monorepo threshold; the 39%→60% recovery is a real-tests-needed action, NOT a measurement gap — Phase 22A agent 3 disproved the measurement-artifact hypothesis; ~100 new tests for Sessions I–Q routers will close it). Session S complete, Session 5 staging deploy on top, P0d done + validated, Phase 22 review checkpoint complete.
+**Active sprint:** P0e (jackpot init CLI). Phase 22 COMPLETE — see Session 13 in jackpot_session_summary_and_backlog.md, the Phase 22 entry in learnings.md, and `docs/review_log.md` for findings + 19-item action list.
 
 **Project context as of 2026-04-28:** JACKPOT pivoted to an independent project under `Midnight-Oil-Innovation/jackpot` (no longer ADHS/ASU-coupled, no longer the APGAP successor). License flipped from Apache 2.0 to **AGPL-3.0**. New multi-deployment-target architecture covers 7 install scenarios (A laptop, B single-org cloud, C multi-lab agency, D hosted SaaS, E federation member, F CI test, **T Tribal-sovereignty deployment**). Cleanup A through J COMPLETE → **P0d COMPLETE and VALIDATED (2026-04-30 → 2026-05-01)** → P0e (jackpot init CLI, next) → **P0f (BYOP infrastructure)** → P0b/c (multi-tenancy schema + middleware, **gated on Phase 24.5 sovereignty design** AND **must include BYOP + eukaryotic schema additions**) → P1–P5. See `jackpot_pathoplexus_loculus_overview.md`, `jackpot_cdc_dmi_stlt_overview.md`, and `jackpot_byop_and_eukaryotic_design.md` for the analyses driving Phases 26, 27, P0f, and 28.
 
@@ -628,30 +628,77 @@ Items, all complete:
 
 ---
 
-## Phase 22 — Periodic Review Checkpoint
+## Phase 22 — Periodic Review Checkpoint (COMPLETE 2026-05-01)
 
-After every ~20 completed tasks, pause and run this review:
+Four-agent parallel review (Critical Rules, spec drift, coverage, TODOs)
+followed by four sequential security/deploy commits. Findings synthesized
+into `docs/review_log.md` (commit `8cbb993`) — that file is the canonical
+output and carries the 19-item action list. Session 13 in
+`jackpot_session_summary_and_backlog.md` and the Phase 22 entry in
+`learnings.md` carry the play-by-play.
 
-```
-Review spec.md and the current implementation for gaps.
-Check: are all Critical Rules from CLAUDE.md being followed?
-Check: has coverage stayed above 60%?
-Check: are there any TODO comments or placeholder code left in place?
-Log findings to docs/review_log.md and resolve before continuing.
-```
+Named deliverables, all done:
 
-- [ ] **SEC-1: Tighten CORS methods/headers in `backend/main.py`** —
-      replace `allow_methods=["*"]` with
-      `["GET","POST","PATCH","DELETE","OPTIONS"]` and restrict
-      `allow_headers` to the actually needed set.
-- [ ] **SEC-2: Add rate limiting** — `slowapi` on auth endpoints
-      (`/api/v1/auth/login`, `/api/v1/auth/callback`) and ingest
-      endpoints before GCP production deployment.
-- [ ] **DEPLOY-1: Document staging→production gate** — add a required
-      manual approval step in `.github/workflows/` before production
-      deploy.
-- [ ] **DEPLOY-2: Test backup restore** — run a full PITR restore drill
-      to a separate Cloud SQL instance before going live with real data.
+- [x] **SEC-1: Tighten CORS methods/headers in `backend/backend/main.py`** —
+      replaced `allow_methods=["*"]` / `allow_headers=["*"]` with explicit
+      lists. Commit `cea62b6`.
+- [x] **SEC-2: Add rate limiting** — `slowapi==0.1.9` on
+      `/api/v1/auth/google/login` (5/min) and `/api/v1/ingest/{upload,csv,globus}`
+      (60/min); env-tunable; envelope-conforming 429 handler; 3 new tests.
+      Commit `a1ed4ab`.
+- [x] **DEPLOY-1: Document staging→production gate** — new
+      `.github/workflows/deploy-production.yml` declaring
+      `environment: name: production` (Required Reviewers configured in
+      GitHub UI, per-instance); workflow_dispatch only with mandatory
+      `image_tag` + `reason` inputs; runbook at
+      `docs/deploy/production-deploy.md`. Commit `f7680ea`.
+- [x] **DEPLOY-2: PITR restore drill procedure** —
+      `docs/deploy/pitr-restore-drill.md` with permissions, 6-step drill,
+      explicit pass criteria, cleanup. README.md gained an "Operations
+      runbooks" index. Live drill execution deferred to per-instance
+      go-live (procedure-only here). Commit `6d35d20`.
+
+Action items deferred to later phases (numbered per `docs/review_log.md`):
+
+- **P0e (next sprint) absorbs:**
+  - 5: Fix coverage docs in `learnings.md` + `CLAUDE.md` (drop the "0% storage"
+    + "measurement gap" claims; describe the organic dilution)
+  - 6: Change `--cov=backend` → `--cov=backend/backend` in `pyproject.toml`
+    (eliminates a fragile directory-vs-package ambiguity)
+  - 7: Remove 9 stale CLI TODO comments
+  - 8: Wire 3 SDK methods (`Sample.download_fastq`, `SamplesModule.search/get`)
+    — backend endpoints already live
+  - 9: Fix CLI Rule 55 (Glen-introduced) — `cli/jackpot/cli/upload.py:442,474,478,485`,
+    `cli/jackpot/cli/main.py:25,47`, remove dead `ADHS_ORGANIZATION_NAME` from Helm values
+  - 10: Stub routers return 501 instead of 200 (datasets, notifications,
+    archive_requests, saved_searches, billing, dataset_access, ncbi_submissions)
+  - 11: Fix 5 inherited Rule 55 CRITICAL violations (`backend/setup/write_files*.py`,
+    baseline migration `5adf11b77c19`, `Chart.yaml`, `bootstrap_project.sh`) — these
+    block any non-Glen operator deploys
+  - 12: Implement `POST /api/v1/auth/refresh` OR remove the spec claim that it exists
+  - 13: Resolve `backend/backend/storage/*.py` SPDX `Apache-2.0` vs project AGPL-3.0
+    (needs human decision on whether storage module was adapted from Apache source)
+  - 14: Update spec — replace 60% coverage with interim 35% + restoration plan;
+    update §10 frontend path; close Q-10/Q-11; update §3 `STORAGE_BACKEND` to
+    `STORAGE_ENDPOINT`
+
+- **Pre-Phase-26 (was Phase 21.5 follow-up):**
+  - 15: Restore 60% coverage by writing tests for Sessions I–Q routers (~100 new tests)
+
+- **Refactor pass alongside Phase 24:**
+  - 18: Move Rule 18 violation in `ingest.py:288` (FASTA scrub_status logic) into
+    `validator.py.ValidationResult`
+
+- **Month 2 / P0e or after:**
+  - 16: Implement `jackpot auth login` OAuth flow + backend `/auth/cli-login-url`
+
+- **Month 3 / Phase 24+:**
+  - 17: Build out 7 stub routers (datasets, notifications, archive_requests,
+    saved_searches, billing, dataset_access, ncbi_submissions)
+
+- **CI track (separate from feature phases):**
+  - 19: Investigate testcontainers DinD reliability if integration tests are
+    erroring silently in CI
 
 ---
 

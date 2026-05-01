@@ -2313,3 +2313,55 @@ Before P0d.1                          After P0d.1
 4. `8a01cd8 fix(p0d): restore canonical frontend at monorepo root, drop unused jackpot-frontend stub` (the recovery)
 
 The bad commit (5dd4806) stays in history rather than being reverted — its presence + the recovery commit document the lesson better than a clean revert would.
+
+---
+
+## Phase 22 — Periodic review checkpoint after P0d — 2026-05-01
+
+**What was built:** A four-agent parallel review of the post-P0d codebase plus four named security/deploy deliverables (SEC-1 CORS tightening, SEC-2 slowapi rate limiting, DEPLOY-1 production deploy gate, DEPLOY-2 PITR restore drill procedure). Findings synthesized into `docs/review_log.md`. Session 13 in `jackpot_session_summary_and_backlog.md` carries the full play-by-play.
+
+**Key decisions:**
+
+- *The "coverage measurement gap" framing in P0d's `learnings.md` was wrong.* When the post-P0d coverage dropped from 86.99% to 39%, we attributed it to a pytest-cov-can't-find-the-files measurement artifact. A dedicated diagnosis subagent in Phase 22A (`/tmp/phase22_agent3_coverage.md`) disproved this: pytest-cov correctly instruments `backend/backend/*.py`, the `.coverage` data file contains 43 entries at correct absolute paths, and the omit pattern `**/backend/storage/**` is excluding storage from the report (not measuring it at 0%). The drop is **organic dilution** — Sessions I–Q added ~660 statements with low/no coverage. Recovering 60% requires writing tests for those modules, not fixing tooling. Lesson: when test count stays roughly constant (639 across the migration) but coverage drops drastically, do the math against the new total stmts before reaching for "tooling broke."
+- *Security defaults should land before production goes live, not after.* SEC-1 and SEC-2 are pre-emptive — there's no production deployment yet, no observed attack. But CORS `allow_methods=["*"]` and unrate-limited auth are the kind of things you regret only in retrospect. Cost was small (one config edit + one new module + 3 tests).
+- *Production deploy approval lives in GitHub UI, not YAML.* The `environment: name: production` block in the workflow is the gate's _wiring_; the Required Reviewers list is configured per-environment under repo Settings. This is operator-agnostic by design (each instance sets its own approver list) and survives YAML edits — a malicious PR cannot grant itself approval rights without first changing the Settings UI.
+- *PITR drill is documentation, not code, but the procedure has explicit pass criteria.* Row counts within ±1% of production at the target time, latest sample timestamp ≤ target, alembic_version match. A drill that just "successfully creates a clone instance" doesn't validate that the data is intact — the verification queries are the actual test.
+- *macOS APFS case-insensitivity hides path-typo bugs.* Phase 22A agent 3 typed `/Users/glen/projects/jackpot/...` (lowercase) three times in its report. Commands worked because the filesystem resolved them to `/Users/glen/Projects/jackpot/...`. Codebase grep confirmed no production file has either lowercase or uppercase developer paths. Lesson for future agents: explicitly type the canonical case in reports even if the FS doesn't enforce it.
+- *Inherited rule violations stay deferred to the natural fix point.* The 5 inherited Rule 55 violations (operator-specific values in `backend/setup/write_files*.py`, baseline migration `5adf11b77c19`, `Chart.yaml`, `bootstrap_project.sh`) were known going into Phase 22 and were not fixed during it. The natural place is P0e (`jackpot init` CLI), which is the operator-bootstrap mechanism — fixing these requires deciding what the post-`jackpot init` flow looks like for each file, and that decision belongs in P0e scope, not Phase 22. Documented as action item 11 in `review_log.md`.
+
+**Watch out for:**
+
+- *FastAPI routes decorated with `@limiter.limit(...)` MUST take `request: Request` as a parameter.* slowapi reads `request.client.host` (or X-Forwarded-For via the key_func) to identify the rate-limit bucket. If the parameter is missing, slowapi raises a confusing `Could not find Request object` at request time, not at startup. All 4 endpoints we decorated already had `request: Request` for other reasons; would have been a debugging trap otherwise.
+- *Pydantic-settings `BaseSettings` reads env vars case-insensitively, but the env var name in the test must still match field-name conventions.* `RATE_LIMIT_ENABLED` (uppercase) is correctly mapped to `rate_limit_enabled` (lowercase field). When test sets `monkeypatch.setenv("RATE_LIMIT_ENABLED", "false")` after `get_settings.cache_clear()`, the next call to `get_settings()` re-reads the env. The slowapi `Limiter` instance, however, was constructed at import time with `enabled=get_settings().rate_limit_enabled` and does NOT re-read settings on each request. So the test conftest must explicitly do `limiter.enabled = get_settings().rate_limit_enabled` after the env mutation, or rate-limit-disabled tests will trip the live limiter.
+- *slowapi `_route_limits` is an internal dict.* The dedicated test asserting "ingest endpoints carry a 60/* limit" reaches into `live_limiter._route_limits.values()`. This is brittle to slowapi version changes. We pinned `slowapi==0.1.9`; bump only with care and re-run `tests/test_rate_limiting.py`.
+- *RateLimitExceeded handler must produce the JACKPOT envelope.* slowapi's default returns `{"error": "Rate limit exceeded: 5 per 1 minute"}` — a bare dict without the `success`/`error.code`/`error.message` shape the frontend ApiClient expects (Critical Rule 24). Without our custom `_rate_limit_to_envelope` handler, a 429 response would crash the frontend's response unwrapper.
+- *Production environment in GitHub also needs env-scoped secrets.* `GCP_PROJECT_ID`, `GCP_CLUSTER_NAME`, etc. should be set at the `production` environment scope, NOT at the repo scope, so the staging workflow cannot accidentally read production credentials. This is documented in `production-deploy.md` step 2 but is operator action, not a workflow concern.
+- *Cloud SQL clone instances bill at the source instance's machine type.* A 90-minute drill against `db-custom-4-15360` is roughly $0.50; a forgotten clone left running for a month is ~$350. The cleanup step in the PITR drill is not optional.
+
+**ASCII diagram — Phase 22 sub-phase flow:**
+
+```
+22A: Four parallel review subagents (read-only)
+   ┌──────────────────────────┐
+   │ Agent 1: Critical Rules  │ → /tmp/phase22_agent1_rules.md
+   │ Agent 2: Spec drift      │ → /tmp/phase22_agent2_spec.md
+   │ Agent 3: Coverage        │ → /tmp/phase22_agent3_coverage.md
+   │ Agent 4: TODOs           │ → /tmp/phase22_agent4_todos.md
+   └──────────────────────────┘
+                ↓
+22B: Synthesis (orchestrator reads all 4 → docs/review_log.md)  ── commit 8cbb993
+                ↓
+22C: Four named deliverables (sequential)
+   ┌──────────────────────────────────────────────────┐
+   │ SEC-1: Tighten CORS         ── commit cea62b6   │
+   │ SEC-2: slowapi rate limit   ── commit a1ed4ab   │
+   │ DEPLOY-1: prod deploy gate  ── commit f7680ea   │
+   │ DEPLOY-2: PITR drill doc    ── commit 6d35d20   │
+   └──────────────────────────────────────────────────┘
+                ↓
+22D: learnings.md + session_summary.md + todo.md updates,
+     /ultrareview pass, then `git tag -a phase-22-complete`,
+     then push.
+```
+
+**The pause-for-review pattern from `/automode`:** Phase 22 was a textbook fit for spawn-N-parallel-agents, synthesize, then sequential commits. The four review agents shared no state, each took ~5–40 minutes, and the orchestrator synthesizing their outputs took roughly the same wall time as one agent. Net: ~80 minutes of agent work compressed into ~40 wall-clock minutes. Reuse this pattern at every "after-P0X" review checkpoint.
