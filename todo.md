@@ -1,10 +1,10 @@
 # JACKPOT — To-Do List
 
-**Last updated:** 2026-04-28 (post-CDC DMI / STLT / CARE Principles overview)
-**Baseline:** 477 tests passing, 86.99% coverage — Session S (projects + dataharmonizer) complete, Session 5 staging deploy work landed on top
-**Active sprint:** Phase 21 (UI page triage close-out) → **P0d monorepo migration starting now**
+**Last updated:** 2026-05-01 (post-P0d execution + post-execution cleanup)
+**Baseline:** 639 tests passing, 1 skipped, 39% coverage (interim post-monorepo threshold; restore to 60% once measurement gap fixed) — Session S (projects + dataharmonizer) complete, Session 5 staging deploy work landed on top, P0d monorepo migration done and validated
+**Active sprint:** Phase 22 (Periodic review checkpoint) → P0e (jackpot init CLI). P0d is COMPLETE and VALIDATED — see Session 12 in jackpot_session_summary_and_backlog.md and the P0d.1 cleanup entry in learnings.md.
 
-**Project context as of 2026-04-28:** JACKPOT pivoted to an independent project under `Midnight-Oil-Innovation/jackpot` (no longer ADHS/ASU-coupled, no longer the APGAP successor). License flipped from Apache 2.0 to **AGPL-3.0**. New multi-deployment-target architecture covers 7 install scenarios (A laptop, B single-org cloud, C multi-lab agency, D hosted SaaS, E federation member, F CI test, **T Tribal-sovereignty deployment**). Cleanup A through J COMPLETE → P0d (monorepo migration, **starting now**) → P0e (jackpot init CLI) → **P0f (BYOP infrastructure)** → P0b/c (multi-tenancy schema + middleware, **gated on Phase 24.5 sovereignty design** AND **must include BYOP + eukaryotic schema additions**) → P1–P5. See `jackpot_pathoplexus_loculus_overview.md`, `jackpot_cdc_dmi_stlt_overview.md`, and `jackpot_byop_and_eukaryotic_design.md` for the analyses driving Phases 26, 27, P0f, and 28.
+**Project context as of 2026-04-28:** JACKPOT pivoted to an independent project under `Midnight-Oil-Innovation/jackpot` (no longer ADHS/ASU-coupled, no longer the APGAP successor). License flipped from Apache 2.0 to **AGPL-3.0**. New multi-deployment-target architecture covers 7 install scenarios (A laptop, B single-org cloud, C multi-lab agency, D hosted SaaS, E federation member, F CI test, **T Tribal-sovereignty deployment**). Cleanup A through J COMPLETE → **P0d COMPLETE and VALIDATED (2026-04-30 → 2026-05-01)** → P0e (jackpot init CLI, next) → **P0f (BYOP infrastructure)** → P0b/c (multi-tenancy schema + middleware, **gated on Phase 24.5 sovereignty design** AND **must include BYOP + eukaryotic schema additions**) → P1–P5. See `jackpot_pathoplexus_loculus_overview.md`, `jackpot_cdc_dmi_stlt_overview.md`, and `jackpot_byop_and_eukaryotic_design.md` for the analyses driving Phases 26, 27, P0f, and 28.
 
 **Priority shift (2026-04-28):** With CARE Principles, STLT alignment, and DMI/North Star analysis in scope, several items that were "Year 2 stretch" deserve to land *during* P0d (governance docs, deploy guide reorganization, layer-cake framing) because P0d is already touching exactly those files. The architectural design for delete-on-request (B-CARE-3) is now **Phase 24.5** — must lock in *before* P0b schema work to avoid retrofit.
 
@@ -528,9 +528,11 @@ Upload page triage". Two real backend bugs found and fixed at root.
 
 ## Phase 21.5 — Interstitial During-P0d Quick Wins
 
-**Why now, not later:** P0d is already touching the docs tree, the repo structure, the README, and the directory layout. These items are pure-documentation or near-pure-documentation work that ride along naturally with the monorepo migration. Doing them as part of P0d is more efficient than scheduling them as separate phases — the alternative is reopening the same files later. None of these add engineering scope; they all add clarity / governance / grant-narrative quality.
+**Status (2026-05-01):** all items below COMPLETE. Phase 21.5 docs landed during P0d execution (commit `2d340af docs(p0d): Phase 21.5 quick-wins — STLT guides, FHIR mapping, README, spec edits` plus `f46f7ee docs(p0d): governance/ directory — 8 charter + policy documents`).
 
-Order is rough effort ascending. Do these opportunistically between bigger P0d chunks; none gates anything.
+**Why this phase existed:** P0d was already touching the docs tree, the repo structure, the README, and the directory layout. These items were pure-documentation or near-pure-documentation work that rode along naturally with the monorepo migration. Doing them as part of P0d was more efficient than scheduling them as separate phases — the alternative was reopening the same files later. None added engineering scope; they all added clarity / governance / grant-narrative quality.
+
+The items below are kept for historical record with checkboxes marked. Order was rough effort ascending.
 
 ### B-DMI-3: "Single-entry-point" framing in spec.md
 
@@ -598,6 +600,31 @@ By the time P0d is otherwise complete:
 - [x] README.md links to governance/ directory
 
 If any of these slip past P0d, that's fine — they're not gating. But if you're touching docs anyway during P0d, you should be touching these.
+
+---
+
+## Phase 21.6 — P0d.1 Post-Execution Cleanup (COMPLETE 2026-05-01)
+
+Four structural follow-ups surfaced AFTER P0d's `p0d-complete` tag landed (commit `d32f40a`) but before the local dev stack actually ran. None were caught by P0d's own success criteria — those covered tests-pass and /ultrareview-clean and gh-archive-done, but didn't include "`docker compose up` brings the full stack up." Documented in detail in `learnings.md` ("P0d.1 — Post-execution cleanup" entry) and `jackpot_session_summary_and_backlog.md` Session 12.
+
+Items, all complete:
+
+- [x] **docker-compose.yml moved from `backend/` to monorepo root.** P0d's filter-repo carried it along with backend's other root-level files; relative paths broke in the new layout.
+- [x] **Dockerfile.api and Dockerfile.ui rewritten for workspace-aware paths.** Now copy full uv workspace (root pyproject + all member directories) before `uv sync --frozen` so workspace resolution sees all member metadata.
+- [x] **entrypoint.sh updated for new layout.** `cd /app/backend` before alembic (script_location=db/migrations), `cd /app` before uvicorn (backend.main:app import).
+- [x] **Frontend canonicalization.** P0d's design kept canonical Streamlit at `backend/frontend/`; chat-side analysis incorrectly deleted it as a "stale shadow" (commit `5dd4806`). Recovery: filter-repo merge of archived gotero/jackpot-frontend brought in a half-finished uv-init stub (not useful); canonical files restored from `5dd4806^` and relocated to `frontend/` at monorepo root (more aligned with P0d's "each component at top level" intent than its actual `backend/frontend/` placement).
+- [x] **`p0d-validated` tag added** at the commit where the stack genuinely runs end-to-end. `p0d-complete` kept at d32f40a for historical record.
+- [x] **End-to-end smoke validated:** API healthy with all 17 alembic migrations applied, Streamlit on 8501 with 9 researcher pages, /health returns 200, 55 OpenAPI paths registered.
+
+**Lessons folded back into learnings.md:**
+
+- "Shadows that aren't shadows" — always `git ls-files <canonical-path>` before deleting apparent duplicates
+- `backend/backend/` for uv workspaces is a standard layout, not an anti-pattern
+- git filter-repo `--to-subdirectory-filter` wraps structure, doesn't flatten it
+- Docker workspace pattern: copy full workspace (root pyproject + all members) before `uv sync`
+- Compose file location matters in monorepo migrations — should be at root
+- `gotero/jackpot-frontend` was a uv-init stub; the canonical streamlit lived inside `jackpot-backend`
+- Future structural-migration phases should include "fresh-clone smoke test" in the success criteria, not just unit-test pass
 
 ---
 

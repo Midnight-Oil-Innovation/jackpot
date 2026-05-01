@@ -2229,3 +2229,87 @@ documentation landed alongside.
 ├── tests/      (backend integration tests vs Postgres testcontainer)
 └── .github/workflows/  (test.yml + deploy-staging.yml; consolidated)
 ```
+
+---
+
+## P0d.1 — Post-execution cleanup: docker-compose location, frontend canonicalization — 2026-05-01
+
+**What was built:** The four structural follow-ups that surfaced after P0d's `p0d-complete` tag was applied (commit `d32f40a`) but before the local dev stack actually ran. None of them were caught by P0d's own success criteria (tests pass, /ultrareview clean, gh archive done) because those criteria didn't include "`docker compose up` brings the full stack up." This entry documents the structural fixes that took P0d from "executed cleanly" to "validated end-to-end working" at tag `p0d-validated`.
+
+**The four issues, in order encountered:**
+
+1. **`docker-compose.yml` stayed at `backend/docker-compose.yml`** because the P0d filter-repo for `gotero/jackpot-backend` carried it along with the rest of the source repo's root-level files into `backend/`. From the monorepo root, `docker compose up` returned "no compose file found." The compose file's relative paths (`./schema`, `./frontend`, `context: .`) all resolved relative to the file's location, so even running it from `backend/` would have used wrong paths.
+
+2. **Dockerfiles also at `backend/Dockerfile.{api,ui}`** with `COPY pyproject.toml uv.lock alembic.ini ./` and `COPY db/ ./db/` — paths that worked when build context was the old `jackpot-backend` repo root but were broken in the new monorepo where `alembic.ini` is at `backend/alembic.ini` and `db/` is at `backend/db/`. The Dockerfiles also did `COPY pyproject.toml uv.lock` without the workspace member pyproject files, which would have failed `uv sync --frozen` because workspace resolution requires all member pyproject.toml files to be present at sync time.
+
+3. **`backend/frontend/` was treated by chat-side analysis as a stale shadow** of a canonical `frontend/` at the monorepo root. It wasn't. P0d's design (per the prior P0d entry above) deliberately kept the canonical Streamlit at `backend/frontend/` and skipped `gotero/jackpot-frontend` as a vestigial stub. Deleting `backend/frontend/` removed 18 working files (1,840 lines: `app.py`, `lib/api.py`, `lib/session.py`, `components/badges.py`, 9 researcher pages) under the wrong assumption that they were duplicates.
+
+4. **Retroactive merge of `gotero/jackpot-frontend` brought in a half-stub** instead of recovering the deleted code. The archived gotero repo turned out to be a `uv init` skeleton (5-line "Hello from jackpot-frontend" `main.py`, placeholder pyproject.toml, the actual streamlit code copied as an unused subdirectory `frontend/frontend/`, plus a never-initialized `.gitmodules` submodule pointer to `gotero/jackpot-schema`). Confirmed why P0d had skipped this repo: there was nothing useful in it.
+
+**Recovery sequence (for future migrations):**
+
+```bash
+# 1. Delete the half-stub from the bad merge
+git rm -rf frontend/
+
+# 2. Restore the canonical files from the parent of the deletion commit
+git checkout <bad-deletion-commit>^ -- backend/frontend/
+
+# 3. Move to the canonical location (root, per P0d intent)
+git mv backend/frontend frontend
+
+# 4. Single recovery commit that surfaces the full repair
+gac "fix(p0d): restore canonical frontend at monorepo root"
+```
+
+**Key decisions:**
+
+- *Frontend restored to `frontend/` at monorepo root, NOT to `backend/frontend/`.* The P0d execution's choice to keep frontend nested under `backend/` was internally consistent (Streamlit code shared `from backend.foo` imports easily), but it diverged from P0d's stated intent that "each top-level directory is a first-class component." The recovery used the relocate to honor the original intent. Cost: the streamlit code now uses `from frontend.lib.session import current_user` which works because the monorepo root is on sys.path inside the container.
+- *docker-compose.yml at monorepo root, not `backend/`.* Standard monorepo pattern. The compose file's relative paths now resolve to canonical sibling directories (`./frontend`, `./schema`, `./pipelines`) at the root. This is the configuration most natural to "developer wants `docker compose up` to work from the repo top."
+- *Dockerfiles copy the full uv workspace before `uv sync`.* Specifically: `COPY pyproject.toml uv.lock ./` then `COPY backend/ ./backend/` then `COPY cli/ ./cli/` then `COPY schema/ ./schema/`. Then `uv sync --frozen` resolves the workspace correctly because all member pyproject files exist. We accepted worse Docker layer caching (any source change invalidates the deps layer) for reproducibility — workspace member sources may reference each other's APIs, and partial copies can succeed at sync but fail at runtime.
+- *entrypoint.sh now `cd /app/backend` before alembic, `cd /app` before uvicorn.* Alembic's `script_location = db/migrations` is relative to cwd, and `db/migrations` lives at `/app/backend/db/migrations` in the new layout. Uvicorn imports `backend.main:app` which requires `/app` on sys.path so the package at `/app/backend/__init__.py` resolves.
+- *Add `p0d-validated` tag, leave `p0d-complete` where it is.* Two tags now: `p0d-complete` at d32f40a marks "Claude Code declared P0d done"; `p0d-validated` marks "stack actually runs end-to-end." Useful historical record of the gap.
+
+**Watch out for:**
+
+- *"Shadows that aren't shadows."* Before deleting an apparent duplicate during a migration, run `git ls-files <canonical-path>` to confirm the canonical version exists in the working tree. If `git ls-files frontend/` returns empty, then `backend/frontend/` is NOT a shadow — it's the only copy. The diagnostic costs nothing; deleting working code costs an hour of recovery.
+- *`backend/backend/` for uv workspaces is a standard layout, not an anti-pattern.* When `backend/pyproject.toml` declares the package name as `backend`, the inner `backend/backend/__init__.py` is the canonical Python package directory. Imports resolve as `from backend.foo import bar` because the package metadata in `backend/pyproject.toml` points uv there. Same pattern at `pipelines/pipelines/`, `schema/schema/`, `cli/jackpot/`. Don't flatten these without checking the workspace config first.
+- *git filter-repo `--to-subdirectory-filter` wraps source structure, doesn't flatten it.* If the source repo has `frontend/X.py` at its root, filter-repo with `--to-subdirectory-filter frontend` produces `frontend/X.py` (correct). If the source repo had `subdir/X.py`, the result is `frontend/subdir/X.py`. The destination layout depends entirely on the source layout.
+- *Compose file location matters in monorepo migrations.* The default-correct location is the monorepo root, not nested under one of the components. If the source repo had its compose file at root (which is typical), filter-repo will move it to `<subdir>/docker-compose.yml` — it must then be promoted back to the root in a follow-up step. Same applies to `Dockerfile.*` and any cross-cutting config files.
+- *P0d's success criteria didn't include "stack runs."* All 8 phases passed their declared exit criteria (tests green, /ultrareview clean, gotero/* archived, p0d-complete tag) but `docker compose up` was never validated. For future migrations, add to the success criteria: "From a fresh clone of the destination repo, `docker compose up` brings all services healthy and the integration smoke test passes." Validation gate, not just acceptance gate.
+
+**ASCII diagram — the four files that needed to move from `backend/` to monorepo root:**
+
+```
+Before P0d.1                          After P0d.1
+~/Projects/jackpot/                   ~/Projects/jackpot/
+├── backend/                          ├── backend/
+│   ├── docker-compose.yml ───────┐   │   ├── backend/  (Python pkg)
+│   ├── Dockerfile.api ───────┐   │   │   ├── db/
+│   ├── Dockerfile.ui ────┐   │   │   │   └── ...
+│   ├── frontend/   ──────┼───┼───┼   │   └── (no Dockerfiles, no compose)
+│   │   └── (canonical)   │   │   │   ├── docker-compose.yml ◄────┐
+│   ├── pipelines/        │   │   │   ├── Dockerfile.api ◄──────┐ │
+│   └── ...               │   │   │   ├── Dockerfile.ui ◄────┐  │ │
+├── frontend/  (empty/    │   │   │   ├── frontend/  ◄───────┼──┼─┘
+│       absent)           │   │   │   │   ├── app.py        │  │
+├── pipelines/  (canonical)│  │   │   │   └── pages/         │  │
+├── schema/  (canonical)  │   │   │   ├── pipelines/  (canonical)
+└── ...                   │   │   │   ├── schema/  (canonical)
+                          ▼   ▼   ▼   └── ...
+                    moved to root    │
+                                     │
+                       Dockerfiles copy full workspace
+                       members before `uv sync --frozen`
+                       so workspace resolution sees all
+                       member pyproject.toml files
+```
+
+**Total cleanup work:** 4 commits between `d32f40a` (p0d-complete) and `p0d-validated`:
+
+1. `5dd4806 fix(p0d): remove stale frontend/ and pipelines/ shadows from backend/` (the bad commit — wiped working frontend)
+2. `6b462f3 fix(p0d): docker-compose + Dockerfiles to monorepo root with workspace-aware paths` (correct: moved compose+Dockerfiles)
+3. `0373156 chore(p0d): merge jackpot-frontend (root → frontend/) [retroactive Phase C step]` (the half-stub merge, kept for history despite being unused)
+4. `8a01cd8 fix(p0d): restore canonical frontend at monorepo root, drop unused jackpot-frontend stub` (the recovery)
+
+The bad commit (5dd4806) stays in history rather than being reverted — its presence + the recovery commit document the lesson better than a clean revert would.

@@ -1,8 +1,10 @@
 # JACKPOT Session Summary & Backlog
 
-**Document version:** 2.6
-**Last updated:** 2026-04-29
-**Sessions covered:** Session 1 (March–April 2026 consolidated), Session 2 (2026-04-10), Sessions 3–S (2026-04 through 2026-04-19), Pathoplexus/Loculus comparative analysis session (2026-04-28), Cleanup A–J operator-agnostic genericization session (2026-04-26 to 2026-04-28), Session 11 (2026-04-28 → 2026-04-29 — CDC DMI/STLT/CARE alignment, BYOP/eukaryotic design, phasing rework, P0d migration prep)
+**Document version:** 2.7
+**Last updated:** 2026-05-01
+**Sessions covered:** Session 1 (March–April 2026 consolidated), Session 2 (2026-04-10), Sessions 3–S (2026-04 through 2026-04-19), Pathoplexus/Loculus comparative analysis session (2026-04-28), Cleanup A–J operator-agnostic genericization session (2026-04-26 to 2026-04-28), Session 11 (2026-04-28 → 2026-04-29 — CDC DMI/STLT/CARE alignment, BYOP/eukaryotic design, phasing rework, P0d migration prep), Session 12 (2026-04-30 → 2026-05-01 — P0d execution in Claude Code + post-execution cleanup)
+
+**v2.7 changelog (2026-05-01):** Added Session 12 covering: (1) P0d execution in Claude Code on 2026-04-30 — 6 source repos consolidated into Midnight-Oil-Innovation/jackpot via two-pass git filter-repo, history preserved, p0d-complete tag at d32f40a. (2) Post-execution cleanup of four structural issues that prevented `docker compose up` from working: docker-compose.yml + Dockerfiles stayed in backend/, Dockerfiles needed workspace-aware path rewrites, the `backend/frontend/` canonical streamlit code was incorrectly deleted as a "shadow" then partially recovered via filter-repo of the archived gotero/jackpot-frontend (which turned out to be a uv-init stub), and finally restored from the parent of the bad-deletion commit. (3) Frontend now lives at `frontend/` at monorepo root (more aligned with P0d's "each component at top level" intent than P0d's actual `backend/frontend/` placement). (4) Local dev stack validated end-to-end: API healthy with all 17 alembic migrations, Streamlit on 8501 with 9 researcher pages, /health 200, p0d-validated tag added.
 
 **v2.6 changelog (2026-04-29):** Added Session 11 covering: (1) CDC Data Modernization Initiative / North Star Architecture / STLT alignment with formal CARE Principles adoption and addition of Scenario T (Tribal-sovereignty deployment) — produced `jackpot_cdc_dmi_stlt_overview.md`, 14-item Phase 27 backlog. (2) Multi-engine BYOP infrastructure design (Nextflow + Snakemake + WDL + manifest-wrapped scripts) plus full-parity eukaryotic pathogen support across 8 pathogen groups — produced `jackpot_byop_and_eukaryotic_design.md`, 25-item set split across Phase 24.5 / P0f / Phase 28. (3) Phasing rework: schema items moved to Phase 24.5 (lockdown before P0b), BYOP infrastructure becomes new P0f phase between P0e and P0b/c, eukaryotic pipelines stay in Phase 28 with internal tier-prioritization. (4) Claude Code parallel-agents playbook with `/automode` and `/ultrareview` skill designs — produced `jackpot_claude_code_playbook.md`. (5) P0d migration pre-flight: verified all 6 source repos clean and pushed to canonical GitHub state, replaced Apache 2.0 with AGPL-3.0 on destination repo, ready for Claude Code kickoff.
 
@@ -2595,3 +2597,88 @@ Three reference documents drive everything from here:
 - `jackpot_claude_code_playbook.md` (693 lines) — operational guide for Claude Code with parallel agents
 
 `spec.md` is at v2.2; `todo.md` reflects the 7-scenario model and full phase chain; `CLAUDE.md` enforces Critical Rule 55 (operator-agnostic production code); memory edits capture the pivot, AGPL flip, multi-deployment architecture, two-PII-gate architecture, and reference document map.
+
+
+---
+
+# Session 12 — 2026-04-30 → 2026-05-01 (P0d Execution + Post-Execution Cleanup)
+
+## What we covered
+
+The session that took JACKPOT from "P0d planned" to "P0d running locally end-to-end." Two distinct chunks of work: P0d execution in Claude Code on 2026-04-30, then post-execution cleanup back in Chat on 2026-05-01 to address structural issues that prevented `docker compose up` from working.
+
+## Part A — P0d execution in Claude Code (2026-04-30)
+
+Glen took the P0d master prompt produced in Session 11 and executed it autonomously in Claude Code with parallel agents. The execution was largely successful; full notes live in `learnings.md` at the entry "P0d — Monorepo migration to Midnight-Oil-Innovation/jackpot — 2026-04-29." Highlights:
+
+- All 6 source repos collapsed into `Midnight-Oil-Innovation/jackpot` via `git filter-repo` subtree merges, history preserved.
+- `jackpot-frontend` GitHub repo was deliberately NOT merged — at execution time the canonical Streamlit code was inside `backend/frontend/` (a regular subdirectory of the source jackpot-backend repo). Per Claude Code's analysis at the time, the gotero/jackpot-frontend repo was a vestigial stub.
+- Two-pass filter-repo for the backend (one pass to drop unwanted paths, second pass to promote spec.md/todo.md/LICENSE/NOTICE/COPYRIGHT/docs/tests to top level via a staging-prefix dance).
+- Single uv "virtual workspace" pyproject.toml at root, members `backend`, `cli`, `schema`. Pipelines/deploy/governance/docs/tests excluded by design.
+- Schema as a workspace member required a stub Python package (`schema/jackpot_schema/__init__.py`) exposing `SCHEMA_YAML_PATH`, `SCHEMA_JSON_PATH`, `MAPPING_CONFIGS_DIR`. Backend modules now import paths via this helper rather than computing them with `Path("schema/schema/...")`.
+- CI workflows consolidated under `.github/workflows/` at monorepo root.
+- Phase 21.5 quick wins all landed: governance/ directory with 8 charters, 5 STLT deploy guides, FHIR mapping doc, layer-cake diagram in spec.md, Scenario T explicit in spec.md, top-level monorepo README.
+- /ultrareview ran before tagging, surfaced and fixed several blockers + should-fix items.
+- gotero/* repos all archived per Phase H.
+- p0d-complete tag landed at commit d32f40a.
+
+## Part B — Post-execution cleanup (2026-05-01)
+
+Despite all 8 P0d phases declaring success, `docker compose up` from the new monorepo root failed because four structural issues weren't covered by P0d's success criteria. Glen surfaced this with "I think the docker-compose file is in the wrong place because I can't launch anything. This directory organization seems very redundant."
+
+### Issue 1 — docker-compose.yml stayed at backend/
+
+The compose file moved into `backend/` along with the rest of the jackpot-backend filter-repo. Compose's relative paths (`context: .`, `./schema`, `./frontend`) resolved relative to its location, so paths broke whether you ran from the monorepo root (file not found) or from `backend/` (paths pointed at stale or non-existent siblings).
+
+**Fix:** moved `docker-compose.yml`, `Dockerfile.api`, `Dockerfile.ui` from `backend/` to the monorepo root. The compose file's relative paths now resolve correctly to canonical sibling directories.
+
+### Issue 2 — Dockerfiles assumed wrong build context
+
+The Dockerfiles assumed `pyproject.toml`, `alembic.ini`, `db/`, and `backend/` were all top-level siblings (the old jackpot-backend repo root layout). After P0d, `alembic.ini` is at `backend/alembic.ini`, `db/` is at `backend/db/`, and `backend/` is at `backend/backend/`. Plus the Dockerfiles ran `uv sync --frozen` after copying only the workspace root pyproject — which would fail because workspace resolution needs all member pyproject.toml files.
+
+**Fix:** rewrote Dockerfiles to copy the full uv workspace (root pyproject.toml + uv.lock + all member directories: backend/, cli/, schema/) before `uv sync`. Updated `entrypoint.sh` to `cd /app/backend` before alembic (so script_location resolves) and `cd /app` before uvicorn (so the backend package import works).
+
+### Issue 3 — backend/frontend/ deleted as "stale shadow"
+
+This was the costly mistake. From the directory listing, `backend/frontend/` looked like a stale duplicate of canonical content at the monorepo root. It wasn't — it was the canonical streamlit code itself, deliberately placed at `backend/frontend/` per P0d's design. The check that should have run before deletion was `git ls-files frontend/` (which would have returned empty, proving there was no canonical at root). Skipped the check, deleted 18 files / 1,840 lines.
+
+**Fix:** restored the canonical files from `5dd4806^` (parent of the bad deletion) using `git checkout <commit>^ -- <path>`, then `git mv backend/frontend frontend` to put them at the monorepo root. The relocate to `frontend/` (rather than restoring at `backend/frontend/`) honors P0d's stated intent that "each top-level directory is a first-class component." The streamlit imports work because the monorepo root is on sys.path inside the container.
+
+### Issue 4 — Retroactive merge of gotero/jackpot-frontend brought a half-stub
+
+In an attempt to recover the deleted frontend by sourcing the canonical content from the gotero/jackpot-frontend GitHub repo, we filter-repo'd it and merged. It turned out P0d had been right to skip this repo: it contained only a uv-init skeleton (5-line hello-world `main.py`, placeholder `pyproject.toml`, the actual streamlit code copied as an unused subdirectory `frontend/frontend/`, never-initialized `.gitmodules` submodule pointer to gotero/jackpot-schema). Confirmed why P0d had skipped it: there was nothing useful there.
+
+**Fix:** the half-stub merge stays in history (commit kept for record), but its content was wiped and replaced by the canonical restoration described in Issue 3.
+
+### End state — local dev validated
+
+After 4 cleanup commits between `p0d-complete` (d32f40a) and `p0d-validated`:
+
+- `docker compose up postgres minio minio_init` — healthy
+- `docker compose up api` — alembic ran all 17 migrations from baseline through `00b4bd99ddee (rename example org and lab)`. Uvicorn started cleanly. APScheduler started two background jobs (run_scrubber_queue_job, run_access_request_job).
+- `/health` returns `{"status":"ok","version":"5.0.0","project":"JACKPOT","database":"connected"}` 200 OK
+- `/openapi.json` reports 55 paths registered under "JACKPOT API 5.0.0"
+- `docker compose up ui` — Streamlit on `http://localhost:8501`, JACKPOT 🧬 favicon, 9 researcher pages auto-discovered (access_requests, dashboard, data_entry, datasets, my_samples, notifications, pipelines, search, upload)
+- Tests still pass: 639 passed, 1 skipped, 39% coverage (interim threshold; CLAUDE.md documents the post-monorepo measurement gap)
+
+## Lessons captured in learnings.md
+
+- *"Shadows that aren't shadows."* Always run `git ls-files <canonical-path>` before deleting an apparent duplicate.
+- *`backend/backend/` for uv workspaces is a standard layout.* When `backend/pyproject.toml` names the package `backend`, the inner `backend/backend/__init__.py` is the canonical Python package. Same pattern at `pipelines/pipelines/`, `schema/schema/`, `cli/jackpot/`. Don't "fix" these without checking workspace config.
+- *git filter-repo `--to-subdirectory-filter` wraps source structure, doesn't flatten it.* The destination layout depends entirely on the source layout.
+- *Docker workspace pattern: copy full root pyproject.toml + uv.lock + ALL member directories before `uv sync --frozen`.* Workspace resolution needs all member pyproject.toml files present.
+- *entrypoint.sh in workspace-rooted Docker: cd /app/backend for alembic (script_location=db/migrations), cd /app for uvicorn (backend.main:app import path).*
+- *Compose file location matters in monorepo migrations: should be at root so relative paths resolve to canonical sibling directories.*
+- *gotero/jackpot-frontend was a half-finished extraction stub; actual frontend lived inside jackpot-backend.* P0d's choice to skip the gotero repo was correct.
+- *P0d's success criteria didn't include "stack runs."* Future structural-migration phases should add a "fresh-clone smoke test" to the acceptance criteria, not just unit-test pass + lint clean.
+
+## Tagging
+
+- `p0d-complete` (existing, at d32f40a) — kept for historical record. Marks "Claude Code declared P0d done."
+- `p0d-validated` (new, at HEAD after cleanup commits) — marks "stack actually runs end-to-end." Useful trace of the validation gap.
+
+## Outcome
+
+JACKPOT now has a working monorepo at Midnight-Oil-Innovation/jackpot. Local dev runs from `docker compose up`. The post-P0d phases (P0e jackpot init CLI, Phase 24.5 design lockdown, P0f BYOP infrastructure, P0b Schema v5.0, P0c multi-tenancy middleware) are unblocked. The five planning documents (`spec.md`, `todo.md`, `CLAUDE.md`, this file, `learnings.md`) plus the four design documents (Pathoplexus/Loculus, CDC DMI/STLT, BYOP/Eukaryotic, Claude Code Playbook) plus the new repo-level docs (governance/, deploy/stlt/, fhir-mapping.md, monorepo README) constitute the post-P0d documentation baseline.
+
+The next session work should resume on Phase 22 (Periodic review checkpoint, the original "after P0d" milestone) or jump directly into P0e per the agreed phase chain.
