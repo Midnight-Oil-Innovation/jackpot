@@ -1,7 +1,39 @@
+from types import SimpleNamespace
+
 import pytest
 
 from backend.config import get_settings
-from backend.rate_limit import limiter
+from backend.rate_limit import _key_func, limiter
+
+
+def test_key_func_takes_rightmost_xforwardedfor():
+    # GCP Cloud Load Balancer appends the real client IP to the right
+    # of X-Forwarded-For. The leftmost entries are client-controlled.
+    # If the limiter keyed on the leftmost, an attacker could rotate
+    # fake IPs to bypass the quota or spoof a victim's IP to poison
+    # their bucket. This test locks in the rightmost-takes-priority
+    # behavior so the spoofing window stays closed.
+    spoofed = SimpleNamespace(
+        headers={"x-forwarded-for": "1.1.1.1, 2.2.2.2, 203.0.113.42"},
+        client=SimpleNamespace(host="127.0.0.1"),
+    )
+    assert _key_func(spoofed) == "203.0.113.42"
+
+
+def test_key_func_strips_whitespace_around_ip():
+    req = SimpleNamespace(
+        headers={"x-forwarded-for": "   198.51.100.1  "},
+        client=SimpleNamespace(host="127.0.0.1"),
+    )
+    assert _key_func(req) == "198.51.100.1"
+
+
+def test_key_func_falls_back_to_remote_address_when_no_xff_header():
+    req = SimpleNamespace(
+        headers={},
+        client=SimpleNamespace(host="10.0.0.5"),
+    )
+    assert _key_func(req) == "10.0.0.5"
 
 
 @pytest.fixture

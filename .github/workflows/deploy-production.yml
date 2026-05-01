@@ -47,19 +47,18 @@ jobs:
     # least one Required Reviewer; the job will block at "Waiting for
     # review" until a reviewer approves it. Operator-agnostic: the list
     # of approved reviewers is a per-instance UI configuration, not
-    # something this workflow encodes.
-    environment:
-      name: production
-      url: https://api.jackpot.example.org
+    # something this workflow encodes. The deployment URL is intentionally
+    # NOT pinned in the workflow (Critical Rule 55) — operators see the
+    # destination via their environment-scoped vars / runbook.
+    environment: production
 
     steps:
       - uses: actions/checkout@v4
 
-      - name: Record deploy reason
-        run: |
-          echo "::notice::Production deploy of image_tag=${{ inputs.image_tag }} requested by ${{ github.actor }}"
-          echo "::notice::Reason: ${{ inputs.reason }}"
-
+      # Validate inputs FIRST. The next step echoes them via $env-vars
+      # (never via `${{ }}` interpolation) so a malicious `reason` value
+      # like `\n::notice::Approved by: CISO` cannot inject fake workflow
+      # commands into the runner log / audit trail.
       - name: Validate image_tag
         env:
           IMAGE_TAG_INPUT: ${{ inputs.image_tag }}
@@ -69,6 +68,15 @@ jobs:
             echo "::error::image_tag contains disallowed characters"
             exit 1
           fi
+
+      - name: Record deploy reason
+        env:
+          IMAGE_TAG: ${{ inputs.image_tag }}
+          REASON: ${{ inputs.reason }}
+          ACTOR: ${{ github.actor }}
+        run: |
+          echo "::notice::Production deploy of image_tag=$IMAGE_TAG requested by $ACTOR"
+          echo "::notice::Reason: $REASON"
 
       - name: Authenticate to GCP (Workload Identity Federation)
         uses: google-github-actions/auth@v2
