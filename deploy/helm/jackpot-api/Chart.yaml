@@ -4,7 +4,9 @@ description: JACKPOT FastAPI backend + Alembic migration Job.
 type: application
 version: 0.1.0
 appVersion: "5.0.0"
-icon: https://raw.githubusercontent.com/linuxprophet/jackpot-backend/main/docs/logo.png
+home: https://github.com/Midnight-Oil-Innovation/jackpot
+sources:
+  - https://github.com/Midnight-Oil-Innovation/jackpot
 maintainers:
-  - name: Glen Otero
-    email: gotero@linuxprophet.com
+  - name: Midnight-Oil-Innovation/jackpot maintainers
+    url: https://github.com/Midnight-Oil-Innovation/jackpot
