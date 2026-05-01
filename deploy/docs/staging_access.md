@@ -1,41 +1,49 @@
 # Staging access
 
-Quick reference for reaching the JACKPOT staging environment, who has
+Quick reference for reaching a JACKPOT staging environment, who has
 access, what the endpoints are, and how to redeploy.
+
+This runbook is operator-agnostic per Critical Rule 55. Replace the
+`<placeholder>` values with whatever your operator actually uses
+(GCP project ID, hostnames, etc.). The values come from the operator's
+`jackpot init` configuration (P0e) and from the GitHub Actions
+environment variables documented in `docs/deploy/production-deploy.md`.
 
 ## Endpoints
 
 | Endpoint | URL |
 |---|---|
-| API (TLS) | `https://api.staging.jackpot.example.org` |
-| Health check | `https://api.staging.jackpot.example.org/health` |
-| OpenAPI | `https://api.staging.jackpot.example.org/openapi.json` |
-| Frontend | `https://staging.jackpot.example.org` *(Month 2+)* |
+| API (TLS) | `https://api.staging.<your-jackpot-domain>` |
+| Health check | `https://api.staging.<your-jackpot-domain>/health` |
+| OpenAPI | `https://api.staging.<your-jackpot-domain>/openapi.json` |
+| Frontend | `https://staging.<your-jackpot-domain>` *(Month 2+)* |
 
-The staging hostnames above are placeholders. Update them here and in
-`helm/jackpot-api/values-staging.yaml` once the DNS records are cut.
+The hostnames are operator-specific. Set `STAGING_JACKPOT_API_URL` and
+`STAGING_CORS_ORIGINS` in the repo's `staging` GitHub environment vars;
+the deploy workflow plumbs them through to the running API. Update DNS
+records (Cloud DNS / Route53 / Cloudflare etc.) at the same time.
 
 ## GCP project
 
 | | |
 |---|---|
-| Project ID | `gotero3-acdp-488517` |
-| Region | `us-central1` |
+| Project ID | `<your-gcp-project>` |
+| Region | `us-central1` (or operator's choice — set `GCP_REGION`) |
 | Backups region | `us-east1` |
-| GKE cluster | `jackpot-staging-gke` |
+| GKE cluster | `<your-gke-cluster>` (set `GCP_CLUSTER_NAME`) |
 | Cloud SQL instance | `jackpot-staging-db` |
-| Artifact Registry | `us-central1-docker.pkg.dev/gotero3-acdp-488517/jackpot` |
-| Namespace | `jackpot` |
+| Artifact Registry | `<region>-docker.pkg.dev/<your-gcp-project>/jackpot` |
+| Namespace | `<your-namespace>` (set `GCP_NAMESPACE`) |
 
 ## Who has access
 
 | Role | Principal | Granted via |
 |---|---|---|
-| Project Owner | `gotero3@asu.edu` | Manual — bootstrap account |
-| GitHub Actions deploy | `jackpot-staging-deploy@...` SA | Workload Identity Federation (`gotero/jackpot-iac` repo) |
-| Backend pod workload identity | `jackpot-api@...` SA | KSA `jackpot/jackpot-api` |
-| Nextflow controllers | `jackpot-nextflow@...` SA | KSA `jackpot/jackpot-nextflow` |
-| Scrubber GKE Jobs | `jackpot-scrubber@...` SA | KSA `jackpot/jackpot-scrubber` |
+| Project Owner | `<operator-bootstrap-account>` | Manual — bootstrap account |
+| GitHub Actions deploy | `jackpot-staging-deploy@<project>.iam.gserviceaccount.com` SA | Workload Identity Federation (`<github-org>/<repo>`) |
+| Backend pod workload identity | `jackpot-api@<project>.iam.gserviceaccount.com` SA | KSA `<namespace>/jackpot-api` |
+| Nextflow controllers | `jackpot-nextflow@<project>.iam.gserviceaccount.com` SA | KSA `<namespace>/jackpot-nextflow` |
+| Scrubber GKE Jobs | `jackpot-scrubber@<project>.iam.gserviceaccount.com` SA | KSA `<namespace>/jackpot-scrubber` |
 
 Add new human users at the project IAM level — never add them to the
 deploy SA's impersonation set.
@@ -44,10 +52,10 @@ deploy SA's impersonation set.
 
 ```bash
 gcloud auth login
-gcloud config set project gotero3-acdp-488517
+gcloud config set project <your-gcp-project>
 
 # GKE credentials for kubectl / helm / k9s
-gcloud container clusters get-credentials jackpot-staging-gke \
+gcloud container clusters get-credentials <your-gke-cluster> \
     --region us-central1
 ```
 
@@ -60,29 +68,31 @@ exist but have no versions. Populate them with:
 # Copy-paste from `terraform output secret_seed_commands` and replace
 # REPLACE_ME with real values before running.
 
+PROJECT_ID=<your-gcp-project>
+
 echo -n "$(openssl rand -hex 32)" | gcloud secrets versions add \
-    jackpot-staging-secret-key --data-file=- --project=gotero3-acdp-488517
+    jackpot-staging-secret-key --data-file=- --project=$PROJECT_ID
 
 # DATABASE_URL format: postgresql://jackpot:<password>@<private-ip>:5432/jackpot_db
 # Private IP comes from `terraform output cloudsql_private_ip`.
 echo -n "postgresql://jackpot:<DB_PASSWORD>@<PRIVATE_IP>:5432/jackpot_db" | \
     gcloud secrets versions add jackpot-staging-database-url \
-    --data-file=- --project=gotero3-acdp-488517
+    --data-file=- --project=$PROJECT_ID
 
 echo -n "<google-oauth-client-id>" | gcloud secrets versions add \
-    jackpot-staging-google-oauth-client-id --data-file=- --project=gotero3-acdp-488517
+    jackpot-staging-google-oauth-client-id --data-file=- --project=$PROJECT_ID
 
 echo -n "<google-oauth-client-secret>" | gcloud secrets versions add \
-    jackpot-staging-google-oauth-client-secret --data-file=- --project=gotero3-acdp-488517
+    jackpot-staging-google-oauth-client-secret --data-file=- --project=$PROJECT_ID
 
 echo -n "<ncbi-api-key>" | gcloud secrets versions add \
-    jackpot-staging-ncbi-api-key --data-file=- --project=gotero3-acdp-488517
+    jackpot-staging-ncbi-api-key --data-file=- --project=$PROJECT_ID
 
 echo -n "<gisaid-username>" | gcloud secrets versions add \
-    jackpot-staging-gisaid-username --data-file=- --project=gotero3-acdp-488517
+    jackpot-staging-gisaid-username --data-file=- --project=$PROJECT_ID
 
 echo -n "<gisaid-password>" | gcloud secrets versions add \
-    jackpot-staging-gisaid-password --data-file=- --project=gotero3-acdp-488517
+    jackpot-staging-gisaid-password --data-file=- --project=$PROJECT_ID
 ```
 
 Rotate the Cloud SQL user password separately:
@@ -99,57 +109,69 @@ Then update the `jackpot-staging-database-url` secret with the new value.
 
 Three paths:
 
-1. **Push to `staging` branch of `jackpot-backend`** — triggers
+1. **Push to `staging` branch** — triggers
    `.github/workflows/deploy-staging.yml`.
 2. **Manual workflow dispatch** — GitHub Actions → `deploy-staging` →
    Run workflow → optionally pass `image_tag` input.
 3. **Local** (emergency only):
 
    ```bash
-   IMAGE=us-central1-docker.pkg.dev/gotero3-acdp-488517/jackpot/jackpot-api:$(git rev-parse --short HEAD)
+   PROJECT_ID=<your-gcp-project>
+   IMAGE=us-central1-docker.pkg.dev/$PROJECT_ID/jackpot/jackpot-api:$(git rev-parse --short HEAD)
    docker build -f Dockerfile.api -t "$IMAGE" .
    docker push "$IMAGE"
 
-   kubectl create namespace jackpot --dry-run=client -o yaml | kubectl apply -f -
+   kubectl create namespace <your-namespace> --dry-run=client -o yaml | kubectl apply -f -
 
    helm upgrade --install jackpot-api ./helm/jackpot-api \
-       --namespace jackpot \
+       --namespace <your-namespace> \
        --values ./helm/jackpot-api/values-staging.yaml \
+       --set image.repository="us-central1-docker.pkg.dev/$PROJECT_ID/jackpot/jackpot-api" \
        --set image.tag="$(git rev-parse --short HEAD)" \
+       --set serviceAccount.gcpServiceAccountEmail="jackpot-api@$PROJECT_ID.iam.gserviceaccount.com" \
+       --set env.GCP_PROJECT_ID="$PROJECT_ID" \
+       --set env.JACKPOT_API_URL="https://api.staging.<your-jackpot-domain>" \
+       --set env.CORS_ORIGINS="https://staging.<your-jackpot-domain>" \
        --wait --timeout 10m
    ```
 
 ## Verifying a deploy
 
 ```bash
+JACKPOT_API_URL=https://api.staging.<your-jackpot-domain>
+
 # Health
-curl -s https://api.staging.jackpot.example.org/health | jq
+curl -s "$JACKPOT_API_URL/health" | jq
 
 # Full smoke test (from repo root)
-JACKPOT_API_URL=https://api.staging.jackpot.example.org \
+JACKPOT_API_URL="$JACKPOT_API_URL" \
     ./scripts/staging_smoke_test.sh
 
 # Smoke test with cluster-level checks
-PROJECT_ID=gotero3-acdp-488517 \
-    GKE_CLUSTER=jackpot-staging-gke \
+PROJECT_ID=<your-gcp-project> \
+    GKE_CLUSTER=<your-gke-cluster> \
     GKE_REGION=us-central1 \
-    JACKPOT_API_URL=https://api.staging.jackpot.example.org \
+    JACKPOT_API_URL="$JACKPOT_API_URL" \
     ./scripts/staging_smoke_test.sh --check-kube --check-buckets
 ```
 
 ## Tailing logs
 
 ```bash
+NAMESPACE=<your-namespace>
+PROJECT_ID=<your-gcp-project>
+GKE_CLUSTER=<your-gke-cluster>
+
 # API logs
-kubectl -n jackpot logs -f deploy/jackpot-api
+kubectl -n $NAMESPACE logs -f deploy/jackpot-api
 
 # Alembic migration Job (most recent)
-kubectl -n jackpot logs job/$(kubectl -n jackpot get jobs \
+kubectl -n $NAMESPACE logs job/$(kubectl -n $NAMESPACE get jobs \
     -l component=migrations -o jsonpath='{.items[-1:].metadata.name}')
 
 # Cloud Logging via gcloud
-gcloud logging read 'resource.type="k8s_container" resource.labels.cluster_name="jackpot-staging-gke"' \
-    --project=gotero3-acdp-488517 --limit=50 --format=json
+gcloud logging read "resource.type=\"k8s_container\" resource.labels.cluster_name=\"$GKE_CLUSTER\"" \
+    --project=$PROJECT_ID --limit=50 --format=json
 ```
 
 ## Database access
@@ -159,23 +181,25 @@ gcloud logging read 'resource.type="k8s_container" resource.labels.cluster_name=
 psql "postgresql://jackpot:<password>@<private-ip>:5432/jackpot_db"
 
 # From laptop via Cloud SQL Auth Proxy
-cloud-sql-proxy gotero3-acdp-488517:us-central1:jackpot-staging-db
+cloud-sql-proxy <your-gcp-project>:us-central1:jackpot-staging-db
 # Then: psql "postgresql://jackpot:<password>@localhost:5432/jackpot_db"
 ```
 
 ## Rolling back
 
 ```bash
+NAMESPACE=<your-namespace>
+
 # Show release history
-helm -n jackpot history jackpot-api
+helm -n $NAMESPACE history jackpot-api
 
 # Roll back to previous revision (runs alembic pre-upgrade hook on the
 # OLD image — be careful if the schema delta isn't reversible)
-helm -n jackpot rollback jackpot-api <REVISION>
+helm -n $NAMESPACE rollback jackpot-api <REVISION>
 ```
 
 If a migration needs to be reversed, prefer PITR over `alembic downgrade`
-(see `docs/production_runbook.md` → Disaster Recovery).
+(see `docs/deploy/pitr-restore-drill.md` and the production runbook).
 
 ## Shutting down to save cost
 
@@ -183,15 +207,17 @@ This is a staging environment — it's expected to be live for active
 development. If you genuinely need to pause it overnight, scale to zero:
 
 ```bash
+NAMESPACE=<your-namespace>
+
 # Zero out the API Deployment
-kubectl -n jackpot scale deploy/jackpot-api --replicas=0
+kubectl -n $NAMESPACE scale deploy/jackpot-api --replicas=0
 
 # Stop the Cloud SQL instance (saves ~75% — restart takes ~2 minutes)
 gcloud sql instances patch jackpot-staging-db --activation-policy=NEVER
 
 # Resume:
 gcloud sql instances patch jackpot-staging-db --activation-policy=ALWAYS
-kubectl -n jackpot scale deploy/jackpot-api --replicas=2
+kubectl -n $NAMESPACE scale deploy/jackpot-api --replicas=2
 ```
 
 `terraform destroy` is NOT the right way to pause — it drops the Cloud

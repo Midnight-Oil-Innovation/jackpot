@@ -1,4 +1,4 @@
-project_id  = "gotero3-acdp-488517"
+project_id  = "your-gcp-project-id"
 region      = "us-central1"
 environment = "staging"
 
@@ -11,7 +11,7 @@ db_password = "CHANGE_ME_BEFORE_APPLY"
 # Lock the GKE control-plane endpoint to your office / home / CI CIDRs.
 # Empty list = open. Populate before production.
 master_authorized_networks = [
-  # { cidr_block = "203.0.113.0/32", display_name = "glen-home" },
+  # { cidr_block = "203.0.113.0/32", display_name = "operator-home-net" },
   # { cidr_block = "198.51.100.0/24", display_name = "gh-actions-nat" },
 ]
 

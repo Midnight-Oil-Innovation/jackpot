@@ -3,7 +3,7 @@ nameOverride: ""
 fullnameOverride: ""
 
 image:
-  repository: ""          # e.g. us-central1-docker.pkg.dev/gotero3-acdp-488517/jackpot/jackpot-api
+  repository: ""          # e.g. <region>-docker.pkg.dev/<your-gcp-project>/jackpot/jackpot-api
   tag: ""                 # short git SHA or semver tag
   pullPolicy: IfNotPresent
 

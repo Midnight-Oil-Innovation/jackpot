@@ -141,11 +141,25 @@ jobs:
             --dry-run=client -o yaml | kubectl apply -f -
 
       - name: Helm upgrade (runs alembic as pre-upgrade hook, then rolls Deployment)
+        env:
+          # Operator-specific values pulled from environment-scoped
+          # GitHub Actions vars and passed to Helm via `--set`. Critical
+          # Rule 55: the values file in git is operator-agnostic; the
+          # actual values land at deploy time only.
+          IMAGE_REPO: ${{ vars.GCP_REGION }}-docker.pkg.dev/${{ vars.GCP_PROJECT_ID }}/jackpot/jackpot-api
+          APP_SA_EMAIL: jackpot-api@${{ vars.GCP_PROJECT_ID }}.iam.gserviceaccount.com
+          STAGING_API_URL: ${{ vars.STAGING_JACKPOT_API_URL }}
+          STAGING_CORS: ${{ vars.STAGING_CORS_ORIGINS }}
         run: |
           helm upgrade --install "$RELEASE_NAME" "$HELM_CHART_PATH" \
             --namespace "$NAMESPACE" \
             --values "$VALUES_FILE" \
+            --set image.repository="$IMAGE_REPO" \
             --set image.tag="${{ steps.tag.outputs.tag }}" \
+            --set serviceAccount.gcpServiceAccountEmail="$APP_SA_EMAIL" \
+            --set env.GCP_PROJECT_ID="${{ vars.GCP_PROJECT_ID }}" \
+            --set env.JACKPOT_API_URL="$STAGING_API_URL" \
+            --set env.CORS_ORIGINS="$STAGING_CORS" \
             --wait --timeout 10m
 
       - name: Smoke test (via kubectl port-forward)

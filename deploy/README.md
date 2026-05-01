@@ -43,7 +43,7 @@ Before `terraform apply` can run, the GCP project needs APIs enabled, a
 Terraform state bucket, and a deploy service account. Run:
 
 ```bash
-./scripts/bootstrap_project.sh gotero3-acdp-488517 us-central1 staging
+./scripts/bootstrap_project.sh <your-gcp-project-id> us-central1 staging <your-github-org>
 ```
 
 See the script for details. It is idempotent and safe to re-run.
@@ -61,7 +61,7 @@ After apply, populate secret values:
 
 ```bash
 echo -n "$(openssl rand -hex 32)" | gcloud secrets versions add \
-    jackpot-staging-secret-key --data-file=- --project=gotero3-acdp-488517
+    jackpot-staging-secret-key --data-file=- --project=<your-gcp-project-id>
 ```
 
 See `docs/staging_access.md` for the full secret-seeding checklist and
@@ -69,7 +69,8 @@ endpoint URLs.
 
 ## Environments
 
-| Env | Project ID | Region | Status |
-|---|---|---|---|
-| staging | `gotero3-acdp-488517` | `us-central1` | live |
-| production | TBD | `us-central1` | Month 3 |
+Operators configure their per-environment GCP projects via the
+`staging` and `production` GitHub Actions environment vars
+(`GCP_PROJECT_ID`, `GCP_REGION`, etc.). See
+`docs/deploy/production-deploy.md` for the production approval gate
+runbook and `docs/staging_access.md` for the staging variant.

@@ -47,6 +47,11 @@ config/operator.local.yaml
 *.env
 *.env.local
 !*.env.example
+# Per-operator Helm values forks (operators who need more than the
+# deploy-workflow's --set overrides can copy values-staging.yaml /
+# values-production.yaml as values-*.local.yaml and point their
+# workflow at the local copy).
+deploy/helm/jackpot-api/values-*.local.yaml
 
 # Terraform
 .terraform/

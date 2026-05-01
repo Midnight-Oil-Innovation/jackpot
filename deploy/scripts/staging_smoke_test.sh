@@ -5,7 +5,7 @@
 # also be run locally against staging. Exits non-zero on any failure.
 #
 # Usage:
-#   JACKPOT_API_URL=https://api.staging.jackpot.example.org ./scripts/staging_smoke_test.sh
+#   JACKPOT_API_URL=https://api.staging.<your-jackpot-domain> ./scripts/staging_smoke_test.sh
 #
 # Optional:
 #   JACKPOT_API_TOKEN     Bearer token to exercise an auth-gated endpoint.
