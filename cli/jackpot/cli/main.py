@@ -22,7 +22,7 @@ def cli() -> None:
 
     \b
     Quick start:
-      jackpot config set --api-url https://api.jackpot.adhs.az.gov
+      jackpot config set --api-url https://api.your-jackpot-instance.org
       jackpot auth login
       jackpot upload --r1 sample_R1.fastq.gz --r2 sample_R2.fastq.gz --project 42
     """
@@ -44,7 +44,7 @@ def config_set(api_url: str, profile: str) -> None:
 
     \b
     Example:
-      jackpot config set --api-url https://api.jackpot.adhs.az.gov
+      jackpot config set --api-url https://api.your-jackpot-instance.org
     """
     import toml
 

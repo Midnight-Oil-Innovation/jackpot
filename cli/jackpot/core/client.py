@@ -35,9 +35,9 @@ class JACKPOTClient:
     Thin httpx wrapper for the JACKPOT REST API.
 
     Usage:
-        client = JACKPOTClient(api_url="https://api.jackpot.adhs.az.gov",
+        client = JACKPOTClient(api_url="https://api.your-jackpot-instance.org",
                                token="jk_live_...")
-        sample = client.get("/samples/AZ-2026-001")
+        sample = client.get("/samples/EX-2026-001")
     """
 
     def __init__(self, api_url: str, token: str) -> None:

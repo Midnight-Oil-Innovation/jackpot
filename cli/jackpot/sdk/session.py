@@ -11,7 +11,7 @@ Usage in a workspace notebook:
     session = Session()
 
     # Explicitly specify credentials (for non-workspace use):
-    session = Session(api_url="https://api.jackpot.adhs.az.gov", token="jk_live_...")
+    session = Session(api_url="https://api.your-jackpot-instance.org", token="jk_live_...")
 
     # Work with a specific project (overrides JACKPOT_PROJECT_ID):
     session = Session(project_id=42)

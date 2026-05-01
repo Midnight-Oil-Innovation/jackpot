@@ -28,13 +28,13 @@ uv pip install jackpot
 
 ```bash
 # One-time setup
-jackpot config set --api-url https://api.jackpot.adhs.az.gov
+jackpot config set --api-url https://api.your-jackpot-instance.org
 jackpot auth login   # opens browser for Google OAuth, stores 1-year token
 
 # Upload a single sample
 jackpot upload \
-    --r1 AZ-2026-001_R1.fastq.gz \
-    --r2 AZ-2026-001_R2.fastq.gz \
+    --r1 EX-2026-001_R1.fastq.gz \
+    --r2 EX-2026-001_R2.fastq.gz \
     --organism "Salmonella enterica" \
     --source-type isolate \
     --sector clinical \
@@ -49,8 +49,8 @@ jackpot upload-dir /data/sequences/ \
 # Upload via Globus (large batches from HPC)
 jackpot upload-globus \
     --metadata-csv metadata.csv \
-    --source-endpoint asu-sol \
-    --source-path /scratch/otero/sequences/ \
+    --source-endpoint your-hpc-cluster \
+    --source-path /your/sequencing/data/path/ \
     --project 42
 
 # List samples in a project
@@ -80,7 +80,7 @@ df = session.samples.search(
 )
 
 # Download a FASTQ
-sample = session.samples.get("AZ-2026-001")
+sample = session.samples.get("EX-2026-001")
 r1_path = sample.download_fastq(r1=True)
 
 # Launch a pipeline
@@ -130,7 +130,7 @@ API tokens are stored in `~/.jackpot/config.toml`:
 
 ```toml
 [default]
-api_url = "https://api.jackpot.adhs.az.gov"
+api_url = "https://api.your-jackpot-instance.org"
 token = "jk_live_..."
 token_expires = "2027-04-09T00:00:00Z"
 ```

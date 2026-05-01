@@ -6,7 +6,7 @@ Manages ~/.jackpot/config.toml — the local CLI configuration file.
 Config file format:
 
     [default]
-    api_url = "https://api.jackpot.adhs.az.gov"
+    api_url = "https://api.your-jackpot-instance.org"
     token = "jk_live_..."
     token_expires = "2027-04-09T00:00:00Z"
 

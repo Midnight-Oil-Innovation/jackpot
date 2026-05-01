@@ -57,7 +57,7 @@ def _detect_files(directory: Path, pattern: str) -> list[dict]:
     samples = []
     for r1 in r1_files:
         # Derive sample_id from filename stem
-        # e.g. AZ-2026-001_R1.fastq.gz → AZ-2026-001
+        # e.g. EX-2026-001_R1.fastq.gz → EX-2026-001
         stem = r1.name
         for suffix in [
             "_R1_001.fastq.gz",
@@ -180,8 +180,8 @@ def upload(
     Examples:
       # Paired-end Illumina
       jackpot upload \\
-          --r1 AZ-2026-001_R1.fastq.gz \\
-          --r2 AZ-2026-001_R2.fastq.gz \\
+          --r1 EX-2026-001_R1.fastq.gz \\
+          --r2 EX-2026-001_R2.fastq.gz \\
           --organism "Salmonella enterica" \\
           --source-type isolate \\
           --sector clinical \\

@@ -159,7 +159,7 @@ def samples_get(sample_id: str, output_json: bool) -> None:
 
     \b
     Example:
-      jackpot samples get AZ-2026-001
+      jackpot samples get EX-2026-001
     """
     client = _get_client()
 
@@ -215,7 +215,7 @@ def samples_search(
     \b
     Example:
       jackpot samples search --query "Salmonella"
-      jackpot samples search --query "AZ-2026" --project 42
+      jackpot samples search --query "EX-2026" --project 42
     """
     client = _get_client()
 

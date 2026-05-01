@@ -5,7 +5,7 @@ SamplesModule — search, retrieve, and download samples.
 
 Accessed via session.samples:
     df = session.samples.search(organism="Salmonella enterica")
-    sample = session.samples.get("AZ-2026-001")
+    sample = session.samples.get("EX-2026-001")
     path = sample.download_fastq(r1=True)
 """
 
