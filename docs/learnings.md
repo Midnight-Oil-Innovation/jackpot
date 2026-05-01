@@ -10,6 +10,7 @@ Each entry records what was built, why key decisions were made, and what to watc
 **What was built:** Full CRUD for `/api/v1/organizations/` (POST, GET list, GET {id}, PATCH, DELETE soft-delete) plus 13-test integration suite. New baseline: 329 tests passing, 79.95% coverage (+13 tests, +3.3%).
 
 **Key decisions:**
+
 - All endpoints use `Depends(get_db_dep)` and forward the same `db` session to `execute_write`, `execute_query`, and `log_audit` — this is the only way audit + business writes share a transaction per CLAUDE.md rule 41.
 - Explicit 409 CONFLICT pre-check on `display_name` duplicate rather than catching the UNIQUE violation, so we can return our structured `error()` envelope cleanly instead of raising 500 and relying on a global handler.
 - GET {id} allows the requester through if `is_platform_admin` OR `user.organization_id == org_id`. No lab-membership climb required — the spec just says "Platform Admin or org member" and users.organization_id is the direct membership link.
@@ -17,6 +18,7 @@ Each entry records what was built, why key decisions were made, and what to watc
 - Serialisation helper `_serialise()` coerces `datetime` fields to ISO strings so `JSONResponse` can encode them — FastAPI's default encoder does this for response_model routes but we return raw `JSONResponse`.
 
 **Watch out for:**
+
 - **Pre-existing bug found and fixed:** `backend/audit.py` used `:before::jsonb` in its INSERT. SQLAlchemy's `text()` bind-param regex refuses to match `:name` when followed by `:`, so the JSONB casts were sent literally to Postgres and every audit write failed with a syntax error. Because the write happened inside the router's transaction, the error poisoned the transaction and silently rolled back the *business* write on commit — the API returned 201, but the org was never persisted. Switched to `CAST(:before AS JSONB)`. Apply the same pattern to any future `::type` cast with a bindparam.
 - In local dev `get_current_user()` falls back to a synthetic Platform Admin dict when `MOCK_USER_EMAIL` doesn't resolve in the users table. To test the 403 path for a non-admin you must (a) INSERT the non-admin user, (b) `monkeypatch.setenv("MOCK_USER_EMAIL", ...)`, AND (c) `get_settings.cache_clear()` — otherwise the lru-cached settings keep the old email.
 - Tests that create an org and assign a user to it must unwind `users.organization_id` before DELETE-ing the org, or the FK constraint fires during cleanup. `_cleanup_org()` now does both steps.
@@ -54,6 +56,7 @@ client ─► POST /api/v1/organizations/
 **What was built:** Nine endpoints for `/api/v1/labs/` — lab CRUD (POST, GET list, GET {id}, PATCH, DELETE soft-delete) plus member lifecycle (GET/POST members, PATCH/DELETE members/{user_id}) — with 17-test integration suite. New baseline: 346 tests passing, 81.78% coverage (+17 tests, +1.83%). Router coverage: 93% (166 stmts, 12 missed — defensive branches).
 
 **Key decisions:**
+
 - `require_platform_admin` gates create/list-all/delete; `require_lab_director` gates PATCH + all member endpoints. GET {id} allows Platform Admin OR any lab member (via `get_user_lab_membership`). This mirrors APGAP's role boundaries exactly.
 - GET list branches on `is_platform_admin`: admins see every lab paginated; others see only labs where `lab_membership.user_id = me`, via an INNER JOIN in the base query before `paginate()` wraps it. Kept the search-by-display_name filter uniform across both branches.
 - POST /members validates three ways before insert: user must exist (404), permission_group must exist (404), and `(lab_id, user_id)` must not already be a member (409). The 409 pre-check beats catching the UNIQUE violation because it lets us return a structured envelope instead of a SQL error.
@@ -61,6 +64,7 @@ client ─► POST /api/v1/organizations/
 - Ruff `SIM102` flagged nested `if not admin: if not member:` — collapsed to one `and` expression. `F841` flagged a discarded response from the "theirs lab" create in the list-test; dropped the assignment.
 
 **Watch out for:**
+
 - **FK `audit_log_user_id_fkey` persists through the rename migration.** The migration renames the column `user_id` → `actor_id` but the FK constraint keeps its original name. So deleting a test user that has any audit row (even one from a previous test) still raises `violates foreign key constraint "audit_log_user_id_fkey"`. `_cleanup_user()` must `UPDATE audit_log SET actor_id = NULL WHERE actor_id IN (SELECT id FROM users WHERE email = :e)` before DELETE. Learned the hard way on the director/reader tests.
 - Three-step cleanup ordering for lab tests: (1) DELETE lab_membership rows pointing at the lab, (2) DELETE sequencing_labs rows with the same lab_id (FK from Critical Rule 21), (3) DELETE the lab. Skipping step 2 breaks tests that happen to run after any ingest-seeded data.
 - `is_lab_director=True` plus `permission_group_id = 'Lab Director'` are independent columns — both must be set when adding a director. `require_lab_director` checks the boolean flag only, so a permission_group of Lab Director without the flag won't grant write access.
@@ -116,12 +120,14 @@ client ─► POST /api/v1/labs/{id}/members
 **What was built:** Five endpoints for `/api/v1/users/` — `/me` (self + lab memberships), list (Platform Admin only), get by id (admin or self), PATCH (admin or self with field whitelist), DELETE soft-delete — plus 16-test integration suite. New baseline: 362 tests passing, 82.84% coverage (+16 tests, +1.06%). Router coverage: 98% (91 stmts, 2 missed).
 
 **Key decisions:**
+
 - Two editable-field sets on PATCH: `_SELF_EDITABLE = {"name"}` and `_ADMIN_EDITABLE = {"name", "is_platform_admin", "is_data_analyst", "is_active", "organization_id"}`. A non-admin touching any admin-only field returns 403 (not 422) — the request shape is valid, the actor is not. This is simpler and more grep-friendly than two separate Pydantic models.
 - `/me` returns the user row plus a `lab_memberships` array (lab_id, lab_name, permission_group_id, permission_group_name, is_lab_director). Joined via `lab_membership → labs` + `permission_groups`. This is the one endpoint the frontend polls on every page load, so shoving memberships in saves a second round-trip.
 - Added single new audit action `UPDATE_USER` — used for both PATCH and soft-delete (with `metadata={"soft_delete": True}`), same pattern as `UPDATE_ORG` / `UPDATE_LAB`. No `CREATE_USER` / `DELETE_USER` constants invented; user creation happens inside the OAuth flow, not via this router.
 - `_SELF_EDITABLE`/`_ADMIN_EDITABLE` checks happen *before* the row fetch. This means an unauthorized PATCH returns 403 even when the target user does not exist — intentional, don't leak existence to non-admins.
 
 **Watch out for:**
+
 - `get_current_user()` in local dev falls back to a synthetic Platform Admin dict (id=1) when `MOCK_USER_EMAIL` does not resolve. Test fixtures that expect "non-admin" behavior must insert the user AND `monkeypatch.setenv("MOCK_USER_EMAIL", ...)` AND `get_settings.cache_clear()` — all three. Same trap as Sessions A/B.
 - The `users` table has no `active` column — the soft-delete flag is `is_active`. Do not unify with orgs/labs (which use `active`).
 - The `updated_at` column has no trigger, so every write statement must include `updated_at = NOW()` in its SET clause. Orgs/labs do not do this because they were written first and the column has a default; the users table should be patched with a trigger in a later migration, but for now explicit `updated_at` works.
@@ -169,12 +175,14 @@ client ─► PATCH /api/v1/users/{id}  {is_platform_admin: true}
 **What was built:** Three endpoints for `/api/v1/domain-whitelist/` — GET list (paginated), POST add (normalise + dedup), DELETE remove (hard delete, not soft) — plus 9-test integration suite. New baseline: 371 tests passing, 83.36% coverage (+9 tests, +0.52%). Router coverage: 100% (51 stmts).
 
 **Key decisions:**
+
 - **Hard delete, not soft delete.** Orgs/labs/users all use soft delete because a deactivated row still has FK children (samples, memberships, audit log). Whitelist entries have no children — the domain is just a string that gates self-registration. Removing from the whitelist must take effect immediately, so a `DELETE` row is the right move. The `before` state is captured in the audit log to preserve history.
 - **Normalise to lowercase at the API boundary.** Input `UPPER.example` is stored as `upper.example`. The UNIQUE constraint on `domain` is case-sensitive at the DB level, so without normalisation two case variants of the same domain could both be whitelisted. A case-insensitive pre-check before insert makes the 409 deterministic.
 - Added two new audit actions — `ADD_WHITELIST_DOMAIN` and `REMOVE_WHITELIST_DOMAIN`. The spec section for governance (Rule 4) requires every state-changing endpoint to audit, and the domain list directly gates who can register, so the audit trail is non-optional.
 - No PATCH endpoint — spec omits it. If admins want to fix a typo they remove the bad entry and add the new one; the two-step trail is clearer in audit review than a silent rename.
 
 **Watch out for:**
+
 - The seed data in `db/init.sql` includes `example-academic.edu` and `gmail.com` — the first list test asserts `example-academic.edu` is present, which works as long as the seed INSERT runs before the Alembic migrations in conftest. Seed INSERTs are at the bottom of `init.sql` and run as part of `conn.execute(text(sql))` before the Alembic step, so this is safe — but any future test that expects an empty whitelist would need to clean up seed entries first.
 - `execute_write(...)` on a DELETE with no RETURNING still returns `[]`. The handler fetches the `before` row via `execute_query` first (for 404 and audit), which is the right pattern because Critical Rule 40 requires RETURNING only on INSERT/UPDATE.
 - Removed `backend/routers/domain_whitelist.py` from `pyproject.toml` coverage omit — same pattern as every previous session.
@@ -211,6 +219,7 @@ client ─► POST /api/v1/domain-whitelist/  {"domain": "UPPER.example"}
 **What was built:** Six endpoints for `/api/v1/sequencing-labs/` — list, POST create, GET by id, PATCH update, POST assign/{lab_id}, DELETE assign/{lab_id} — plus a new Alembic migration creating the `sequencing_lab_assignments` join table, plus a 13-test integration suite. New baseline: 384 tests passing, 84.20% coverage (+13 tests, +0.84%).
 
 **Key decisions:**
+
 - **Created a new Alembic migration (`919759af99a1`) for `sequencing_lab_assignments`.** Critical Rule 21 mandates the table but neither `db/init.sql` nor any existing migration had created it — this is a spec-mandated schema gap that Session E had to fill before endpoints could be written. The table enforces `UNIQUE(sequencing_lab_id, lab_id)` so 409 duplicates are caught at the DB level too, and cascades on delete of either parent row. The init.sql `sequencing_labs.lab_id` FK column is preserved (legacy 1:1 auto-link for the JACKPOT-lab-as-sequencing-lab case) — the join table is the additive, many-to-many channel.
 - **List endpoint requires authentication but not admin.** Spec line: "any authenticated user" can see sequencing labs, because ingest forms need to populate a dropdown of valid `sequencing_lab` values. Only create/patch/assign/unassign require `require_platform_admin`.
 - **Two-stage validation on assign:** pre-check both `sequencing_labs.id` and `labs.id` exist so we can return precise 404s, then pre-check assignment uniqueness for 409. Pure DB UNIQUE violation would force a 500 or a messy error-envelope wrap.
@@ -218,6 +227,7 @@ client ─► POST /api/v1/domain-whitelist/  {"domain": "UPPER.example"}
 - **PATCH uses `_UPDATABLE` whitelist** `{"name", "organization", "is_external", "is_active"}` — intentionally excludes `lab_id` (legacy auto-link column must not be edited through this endpoint) and `created_at`.
 
 **Watch out for:**
+
 - **The join table did not exist until this session.** Any prior code or test that references `sequencing_lab_assignments` against the stub DB would have failed until the migration was applied. `tests/conftest.py` runs `alembic upgrade head` after `db/init.sql`, so the table is available as soon as the migration file lands — no one-shot DB rebuild required.
 - Seed contains `Example Sequencing Lab`, `Example Reference Lab`, and `Example Lab` (the last as a non-external auto-added entry). Tests assert the first two verbatim. If ingest code ever hardcodes a specific lab-name match, grep will surface the mismatch.
 - `DELETE /assign/{lab_id}` 200s on first call and 404s on second — tests exercise both. There is no idempotent mode; callers must cope.
@@ -267,6 +277,7 @@ client ─► POST /api/v1/sequencing-labs/{sid}/assign/{lid}
 ## 2026-04-16 — Session F: tokens router + project name filter
 
 **What was built**
+
 - Fleshed out stub `backend/routers/projects.py` into a real paginated list
   with `?name=` case-insensitive exact filter (for the CLI project lookup),
   plus `GET /api/v1/projects/{id}` for completeness. Authenticated only.
@@ -281,6 +292,7 @@ client ─► POST /api/v1/sequencing-labs/{sid}/assign/{lid}
   list → both reach 100% stmt coverage.
 
 **Key decisions**
+
 - **SHA-256, not bcrypt**, for token hashing. The spec says "stored as hash
   in DB" — the DDL comment in `db/init.sql:100` already specifies SHA-256
   and the existing column is `token_hash` (fixed-width text). Bcrypt buys
@@ -308,6 +320,7 @@ client ─► POST /api/v1/sequencing-labs/{sid}/assign/{lid}
   who did the revoke.
 
 **Watch out for**
+
 - The `cleanup_user` helper in `tests/test_tokens_api.py` must DELETE from
   `personal_tokens` *before* deleting the user, or the `user_id` FK blocks
   the delete. Added that step to the helper.
@@ -359,6 +372,7 @@ New baseline: 418 tests passing, 85.33% coverage (+19 tests, +0.25%). Commit
 `3c74b24`.
 
 **Key decisions**
+
 - **Shared `_ingest_one()` core** takes metadata, URI map, size map, user, db,
   and ingest_method. This keeps the validator → sequencing-lab check →
   epiweek → scrub_status → quality/surveillance → INSERT samples + sample_files
@@ -397,6 +411,7 @@ New baseline: 418 tests passing, 85.33% coverage (+19 tests, +0.25%). Commit
   to `SKIPPED` for FASTQ.
 
 **Watch out for**
+
 - **DB NOT NULL vs. validator tier mismatch.** The `samples` table has
   `NOT NULL` on fields the validator considers Tier 2 (e.g. `date_sequenced`,
   `library_preparation_method`, `sequencing_protocol`). A client sending
@@ -481,6 +496,7 @@ client ─► POST /api/v1/ingest/upload  (multipart: metadata, fastq_r1, fastq_
 **What was built:** Six samples endpoints on `/api/v1/samples/` — GET list (with 11-parameter filter surface + `?select_all=true` + `can_see_sample` per row), GET {id} (+ file list), PATCH {id} (partial update + recompute quality + surveillance), DELETE {id} (soft-delete / archive), GET {id}/files, GET {id}/download (presigned URL). Plus a proper access-control module in `backend/permissions.py` with `can_access_sample`, `can_see_sample`, and `visibility_sql_clause` (SQL-side predicate). 32 integration tests. New baseline: **450 tests passing, 86.23% coverage** (+32 tests, +0.9%). Router coverage 89%; permissions module 88%.
 
 **Key decisions:**
+
 - **Two-tier access model.** `can_see_sample` includes `DISCOVERABLE` (shows in lists); `can_access_sample` excludes it (detail requires an approved `sample_access_requests` row). That is the only way the access-request workflow makes semantic sense — otherwise DISCOVERABLE would collapse into PUBLIC. Spec.md §5 Session H confirms: "Platform Admin → lab member → PUBLIC → host-operator oversight (surveillance_relevant only) → approved request" — no DISCOVERABLE on that ladder. todo.md's test hint conflicted ("DISCOVERABLE → 200 for authenticated users") and was ignored in favour of the spec.
 - **Visibility enforced in SQL, not Python.** `visibility_sql_clause(user)` emits an OR'd EXISTS clause straight into the list WHERE, so the list endpoint paginates at the DB tier with no N+1 membership check. Platform Admin short-circuits to `"TRUE"`. Data analysts get `s.surveillance_relevant = TRUE` OR'd in for host-operator oversight.
 - **LOCKED_FIELDS frozenset on PATCH.** Instead of silently dropping forbidden keys, any attempt to set `quality_status`, `surveillance_relevant`, `scrub_status`, `mmwr_week`, `iso_week`, `iso_year`, `mmwr_year`, `ingest_timestamp`, `is_deleted`, identifiers/accessions, pipeline outputs, or file URIs returns **422 with the offending field names**. Editable fields are a separate `_EDITABLE_FIELDS` whitelist — only the intersection is written. After the caller's update, the endpoint re-runs `validate_sample() → compute_quality_status()` and `compute_surveillance_relevant()` on the merged row and issues a second UPDATE, so derived state always matches the canonical source of truth.
@@ -490,6 +506,7 @@ client ─► POST /api/v1/ingest/upload  (multipart: metadata, fastq_r1, fastq_
 - **Test fixtures use `_switch_user(email, monkeypatch)` + `get_settings.cache_clear()`** so the `lru_cache`'d settings pick up the new mock email. The same pattern from Sessions A/B/C. Mandatory before every role-change test.
 
 **Watch out for:**
+
 - **The samples table does NOT have `created_at`/`updated_at`.** Do not copy the UPDATE ... `SET updated_at = NOW()` idiom from organizations/labs. It raises `UndefinedColumn`. The initial PATCH query had it and was silently passing tests until the first PATCH test hit it.
 - **`sample_access_requests` FK blocks user DELETE in teardown.** `_cleanup_users()` must first `DELETE FROM sample_access_requests WHERE requester_id = :u OR owner_id = :u` before deleting the user. Audit log still needs the `UPDATE audit_log SET actor_id = NULL` step from Session B. Three-step cleanup now: access_requests → lab/project_membership → audit NULL → users.
 - **Pre-commit ruff-format reformatted 4 files on the first `gac`,** failed the hook, then passed on the second. Also a SIM103 "return the condition directly" flagged `_base_access` (the last `if _has_approved_access_request(): return True; return False` was collapsible). Same "run gac twice" pattern as Sessions B/C/E/F/G — documented here for the sixth time.
@@ -552,6 +569,7 @@ client ─► GET /api/v1/samples/{id}
 **What was built:** Fleshed out two stub routers. `projects` grew from GET-only to full CRUD: `POST /` (Lab Director on target lab OR Platform Admin), `GET /` (membership-filtered list with `?name=` + `?lab_id=` filters), `GET /{id}` (lab OR project member), `PATCH /{id}` (Lab Director on the project's lab). `dataharmonizer` went from stub to two real endpoints: `GET /templates/{source_type}/{tier}` (CSV download via `template_generator.generate_csv_template`) and `POST /validate` (row-by-row CSV validation via `validator.validate_sample`). New baseline: **477 tests passing, 86.99% coverage** (+27 tests, +0.76%). `dataharmonizer.py` removed from coverage omit, now at 94%; `projects.py` at 99%.
 
 **Key decisions:**
+
 - **Project access delegates to lab-level authorization.** `require_lab_director(user, project.lab_id)` for writes; list visibility is `(lab_id IN user's labs) OR (project_id IN user's projects)`. This matches spec.md: "members inherit lab access". A user invited to a single project sees only that project; a lab member sees all projects in the lab. Platform Admin short-circuits to all rows.
 - **`AuditActions.CREATE_PROJECT` + `UPDATE_PROJECT` added.** Following the same pattern as `CREATE_LAB` / `UPDATE_LAB`. No `DELETE_PROJECT` — soft-delete via `active=FALSE` through PATCH; matches how `labs.py` handles the equivalent, except we skip the DELETE endpoint entirely for Month 1 (not in spec).
 - **DataHarmonizer endpoints live on their own router, not under `/templates`.** todo.md wrote `/api/v1/templates/{source_type}/{tier}` as the example URL but the section title is "Implement dataharmonizer router". The existing `templates.py` already serves query-string-driven downloads. Rather than duplicate routes, the dataharmonizer surface got its own path-based route under `/api/v1/dataharmonizer/templates/{source_type}/{tier}` — zero collision with `/api/v1/templates/?source_type=...`.
@@ -561,6 +579,7 @@ client ─► GET /api/v1/samples/{id}
 - **Test user cleanup needs project FK nullification.** Added `UPDATE projects SET created_by_id = NULL WHERE created_by_id = uid` before `DELETE FROM users`. Same three-step pattern from Session H (audit actor → project FK → user) — if a new table adds an FK to users, add another nullification here.
 
 **Watch out for:**
+
 - **`Isolate` source type has no source-specific required fields.** Used it as the happy-path test in validate tests. `Human` requires `external_case_id`, `biospecimen_type`, `reason_for_collection`, `host_disease` — the naive 7-column CSV that passes BASE_REQUIRED still fails Human's extras. Pick `Isolate` for "should be valid" fixtures.
 - **Pre-commit ruff reformatted on first check.** Seventh session with the same finding — `gac` rewrites the file and exits non-zero the first time. Also surfaced an N806 on `META_MARKERS` being uppercase inside a function; renamed to `meta_markers`. Same pattern: run gac twice, let the first format and the second commit.
 - **Data analysts do not automatically see all projects.** The list filter is `lab_membership OR project_membership`; `is_data_analyst` does not bypass project visibility. That's a surveillance-samples-only privilege, applied at the samples layer, not the project layer. Keep this boundary when wiring future endpoints.
@@ -611,6 +630,7 @@ each pipeline. Backend baseline: 486 tests passing, 86.99% coverage
 `2a098b0`; backend commit `6aeee66`.
 
 **Key decisions:**
+
 - **Sibling top-level packages** (`shared/` and `pipelines/` both at the
   `nf/` root): `pyproject.toml` only packages `shared`, and `pipelines/`
   is imported by tests via a `sys.path.insert` shim. Relative imports
@@ -653,6 +673,7 @@ each pipeline. Backend baseline: 486 tests passing, 86.99% coverage
   –3.66 enumerated; viralrecon 2.4.0–2.6.0; walkercreek 1.0.x–1.1.x.
 
 **Watch out for:**
+
 - **Submodule commit + pointer bump is two commits.** Fixing a parser
   bug requires: (1) commit in `nf/`, (2) `git add nf && gac` in the
   backend to bump the submodule SHA. Forgetting step 2 leaves CI
@@ -719,6 +740,7 @@ Backend commit 6aeee66 bumps nf pointer to submodule commit 2a098b0.
 **What was built:** Phase 13 of the jackpot-nf plugin — parsers for bactopia (K-1), Grandeur (K-2), mycosnp-nf (K-3), and tb-profiler (K-4), plus three new shared helpers (AMRFinderPlus, MLST, Kraken2), 15 fixtures, and 51 new unit tests (K-5, K-6). Submodule baseline: 137 tests passing (+51). Backend baseline unchanged at 486 tests / 86.99% (nf tests run inside the submodule, not in the parent pytest run).
 
 **Key decisions:**
+
 - **Shared AMR normalization threaded through `shared.hamronization_normalizer`** per the explicit spec requirement. `shared/parsers/amrfinderplus.py` wraps `normalize()` and exposes two entry points: `parse()` (runs the hAMRonize CLI on a raw AMRFinderPlus TSV) and `parse_canonical()` (skips the CLI when a `*.hamronized.tsv` already exists). Grandeur 4.x ships canonical outputs, so its parser prefers the shortcut and only falls back to `runner` when no canonical sibling is found. Bactopia always uses the CLI path.
 - **Injectable `runner` callable** on every AMR parser so tests don't need `hamronize` on PATH. `runner` signature is the subset of `subprocess.run` the normalizer actually uses (`(cmd, *, capture_output, text) → CompletedProcess`). Tests pass in a closure that returns a canned canonical TSV. The `shared.hamronization_normalizer.run_hamronize()` binary-presence check is still first — tests monkeypatch `shutil.which` to return a truthy path before calling.
 - **TB-profiler mirrors drug resistance into `amr_results`** per spec: each `dr_variants[].drugs[]` row becomes an `AMRResult` with `reference_database="WHO_catalogue"`, `reference_accession=f"WHO-Catalogue/{db_version}"`, `drug_class="antimycobacterial"`, `tool_name="tb-profiler"`. This lets TB resistance surface in platform-wide AMR search alongside bacterial AMR results without a special-case query. The original TB-typing row (`tb_typing_results` with `who_drug_susceptibility` JSONB) is still emitted for the WHO-catalogue-shaped view.
@@ -728,6 +750,7 @@ Backend commit 6aeee66 bumps nf pointer to submodule commit 2a098b0.
 - **Absolute imports only** across all four pipelines (`from shared.parsers import RunMetadata`). Consistent with Session J's choice — the pipelines are sibling top-level packages under `nf/`, not submodules of `shared`.
 
 **Watch out for:**
+
 - **`_ALLELE_RE` matches dash-only alleles**: Tseemann's `mlst` emits `adk(-)` when the locus is present in the scheme but unassigned. The regex `^(?P<locus>[A-Za-z0-9_]+)\((?P<allele>[^)]+)\)$` captures this as `{"adk": "-"}`, not as a raw key `"adk(-)"`. First pass of `test_blank_st_becomes_none` asserted the raw-key fallback; corrected to assert `allele_calls["adk"] == "-"`.
 - **`hamronize` CLI presence is checked before the runner runs**. `shared.hamronization_normalizer.run_hamronize()` calls `shutil.which("hamronize")` at the top and raises `HamronizationError` if missing — so an injected `runner` alone isn't enough. All AMR tests either (a) provide a canonical TSV and never hit the CLI path, or (b) monkeypatch `shutil.which` to return a truthy path. The bactopia `fake_runner` fixture does this explicitly for every test in the class.
 - **TB-profiler `pipeline.software_version` fallback chain**: lineage parser prefers `data["pipeline"]["software_version"]`, falls back to `metadata.pipeline_version`, and only uses `None` if both are absent. `db_version` has no fallback — if the WHO catalogue version isn't in the JSON, the mirror rows get `reference_accession="WHO-Catalogue/None"` which is ugly but not wrong. Upstream tb-profiler always populates both in practice.
@@ -782,9 +805,11 @@ Submodule commit 2973e7a; backend bump tracks pointer.
 ```
 
 ## Session L: metagenomic parsers (nf-core/mag + nf-core/taxprofiler) — 2026-04-17
+
 **What was built:** Parser modules for nf-core/mag (CheckM2 MAG QC, GTDB-Tk taxonomy, bin-FASTA registry) and nf-core/taxprofiler (Kraken2 full ranked list, Bracken abundance, DIAMOND summary) inside the `jackpot-nf` submodule, plus 36 new unit tests covering the one-sample-to-many-MAGs relationship end-to-end.
 
 **Key decisions:**
+
 - **MAG derived-sample design is spread across three emit sites.** MAGQC rows use `sample_id=parent, bin_id=bin_id` (parent parses out of `<parent>.<binner>.<n>` via the default `sample_id_resolver`), GTDB-Tk TaxonomicProfile rows use `sample_id=bin_id` (the bin *is* the derived sample), and the bin FASTA FileArtifact also uses `sample_id=bin_id`. The parser layer stays dumb about the `sample_associations` junction table — the backend registration endpoint is the sole owner of derived-sample + mag_bin wiring. This keeps parsers pure functions of file → model.
 - **Shared Kraken2 parser now has two knobs: `top_only` and `species_only`.** Grandeur (isolate) keeps the default top-S behaviour. taxprofiler (metagenome) passes `top_only=False, species_only=False` and preserves every rank and row. Previously the species filter was unconditional inside the shared parser and silently dropped non-S rows even when `top_only=False`. Guard test `test_shared_kraken2_parser_used` asserts taxprofiler imports the shared module (not a fork).
 - **Bin FASTA discovery uses a heuristic, not hardcoded paths.** nf-core/mag emits bins under many variants (`GenomeBinning/MetaBAT2/bins/`, `GenomeBinning/DAS_Tool/bins/`, `GenomeBinning/MaxBin2/`, etc.). `_is_bin_file()` walks the tree and accepts files whose parent chain hits `bins/` or a binner-named directory (metabat2/maxbin2/concoct/das_tool/dastool/semibin/genomebinning), explicitly excluding `Assembly/` so primary contigs don't leak in.
@@ -793,6 +818,7 @@ Submodule commit 2973e7a; backend bump tracks pointer.
 - **Conservative missing-column handling.** `-` and `N/A` in CheckM2 numeric fields get dropped cleanly (field omitted from payload) rather than forcing a Pydantic ValidationError. Missing *required* columns (Name in CheckM2, required trio in GTDB-Tk/Bracken) raise typed ParseErrors.
 
 **Watch out for:**
+
 - **sample_associations is NOT set by the parser.** When writing the registration endpoint for MAG runs, iterate MAGQC rows, upsert each `bin_id` as a derived sample (parent = MAGQC.sample_id), then insert `sample_associations(parent_id=..., child_id=..., type='mag_bin')`. The parser layer intentionally omits this to keep it testable.
 - **Two MAGQC rows per parent is the expected shape,** not a bug. `AZ-META-001` having `.MetaBAT2.1` and `.MetaBAT2.2` bins produces two MAGQC rows sharing `sample_id=AZ-META-001` with distinct `bin_id`s. The registration layer must handle duplicate parent writes idempotently.
 - **Default `sample_id_resolver` splits on the first `.`.** If a sample naming scheme uses `.` in the parent ID itself (e.g. `sp.1_AZ.META.001`), the default resolver will chop it. Callers can pass a custom `sample_id_resolver` callable.
@@ -801,6 +827,7 @@ Submodule commit 2973e7a; backend bump tracks pointer.
 - **DIAMOND needs ≥ 12 columns per row** (standard outfmt-6). Malformed rows are skipped silently; empty files emit a zero-hits summary.
 
 **ASCII diagram:**
+
 ```
 nf-core/mag output
 ├── CheckM2/checkm2_quality_report.tsv
@@ -836,6 +863,7 @@ nf-core/taxprofiler output
 ```
 
 nf/ tree delta:
+
 ```
 pipelines/
 ├── mag/
@@ -878,6 +906,7 @@ matrix in `nf/README.md`, a minimal `pipeline_catalog` table with a
 that walks every wrapper against its fixture tree.
 
 **Key decisions:**
+
 - **Decoupled layout dict in pathogensurveillance orchestrator.** The parsers
   module hardcodes directory names in a `_LAYOUT` constant rather than scattering
   them through `parse()`. When nf-core/pathogensurveillance shuffles its top-level
@@ -913,6 +942,7 @@ that walks every wrapper against its fixture tree.
   own ruff config.
 
 **Watch out for:**
+
 - The AMR invariant test depends on `bactopia_amr.shared_amr is shared_amr`
   (identity, not equivalence). If someone adds a local AMR parser to any of
   the three wrappers that bypasses the shared path, the identity check fails
@@ -955,6 +985,7 @@ RunMetadata(pipeline_name, version) ──► (pipelines/<name>/parsers/__init__
 ```
 
 nf/ tree delta:
+
 ```
 pipelines/pathogensurveillance/
 ├── __init__.py                    SUPPORTED_PIPELINE_VERSIONS=[1.1.0]
@@ -980,6 +1011,7 @@ tests/  (236 total: 225 unit + 11 integration)
 ```
 
 Backend delta:
+
 ```
 db/migrations/versions/b1a4c9d2e8f0_add_pipeline_catalog_and_parser_.py
    CREATE TABLE pipeline_catalog (id, pipeline_name, pipeline_version,
@@ -1115,6 +1147,7 @@ POST /custom               (Lab Director)    POST /{catalog_id}/promote
 ```
 
 Backend delta:
+
 ```
 backend/routers/pipelines.py                  full rewrite (~1040 lines, 8 endpoints)
 backend/pipeline_config.py                    NEW — run_id/token/work_dir/config/submit_to_batch
@@ -1261,6 +1294,7 @@ purely additive.
 **What was built:** Complete Streamlit researcher frontend under `frontend/` — 9 pages (dashboard, search, upload, data_entry, my_samples, datasets, access_requests, notifications, pipelines), a shared API client / session helpers / badge components, and a 12-test smoke suite that exercises every page import without a live Streamlit runtime. Net test delta: **537 → 549 passing tests** (+12), coverage 87.56%, still well above the 60% gate. Admin pages (lab_director, platform_admin, archive_requests, billing) are intentionally absent — Month 3 scope.
 
 **Key decisions:**
+
 - **Auto-discovery, not `st.navigation`.** Project pins streamlit==1.35.0; the explicit `st.Page`/`st.navigation` APIs landed in 1.36. Relying on Streamlit's filesystem page discovery (`frontend/pages/*.py` surfaces in the sidebar automatically) keeps us on the pinned version and saves an entrypoint rewrite when we eventually upgrade. `frontend/app.py` calls `main()` unconditionally at import time so auto-discovery still runs the landing page when Streamlit imports the module.
 - **Envelope unwrap in the API client, not in every page.** `ApiClient.get/post/patch/delete` reads the `{success, data}` JACKPOT envelope and returns `body["data"]` directly; errors raise `ApiError(code, message, status_code)`. Page code never sees the wrapper. This keeps the pages from being littered with `["data"]` indexing and means the eventual FastAPI → real auth migration is a single-file change.
 - **Test shim via `SimpleStreamlit`, not a headless browser.** `tests/test_streamlit_pages.py` installs a `sys.modules["streamlit"]` stub whose `__getattr__` returns a call-recording callable. Widgets return sensible defaults (text_input → `""` or supplied `value=`, checkbox → False, columns → list of shim instances, tabs/form/expander/container/sidebar → `_RecordingContext`). Pages import, their `render()` runs, and we assert `st.title` was called. Found two real bugs during test authoring: `with cols[i]:` failed because `columns()` returned plain `SimpleStreamlit` instances without context-manager protocol — fixed by adding `__enter__/__exit__` on the class itself (simpler than switching columns to a wrapper). No Playwright dependency, no browser, runs in 2s.
@@ -1271,6 +1305,7 @@ purely additive.
 - **Selection persists across pagination.** `search.py` stores `search.selected_ids` as a `set` in `st.session_state`. Row checkboxes sync to the set (add on check, discard on uncheck); select-all-N uses the backend's `?select_all=true` path which returns IDs only. The action bar then reads from the same set, and `datasets.py` pulls the same session-state key for the cross-page hand-off.
 
 **Watch out for:**
+
 - **`with cols[i]:` needs a context-manager on the column object.** Streamlit's real `st.columns()` returns objects that implement `__enter__`/`__exit__`. The first run of the smoke tests failed on three pages with `'SimpleStreamlit' object does not support the context manager protocol`. If anyone later refactors `SimpleStreamlit` to return a narrower stub, put those two methods back — every page uses `with cols[i]:` somewhere.
 - **`frontend/app.py` must call `main()` at import, not just under `__name__ == "__main__"`.** Streamlit's page loader imports the module; it never runs it as `__main__`. The current file guards both cases (`if __name__ == "__main__": main(); else: main()`) which is intentional belt-and-braces — don't "clean it up" without understanding that Streamlit never hits the `__main__` branch.
 - **`my_samples.py` Edit button uses `st.switch_page("pages/data_entry.py")`** — available since Streamlit 1.30. If the pin ever drops below 1.30, swap to setting session state and asking the user to click Data Entry in the sidebar.
@@ -1339,6 +1374,7 @@ Test delta: **537 → 549 passing tests** (+12); coverage 87.56%. The 9 pages lo
 **What was built:** Full Infrastructure-as-Code scaffold for the JACKPOT staging environment in a separate `jackpot-iac` repo — 7 reusable Terraform modules (network, cloud-sql, gke, gcs-buckets, artifact-registry, iam, secrets), thin staging wrapper + production stub, Helm chart `jackpot-api` with pre-upgrade Alembic migration Job, GitHub Actions `deploy-staging.yml` with Workload Identity Federation auth, idempotent `bootstrap_project.sh` for one-time GCP setup, `staging_smoke_test.sh` gate, and `docs/staging_access.md` + `docs/production_runbook.md` stub. 5 logical commits (Q-1 through Q-3, Q-6, Q-7) — Q-4 (`terraform apply`) and Q-5 (Cecret E2E) are intentionally left for manual execution because they create billable resources.
 
 **Key decisions:**
+
 - **Split Session Q scope from the user's original framing.** The original ask bundled `terraform apply` and a real Cecret E2E run into the autonomous pass, plus a `month-2-complete` tag at the end. I pushed back: applying is a billable, side-effecting action against a real GCP project, and tagging before post-apply verification is dishonest. The agreed split is what's reflected in the 5 commits — file work only — with Q-4/Q-5 operated manually and Q-8 gated on that confirmation.
 - **Zero hardcoded values in modules.** Every `project_id`, `region`, `environment`, bucket name, SA email, and secret name derives from `var.project_id` / `var.region` / `"jackpot-${var.environment}-<purpose>"`. The staging wrapper is thin (50 lines of module calls); the production wrapper is a commented-out twin of staging with Month 3 TODOs — production stands up by uncommenting blocks and filling tfvars, not by editing module code.
 - **Canonical naming authority lives in jackpot-backend, not jackpot-iac.** `jackpot-backend/docs/gcp_context.md` is the single source of truth for project IDs, regions, bucket naming, and SA emails. The jackpot-iac README points to it explicitly. This avoids two-repo naming drift — change the doc first, mirror into tfvars.
@@ -1352,6 +1388,7 @@ Test delta: **537 → 549 passing tests** (+12); coverage 87.56%. The 9 pages lo
 - **Secret short-names double as env-var keys.** The secrets module's default list (`secret-key`, `database-url`, `google-oauth-client-id`, …) is chosen so each short-name upper-cases into the env var the backend reads (`SECRET_KEY`, `DATABASE_URL`, `GOOGLE_OAUTH_CLIENT_ID`). The deploy workflow iterates the list and synthesizes `kubectl create secret generic --from-literal=$K=$V` without a manual mapping table.
 
 **Watch out for:**
+
 - **GPG signing is not configured in the jackpot-iac repo.** The baseline commit `f9a0e20` is unsigned. My first attempt at `git commit -c commit.gpgsign=true` failed with "gpg failed to sign the data" because no signing key is in this repo's config. Dropped the flag; subsequent commits are unsigned to match the repo's existing style. If we want signed commits, configure `user.signingkey` in the jackpot-iac repo first.
 - **`gac` alias does not work in jackpot-iac.** `gac` runs `uv run ruff check --fix . && uv run ruff format .` before committing — there's no `pyproject.toml` in jackpot-iac, so ruff fails immediately. Use plain `git commit` in this repo. The `gac` alias is specific to jackpot-backend.
 - **backend/config.py's bucket env var names do not match CLAUDE.md's canonical bucket list.** config.py expects `STORAGE_BUCKET_SEQUENCES`, `_RAW`, `_STAGING`, `_DATASETS`, `_SUBMISSIONS`; CLAUDE.md canonicalizes `sequences`, `references`, `results`, `staging`, `work`, `backups`. I resolved this by mapping `_RAW`→staging, `_DATASETS`→references, `_SUBMISSIONS`→portal-exports in `values-staging.yaml`. The clean fix is to rename the config fields in a follow-up — out of scope for Session Q.
@@ -1697,31 +1734,32 @@ a new `.dockerignore` excludes `nf/` from the build context.
 ## UI-B — Upload page triage (2026-04-24)
 
 Reframed from "browser walkthrough" to "backend-contract verification
+
 + page-code review" because this session has no headless-browser
-tooling. Drove every payload the page would send via curl, verified
-the API contract for each happy/error path, and read
-`frontend/pages/upload.py` + `frontend/lib/api.py` to confirm the
-error-rendering plumbing handles each path. Surfaced two real backend
-bugs and fixed both at root.
+  tooling. Drove every payload the page would send via curl, verified
+  the API contract for each happy/error path, and read
+  `frontend/pages/upload.py` + `frontend/lib/api.py` to confirm the
+  error-rendering plumbing handles each path. Surfaced two real backend
+  bugs and fixed both at root.
 
 ### Page surface inventory (current Upload page MVP)
 
-| Expected field per UI-B task | Status |
-|---|---|
-| Sample type selector | PRESENT (Human/Animal/Vector/Wastewater/Environmental) |
-| Sector | PRESENT but MANUAL — not auto-derived from source_type |
-| Tier selector with descriptions | MISSING — only a live "estimated tier" badge |
-| Organism name | PRESENT (free text — no autocomplete/dropdown) |
-| Collection country | PRESENT (free text) |
-| Collection state + admin units | MISSING (only country) |
-| Date collected (year-only tolerance UI) | PARTIAL — `st.date_input` forces a full date |
-| Host species | MISSING |
-| Host age | MISSING |
-| Host sex | MISSING |
-| Isolation source | MISSING |
-| Sequencing lab DROPDOWN from /api/v1/sequencing-labs/ | MISSING — free text input |
-| Project DROPDOWN from /api/v1/projects/ | MISSING — `st.number_input` for project_id |
-| FASTQ R1/R2 file upload | PRESENT |
+| Expected field per UI-B task                          | Status                                                 |
+| ----------------------------------------------------- | ------------------------------------------------------ |
+| Sample type selector                                  | PRESENT (Human/Animal/Vector/Wastewater/Environmental) |
+| Sector                                                | PRESENT but MANUAL — not auto-derived from source_type |
+| Tier selector with descriptions                       | MISSING — only a live "estimated tier" badge           |
+| Organism name                                         | PRESENT (free text — no autocomplete/dropdown)         |
+| Collection country                                    | PRESENT (free text)                                    |
+| Collection state + admin units                        | MISSING (only country)                                 |
+| Date collected (year-only tolerance UI)               | PARTIAL — `st.date_input` forces a full date           |
+| Host species                                          | MISSING                                                |
+| Host age                                              | MISSING                                                |
+| Host sex                                              | MISSING                                                |
+| Isolation source                                      | MISSING                                                |
+| Sequencing lab DROPDOWN from /api/v1/sequencing-labs/ | MISSING — free text input                              |
+| Project DROPDOWN from /api/v1/projects/               | MISSING — `st.number_input` for project_id             |
+| FASTQ R1/R2 file upload                               | PRESENT                                                |
 
 The page is a working MVP: it relays metadata + files to the ingest
 endpoint, surfaces the validator's tier on the response, and handles
@@ -1739,18 +1777,18 @@ Admin, Example-Lab director). "Contract verified" = API returned
 the expected envelope and the page-code review confirms `upload.py`
 will render it via `st.error(f"Upload failed: {exc.message}")`.
 
-| Step | Scenario | Status |
-|---|---|---|
-| 3 | GET /api/v1/sequencing-labs/ → 3 seeded labs | CONTRACT VERIFIED (Example Sequencing Lab, Example Reference Lab, Example Lab) |
-| 3 | GET /api/v1/projects/ → ≥1 | CONTRACT VERIFIED (Dev Project) |
-| 4 | POST /api/v1/ingest/upload happy path | CONTRACT VERIFIED — 201, sample_id returned, quality_status=PRELIMINARY, sector=clinical, scrub_status=PENDING |
-| 5 | GET /api/v1/samples/{integer-id} retrieves | CONTRACT VERIFIED. Note: endpoint requires the integer DB id, not the string sample_id — UI must capture `data.id` from the upload response |
-| 5 | audit_log row written | CONTRACT VERIFIED (action=CREATE_SAMPLE, resource_type=sample) |
-| 6 | Missing host_age (Tier 3 field) → 422 | NOT TRIGGERED — host_age is optional per current validator. The UI-B task description expected a Tier 3 requirement, but `validate_sample()` doesn't enforce it. Documented for product-owner review |
-| 7 | CSV body named .fasta → 400 | CONTRACT VERIFIED **after fix** — `Upload failed: fake.fasta has extension .fasta but its content could not be recognised as any known format. ...` |
-| 8 | Gzipped CSV named .fastq.gz → 400 | CONTRACT VERIFIED **after fix** — same human-readable message, `_read_first_bytes` decompressed gzip first |
-| 9 | Missing organism_name (BASE_REQUIRED) → 422 | CONTRACT VERIFIED — `Upload failed: Missing required field: organism_name` |
-| 10 | Invalid enum value | FORECLOSED by UI — source_type/sharing/sector are all `st.selectbox`, can't pick an out-of-range value from the page |
+| Step | Scenario                                     | Status                                                       |
+| ---- | -------------------------------------------- | ------------------------------------------------------------ |
+| 3    | GET /api/v1/sequencing-labs/ → 3 seeded labs | CONTRACT VERIFIED (Example Sequencing Lab, Example Reference Lab, Example Lab) |
+| 3    | GET /api/v1/projects/ → ≥1                   | CONTRACT VERIFIED (Dev Project)                              |
+| 4    | POST /api/v1/ingest/upload happy path        | CONTRACT VERIFIED — 201, sample_id returned, quality_status=PRELIMINARY, sector=clinical, scrub_status=PENDING |
+| 5    | GET /api/v1/samples/{integer-id} retrieves   | CONTRACT VERIFIED. Note: endpoint requires the integer DB id, not the string sample_id — UI must capture `data.id` from the upload response |
+| 5    | audit_log row written                        | CONTRACT VERIFIED (action=CREATE_SAMPLE, resource_type=sample) |
+| 6    | Missing host_age (Tier 3 field) → 422        | NOT TRIGGERED — host_age is optional per current validator. The UI-B task description expected a Tier 3 requirement, but `validate_sample()` doesn't enforce it. Documented for product-owner review |
+| 7    | CSV body named .fasta → 400                  | CONTRACT VERIFIED **after fix** — `Upload failed: fake.fasta has extension .fasta but its content could not be recognised as any known format. ...` |
+| 8    | Gzipped CSV named .fastq.gz → 400            | CONTRACT VERIFIED **after fix** — same human-readable message, `_read_first_bytes` decompressed gzip first |
+| 9    | Missing organism_name (BASE_REQUIRED) → 422  | CONTRACT VERIFIED — `Upload failed: Missing required field: organism_name` |
+| 10   | Invalid enum value                           | FORECLOSED by UI — source_type/sharing/sector are all `st.selectbox`, can't pick an out-of-range value from the page |
 
 ### Bugs found and fixed
 
@@ -1773,8 +1811,8 @@ will render it via `st.error(f"Upload failed: {exc.message}")`.
   `{"success": false, "error": {"code": "HTTP_400", "message": "..."}}`.
 - **Regression tests**: `test_upload_rejects_csv_renamed_to_fasta`
   + `test_upload_rejects_gzipped_csv_renamed_to_fastq_gz` in
-  `tests/test_ingest_api.py`. Cover both the bare-extension case and
-  the gzip-peek case.
+    `tests/test_ingest_api.py`. Cover both the bare-extension case and
+    the gzip-peek case.
 
 **Bug 2: HTTPException-based errors bypass the JACKPOT envelope.**
 
@@ -1923,6 +1961,173 @@ already deployed somewhere (local, staging, prod, fork):
   product owner: real Google OAuth sign-ups from `@example.org`
   won't be whitelisted by the seed if/when OAuth fronts the API.
   Surfacing the mismatch beats silently auto-correcting it.
+
+
+
+## P0d Pre-Flight: Verifying source-repo canonicality before history-preserving migration — 2026-04-29
+
+**What was built:** A diagnostic protocol (and the muscle memory for it) for confirming that all source repos for a `git filter-repo`-based monorepo migration are in clean canonical state on GitHub before the migration starts. Surfaced and resolved 4 distinct types of pre-migration drift across 6 source repos.
+
+**Key decisions:**
+
+- **Pull from GitHub, not local clones, during migration.** Local clones can have unpushed commits, dirty state, or stale view of `origin`. Migration tooling must use GitHub as the single source of truth. The pre-flight verifies this is safe.
+- **Submodule pin vs sibling clone divergence is the failure mode to look for.** When the same repo exists as both a submodule and a standalone sibling clone, they almost always disagree about what `origin/main` is. The diagnostic uses `git merge-base --is-ancestor <submodule-pin> HEAD` against the sibling — three outcomes:
+  - YES → sibling is strictly ahead, push it (case 1, easy)
+  - NO with valid SHAs → genuine divergence, requires manual reconciliation
+  - NO with `unknown revision` → submodule pin SHA doesn't exist locally in the sibling (sibling is behind GitHub), `git fetch origin` then re-test
+- **`ahead/behind/dirty: 0/0/0` is the readiness gate.** A sweep loop over all source repos that prints these three numbers per repo. P0d cannot start until every line reads three zeros.
+
+**Watch out for:**
+
+- **`gh repo view --json isEmpty` is misleading.** Returns `false` if the repo has even a single auto-generated `LICENSE` file from GitHub's repo-creation form. Use `gh api repos/.../commits` to actually see how many commits and what they say. A "non-empty" repo with one `Initial commit` and only a LICENSE file is the cleanest possible starting state.
+- **GitHub's auto-generated LICENSE is whatever was selected at repo creation.** For `Midnight-Oil-Innovation/jackpot`, this was Apache 2.0 from before the AGPL-3.0 decision was finalized. The fix is straightforward: `curl -L -o /tmp/agpl-3.0.txt https://www.gnu.org/licenses/agpl-3.0.txt && cp /tmp/agpl-3.0.txt LICENSE && gac "chore: replace Apache 2.0 with AGPL-3.0 license"`. GitHub's repo metadata (`gh api repos/X/Y --jq '.license'`) auto-detects from file contents within an hour.
+- **The diagnostic command for unfetched-sibling detection has a subtle gotcha.** `git log --oneline <sha> 2>&1 | head -3` will return `fatal: ambiguous argument` if the SHA isn't in the local clone — that's the signal the sibling is behind GitHub. It looks like an error but is actually diagnostic data.
+- **`git log --1` is a typo that fails.** Real flag is `git log -1` (single dash, no double). Easy to mistype and the error is non-obvious.
+
+**ASCII diagram — the three submodule-vs-sibling drift cases:**
+
+```
+Case 1 (most common): sibling is ahead of submodule pin
+  GitHub origin/<branch>:  ... → A → B (newest)
+  jackpot-backend pin:     ... → A
+  sibling clone HEAD:      ... → A → B
+  is-ancestor: YES   →   push siblings, done
+
+Case 2: sibling is behind GitHub (saw this for jackpot-nf)
+  GitHub origin/<branch>:  ... → A → B → C → D → E (newest)
+  jackpot-backend pin:     ... → A → B → C → D → E
+  sibling clone HEAD:      ... → A
+  is-ancestor with stale fetch: NO (E "unknown")
+  → fetch + ff-only pull, sibling catches up, done
+
+Case 3: genuine divergence (didn't hit this; flag if you do)
+  GitHub origin/<branch>:  ... → A → B (canonical)
+  sibling clone HEAD:      ... → A → X (local-only work on different line)
+  is-ancestor: NO with both SHAs valid locally
+  → manual reconciliation: rebase, merge, or pick-one-side
+```
+
+**Diagnostic loop (the readiness sweep):**
+
+```bash
+for repo in jackpot-backend jackpot-cli jackpot-iac jackpot-frontend jackpot-nf jackpot-schema; do
+  echo "=== ~/jackpot/$repo ==="
+  cd ~/jackpot/$repo
+  echo "  branch: $(git branch --show-current)"
+  echo "  HEAD:   $(git log -1 --oneline)"
+  echo "  ahead:  $(git rev-list --count @{u}..HEAD 2>/dev/null) commits ahead of upstream"
+  echo "  behind: $(git rev-list --count HEAD..@{u} 2>/dev/null) commits behind upstream"
+  echo "  dirty:  $(git status --short | wc -l | tr -d ' ') uncommitted file changes"
+done
+```
+
+Want every line to read `ahead: 0, behind: 0, dirty: 0`. Anything else is a loose end to tie up before P0d.
+
+---
+
+## `.claude/settings.json` for autonomous mode — Option B (scoped allow + explicit deny) — 2026-04-29
+
+**What was built:** A refinement of `.claude/settings.json` for Claude Code autonomous mode that supports `/automode` without overly broad permissions. Replaces the "flat allowlist" approach with scoped patterns plus an explicit deny list. Verified Glen's pre-existing `CLAUDE_CODE_SUBAGENT_MODEL: "sonnet"` is the right cost/quality split (Opus orchestrator + Sonnet subagents).
+
+**Key decisions:**
+
+- **Scoped allow patterns over flat `Bash` and `Edit`.** A scoped pattern like `Bash(uv *)` covers `uv run`, `uv sync`, `uv pip install` without granting `Bash(*)` blanket access. `Edit(**)` and `Write(**)` are unavoidable for autonomous work but `Bash` should stay scoped.
+- **Explicit deny list catches the destructive-by-default actions.** `Bash(rm -rf *)`, `Bash(git push --force *)`, `Bash(git reset --hard *)`, `Bash(sudo *)`, `Bash(curl * | bash)` all deny even though `Bash(rm *)` (single-file delete) and `Bash(git push *)` are allowed. This is the right granularity for trust without recklessness.
+- **`Bash(rm *)` allowed; `Bash(rm -rf *)` denied.** Single-file `rm` is routine in P0d (deleting `__pycache__`, removing accidental files); recursive removal needs a pause.
+- **`Bash(git push --force *)` denied even with `--force-with-lease`.** Force-push is essentially never necessary in autonomous mode; if it really is, force the operator to do it manually.
+- **`CLAUDE_CODE_SUBAGENT_MODEL: "sonnet"` is non-negotiable for cost reasons.** Top-level orchestrator runs on `claude-opus-4-7` (the model setting at the top level); subagents run on Sonnet. With ~10 parallel subagents in a typical fan-out task, running them all on Opus would burn ~10x the budget for marginal quality gain.
+
+**Watch out for:**
+
+- **`hooks.Notification` with `osascript` requires macOS notification permissions enabled for the Terminal app.** Test once before a long autonomous session: `osascript -e 'display notification "test" with title "test"'` from your shell. If nothing appears, check System Settings → Notifications → Terminal (or whichever shell host you use) → Allow notifications. Otherwise `/automode` will silently fail to ping you when it stops.
+- **`enabledPlugins.pyright-lsp` matters for refactor work.** Real-time type checking catches a meaningful percentage of import-path-rewrite bugs before tests do. Don't disable it during P0d.
+- **`CLAUDE_CODE_DISABLE_AUTO_MEMORY: "1"` means Claude Code won't write to memory automatically.** Memory updates happen explicitly via the `memory_user_edits` tool when the user requests them. This is intentional — managing memory deliberately via the docs/CLAUDE.md + design-docs pattern is preferred over magic auto-write.
+- **Claude Code must be restarted to pick up new `settings.json`.** `/exit` then re-launch `claude`. Verifying load: `> Show me your current permissions configuration`.
+
+**Final structure (top-level keys):**
+
+```
+.claude/settings.json
+├── env
+│   ├── CLAUDE_CODE_DISABLE_AUTO_MEMORY: "1"
+│   └── CLAUDE_CODE_SUBAGENT_MODEL: "sonnet"
+├── permissions
+│   ├── allow: [~50 scoped Bash patterns + Read(**) + Edit(**) + Write(**) + Glob + Grep + Task + WebFetch + WebSearch]
+│   └── deny: [~10 patterns covering rm -rf, force-push, hard-reset, sudo, curl-pipe-bash]
+├── model: "claude-opus-4-7"          # orchestrator
+├── hooks.Notification: osascript ping when attention needed
+├── enabledPlugins.pyright-lsp: true
+├── effortLevel: "xhigh"
+└── theme: "light"
+```
+
+---
+
+## /automode and /ultrareview skills — 2026-04-29
+
+**What was built:** Two new Claude Code skills under `.claude/commands/`. `/automode` is the persistent-autonomous-execution wrapper that lets a phase or task run without per-action confirmation. `/ultrareview` is the heavier sibling of `/simplify` — six parallel reviewers covering simplicity, security, performance, test coverage, documentation, and architectural consistency, with severity-ranked synthesis.
+
+**Key decisions:**
+
+- **Three-skill cadence: `/go` after every chunk → `/simplify` mid-phase → `/ultrareview` end-of-phase.** Each has different cost and scope. `/go` is verification-and-commit (seconds). `/simplify` is 4-agent simplification review (1-2 min). `/ultrareview` is 6-agent deep review (5-10 min plus the time to read findings). `/automode` is the wrapper that lets all three run without user babysitting.
+- **`/automode` has explicit stop conditions.** Doesn't ask for routine confirmations (file edits, tests, lints, commits via `gac`) but DOES stop for: destructive actions outside the task scope, genuine ambiguity (multiple valid interpretations with materially different outcomes), test failures or errors needing human judgment, rate limits or auth errors, three-strike failure on autonomous fix attempts, task completion. Critical Rules from CLAUDE.md still apply.
+- **`/ultrareview`'s six reviewers are non-overlapping.** Simplicity (deletable code, duplicated logic, over-abstraction), Security (injection risks, secrets, auth bypass, Critical-Rule compliance), Performance (N+1 queries, sync-when-async, unbounded loops, leaks), Test coverage (untested paths, weak tests, coverage delta), Documentation (CLAUDE.md/spec.md/todo.md/learnings.md updates, docstrings, inline rationale), Architectural consistency (module boundaries, import cycles, Rule-55 operator-agnostic compliance, pattern divergence).
+- **`/ultrareview` synthesizes by severity, not by reviewer.** Output is ranked: Blockers (CRITICAL/HIGH security, broken tests, rule violations) → Should-fix-before-merge → Nice-to-have. Don't bury blockers in a long flat list.
+- **Both skills explicitly invoke parallel subagents via the `Task` tool.** The prompt pattern is `> Use parallel subagents to do the following: Agent 1: ... Agent 2: ... Agent 3: ... When all agents complete, synthesize their outputs and report back.` This is a stronger prompt than "do A, B, and C in parallel" because it explicitly invokes the subagent mechanism.
+
+**Watch out for:**
+
+- **`/automode` does not bypass safety rules.** All 55 Critical Rules from CLAUDE.md remain in force during autonomous execution. Rule 55 (operator-agnostic production code) is the hardest one to violate accidentally during refactoring; `/ultrareview`'s Architectural Consistency reviewer specifically checks for it.
+- **Long autonomous sessions degrade context.** After ~3-4 hours or ~10 substantive commits, end the session and start a new one. Pattern: `> Summarize what we've done in this session, what state the codebase is in, what the next 3-5 logical commits would be, and append this to docs/session-N-handoff.md. Then exit.` Next session starts with `> Read docs/session-N-handoff.md, then continue from where we left off. Enter /automode.`
+- **`/automode off` is explicit.** Skill exits autonomous mode but doesn't undo changes. Use when wrapping up a phase or transitioning to interactive work.
+- **`/ultrareview` is heavy.** Don't run it after every chunk — use `/simplify` or `/go` for that. Reserve `/ultrareview` for end-of-phase, before tag/release, or after a significant refactor.
+
+---
+
+## P0d migration — design pattern: "blueprint-with-parallel-fanout" — 2026-04-29
+
+**What was built:** The master prompt template for P0d (JACKPOT monorepo migration), structured to take maximum advantage of Claude Code's subagent parallelism. Eight phases A-H, each declaring explicitly which work fans out to parallel subagents and which is sequential.
+
+**Key decisions:**
+
+- **Phase A (Inventory) parallelizes across source repos.** 6 subagents, one per source repo, fan out to read each repo's structure, count files, identify dependencies, find secrets, verify clean+pushed state. Independent work → ideal subagent fit.
+- **Phase C (Execute merges) is sequential.** `git filter-repo` operations on the destination must happen in order because each one rewrites history. Cannot parallelize.
+- **Phase E (Import-path rewrites) parallelizes across backend subdirectories.** 5 subagents working on `routers/`, `services/`, `models/`, `parsers/`, `tests/` in parallel — each subdirectory has independent import statements to rewrite.
+- **Phase G (Phase 21.5 quick wins) parallelizes within the docs tree.** 8+ subagents writing the governance directory files, the FHIR mapping doc, the STLT deploy guides — all independent files.
+- **Phase H (Final verification) ends with `/ultrareview` before tagging.** Six-agent deep review surfaces blockers; address before `git tag p0d-complete`.
+
+**Watch out for:**
+
+- **The `Use parallel subagents to do the following` prompt is required.** Claude Code does not always parallelize on its own; you have to invoke the subagent mechanism explicitly. Without that prompt, the orchestrator will do the work sequentially even when fan-out is obvious.
+- **Subagent prompts must be self-contained.** Each subagent has its own context window and doesn't see the others' work. The orchestrator's prompt to each must include all the context that subagent needs.
+- **Sequential phases must verify before moving on.** Phase C cannot start until Phase B confirmed the merge order. Phase E cannot start until Phase D's `uv sync` passes. The master prompt's phase-boundary "emit phase summary then continue" pattern enforces this.
+- **The destination repo path matters.** `~/projects/jackpot/` (outside `~/jackpot/`) avoids confusion with source repos. `~/jackpot/jackpot-monorepo` would have collided with sibling source repos. The pre-flight cleanup includes deleting any leftover empty clones from earlier attempts.
+
+**ASCII diagram — phase fan-out structure:**
+
+Phase A — Inventory                Phase C — Merges (SEQUENTIAL)
+
+```
+Phase A — Inventory                Phase C — Merges (SEQUENTIAL)
+┌─────────────┐                   ┌──────────────────────┐
+│ subagent 1  │───┐               │ filter-repo backend  │
+│ subagent 2  │───┤               │         ↓            │
+│ subagent 3  │───┼─→ orchestrator│ filter-repo cli      │
+│ subagent 4  │───┤   synthesis   │         ↓            │
+│ subagent 5  │───┤               │ filter-repo iac      │
+│ subagent 6  │───┘               │         ↓ ...        │
+└─────────────┘                   └──────────────────────┘
+
+Phase E — Import rewrites          Phase G — Phase 21.5 docs
+┌─────────────────┐                ┌───────────────────────┐
+│ routers/        │───┐            │ governance/charter.md │
+│ services/       │───┤            │ governance/coi.md     │
+│ models/         │───┼─→ tests    │ governance/care.md    │
+│ parsers/        │───┤   per      │ docs/fhir-mapping.md  │
+│ tests/          │───┘   batch    │ docs/deploy/stlt/*    │
+└─────────────────┘                │ README.md             │
+                                   └───────────────────────┘
+```
 
 ## P0d — Monorepo migration to Midnight-Oil-Innovation/jackpot — 2026-04-29
 

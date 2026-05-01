@@ -1,8 +1,10 @@
 # JACKPOT Session Summary & Backlog
 
-**Document version:** 2.5
-**Last updated:** 2026-04-28
-**Sessions covered:** Session 1 (March–April 2026 consolidated), Session 2 (2026-04-10), Sessions 3–S (2026-04 through 2026-04-19), Pathoplexus/Loculus comparative analysis session (2026-04-28), Cleanup A–J operator-agnostic genericization session (2026-04-26 to 2026-04-28)
+**Document version:** 2.6
+**Last updated:** 2026-04-29
+**Sessions covered:** Session 1 (March–April 2026 consolidated), Session 2 (2026-04-10), Sessions 3–S (2026-04 through 2026-04-19), Pathoplexus/Loculus comparative analysis session (2026-04-28), Cleanup A–J operator-agnostic genericization session (2026-04-26 to 2026-04-28), Session 11 (2026-04-28 → 2026-04-29 — CDC DMI/STLT/CARE alignment, BYOP/eukaryotic design, phasing rework, P0d migration prep)
+
+**v2.6 changelog (2026-04-29):** Added Session 11 covering: (1) CDC Data Modernization Initiative / North Star Architecture / STLT alignment with formal CARE Principles adoption and addition of Scenario T (Tribal-sovereignty deployment) — produced `jackpot_cdc_dmi_stlt_overview.md`, 14-item Phase 27 backlog. (2) Multi-engine BYOP infrastructure design (Nextflow + Snakemake + WDL + manifest-wrapped scripts) plus full-parity eukaryotic pathogen support across 8 pathogen groups — produced `jackpot_byop_and_eukaryotic_design.md`, 25-item set split across Phase 24.5 / P0f / Phase 28. (3) Phasing rework: schema items moved to Phase 24.5 (lockdown before P0b), BYOP infrastructure becomes new P0f phase between P0e and P0b/c, eukaryotic pipelines stay in Phase 28 with internal tier-prioritization. (4) Claude Code parallel-agents playbook with `/automode` and `/ultrareview` skill designs — produced `jackpot_claude_code_playbook.md`. (5) P0d migration pre-flight: verified all 6 source repos clean and pushed to canonical GitHub state, replaced Apache 2.0 with AGPL-3.0 on destination repo, ready for Claude Code kickoff.
 
 **Changelog:**
 
@@ -2458,3 +2460,138 @@ Following the April 2026 pivot (JACKPOT becomes an independent project under `Mi
 | Users                     | gotero@linuxprophet.com / Glen Otero               | admin@example.org / Admin User |
 
 **Outcome:** the codebase is operator-agnostic. The next phase, **P0d**, is the monorepo migration consolidating `jackpot-backend`, `jackpot-schema`, `jackpot-nf`, `jackpot-cli`, `jackpot-iac` (and possibly `jackpot-biotools`) into a single `Midnight-Oil-Innovation/jackpot` repo with no submodules — a clean entry point for the `jackpot init` work in P0e.
+
+
+---
+
+# Session 11 — 2026-04-28 → 2026-04-29 (CDC DMI/STLT, BYOP/Eukaryotic, Phasing Rework, P0d Migration Prep)
+
+## What we covered
+
+A working session that produced two more major design documents and a Claude Code operational playbook, then walked through the pre-flight verification needed to kick off P0d in Claude Code with parallel agents. Five distinct work streams.
+
+## 1. CDC Data Modernization Initiative / STLT alignment
+
+Researched and synthesized:
+
+- **CDC DMI history (2020–2025).** $1B+ in initial appropriations across CARES + ARP + ELC. Five priorities: foundation, data-into-action, workforce, partnerships, governance. North Star Architecture as the technical centerpiece — "blueprint not platform," tiered support levels, "CDC Front Door" pattern, local data control, TEFCA + FHIR interoperability stack. EDAV, eCR, NBS modernization, TEFCA Public Health SOP all built before October 2025.
+- **Current limbo.** Implementation Center Program (IC Program) Wave 2 applications halted October 2025; broader DMI funding stalled in FY26 LHHS appropriations negotiations. Underlying technical vision still sound; pause is political.
+- **STLT landscape.** State (50+DC), Territorial (5+3 FAS), Local (~3000 LHDs), Tribal (574 federally-recognized + 12 TECs serving 9.7M AI/AN people). "Big Cities Health Coalition" sub-segment of ~30 LHDs with state-class capability.
+- **Tribal sovereignty deep-dive.** TECs as HIPAA-recognized public health authorities. CARE Principles for Indigenous Data Governance (Collective Benefit, Authority to Control, Responsibility, Ethics) as the canonical framework, complementary to FAIR. Tribal IRBs + tribal research codes + sovereignty-aware data handling.
+
+Decisions made:
+
+- **Add Scenario T to install scenarios.** Variant of A or E with sovereignty-aware defaults: deletion-on-request that actually removes data (tombstone-and-vacuum lifecycle, not soft-delete), no auto-publish to NCBI/INSDC, federation off-by-default, CARE Principles compliance.
+- **Adopt CARE Principles formally** alongside FAIR. Becomes a first-class design constraint for Scenario T deployments.
+- **Tombstone-and-vacuum architectural pattern** for sovereignty-compliant deletion. New `samples.deletion_status` enum (ACTIVE / DELETION_REQUESTED / TOMBSTONED / VACUUMED), background vacuum job removes file URIs + GCS objects + `pipeline_results.result_data` JSONB content + cached artifacts, audit log preserves the *fact* of deletion not the deleted content. Federation-aware tombstone propagation with signed receipts.
+- **TEC federation pattern.** Scenario E concretized for Tribal contexts: TEC instance aggregates from member Tribes per per-Tribe sharing agreements; honors deletion propagation; provides public-health-authority view for IHS/state/CDC reporting.
+- **Layer-cake positioning.** JACKPOT is the genomics layer between LIMS and downstream analysis platforms (NCBI Pathogen Detection, Pathoplexus, Pathogenwatch, Nextstrain). Integrates with NBS/eCR/AIMS — does not replace them. Critical for grant narratives.
+- **Defer FHIR/TEFCA support to Year 2.** Document the data model in FHIR-translatable terms now; build actual FHIR ingest/emit when an operator asks for it.
+
+Output: `jackpot_cdc_dmi_stlt_overview.md` (816 lines, 14 backlog items grouped K–M).
+
+## 2. BYOP infrastructure + eukaryotic pathogen pipelines
+
+A combined design because the two are interlinked: eukaryotic pipelines are the first non-trivial test of BYOP.
+
+### BYOP architecture
+
+Four supported workflow engines, each with their own launcher: **Nextflow** (existing path, hardened), **Snakemake** (new, with weblog wrapper), **WDL** (new, supports Cromwell + miniwdl backends), **manifest-wrapped scripts** (new, JACKPOT-specific — Bash/Python script with a `jackpot-pipeline.yaml` manifest, single Docker container, no resume).
+
+Four source types: **public Git URL**, **private Git with deploy keys** (per-pipeline keys in operator's secret manager), **uploaded tar.gz** (max 500MB compressed), **Docker image with manifest path** (single-container only).
+
+Two-stage validation gating before activation:
+
+1. **Static checks** — manifest schema, engine syntax (`nextflow inspect`, `snakemake --lint`, `miniwdl check`, `bash -n` / `python -c`), container resolution (registry reachability, tag existence, digest verification), reference data resolution (HTTP HEAD + checksum), license compatibility (SPDX against allowlist), permissions sanity.
+2. **Sandbox dry-run** — isolated namespace (Kubernetes) or network (Docker), 5-minute timeout, synthetic test inputs from `backend/test_data/byop_sandbox/`, egress restricted to operator allowlist, 2 CPU / 4 GB RAM / 10 GB storage cap.
+
+The `jackpot-pipeline.yaml` manifest format (9 sections: api_version, kind, metadata, engine, applicability, resources, reference_data, containers, inputs, outputs, permissions, cost) becomes JACKPOT's contract — engine-specific workflow files are read as needed but the manifest is the source of truth.
+
+Pipeline lifecycle state machine: `SUBMITTED → VALIDATING → SANDBOX_PENDING → SANDBOX_RUNNING → ACTIVE → DEACTIVATED → ARCHIVED`, plus three terminal failure states (`VALIDATION_FAILED`, `SANDBOX_FAILED`, `SANDBOX_TIMEOUT`). Quarterly background re-validation catches upstream rot.
+
+### Eukaryotic pathogen support
+
+Full-parity coverage across 8 pathogen groups, biology-aware (each with different reference databases, typing schemes, drug-resistance markers, sample types):
+
+| Group | Species | Surveillance focus |
+|---|---|---|
+| *Plasmodium* | P. falciparum, P. vivax, P. malariae, P. ovale (curtisi/wallikeri), P. knowlesi | Drug resistance (`pfk13`/`pfdhfr`/`pfdhps`/`pfcrt`/`pfmdr1`), HRP2/HRP3 deletions, MOI |
+| *Leishmania* | L. donovani, L. major, L. infantum, L. tropica, L. braziliensis, L. mexicana | Species ID, MLST, antimony/miltefosine resistance |
+| *Trypanosoma* | T. cruzi, T. brucei (gambiense/rhodesiense), T. congolense, T. vivax | DTU assignment (TcI–TcVI), drug resistance |
+| *Schistosoma* | S. mansoni, S. haematobium, S. japonicum, S. mekongi, S. intercalatum | cox1/nad1/ITS markers, hybrid detection (S. haematobium × S. bovis), PZQ resistance |
+| Soil-transmitted helminths | Ascaris, Trichuris, Necator, Ancylostoma, Strongyloides | β-tubulin SNPs (codons 167/198/200) for benzimidazole resistance, ITS2 species ID |
+| Filarial nematodes | W. bancrofti, B. malayi, B. timori | Wolbachia status (basis for doxycycline therapy), ivermectin resistance |
+| Cryptosporidium / Giardia | C. parvum, C. hominis, C. meleagridis, G. intestinalis | GP60 subtyping (gold-standard outbreak typing), Giardia assemblage assignment |
+| Toxoplasma / Entamoeba | T. gondii, E. histolytica, E. dispar | 15-marker MLST, clonal lineage (Type I/II/III), E. histolytica vs E. dispar discrimination |
+
+Schema additions: **~25 OrganismNameEnum entries**, new `ParasiteDevelopmentalStageEnum` and `SamplePreservationMethodEnum`, new `samples` columns (parasite_developmental_stage, sample_preservation_method, parasitemia_percent, multiplicity_of_infection, coinfection_organisms), **8 new pipeline-result tables** with their own enums (TcDTUEnum, GiardiaAssemblageEnum, ToxoClonalLineageEnum, EhVsEdEnum, WolbachiaStatusEnum, ResistanceCallEnum).
+
+10 default zoo pipelines under `Midnight-Oil-Innovation/jackpot-pipelines-eukaryotic` (single repo, one subdirectory per pipeline), AGPL-3.0, registered as Level-1 zoo entries via P0f BYOP infrastructure. 8 dashboard pages, one per pathogen group.
+
+Output: `jackpot_byop_and_eukaryotic_design.md` (1,456 lines, 25 backlog items split across Phase 24.5 / P0f / Phase 28).
+
+## 3. Phasing rework
+
+The 25 BYOP/eukaryotic items would have been wrong as a homogeneous Phase 28. Real dependencies:
+
+- **Schema items must land with P0b** (otherwise double-migrate). 4 items: `B-BYOP-9` (byop_pipelines table + pipeline_results FK), `B-EUK-1` (OrganismNameEnum + samples columns), `B-EUK-2` (8 pipeline-result tables), `B-EUK-3` (validator updates). Moved to **Phase 24.5** so they're locked before P0b touches the schema.
+- **BYOP infrastructure must land before eukaryotic pipelines** (which register through it). 10 items: B-BYOP-1 through B-BYOP-10 (manifest schema, validators, sandbox, router, 4 engine launchers, quarterly revalidation, registration UI, catalog UI, telemetry). Created **new Phase 24.7 / P0f** between P0e and P0b/c.
+- **Default eukaryotic pipelines stay in Phase 28** but **internally tier-prioritized**: Tier 1 (Plasmodium, Crypto/Giardia + parsers + dashboards) ships first, Tier 2 (Leishmania, Trypanosoma, Schistosoma) second, Tier 3 (STH, Filarial, Toxo/Entamoeba, Plasmodium-amplicon) third.
+
+Updated phase chain: **Phase 21 (UI close-out) → P0d → P0e → Phase 24.5 (design lockdown for sovereignty + BYOP/eukaryotic schema) → P0f / Phase 24.7 (BYOP infrastructure) → P0b (Schema v5.0 with all 24.5 lockdowns) → P0c (multi-tenancy middleware + sovereignty deletion implementation) → P1–P5.** Tracked but not scheduled: Phase 25 (Month 3 stretch), Phase 26 (Pathoplexus/Loculus 34 items), Phase 27 (CDC DMI/STLT 14 items), Phase 28 (eukaryotic pipelines 11 items).
+
+`spec.md` bumped to v2.2, `todo.md` updated with the new phases, `CLAUDE.md` Critical Rule 55 already in force unchanged.
+
+## 4. Claude Code parallel-agents playbook
+
+Glen requested operational guidance for shifting most development to Claude Code with maximum parallelism. Produced `jackpot_claude_code_playbook.md` (693 lines) covering:
+
+- Two distinct parallelism mechanisms: **subagents within one session** (`Use parallel subagents to do X` prompt) vs **multiple Claude Code instances in separate terminals** (genuinely separate work tracks). Most P0d work is mechanism 1; running Phase 21.5 docs alongside is mechanism 2.
+- Pre-P0d setup: `.claude/settings.json` Option B configuration with scoped allow patterns + explicit deny list (`rm -rf`, force-push, hard reset). Verified Glen's existing `CLAUDE_CODE_SUBAGENT_MODEL: "sonnet"` (top-level Opus + subagent Sonnet) is the right cost/quality split.
+- Two new skills: **`/automode`** for persistent autonomous execution (skips routine confirmations, only stops for genuine ambiguity / destructive actions / 3-strike test failures / rate limits), **`/ultrareview`** for 6-agent deep multi-perspective review (simplicity, security, performance, test coverage, documentation, architectural consistency) with severity-ranked synthesis.
+- P0d master prompt template, expected output cadence, completion checklist, post-P0d ongoing-development phase-start template, session-handoff pattern.
+
+The skill cadence: `/go` after every chunk → `/simplify` mid-phase → `/ultrareview` end-of-phase. `/automode` is the wrapper that lets all three run without user babysitting.
+
+## 5. P0d migration pre-flight
+
+Verified actual local layout differs from playbook assumptions: not 5 independent siblings but `jackpot-backend` already containing `schema/` and `nf/` as submodules, plus 3 truly independent siblings (`jackpot-cli`, `jackpot-iac`, `jackpot-frontend`), plus 2 standalone duplicate clones of schema and nf, plus 1 non-git directory (`jackpot-biotools`).
+
+Pre-flight diagnostic discovered:
+
+- **Schema sibling was 1 commit ahead of GitHub** (a `.DS_Store -> .gitignore` cleanup) — pushed.
+- **Nf sibling was 5 commits *behind* GitHub** (no local-only work) — fast-forwarded with `git pull --ff-only`.
+- **3 repos had unpushed commits** (cli + 1, iac + 1, frontend + 2) — pushed.
+- **Frontend had dirty state** (2 deleted admin pages + .DS_Store) — Glen committed the deletions and gitignored .DS_Store.
+- **`jackpot-biotools` is not a git repo** — excluded from P0d, documented in `MIGRATION_TBD.md`.
+- **Submodule pin in jackpot-backend was older than sibling HEAD** for both schema (688..→c74...) and nf (f11...→a45...) — confirmed `git merge-base --is-ancestor` showed sibling was strictly ahead in both cases (case 1 — easy fast-forward).
+
+Final state before P0d kickoff: all 6 source repos report `ahead: 0, behind: 0, dirty: 0`. GitHub is the single source of truth.
+
+Destination repo `Midnight-Oil-Innovation/jackpot` had been created on 2026-04-28 with an Apache 2.0 LICENSE file (default GitHub auto-generation). **Replaced with AGPL-3.0** by pulling canonical text from `https://www.gnu.org/licenses/agpl-3.0.txt`, committing as `chore: replace Apache 2.0 with AGPL-3.0 license` with rationale referencing spec.md §13 and the Pathoplexus/Loculus overview §3.
+
+Destination cloned to `~/projects/jackpot/` (outside `~/jackpot/` to avoid confusion with source repos). Ready for Claude Code kickoff.
+
+## Decisions ready for P0d execution
+
+The corrected master prompt for Claude Code includes:
+
+- All 6 source repos verified clean and canonical
+- Destination at `~/projects/jackpot/` (NOT `~/jackpot/jackpot-monorepo` which was an empty leftover, deleted)
+- Target tree: `backend/` (from jackpot-backend root → backend/), `schema/` (subtree-merged), `pipelines/` (from jackpot-nf, renamed), `cli/`, `deploy/` (from jackpot-iac, renamed), `frontend/`, plus top-level `docs/`, `governance/` (NEW), `tests/`, `pyproject.toml`, `LICENSE`, `NOTICE`, `COPYRIGHT`, `spec.md`, `todo.md`, `README.md`
+- 8 phases A–H with parallelism per phase explicitly named
+- Phase 21.5 quick wins ride along during P0d (governance/ directory, layer-cake diagram, FHIR mapping doc, STLT deploy guides, Scenario T explicit in spec)
+- `/automode` for the whole phase, `/ultrareview` before tagging
+
+## Outcome
+
+JACKPOT is now positioned to start P0d in Claude Code. Pre-flight is complete; design documents are comprehensive; phasing is correctly ordered to avoid retrofit work. The hand-off from Chat (this interface, where design happens) to Claude Code (terminal, where code execution happens) is well-defined.
+
+Three reference documents drive everything from here:
+
+- `jackpot_pathoplexus_loculus_overview.md` (1,873 lines) — peer-platform comparative analysis driving Phase 26
+- `jackpot_cdc_dmi_stlt_overview.md` (816 lines) — US public-health-data ecosystem alignment driving Phase 27 and Scenario T
+- `jackpot_byop_and_eukaryotic_design.md` (1,456 lines) — multi-engine BYOP infrastructure driving P0f, plus eukaryotic pipeline coverage driving Phase 28
+- `jackpot_claude_code_playbook.md` (693 lines) — operational guide for Claude Code with parallel agents
+
+`spec.md` is at v2.2; `todo.md` reflects the 7-scenario model and full phase chain; `CLAUDE.md` enforces Critical Rule 55 (operator-agnostic production code); memory edits capture the pivot, AGPL flip, multi-deployment architecture, two-PII-gate architecture, and reference document map.
