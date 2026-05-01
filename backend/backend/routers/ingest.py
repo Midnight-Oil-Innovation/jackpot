@@ -12,6 +12,7 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, Uplo
 
 from backend.audit import AuditActions, log_audit
 from backend.auth.guards import get_current_user, require_platform_admin
+from backend.config import get_settings
 from backend.database import execute_query, execute_write, get_db_dep
 from backend.epiweek import compute_epiweeks
 from backend.file_detector import (
@@ -22,6 +23,7 @@ from backend.file_detector import (
     validate_file_type,
 )
 from backend.notifications import NotificationEvents, create_notification
+from backend.rate_limit import limiter
 from backend.responses import success
 from backend.storage import StorageError, stage_file
 from backend.validator import (
@@ -32,6 +34,7 @@ from backend.validator import (
 
 router = APIRouter(prefix="/api/v1/ingest", tags=["ingest"])
 logger = logging.getLogger(__name__)
+_INGEST_LIMIT = get_settings().rate_limit_ingest
 
 
 # Whitelist of columns the ingest pipeline may INSERT into the samples table.
@@ -339,6 +342,7 @@ def list_ingest() -> dict:
 
 
 @router.post("/upload", status_code=201)
+@limiter.limit(_INGEST_LIMIT)
 async def upload(
     request: Request,
     metadata: str = Form(...),
@@ -463,6 +467,7 @@ def _coerce_csv_row(row: dict[str, str]) -> dict[str, Any]:
 
 
 @router.post("/csv")
+@limiter.limit(_INGEST_LIMIT)
 async def ingest_csv(
     request: Request,
     file: UploadFile = File(...),  # noqa: B008
@@ -524,6 +529,7 @@ async def ingest_csv(
 
 
 @router.post("/globus")
+@limiter.limit(_INGEST_LIMIT)
 async def ingest_globus(
     request: Request,
     db=Depends(get_db_dep),  # noqa: B008

@@ -8,12 +8,14 @@ from backend.auth.oauth import (
     issue_refresh_token,
 )
 from backend.config import get_settings
+from backend.rate_limit import limiter
 
 router = APIRouter(prefix="/api/v1/auth", tags=["auth"])
 settings = get_settings()
 
 
 @router.post("/google/login")
+@limiter.limit(settings.rate_limit_auth)
 async def google_login(code: str, request: Request, response: Response) -> dict:
     """Exchange Google auth code for JWT cookies."""
     redirect_uri = settings.google_oauth_redirect_url

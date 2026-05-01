@@ -52,8 +52,15 @@ def override_settings(test_db_url, monkeypatch):
     monkeypatch.setenv("STORAGE_ENDPOINT", "http://localhost:9000")
     monkeypatch.setenv("STORAGE_ACCESS_KEY", "minioadmin")
     monkeypatch.setenv("STORAGE_SECRET_KEY", "minioadmin")
+    monkeypatch.setenv("RATE_LIMIT_ENABLED", "false")
     get_settings.cache_clear()
     reset_engine()  # ← force engine rebuild with test URL
+    # The slowapi limiter was constructed at import time with the original
+    # rate_limit_enabled value. Re-evaluate it now so test runs aren't
+    # tripping the live 5/minute auth gate after a few login attempts.
+    from backend.rate_limit import limiter
+
+    limiter.enabled = get_settings().rate_limit_enabled
     yield
     get_settings.cache_clear()
     reset_engine()

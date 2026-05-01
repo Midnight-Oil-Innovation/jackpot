@@ -37,6 +37,9 @@ class Settings(BaseSettings):
     work_bucket: str = "jackpot-work"
     results_bucket: str = "jackpot-results"
     gcp_region: str = "us-central1"
+    rate_limit_enabled: bool = True
+    rate_limit_auth: str = "5/minute"
+    rate_limit_ingest: str = "60/minute"
 
     @field_validator("cors_origins", mode="before")
     @classmethod

@@ -5,12 +5,15 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from slowapi.errors import RateLimitExceeded
+from slowapi.middleware import SlowAPIMiddleware
 
 from backend.config import get_settings
 from backend.database import execute_query
 from backend.jobs import run_access_request_job, run_scrubber_queue_job
 from backend.logging_config import configure_logging
 from backend.middleware import RequestIDMiddleware
+from backend.rate_limit import limiter
 from backend.responses import error
 from backend.routers import (
     archive_requests,
@@ -76,6 +79,8 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+app.state.limiter = limiter
+
 app.include_router(archive_requests.router)
 app.include_router(auth.router)
 app.include_router(billing.router)
@@ -100,6 +105,7 @@ app.include_router(users.router)
 app.include_router(templates.router)
 
 app.add_middleware(RequestIDMiddleware)
+app.add_middleware(SlowAPIMiddleware)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=get_settings().cors_origins,
@@ -140,6 +146,18 @@ async def _http_exception_to_envelope(request: Request, exc: HTTPException) -> J
         code=f"HTTP_{exc.status_code}",
         message=str(detail) if detail is not None else "Request failed.",
         status_code=exc.status_code,
+    )
+
+
+@app.exception_handler(RateLimitExceeded)
+async def _rate_limit_to_envelope(request: Request, exc: RateLimitExceeded) -> JSONResponse:
+    # Critical Rule 24: surface rate-limit rejections through the JACKPOT
+    # envelope so the frontend ApiClient gets a uniform shape. slowapi's
+    # default handler returns a bare {"error": "..."} dict.
+    return error(
+        code="HTTP_429",
+        message=f"Rate limit exceeded: {exc.detail}",
+        status_code=429,
     )
 
 
