@@ -13,22 +13,38 @@
 #   6. Creates the Workload Identity Federation pool + provider for GitHub.
 #
 # Usage:
-#   ./scripts/bootstrap_project.sh <project-id> <region> <environment>
+#   ./scripts/bootstrap_project.sh <project-id> <region> <environment> <github-org>
 #
 # Example:
-#   ./scripts/bootstrap_project.sh gotero3-acdp-488517 us-central1 staging
+#   ./scripts/bootstrap_project.sh my-jackpot-prod us-central1 production my-github-org
+#
+# <github-org> is the GitHub organisation or user that owns the JACKPOT
+# repository fork being deployed. The Workload Identity Federation
+# attribute condition restricts impersonation to that owner so a
+# different repo cannot impersonate this project's deploy SA. Operators
+# typically set this via `jackpot init` (P0e) which knows the GitHub
+# org from operator config.
 
 set -euo pipefail
 
-if [[ $# -lt 3 ]]; then
-    echo "Usage: $0 <project-id> <region> <environment>" >&2
-    echo "Example: $0 gotero3-acdp-488517 us-central1 staging" >&2
+if [[ $# -lt 4 ]]; then
+    echo "Usage: $0 <project-id> <region> <environment> <github-org>" >&2
+    echo "Example: $0 my-jackpot-prod us-central1 production my-github-org" >&2
     exit 1
 fi
 
 PROJECT_ID="$1"
 REGION="$2"
 ENVIRONMENT="$3"
+GITHUB_ORG="$4"
+
+# Validate GITHUB_ORG against GitHub's actual character set (alphanumeric,
+# hyphen; cannot start with hyphen) so a typo or shell-metacharacter
+# value can't sneak through into the WIF condition string.
+if [[ ! "$GITHUB_ORG" =~ ^[A-Za-z0-9][A-Za-z0-9-]*$ ]]; then
+    echo "ERROR: <github-org> '$GITHUB_ORG' is not a valid GitHub org/user name" >&2
+    exit 1
+fi
 
 TF_STATE_BUCKET="jackpot-${ENVIRONMENT}-tfstate"
 DEPLOY_SA="jackpot-${ENVIRONMENT}-deploy"
@@ -149,7 +165,7 @@ else
         --workload-identity-pool="$WIF_POOL" \
         --display-name="GitHub OIDC" \
         --attribute-mapping="google.subject=assertion.sub,attribute.repository=assertion.repository,attribute.ref=assertion.ref" \
-        --attribute-condition="assertion.repository_owner == 'linuxprophet'" \
+        --attribute-condition="assertion.repository_owner == '${GITHUB_ORG}'" \
         --issuer-uri="https://token.actions.githubusercontent.com"
 fi
 
