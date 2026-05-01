@@ -47,6 +47,16 @@ domains, or infrastructure identifiers are hardcoded. The `jackpot
 init` CLI is the only place where operator-specific values are learned
 at install time.
 
+## Operations runbooks
+
+For deploying and operating a JACKPOT instance:
+
+| Runbook | When to use it |
+|---|---|
+| [`docs/deploy/production-deploy.md`](./docs/deploy/production-deploy.md) | Every production deploy. Documents the GitHub Actions `production` environment approval gate, what an approver should verify, cancel + rollback procedures. |
+| [`docs/deploy/pitr-restore-drill.md`](./docs/deploy/pitr-restore-drill.md) | Before going live with real data, then quarterly. Validates Cloud SQL point-in-time recovery is configured AND your team can execute it. |
+| [`docs/staging_access.md`](./docs/staging_access.md) | Day-to-day staging environment access, troubleshooting, and the bootstrap Job pattern. |
+
 ## Governance
 
 JACKPOT is licensed AGPL-3.0 and is committed to FAIR + CARE
