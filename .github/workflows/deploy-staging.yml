@@ -42,9 +42,10 @@ jobs:
   deploy:
     name: Build, migrate, and deploy to staging
     runs-on: ubuntu-latest
-    environment:
-      name: staging
-      url: https://api.staging.jackpot.example.org
+    # Operator-agnostic per Critical Rule 55: the staging URL is whatever
+    # the operator's `staging` GitHub environment vars resolve to. Drop the
+    # cosmetic `url:` field rather than hardcode an example hostname.
+    environment: staging
     steps:
       # Single checkout — the monorepo holds backend, deploy, schema,
       # pipelines, and cli together. The pre-P0d cross-repo checkout +

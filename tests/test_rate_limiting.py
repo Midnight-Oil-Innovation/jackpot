@@ -36,6 +36,18 @@ def test_key_func_falls_back_to_remote_address_when_no_xff_header():
     assert _key_func(req) == "10.0.0.5"
 
 
+def test_key_func_falls_back_when_xff_rightmost_is_empty():
+    # `X-Forwarded-For: 1.2.3.4,` (trailing comma) splits to ["1.2.3.4", ""].
+    # If we returned the empty rightmost as the bucket key, all such
+    # requests would share one quota — a subtle DoS path. Fall through
+    # to the peer instead.
+    req = SimpleNamespace(
+        headers={"x-forwarded-for": "1.2.3.4,"},
+        client=SimpleNamespace(host="10.0.0.99"),
+    )
+    assert _key_func(req) == "10.0.0.99"
+
+
 @pytest.fixture
 def enable_limiter(monkeypatch):
     # Override the conftest default which disables the limiter for the rest
@@ -80,12 +92,17 @@ async def test_rate_limit_429_carries_retry_after_header(enable_limiter, client)
     blocked = await client.post("/api/v1/auth/google/login", params={"code": "x"})
 
     assert blocked.status_code == 429
-    headers_lower = {k.lower() for k in blocked.headers}
+    headers_lower = {k.lower(): v for k, v in blocked.headers.items()}
     assert "retry-after" in headers_lower, f"missing Retry-After in {blocked.headers}"
-    # slowapi's RateLimit-* hints (informational, optional in spec but
-    # set whenever headers_enabled=True on the Limiter)
-    assert "x-ratelimit-limit" in headers_lower
-    assert "x-ratelimit-remaining" in headers_lower
+    # The window is "5/minute" so the wait should be a positive number of
+    # seconds well under 60. Asserting > 0 catches a misconfigured handler
+    # that emits the header with a stub value.
+    retry_after = int(headers_lower["retry-after"])
+    assert 0 < retry_after <= 60, f"unexpected Retry-After value {retry_after}"
+    # The configured ceiling — if this drifts the test forces an audit.
+    assert int(headers_lower["x-ratelimit-limit"]) == 5
+    # We just ate the entire budget; remaining must be zero.
+    assert int(headers_lower["x-ratelimit-remaining"]) == 0
 
 
 @pytest.mark.asyncio

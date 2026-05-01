@@ -49,7 +49,8 @@ async def test_cors_preflight_allows_jackpot_specific_headers(client):
 @pytest.mark.asyncio
 async def test_cors_preflight_rejects_disallowed_origin(client):
     # cors_origins is configured to localhost:8501 + localhost:4200.
-    # An origin outside that list MUST NOT receive Access-Control-Allow-Origin.
+    # An origin outside that list MUST NOT receive Access-Control-Allow-Origin
+    # AND MUST get the 400 status Starlette uses to signal preflight rejection.
     resp = await client.options(
         "/api/v1/auth/google/login",
         headers={
@@ -57,9 +58,11 @@ async def test_cors_preflight_rejects_disallowed_origin(client):
             "Access-Control-Request-Method": "POST",
         },
     )
-    # Starlette's CORSMiddleware returns 400 for disallowed origins on preflight.
-    # The Access-Control-Allow-Origin header MUST NOT be set or MUST NOT
-    # echo the disallowed origin.
+    assert resp.status_code == 400, f"expected 400 for disallowed origin; got {resp.status_code}"
+    # The header must be entirely absent (== ""), not just != the spoofed value.
+    # A future Starlette version that returns "null" or echoes back something
+    # else for an unknown reason should still fail this test.
     allow_origin = resp.headers.get("access-control-allow-origin", "")
-    assert allow_origin != "http://evil.example.com"
-    assert allow_origin != "*"
+    assert (
+        allow_origin == ""
+    ), f"Access-Control-Allow-Origin must be absent for disallowed origins; got {allow_origin!r}"

@@ -1769,7 +1769,9 @@ nextflow run ${pipeline_uri} \
 When `PIPELINE_EXECUTOR=gcp_batch`, Nextflow runs on GCP Batch VMs.
 The `-weblog` callback URL must be publicly reachable from those VMs.
 
-- **Production**: use the deployed API URL (`https://api.jackpot.example.org`)
+- **Production**: use the deployed API URL configured per-instance (the
+  hostname under which the JACKPOT API is reachable from the GCP Batch
+  network — operator's choice, not encoded in this repo per Rule 55)
 - **Local dev testing with gcp_batch**: use `ngrok` or `cloudflared tunnel`
   to expose the local API temporarily:
 

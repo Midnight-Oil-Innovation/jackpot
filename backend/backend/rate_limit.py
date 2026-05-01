@@ -13,12 +13,22 @@ def _key_func(request) -> str:
     # entry, which the proxy sets and the client cannot forge.
     fwd = request.headers.get("x-forwarded-for")
     if fwd:
-        return fwd.split(",")[-1].strip()
+        rightmost = fwd.split(",")[-1].strip()
+        if rightmost:
+            return rightmost
+        # Trailing comma / all-whitespace value: don't bucket every such
+        # request to the same empty-string key — fall through to the peer.
     return get_remote_address(request)
 
 
+# swallow_errors: if the rate-limit storage backend is ever unavailable
+# (e.g. when we move to Redis and Memorystore is briefly unreachable), a
+# raised storage exception inside _inject_headers would otherwise turn
+# the 429 into a 500 — strictly worse than just sending 429 without the
+# Retry-After hint.
 limiter = Limiter(
     key_func=_key_func,
     enabled=get_settings().rate_limit_enabled,
     headers_enabled=True,
+    swallow_errors=True,
 )
