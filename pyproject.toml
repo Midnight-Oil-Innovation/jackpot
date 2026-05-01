@@ -74,7 +74,6 @@ omit = [
     "**/backend/frontend/**",
     "**/backend/db/**",
     "**/backend/scripts/**",
-    "**/backend/setup/**",
     "**/tests/**",
 ]
 # Removed from omit (UR follow-up): `backend/storage/**` (42 tests in
@@ -103,7 +102,6 @@ extend-exclude = [
 select = ["E", "F", "I", "N", "W", "UP", "B", "SIM"]
 
 [tool.ruff.lint.per-file-ignores]
-"backend/setup/*.py"                      = ["E501"]
 "backend/db/migrations/versions/*.py"     = ["E501", "E402"]
 "backend/scripts/*.py"                    = ["E501"]
 "schema/setup/*.py"                       = ["E501"]
