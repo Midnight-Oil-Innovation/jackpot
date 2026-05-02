@@ -1,0 +1,12 @@
+# Per-instance directories — each operator's `jackpot init` output
+# lives here. Per design Decision 1: everything is gitignored EXCEPT
+# `instances/ci/` (Critical Rule 56 — synthetic-only values, used as
+# the canonical CI fixture).
+#
+# Operators reproducing CI locally use `--instance-name ci-local`
+# (gitignored) rather than overwriting the committed `instances/ci/`.
+
+*
+!.gitignore
+!ci/
+!ci/**

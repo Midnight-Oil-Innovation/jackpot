@@ -1,0 +1,45 @@
+[meta]
+schema_version = "1.0"
+created_at = "2026-05-02T00:40:46+00:00"
+created_by_jackpot_version = "5.0.0"
+last_reconfigured_at = "2026-05-02T00:40:46+00:00"
+instance_name = "ci"
+
+[scenario]
+code = "F"
+name = "CI / e2e test harness"
+
+[operator]
+
+[defaults]
+host_organization_name = "CI Test Organization"
+host_organization_email = "ci@example.org"
+deployment_url = "http://localhost:8000"
+cors_origins = [ "http://localhost:8501",]
+deletion_on_request = false
+auto_publish_to_insdc = false
+federation_enabled = false
+dlp_enabled = false
+scheduler_enabled = false
+care_principles_enforced = false
+consent_workflow_enabled = false
+compose_profile = "ci"
+replica_count = 1
+storage_backend = "local"
+pipeline_executor = "local"
+auth_method = "mock"
+database_engine = "postgres-local"
+database_pitr_enabled = false
+database_backup_retention_days = 0
+federation_role = "off"
+federation_peers = []
+bucket_sequences = "jackpot-sequences"
+bucket_raw = "jackpot-raw"
+bucket_staging = "jackpot-staging"
+bucket_datasets = "jackpot-datasets"
+bucket_submissions = "jackpot-submissions"
+bucket_work = "jackpot-work"
+bucket_results = "jackpot-results"
+rate_limit_enabled = true
+rate_limit_auth = "5/minute"
+rate_limit_ingest = "60/minute"

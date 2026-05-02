@@ -1,9 +1,40 @@
+# JACKPOT local-dev / CI compose stack.
+#
+# Per design Decision 2 (docs/architecture/jackpot-init-cli.md): each
+# service is gated by `profiles:` keys so the same compose file serves
+# all 7 install scenarios. Activate profiles via the COMPOSE_PROFILES
+# env var, which `jackpot init configure` writes to
+# `instances/<name>/.env.local`.
+#
+# Service ↔ scenario matrix:
+#
+#     Service     │ A laptop  │ B/C/E single-org │ D multi-tenant │ T tribal │ F ci
+#     ────────────┼───────────┼──────────────────┼────────────────┼──────────┼──────
+#     postgres    │   ✓       │       ✓          │       ✓        │    ✓     │  ✓
+#     api         │   ✓       │       ✓          │       ✓        │    ✓     │  ✓
+#     ui          │   ✓       │       ✓          │       ✓        │    ✓     │  –
+#     minio       │   ✓       │       –          │       –        │    –     │  ✓
+#     minio_init  │   ✓       │       –          │       –        │    –     │  ✓
+#
+# Cloud scenarios (B/C/D/E/T) connect to managed Postgres + GCS, not
+# the local containers — the postgres + api services here are the
+# local-development counterparts. For real cloud deploys, use the
+# Helm chart at deploy/helm/jackpot-api/ instead.
+#
+# Activation:
+#   docker compose --env-file instances/local/.env.local up
+# or:
+#   COMPOSE_PROFILES=laptop docker compose up
+# or (legacy, pre-jackpot-init):
+#   docker compose --profile laptop up
+
 services:
 
   postgres:
     image: postgres:16
     platform: linux/arm64
     container_name: jackpot_postgres
+    profiles: ["laptop", "single-org", "multi-tenant", "tribal", "ci"]
     environment:
       POSTGRES_USER:     jackpot
       POSTGRES_PASSWORD: jackpot
@@ -22,6 +53,7 @@ services:
     image: minio/minio:latest
     platform: linux/arm64
     container_name: jackpot_minio
+    profiles: ["laptop", "ci"]
     command: server /data --console-address ":9001"
     environment:
       MINIO_ROOT_USER:     minioadmin
@@ -41,6 +73,7 @@ services:
     image: minio/mc:latest
     platform: linux/arm64
     container_name: jackpot_minio_init
+    profiles: ["laptop", "ci"]
     depends_on:
       minio:
         condition: service_healthy
@@ -62,6 +95,7 @@ services:
       context: .
       dockerfile: Dockerfile.api
     container_name: jackpot_api
+    profiles: ["laptop", "single-org", "multi-tenant", "tribal", "ci"]
     environment:
       ENV:                        local
       DATABASE_URL:               postgresql://jackpot:jackpot@postgres:5432/jackpot_db
@@ -87,13 +121,20 @@ services:
       postgres:
         condition: service_healthy
       minio:
+        # `required: false` so cloud profiles (which don't activate
+        # minio) still resolve. Local profiles activate minio and the
+        # health gate fires normally.
         condition: service_healthy
+        required: false
 
   ui:
     build:
       context: .
       dockerfile: Dockerfile.ui
     container_name: jackpot_ui
+    # No CI profile: the integration tests don't need Streamlit; the
+    # ui service is opt-in for any scenario where humans look at it.
+    profiles: ["laptop", "single-org", "multi-tenant", "tribal"]
     environment:
       API_BASE_URL:    http://api:8000
       ENV:             local
