@@ -100,11 +100,20 @@ unblocked item.
 These were the blocking bugs resolved before any router session began.
 
 - [x] **P0-1 through P0-16** — all completed. Summary: conftest Alembic
-  migrations, auth settings isolation, JWT refresh endpoint,
+  migrations, auth settings isolation, JWT refresh endpoint *(see note*),
   audit/notification transaction cohesion, execute_query conn param,
   JWT type claim validation, /health 503 on DB down, APScheduler job
   intervals, tier-specific validator BASE_REQUIRED, Isolate source
   type, validator docstring v4.1→v4.4, configurable CORS origins.
+  - *Note:* Phase 22 review (item 12) surfaced that the "JWT refresh
+    endpoint" line was over-claimed: the refresh-token cookie IS
+    issued at login but no `POST /api/v1/auth/refresh` route was ever
+    written. Browser-cookie clients work fine without it; CLI/SDK
+    clients that want explicit refresh would need the route.
+    **P0e C.5 decision: defer the explicit-refresh endpoint to P1**
+    alongside the broader auth-architecture review (refresh-token
+    rotation, refresh-token revocation list, etc.). Spec.md §13 fix #5
+    now carries a ⚠️ note documenting the gap.
 
 ## Phase 1 — Session A: organizations router (COMPLETE)
 

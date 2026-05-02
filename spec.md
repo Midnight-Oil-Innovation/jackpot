@@ -261,7 +261,16 @@ These blocking bugs were resolved before any router session began:
 3. ✅ `valid_human_sample` fixture — "Example Lab" references fixed.
 4. ✅ `active` vs `is_active` — CLAUDE.md note added; routers follow the
    convention (orgs/labs use `active`, everything else `is_active`).
-5. ✅ JWT refresh endpoint — `POST /api/v1/auth/refresh` implemented.
+5. ⚠️ JWT refresh endpoint — `POST /api/v1/auth/refresh` was MARKED
+   complete during pre-session fixes but never actually implemented
+   (Phase 22 review surfaced the gap; P0e C.5 confirmed). The
+   refresh-token cookie IS issued at login by `auth/oauth.py` and
+   stays valid for 7 days; clients with a long-lived session do not
+   need to call `/auth/refresh` because the cookie is automatically
+   sent on every request and `auth/guards.py` accepts both. Building
+   a separate refresh endpoint is deferred to **P1** (real
+   token-rotation work alongside the broader auth-architecture
+   review). Tracked in `todo.md`.
 6. ✅ Full test suite — passing, coverage ≥ 80% (post-P0e).
 7. ✅ `log_audit()` `db_conn` forwarding — transactional cohesion.
 8. ✅ `create_notification()` `db_conn` forwarding — same.
