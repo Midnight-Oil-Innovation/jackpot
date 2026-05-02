@@ -372,6 +372,29 @@ def validate_sample(data: dict) -> ValidationResult:
     )
 
 
+def compute_scrub_status(uri_map: dict[str, str] | list[str]) -> str:
+    """
+    Determine the scrub_status for a sample based on the file types
+    being ingested. PENDING when at least one FASTQ is present (the
+    scrubber will run); SKIPPED when only FASTA / consensus / other
+    non-raw-read types are present (already-assembled, nothing to
+    scrub).
+
+    Critical Rule 18: file-type-driven scrub decisions live in
+    validator.py, not in the ingest router. P0e E.1 moved this here
+    from `routers/ingest.py`. Accepts either a uri_map dict (filename
+    → URI) or a flat list of filenames so callers can use whichever
+    shape is convenient.
+    """
+    # Lazy-import to avoid module-import cycles (file_detector imports
+    # nothing back from validator, but be defensive).
+    from backend.file_detector import get_file_type
+
+    filenames = list(uri_map.keys()) if isinstance(uri_map, dict) else uri_map
+    file_types = [get_file_type(fn) for fn in filenames]
+    return "PENDING" if "FASTQ" in file_types else "SKIPPED"
+
+
 def compute_quality_status(validation_result: ValidationResult) -> str:
     """
     Convert a ValidationResult tier to a quality_status string.

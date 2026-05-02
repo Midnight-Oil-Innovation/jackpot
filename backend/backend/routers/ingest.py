@@ -19,7 +19,6 @@ from backend.file_detector import (
     FileDetectorError,
     detect_files,
     get_convenience_uris,
-    get_file_type,
     validate_file_type,
 )
 from backend.notifications import NotificationEvents, create_notification
@@ -28,6 +27,7 @@ from backend.responses import success
 from backend.storage import StorageError, stage_file
 from backend.validator import (
     compute_quality_status,
+    compute_scrub_status,
     compute_surveillance_relevant,
     validate_sample,
 )
@@ -287,8 +287,9 @@ def _ingest_one(
     detected = detect_files(list(uri_map.keys()))
     fastq_r1_uri, fastq_r2_uri = get_convenience_uris(detected, uri_map)
 
-    file_types = [get_file_type(fn) for fn in uri_map]
-    scrub_status = "PENDING" if "FASTQ" in file_types else "SKIPPED"
+    # Critical Rule 18: file-type-driven scrub decision moved to
+    # validator.py in P0e E.1.
+    scrub_status = compute_scrub_status(uri_map)
 
     quality_status = compute_quality_status(validation)
     reportable = _get_reportable_organisms(db)
