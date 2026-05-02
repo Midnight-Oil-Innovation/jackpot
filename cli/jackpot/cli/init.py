@@ -518,3 +518,274 @@ def secrets_cmd(
     click.echo(
         "Next: `jackpot init bootstrap --instance " f"{instance_name}` to apply alembic + seed.sql."
     )
+
+
+# ── bootstrap + validate subcommands ───────────────────────────────────
+
+
+@init.command("validate")
+@click.option(
+    "--instance",
+    "instance_name",
+    type=str,
+    required=True,
+    help="Instance name (matches `instances/<name>/` directory).",
+)
+@click.option(
+    "--instances-dir",
+    "instances_dir_str",
+    type=str,
+    default="instances",
+    help="Parent directory for per-instance configs.",
+)
+@click.option(
+    "--api-url",
+    "api_url_override",
+    type=str,
+    default=None,
+    help="Override the JACKPOT_API_URL from .env.local (e.g. for local port-forward).",
+)
+@click.option(
+    "--timeout",
+    "timeout_seconds",
+    type=int,
+    default=60,
+    help="Maximum seconds to poll /health before giving up.",
+)
+def validate_cmd(
+    instance_name: str,
+    instances_dir_str: str,
+    api_url_override: str | None,
+    timeout_seconds: int,
+) -> None:
+    """Smoke-test a running JACKPOT stack — polls /health until 200."""
+    from jackpot.init.validator import (
+        check_health,
+        parse_api_url_from_env_local,
+    )
+
+    instance_dir = Path(instances_dir_str) / instance_name
+    if not instance_dir.exists():
+        raise click.UsageError(
+            f"Instance directory {instance_dir} does not exist. "
+            "Run `jackpot init configure` first."
+        )
+
+    api_url = api_url_override or parse_api_url_from_env_local(instance_dir / ".env.local")
+
+    click.echo()
+    click.secho(f"Validating instance {instance_name!r}", bold=True)
+    click.echo(f"  API URL:  {api_url}")
+    click.echo(f"  Timeout:  {timeout_seconds}s")
+    click.echo("  Polling /health...")
+
+    result = check_health(api_url, timeout_seconds=timeout_seconds)
+
+    click.echo()
+    if result.ok:
+        click.secho(f"  ✓ {result.detail}", fg="green", bold=True)
+    else:
+        click.secho(f"  ✗ {result.detail}", fg="red", bold=True)
+        raise click.Abort()
+
+
+@init.command("bootstrap")
+@click.option(
+    "--instance",
+    "instance_name",
+    type=str,
+    required=True,
+    help="Instance name (matches `instances/<name>/` directory).",
+)
+@click.option(
+    "--instances-dir",
+    "instances_dir_str",
+    type=str,
+    default="instances",
+    help="Parent directory for per-instance configs.",
+)
+@click.option(
+    "--skip-alembic",
+    is_flag=True,
+    default=False,
+    help="Skip the alembic upgrade step (for environments where the DB is already migrated).",
+)
+@click.option(
+    "--skip-seed",
+    is_flag=True,
+    default=False,
+    help="Skip applying seed.sql (for environments where seeds were applied out-of-band).",
+)
+@click.option(
+    "--skip-validate",
+    is_flag=True,
+    default=False,
+    help="Skip the post-bootstrap /health smoke test (for headless CI runs).",
+)
+@click.option(
+    "--alembic-cmd",
+    "alembic_cmd",
+    type=str,
+    default="alembic upgrade head",
+    help="Override the alembic command (e.g. for kubectl exec wrapping).",
+)
+@click.option(
+    "--psql-cmd",
+    "psql_cmd",
+    type=str,
+    default="psql",
+    help="Override the psql binary (e.g. /opt/homebrew/bin/psql).",
+)
+def bootstrap_cmd(
+    instance_name: str,
+    instances_dir_str: str,
+    skip_alembic: bool,
+    skip_seed: bool,
+    skip_validate: bool,
+    alembic_cmd: str,
+    psql_cmd: str,
+) -> None:
+    """Apply alembic migrations + seed.sql + smoke-test the running stack.
+
+    Reads DATABASE_URL from instances/<name>/.env.local. Does NOT start
+    Docker; assumes the stack is already up. Run `docker compose up -d`
+    in a separate shell first (compose profiles are set in .env.local
+    so `docker compose up -d` picks them up automatically).
+    """
+    import shlex
+    import subprocess
+
+    from jackpot.init.validator import (
+        check_bootstrap_preconditions,
+        check_health,
+        parse_api_url_from_env_local,
+    )
+
+    instance_dir = Path(instances_dir_str) / instance_name
+    if not instance_dir.exists():
+        raise click.UsageError(
+            f"Instance directory {instance_dir} does not exist. "
+            "Run `jackpot init configure` first."
+        )
+
+    # Critical Rule 56: refuse to apply seeds onto the committed CI dir.
+    # (instances/ci/ ships with synthetic seed data; bootstrap there is
+    # a developer mistake.)
+    if instance_name == "ci":
+        raise click.UsageError(
+            "Refusing to bootstrap committed instances/ci/ directory "
+            "(Critical Rule 56). Use --instance ci-local for local CI "
+            "reproduction."
+        )
+
+    pre = check_bootstrap_preconditions(instance_dir)
+    if not pre.ok:
+        click.secho("Missing required files:", fg="red", bold=True)
+        for rel in pre.missing:
+            click.echo(f"  - {instance_dir / rel}")
+        click.echo()
+        click.echo(
+            "Run `jackpot init configure --instance-name "
+            f"{instance_name}` and "
+            f"`jackpot init secrets --instance {instance_name}` first."
+        )
+        raise click.Abort()
+
+    env_local = instance_dir / ".env.local"
+    api_url = parse_api_url_from_env_local(env_local)
+
+    click.echo()
+    click.secho(f"Bootstrapping instance {instance_name!r}", bold=True)
+    click.echo(f"  Instance dir: {instance_dir}")
+    click.echo(f"  API URL:      {api_url}")
+    click.echo()
+
+    # 1. Alembic upgrade head.
+    if skip_alembic:
+        click.echo("  [skipped]  alembic upgrade head")
+    else:
+        click.echo(f"  [running]  {alembic_cmd}")
+        result = subprocess.run(
+            shlex.split(alembic_cmd),
+            cwd=Path.cwd() / "backend"
+            if (Path.cwd() / "backend" / "alembic.ini").exists()
+            else Path.cwd(),
+            env={"PATH": _path_env(), **_load_env_local(env_local)},
+            capture_output=True,
+            text=True,
+        )
+        if result.returncode != 0:
+            click.secho(
+                f"  ✗ alembic failed (exit {result.returncode}):",
+                fg="red",
+            )
+            click.echo(result.stdout)
+            click.echo(result.stderr)
+            raise click.Abort()
+        click.secho("  ✓ alembic upgrade head", fg="green")
+
+    # 2. Apply seed.sql via psql.
+    if skip_seed:
+        click.echo("  [skipped]  apply seed.sql")
+    else:
+        seed_path = instance_dir / "seed.sql"
+        env_vars = _load_env_local(env_local)
+        database_url = env_vars.get("DATABASE_URL", "")
+        if not database_url:
+            click.secho(
+                "  ✗ DATABASE_URL not set in .env.local; cannot apply seed.sql",
+                fg="red",
+            )
+            raise click.Abort()
+        click.echo(f"  [running]  {psql_cmd} -f {seed_path}")
+        result = subprocess.run(
+            [psql_cmd, "-f", str(seed_path), database_url],
+            capture_output=True,
+            text=True,
+        )
+        if result.returncode != 0:
+            click.secho(
+                f"  ✗ psql failed (exit {result.returncode}):",
+                fg="red",
+            )
+            click.echo(result.stdout)
+            click.echo(result.stderr)
+            raise click.Abort()
+        click.secho("  ✓ seed.sql applied", fg="green")
+
+    # 3. Validate (poll /health).
+    if skip_validate:
+        click.echo("  [skipped]  /health smoke test")
+    else:
+        click.echo(f"  [running]  poll {api_url}/health")
+        result = check_health(api_url, timeout_seconds=60)
+        if result.ok:
+            click.secho(f"  ✓ {result.detail}", fg="green")
+        else:
+            click.secho(f"  ✗ {result.detail}", fg="red")
+            raise click.Abort()
+
+    click.echo()
+    click.secho("Bootstrap complete.", bold=True, fg="green")
+
+
+def _load_env_local(env_local_path: Path) -> dict[str, str]:
+    """Parse `.env.local` into a dict. Used by bootstrap to forward
+    DATABASE_URL etc. to alembic + psql subprocesses."""
+    env: dict[str, str] = {}
+    for line in env_local_path.read_text().splitlines():
+        stripped = line.strip()
+        if not stripped or stripped.startswith("#"):
+            continue
+        if "=" not in stripped:
+            continue
+        key, _, value = stripped.partition("=")
+        env[key.strip()] = value.strip().strip('"').strip("'")
+    return env
+
+
+def _path_env() -> str:
+    """Return the system PATH so subprocesses can find binaries."""
+    import os
+
+    return os.environ.get("PATH", "")
