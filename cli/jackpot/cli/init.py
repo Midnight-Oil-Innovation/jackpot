@@ -20,6 +20,12 @@ Subcommand layout (see docs/architecture/jackpot-init-cli.md):
 from __future__ import annotations
 
 import json
+
+# GitHub-org-style alphanumeric + hyphen, no leading hyphen, no slashes,
+# no parent-directory traversal. Mirrors the validation in
+# deploy/scripts/bootstrap_project.sh — operators see the same shape
+# rules at the CLI and the deploy layer.
+import re as _re
 from pathlib import Path
 
 import click
@@ -32,6 +38,28 @@ from jackpot.init.github_vars import (
     probe_gh,
 )
 from jackpot.init.writers import write_instance
+
+_INSTANCE_NAME_RE = _re.compile(r"^[A-Za-z0-9][A-Za-z0-9_-]*$")
+
+
+def _validate_instance_name(instance_name: str) -> str:
+    """Reject instance names that would escape `instances/` via path
+    trickery, contain shell-metacharacters, or shadow special dotfiles.
+
+    Returns the normalised name (currently identity — no normalisation
+    is applied so the on-disk directory matches the operator's typed
+    value exactly).
+    """
+    if not instance_name or not _INSTANCE_NAME_RE.match(instance_name):
+        raise click.UsageError(
+            f"Invalid --instance-name {instance_name!r}. Must match "
+            r"`[A-Za-z0-9][A-Za-z0-9_-]*` (alphanumeric + dash/underscore, "
+            "no leading dash). Path traversal characters (`/`, `\\`, `..`, "
+            "leading `.`) are rejected to keep all instance writes inside "
+            "the instances/ directory."
+        )
+    return instance_name
+
 
 # Map scenario codes to default instance-name suggestions. Operators
 # override via --instance-name.
@@ -317,7 +345,9 @@ def configure_cmd(
         )
     scenario = SCENARIO_REGISTRY[scenario_code_upper]  # type: ignore[index]
 
-    resolved_instance_name = instance_name or _DEFAULT_INSTANCE_NAME[scenario_code_upper]
+    resolved_instance_name = _validate_instance_name(
+        instance_name or _DEFAULT_INSTANCE_NAME[scenario_code_upper]
+    )
 
     # Critical Rule 56: the committed instances/ci/ directory must NOT
     # be overwritten by jackpot init. Developers reproducing CI locally
@@ -436,7 +466,7 @@ def secrets_cmd(
 
     from jackpot.init.secrets import assert_secret_path_invariant, populate_secrets
 
-    instance_dir = Path(instances_dir_str) / instance_name
+    instance_dir = Path(instances_dir_str) / _validate_instance_name(instance_name)
     if not instance_dir.exists():
         raise click.UsageError(
             f"Instance directory {instance_dir} does not exist. "
@@ -564,7 +594,7 @@ def validate_cmd(
         parse_api_url_from_env_local,
     )
 
-    instance_dir = Path(instances_dir_str) / instance_name
+    instance_dir = Path(instances_dir_str) / _validate_instance_name(instance_name)
     if not instance_dir.exists():
         raise click.UsageError(
             f"Instance directory {instance_dir} does not exist. "
@@ -661,7 +691,7 @@ def bootstrap_cmd(
         parse_api_url_from_env_local,
     )
 
-    instance_dir = Path(instances_dir_str) / instance_name
+    instance_dir = Path(instances_dir_str) / _validate_instance_name(instance_name)
     if not instance_dir.exists():
         raise click.UsageError(
             f"Instance directory {instance_dir} does not exist. "
@@ -705,12 +735,19 @@ def bootstrap_cmd(
         click.echo("  [skipped]  alembic upgrade head")
     else:
         click.echo(f"  [running]  {alembic_cmd}")
+        # PATH comes from the calling shell first, NEVER from .env.local
+        # — `env_vars` is loaded last so a malicious or accidental
+        # `PATH=` line in .env.local CANNOT override the binary lookup
+        # for `alembic` itself.
+        env_vars = _load_env_local(env_local)
+        env_vars.pop("PATH", None)
+        env_vars["PATH"] = _path_env()
         result = subprocess.run(
             shlex.split(alembic_cmd),
             cwd=Path.cwd() / "backend"
             if (Path.cwd() / "backend" / "alembic.ini").exists()
             else Path.cwd(),
-            env={"PATH": _path_env(), **_load_env_local(env_local)},
+            env=env_vars,
             capture_output=True,
             text=True,
         )
@@ -738,8 +775,15 @@ def bootstrap_cmd(
             )
             raise click.Abort()
         click.echo(f"  [running]  {psql_cmd} -f {seed_path}")
+        # Same env-hygiene rule as alembic above: PATH from the calling
+        # shell, not from .env.local. Otherwise a .env.local with
+        # `PATH=/tmp/evil:/usr/bin` would intercept which `psql` runs.
+        psql_env = _load_env_local(env_local)
+        psql_env.pop("PATH", None)
+        psql_env["PATH"] = _path_env()
         result = subprocess.run(
             [psql_cmd, "-f", str(seed_path), database_url],
+            env=psql_env,
             capture_output=True,
             text=True,
         )

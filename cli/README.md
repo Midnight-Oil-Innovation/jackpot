@@ -151,9 +151,16 @@ The SDK checks these environment variables before falling back to the config fil
 
 ## Development
 
+The CLI is a workspace member inside the JACKPOT monorepo. From the
+repo root:
+
 ```bash
-git clone git@github.com:gotero/jackpot-cli.git
-cd jackpot-cli
-uv sync --extra dev
-uv run pytest
+git clone git@github.com:Midnight-Oil-Innovation/jackpot.git
+cd jackpot
+uv sync                             # workspace-wide install
+uv run pytest cli/tests/ --no-cov   # CLI suite only
 ```
+
+For the broader test suite (backend + schema + CLI) see the
+[project root README](../README.md) and
+[`docs/install/quickstart.md`](../docs/install/quickstart.md).
