@@ -73,11 +73,16 @@ section.
 
 ---
 
-## 2. Current Baseline (end of Session 5)
+## 2. Current Baseline (post-P0e — May 2026)
 
-- **477 tests passing, 86.99% coverage** (baseline from Session S complete;
-  Session 5 added staging infra changes without net-new test coverage)
-- CI threshold: 60% — must never fall below this
+- **904+ tests passing, 84%+ coverage** (workspace-wide: backend +
+  schema + cli)
+- CI threshold: 80% — must never fall below this. (The post-P0d 39%
+  number we briefly carried was a pytest-cov misconfiguration; see
+  `docs/learnings.md` "Coverage measurement bug" entry.)
+- The `jackpot init` CLI (P0e) bootstraps any of the 7 install
+  scenarios from `git clone` to running stack in under 10 minutes —
+  see `docs/install/quickstart.md`.
 - Health check local: `curl http://localhost:8000/health` →
   `{"status":"ok","version":"5.0.0","project":"JACKPOT","database":"connected"}`
 - Health check staging (in-cluster via port-forward): same response
@@ -191,8 +196,12 @@ a peer system at a different layer (not a competitor).
 
 - All GCS/MinIO operations go through `backend/storage.py` — routers never
   call boto3 directly
-- Local dev: MinIO via `STORAGE_BACKEND=minio`; production: GCS via
-  `STORAGE_BACKEND=gcs`
+- Local dev: MinIO via `STORAGE_ENDPOINT=http://minio:9000` (the
+  storage factory auto-selects S3-compatible mode when an endpoint is
+  set); production: GCS via leaving `STORAGE_ENDPOINT` unset (factory
+  defaults to GCS). The earlier `STORAGE_BACKEND` env var was a
+  documentation fiction never consumed by `config.py` — the actual
+  switch is `storage_endpoint` set vs unset.
 
 ### Business Logic Constraints
 
@@ -253,7 +262,7 @@ These blocking bugs were resolved before any router session began:
 4. ✅ `active` vs `is_active` — CLAUDE.md note added; routers follow the
    convention (orgs/labs use `active`, everything else `is_active`).
 5. ✅ JWT refresh endpoint — `POST /api/v1/auth/refresh` implemented.
-6. ✅ Full test suite — passing, coverage ≥ 60%.
+6. ✅ Full test suite — passing, coverage ≥ 80% (post-P0e).
 7. ✅ `log_audit()` `db_conn` forwarding — transactional cohesion.
 8. ✅ `create_notification()` `db_conn` forwarding — same.
 9. ✅ `execute_query()` `conn=` parameter added.
@@ -503,7 +512,7 @@ Every router session must produce a `tests/test_{router}_api.py` file with:
 - At least one error case (404 on missing resource, 409 on duplicate)
 - Edge case specific to the router (e.g., ingest: unknown sequencing lab → 422)
 
-Coverage must stay ≥ 60% after every session. Run
+Coverage must stay ≥ 80% after every session. Run
 `uv run pytest --cov=backend --cov-report=term-missing` and check.
 
 ---
@@ -1375,12 +1384,14 @@ to `todo.md`.
 **Q-9 (P0):** ✅ Closed — baseline migration `5adf11b77c19` makes
 `alembic upgrade head` work from an empty DB. Bootstrap Job retired.
 
-**Q-10 (P0):** `cors_origins` validator with `NoDecode` + `field_validator`
-in `backend/config.py`. Lets env var be plain comma-separated again.
+**Q-10 (P0):** ✅ Closed — `cors_origins` validator with `NoDecode`
++ `field_validator` in `backend/config.py` lands; env var accepts
+plain comma-separated, JSON, or empty.
 
-**Q-11 (P0):** Remove `sys.path` hack from `pipelines.py`. Move
-`RESULT_SCHEMAS` into `backend/pipeline_schemas.py`. Can then drop
-`COPY nf/` from `Dockerfile.api`.
+**Q-11 (P0):** ✅ Closed — `sys.path` hack removed; `RESULT_SCHEMAS`
+moved to `backend/backend/pipeline_schemas/` package (better than
+spec'd: a package per-result-type, not a single flat file).
+Architectural resolution recorded in `docs/learnings.md` (P0d entry).
 
 **Q-12 (P1):** Terraform-owned `DATABASE_URL` Secret construction. Removes
 the off-by-one failure mode.
@@ -1470,7 +1481,7 @@ These three documents are the source of truth for the post-P0d roadmap. Cross-re
 
 - `gac "type: description"` for all commits — runs ruff fix + format
 - Pre-commit hooks: ruff (SIM102, E501, B008 among others)
-- Test coverage threshold 60% enforced in CI
+- Test coverage threshold 80% enforced in CI (post-P0e baseline)
 - GitHub Actions workflow `deploy-staging.yml` in `jackpot-iac/` triggers
   on push to `staging` branch
 
