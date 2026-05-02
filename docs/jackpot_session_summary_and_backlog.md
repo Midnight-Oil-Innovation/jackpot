@@ -2731,3 +2731,91 @@ Phase 22 produces three durable artifacts: `docs/review_log.md` (the findings), 
 After Phase 22, the post-P0d health summary: backend core clean, security defensive layer present (CORS + rate limit), production deploy guarded behind required-reviewer approval, PITR restore procedure documented and ready to drill. Outstanding: 5 inherited Rule 55 violations, 7 stub routers returning misleading 200s, 3 SDK methods raising NotImplementedError despite live endpoints, 9 stale CLI TODOs, and ~25 percentage points of coverage debt to recover. None of these block the next phase.
 
 The next session should jump into P0e (jackpot init CLI), folding action items 7 (stale TODOs), 8 (SDK wires), 9 (CLI Rule 55 fixes), 10 (501 stubs), 11 (inherited Rule 55), 12 (auth refresh decision), and 14 (spec updates) into its scope.
+
+---
+
+# Session 14 — 2026-05-02 (P0e — `jackpot init` CLI + 13-item Phase 22 cleanup)
+
+## What we covered
+
+P0e shipped the `jackpot init` operator-bootstrap CLI plus 13 cleanup items the Phase 22 review explicitly absorbed. Five-stream execution per the kickoff plan: A (CRITICAL Rule 55 fixes) → B (jackpot init design + impl) → C (spec/docs alignment) → D (coverage gap closure) → E (refactor + docs).
+
+**Tests:** 944 passing (was 615 pre-P0e), 86.20% coverage (was 84.09%).
+**Commits:** 28 across the 5 streams.
+
+## Stream-by-stream
+
+**Stream A — CRITICAL Rule 55 fixes (8 commits, 3369eb8 → 204c493)**
+
+- A.1+A.2: deleted `backend/setup/` entirely (3,378 lines of pre-P0d scaffold scripts). Net: 5 inherited CRITICAL violations resolved in one commit.
+- A.3: baseline migration (`5adf11b77c19`) now seeds `Example Org`/`Example Lab`/`admin@example.org`/`Example Sequencing Lab`/`Example Reference Lab` directly. Three rename migrations marked historical-no-op (functional for any existing DB; zero-rows-matched on fresh installs). Glen confirmed the (a)+(c) hybrid approach.
+- A.4: `Chart.yaml` maintainer → Midnight-Oil-Innovation; icon URL dropped.
+- A.5: `bootstrap_project.sh` takes `<github-org>` as 4th positional arg; runtime WIF restriction parameterized; gotero3 example replaced with placeholder.
+- A.6: `cli/jackpot/cli/upload.py` operator strings (`/scratch/otero/sequences/`, `asu-sol`) genericized.
+- A.7: `cli/jackpot/cli/main.py` ADHS URL → `your-jackpot-instance.org`; dead `ADHS_ORGANIZATION_NAME` env var deleted from 3 deploy files; `AZ-2026` sample IDs in CLI/SDK examples → `EX-2026`.
+- A.8: `values-staging.yaml` parameterized; deploy workflow plumbs `--set env.X=...` from `vars.GCP_PROJECT_ID` etc; staging_access.md and .env.staging.example genericized.
+
+**Stream B — `jackpot init` design + implementation (10 commits)**
+
+- B.1 design lockdown — Glen confirmed all 9 architectural decisions in chat working sessions. Doc landed as `docs/architecture/jackpot-init-cli.md` (369 lines). Sanity-check found 4 minor implementation-time concerns; none required design revision.
+- B.2.1 (6b1cea2): `schema/jackpot_scenarios/` registry — 7 scenarios (A/B/C/D/E/F/T), `ScenarioDefaults` pydantic model with secret/bucket sub-blocks (per the F4 sanity-check finding), CARE-aligned T defaults. 50 unit tests.
+- B.2.2 (4f6248e): pure detector in `schema/`, Click wrapper in `cli/`. `jackpot init detect`, `--scenario`, `--non-interactive`, `scenario-info {--json}` all live. 42 tests.
+- B.2.3 (eb358ed): `jackpot init configure` + writers (jackpot.toml, .env.local, values.local.yaml, seed.sql, README.md) + GitHub vars detect-and-confirm hybrid. 53 tests. Critical Rule 56 enforced at the CLI level.
+- B.2.4 (37b840a): `jackpot init secrets` — JWT signing key for every scenario, ed25519 federation keypair for E+T per Decision 5, OAuth client secret prompt. `--regenerate-secrets` with per-secret confirm. Live-smoke caught a "wrote_new" → "regenerated" mislabel bug; fixed + regression test added. 27 tests.
+- B.2.5 (7a7f4dd): `jackpot init bootstrap` (alembic + seed.sql + /health smoke) + `jackpot init validate`. 19 tests.
+- B.2.6 (5dd3e25): docker-compose.yml `profiles:` keys per Decision 2 matrix; `instances/.gitignore`; committed `instances/ci/` canonical fixture (synthetic-only per Critical Rule 56).
+- B.3 (bbd6633): 50 e2e tests — per-scenario walks (configure → secrets → bootstrap-dry) + committed-fixture contract tests. 87% coverage on `cli/jackpot/init/`.
+- B.4 (5b526c6): `docs/install/quickstart.md` + README.md anchors to the new bootstrap flow.
+
+**Stream C — spec/docs alignment (5 commits)**
+
+- C.1+C.2 (6b3bc7b): 7 stale CLI TODO comments deleted; 3 SDK methods (`Sample.download_fastq`, `SamplesModule.search/get`) wired.
+- C.3 (e0e2046): 7 stub routers convert from 200 to 501 with envelope-conforming HTTPException; 14 contract tests.
+- C.4 (c02b44c): spec.md aligned (60→80% coverage; STORAGE_BACKEND→STORAGE_ENDPOINT; Q-10/Q-11 closed).
+- C.5 (d037ea4): `POST /api/v1/auth/refresh` deferred to P1; ⚠️ note added to spec fix #5 + todo.md P0-1 line.
+- C.6 (d7be3ff): storage SPDX `Apache-2.0` → `AGPL-3.0-or-later` across 14 files. Git history showed the storage refactor predated the AGPL flip by 2 days; headers were stale, not derived.
+
+**Stream D — coverage gap closure (1 commit, 961610f)**
+
+- 33 new tests across 4 modules.
+- `harmonizer.py` 0% → 97% (was untested entirely; 19 tests covering load_mapping path-traversal rejection, harmonize_row edge cases, harmonize_csv warnings).
+- `routers/gisaid.py` 43% → 100% (5 e2e tests with real DB seeding, multiple scenarios including non-Human host_species fallback).
+- `routers/templates.py` 53% → 100% (8 tests covering CSV generation paths, xlsx 501, enums endpoint, source-types).
+- `dlp_scanner.py` 71% → 81% (only the import-failure fallback path; the GCP-DLP-call path needs ADC-mocking that's hard to do cleanly — tracked).
+
+**Stream E — refactor + docs (3 commits)**
+
+- E.1 (083ec88): Critical Rule 18 — moved `scrub_status = "PENDING" if "FASTQ" in file_types else "SKIPPED"` from `routers/ingest.py:288` into `validator.compute_scrub_status`. 7 unit tests.
+- E.2: this Session 14 entry + `docs/learnings.md` P0e entry + `docs/review_log.md` "P0e closeout" section.
+- E.3: `git tag -a p0e-complete` (after pause for `/ultrareview`).
+
+## Decisions
+
+- *9 architectural decisions for `jackpot init`* locked in chat working sessions before any code shipped (see `docs/architecture/jackpot-init-cli.md`). Result: zero design-revision churn during implementation. The B.1 design checkpoint paid for itself in B.2.
+- *Compose profiles over per-scenario compose files.* One canonical `docker-compose.yml` with `profiles:` keys per service, `COMPOSE_PROFILES` in `instances/<name>/.env.local`. Operators run `docker compose --env-file instances/X/.env.local up`.
+- *Critical Rule 56* (instances/ci/ no-secrets-no-PII) enforced at the CLI level, not just documented. `jackpot init configure --instance-name ci` and `jackpot init secrets --instance ci` and `jackpot init bootstrap --instance ci` all refuse to execute against the committed CI dir. Operators reproducing CI locally use `--instance-name ci-local` (gitignored).
+- *Storage SPDX correction was structural, not derivation.* git log audit showed the storage refactor (commit f481a4a, 2026-04-26) predated the AGPL-3.0 flip (Cleanup A on 2026-04-28) by 2 days; the Apache-2.0 SPDX headers were correct at authorship and became stale post-flip. Decision: flip them to AGPL-3.0-or-later, no derivation-credit needed.
+- *Stub routers return 501, not 200.* The Phase 22 review's silent-failure flag closed in C.3; the stubs are now loud about being unimplemented at the HTTP layer. Operators / CI / clients that don't inspect the response body now see the 501 status code as expected.
+
+## Outcome
+
+P0e leaves JACKPOT in a substantially-better-deploy-able state. Any non-Glen operator can:
+
+1. Clone `Midnight-Oil-Innovation/jackpot`
+2. Run `uv run jackpot init configure --scenario <X> --instance-name local`
+3. Run `uv run jackpot init secrets --instance local`
+4. Run `docker compose --env-file instances/local/.env.local up -d`
+5. Run `uv run jackpot init bootstrap --instance local`
+
+— and end up with a running instance configured for their operator type, with zero hardcoded `gotero@linuxprophet.com` / `ADHS` / `gotero3-acdp-488517` strings in production code paths. The 5 inherited CRITICAL Rule 55 violations are resolved; the 6 inherited values-staging.yaml violations are parameterized; the 2 NEW HIGH violations from P0d are gone.
+
+Pending architectural follow-ups, in expected order:
+
+- **Phase 24.5** — sovereignty + BYOP design lockdown (gates P0b)
+- **P0f** — BYOP infrastructure (10 backlog items from `jackpot_byop_and_eukaryotic_design.md`)
+- **P0b** — Schema v5.0 (instances + tenants + federated_peers + BYOP/eukaryotic schema)
+- **P0c** — multi-tenancy middleware + sovereignty deletion path
+- **B-FED-1** — central CA federation peer authentication (triggered when network exceeds 5 instances or a revocation event happens)
+- **P1** — `POST /api/v1/auth/refresh` (real token-rotation work)
+
+The next session work depends on Glen's call. If P0f-as-next, the design alignment is already there in `jackpot_byop_and_eukaryotic_design.md`. If something else, P0e leaves the codebase in a state that supports any of the planned phases without prerequisite cleanup.

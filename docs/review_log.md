@@ -402,3 +402,69 @@ Ordered by priority within Phase 22.
   the gap is real coverage debt from Sessions I–Q.
 - `backend/backend/` core code is in good shape — the next refactor pass should
   focus on CLI and deploy, where most of the new debt lives.
+
+---
+
+# P0e closeout — 2026-05-02
+
+P0e shipped `jackpot init` (operator-bootstrap CLI) and absorbed 13
+cleanup items the Phase 22 review had explicitly tagged for it. This
+section closes out which Phase 22 action items P0e resolved and which
+got deferred further.
+
+## Phase 22 action items resolved by P0e
+
+| # | Item | P0e commit(s) | Outcome |
+|---|---|---|---|
+| 5 | Fix coverage docs in `learnings.md` + `CLAUDE.md` | (resolved post-Phase-22 by 863fd18) | Already done |
+| 6 | Change `--cov=backend` → `--cov=backend/backend` | (resolved post-Phase-22 by 863fd18) | Already done |
+| 7 | Remove 9 stale CLI TODO comments | 6b3bc7b | 7 stale comments deleted (the 9th + 10th were classified non-stale on closer inspection) |
+| 8 | Wire 3 SDK methods | 6b3bc7b | `Sample.download_fastq`, `SamplesModule.search`, `SamplesModule.get` all wired against live backend endpoints |
+| 9 | Fix CLI Rule 55 (Glen-introduced) | 7d1a2e3 + f2626a1 | `cli/jackpot/cli/upload.py:442/474/478/485` + `cli/jackpot/cli/main.py:25,47` operator strings replaced; dead `ADHS_ORGANIZATION_NAME` env var deleted from 3 deploy files |
+| 10 | Stub routers 200 → 501 | e0e2046 | 7 stub routers convert to HTTP 501 with envelope-conforming HTTPException; 14 contract tests guard the new status code |
+| 11 | Fix 5 inherited Rule 55 CRITICAL violations | 3369eb8 + 156b7ab + 7465d45 + b3d4978 + 204c493 | All 5 inherited + 6 in `values-staging.yaml` + 7 misc CLI/deploy strings now operator-agnostic. `backend/setup/` deleted entirely (3,378 lines of vestigial scaffold). Baseline migration seeds Example Org/Lab/admin directly; rename chain becomes historical no-op. |
+| 12 | Implement `POST /api/v1/auth/refresh` OR remove the spec claim | d037ea4 | Deferred to P1. Spec.md fix #5 carries a ⚠️ note. The refresh-token cookie IS issued at login; only the explicit-refresh endpoint is missing. |
+| 13 | Storage SPDX `Apache-2.0` vs project AGPL-3.0 | d7be3ff | git-history audit confirmed the storage refactor predated the AGPL flip by 2 days; SPDX headers were stale, not derived. Flipped 14 files to `AGPL-3.0-or-later`. |
+| 14 | Spec updates (60→80%, STORAGE_BACKEND→STORAGE_ENDPOINT, close Q-10/Q-11) | c02b44c | spec.md aligned to current state |
+| 15 (revised) | Close 4 real coverage gaps | 961610f | `harmonizer.py` 0→97%, `gisaid.py` 43→100%, `templates.py` 53→100%, `dlp_scanner.py` 71→81%; overall 84→86% |
+| 16 | Implement `jackpot auth login` OAuth flow | (deferred to Month 2) | Out of P0e scope per the kickoff plan |
+| 18 | Move Rule 18 violation in `ingest.py:288` | 083ec88 | `compute_scrub_status` now lives in `validator.py`; ingest router calls it as a one-liner |
+
+## P0e additions beyond the Phase 22 action list
+
+- **Critical Rule 56** (`d14f415`) — formalized "instances/ci/ ships
+  with synthetic-only values, never real secrets/PII." Enforced at
+  the CLI level (configure/secrets/bootstrap all refuse to overwrite
+  the committed CI dir).
+- **`schema/jackpot_scenarios/` registry** (`6b1cea2`) — new
+  workspace-co-located package exposing the 7-scenario defaults.
+  Used by `jackpot init` and importable from backend / CI for runtime
+  scenario checks.
+- **Compose profiles refactor** (`5dd3e25`) — `docker-compose.yml`
+  per-service `profiles:` keys map cleanly to the 5 scenario
+  compose-profile names; `required: false` on api→minio depends_on
+  resolves cleanly for cloud profiles that don't activate minio.
+- **`docs/install/quickstart.md`** (`5b526c6`) — the 10-minute
+  fresh-clone-to-running-stack guide that anchors the new operator
+  experience.
+
+## Items remaining open
+
+- **Action item 17** (build out 7 stub routers): Month 3 / Phase 24+
+  scope. Now visibly stubbed via 501 (item 10), so the deferral is
+  honest rather than silent.
+- **Action item 19** (CI testcontainers DinD reliability): CI track,
+  not part of P0e.
+- **B-FED-1** (central-CA federation peer authentication): newly
+  documented in the design lockdown; trigger is "federation
+  membership exceeds 5 instances" or "first revocation event."
+
+## Tests + coverage at P0e close
+
+- 944 backend + schema + CLI tests passing
+- 1 skipped (the long-standing pre-P0e skip)
+- 86.20% overall coverage (workspace-wide)
+- `jackpot/init/` package: 87% coverage
+- Critical Rule 55: zero NEW violations introduced; 11 + inherited
+  resolved; only historical-no-op SQL UPDATE strings in 3 rename
+  migrations remain (functionally required, not violations)

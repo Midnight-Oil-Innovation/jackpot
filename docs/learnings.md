@@ -2441,3 +2441,91 @@ The user surfaced the discrepancy by asking "Why is the test coverage so low?" �
 
 - Action item 15 in `review_log.md` ("Restore 60% coverage by writing tests for Sessions I–Q") is partially obsolete — coverage is already 84%. The real remaining gaps are smaller and more specific: `harmonizer.py` 0%, `gisaid.py` 43%, `templates.py` 53%, `dlp_scanner.py` 71%. The "~100 new tests for Sessions I–Q" estimate was based on the wrong baseline; ~20 targeted tests against those four modules would close the meaningful gaps.
 - Action item 5 (fix `learnings.md` + `CLAUDE.md` "0% storage" / "measurement gap" claims) is now fully resolved — the framing was wrong, and this entry retires it.
+
+---
+
+## P0e — `jackpot init` operator-bootstrap CLI + 13-item Phase 22 cleanup — 2026-05-02
+
+**What was built:** The full `jackpot init` CLI (detect / scenario-info / configure / secrets / bootstrap / validate / reconfigure subcommands) plus 13 Phase 22 cleanup items absorbed into the same phase. P0e shipped 28 commits across 5 streams (A through E), 944 tests passing, 86.20% coverage. Full closeout in `docs/review_log.md` "P0e closeout" section; this entry captures the patterns + lessons, not the per-commit log.
+
+**Key decisions:**
+
+- *Pure-logic-in-schema, Click-wrappers-in-cli.* The detector and scenario registry live under `schema/jackpot_scenarios/` (workspace-co-located, importable from anywhere); the Click prompts wrapping the detector live under `cli/jackpot/init/`. Result: the inference policy is testable without subprocess gymnastics, and the CLI surface is replaceable (a future TUI / web installer could reuse the same pure functions). Same separation pattern Glen has been pushing for in routers (validator-policy vs router-orchestration).
+- *Operator-agnostic by force, not convention.* Critical Rule 55 enforcement got teeth in P0e via Critical Rule 56 (`instances/ci/` ships with synthetic-only values) AND via the `jackpot init configure --instance-name ci` runtime check that REFUSES to overwrite the committed CI dir. The pattern is: rules that need to be enforced get enforced at the CLI boundary, not just documented in CLAUDE.md.
+- *Compose profiles over per-scenario compose files.* Decision 2 collapsed what could've been 7 docker-compose-X.yml files into one canonical compose file with `profiles:` keys. The trade is "operator must set COMPOSE_PROFILES" (handled automatically by `jackpot init` writing it to `.env.local`) for "we maintain one compose file forever, not 7 in lockstep." The matrix-comment at the top of the compose file is the contract.
+- *Idempotent everything.* `jackpot init configure` and `jackpot init secrets` are safe to re-run. Non-secret files overwrite by default (operators can pass `--no-overwrite-non-secrets` to preserve hand-edits); secret files preserve by default (operators must pass `--regenerate-secrets` AND confirm per-secret to rotate). Same baseline as Alembic — the surface should be safe to call again.
+- *Hybrid GitHub-vars detection.* Decision 3's "detect `gh` is installed and authed, slurp existing repo vars from `gh api repos/$REPO/actions/variables`, present each as confirm prompt" pattern is a strict UX improvement for operators who already use GitHub Actions, and a no-op for everyone else. Hard rule embedded in the module: secrets are NEVER slurped from `gh api` (the GitHub API doesn't return secret values anyway, but the constraint is tested via `test_no_secrets_fetcher_exported` + `test_no_subprocess_call_references_secrets_endpoint`).
+- *Local ed25519 keypairs for federation, defer central CA to P1.* Scenario E (federation member) and Scenario T (Tribal sovereignty — uses local keypair regardless of broader network policy) generate ed25519 keypairs at `jackpot init secrets` time. Public key committable to private operator repos for sharing; private key gitignored, 0600 perms. Federation protocol design supports BOTH local-keypair AND CA-cert auth modes simultaneously — peers record which mode each uses — so an operator-network that grows past 5 instances and wants central revocation can layer the CA on without breaking existing local-keypair peers (B-FED-1 trigger).
+- *Scenario T defaults are baked, not opt-in.* `deletion_on_request=True`, `auto_publish_to_insdc=False`, `federation_enabled=False`, `consent_workflow_enabled=True` are all defaults a Tribal IT staffer running `jackpot init` does not have to read about to enable. Operator overrides them only via explicit prompts. CARE Principles enforcement on by default.
+
+**Watch out for:**
+
+- *`@dataclass(frozen=True)` + `__class_getitem__` on subclasses doesn't work.* Tried it for the `_Likelihood` test stub; pydantic raised a confusing error chain. Real solution was to drop the GCP DLP mock entirely and use `monkeypatch.setitem(sys.modules, "google.cloud.dlp_v2", None)` to force the import to fail (which exercises the operational fallback path the scanner is supposed to handle).
+- *`google.cloud.dlp_v2.DlpServiceClient()` triggers ADC at construction time.* Mocking at module import doesn't intercept the credential probe — the client constructor immediately tries to read GCP credentials from the environment. Net effect: any test that exercises the dlp_enabled-and-content-present path will make a real network call unless you intercept at the function level (or skip it). I went with skip + 1 import-failure test that covers the operational fallback.
+- *Click `enum=...` Query metadata is OpenAPI-only.* It does NOT enforce the value at request time. So `/api/v1/templates/?source_type=garbage` returns 200 with the default template, not 422. Spec-mode validation requires explicit pydantic models — flag for any future endpoint where input is sensitive.
+- *`Settings()` `@lru_cache` interaction with `monkeypatch.setenv`.* Always `get_settings.cache_clear()` after monkeypatching env vars in tests. A class-level Limiter (e.g. slowapi's) constructed with `enabled=get_settings().rate_limit_enabled` at module import time also needs its `.enabled` attribute mutated separately — see `tests/conftest.py` `override_settings` for the pattern.
+- *Pydantic v2 `@dataclass(frozen=True)` raises `ValidationError`, not `FrozenInstanceError`.* Tests that try to mutate a frozen pydantic model should expect the former.
+- *`docker compose` `profiles:` keys interact with `depends_on`.* If service A in profile X depends_on service B in profile Y, and you activate only X, compose errors with "depends on undefined service B." Fix: `required: false` on the depends_on entry. Compose v2.6+.
+- *Bootstrap action labels can mis-fire on fresh writes.* The first commit of B.2.4 set `action = "regenerated" if private_key_path.exists() else "wrote_new"` AFTER calling `write_bytes` — by then the file always exists. Caught by the live smoke test, not by unit tests. Capture pre-write state in a local before any I/O.
+
+**ASCII diagram — `jackpot init` data flow:**
+
+```
+operator runs `jackpot init configure --scenario T --instance-name tribal`
+                                     │
+                                     ▼
+            ┌────────────────────────────────────────────┐
+            │ schema/jackpot_scenarios/                  │
+            │   scenarios.py: ScenarioDefaults registry  │
+            │   detector.py:  pure inference policy      │
+            └────────────────────────────────────────────┘
+                                     │
+                                     ▼
+            ┌────────────────────────────────────────────┐
+            │ cli/jackpot/init/                          │
+            │   detector.py:  Click-prompts wrapper      │
+            │   github_vars.py: gh api detect-and-confirm│
+            │   writers.py:   emit instance/<name>/*     │
+            │   secrets.py:   JWT key + ed25519 keypair  │
+            │   validator.py: /health smoke check        │
+            └────────────────────────────────────────────┘
+                                     │
+                                     ▼
+            ┌────────────────────────────────────────────┐
+            │ instances/tribal/                          │
+            │   jackpot.toml      ← canonical config     │
+            │   .env.local        ← compose env vars     │
+            │   values.local.yaml ← Helm overlay         │
+            │   seed.sql          ← idempotent post-     │
+            │                       alembic operator     │
+            │                       seed updates         │
+            │   secrets/          ← 0700, gitignored     │
+            │     jwt_signing_key.txt              0600  │
+            │     federation_private_key.pem       0600  │
+            │     federation_public_key.pem        0644  │
+            └────────────────────────────────────────────┘
+                                     │
+                                     ▼
+              docker compose --env-file instances/tribal/.env.local up -d
+              jackpot init bootstrap --instance tribal
+              # alembic upgrade head; psql -f seed.sql; poll /health
+```
+
+**Per-scenario compose-profile activation:**
+
+```
+Scenario A (laptop)        → COMPOSE_PROFILES=laptop      → postgres+minio+minio_init+api+ui
+Scenario B/C/E single-org  → COMPOSE_PROFILES=single-org  → postgres+api+ui
+Scenario D multi-tenant    → COMPOSE_PROFILES=multi-tenant→ postgres+api+ui
+Scenario T tribal          → COMPOSE_PROFILES=tribal      → postgres+api+ui
+Scenario F CI              → COMPOSE_PROFILES=ci          → postgres+minio+minio_init+api  (no ui)
+```
+
+**Pattern for future operator-bootstrap work:** the
+schema/cli split, the per-instance directory contract, and the
+idempotency+secret-preservation rules are reusable for ANY tool that
+turns operator config into runtime state. The compose-profiles pattern
+also generalises beyond Docker — any "one definition, multiple
+deployment shapes" tool (Helm charts via `--set`, Terraform via
+workspaces, etc.) benefits from the same matrix-as-contract
+documentation pattern.
