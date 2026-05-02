@@ -129,10 +129,190 @@ class TestRegistrationInRootCli:
         assert result.exit_code == 0
         assert "init" in result.output
 
-    def test_init_subcommand_help_shows_detect(self, runner: CliRunner) -> None:
+    def test_init_subcommand_help_shows_all_commands(self, runner: CliRunner) -> None:
         from jackpot.cli.main import cli
 
         result = runner.invoke(cli, ["init", "--help"])
         assert result.exit_code == 0
-        assert "detect" in result.output
-        assert "scenario-info" in result.output
+        for subcommand in ("detect", "scenario-info", "configure"):
+            assert subcommand in result.output
+
+
+class TestConfigureNonInteractive:
+    """`jackpot init configure --scenario X --non-interactive` writes
+    the 5 instance files using only scenario defaults."""
+
+    def test_configure_writes_instance_dir(self, runner: CliRunner, tmp_path) -> None:
+        result = runner.invoke(
+            init,
+            [
+                "configure",
+                "--scenario",
+                "F",
+                "--instance-name",
+                "ci-local",
+                "--instances-dir",
+                str(tmp_path),
+                "--non-interactive",
+                "--no-gh",
+            ],
+        )
+        assert result.exit_code == 0, result.output
+        instance_dir = tmp_path / "ci-local"
+        for filename in (
+            "jackpot.toml",
+            ".env.local",
+            "values.local.yaml",
+            "seed.sql",
+            "README.md",
+        ):
+            assert (instance_dir / filename).exists(), filename
+
+    def test_configure_refuses_to_overwrite_committed_ci(self, runner: CliRunner, tmp_path) -> None:
+        # Critical Rule 56: instances/ci/ ships in the repo with synthetic
+        # values; jackpot init MUST refuse to clobber it.
+        result = runner.invoke(
+            init,
+            [
+                "configure",
+                "--scenario",
+                "F",
+                "--instance-name",
+                "ci",
+                "--instances-dir",
+                str(tmp_path),
+                "--non-interactive",
+                "--no-gh",
+            ],
+        )
+        assert result.exit_code != 0
+        assert "Critical Rule 56" in result.output
+
+    def test_configure_unknown_scenario_rejected(self, runner: CliRunner, tmp_path) -> None:
+        result = runner.invoke(
+            init,
+            [
+                "configure",
+                "--scenario",
+                "Z",
+                "--instances-dir",
+                str(tmp_path),
+                "--non-interactive",
+                "--no-gh",
+            ],
+        )
+        assert result.exit_code != 0
+        assert "Unknown" in result.output
+
+
+class TestConfigureInteractivePrompts:
+    """Walk through the operator-identity prompts."""
+
+    def test_configure_with_typed_operator_values(self, runner: CliRunner, tmp_path) -> None:
+        # Inputs in order:
+        #   org name, email, deployment URL, accept derived CORS
+        result = runner.invoke(
+            init,
+            [
+                "configure",
+                "--scenario",
+                "B",
+                "--instance-name",
+                "staging",
+                "--instances-dir",
+                str(tmp_path),
+                "--no-gh",
+            ],
+            input=(
+                "Example Hospital\n"
+                "admin@hospital.example.org\n"
+                "https://api.hospital.example.org\n"
+                "y\n"
+            ),
+        )
+        assert result.exit_code == 0, result.output
+        toml_path = tmp_path / "staging" / "jackpot.toml"
+        assert "Example Hospital" in toml_path.read_text()
+        assert "admin@hospital.example.org" in toml_path.read_text()
+
+
+class TestConfigureRerunsArePreservingByDefault:
+    def test_rerun_overwrites_non_secrets_by_default(self, runner: CliRunner, tmp_path) -> None:
+        # First run.
+        runner.invoke(
+            init,
+            [
+                "configure",
+                "--scenario",
+                "F",
+                "--instance-name",
+                "ci-local",
+                "--instances-dir",
+                str(tmp_path),
+                "--non-interactive",
+                "--no-gh",
+            ],
+        )
+        # Plant a secret + a hand-edited TOML comment.
+        secret_file = tmp_path / "ci-local" / "secrets" / "jwt_signing_key.txt"
+        secret_file.parent.mkdir(parents=True, exist_ok=True)
+        secret_file.write_text("ORIGINAL")
+        toml_file = tmp_path / "ci-local" / "jackpot.toml"
+        toml_file.write_text(toml_file.read_text() + "\n# operator note\n")
+
+        # Second run — default overwrite_non_secrets=True (operator note lost).
+        runner.invoke(
+            init,
+            [
+                "configure",
+                "--scenario",
+                "F",
+                "--instance-name",
+                "ci-local",
+                "--instances-dir",
+                str(tmp_path),
+                "--non-interactive",
+                "--no-gh",
+            ],
+        )
+        assert secret_file.read_text() == "ORIGINAL"
+        assert "# operator note" not in toml_file.read_text()
+
+    def test_rerun_with_no_overwrite_preserves_everything(
+        self, runner: CliRunner, tmp_path
+    ) -> None:
+        runner.invoke(
+            init,
+            [
+                "configure",
+                "--scenario",
+                "F",
+                "--instance-name",
+                "ci-local",
+                "--instances-dir",
+                str(tmp_path),
+                "--non-interactive",
+                "--no-gh",
+            ],
+        )
+        toml_file = tmp_path / "ci-local" / "jackpot.toml"
+        toml_file.write_text(toml_file.read_text() + "\n# operator note\n")
+
+        result = runner.invoke(
+            init,
+            [
+                "configure",
+                "--scenario",
+                "F",
+                "--instance-name",
+                "ci-local",
+                "--instances-dir",
+                str(tmp_path),
+                "--non-interactive",
+                "--no-gh",
+                "--no-overwrite-non-secrets",
+            ],
+        )
+        assert result.exit_code == 0
+        assert "# operator note" in toml_file.read_text()
+        assert "preserved" in result.output

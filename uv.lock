@@ -1247,8 +1247,10 @@ source = { editable = "cli" }
 dependencies = [
     { name = "click" },
     { name = "httpx" },
+    { name = "jackpot-schema" },
     { name = "pydantic" },
     { name = "python-dateutil" },
+    { name = "pyyaml" },
     { name = "rich" },
     { name = "toml" },
 ]
@@ -1266,8 +1268,10 @@ dev = [
 requires-dist = [
     { name = "click", specifier = ">=8.1.0" },
     { name = "httpx", specifier = ">=0.27.0" },
+    { name = "jackpot-schema", editable = "schema" },
     { name = "pydantic", specifier = ">=2.0.0" },
     { name = "python-dateutil", specifier = ">=2.9.0" },
+    { name = "pyyaml", specifier = ">=6.0" },
     { name = "rich", specifier = ">=13.0.0" },
     { name = "toml", specifier = ">=0.10.2" },
 ]
