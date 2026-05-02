@@ -1,9 +1,22 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException
 
 router = APIRouter(prefix="/api/v1/saved-searches", tags=["saved_searches"])
 
 
 @router.get("/")
-def list_saved_searches() -> dict:
-    """Stub — implement in Month 1 sprint."""
-    return {"status": "not implemented", "router": "saved_searches"}
+def list_saved_searches() -> None:
+    """Stub — implement in Phase 24+ (Month 3).
+
+    Phase 22 review action item 10: stub routers MUST return 501,
+    never 200 — silent-failure hazard for clients that don't inspect
+    the response body. The HTTPException is caught by the global
+    `_http_exception_to_envelope` handler in main.py and rendered
+    through the JACKPOT envelope (Critical Rule 24).
+    """
+    raise HTTPException(
+        status_code=501,
+        detail=(
+            "The saved_searches router is not yet implemented. "
+            "Tracked as P0e action item 10 / Phase 24 (Month 3) work."
+        ),
+    )
