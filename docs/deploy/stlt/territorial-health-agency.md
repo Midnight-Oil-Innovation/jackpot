@@ -50,12 +50,14 @@ JACKPOT's value for this operator:
    state-scale deployment; territorial deployments can drop to about
    1/10 the resource budget.
 
-3. **Run `jackpot init`** (forthcoming). For Scenario A: the CLI
-   provisions a Docker Compose stack on the workstation, sets up
-   MinIO for local storage, and seeds the reportable-organisms list
-   with a Pacific-region appropriate default. For Scenario B: the CLI
-   wires up your cloud project the same way as Scenario C but with
-   the smaller footprint.
+3. **Run `jackpot init configure --scenario A`** (or `--scenario B`
+   for a cloud territorial deployment) — shipped in P0e, see
+   `docs/install/quickstart.md`. For Scenario A: the CLI emits a
+   Docker Compose `.env.local` with `COMPOSE_PROFILES=laptop` (api +
+   postgres + minio + ui), and `jackpot init secrets` generates a
+   per-instance JWT signing key. For Scenario B: the CLI emits a
+   Helm `values.local.yaml` overlay with `COMPOSE_PROFILES=single-org`
+   for any local-dev runs alongside the cloud deploy.
 
 4. **Configure NCBI submitter account.** Most territorial agencies
    submit to NCBI either directly under their own BioProject or via

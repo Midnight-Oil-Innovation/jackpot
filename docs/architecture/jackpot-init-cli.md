@@ -64,7 +64,7 @@ Everything is ignored except `instances/ci/` (per Decision 4, which is committed
 
 **Implication for writers:** Refactor existing `docker-compose.yml` to add `profiles: ["A", "B", ...]` keys to each service. `jackpot init` generates the COMPOSE_PROFILES env var as a comma-separated list (e.g., `COMPOSE_PROFILES=A,T` for a Scenario T instance that also needs the Scenario A's local-dev affordances during install).
 
-**Watch out for:** Compose profiles require docker-compose v2.4+. Document the minimum version in the install prerequisites.
+**Watch out for:** Compose profiles require docker-compose **v2.6+** (the `required: false` on `depends_on` entries — used to let cloud profiles resolve cleanly when minio isn't activated — landed in v2.6.0). Document the minimum version in the install prerequisites.
 
 ### 3. GitHub vars integration
 
@@ -314,14 +314,24 @@ Existing operator config is preserved; only the federation-specific fields are a
 Final shape:
 
 ```
-jackpot init                        # default: runs detect, configure, bootstrap, validate in sequence
 jackpot init detect                 # B-STLT-4: ask 4-5 questions, propose scenario
 jackpot init configure              # generate instance dir + write all files (no DB changes)
+jackpot init secrets                # generate JWT key + (E/T) federation keypair
 jackpot init bootstrap              # alembic upgrade head + apply seed.sql + sanity check
 jackpot init validate               # health checks against running stack
-jackpot init reconfigure            # update existing instance for schema_version delta or new feature opt-in
 jackpot init scenario-info <X>      # print canonical defaults for scenario X (--json for machine-readable)
 ```
+
+**Status note:** `jackpot init reconfigure` is described in Decisions
+6 + 7 + 9 + the bonus-federation section above. It is **deferred to
+P0f**. The underlying capability — re-run configure preserving
+operator hand-edits and secrets — is already reachable today via
+`jackpot init configure --no-overwrite-non-secrets`. The named alias
++ `schema_version` migration plan land in P0f when there's a real
+schema_version delta to migrate from. The default `jackpot init`
+no-arg umbrella that chains detect → configure → bootstrap → validate
+is also deferred to P0f; for now operators run each subcommand
+explicitly.
 
 ---
 

@@ -2446,7 +2446,7 @@ The user surfaced the discrepancy by asking "Why is the test coverage so low?" �
 
 ## P0e — `jackpot init` operator-bootstrap CLI + 13-item Phase 22 cleanup — 2026-05-02
 
-**What was built:** The full `jackpot init` CLI (detect / scenario-info / configure / secrets / bootstrap / validate / reconfigure subcommands) plus 13 Phase 22 cleanup items absorbed into the same phase. P0e shipped 28 commits across 5 streams (A through E), 944 tests passing, 86.20% coverage. Full closeout in `docs/review_log.md` "P0e closeout" section; this entry captures the patterns + lessons, not the per-commit log.
+**What was built:** The full `jackpot init` CLI (detect / scenario-info / configure / secrets / bootstrap / validate subcommands; `reconfigure` documented in the design lockdown but deferred to P0f) plus 13 Phase 22 cleanup items absorbed into the same phase. P0e shipped 26 commits across 5 streams (A through E), 970+ tests passing, 86%+ coverage. Full closeout in `docs/review_log.md` "P0e closeout" section; this entry captures the patterns + lessons, not the per-commit log.
 
 **Key decisions:**
 

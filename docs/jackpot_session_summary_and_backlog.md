@@ -2741,11 +2741,11 @@ The next session should jump into P0e (jackpot init CLI), folding action items 7
 P0e shipped the `jackpot init` operator-bootstrap CLI plus 13 cleanup items the Phase 22 review explicitly absorbed. Five-stream execution per the kickoff plan: A (CRITICAL Rule 55 fixes) → B (jackpot init design + impl) → C (spec/docs alignment) → D (coverage gap closure) → E (refactor + docs).
 
 **Tests:** 944 passing (was 615 pre-P0e), 86.20% coverage (was 84.09%).
-**Commits:** 28 across the 5 streams.
+**Commits:** 26 across the 5 streams (plus 3 ultrareview follow-ups).
 
 ## Stream-by-stream
 
-**Stream A — CRITICAL Rule 55 fixes (8 commits, 3369eb8 → 204c493)**
+**Stream A — CRITICAL Rule 55 fixes (7 commits, 3369eb8 → 204c493)**
 
 - A.1+A.2: deleted `backend/setup/` entirely (3,378 lines of pre-P0d scaffold scripts). Net: 5 inherited CRITICAL violations resolved in one commit.
 - A.3: baseline migration (`5adf11b77c19`) now seeds `Example Org`/`Example Lab`/`admin@example.org`/`Example Sequencing Lab`/`Example Reference Lab` directly. Three rename migrations marked historical-no-op (functional for any existing DB; zero-rows-matched on fresh installs). Glen confirmed the (a)+(c) hybrid approach.

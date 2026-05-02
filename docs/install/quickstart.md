@@ -12,7 +12,9 @@ guides under `docs/deploy/stlt/` for the operational specifics.
 
 ## Prerequisites
 
-- **Docker Desktop** (or Docker Engine + docker-compose v2.4+)
+- **Docker Desktop** (or Docker Engine + docker-compose **v2.6+** —
+  the JACKPOT compose file uses `required: false` on `depends_on`
+  entries which landed in compose v2.6.0)
   — needed for `docker compose up -d` of the local stack.
 - **uv** — Python package + workspace manager.
   Install: `curl -LsSf https://astral.sh/uv/install.sh | sh`

@@ -53,8 +53,11 @@ JACKPOT's value:
 2. **Provision the cloud or workstation.** Same patterns as the
    state-health-department guide, scaled smaller.
 
-3. **Run `jackpot init`** (forthcoming). Pick the appropriate
-   scenario per the size guidance above.
+3. **Run `jackpot init configure --scenario <X>`** (shipped in P0e
+   — see `docs/install/quickstart.md`). Pick the appropriate scenario
+   per the size guidance above (typically A for a single-LHD laptop
+   or B for a single-org cloud deployment), then `jackpot init
+   secrets` and `jackpot init bootstrap` to complete the install.
 
 4. **Configure NCBI / GISAID.** LHDs sometimes submit under their own
    BioProject, sometimes under the state's BioProject with a

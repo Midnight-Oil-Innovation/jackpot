@@ -52,10 +52,12 @@ JACKPOT's value proposition for this operator:
    `deploy/terraform/` is GCP-specific; AWS/Azure equivalents are
    community-contributable.
 
-2. **Run `jackpot init`** (forthcoming in P0e). The CLI prompts for
-   your state name, the ID of your central public-health lab, the
-   list of sentinel labs you want to seed, and the contact email for
-   platform-admin notifications. Pick **Scenario C**.
+2. **Run `jackpot init configure --scenario C`** (shipped in P0e — see
+   `docs/install/quickstart.md`). The CLI prompts for your state
+   name, the contact email for platform-admin notifications, and the
+   public API URL. Then `jackpot init secrets --instance <name>` to
+   generate the JWT signing key, and `jackpot init bootstrap --instance
+   <name>` to apply alembic + seed.sql + smoke-test `/health`.
 
 3. **Apply the Terraform / Helm.** The deploy/ subtree of this
    monorepo is where your IT team gets started. The reference

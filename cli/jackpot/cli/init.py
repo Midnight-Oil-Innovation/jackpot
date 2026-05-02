@@ -8,13 +8,19 @@ flag parsing + orchestration.
 
 Subcommand layout (see docs/architecture/jackpot-init-cli.md):
 
-    jackpot init                 # default: detect → configure → bootstrap → validate
     jackpot init detect          # B-STLT-4: ask 5 questions, propose scenario
     jackpot init configure       # write instances/<name>/ files
-    jackpot init bootstrap       # alembic upgrade head + apply seed.sql
+    jackpot init secrets         # generate JWT key + (E/T) federation keypair
+    jackpot init bootstrap       # alembic upgrade head + apply seed.sql + smoke /health
     jackpot init validate        # /health smoke checks
-    jackpot init reconfigure     # update existing instance
     jackpot init scenario-info   # print canonical defaults
+
+`jackpot init reconfigure` is documented in the design lockdown but
+deferred to P0f. The underlying capability (re-run configure without
+clobbering operator hand-edits) is reachable today via
+`jackpot init configure --no-overwrite-non-secrets`; the named alias
++ schema-version migration plan land in P0f when there's a real
+schema_version delta to migrate from.
 """
 
 from __future__ import annotations
