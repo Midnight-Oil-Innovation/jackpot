@@ -74,22 +74,40 @@ principles. The full set of governance documents lives under
 
 ## Development
 
+The fastest path from `git clone` to a running stack is the
+[10-minute quickstart guide](./docs/install/quickstart.md):
+
 ```bash
-# Clone
+# Clone + workspace install
 git clone git@github.com:Midnight-Oil-Innovation/jackpot.git
 cd jackpot
-
-# Resolve workspace dependencies (single uv.lock at the root)
 uv sync
 
-# Run the test suite (Docker required for testcontainers)
-uv run pytest
+# Bootstrap a laptop instance (Scenario A)
+uv run jackpot init configure --scenario A --instance-name local --no-gh
+uv run jackpot init secrets --instance local
+docker compose --env-file instances/local/.env.local up -d
+uv run jackpot init bootstrap --instance local
 
-# Start the API + Streamlit + Postgres + MinIO stack locally
-cd backend && docker compose up -d
-curl http://localhost:8000/health
-# Open http://localhost:8501 for the Streamlit UI
+# Test suite (Docker required for testcontainers)
+uv run pytest
 ```
+
+For other scenarios:
+
+```bash
+# Show what jackpot init knows about each scenario
+uv run jackpot init scenario-info F --json     # CI defaults
+uv run jackpot init scenario-info T --json     # Tribal-sovereignty defaults
+
+# Walk the 5-question detector to pick the right scenario for your operator
+uv run jackpot init detect
+```
+
+See [`docs/architecture/jackpot-init-cli.md`](./docs/architecture/jackpot-init-cli.md)
+for the design + the 9 architectural decisions that shape `jackpot init`,
+and the [STLT-tier deploy guides](./docs/deploy/stlt/) for cloud
+deployment specifics per operator type.
 
 For the full developer guide, the 55 Critical Rules, the testing
 philosophy, and the GCP production architecture, read
