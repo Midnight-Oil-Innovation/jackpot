@@ -69,7 +69,6 @@ def pipelines_list(
         params["status"] = status
 
     try:
-        # TODO: implement when GET /api/v1/pipelines/ is built
         response = client.get("/api/v1/pipelines/", params=params)
     except Exception as e:
         click.echo(f"Error: {e}", err=True)
@@ -183,7 +182,6 @@ def pipelines_launch(
     click.echo(f"Launching {pipeline}...")
 
     try:
-        # TODO: implement when POST /api/v1/pipelines/launch is built
         result = client.post("/api/v1/pipelines/launch", json=payload)
         run_id = result.get("id")
         click.echo(f"Pipeline run started: run_id={run_id}")
@@ -209,7 +207,6 @@ def pipelines_status(run_id: int, tasks: bool, output_json: bool) -> None:
     client = _get_client()
 
     try:
-        # TODO: implement when GET /api/v1/pipelines/{run_id} is built
         result = client.get(f"/api/v1/pipelines/{run_id}")
     except Exception as e:
         click.echo(f"Error: {e}", err=True)

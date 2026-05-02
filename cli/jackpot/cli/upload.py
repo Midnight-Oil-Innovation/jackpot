@@ -237,7 +237,6 @@ def upload(
     click.echo(f"Uploading {r1_path.name}...")
 
     try:
-        # TODO: implement when POST /api/v1/ingest/upload is built
         result = client.post_multipart(
             "/api/v1/ingest/upload",
             metadata=meta,
@@ -404,7 +403,6 @@ def upload_dir(
             files["fastq_r2"] = (r2_path.name, r2_path.open("rb"), "application/octet-stream")
 
         try:
-            # TODO: implement when POST /api/v1/ingest/upload is built
             result = client.post_multipart(
                 "/api/v1/ingest/upload",
                 metadata=meta,

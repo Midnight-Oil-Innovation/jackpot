@@ -47,13 +47,62 @@ class Sample:
         Download the scrubbed FASTQ file to dest_dir.
         Returns the local path of the downloaded file.
 
-        Raises ScrubPendingError if the file is not yet available.
+        Calls `GET /api/v1/samples/{sample_id}/files` to enumerate
+        available files for the sample, then `GET /api/v1/samples/{id}/download`
+        for the chosen file's bytes (the backend serves the scrubbed
+        copy when one exists, raising 409 when the scrubber hasn't
+        produced output yet).
         """
-        # TODO: implement in Month 1 — get presigned URL from
-        # GET /api/v1/samples/{sample_id}/files, stream to dest_dir
-        raise NotImplementedError(
-            "download_fastq() will be implemented with the sample files endpoint"
+        sample_id = self._data.get("sample_id") or self._data.get("id")
+        if sample_id is None:
+            raise RuntimeError("Sample has neither sample_id nor id; cannot download")
+
+        files_response = self._client.get(f"/api/v1/samples/{sample_id}/files")
+        files = (
+            files_response if isinstance(files_response, list) else files_response.get("data", [])
         )
+
+        # Pick the R1 vs R2 file. Convention: filenames contain `_R1` / `_R2`
+        # suffixes (per backend.file_detector — Critical Rule 11).
+        marker = "_R1" if r1 else "_R2"
+        chosen = next(
+            (f for f in files if marker in f.get("filename", "")),
+            None,
+        )
+        if chosen is None:
+            raise FileNotFoundError(
+                f"No {'R1' if r1 else 'R2'} file found for sample {sample_id!r}"
+            )
+
+        # Download the bytes — the backend's /download endpoint returns
+        # a presigned URL or streams the bytes directly depending on
+        # storage backend.
+        download_response = self._client.get(
+            f"/api/v1/samples/{sample_id}/download",
+            params={"file_id": chosen.get("id")},
+        )
+        # Backend returns either bytes (local/MinIO) or a JSON
+        # {"presigned_url": "https://..."} (GCS/S3). Handle both.
+        dest_path = Path(dest_dir).resolve() / chosen["filename"]
+        dest_path.parent.mkdir(parents=True, exist_ok=True)
+
+        if isinstance(download_response, dict) and "presigned_url" in download_response:
+            # Stream from the presigned URL.
+            import httpx
+
+            with httpx.stream("GET", download_response["presigned_url"]) as r:
+                r.raise_for_status()
+                with dest_path.open("wb") as f:
+                    for chunk in r.iter_bytes(chunk_size=8192):
+                        f.write(chunk)
+        elif isinstance(download_response, bytes | bytearray):
+            dest_path.write_bytes(download_response)
+        else:
+            raise RuntimeError(
+                f"Unexpected /download response type: {type(download_response).__name__}"
+            )
+
+        return dest_path
 
     def to_dict(self) -> dict:
         return dict(self._data)
@@ -117,8 +166,9 @@ class SamplesModule:
             if v is not None
         }
 
-        # TODO: implement in Month 1 — calls GET /api/v1/samples/
-        raise NotImplementedError("search() will be implemented when GET /api/v1/samples/ is built")
+        response = self._client.get("/api/v1/samples/", params=params)
+        items = response if isinstance(response, list) else response.get("data", [])
+        return [Sample(item, self._client) for item in items]
 
     def get(self, sample_id: str) -> Sample:
         """
@@ -126,10 +176,12 @@ class SamplesModule:
         Raises NotFoundError if not found.
         Raises AuthError if not accessible.
         """
-        # TODO: implement in Month 1 — calls GET /api/v1/samples/{sample_id}
-        raise NotImplementedError(
-            "get() will be implemented when GET /api/v1/samples/{id} is built"
-        )
+        data = self._client.get(f"/api/v1/samples/{sample_id}")
+        # Backend returns either the row directly or wrapped in
+        # {"data": {...}} per the JACKPOT envelope (Critical Rule 24).
+        if isinstance(data, dict) and "data" in data and "sample_id" not in data:
+            data = data["data"]
+        return Sample(data, self._client)
 
     def register_from_workspace(
         self,

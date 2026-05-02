@@ -110,7 +110,6 @@ def samples_list(
         params["surveillance_relevant"] = True
 
     try:
-        # TODO: implement when GET /api/v1/samples/ is built
         response = client.get("/api/v1/samples/", params=params)
     except Exception as e:
         click.echo(f"Error: {e}", err=True)
@@ -164,7 +163,6 @@ def samples_get(sample_id: str, output_json: bool) -> None:
     client = _get_client()
 
     try:
-        # TODO: implement when GET /api/v1/samples/{sample_id} is built
         result = client.get(f"/api/v1/samples/{sample_id}")
     except Exception as e:
         click.echo(f"Error: {e}", err=True)
