@@ -10,6 +10,7 @@ All commands are defined in submodules and registered here.
 import click
 
 from jackpot.cli.auth import auth
+from jackpot.cli.init import init
 from jackpot.cli.pipelines import pipelines
 from jackpot.cli.samples import samples
 from jackpot.cli.upload import upload, upload_dir, upload_globus
@@ -89,6 +90,7 @@ def config_show(profile: str | None) -> None:
 # ── Register subcommand groups ───────────────────────────────────────────────
 
 cli.add_command(auth)
+cli.add_command(init)
 cli.add_command(samples)
 cli.add_command(pipelines)
 
