@@ -29,8 +29,8 @@ federated_peers + BYOP/eukaryotic schema) → P0c (multi-tenancy middleware
 
 1. Read `spec.md` — understand the goals and constraints for the current sprint
 2. Read `todo.md` — find the next unchecked task
-3. Re-read this file (`docs/CLAUDE.md`) — all 55 Critical Rules apply at all times
-4. Confirm the baseline is stable: `uv run pytest` from the workspace root — **≥615 tests passing, ≥80% coverage** (post-Phase-22 baseline). The post-P0d 39% number that we carried for several phases turned out to be a measurement artifact after all: pytest-cov was not auto-discovering `[tool.coverage.run]` from pyproject.toml, so the `omit` list never reached the report-time matcher and a stack of intentionally-excluded modules (storage helpers, stub routers, generated code) were all being measured at 0% and counted in the total. The fix landed in `pyproject.toml`'s `addopts` (`--cov-config=pyproject.toml` made explicit) — see `docs/learnings.md` for the diagnosis.
+3. Re-read this file (`docs/CLAUDE.md`) — all 56 Critical Rules apply at all times
+4. Confirm the baseline is stable: `uv run pytest tests/ schema/tests/ cli/tests/` from the workspace root — **≥970 tests passing, ≥80% coverage** (post-P0e baseline). The post-P0d 39% number we carried briefly was a pytest-cov misconfiguration (omit list wasn't reaching the report-time matcher); fixed by making `--cov-config=pyproject.toml` explicit in addopts — see `docs/learnings.md` "Coverage measurement bug" entry. P0e (`docs/architecture/jackpot-init-cli.md`) shipped `jackpot init` operator-bootstrap CLI plus 13 absorbed Phase 22 cleanup items; see `docs/review_log.md` "P0e closeout" section.
 
 ### Work Loop
 
@@ -104,8 +104,10 @@ After completing any router session or significant fix, append a new entry to
   dashboards, turnaround reporting, and population-level queries. Populated
   via ETL from Cloud SQL. The FastAPI API never queries BigQuery directly.
   Not present in local dev. Month 3+ concern.
-- MinIO (local) / GCS (production) — same boto3 code via backend/storage.py,
-  different endpoint. Transition = STORAGE_BACKEND env var change.
+- MinIO (local) / GCS (production) — same boto3 code via
+  `backend/storage/` (a multi-backend package since 2026-04-26).
+  Transition = `STORAGE_ENDPOINT` env var: set (e.g.
+  `http://minio:9000`) → S3-compatible mode; unset → GCS native.
 - LinkML v4.4 schema: `schema/schema/jackpot_schema.yaml` (git submodule)
 - Authentication: Google OAuth 2.0 + JWT httponly cookies (mock in local dev)
 - Environment management: uv — never use pip directly
@@ -154,14 +156,20 @@ six-repo + git-submodule arrangement is gone; what used to be submodules
 │   ├── scripts/ / setup/
 ├── cli/                           ← workspace member (jackpot-cli)
 │   ├── pyproject.toml
-│   ├── jackpot/                   `jackpot` CLI + SDK
-│   └── tests/                     CLI's own tests (45% coverage threshold)
+│   ├── jackpot/
+│   │   ├── cli/                   Click commands (auth, init, samples, pipelines, upload)
+│   │   ├── init/                  P0e bootstrap library: detector + writers + secrets + validator + github_vars
+│   │   ├── core/                  client + exceptions
+│   │   └── sdk/                   programmatic SDK (samples, pipelines, datasets, references, etc.)
+│   └── tests/                     CLI's own tests
 ├── schema/                        ← workspace member (jackpot-schema)
 │   ├── pyproject.toml
 │   ├── jackpot_schema/            Helper module exposing SCHEMA_YAML_PATH, SCHEMA_JSON_PATH, MAPPING_CONFIGS_DIR
+│   ├── jackpot_scenarios/         P0e: 7-scenario defaults registry + detector (Decision 8 co-located)
 │   ├── schema/                    LinkML data — jackpot_schema.yaml/json + mapping_configs/
 │   ├── course/                    Schema-blueprint course content (technical)
-│   └── setup/                     Schema-update scripts
+│   ├── setup/                     Schema-update scripts
+│   └── tests/                     Schema-side tests (scenarios + detector)
 ├── pipelines/                     ← NOT a workspace member; member-local pyproject.toml + uv.lock
 │   ├── pipelines/                 Nextflow workflows
 │   ├── plugins/                   nf-jackpot plugin (Groovy)
@@ -174,10 +182,15 @@ six-repo + git-submodule arrangement is gone; what used to be submodules
 │   └── docs/                      Deploy-specific docs (production_runbook, env examples)
 ├── docs/                          Product + design docs (CLAUDE.md, learnings, design overviews)
 │   ├── CLAUDE.md                  ← this file
+│   ├── architecture/              P0e: jackpot-init-cli.md design lockdown
+│   ├── install/                   P0e: quickstart.md (10-minute fresh-clone walk)
 │   ├── deploy/stlt/               Five STLT-tier deploy guides (Phase 21.5)
 │   ├── fhir-mapping.md            FHIR R5 translation map
 │   └── jackpot_*_overview.md      Pathoplexus, CDC DMI, BYOP design documents
 ├── governance/                    8 charter + policy markdown files (P0d Phase 21.5)
+├── instances/                     P0e: per-instance jackpot init output (gitignored except instances/ci/)
+│   ├── .gitignore                 Whitelist: only ci/ + .gitignore are committed
+│   └── ci/                        Critical Rule 56 — synthetic-only canonical CI fixture
 ├── tests/                         Backend's integration tests (Postgres testcontainer)
 ├── pyproject.toml                 Workspace root: uv.workspace.members + pytest + coverage + ruff config
 ├── pyrightconfig.json             Pyright config for the whole workspace
@@ -204,26 +217,28 @@ Notification System sections for their exact interfaces.
 
 ## Current Baseline
 
-- **639 tests passing, 1 skipped, 0 failed** (post-P0d, up from 477
-  in the pre-P0d single-repo baseline; the increase comes from CLI
-  and storage tests being included via the workspace).
-- **Coverage: 39.46%** measured against `--cov=backend` from the
-  workspace root. **This is a known regression from the pre-P0d
-  86.99% baseline** caused by pytest-cov interacting with the editable
-  workspace install — backend's `storage/` subtree shows 0% measured
-  even though storage tests run and pass. The CI threshold is set to
-  35% as an interim floor (`pyproject.toml [tool.pytest.ini_options]
-  addopts`); the work to restore the 60% bar is a Phase 21.5 follow-up
-  noted in `docs/learnings.md`. Tests passing is the gating signal,
-  not the coverage number, until measurement is fixed.
+- **970 tests passing, 1 skipped, 0 failed** (post-P0e); up from 944
+  at P0e close + 26 from the ultrareview security follow-up.
+- **Coverage: 86%+** workspace-wide. The pre-P0d 86.99% baseline was
+  briefly under-reported as 39% due to a pytest-cov misconfiguration
+  (omit list wasn't reaching the report-time matcher because
+  `--cov-config=pyproject.toml` wasn't explicit in addopts). Fix landed
+  post-Phase-22; see `docs/learnings.md` "Coverage measurement bug"
+  entry for the full diagnosis. CI threshold is now 80%.
 - Health check local: `curl http://localhost:8000/health` → `{"status":"ok","version":"5.0.0","project":"JACKPOT","database":"connected"}`
 - Health check staging (via `kubectl port-forward`): identical envelope
-- All 27 database tables loaded in PostgreSQL
+- All 27 database tables loaded in PostgreSQL via Alembic; baseline
+  migration `5adf11b77c19` seeds operator-agnostic Example Org/Lab/
+  admin/Sequencing Lab/Reference Lab directly (P0e A.3); the 3 rename
+  migrations after it are historical-no-op on fresh installs.
 - Both `development` and `main` are at the same commit; `staging` branch triggers the GCP deploy
+- The `jackpot init` CLI (P0e) bootstraps any of the 7 install
+  scenarios from a fresh clone in under 10 minutes — see
+  `docs/install/quickstart.md` and `docs/architecture/jackpot-init-cli.md`.
 
-Do not regress the test count without a deliberate reason. Coverage
-restoration is owned by the follow-up issue; do not lower the 35%
-threshold without a Phase 21.5 review.
+Do not regress the test count or coverage without a deliberate reason.
+Do not lower the 80% threshold without a documented architectural
+decision.
 
 ---
 
@@ -831,7 +846,7 @@ If you find yourself about to write `if org_name == "Linux Prophet" or `BUCKET =
 
 The `jackpot init` CLI (P0e) is the only place where operator-specific values are *learned* — the CLI prompts for them and writes them into env vars, the database, and operator config. Production code reads from those three sources and stays clean.
 
-**56. `instances/ci/` is the only committed instance directory; it MUST contain zero secrets, zero PII, and zero real operator-specific values.** All other `instances/*/` paths are gitignored. The `instances/ci/` directory exists as the committed Scenario F (CI test) artifact set: pinned-forever values that produce reproducible green CI runs. It uses synthetic operator names (`CI Test Organization`, `ci@example.org`), mock auth, a randomly-generated-but-fixed JWT signing key (committed; CI is the only scenario where a known-fixed key is acceptable because there's no real auth to compromise), `OAUTH_PROVIDER=mock`, `STORAGE_BACKEND=minio_local`, no GCS, no GISAID, no NCBI submission, no federation. The `jackpot init` CLI must REFUSE to overwrite `instances/ci/` files; developers reproducing CI locally use `jackpot init --scenario F --instance-name ci-local` (or any name other than `ci`) and `instances/ci-local/` is gitignored.
+**56. `instances/ci/` is the only committed instance directory; it MUST contain zero secrets, zero PII, and zero real operator-specific values.** All other `instances/*/` paths are gitignored. The `instances/ci/` directory exists as the committed Scenario F (CI test) artifact set: pinned-forever values that produce reproducible green CI runs. It uses synthetic operator names (`CI Test Organization`, `ci@example.org`), `auth_method = "mock"` in jackpot.toml (no real OAuth client), filesystem storage (`STORAGE_ENDPOINT` empty in `.env.local`), and a randomly-generated-but-fixed JWT signing key (committed; CI is the only scenario where a known-fixed key is acceptable because there's no real auth to compromise). No GCS, no GISAID, no NCBI submission, no federation. The `jackpot init` CLI REFUSES to overwrite `instances/ci/` files; developers reproducing CI locally use `jackpot init --scenario F --instance-name ci-local` (or any name other than `ci`) and `instances/ci-local/` is gitignored.
 
 ---
 
@@ -925,7 +940,7 @@ implementing any component that touches infrastructure.
 | Variable | Local dev value | GCP production value | Effect |
 |---|---|---|---|
 | `ENV` | `local` | `gcp` | Master switch — changes OAuth, storage, DB |
-| `STORAGE_BACKEND` | `minio` | `gcs` | Routes backend/storage.py to MinIO or GCS |
+| `STORAGE_ENDPOINT` | `http://minio:9000` | (unset) | Set → S3-compatible mode; unset → GCS native |
 | `SCHEDULER_ENABLED` | `true` | `false` | APScheduler runs locally; Cloud Scheduler takes over in GKE |
 | `PIPELINE_EXECUTOR` | `local` | `gcp_batch` | Nextflow runs locally or submits to GCP Batch |
 | `WORKSPACE_ENABLED` | `false` | `true` | JupyterHub launch endpoint active only in GKE |
@@ -934,7 +949,7 @@ implementing any component that touches infrastructure.
 
 | Component | Local dev | GCP production | Transition complexity |
 |---|---|---|---|
-| Object storage | MinIO via boto3 | GCS via boto3 | STORAGE_BACKEND env var — genuinely simple |
+| Object storage | MinIO via boto3 | GCS via google-cloud-storage | `STORAGE_ENDPOINT` set vs unset — factory selects backend |
 | Operational DB | PostgreSQL in Docker | Cloud SQL PostgreSQL | Connection string — genuinely simple |
 | Analytics layer | Not present | BigQuery (ETL from Cloud SQL) | Separate ETL pipeline — Month 3+ |
 | Background jobs | APScheduler in-process | Cloud Scheduler → HTTP endpoint | SCHEDULER_ENABLED env var |
@@ -1422,17 +1437,17 @@ the notifications table is the only delivery mechanism in Month 1.
 
 ## Storage Abstraction (MinIO local / GCS production)
 
-All file storage operations go through `backend/storage.py`. Routers never
-call boto3 or the GCS client directly.
+All file storage operations go through `backend/storage/` (a multi-backend
+package as of 2026-04-26). Routers never call boto3 or the GCS client
+directly.
 
 ### Environment variables
 
 | Variable | Local dev value | Production value |
 |---|---|---|
-| `STORAGE_BACKEND` | `minio` | `gcs` |
-| `MINIO_ENDPOINT` | `http://minio:9000` | — |
-| `MINIO_ACCESS_KEY` | `minioadmin` | — |
-| `MINIO_SECRET_KEY` | `minioadmin` | — |
+| `STORAGE_ENDPOINT` | `http://minio:9000` | (unset → GCS native) |
+| `STORAGE_ACCESS_KEY` | `minioadmin` | — |
+| `STORAGE_SECRET_KEY` | `minioadmin` | — |
 | `GCS_PROJECT_ID` | — | `jackpot-prod` |
 | `SEQUENCES_BUCKET` | `jackpot-sequences` | `jackpot-sequences-prod` |
 | `STAGING_BUCKET` | `jackpot-staging` | `jackpot-staging-prod` |
@@ -1461,9 +1476,10 @@ def file_exists(bucket: str, key: str) -> bool:
     """Check if a file exists without downloading it."""
 ```
 
-All functions are backend-agnostic — they read `STORAGE_BACKEND` at call
-time and route to either boto3 (MinIO) or the GCS client. Never check
-`STORAGE_BACKEND` in a router.
+All functions are backend-agnostic — the `backend/storage/factory.py`
+module inspects `STORAGE_ENDPOINT` at construction time and selects
+S3-compatible (boto3) vs native GCS. Never branch on storage-backend
+identity inside a router.
 
 ---
 
