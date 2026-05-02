@@ -367,3 +367,55 @@ P0e Phase B from the kickoff prompt:
    - `instances/.gitignore` + Critical Rule 56 enforcement (Decision 4)
 3. **B.3 — Tests** — at least one end-to-end test per scenario, B-STLT-4 detector unit tests, idempotency re-run tests
 4. **B.4 — Documentation** — install quickstart, deploy guides per scenario, README updates
+
+---
+
+## B.1 sanity-check findings — 2026-05-01
+
+Pre-B.2 codebase audit against the locked design. Four minor inconsistencies found, none requiring redesign — all addressed at the appropriate B.2 step.
+
+### F1 — `schema/pyproject.toml` build backend
+
+**Decision 8 sample uses setuptools** (`[tool.setuptools.packages.find]`); current `schema/pyproject.toml` uses **hatchling** (`[tool.hatch.build.targets.wheel]`). The equivalent hatchling syntax for exposing both subpackages is:
+
+```toml
+[tool.hatch.build.targets.wheel]
+packages = ["jackpot_schema", "jackpot_scenarios"]
+include  = ["schema/**/*.yaml", "schema/**/*.json"]
+```
+
+**Resolution:** Use the hatchling form during B.2 step "schema/jackpot_scenarios/ workspace setup". No design change needed — Decision 8's intent is the same.
+
+### F2 — `schema/pyproject.toml` dependencies
+
+Current `schema/pyproject.toml` declares `dependencies = []`. `jackpot_scenarios/` will need pydantic v2 for the `ScenarioDefaults` models.
+
+**Resolution:** Add `dependencies = ["pydantic>=2"]` during B.2 step. If `versioning.py` later needs `tomli`/`tomllib` for `jackpot.toml` parsing on Python <3.11, add it then; for now Python 3.11+ ships `tomllib` in stdlib (per `requires-python = ">=3.11"`).
+
+### F3 — Compose service inventory
+
+Current `docker-compose.yml` has 5 services: `postgres`, `minio`, `minio_init`, `api`, `ui`. Decision 2's service-to-scenario matrix mentions 8: the existing 4 (treating `minio_init` as part of `minio`) plus `jupyter`, `consent_workflow`, `federation_relay`, `pipelines_runner`. The latter four don't exist yet and are aspirational (consent_workflow gated on P0b sovereignty schema; federation_relay gated on Scenario E having peers; jupyter is BYOP, P0f).
+
+**Resolution:** During B.2 compose refactor, add `profiles:` keys to the 5 existing services only. The matrix in Decision 2 stays as future-state documentation; a comment in the compose file points to it. When the deferred services land, they get profiles at that time.
+
+### F4 — Operator config knobs in `backend/config.py` not yet covered by `ScenarioDefaults`
+
+Audited current `backend/backend/config.py` (32 fields) against the `ScenarioDefaults` sketch in the original design doc. Most are covered or implied. Two classes of fields warrant explicit handling:
+
+**Secrets (must flow through `secrets/`, not `.env.local`):**
+- `ncbi_api_key` — operator-supplied API key
+- `jackpot_api_token` — service-to-service auth token
+- `google_oauth_client_secret` — already implicitly secret per Decision 5
+
+**Bucket names (scenario-defaulted, operator-overridable):**
+- `storage_bucket_sequences`, `storage_bucket_raw`, `storage_bucket_staging`, `storage_bucket_datasets`, `storage_bucket_submissions`, `work_bucket`, `results_bucket` — 7 buckets total; defaults like `jackpot-staging-sequences` work for any operator but operators with naming-policy restrictions (e.g., org-prefix mandates) need to override.
+
+**Resolution:** Add a `secrets:` block to `ScenarioDefaults` listing fields that route through `instances/<name>/secrets/` rather than `.env.local`. Add a `buckets:` sub-block (or a flat `bucket_*_name` set of fields) for the 7 bucket names so operators can override at install time.
+
+### F5 — Gitignore compatibility (no finding)
+
+Verified the existing root `.gitignore` doesn't conflict with the proposed `instances/.gitignore` from Decision 1. The root rule `*.env.local` would also block `instances/<name>/.env.local` (belt-and-suspenders). The per-directory `instances/.gitignore` adds the correct scoping for the rest. No changes needed to the root `.gitignore` for B.2.
+
+### Net assessment
+
+All 4 findings are implementation-time concerns. No Decision needs revision. B.2 proceeds.
