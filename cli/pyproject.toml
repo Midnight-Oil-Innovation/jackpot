@@ -15,6 +15,9 @@ dependencies = [
     "toml>=0.10.2",
     "pyyaml>=6.0",
     "python-dateutil>=2.9.0",
+    # ed25519 federation keypair generation for Scenarios E + T
+    # (jackpot init secrets, P0e Decision 5).
+    "pynacl>=1.5",
     # `jackpot init` writers + scenarios; jackpot_scenarios lives inside
     # the schema workspace member.
     "jackpot-schema",

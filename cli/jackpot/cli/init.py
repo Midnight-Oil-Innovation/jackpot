@@ -366,3 +366,155 @@ def configure_cmd(
         f"{resolved_instance_name}` to generate JWT signing key + "
         "(if applicable) federation keypair."
     )
+
+
+# ── secrets subcommand ─────────────────────────────────────────────────
+
+
+def _read_jackpot_toml_scenario(instance_dir: Path) -> str:
+    """Look up the scenario code from instances/<name>/jackpot.toml."""
+    import toml
+
+    toml_path = instance_dir / "jackpot.toml"
+    if not toml_path.exists():
+        raise click.UsageError(
+            f"No jackpot.toml found at {toml_path}. Run "
+            "`jackpot init configure --scenario <X> --instance-name "
+            f"{instance_dir.name}` first."
+        )
+    parsed = toml.loads(toml_path.read_text())
+    code = parsed.get("scenario", {}).get("code")
+    if not code:
+        raise click.UsageError(f"jackpot.toml at {toml_path} has no [scenario].code")
+    return code
+
+
+@init.command("secrets")
+@click.option(
+    "--instance",
+    "instance_name",
+    type=str,
+    required=True,
+    help="Instance name (matches `instances/<name>/` directory).",
+)
+@click.option(
+    "--instances-dir",
+    "instances_dir_str",
+    type=str,
+    default="instances",
+    help="Parent directory for per-instance configs.",
+)
+@click.option(
+    "--regenerate-secrets",
+    is_flag=True,
+    default=False,
+    help=(
+        "Rotate existing secrets. Prompts per-secret before "
+        "overwriting. WARNING: regenerating a JWT signing key in "
+        "production invalidates every issued token."
+    ),
+)
+@click.option(
+    "--non-interactive",
+    is_flag=True,
+    default=False,
+    help=(
+        "Do not prompt for OAuth client secret or rotation confirms. "
+        "OAuth scenarios will leave the OAuth secret file blank — the "
+        "operator populates it out-of-band."
+    ),
+)
+def secrets_cmd(
+    instance_name: str,
+    instances_dir_str: str,
+    regenerate_secrets: bool,
+    non_interactive: bool,
+) -> None:
+    """Generate per-instance secrets (JWT signing key, federation
+    keypair, OAuth client secret)."""
+    from jackpot_scenarios.scenarios import SCENARIO_REGISTRY
+
+    from jackpot.init.secrets import assert_secret_path_invariant, populate_secrets
+
+    instance_dir = Path(instances_dir_str) / instance_name
+    if not instance_dir.exists():
+        raise click.UsageError(
+            f"Instance directory {instance_dir} does not exist. "
+            "Run `jackpot init configure` first."
+        )
+
+    scenario_code = _read_jackpot_toml_scenario(instance_dir)
+    if scenario_code not in SCENARIO_REGISTRY:
+        raise click.UsageError(
+            f"jackpot.toml references unknown scenario {scenario_code!r}. "
+            f"Valid: {', '.join(sorted(SCENARIO_REGISTRY))}"
+        )
+    scenario = SCENARIO_REGISTRY[scenario_code]  # type: ignore[index]
+
+    # Critical Rule 56: refuse to overwrite committed instances/ci/.
+    if instance_name == "ci" and scenario.code == "F":
+        raise click.UsageError(
+            "Refusing to write secrets into committed instances/ci/ "
+            "(Critical Rule 56). Use --instance-name ci-local for "
+            "local CI reproduction."
+        )
+
+    def _confirm_overwrite(path: Path) -> bool:
+        if non_interactive:
+            return False  # never silently rotate in non-interactive mode
+        return click.confirm(
+            f"  Regenerate {path}? Existing value will be lost.",
+            default=False,
+        )
+
+    def _oauth_provider() -> str | None:
+        if non_interactive:
+            return None
+        click.echo()
+        click.secho(
+            "OAuth client secret prompt:",
+            bold=True,
+        )
+        click.echo("  This scenario uses OAuth/SSO. Paste the client secret from your")
+        click.echo("  OAuth provider's console (Google Cloud Console / Okta / etc.).")
+        click.echo("  Press Enter to skip and populate this file by hand later.")
+        value = click.prompt(
+            "  OAuth client secret",
+            default="",
+            show_default=False,
+            type=str,
+            hide_input=True,
+        )
+        return value if value else None
+
+    click.echo()
+    click.secho(
+        f"Populating secrets for instance {instance_name!r} "
+        f"(scenario {scenario.code} — {scenario.name})",
+        bold=True,
+    )
+
+    records = populate_secrets(
+        scenario=scenario,
+        instance_dir=instance_dir,
+        regenerate_secrets=regenerate_secrets,
+        confirm_overwrite=_confirm_overwrite,
+        oauth_secret_provider=_oauth_provider,
+    )
+
+    # Hard invariant — all writes go inside the secrets/ subtree.
+    assert_secret_path_invariant(records)
+
+    click.echo()
+    click.secho("Secret outcomes:", bold=True)
+    for rec in records:
+        try:
+            display_path = rec.path.relative_to(instance_dir.parent)
+        except ValueError:
+            display_path = rec.path
+        click.echo(f"  [{rec.action:24s}] {display_path}")
+
+    click.echo()
+    click.echo(
+        "Next: `jackpot init bootstrap --instance " f"{instance_name}` to apply alembic + seed.sql."
+    )
