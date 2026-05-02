@@ -696,6 +696,15 @@ Action items deferred to later phases (numbered per `docs/review_log.md`):
   - 18: Move Rule 18 violation in `ingest.py:288` (FASTA scrub_status logic) into
     `validator.py.ValidationResult` (lighter than expected — was tagged "Phase 24
     refactor" but fits naturally with P0e's CLI-touches-ingest work)
+  - **B-FED-1** (NEW, deferred from P0e): central CA infrastructure for
+    federation peer authentication. P0e ships local ed25519 keypair generation
+    only — operators share public keys out-of-band. Deferred trigger: when
+    JACKPOT federation network exceeds ~5 instances OR when a peer revocation
+    event becomes operationally necessary. Federation protocol designed to
+    support BOTH local-keypair AND CA-cert auth modes simultaneously, so
+    Scenario T instances (which retain local-keypair regardless for sovereignty
+    reasons) can continue to federate with CA-using peers. Phase placement: P1
+    or later, depending on federation network growth.
 
 - **Month 3 / Phase 24+:**
   - 17: Build out 7 stub routers (datasets, notifications, archive_requests,
@@ -1040,7 +1049,7 @@ The items below are the ones that don't fit those interstitial buckets — imple
 
 (Most STLT items are in Phase 21.5 — they're documentation that rides along with P0d. The implementation-shape items below are separate.)
 
-- [ ] **B-STLT-4** (NEW) Build a **scenario detector** in `jackpot init` that asks operator-type questions (state? local? Tribal? academic?) and selects appropriate scenario defaults (Scenario A vs B vs C vs T) plus seeds appropriate config. (1-2 sessions, **P0e** with `jackpot init` work)
+- [ ] **B-STLT-4** (NEW) Build a **scenario detector** in `schema/jackpot_scenarios/detector.py` that asks 4-5 operator-type questions (operator type, deployment target, federation, PII handling, optional auth override) and deterministically maps to scenarios A–F+T. The scenario registry + detector live in the shared `jackpot_scenarios` package (sibling of `jackpot_schema/`) so backend, CLI, and CI workflows all import the canonical logic. CLI consumes via `cli/jackpot/init/`. (1-2 sessions, **P0e** with `jackpot init` work) — design decisions LOCKED 2026-05-01, see `docs/architecture/jackpot-init-cli.md`.
 
 ### M. CDC DMI / North Star alignment (overview §3-5 of `jackpot_cdc_dmi_stlt_overview.md`)
 

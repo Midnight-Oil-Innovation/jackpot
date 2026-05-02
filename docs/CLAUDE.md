@@ -831,6 +831,8 @@ If you find yourself about to write `if org_name == "Linux Prophet" or `BUCKET =
 
 The `jackpot init` CLI (P0e) is the only place where operator-specific values are *learned* — the CLI prompts for them and writes them into env vars, the database, and operator config. Production code reads from those three sources and stays clean.
 
+**56. `instances/ci/` is the only committed instance directory; it MUST contain zero secrets, zero PII, and zero real operator-specific values.** All other `instances/*/` paths are gitignored. The `instances/ci/` directory exists as the committed Scenario F (CI test) artifact set: pinned-forever values that produce reproducible green CI runs. It uses synthetic operator names (`CI Test Organization`, `ci@example.org`), mock auth, a randomly-generated-but-fixed JWT signing key (committed; CI is the only scenario where a known-fixed key is acceptable because there's no real auth to compromise), `OAUTH_PROVIDER=mock`, `STORAGE_BACKEND=minio_local`, no GCS, no GISAID, no NCBI submission, no federation. The `jackpot init` CLI must REFUSE to overwrite `instances/ci/` files; developers reproducing CI locally use `jackpot init --scenario F --instance-name ci-local` (or any name other than `ci`) and `instances/ci-local/` is gitignored.
+
 ---
 
 ## Local Dev Role Switching

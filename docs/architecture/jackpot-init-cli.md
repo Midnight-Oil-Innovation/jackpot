@@ -1,538 +1,369 @@
-# `jackpot init` CLI — design
+# `jackpot init` CLI — Architecture & Design Lockdown
 
-**Status:** P0e B.1 design checkpoint. Not yet implemented.
-**Author:** P0e session, 2026-05-01.
-**Reviewers required before B.2 implementation:** Glen.
+**Status:** Design lockdown complete (2026-05-01). Implementation = Phase B of P0e.
+**Authors:** Glen Otero (decisions), Claude (synthesis)
+**Source:** Chat working sessions 2026-05-01 plus Phase 22 review log items 9, 10, 11
+
+---
 
 ## Purpose
 
-`jackpot init` is the operator-bootstrap CLI. It turns a freshly-cloned
-`Midnight-Oil-Innovation/jackpot` into a configured deployment for one
-of the 7 install scenarios. It is the **single, named, version-
-controlled point** at which operator-specific values enter the system,
-satisfying Critical Rule 55 (production code is operator-agnostic).
+`jackpot init` is JACKPOT's operator-bootstrap CLI. It turns a freshly-cloned `Midnight-Oil-Innovation/jackpot` monorepo into a configured, runnable JACKPOT deployment for one of the 7 install scenarios (A laptop / B single-org cloud / C multi-lab agency / D hosted SaaS / E federation member / F CI test / T Tribal-sovereignty).
 
-It replaces:
+The CLI is **the only place** in JACKPOT where operator-specific values (host organization name, GCP project ID, OAuth client, scenario defaults, federation policy, etc.) are *learned*. Production code is operator-agnostic per Critical Rule 55; `jackpot init` learns operator values via prompts, GitHub vars detection, or scenario-default inference, and writes them into per-instance config files that production code reads at runtime.
 
-- The deleted `backend/setup/write_files*.py` scaffold scripts (which
-  emitted operator-coupled files at install time)
-- The hardcoded operator strings in `deploy/helm/jackpot-api/values-staging.yaml`
-  (now templated, awaiting `jackpot init` to fill them per-instance)
-- The hardcoded `assertion.repository_owner == 'linuxprophet'` WIF
-  attribute in `deploy/scripts/bootstrap_project.sh` (now a CLI arg)
-- The "edit values.yaml then docker compose up" tribal knowledge in
-  the README
+---
 
-## Non-goals
+## Locked decisions (2026-05-01)
 
-- **Not a deployment orchestrator.** `jackpot init` produces config; it
-  does not run `terraform apply`, `helm upgrade`, or `docker compose up`
-  on the operator's behalf. Those remain explicit operator actions.
-- **Not a secret manager.** It generates secrets locally (JWT signing
-  key, etc.) but does not push them to GCP Secret Manager — that's a
-  separate `terraform apply` step the operator runs after seeing what
-  was generated.
-- **Not a continuous-config tool.** Run-once at install. For ongoing
-  config drift, operators edit their gitignored local config files
-  directly or rerun `jackpot init reconfigure`.
+The 9 architectural decisions below were resolved in chat working sessions before B.2 implementation began. Each constrains a chunk of code that can't be easily refactored later.
 
-## 1. Command structure
+### 1. Instance directory location
 
-`jackpot init` is a Click subcommand of the existing `jackpot` CLI
-(installed via `cli/pyproject.toml` `[project.scripts]`). Subcommand
-layout:
+**Decision:** Two distinct concepts in two distinct locations.
+
+- **`instances/<name>/`** at the repo root for everything `jackpot init` writes (per-instance config, generated secrets, seed SQL, per-instance compose env vars).
+- **`~/.cache/jackpot/`** for cross-instance state (CLI auth tokens, federation peer public keys received from other operators, downloaded reference data artifacts cached across instances).
+
+**Rationale:** Repo-rooted instance dirs keep "git clone → jackpot init → docker compose up" simple — no absolute paths in compose contexts, no env-var gymnastics, no cross-checkout collision risk for users who maintain a single dev tree. XDG-style cache home holds the things that genuinely outlive any one instance.
+
+**Implication for writers:** `ScenarioDefaults` model has both `instance_dir: Path` and `cross_instance_state_dir: Path` fields, populated at instantiation.
+
+**Gitignore strategy:**
 
 ```
-jackpot init                  # entrypoint — runs detect → configure → bootstrap
-jackpot init detect           # ask scenario-detector questions, propose scenario
-jackpot init configure        # generate .env.local + values.local.yaml + secrets
-jackpot init bootstrap        # apply the generated config to the local stack
-jackpot init validate         # run /health smoke tests against the configured stack
-jackpot init reconfigure      # rerun configure preserving existing secrets
+# instances/.gitignore
+*
+!.gitignore
+!ci/
+!ci/**
 ```
 
-The default `jackpot init` (no subcommand) runs `detect → configure →
-bootstrap → validate` in sequence, prompting between each step. Each
-subcommand is independently runnable for cases where an operator wants
-to skip or rerun a phase.
+Everything is ignored except `instances/ci/` (per Decision 4, which is committed and pinned).
 
-**Why subcommands rather than a monolithic init?** The 7 scenarios
-have different needs. Scenario F (CI) wants `jackpot init detect
---scenario F --non-interactive` and skip everything else. Scenario T
-(Tribal) wants the operator to read every prompt carefully. Splitting
-the phases lets each scenario use what fits.
+### 2. Compose mechanism
 
-## 2. Scenario detector flow (B-STLT-4)
+**Decision:** Single canonical `docker-compose.yml` with `profiles:` keys per service. `jackpot init` writes `COMPOSE_PROFILES` to `instances/<name>/.env.local`.
 
-`jackpot init detect` asks a small number of questions and proposes a
-scenario. Operators can override the proposal.
+**Rationale:** Docker Compose profiles are the feature designed for exactly this. Per-scenario generated compose files would duplicate the service definitions 7 times and create N×M maintenance burden whenever a service config changes.
 
-### Question set
+**Service-to-scenario matrix** (initial):
 
-```
-1. Operator type
-   [a] Academic researcher / single bioinformatician
-   [b] Single public-health organization (no federation, no SaaS)
-   [c] Multi-lab agency (state health department, city public health)
-   [d] Hosted SaaS provider serving multiple tenants
-   [e] Federation member (peers with other JACKPOT instances)
-   [f] CI / automated test environment
-   [t] Tribal nation, Tribal Epidemiology Center, or Indigenous-data-
-       sovereignty deployment
-   [?] Help me decide
+| Service | A | B | C | D | E | T | F |
+|---|---|---|---|---|---|---|---|
+| postgres | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| api | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| ui | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | – |
+| minio | ✓ | – | – | – | – | – | ✓ |
+| jupyter (BYOP) | ✓ | ✓ | ✓ | ✓ | – | – | – |
+| consent_workflow | – | – | – | – | – | ✓ | – |
+| federation_relay | – | – | – | – | ✓ | – | – |
+| pipelines_runner | ✓ | ✓ | ✓ | ✓ | – | ✓ | ✓ |
 
-2. Deployment target
-   [1] Laptop / on-prem (Docker Compose; no cloud)
-   [2] Cloud single-org (GCP/AWS/Azure managed)
-   [3] Cloud multi-tenant (Kubernetes-native, multi-region)
+(Adjust during implementation as the actual service inventory crystallizes.)
 
-3. Federation participation
-   [n] Off — this instance does not peer with others
-   [m] Member — receives data from peers; may push data to peers
-   [h] Hub — coordinates a federation; routes between members
+**Implication for writers:** Refactor existing `docker-compose.yml` to add `profiles: ["A", "B", ...]` keys to each service. `jackpot init` generates the COMPOSE_PROFILES env var as a comma-separated list (e.g., `COMPOSE_PROFILES=A,T` for a Scenario T instance that also needs the Scenario A's local-dev affordances during install).
 
-4. PII handling defaults
-   [d] Full DLP — Cloud DLP scanner runs on every metadata write
-   [s] Scrubber-only — strip identifiers at ingest, no DLP scanning
-   [o] Off — operator certifies they do not handle PII (rare; CI/research only)
+**Watch out for:** Compose profiles require docker-compose v2.4+. Document the minimum version in the install prerequisites.
 
-5. Authentication method
-   [g] Google OAuth (recommended for cloud deployments)
-   [s] SSO (Okta, Auth0; production multi-tenant only)
-   [m] Mock auth — single dev user (laptop / CI only)
-```
+### 3. GitHub vars integration
 
-### Scenario inference
+**Decision:** Hybrid — detect when `gh` is installed and authed, slurp existing GitHub repo vars from `gh api repos/$REPO/actions/variables`, present each as `value found in GitHub: X — use this? [Y/n]`. Never auto-write. Never slurp secrets.
 
-Detector applies a deterministic mapping from `(operator_type,
-deployment_target, federation, auth)` to a scenario:
+**Rationale:** Operators who have GitHub repo vars set up are the same ones running CI/CD against `Midnight-Oil-Innovation/jackpot` — they're not the laptop-only or air-gapped users. So `gh api` integration is a strict UX improvement for some ops and never invoked for others. Confirmation per-value protects against silent population of wrong values.
 
-| If operator answers... | Scenario inferred |
-|---|---|
-| operator=a, target=1, auth=m | A (laptop) |
-| operator=b, target=2, auth=g | B (single-org cloud) |
-| operator=c, target=2 or 3, auth=g | C (multi-lab agency) |
-| operator=d, target=3, auth=s | D (hosted SaaS) |
-| operator=e, federation in {m, h} | E (federation member) |
-| operator=f, auth=m, dlp=o | F (CI test) |
-| operator=t (any combination) | T (Tribal-sovereignty) |
+**Module:** `cli/jackpot/init/github_vars.py` with the detect+confirm loop. Falls through to typed-fresh prompts when `gh` is unavailable or unauthenticated.
 
-If answers are inconsistent (e.g. "tribal" + "SaaS multi-tenant" — a
-cross-tenant Tribal hub is unusual but not impossible), the detector
-proposes the closest match and asks the operator to confirm or
-override.
+**Hard constraint:** Secrets (OAuth client secrets, JWT signing keys, federation private keys) are NEVER slurped from `gh api`. GitHub's `gh api repos/X/actions/secrets` endpoint doesn't return values anyway (only names), so this is enforced by GitHub's security model — but be explicit in the prompt-pattern code that the only acceptable origins for secrets are: (a) freshly generated by `jackpot init`, or (b) typed by the operator at the prompt.
 
-Detector outputs to stdout: the inferred scenario, the question-by-
-question answer log, and a one-paragraph rationale. The operator can
-accept, override (`--scenario X` flag), or rerun with different
-answers.
+### 4. Commit `instances/ci/`
 
-## 3. Scenario → defaults mapping
+**Decision:** Commit `instances/ci/`. Hard rule (now Critical Rule 56): zero secrets, zero PII, zero real operator-specific values.
 
-Each scenario maps to a `ScenarioDefaults` Pydantic model with named
-fields for every install-time knob. The full registry lives at
-`cli/jackpot/init/scenarios.py`. Sketch:
+**Rationale:** CI is the only scenario where reproducibility matters more than flexibility. All other scenarios are real deployments with operator-specific values. Scenario F has no real operator — it's the synthetic test environment. Committing it gives a known-good "this exact set of values produces a green CI run" snapshot, doubles as living documentation of Scenario F defaults, and lets new contributors study the canonical CI config.
+
+**The committed `instances/ci/`** uses synthetic-only values:
+
+- `mock_user_email = "ci@example.org"`
+- `host_organization_name = "CI Test Organization"`
+- A randomly-generated-but-fixed JWT signing key (committed; CI is the only scenario where a known-fixed key is acceptable because there's no real auth to compromise)
+- Synthetic seed data for the integration test fixtures
+- `OAUTH_PROVIDER=mock` (no real OAuth)
+- `STORAGE_BACKEND=minio_local` (no GCS, no AWS)
+- `JACKPOT_DLP_ENABLED=false`
+- No NCBI/GISAID submission, no federation
+
+**CLI behavior:** `jackpot init` MUST refuse to overwrite `instances/ci/` files. Developers reproducing CI locally use a different name: `jackpot init --scenario F --instance-name ci-local` produces `instances/ci-local/` (gitignored) without touching the committed `instances/ci/`.
+
+**Critical Rule 56** (added to CLAUDE.md 2026-05-01) formalizes the no-secrets-no-PII rule.
+
+### 5. Federation keypair generation
+
+**Decision:** Local ed25519 keypair generation for P0e. Document migration path to central CA in P1 or later. Scenario T uses local-keypair regardless of what the broader network does (sovereignty implication).
+
+**Rationale:** JACKPOT doesn't have a federation network yet. Scenario E is currently aspirational — there are no production peer instances to federate with. Building central-CA infrastructure now is premature optimization for a feature with zero users.
+
+**P0e implementation** (`cli/jackpot/init/secrets.py`):
+
+1. For Scenario E, generate ed25519 keypair via `nacl.signing.SigningKey.generate()`
+2. Public key written to `instances/<name>/secrets/federation_public_key.pem` (committable to private operator repos if desired)
+3. Private key written to `instances/<name>/secrets/federation_private_key.pem` with 0600 perms (NEVER committed; the gitignore strategy in Decision 1 handles this)
+4. Operator manually shares public keys with peers out-of-band (secure channel: encrypted email, in-person, signed message)
+5. Each instance maintains a `federated_peers` table seeded with peer public keys
+6. Federation messages signed with private key, verified with peer's known public key
+
+**Federation protocol design** supports BOTH auth modes simultaneously:
 
 ```python
-class ScenarioDefaults(BaseModel):
-    # — Backend behaviour —
-    deletion_on_request: bool         # CARE Authority-to-Control
-    auto_publish_to_insdc: bool       # NCBI/GenBank auto-submission
-    federation_enabled: bool
-    dlp_enabled: bool
-    scheduler_enabled: bool
-
-    # — Compose / Helm shape —
-    compose_profile: Literal["laptop", "single-org", "multi-tenant", "ci"]
-    replica_count: int
-    storage_backend: Literal["local", "minio", "gcs", "s3"]
-    pipeline_executor: Literal["local", "gcp_batch", "aws_batch", "k8s_jobs"]
-
-    # — Auth shape —
-    auth_method: Literal["mock", "oauth", "sso"]
-    oauth_provider: Literal["google", None]
-
-    # — Database —
-    database_engine: Literal["postgres-local", "cloud-sql", "rds-postgres"]
-    database_pitr_enabled: bool
-    database_backup_retention_days: int
-
-    # — Federation —
-    federation_role: Literal["off", "member", "hub", None]
-    federation_peers: list[str]       # initial peer list (URLs)
-
-    # — Governance flags —
-    care_principles_enforced: bool    # extra audit-log events
-    consent_workflow_enabled: bool
-
-    # — Operator metadata (these are ASKED, not defaulted) —
-    host_organization_name: str       # required at install time
-    host_organization_email: str      # required at install time
-    deployment_url: str               # for cloud scenarios
-    cors_origins: list[str]
+# Conceptual — actual schema lands in P0b
+class FederatedPeer(Base):
+    peer_id: UUID
+    auth_mode: Literal["local_keypair", "ca_cert"]
+    public_key: Optional[bytes]      # populated when auth_mode == "local_keypair"
+    cert_pem: Optional[bytes]         # populated when auth_mode == "ca_cert"
+    cert_revoked_at: Optional[datetime]  # populated by CA revocation events
+    # ... other fields
 ```
 
-### Scenario A (laptop) defaults
+This means Scenario T instances (which always use `local_keypair` mode for sovereignty reasons) remain fully federatable with non-T instances that adopted the CA. The peer relationship records which auth mode is used; both code paths execute as needed.
+
+**Migration trigger** (recorded as B-FED-1 in todo.md): "Investigate central CA approach for federation peer authentication. Triggered when federation membership exceeds 5 instances OR when a peer revocation event becomes necessary. CA implementation deferred to P1 or P2."
+
+### 6. Migration → seed data overwrite
+
+**Decision:** Option (b). `jackpot init` generates `instances/<name>/seed.sql` for the operator to apply via `jackpot init bootstrap`.
+
+**Rationale:** The right layering is Alembic owns schema (DDL, Critical Rule 2); seed scripts own initial data (DML); `jackpot init` owns operator-config (which seeds to apply, with what operator names). Option (a) — `jackpot init` directly UPDATEs the DB — couples the CLI to migration internals, breaks atomicity if interrupted, and violates the layering. Option (c) — leave examples in place for operator UI rename — fails for production deploys (operator forgets, ships with "Example Org") and doesn't update audit logs or historical references.
+
+**Implementation** (`cli/jackpot/init/writers.py`):
 
 ```python
-ScenarioDefaults(
-    deletion_on_request=False,        # local-only; no consent flow
-    auto_publish_to_insdc=False,
-    federation_enabled=False,
-    dlp_enabled=False,
-    scheduler_enabled=True,
-    compose_profile="laptop",
-    replica_count=1,
-    storage_backend="minio",
-    pipeline_executor="local",
-    auth_method="mock",
-    oauth_provider=None,
-    database_engine="postgres-local",
-    database_pitr_enabled=False,
-    database_backup_retention_days=0,
-    federation_role="off",
-    federation_peers=[],
-    care_principles_enforced=False,
-    consent_workflow_enabled=False,
-)
+def write_seed_sql(scenario: ScenarioDefaults, instance_dir: Path) -> None:
+    """Generate idempotent seed SQL for the operator to apply post-alembic."""
+    seed_sql = textwrap.dedent(f"""
+        -- Generated by `jackpot init` on {datetime.now(timezone.utc).isoformat()}
+        -- Scenario: {scenario.name}
+        -- Apply with: psql -f {instance_dir}/seed.sql
+        --   or via:  jackpot init bootstrap
+
+        UPDATE organizations
+        SET name = '{scenario.host_organization_name}',
+            display_name = '{scenario.host_organization_display_name}'
+        WHERE name = 'Example Org';
+
+        UPDATE labs
+        SET name = '{scenario.host_lab_name}'
+        WHERE name = 'Example Lab';
+
+        -- ... etc
+    """)
+    (instance_dir / "seed.sql").write_text(seed_sql)
 ```
 
-### Scenario B (single-org cloud) defaults
-
-Same as A but: `replica_count=2`, `storage_backend="gcs"`,
-`pipeline_executor="gcp_batch"`, `auth_method="oauth"`,
-`oauth_provider="google"`, `database_engine="cloud-sql"`,
-`database_pitr_enabled=True`, `database_backup_retention_days=14`,
-`dlp_enabled=True`.
-
-### Scenario C (multi-lab agency) defaults
-
-Same as B but: `replica_count=3`, `database_backup_retention_days=30`,
-prompts for additional `lab_count` and `default_lab_director_email`
-(seed data the operator can later edit).
-
-### Scenario D (hosted SaaS) defaults
-
-Same as C but: `compose_profile="multi-tenant"`, `auth_method="sso"`,
-multi-tenancy middleware enabled (P0c gate must be lifted before this
-scenario is bootstrap-able), `replica_count=5`, billing module enabled
-(once 7 stub routers from review_log item 17 ship).
-
-### Scenario E (federation member) defaults
-
-Same as B (or C if multi-lab) but: `federation_enabled=True`,
-`federation_role="member"` (operator chooses "hub" if running a TEC),
-prompts for initial peer list, generates federation-peer keypair.
-
-### Scenario F (CI test) defaults
+**`jackpot init bootstrap` orchestrates:**
 
 ```python
-ScenarioDefaults(
-    deletion_on_request=False,
-    auto_publish_to_insdc=False,
-    federation_enabled=False,
-    dlp_enabled=False,
-    scheduler_enabled=False,         # no APScheduler in CI
-    compose_profile="ci",
-    replica_count=1,
-    storage_backend="local",         # filesystem; no MinIO container needed
-    pipeline_executor="local",
-    auth_method="mock",
-    oauth_provider=None,
-    database_engine="postgres-local",
-    database_pitr_enabled=False,
-    database_backup_retention_days=0,
-    federation_role="off",
-    federation_peers=[],
-    care_principles_enforced=False,
-    consent_workflow_enabled=False,
-    host_organization_name="CI Test Org",
-    host_organization_email="ci@example.org",
-    deployment_url="http://localhost:8000",
-    cors_origins=["http://localhost:8501"],
-)
+def bootstrap(instance_dir: Path) -> None:
+    """Apply alembic migrations + seed.sql + run validation."""
+    run("alembic", "upgrade", "head", env=instance_dir / ".env.local")
+    run("psql", "-f", str(instance_dir / "seed.sql"))
+    run("jackpot", "init", "validate", "--instance", instance_dir.name)
 ```
 
-CI deploy must work with `jackpot init --scenario F --non-interactive`
-and zero further input. This is the reproducible-tests-from-fresh-
-clone path.
+**Production scenario guard:** For scenarios B, C, D, E, T — Option C ("leave examples in place") is FORBIDDEN. The CLI refuses to bootstrap a production-ish scenario without operator names provided. Scenario A (laptop) MAY proceed with a WARNING when the operator opts to keep examples.
 
-### Scenario T (Tribal-sovereignty) defaults
+### 7. Idempotency
+
+**Decision:** `jackpot init` re-runs preserve secrets by default. Add `--regenerate-secrets` flag with per-secret confirmation prompts when the operator explicitly wants to regenerate.
+
+**Rationale:** Secrets like JWT signing keys, federation private keys, and OAuth client secrets are not safe to silently regenerate. Doing so would invalidate live deployments. But operators do legitimately need to rotate secrets (after a compromise, periodic security policy, etc.), so the capability exists behind an explicit flag.
+
+**Implementation** (`cli/jackpot/init/writers.py`):
 
 ```python
-ScenarioDefaults(
-    deletion_on_request=True,         # CARE Authority-to-Control — REQUIRED
-    auto_publish_to_insdc=False,      # explicit per-sample approval only
-    federation_enabled=False,         # off by default; opt-in only
-    dlp_enabled=True,                 # PII handling on
-    scheduler_enabled=True,
-    compose_profile="laptop",         # or "single-org"; operator picks
-    replica_count=1,
-    storage_backend="local",          # default to on-prem; operator can switch
-    pipeline_executor="local",
-    auth_method="oauth",
-    oauth_provider="google",
-    database_engine="postgres-local",
-    database_pitr_enabled=True,       # data integrity matters
-    database_backup_retention_days=30,
-    federation_role="off",            # operator opts in if applicable
-    federation_peers=[],
-    care_principles_enforced=True,    # extra audit-log events for consent
-    consent_workflow_enabled=True,
-)
+def is_secret_path(path: Path) -> bool:
+    """Detect files that should never be silently overwritten."""
+    return any(part == "secrets" for part in path.parts) or path.name in {
+        "federation_private_key.pem",
+        "jwt_signing_key.txt",
+        "oauth_client_secret.txt",
+    }
+
+def write_with_idempotency_check(
+    path: Path,
+    content: str,
+    *,
+    regenerate_secrets: bool,
+) -> None:
+    if path.exists() and is_secret_path(path):
+        if not regenerate_secrets:
+            return  # silently preserve
+        # Prompt before overwriting
+        if not confirm(f"Regenerate {path}? Existing value will be lost."):
+            return
+    path.write_text(content)
 ```
 
-The Scenario T defaults specifically address the four CARE Principles:
-- **C**ollective benefit: federation off-by-default until operator
-  decides who they trust
-- **A**uthority to control: `deletion_on_request=True` enables the
-  tombstone-and-vacuum path described in `jackpot_cdc_dmi_stlt_overview.md` §7
-- **R**esponsibility: extra audit log events tag every consent grant /
-  withdrawal / derivation
-- **E**thics: no auto-publish to INSDC; explicit per-sample approval
+**`reconfigure` subcommand** (subcommand 5 from the layout) handles "I want to add a new feature to my running instance without reinit" — it reads the existing `jackpot.toml`, computes a diff against current scenario defaults, and writes only the new/changed fields.
 
-## 4. Output artifacts
+### 8. Scenario registry + detector location
 
-`jackpot init configure` writes to a per-instance directory rather than
-overwriting repo files. Default path: `instances/<instance-name>/`
-where instance-name is `local` for laptop, `staging`/`production` for
-cloud, or operator-supplied via `--instance-name`.
+**Decision:** Co-locate scenarios + detector under existing `schema/` workspace member. Both `jackpot_schema/` and `jackpot_scenarios/` become Python packages exposed via `schema/pyproject.toml`. Workspace members list stays at 3 (`backend`, `cli`, `schema`).
+
+**Rationale:** uv workspace members each need their own `pyproject.toml`. Putting `jackpot_scenarios/` inside the existing `schema/` workspace member keeps the workspace structure simple while making scenarios available to backend, CLI, and CI workflows via `from jackpot_scenarios import ...`. If `jackpot_scenarios/` ever needs different dependencies than `jackpot_schema/` (e.g., scenarios need pynacl for keypair gen but schema doesn't), splitting them into separate workspace members later is the right move. For P0e, both are pure Python with pydantic only, so co-location is fine.
+
+**Layout:**
+
+```
+schema/                              ← workspace member (one pyproject.toml)
+├── pyproject.toml                   ← jackpot-schema package, exposes both subpackages
+├── jackpot_schema/                  ← Python package: SCHEMA_YAML_PATH etc.
+│   └── __init__.py
+├── jackpot_scenarios/               ← Python package: scenarios + detector
+│   ├── __init__.py
+│   ├── scenarios.py                 ← ScenarioDefaults pydantic models for A-F+T
+│   ├── detector.py                  ← question-asking logic, returns scenario id
+│   └── versioning.py                ← jackpot.toml schema_version migration logic
+└── tests/
+```
+
+**`schema/pyproject.toml` updates:**
+
+```toml
+[project]
+name = "jackpot-schema"
+# ... existing metadata ...
+dependencies = [
+    "pydantic>=2",
+    "pyyaml",
+    # nothing scenario-specific yet; add when scenarios.py imports anything new
+]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["jackpot_schema*", "jackpot_scenarios*"]
+```
+
+**Cross-consumer access:**
+
+- Backend: `from jackpot_scenarios import ScenarioDefaults, Scenario`
+- CLI: `from jackpot_scenarios.detector import detect`
+- CI workflows: `jackpot init scenario-info F --json` (subprocess, returns JSON for non-Python consumers)
+
+### 9. Versioning of scenario defaults
+
+**Decision:** `schema_version` field in `jackpot.toml`. `jackpot init reconfigure` detects version delta and produces a migration plan.
+
+**Rationale:** When JACKPOT 5.1 ships and Scenario T defaults change (new mandatory CARE Principle field, etc.), existing instances need a way to know they're on an older schema. Same pattern as `alembic upgrade` for the DB.
+
+**`jackpot.toml` shape:**
+
+```toml
+[meta]
+schema_version = "1.0"
+created_at = "2026-05-15T08:32:00Z"
+created_by_jackpot_version = "5.0.0"
+last_reconfigured_at = "2026-05-15T08:32:00Z"
+
+[scenario]
+name = "T"
+defaults = "tribal_sovereignty"
+
+[operator]
+host_organization_name = "Example Tribal Health Department"
+# ... etc
+```
+
+**Reconfigure flow:**
+
+```bash
+jackpot init reconfigure --instance my-tribal-instance
+# Output:
+#   Detected jackpot.toml schema_version: 1.0
+#   Current jackpot scenario schema_version: 1.2
+#
+#   Changes between 1.0 and 1.2:
+#     ADDED:    care_principle_consent_workflow_required (default: true for Scenario T)
+#     ADDED:    federation_peer_revocation_endpoint (default: null)
+#     DEPRECATED: legacy_admin_email (replaced by audit_admin_email)
+#
+#   Apply these changes? [Y/n]
+```
+
+**`schema/jackpot_scenarios/versioning.py`** holds the version-to-version migration logic. Each scenario's `ScenarioDefaults` model gets a `_schema_version: ClassVar[str]` field. When reconfigure runs, it loads the existing values, applies the migration functions in order (1.0 → 1.1 → 1.2), and writes the result.
+
+### Bonus — Federation gradual opt-in
+
+**Decision:** `jackpot init reconfigure --enable-federation` adds federation to an existing instance without re-init.
+
+**Rationale:** Scenarios B and C are typically not federation participants today, but might want to be eventually. Forcing a full re-init when an operator decides to federate is bad UX.
+
+**Behavior:**
+
+- Generates federation keypair if one doesn't exist
+- Adds the relevant compose profile to `COMPOSE_PROFILES` env var
+- Seeds the empty `federated_peers` table (operators add real peers via the admin UI later)
+- Updates `jackpot.toml` `[scenario]` block to record the federation opt-in
+
+Existing operator config is preserved; only the federation-specific fields are added.
+
+---
+
+## Subcommand layout
+
+Final shape:
+
+```
+jackpot init                        # default: runs detect, configure, bootstrap, validate in sequence
+jackpot init detect                 # B-STLT-4: ask 4-5 questions, propose scenario
+jackpot init configure              # generate instance dir + write all files (no DB changes)
+jackpot init bootstrap              # alembic upgrade head + apply seed.sql + sanity check
+jackpot init validate               # health checks against running stack
+jackpot init reconfigure            # update existing instance for schema_version delta or new feature opt-in
+jackpot init scenario-info <X>      # print canonical defaults for scenario X (--json for machine-readable)
+```
+
+---
+
+## File output contract
+
+For instance `<name>` of scenario `<S>`:
 
 ```
 instances/<name>/
-├── jackpot.toml            Resolved scenario + operator config
-├── .env.local              Local-dev env vars (gitignored)
-├── values.local.yaml       Helm values overrides (gitignored)
-├── seed.sql                Operator-customized seed data (DROP+REINSERT after alembic)
-├── secrets/
-│   ├── jwt-signing-key     Generated 32-byte hex
-│   └── README.md           Lists what other secrets the operator must
-│                           create in Secret Manager / vault
-└── README.md               How to use this instance directory
+├── jackpot.toml                    # canonical instance config (committed for instances/ci/, gitignored otherwise)
+├── .env.local                      # docker-compose env vars (COMPOSE_PROFILES, secrets references)
+├── values.local.yaml               # Helm values overlay (used for scenarios B/C/D/E/T deploys)
+├── seed.sql                        # idempotent SQL to apply after alembic upgrade head
+├── secrets/                        # 0700 perms; gitignored except for ci/ where contents are synthetic-only
+│   ├── federation_private_key.pem  # only for E + T scenarios; 0600
+│   ├── federation_public_key.pem   # the public counterpart, 0644
+│   ├── jwt_signing_key.txt         # 0600
+│   └── oauth_client_secret.txt     # 0600 (only when auth_mode == "real_oauth")
+└── README.md                       # auto-generated: what scenario this is, when it was created, how to bootstrap
 ```
 
-`instances/` itself is in `.gitignore`. Operators commit their own
-instance configs to a private branch or out-of-band repo.
+---
 
-For Scenario F (CI), `jackpot init --scenario F` writes to
-`instances/ci/` and the CI workflow checks it in (so CI runs are
-reproducible). Operators should NOT commit `instances/local/` or
-`instances/staging/`.
+## Cross-references
 
-## 5. Rerun semantics
+- `docs/CLAUDE.md` — Critical Rule 55 (operator-agnostic), Critical Rule 56 (instances/ci/ no-secrets)
+- `docs/jackpot_cdc_dmi_stlt_overview.md` — Section 6 (Scenario T defaults), Section 8 (TEC federation)
+- `docs/governance/care-principles-and-tribal-data-sovereignty.md` — Scenario T behavioral requirements
+- `todo.md` — B-STLT-4 (scenario detector), B-FED-1 (deferred central-CA federation)
+- `docs/review_log.md` — Phase 22 action items 9 (CLI Rule 55), 11 (inherited Rule 55), 14 (spec drift)
 
-`jackpot init` detects existing `instances/<name>/jackpot.toml` and
-offers three paths:
+---
 
-1. **Reuse** (default if non-interactive): exit 0, do nothing.
-2. **Reconfigure**: rerun `configure` preserving the existing
-   `secrets/` directory and the operator-supplied identity values
-   (host_organization_name, deployment_url). Useful for changing
-   replica counts or adding federation peers.
-3. **Reset**: delete `instances/<name>/` and start fresh. Requires an
-   explicit `--reset --i-mean-it` flag because secrets get regenerated.
+## Implementation phases
 
-`jackpot init reconfigure` skips the detector and goes straight to the
-configure phase, reading scenario from the existing `jackpot.toml`.
+P0e Phase B from the kickoff prompt:
 
-## 6. Scenario T defaults — design rationale
-
-The sovereignty-aware defaults must be *defaults*, not options the
-operator has to discover. A Tribal IT staffer running `jackpot init`
-should not need to read the CARE Principles primer to enable basic
-consent-aware behaviour — it should be on out of the box.
-
-Specifically:
-
-- `deletion_on_request=True` triggers the schema column
-  `samples.deletion_status` (added in P0b/c) and enables the tombstone-
-  and-vacuum job. **Note: the schema column doesn't yet exist** — P0b
-  must land before Scenario T is fully bootstrap-able. `jackpot init
-  --scenario T` should warn that "Tribal sovereignty deletion paths
-  require P0b schema additions; some features will be unavailable
-  until the schema migration runs."
-- `auto_publish_to_insdc=False` requires the operator to explicitly
-  approve each sample for INSDC submission. Adds a column to the
-  pre-publish UI flow.
-- `federation_enabled=False` keeps the federation router unavailable
-  until the operator opts in via `jackpot init reconfigure --enable-
-  federation`.
-- `consent_workflow_enabled=True` adds a "consent grant" record at
-  sample creation (existing user-supplied), and a "consent withdrawal"
-  workflow that triggers the deletion path.
-
-These defaults are operator-overrideable, but the defaults match the
-guidance in `governance/care-principles-and-tribal-data-sovereignty.md`
-and the design in `jackpot_cdc_dmi_stlt_overview.md` §7.
-
-## 7. Scenario F (CI test) — design rationale
-
-Must be runnable by GitHub Actions with one command and no operator
-input. Specifically:
-
-```bash
-git clone https://github.com/Midnight-Oil-Innovation/jackpot
-cd jackpot
-uv sync
-uv run jackpot init --scenario F --non-interactive
-docker compose up -d
-uv run pytest
-```
-
-That's the entire CI bootstrap. The `instances/ci/` directory ships in
-the repo (not gitignored for the `ci/` subdirectory) so CI is
-reproducible; the rest of `instances/` is gitignored.
-
-The Scenario F defaults turn off everything the test suite doesn't
-need:
-- No DLP scanning (slow, requires GCP creds)
-- No NCBI/GISAID submission paths (out of scope for unit + integration
-  tests)
-- No federation
-- No scheduler (tests control time via freezegun)
-- Filesystem storage (no MinIO container — fewer Docker layers)
-- Mock auth (no OAuth flow needed)
-
-## 8. Implementation skeleton
-
-`cli/jackpot/init/` (new package):
-
-```
-cli/jackpot/init/
-├── __init__.py
-├── scenarios.py        ScenarioDefaults Pydantic model + 7-scenario registry
-├── detector.py         Scenario detector (B-STLT-4): question logic
-├── writers.py          Emits .env.local, values.local.yaml, seed.sql
-├── secrets.py          Generates JWT signing key + lists vault entries needed
-├── validator.py        Runs post-bootstrap /health + sanity checks
-└── prompts.py          Reusable click.prompt wrappers with consistent UX
-```
-
-`cli/jackpot/cli/init.py` (new module):
-
-```python
-import click
-from jackpot.init import scenarios, detector, writers, secrets, validator
-
-@click.group()
-def init():
-    """Bootstrap a JACKPOT instance for a chosen install scenario."""
-
-@init.command()
-@click.option("--scenario", type=click.Choice([s.code for s in scenarios.ALL]))
-@click.option("--non-interactive", is_flag=True)
-@click.option("--instance-name", default="local")
-def detect_cmd(scenario, non_interactive, instance_name):
-    ...
-
-@init.command("configure")
-def configure_cmd(...):
-    ...
-
-# etc.
-
-# Wired up from cli/jackpot/cli/main.py:
-# cli.add_command(init)
-```
-
-## 9. Tests
-
-Each scenario gets at least one end-to-end test that runs `jackpot
-init --scenario X --non-interactive` and asserts:
-
-- `instances/X/jackpot.toml` exists with the right scenario marker
-- `instances/X/.env.local` exists and contains all env vars the
-  scenario requires (no hardcoded fallback values)
-- `instances/X/values.local.yaml` exists and contains operator-
-  specific values from the scenario defaults
-
-For the bootstrap path (Scenario A and F), additional tests:
-- `docker compose up -d` succeeds (CI only — uses testcontainers
-  pattern from existing `tests/conftest.py`)
-- `curl http://localhost:8000/health` returns 200
-- The seeded admin user can log in (mock auth)
-
-The B-STLT-4 detector gets unit tests for each branch of its question
-logic (trial answers → expected scenario inference).
-
-Coverage target for `cli/jackpot/init/`: 85%+.
-
-## 10. Documentation
-
-After implementation:
-
-- New: `docs/install/quickstart.md` — "your first 10 minutes with
-  JACKPOT" using `jackpot init --scenario A`
-- Update: each `docs/deploy/stlt/*.md` to reference `jackpot init
-  --scenario <X>` as the standard install path
-- Update: `README.md` "Development" section to use `jackpot init`
-  rather than the manual edit-values + docker compose dance
-- New: `cli/jackpot/init/README.md` developer-facing docs for adding a
-  new scenario or a new question to the detector
-
-## 11. Phasing within P0e
-
-`jackpot init` lands in this order:
-
-1. **B.2.1** — `cli/jackpot/init/scenarios.py` registry only. No CLI
-   wiring yet. Tests for the 7-scenario data structure.
-2. **B.2.2** — `cli/jackpot/init/detector.py` + `cli/jackpot/cli/init.py
-   detect_cmd`. The CLI starts to do something visible.
-3. **B.2.3** — `cli/jackpot/init/writers.py` + `configure_cmd`.
-   Operators can now generate config files.
-4. **B.2.4** — `cli/jackpot/init/secrets.py` + secret generation.
-5. **B.2.5** — `cli/jackpot/init/validator.py` + `bootstrap_cmd` +
-   `validate_cmd`. End-to-end bootstrap works for Scenario A.
-6. **B.2.6** — Wire `bootstrap_cmd` for Scenarios B, C, F. Skip D
-   (gated on P0c multi-tenancy), E (gated on federation router which
-   doesn't exist), T (gated on P0b sovereignty schema).
-7. **B.3** — Tests.
-8. **B.4** — Documentation.
-
-## 12. Open questions for review
-
-The following are unresolved design points that need Glen's input
-before implementation begins:
-
-1. **Instance directory location.** `instances/<name>/` at repo root,
-   or `~/.jackpot/instances/<name>/` (XDG-style)? Repo root is more
-   discoverable and lets the CI path work cleanly; XDG is more
-   conventional for CLI tools.
-
-2. **Compose profile mechanism.** Does the existing `docker-compose.yml`
-   need a `profiles:` section so we can `docker compose --profile
-   laptop up` vs `--profile ci up`? Or do we generate per-scenario
-   compose files in `instances/<name>/docker-compose.yml`? Generating
-   feels closer to the per-instance config pattern but means the canonical
-   compose file diverges across scenarios.
-
-3. **Reading from existing values-staging.yaml.** Phase A landed the
-   workflow plumbing operator vars from `${{ vars.* }}` for staging.
-   Should `jackpot init configure` understand existing GitHub Actions
-   environment vars (read via `gh api` or required vars file)? Or is
-   the operator expected to type them in fresh during init? Type-in is
-   simpler; gh-API integration is more powerful but pulls in a `gh`
-   CLI dependency.
-
-4. **The `instances/ci/` commit-or-don't decision.** If `instances/ci/`
-   ships in the repo, contributors get reproducible CI. But it pins
-   the CI scenario to F forever; switching CI to a different scenario
-   later means a repo edit. The flexibility may not matter — F is the
-   right CI scenario indefinitely.
-
-5. **Federation peer keypair generation.** Scenario E needs operator
-   keypairs for signing federation messages. Generated locally (less
-   trust, easier ops) or via a centralized federation-CA (more trust,
-   harder ops)? Could defer to a Phase E follow-up but Scenario E's
-   bootstrap path becomes incomplete without it.
-
-6. **Migration → seed data interaction.** Per A.3, the baseline
-   migration now seeds operator-agnostic Example Org / Example Lab.
-   Should `jackpot init` immediately overwrite those with operator-
-   specific values via UPDATE, or generate `seed.sql` for the
-   operator to apply via `psql`, or just leave the example values in
-   place and let the operator rename via the UI later? The "leave it
-   for UI" path is simplest for operators but means the seeded admin
-   user is `admin@example.org` until they rename.
-
-Glen's call on each before B.2 begins.
+1. **B.1 — Design lockdown** (this document, COMPLETE 2026-05-01)
+2. **B.2 — Implementation:**
+   - `schema/jackpot_scenarios/` workspace setup (Decision 8)
+   - `cli/jackpot/init/` command modules
+   - Compose refactor with profiles (Decision 2)
+   - `instances/.gitignore` + Critical Rule 56 enforcement (Decision 4)
+3. **B.3 — Tests** — at least one end-to-end test per scenario, B-STLT-4 detector unit tests, idempotency re-run tests
+4. **B.4 — Documentation** — install quickstart, deploy guides per scenario, README updates
