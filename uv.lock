@@ -1330,6 +1330,7 @@ dev = [
     { name = "pytest" },
     { name = "pytest-asyncio" },
     { name = "pytest-cov" },
+    { name = "pytest-httpx" },
     { name = "respx" },
     { name = "ruff" },
     { name = "testcontainers" },
@@ -1376,9 +1377,10 @@ dev = [
     { name = "pytest", specifier = "==8.2.0" },
     { name = "pytest-asyncio", specifier = "==0.23.7" },
     { name = "pytest-cov", specifier = "==5.0.0" },
+    { name = "pytest-httpx", specifier = ">=0.30.0" },
     { name = "respx", specifier = "==0.21.1" },
     { name = "ruff", specifier = "==0.4.4" },
-    { name = "testcontainers", specifier = "==4.5.1" },
+    { name = "testcontainers", extras = ["postgres"], specifier = "==4.5.1" },
     { name = "types-pyyaml", specifier = ">=6.0.12.20250915" },
 ]
 
