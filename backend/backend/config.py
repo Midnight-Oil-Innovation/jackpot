@@ -53,6 +53,19 @@ class Settings(BaseSettings):
     verification_consecutive_failures_to_break: int = 3
     verification_re_fingerprint: bool = False
 
+    # Phase P0f F-9: promote_file_storage one-shot job
+    # managed_storage_root has no default — operators must set it at
+    # deployment time. Failure to configure surfaces at job execution
+    # time as a clear error rather than silently dropping bytes into
+    # the wrong location. Examples:
+    #   gs://jackpot-managed
+    #   s3://jackpot-managed
+    #   file:///srv/jackpot/managed
+    managed_storage_root: str = ""
+    promote_chunk_size_mb: int = 8
+    promote_max_seconds_per_job: int = 3600
+    promote_verify_hash: bool = True
+
     @field_validator("cors_origins", mode="before")
     @classmethod
     def _parse_cors_origins(cls, v: object) -> list[str]:

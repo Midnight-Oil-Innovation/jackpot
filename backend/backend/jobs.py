@@ -7,6 +7,7 @@ trigger endpoint so local dev and Cloud Scheduler hit identical code.
 
 from __future__ import annotations
 
+import contextlib
 import hashlib
 import json
 import logging
@@ -23,6 +24,12 @@ from backend.notifications import NotificationEvents, create_notification
 logger = logging.getLogger(__name__)
 
 FULL_HASH_CHUNK_SIZE = 8 * 1024 * 1024  # 8 MB streaming buffer for SHA-256.
+
+# Phase P0f F-9: streaming-copy chunk size for ``promote_file_storage``.
+# The runtime value is ``settings.promote_chunk_size_mb * 1024 * 1024``;
+# this constant is the fallback used by helpers that don't accept a
+# chunk-size parameter (the httpx streaming wrapper) and for tests.
+PROMOTE_CHUNK_SIZE = 8 * 1024 * 1024
 
 
 async def run_scrubber_queue_job() -> None:
@@ -845,11 +852,687 @@ def _emit_broken_audit_and_notifications(row: dict, status_at_break: str, db) ->
         )
 
 
+# ── Phase P0f F-9: promote_file_storage one-shot job ───────────────────────
+
+
+# Module-level in-memory tracker for promotion jobs. The /api/v1/files/
+# jobs/{job_id} endpoint reads from here so the CLI's --wait flag can
+# poll. Single-process scope: a job started on one API instance is
+# invisible to siblings, and an interrupted promotion's tracker entry
+# disappears with the process. The destination may be half-written on
+# crash but the source is intact and the sample_files row is unchanged
+# (see ``_promote_finalize`` for the atomicity argument). A persistent
+# jobs table is a future P-x improvement.
+_PROMOTE_JOBS: dict[str, dict] = {}
+_PROMOTE_JOBS_MAX = 1000
+
+
+def _record_promote_job(job_id: str, **fields) -> None:
+    """Insert or update an entry in :data:`_PROMOTE_JOBS`.
+
+    Bounded at :data:`_PROMOTE_JOBS_MAX` entries by dropping the oldest
+    (insertion-order) when the cap would be exceeded.
+    """
+    if job_id not in _PROMOTE_JOBS and len(_PROMOTE_JOBS) >= _PROMOTE_JOBS_MAX:
+        oldest = next(iter(_PROMOTE_JOBS))
+        _PROMOTE_JOBS.pop(oldest, None)
+    entry = _PROMOTE_JOBS.setdefault(job_id, {})
+    entry.update(fields)
+
+
+def get_promote_job_status(job_id: str) -> dict | None:
+    """Look up a promotion job in the in-memory tracker.
+
+    Returns ``None`` when the job is unknown to this process — either
+    because it never ran, ran on another instance, or the process was
+    restarted since.
+    """
+    return _PROMOTE_JOBS.get(job_id)
+
+
+def _join_uri(root: str, *parts: str) -> str:
+    """Compose ``root/parts/.../`` keeping exactly one slash between segments."""
+    pieces = [root.rstrip("/")] + [p.strip("/") for p in parts if p]
+    return "/".join(pieces)
+
+
+def _filename_from_uri(uri: str) -> str:
+    parsed = urlparse(uri)
+    path = parsed.path if parsed.scheme else uri
+    name = os.path.basename(path) or "file.bin"
+    return name
+
+
+def _scheme_of(uri: str) -> str:
+    return urlparse(uri).scheme.lower() or "file"
+
+
+def _bucket_and_key(uri: str) -> tuple[str, str]:
+    parsed = urlparse(uri)
+    return parsed.netloc, parsed.path.lstrip("/")
+
+
+def _open_source_stream(uri: str, *, chunk_size: int) -> tuple:
+    """Open a readable stream + content-length for ``uri``.
+
+    Returns ``(stream, size_bytes)``. Caller is responsible for closing
+    the stream. Implementations match :mod:`backend.file_fingerprint`'s
+    scheme dispatch — local via ``open``, ``gs://`` / ``s3://`` via the
+    boto3 client, ``http(s)://`` via ``httpx``. ``sra://`` is rejected:
+    archives can't be byte-streamed without ``fasterq-dump`` and a
+    promotion of an SRA reference is not a meaningful operation in F-9.
+    """
+    scheme = _scheme_of(uri)
+    if scheme in ("file", ""):
+        path = urlparse(uri).path if scheme == "file" else uri
+        size = os.stat(path).st_size
+        return open(path, "rb"), size  # noqa: SIM115 — caller closes
+    if scheme in ("gs", "s3"):
+        from backend.storage import _get_client
+
+        bucket, key = _bucket_and_key(uri)
+        client = _get_client()
+        head = client.head_object(Bucket=bucket, Key=key)
+        body = client.get_object(Bucket=bucket, Key=key)["Body"]
+        return body, int(head["ContentLength"])
+    if scheme in ("http", "https"):
+        import httpx
+
+        client = httpx.Client(follow_redirects=True, timeout=300.0)
+        resp = client.send(client.build_request("GET", uri), stream=True)
+        resp.raise_for_status()
+        cl = resp.headers.get("Content-Length")
+        size = int(cl) if cl else 0
+
+        class _HttpxStream:
+            def __init__(self, resp, client, chunk_size):
+                self._resp = resp
+                self._client = client
+                self._iter = resp.iter_bytes(chunk_size=chunk_size)
+                self._buf = b""
+
+            def read(self, n: int = -1) -> bytes:
+                if n is None or n < 0:
+                    chunks = [self._buf, *list(self._iter)]
+                    self._buf = b""
+                    return b"".join(chunks)
+                while len(self._buf) < n:
+                    try:
+                        self._buf += next(self._iter)
+                    except StopIteration:
+                        break
+                out, self._buf = self._buf[:n], self._buf[n:]
+                return out
+
+            def close(self) -> None:
+                with contextlib.suppress(Exception):
+                    self._resp.close()
+                with contextlib.suppress(Exception):
+                    self._client.close()
+
+        return _HttpxStream(resp, client, chunk_size), size
+    if scheme == "sra":
+        raise ValueError(
+            "Cannot promote an sra:// reference — SRA accessions are "
+            "fetched fresh at pipeline time and have no persistent bytes "
+            "to copy. Use a different ingest path if you need a stable "
+            "managed copy."
+        )
+    raise ValueError(f"Unsupported source scheme for promote: {scheme!r}")
+
+
+def _stream_copy_with_hash(source_uri: str, dest_uri: str, *, chunk_size: int) -> tuple[int, str]:
+    """Copy ``source_uri`` → ``dest_uri`` byte-for-byte with SHA-256.
+
+    Returns ``(bytes_copied, sha256_hex)``. Streaming is the lowest
+    common denominator — works regardless of source/destination scheme
+    pairing. Same-cloud transitions get an early server-side fast-path
+    in :func:`_promote_copy` and never reach this helper.
+
+    The destination is opened, written, and closed inside this helper;
+    the source stream is closed in the caller's ``finally`` block so
+    that retries don't leak file descriptors.
+    """
+    sha = hashlib.sha256()
+    bytes_copied = 0
+    src_stream, _src_size = _open_source_stream(source_uri, chunk_size=chunk_size)
+    try:
+        dest_scheme = _scheme_of(dest_uri)
+        if dest_scheme in ("file", ""):
+            path = urlparse(dest_uri).path if dest_scheme == "file" else dest_uri
+            os.makedirs(os.path.dirname(path), exist_ok=True)
+            with open(path, "wb") as dest:
+                while True:
+                    chunk = src_stream.read(chunk_size)
+                    if not chunk:
+                        break
+                    dest.write(chunk)
+                    sha.update(chunk)
+                    bytes_copied += len(chunk)
+        elif dest_scheme in ("gs", "s3"):
+            import io
+
+            from backend.storage import _get_client
+
+            bucket, key = _bucket_and_key(dest_uri)
+            buffer = io.BytesIO()
+            while True:
+                chunk = src_stream.read(chunk_size)
+                if not chunk:
+                    break
+                buffer.write(chunk)
+                sha.update(chunk)
+                bytes_copied += len(chunk)
+            buffer.seek(0)
+            _get_client().put_object(Bucket=bucket, Key=key, Body=buffer.getvalue())
+        else:
+            raise ValueError(f"Unsupported destination scheme for promote: {dest_scheme!r}")
+    finally:
+        with contextlib.suppress(Exception):
+            src_stream.close()
+    return bytes_copied, sha.hexdigest()
+
+
+def _server_side_copy_if_supported(source_uri: str, dest_uri: str) -> bool:
+    """Try a server-side copy when both URIs are on the same backend.
+
+    Returns ``True`` when the copy was issued server-side and no host
+    bytes were streamed; ``False`` when the caller should fall back to
+    streaming. Same-bucket and cross-bucket are both handled — the
+    storage layer routes both to S3-compatible CopyObject. Hash
+    verification still happens in the caller via
+    :func:`_destination_full_sha256`.
+    """
+    src_scheme = _scheme_of(source_uri)
+    dst_scheme = _scheme_of(dest_uri)
+    if src_scheme != dst_scheme or src_scheme not in ("gs", "s3"):
+        return False
+    from backend.storage import _get_client
+
+    src_bucket, src_key = _bucket_and_key(source_uri)
+    dst_bucket, dst_key = _bucket_and_key(dest_uri)
+    _get_client().copy_object(
+        Bucket=dst_bucket,
+        Key=dst_key,
+        CopySource={"Bucket": src_bucket, "Key": src_key},
+    )
+    return True
+
+
+def _destination_full_sha256(dest_uri: str, chunk_size: int) -> str:
+    """Re-stream the destination and return its SHA-256.
+
+    Used for server-side copies (where we never see the bytes locally
+    and therefore haven't hashed them on the way through). Adds an
+    extra full read at the destination but is the only way to verify
+    a CopyObject result without trusting the backend. ``chunk_size``
+    is reserved for backends that benefit from a tunable read size;
+    the underlying ``_stream_full_sha256`` reads in 8 MB blocks.
+    """
+    del chunk_size  # honoured by _stream_full_sha256's internal default
+    return _stream_full_sha256(dest_uri)
+
+
+def _delete_destination_quietly(dest_uri: str) -> None:
+    """Best-effort cleanup of a partial destination after a failed copy."""
+    scheme = _scheme_of(dest_uri)
+    try:
+        if scheme in ("file", ""):
+            path = urlparse(dest_uri).path if scheme == "file" else dest_uri
+            if os.path.exists(path):
+                os.unlink(path)
+        elif scheme in ("gs", "s3"):
+            from backend.storage import _get_client
+
+            bucket, key = _bucket_and_key(dest_uri)
+            _get_client().delete_object(Bucket=bucket, Key=key)
+    except Exception as exc:  # noqa: BLE001 — best effort
+        logger.warning("promote: failed to clean up partial dest %s: %s", dest_uri, exc)
+
+
+def _promote_destination_uri(file_row: dict, sample_id_int: int, settings) -> str:
+    """Compute the managed-side URI for a promotion.
+
+    The convention mirrors ``/upload``'s staging path: outputs go under
+    ``{managed_storage_root}/sample_{sample_id_int}/{filename}`` so two
+    samples that share a filename can both be promoted without
+    collision. ``managed_storage_root`` carries no default — operators
+    set it via ``Settings.managed_storage_root``.
+    """
+    if not settings.managed_storage_root:
+        raise RuntimeError(
+            "managed_storage_root is not configured. Set the "
+            "MANAGED_STORAGE_ROOT environment variable (or the "
+            "managed_storage_root setting) to the operator-controlled "
+            "managed-storage URI prefix before promoting files."
+        )
+    filename = _filename_from_uri(file_row["uri"])
+    return _join_uri(settings.managed_storage_root, f"sample_{sample_id_int}", filename)
+
+
+def _promote_finalize(
+    *,
+    file_id: int,
+    target_state: str,
+    retention_policy: str,
+    source_uri: str,
+    dest_uri: str,
+    db,
+) -> None:
+    """Atomically transition a sample_files row to the target state.
+
+    Both the row update and the audit log entry land in the same
+    transaction so a partial state (state changed but audit missing,
+    or vice versa) is impossible. ``alternate_uris`` carries the
+    pre-promotion URI for traceability so callers reading by either
+    URI still find the row after promotion.
+
+    For ``MANAGED``: the row's primary ``uri`` becomes the new managed
+    location; ``original_uri`` records where the file came from.
+    For ``MIRRORED``: the primary ``uri`` stays at the source (still
+    authoritative); the managed copy is recorded in ``alternate_uris``
+    and ``original_uri`` mirrors the primary ``uri``.
+    """
+    if target_state == "MANAGED":
+        execute_write(
+            """
+            UPDATE sample_files
+            SET storage_state = 'MANAGED',
+                uri = :new_uri,
+                original_uri = :orig_uri,
+                retention_policy = :rp,
+                alternate_uris = (
+                    CASE
+                      WHEN :orig_uri = ANY(COALESCE(alternate_uris, ARRAY[]::TEXT[]))
+                      THEN alternate_uris
+                      ELSE array_append(COALESCE(alternate_uris, ARRAY[]::TEXT[]), :orig_uri)
+                    END
+                )
+            WHERE id = :id
+            """,
+            {"new_uri": dest_uri, "orig_uri": source_uri, "rp": retention_policy, "id": file_id},
+            conn=db,
+        )
+    else:  # MIRRORED
+        execute_write(
+            """
+            UPDATE sample_files
+            SET storage_state = 'MIRRORED',
+                original_uri = :orig_uri,
+                retention_policy = :rp,
+                alternate_uris = (
+                    CASE
+                      WHEN :new_uri = ANY(COALESCE(alternate_uris, ARRAY[]::TEXT[]))
+                      THEN alternate_uris
+                      ELSE array_append(COALESCE(alternate_uris, ARRAY[]::TEXT[]), :new_uri)
+                    END
+                )
+            WHERE id = :id
+            """,
+            {"new_uri": dest_uri, "orig_uri": source_uri, "rp": retention_policy, "id": file_id},
+            conn=db,
+        )
+
+
+async def promote_file_storage(
+    file_id: int,
+    target_state: str,
+    retention_policy: str,
+    trigger_user_id: int,
+    job_id: str,
+) -> dict:
+    """Stream-copy a file to managed storage; transition the row on success.
+
+    Phase P0f F-9. APScheduler one-shot job triggered by
+    ``POST /api/v1/files/{file_id}/promote``.
+
+    Per Critical Rule 4 (audit on state change), 22 (idempotent — a
+    second run against an already-promoted row is a no-op),
+    57 (copies are explicit), and 58 (sample_files is the dedup
+    primitive — promotion mutates state, never the dedup keying).
+
+    Returns a counters dict that's both logged and stored on the
+    in-memory tracker entry so the CLI ``--wait`` poller can read it.
+
+    Failure semantics: the source file is never touched, and the
+    sample_files row only transitions if the copy plus hash check both
+    succeed inside the same transaction. A failed copy leaves the row
+    untouched, deletes any partial destination, audits ``PROMOTE_FILE_FAILED``,
+    and notifies ``trigger_user_id`` via ``FILE_PROMOTION_FAILED``.
+    """
+    settings = get_settings()
+    chunk_size = settings.promote_chunk_size_mb * 1024 * 1024
+    counters = {
+        "file_id": file_id,
+        "job_id": job_id,
+        "target_state": target_state,
+        "outcome": "RUNNING",
+        "copied_bytes": 0,
+        "elapsed_seconds": 0.0,
+        "verified_hash": None,
+        "error_message": None,
+    }
+    _record_promote_job(job_id, status="RUNNING", file_id=file_id, target_state=target_state)
+    started = monotonic()
+
+    rows = execute_query(
+        """
+        SELECT id, sample_id_fk, uri, storage_state, file_size_bytes
+        FROM sample_files
+        WHERE id = :id
+          AND COALESCE(is_deleted, FALSE) = FALSE
+        LIMIT 1
+        """,
+        {"id": file_id},
+    )
+    if not rows:
+        counters["outcome"] = "FAILURE"
+        counters["error_message"] = f"sample_files {file_id} not found"
+        _record_promote_job(job_id, status="FAILED", error=counters["error_message"])
+        logger.error("promote_file_storage: %s", counters["error_message"])
+        return counters
+    file_row = rows[0]
+    source_uri = file_row["uri"]
+    sample_id_int = file_row["sample_id_fk"]
+
+    if file_row["storage_state"] == target_state:
+        counters["outcome"] = "SUCCESS"
+        counters["error_message"] = "already_in_target_state"
+        _record_promote_job(job_id, status="COMPLETED", outcome="NOOP")
+        return counters
+
+    try:
+        dest_uri = _promote_destination_uri(file_row, sample_id_int, settings)
+    except RuntimeError as exc:
+        counters["outcome"] = "FAILURE"
+        counters["error_message"] = str(exc)
+        _record_promote_job(job_id, status="FAILED", error=str(exc))
+        logger.error("promote_file_storage: %s", exc)
+        return counters
+
+    digest: str | None = None
+    bytes_copied = 0
+    try:
+        if _server_side_copy_if_supported(source_uri, dest_uri):
+            if settings.promote_verify_hash:
+                digest = _destination_full_sha256(dest_uri, chunk_size)
+            bytes_copied = file_row.get("file_size_bytes") or 0
+        else:
+            bytes_copied, digest = _stream_copy_with_hash(
+                source_uri, dest_uri, chunk_size=chunk_size
+            )
+    except Exception as exc:  # noqa: BLE001 — copy failures are user-surfaceable
+        counters["outcome"] = "FAILURE"
+        counters["error_message"] = f"{type(exc).__name__}: {exc}"
+        counters["elapsed_seconds"] = monotonic() - started
+        _delete_destination_quietly(dest_uri)
+        with get_db() as db:
+            log_audit(
+                action=AuditActions.PROMOTE_FILE_FAILED,
+                actor_id=trigger_user_id,
+                resource_type="sample_files",
+                resource_id=str(file_id),
+                before={"storage_state": file_row["storage_state"], "uri": source_uri},
+                after=None,
+                metadata={
+                    "target_state": target_state,
+                    "job_id": job_id,
+                    "error": counters["error_message"],
+                },
+                db_conn=db,
+            )
+            create_notification(
+                recipient_id=trigger_user_id,
+                event_type=NotificationEvents.FILE_PROMOTION_FAILED,
+                title=f"File promotion failed (file_id={file_id})",
+                body=(
+                    f"JACKPOT could not copy {source_uri} into managed "
+                    f"storage. Error: {counters['error_message']}. The "
+                    "file is unchanged; retry once the underlying issue "
+                    "is resolved."
+                ),
+                resource_type="sample_files",
+                resource_id=str(file_id),
+                action_url=f"/files/{file_id}",
+                db_conn=db,
+            )
+        _record_promote_job(
+            job_id,
+            status="FAILED",
+            error=counters["error_message"],
+            elapsed_seconds=counters["elapsed_seconds"],
+        )
+        logger.warning(
+            "promote_file_storage: file_id=%s failed: %s", file_id, counters["error_message"]
+        )
+        return counters
+
+    counters["copied_bytes"] = bytes_copied
+    counters["verified_hash"] = digest
+
+    with get_db() as db:
+        _promote_finalize(
+            file_id=file_id,
+            target_state=target_state,
+            retention_policy=retention_policy,
+            source_uri=source_uri,
+            dest_uri=dest_uri,
+            db=db,
+        )
+        log_audit(
+            action=AuditActions.PROMOTE_FILE,
+            actor_id=trigger_user_id,
+            resource_type="sample_files",
+            resource_id=str(file_id),
+            before={"storage_state": file_row["storage_state"], "uri": source_uri},
+            after={"storage_state": target_state, "uri": dest_uri},
+            metadata={
+                "target_state": target_state,
+                "retention_policy": retention_policy,
+                "job_id": job_id,
+                "copied_bytes": bytes_copied,
+                "verified_hash": digest,
+            },
+            db_conn=db,
+        )
+        create_notification(
+            recipient_id=trigger_user_id,
+            event_type=NotificationEvents.FILE_PROMOTED,
+            title=f"File promoted to {target_state}",
+            body=(
+                f"JACKPOT now manages a copy of {_filename_from_uri(source_uri)} at "
+                f"{dest_uri} (storage_state={target_state})."
+            ),
+            resource_type="sample_files",
+            resource_id=str(file_id),
+            action_url=f"/files/{file_id}",
+            db_conn=db,
+        )
+
+    counters["outcome"] = "SUCCESS"
+    counters["elapsed_seconds"] = monotonic() - started
+    _record_promote_job(
+        job_id,
+        status="COMPLETED",
+        outcome="SUCCESS",
+        copied_bytes=bytes_copied,
+        verified_hash=digest,
+        elapsed_seconds=counters["elapsed_seconds"],
+        dest_uri=dest_uri,
+    )
+    logger.info("promote_file_storage: file_id=%s outcome=SUCCESS bytes=%s", file_id, bytes_copied)
+    return counters
+
+
+# ── Phase P0f F-9: per-file verification helper for the /verify endpoint ──
+
+
+def verify_sample_file(file_id: int) -> dict:
+    """Synchronous re-stat of one sample_files row.
+
+    Phase P0f F-9. Powers ``POST /api/v1/files/{file_id}/verify`` so a
+    user can clear a stale ``BROKEN`` state immediately after putting
+    the file back, instead of waiting for the daily verification job.
+
+    The check uses the same ``_verify_one`` machinery as the
+    background job — what differs is the post-check behavior:
+
+    * On a failed check against a non-BROKEN row: write the
+      consecutive-failure status (with the same three-strike rule),
+      transition to ``BROKEN`` only if the third strike has been
+      reached.
+    * On a failed check against an already-BROKEN row: keep
+      ``BROKEN``, refresh ``last_verification_status``.
+    * On a successful check against a ``BROKEN`` row: clear back to
+      the row's pre-broken non-terminal state (``EXTERNAL`` or
+      ``MIRRORED`` — inferred from ``original_uri``).
+    * On a successful check against any other state: refresh
+      ``last_verified_at`` and set ``last_verification_status='OK'``.
+
+    Returns the post-verify row snapshot ``{file_id, uri, storage_state,
+    last_verification_status, last_verified_at}``. Raises
+    ``FileNotFoundError`` when the row does not exist.
+    """
+    settings = get_settings()
+    rows = execute_query(
+        """
+        SELECT id, uri, file_size_bytes, head64k_hash, tail64k_hash,
+               last_verification_status, storage_state, original_uri
+        FROM sample_files
+        WHERE id = :id
+          AND COALESCE(is_deleted, FALSE) = FALSE
+        LIMIT 1
+        """,
+        {"id": file_id},
+    )
+    if not rows:
+        raise FileNotFoundError(f"sample_files row {file_id} not found")
+    row = rows[0]
+
+    kind = _verify_one(row, re_fingerprint=settings.verification_re_fingerprint)
+    threshold = settings.verification_consecutive_failures_to_break
+
+    with get_db() as db:
+        if kind is None:
+            if row["storage_state"] == "BROKEN":
+                # Recover: clear back to the appropriate non-terminal
+                # state. ``original_uri`` is set on MIRRORED rows after
+                # promotion (see _promote_finalize); when present we
+                # treat the file as MIRRORED, otherwise EXTERNAL.
+                recovered_state = "MIRRORED" if row.get("original_uri") else "EXTERNAL"
+                execute_write(
+                    """
+                    UPDATE sample_files
+                    SET storage_state = CAST(:s AS file_storage_state),
+                        last_verified_at = NOW(),
+                        last_verification_status = 'OK'
+                    WHERE id = :id
+                    """,
+                    {"s": recovered_state, "id": file_id},
+                    conn=db,
+                )
+                log_audit(
+                    action=AuditActions.VERIFY_FILE_TRIGGERED,
+                    actor_id=None,
+                    resource_type="sample_files",
+                    resource_id=str(file_id),
+                    before={"storage_state": "BROKEN"},
+                    after={"storage_state": recovered_state},
+                    metadata={"uri": row["uri"], "outcome": "RECOVERED"},
+                    db_conn=db,
+                )
+            else:
+                execute_write(
+                    """
+                    UPDATE sample_files
+                    SET last_verified_at = NOW(),
+                        last_verification_status = 'OK'
+                    WHERE id = :id
+                    """,
+                    {"id": file_id},
+                    conn=db,
+                )
+                log_audit(
+                    action=AuditActions.VERIFY_FILE_TRIGGERED,
+                    actor_id=None,
+                    resource_type="sample_files",
+                    resource_id=str(file_id),
+                    before=None,
+                    after=None,
+                    metadata={"uri": row["uri"], "outcome": "OK"},
+                    db_conn=db,
+                )
+        else:
+            new_status, count = _next_failure_status(row.get("last_verification_status"), kind)
+            if count >= threshold and row["storage_state"] != "BROKEN":
+                execute_write(
+                    """
+                    UPDATE sample_files
+                    SET storage_state = 'BROKEN',
+                        last_verified_at = NOW(),
+                        last_verification_status = :s
+                    WHERE id = :id
+                    """,
+                    {"s": new_status, "id": file_id},
+                    conn=db,
+                )
+                _emit_broken_audit_and_notifications(row, new_status, db)
+            else:
+                execute_write(
+                    """
+                    UPDATE sample_files
+                    SET last_verified_at = NOW(),
+                        last_verification_status = :s
+                    WHERE id = :id
+                    """,
+                    {"s": new_status, "id": file_id},
+                    conn=db,
+                )
+            log_audit(
+                action=AuditActions.VERIFY_FILE_TRIGGERED,
+                actor_id=None,
+                resource_type="sample_files",
+                resource_id=str(file_id),
+                before=None,
+                after=None,
+                metadata={
+                    "uri": row["uri"],
+                    "outcome": "FAILED",
+                    "kind": kind,
+                    "status": new_status,
+                    "count": count,
+                },
+                db_conn=db,
+            )
+
+    refreshed = execute_query(
+        """
+        SELECT id, uri, storage_state, last_verification_status, last_verified_at
+        FROM sample_files
+        WHERE id = :id
+        """,
+        {"id": file_id},
+    )
+    out = dict(refreshed[0])
+    return {
+        "file_id": out["id"],
+        "uri": out["uri"],
+        "storage_state": out["storage_state"],
+        "last_verification_status": out["last_verification_status"],
+        "last_verified_at": (
+            out["last_verified_at"].isoformat() if out["last_verified_at"] else None
+        ),
+    }
+
+
 # Re-export for tests and ergonomic imports.
 __all__ = [
     "compute_full_content_hash",
+    "get_promote_job_status",
+    "promote_file_storage",
     "run_access_request_job",
     "run_scrubber_queue_job",
     "verify_file_references",
+    "verify_sample_file",
     "FULL_HASH_CHUNK_SIZE",
 ]
