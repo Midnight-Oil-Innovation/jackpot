@@ -235,6 +235,16 @@ Notification System sections for their exact interfaces.
 - The `jackpot init` CLI (P0e) bootstraps any of the 7 install
   scenarios from a fresh clone in under 10 minutes — see
   `docs/install/quickstart.md` and `docs/architecture/jackpot-init-cli.md`.
+- **Branching workflow (interim):** P0d migration left only `main`.
+  The de facto practice in use since P0f F-1 is option (a):
+  feature branches off `main`, PR back, squash-merge, branch
+  deleted (PR #1 merged 2026-05-03 as `4504c21`). This is
+  **interim, not formally adopted** — the formal choice between
+  (a) PR-back-to-main, (b) trunk-based with feature flags, and
+  (c) a `development` integration branch is still pending Glen's
+  call (tracked in `todo.md` housekeeping). Until that decision
+  lands, treat option (a) as the working default and don't push
+  directly to `main`.
 
 Do not regress the test count or coverage without a deliberate reason.
 Do not lower the 80% threshold without a documented architectural
