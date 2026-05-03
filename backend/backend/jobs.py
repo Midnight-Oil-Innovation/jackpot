@@ -10,12 +10,14 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
+import os
 from time import monotonic
 from urllib.parse import urlparse
 
 from backend.audit import AuditActions, log_audit
 from backend.config import get_settings
 from backend.database import execute_query, execute_write, get_db
+from backend.file_fingerprint import cheap_fingerprint
 from backend.notifications import NotificationEvents, create_notification
 
 logger = logging.getLogger(__name__)
@@ -530,10 +532,324 @@ def _reconcile_collision(
     )
 
 
+# ── Phase P0f F-5: verify_file_references background job ───────────────────
+
+
+_FAILURE_KINDS = ("MISSING", "SIZE_CHANGED", "READ_ERROR")
+
+
+async def verify_file_references() -> dict[str, int]:
+    """Re-stat EXTERNAL/MIRRORED sample_files; transition stale rows to BROKEN.
+
+    The safety net for the no-copy ingest model: if JACKPOT references a
+    file in place and the user later deletes or relocates that file,
+    this job notices and surfaces the broken reference to the lab
+    director(s) of every sample using it before a pipeline tries to
+    launch and fails mid-run. See ``spec.md`` Phase P0f Specification
+    (the "New modules" subsection) and Critical Rules 4 (state changes
+    audited), 22 (idempotent, manual-trigger-friendly), and 57 (no copy
+    on ingest — verification is the correctness mechanism that makes
+    the policy safe).
+
+    The three-strike rule is intentional: transient I/O failures are
+    common (NAS hiccups, brief permission glitches, network blips), and
+    BROKEN is a state operators have to recover from manually. Only
+    persistent failures across three consecutive ticks transition the
+    row.
+
+    Returns counts ``{"verified_ok", "verification_failed",
+    "transitioned_to_broken", "skipped"}`` for monitoring.
+    """
+    settings = get_settings()
+    counters = {
+        "verified_ok": 0,
+        "verification_failed": 0,
+        "transitioned_to_broken": 0,
+        "skipped": 0,
+    }
+
+    rows = execute_query(
+        """
+        SELECT id, uri, file_size_bytes, head64k_hash, tail64k_hash,
+               last_verification_status, storage_state
+        FROM sample_files
+        WHERE storage_state IN ('EXTERNAL', 'MIRRORED')
+          AND COALESCE(is_deleted, FALSE) = FALSE
+        ORDER BY last_verified_at ASC NULLS FIRST
+        LIMIT :limit
+        """,
+        {"limit": settings.verification_files_per_tick},
+    )
+    if not rows:
+        return counters
+
+    threshold = settings.verification_consecutive_failures_to_break
+    re_fp = settings.verification_re_fingerprint
+
+    for row in rows:
+        kind = _verify_one(row, re_fingerprint=re_fp)
+
+        with get_db() as db:
+            if kind is None:
+                execute_write(
+                    """
+                    UPDATE sample_files
+                    SET last_verified_at = NOW(),
+                        last_verification_status = 'OK'
+                    WHERE id = :id
+                    """,
+                    {"id": row["id"]},
+                    conn=db,
+                )
+                counters["verified_ok"] += 1
+                continue
+
+            new_status, count = _next_failure_status(row.get("last_verification_status"), kind)
+            counters["verification_failed"] += 1
+
+            if count >= threshold:
+                execute_write(
+                    """
+                    UPDATE sample_files
+                    SET storage_state = 'BROKEN',
+                        last_verified_at = NOW(),
+                        last_verification_status = :status
+                    WHERE id = :id
+                    """,
+                    {"status": new_status, "id": row["id"]},
+                    conn=db,
+                )
+                log_audit(
+                    action=AuditActions.VERIFY_FILE_FAILED,
+                    actor_id=None,
+                    resource_type="sample_files",
+                    resource_id=str(row["id"]),
+                    before=None,
+                    after=None,
+                    metadata={
+                        "uri": row["uri"],
+                        "status": new_status,
+                        "count": count,
+                    },
+                    db_conn=db,
+                )
+                _emit_broken_audit_and_notifications(row, new_status, db)
+                counters["transitioned_to_broken"] += 1
+            else:
+                execute_write(
+                    """
+                    UPDATE sample_files
+                    SET last_verified_at = NOW(),
+                        last_verification_status = :status
+                    WHERE id = :id
+                    """,
+                    {"status": new_status, "id": row["id"]},
+                    conn=db,
+                )
+                log_audit(
+                    action=AuditActions.VERIFY_FILE_FAILED,
+                    actor_id=None,
+                    resource_type="sample_files",
+                    resource_id=str(row["id"]),
+                    before=None,
+                    after=None,
+                    metadata={
+                        "uri": row["uri"],
+                        "status": new_status,
+                        "count": count,
+                    },
+                    db_conn=db,
+                )
+
+    logger.info("verify_file_references: %s", json.dumps(counters))
+    return counters
+
+
+def _verify_one(row: dict, *, re_fingerprint: bool) -> str | None:
+    """Return ``None`` on OK, otherwise the failure kind string.
+
+    Failure kinds: ``MISSING`` (URI does not resolve), ``SIZE_CHANGED``
+    (size differs from the recorded ``file_size_bytes``, or — when
+    ``re_fingerprint`` is true — the cheap fingerprint differs), or
+    ``READ_ERROR`` (anything else: timeouts, permission failures,
+    transient cloud errors).
+    """
+    uri = row["uri"]
+    try:
+        size = _stat_uri(uri)
+    except FileNotFoundError:
+        return "MISSING"
+    except Exception as exc:  # noqa: BLE001 — categorize as transient and retry
+        logger.warning("verify_file_references: stat error on %s: %s", uri, exc)
+        return "READ_ERROR"
+
+    expected_size = row.get("file_size_bytes")
+    if expected_size is not None and size is not None and size != expected_size:
+        return "SIZE_CHANGED"
+
+    if re_fingerprint:
+        try:
+            _, head_hash, tail_hash = cheap_fingerprint(uri)
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("verify_file_references: re-fingerprint failed on %s: %s", uri, exc)
+            return "READ_ERROR"
+        prev_head = row.get("head64k_hash")
+        prev_tail = row.get("tail64k_hash")
+        if prev_head and prev_tail and (head_hash != prev_head or tail_hash != prev_tail):
+            return "SIZE_CHANGED"
+
+    return None
+
+
+def _stat_uri(uri: str) -> int | None:
+    """Return the size in bytes for ``uri``, or raise.
+
+    Mirrors the scheme handling in ``backend.file_fingerprint`` but only
+    issues a HEAD/stat — never reads file body. Raises
+    ``FileNotFoundError`` on definite-missing, anything else on
+    transient/unknown failures (caller maps to ``READ_ERROR``). SRA
+    URIs return ``None`` to signal "size unknown, treat OK" because
+    archives don't yield to byte-range reads.
+    """
+    parsed = urlparse(uri)
+    scheme = parsed.scheme.lower()
+    if scheme in ("", "file"):
+        path = parsed.path if scheme == "file" else uri
+        return os.stat(path).st_size
+    if scheme in ("gs", "s3"):
+        from botocore.exceptions import ClientError
+
+        from backend.storage import _get_client
+
+        client = _get_client()
+        try:
+            head = client.head_object(Bucket=parsed.netloc, Key=parsed.path.lstrip("/"))
+        except ClientError as exc:
+            code = str(exc.response.get("Error", {}).get("Code", ""))
+            http_status = exc.response.get("ResponseMetadata", {}).get("HTTPStatusCode")
+            if code in ("NoSuchKey", "NotFound", "404") or http_status == 404:
+                raise FileNotFoundError(uri) from exc
+            raise
+        return int(head["ContentLength"])
+    if scheme in ("http", "https"):
+        import httpx
+
+        with httpx.Client(follow_redirects=True, timeout=30.0) as client:
+            resp = client.head(uri)
+            if resp.status_code == 404:
+                raise FileNotFoundError(uri)
+            resp.raise_for_status()
+            cl = resp.headers.get("Content-Length")
+            return int(cl) if cl is not None else None
+    if scheme == "sra":
+        return None  # archives — caller treats None as "size check skipped"
+    raise ValueError(f"Unsupported URI scheme for verification: {scheme!r}")
+
+
+def _parse_failure_count(status: str | None) -> int:
+    """Extract the consecutive-failure count from a ``last_verification_status``.
+
+    ``None``/``OK`` → 0; ``MISSING``/``READ_ERROR``/``SIZE_CHANGED`` → 1;
+    suffixed forms (``MISSING_2``, ``READ_ERROR_3``) → the suffixed number.
+    Unknown shapes default to 1 — that's safer than 0 because it preserves
+    the existing failure run rather than silently resetting it.
+    """
+    if status is None or status == "OK":
+        return 0
+    suffix = status.rsplit("_", 1)[-1]
+    if suffix.isdigit():
+        return int(suffix)
+    return 1
+
+
+def _next_failure_status(prev_status: str | None, new_kind: str) -> tuple[str, int]:
+    """Return ``(new_status, consecutive_failure_count)`` for a failed tick.
+
+    The kind in the returned status is always the most recent failure —
+    operators see what failed last, not what failed two ticks ago. Counts
+    cap at 3 so the state machine stays deterministic if a row is
+    re-verified after the BROKEN transition (which shouldn't happen, but
+    defends against it cheaply).
+    """
+    if new_kind not in _FAILURE_KINDS:
+        raise ValueError(f"Unknown failure kind: {new_kind!r}")
+    new_count = min(_parse_failure_count(prev_status) + 1, 3)
+    if new_count == 1:
+        return (new_kind, 1)
+    return (f"{new_kind}_{new_count}", new_count)
+
+
+def _lab_directors_for_sample_file(sample_file_id: int, db) -> list[int]:
+    """Distinct user_ids of all lab directors of all live samples
+    referencing this ``sample_files`` row.
+
+    Soft-deleted samples (``is_deleted=TRUE``) are excluded. If every
+    referencing sample is deleted, returns ``[]`` — caller treats as
+    orphan and logs a WARNING rather than emitting silent BROKEN
+    transitions.
+    """
+    rows = execute_query(
+        """
+        SELECT DISTINCT lm.user_id
+        FROM sample_files sf
+        JOIN samples s ON s.id = sf.sample_id_fk AND s.is_deleted = FALSE
+        JOIN lab_membership lm ON lm.lab_id = s.lab_id
+        WHERE sf.id = :sfid
+          AND lm.is_lab_director = TRUE
+        """,
+        {"sfid": sample_file_id},
+        conn=db,
+    )
+    return [r["user_id"] for r in rows]
+
+
+def _emit_broken_audit_and_notifications(row: dict, status_at_break: str, db) -> None:
+    """Audit the BROKEN transition and notify lab directors."""
+    sample_file_id = row["id"]
+    uri = row["uri"]
+    log_audit(
+        action=AuditActions.MARK_FILE_BROKEN,
+        actor_id=None,
+        resource_type="sample_files",
+        resource_id=str(sample_file_id),
+        before={"storage_state": row["storage_state"]},
+        after={"storage_state": "BROKEN"},
+        metadata={"uri": uri, "last_verification_status": status_at_break},
+        db_conn=db,
+    )
+    directors = _lab_directors_for_sample_file(sample_file_id, db)
+    if not directors:
+        logger.warning(
+            "verify_file_references: sample_files row %s transitioned to "
+            "BROKEN with no lab-director recipients (orphan)",
+            sample_file_id,
+        )
+        return
+    filename = uri.rsplit("/", 1)[-1] or uri
+    body = (
+        f"JACKPOT can no longer reach a registered file ({uri}). "
+        f"The latest verification reported {status_at_break}. "
+        "Re-locate the file, re-upload it, or mark the affected sample "
+        "inactive."
+    )
+    for user_id in directors:
+        create_notification(
+            recipient_id=user_id,
+            event_type=NotificationEvents.FILE_REFERENCE_BROKEN,
+            title=f"File reference broken: {filename}",
+            body=body,
+            resource_type="sample_files",
+            resource_id=str(sample_file_id),
+            action_url=f"/files/{sample_file_id}",
+            db_conn=db,
+        )
+
+
 # Re-export for tests and ergonomic imports.
 __all__ = [
     "compute_full_content_hash",
     "run_access_request_job",
     "run_scrubber_queue_job",
+    "verify_file_references",
     "FULL_HASH_CHUNK_SIZE",
 ]

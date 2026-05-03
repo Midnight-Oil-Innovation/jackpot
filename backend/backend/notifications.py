@@ -33,6 +33,9 @@ class NotificationEvents:
     SURVEILLANCE_OVERRIDE_REQUESTED = "SURVEILLANCE_OVERRIDE_REQUESTED"
     SURVEILLANCE_OVERRIDE_DECIDED = "SURVEILLANCE_OVERRIDE_DECIDED"
 
+    # File references (Phase P0f)
+    FILE_REFERENCE_BROKEN = "FILE_REFERENCE_BROKEN"
+
 
 def create_notification(
     recipient_id: int,
