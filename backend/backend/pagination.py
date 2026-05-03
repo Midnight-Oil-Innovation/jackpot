@@ -40,6 +40,11 @@ ALLOWED_SORT_COLUMNS = {
     "name",
     "email",
     "status",
+    # Phase P0f file_references sort columns (F-9, F-10)
+    "first_seen_at",
+    "last_verified_at",
+    "file_size_bytes",
+    "id",
 }
 
 

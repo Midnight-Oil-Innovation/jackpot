@@ -10,6 +10,7 @@ All commands are defined in submodules and registered here.
 import click
 
 from jackpot.cli.auth import auth
+from jackpot.cli.files import files
 from jackpot.cli.init import init
 from jackpot.cli.pipelines import pipelines
 from jackpot.cli.samples import samples
@@ -93,6 +94,7 @@ cli.add_command(auth)
 cli.add_command(init)
 cli.add_command(samples)
 cli.add_command(pipelines)
+cli.add_command(files)
 
 # Upload commands are top-level (not grouped) for ergonomics
 cli.add_command(upload)
