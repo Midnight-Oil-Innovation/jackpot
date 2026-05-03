@@ -102,12 +102,10 @@ the monorepo migration. None blocked F-2 from landing, but they
 accumulate. Worth a coordinated cleanup pass before P0f F-3 starts.
 
 - [ ] **Establish branching workflow for the monorepo.** P0d migration
-      left only `main`. Decide between:
-      (a) feature branches off main, PR back (recommended for current
-          single-developer-with-AI-assistants reality), or
-      (b) restore a long-lived `development` branch with `main` as
-          released-state.
-      Document the choice in `docs/CLAUDE.md` "Current Baseline" and
+      left only `main`. Option (a) chosen and used for F-1: feature
+      branches off main, PR back, squash-merge, branch deleted (PR #1
+      merged 2026-05-03 as squash commit `4504c21`). Still pending:
+      document the choice in `docs/CLAUDE.md` "Current Baseline" and
       `docs/jackpot_local_dev_setup_guide_macos.md`. Update the
       staging deploy workflow trigger if it's still expecting a
       `staging` branch push.
@@ -1113,47 +1111,67 @@ the sole owner of file type and naming logic) stays. This phase does
 not introduce parallel file-type logic anywhere; `file_detector.py` is
 called once per file_reference at registration.
 
-### F-1: Schema design — `FileStorageState` enum + tables
+### F-1: Schema design — `FileStorageState` enum + `SampleFile` extensions (COMPLETE 2026-05-03)
 
-- [ ] Add `FileStorageState` enum to
-      `schema/schema/jackpot_schema.yaml` with values: `EXTERNAL`,
-      `MANAGED`, `MIRRORED`, `STAGED`, `BROKEN`.
-- [ ] Add `file_references` class to schema with fields:
-      `file_ref_id` (UUID, PK), `content_hash` (SHA-256, indexed,
-      logical key), `size_bytes`, `storage_state`, `primary_uri`,
-      `alternate_uris` (multivalued), `first_seen_at`,
-      `last_verified_at`, `last_verification_status`,
-      `retention_policy`, `original_uri` (for MIRRORED — the external
-      source the managed copy came from), `staged_for_run_id` (for
-      STAGED — the pipeline run that owns this temp copy).
-- [ ] Add `sample_files` association class with fields: `sample_id`
-      (FK), `file_ref_id` (FK), `role` (enum: `R1`, `R2`, `LONG_READ`,
-      `ASSEMBLY`, `OTHER`), `lane`, `chunk` (for nanopore).
-- [ ] Deprecate `samples.fastq_r1_uri`, `samples.fastq_r2_uri`,
-      `samples.long_read_uri`, `samples.assembly_uri` — keep columns
-      for one release as `@deprecated`, populated by trigger from the
-      new association table for backward compatibility.
-- [ ] Update LinkML generation to produce Pydantic v2 models for the
-      new classes; verify `from jose import jwt` style imports unaffected.
-- [ ] Update `schema/schema/templates/` TSV/Excel templates to surface
-      file URIs as path strings (no change in user-visible format).
+**Design shift (locked in during F-2 prep, recorded in Critical Rule 58):**
+the existing `sample_files` table is extended in place. There is no parallel
+`file_references` class — `SampleFile` (uri-keyed) is the dedup primitive,
+`content_hash` is the logical key. File role is encoded by the existing
+`read_direction` + `library_layout` + `paired_file_id` fields; no `role`
+enum is introduced (would create two sources of truth).
 
-### F-2: Alembic migration
+- [x] Add `FileStorageState` enum to `schema/schema/jackpot_schema.yaml`
+      with values: `EXTERNAL`, `MANAGED`, `MIRRORED`, `STAGED`, `BROKEN`.
+- [x] Extend `SampleFile` class with 12 new slots: `content_hash`,
+      `head64k_hash`, `tail64k_hash`, `storage_state` (default
+      `EXTERNAL`), `alternate_uris` (multivalued), `first_seen_at`,
+      `last_verified_at`, `last_verification_status`, `retention_policy`
+      (default `STANDARD`), `original_uri` (MIRRORED only),
+      `staged_for_run_id` (STAGED only), `updated_at` (DB-trigger
+      maintained). Existing slots untouched.
+- [x] Regenerate `backend/backend/models_generated.py` (Pydantic v2);
+      apply boolean-keyword + trailing-newline patch per Rule 20.
+- [x] Verify `from backend.models_generated import SampleFile,
+      FileStorageState` works in api container; all 5 enum values and
+      12 new fields present.
+- [x] Test suite still 891 passing, 1 skipped, 0 failed.
+- [x] Merged via PR #1 (squash commit `4504c21`).
+- [ ] Defer: `samples.fastq_r1_uri`/`fastq_r2_uri`/`long_read_uri`/
+      `assembly_uri` deprecation — moved to a follow-up after F-3 lands
+      and the convenience columns can be safely repointed.
+- [ ] Defer: `schema/schema/templates/` TSV/Excel template regeneration
+      — not required for F-1; will be revisited if F-6 changes the
+      user-facing CSV columns.
 
-- [ ] New revision `add_file_references` chained after current head.
-- [ ] Create `file_references` table with `content_hash` UNIQUE index
-      and partial index on `storage_state IN ('EXTERNAL', 'STAGED')`
-      for the verification job's hot path.
-- [ ] Create `sample_files` table with `(sample_id, role, lane, chunk)`
-      composite UNIQUE constraint.
-- [ ] Backfill: for every existing sample row with a populated URI
-      column, INSERT a `file_references` row (storage_state=EXTERNAL,
-      content_hash NULL until F-4 backfills it) and a corresponding
-      `sample_files` row.
-- [ ] Verify: `alembic upgrade head` from empty DB lands cleanly,
-      `alembic downgrade -1` reverses cleanly, backfill produces one
-      file_reference per existing FASTQ URI in the seed dataset.
-- [ ] Test against staging clone before merging.
+### F-2: Alembic migration (COMPLETE 2026-05-02)
+
+Shipped as `34382b7b82c6_add_file_references.py` extending the existing
+`sample_files` table rather than creating a new `file_references` table
+(see F-1 design-shift note). Critical Rules 57-60 added in the same
+phase to lock in the dedup-primitive + EXTERNAL-default model.
+
+- [x] New revision `34382b7b82c6_add_file_references` chained after
+      `00b4bd99ddee`.
+- [x] Add `file_storage_state` ENUM type and 12 new columns on
+      `sample_files`: `content_hash`, `head64k_hash`, `tail64k_hash`,
+      `storage_state`, `alternate_uris`, `first_seen_at`,
+      `last_verified_at`, `last_verification_status`, `retention_policy`,
+      `original_uri`, `staged_for_run_id`, `updated_at`.
+- [x] UNIQUE partial index on `content_hash` (where non-null);
+      composite fingerprint index on `(file_size_bytes, head64k_hash,
+      tail64k_hash)` for the pre-content-hash dedup path; verification
+      hot-path index on `(storage_state, last_verified_at)` for
+      EXTERNAL/MIRRORED.
+- [x] CHECK constraints: managed/staged require `file_size_bytes`;
+      mirrored requires `original_uri`; staged requires
+      `staged_for_run_id`; retention_policy is one of STANDARD,
+      LONG_TERM, EPHEMERAL.
+- [x] `updated_at` BEFORE-UPDATE trigger.
+- [x] Backfill: `head64k_hash` and `tail64k_hash` seeded from existing
+      `md5` for legacy rows.
+- [x] `alembic upgrade head` and `downgrade -1` both round-trip cleanly.
+- [ ] Defer: staging-clone test — pending the staging environment work
+      from Phase 19 / Q-5.
 
 ### F-3: Cheap fingerprint at ingest
 
