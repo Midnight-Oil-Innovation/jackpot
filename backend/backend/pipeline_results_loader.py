@@ -90,6 +90,20 @@ def _infer_file_type(path: str) -> str:
     return "pipeline_output"
 
 
+# Output file_type → sample_files.read_direction (role).
+# Most pipeline outputs are not raw reads, so default is OTHER.
+# Assembly-shaped outputs map to ASSEMBLY so downstream pipelines that
+# accept an assembly as input can locate them via sample_files.role.
+_OUTPUT_ROLE_BY_FILE_TYPE: dict[str, str] = {
+    "assembly_fasta": "ASSEMBLY",
+    "consensus_fasta": "ASSEMBLY",
+}
+
+
+def _infer_output_role(file_type: str) -> str:
+    return _OUTPUT_ROLE_BY_FILE_TYPE.get(file_type, "OTHER")
+
+
 def _coerce_value(value: Any, coercion: Any) -> Any:
     """Apply type coercion to a metadata value. Returns None on failure."""
     if value is None or value == "":
@@ -122,6 +136,8 @@ class LoaderResult:
     samples_updated: list[str] = field(default_factory=list)
     files_registered: int = 0
     global_files_registered: int = 0
+    sample_files_registered: int = 0
+    sample_files_deduplicated: int = 0
     errors: list[str] = field(default_factory=list)
 
     @property
@@ -292,6 +308,7 @@ def _process_sample(
     """Process one sample from the manifest — files, results row, sample update."""
     from backend.audit import AuditActions, log_audit
     from backend.database import execute_query, execute_write
+    from backend.ingest_files import register_file
 
     # Verify the sample exists in JACKPOT
     rows = execute_query(
@@ -303,8 +320,15 @@ def _process_sample(
         logger.warning("Sample %s not found in JACKPOT — skipping", sample_id)
         result.errors.append(f"Sample {sample_id} not found in database")
         return
+    sample_id_fk = rows[0]["id"]
 
     # ── 3a. Register per-sample output files ──────────────────────────────────
+    # Outputs default to MANAGED (Critical Rule 57: JACKPOT owns derived
+    # data). If register_file dedups against an existing row (e.g., a user
+    # pre-registered this file as EXTERNAL before running it through a
+    # pipeline), keep the existing storage_state — register_file does not
+    # transition state on dedup. The MANAGED intent only takes effect when
+    # register_file inserts a fresh row.
     for file_entry in sample_file_list:
         path = file_entry.get("path", "")
         if not path:
@@ -328,6 +352,48 @@ def _process_sample(
             conn=conn,
         )
         result.files_registered += 1
+
+        try:
+            sf_id, was_dedup = register_file(
+                full_uri,
+                "MANAGED",
+                sample_id_fk,
+                _infer_output_role(file_type),
+                conn=conn,
+                ingest_method="pipeline_output",
+            )
+        except (FileNotFoundError, PermissionError, OSError) as exc:
+            # Output URI unreachable from the API — log and continue. The
+            # pipeline_files row above still records the URI; a later
+            # verification pass can retry the sample_files registration.
+            msg = f"sample_files registration failed for {full_uri}: {exc}"
+            logger.warning(msg)
+            result.errors.append(msg)
+            continue
+
+        if was_dedup:
+            result.sample_files_deduplicated += 1
+        else:
+            result.sample_files_registered += 1
+        log_audit(
+            action=(AuditActions.DEDUP_FILE if was_dedup else AuditActions.REGISTER_FILE),
+            actor_id=launched_by_id,
+            resource_type="sample_files",
+            resource_id=str(sf_id),
+            before=None,
+            after={
+                "uri": full_uri,
+                "storage_state": "MANAGED",
+                "sample_id_fk": sample_id_fk,
+            },
+            metadata={
+                "ingest_method": "pipeline_output",
+                "run_id": run_id,
+                "role": _infer_output_role(file_type),
+                "file_type": file_type,
+            },
+            db_conn=conn,
+        )
 
     # ── 3b. Insert immutable pipeline_results row ──────────────────────────────
     execute_write(

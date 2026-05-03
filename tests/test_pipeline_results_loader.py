@@ -15,6 +15,7 @@ from backend.pipeline_results_loader import (
     _build_sample_updates,
     _coerce_value,
     _infer_file_type,
+    _infer_output_role,
     load_pipeline_results,
 )
 
@@ -349,3 +350,216 @@ class TestLoadPipelineResults:
 
         assert "UNKNOWN-999" not in result.samples_updated
         assert any("not found" in e for e in result.errors)
+
+
+class TestInferOutputRole:
+    def test_assembly_fasta_is_assembly(self):
+        assert _infer_output_role("assembly_fasta") == "ASSEMBLY"
+
+    def test_consensus_fasta_is_assembly(self):
+        assert _infer_output_role("consensus_fasta") == "ASSEMBLY"
+
+    def test_unknown_is_other(self):
+        assert _infer_output_role("multiqc_report") == "OTHER"
+        assert _infer_output_role("variant_calls") == "OTHER"
+        assert _infer_output_role("pipeline_output") == "OTHER"
+
+
+class TestPipelineOutputsAreManaged:
+    """Phase P0f F-7 — pipeline outputs default to ``MANAGED``.
+
+    JACKPOT owns the lifecycle of derived data (Critical Rule 57). The
+    loader passes ``storage_intent='MANAGED'`` to ``register_file`` for
+    every output file, but trusts the helper to leave existing rows
+    alone on dedup hits.
+    """
+
+    def _make_manifest(self, data: dict) -> bytes:
+        return gzip.compress(json.dumps(data).encode())
+
+    def _one_output_manifest(self) -> bytes:
+        return self._make_manifest(
+            {
+                "files": {
+                    "global": [],
+                    "samples": {"EX-001": [{"path": "consensus/EX-001.consensus.fa.gz"}]},
+                },
+                "metadata": {"samples": {"EX-001": {}}},
+            }
+        )
+
+    def _mock_client(self, manifest_bytes: bytes) -> MagicMock:
+        mock_client = MagicMock()
+        mock_client.get_object.return_value = {
+            "Body": MagicMock(read=MagicMock(return_value=manifest_bytes))
+        }
+        return mock_client
+
+    def test_pipeline_results_loader_registers_outputs_as_managed(self):
+        """Every output file is registered with ``storage_intent='MANAGED'``."""
+        mock_register = MagicMock(return_value=(101, False))
+        with (
+            patch(
+                "backend.storage._get_client",
+                return_value=self._mock_client(self._one_output_manifest()),
+            ),
+            patch("backend.config.get_settings"),
+            patch("backend.database.execute_write"),
+            patch("backend.database.execute_query", return_value=[{"id": 42}]),
+            patch("backend.ingest_files.register_file", mock_register),
+            patch("backend.audit.log_audit"),
+        ):
+            result = load_pipeline_results(
+                run_id="run-001",
+                result_uri="gs://jackpot-results/run-001/",
+                pipeline_name="nf-core/viralrecon",
+                pipeline_version="2.6.0",
+                launched_by_id=7,
+                conn=MagicMock(),
+            )
+
+        assert result.success is True
+        assert mock_register.call_count == 1
+        args, kwargs = mock_register.call_args
+        # register_file(uri, storage_intent, sample_id_fk, role, conn=...)
+        assert args[0] == "gs://jackpot-results/run-001/consensus/EX-001.consensus.fa.gz"
+        assert args[1] == "MANAGED"
+        assert args[2] == 42
+        assert args[3] == "ASSEMBLY"  # consensus_fasta → ASSEMBLY
+        assert kwargs["ingest_method"] == "pipeline_output"
+
+    def test_pipeline_results_loader_dedup_preserves_existing_state(self):
+        """On dedup, register_file is called with MANAGED but the loader
+        does not re-issue an UPDATE to transition the existing row.
+
+        The helper itself leaves ``storage_state`` untouched on dedup
+        (verified in F-6's tests); F-7's contract is to *not undo that*
+        by re-asserting MANAGED elsewhere. This test pins the loader's
+        behavior on the dedup branch: increment the deduplicated counter
+        and emit ``DEDUP_FILE`` (not ``REGISTER_FILE``).
+        """
+        mock_register = MagicMock(return_value=(101, True))  # was_dedup=True
+        mock_audit = MagicMock()
+        with (
+            patch(
+                "backend.storage._get_client",
+                return_value=self._mock_client(self._one_output_manifest()),
+            ),
+            patch("backend.config.get_settings"),
+            patch("backend.database.execute_write"),
+            patch("backend.database.execute_query", return_value=[{"id": 42}]),
+            patch("backend.ingest_files.register_file", mock_register),
+            patch("backend.audit.log_audit", mock_audit),
+        ):
+            result = load_pipeline_results(
+                run_id="run-001",
+                result_uri="gs://jackpot-results/run-001/",
+                pipeline_name="nf-core/viralrecon",
+                pipeline_version="2.6.0",
+                launched_by_id=7,
+                conn=MagicMock(),
+            )
+
+        # Loader passes MANAGED — the helper decides whether to honour it
+        assert mock_register.call_args[0][1] == "MANAGED"
+        # Counters reflect dedup, not new registration
+        assert result.sample_files_deduplicated == 1
+        assert result.sample_files_registered == 0
+        # Audit emits DEDUP_FILE, never REGISTER_FILE on this branch
+        audit_actions = [c.kwargs["action"] for c in mock_audit.call_args_list]
+        assert "DEDUP_FILE" in audit_actions
+        assert "REGISTER_FILE" not in audit_actions
+
+    def test_pipeline_results_loader_creates_new_row_as_managed(self):
+        """Novel content → fresh ``sample_files`` row with MANAGED state."""
+        mock_register = MagicMock(return_value=(202, False))  # was_dedup=False
+        with (
+            patch(
+                "backend.storage._get_client",
+                return_value=self._mock_client(self._one_output_manifest()),
+            ),
+            patch("backend.config.get_settings"),
+            patch("backend.database.execute_write"),
+            patch("backend.database.execute_query", return_value=[{"id": 42}]),
+            patch("backend.ingest_files.register_file", mock_register),
+            patch("backend.audit.log_audit"),
+        ):
+            result = load_pipeline_results(
+                run_id="run-001",
+                result_uri="gs://jackpot-results/run-001/",
+                pipeline_name="nf-core/viralrecon",
+                pipeline_version="2.6.0",
+                launched_by_id=7,
+                conn=MagicMock(),
+            )
+
+        assert result.sample_files_registered == 1
+        assert result.sample_files_deduplicated == 0
+        # MANAGED carried through to the helper
+        assert mock_register.call_args[0][1] == "MANAGED"
+
+    def test_pipeline_results_loader_audit_log(self):
+        """REGISTER_FILE audit emitted with sample_files resource id."""
+        mock_register = MagicMock(return_value=(303, False))
+        mock_audit = MagicMock()
+        with (
+            patch(
+                "backend.storage._get_client",
+                return_value=self._mock_client(self._one_output_manifest()),
+            ),
+            patch("backend.config.get_settings"),
+            patch("backend.database.execute_write"),
+            patch("backend.database.execute_query", return_value=[{"id": 42}]),
+            patch("backend.ingest_files.register_file", mock_register),
+            patch("backend.audit.log_audit", mock_audit),
+        ):
+            load_pipeline_results(
+                run_id="run-001",
+                result_uri="gs://jackpot-results/run-001/",
+                pipeline_name="nf-core/viralrecon",
+                pipeline_version="2.6.0",
+                launched_by_id=7,
+                conn=MagicMock(),
+            )
+
+        register_audits = [
+            c for c in mock_audit.call_args_list if c.kwargs["action"] == "REGISTER_FILE"
+        ]
+        assert len(register_audits) == 1
+        call = register_audits[0]
+        assert call.kwargs["actor_id"] == 7
+        assert call.kwargs["resource_type"] == "sample_files"
+        assert call.kwargs["resource_id"] == "303"
+        assert call.kwargs["after"]["storage_state"] == "MANAGED"
+        assert call.kwargs["after"]["sample_id_fk"] == 42
+        assert call.kwargs["metadata"]["ingest_method"] == "pipeline_output"
+        assert call.kwargs["metadata"]["run_id"] == "run-001"
+
+    def test_register_file_unreachable_does_not_break_sample(self):
+        """If a fingerprint read fails, log error and continue."""
+        mock_register = MagicMock(side_effect=FileNotFoundError("not there"))
+        with (
+            patch(
+                "backend.storage._get_client",
+                return_value=self._mock_client(self._one_output_manifest()),
+            ),
+            patch("backend.config.get_settings"),
+            patch("backend.database.execute_write"),
+            patch("backend.database.execute_query", return_value=[{"id": 42}]),
+            patch("backend.ingest_files.register_file", mock_register),
+            patch("backend.audit.log_audit"),
+        ):
+            result = load_pipeline_results(
+                run_id="run-001",
+                result_uri="gs://jackpot-results/run-001/",
+                pipeline_name="nf-core/viralrecon",
+                pipeline_version="2.6.0",
+                launched_by_id=7,
+                conn=MagicMock(),
+            )
+
+        assert result.sample_files_registered == 0
+        assert result.sample_files_deduplicated == 0
+        # The pipeline_files insert (section 3a) still ran
+        assert result.files_registered == 1
+        assert any("sample_files registration failed" in e for e in result.errors)
