@@ -286,8 +286,7 @@ async def test_register_creates_audit_log(client, fastq_files):
     assert resp.status_code == 201
     sf_id = resp.json()["data"]["files"][0]["sample_files_id"]
     rows = execute_query(
-        "SELECT action FROM audit_log WHERE resource_type = 'sample_files' "
-        "AND resource_id = :rid",
+        "SELECT action FROM audit_log WHERE resource_type = 'sample_files' AND resource_id = :rid",
         {"rid": str(sf_id)},
     )
     actions = [r["action"] for r in rows]
@@ -318,8 +317,7 @@ async def test_register_creates_dedup_audit_when_deduped(client, fastq_files):
     )
     sf_id = second.json()["data"]["files"][0]["sample_files_id"]
     rows = execute_query(
-        "SELECT action FROM audit_log WHERE resource_type = 'sample_files' "
-        "AND resource_id = :rid",
+        "SELECT action FROM audit_log WHERE resource_type = 'sample_files' AND resource_id = :rid",
         {"rid": str(sf_id)},
     )
     actions = [r["action"] for r in rows]
