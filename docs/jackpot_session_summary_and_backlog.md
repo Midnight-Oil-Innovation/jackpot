@@ -1,8 +1,44 @@
 # JACKPOT Session Summary & Backlog
 
-**Document version:** 2.7
-**Last updated:** 2026-05-01
-**Sessions covered:** Session 1 (March–April 2026 consolidated), Session 2 (2026-04-10), Sessions 3–S (2026-04 through 2026-04-19), Pathoplexus/Loculus comparative analysis session (2026-04-28), Cleanup A–J operator-agnostic genericization session (2026-04-26 to 2026-04-28), Session 11 (2026-04-28 → 2026-04-29 — CDC DMI/STLT/CARE alignment, BYOP/eukaryotic design, phasing rework, P0d migration prep), Session 12 (2026-04-30 → 2026-05-01 — P0d execution in Claude Code + post-execution cleanup)
+**Document version:** 2.8
+**Last updated:** 2026-05-03
+**Sessions covered:** Session 1 (March–April 2026 consolidated), Session 2 (2026-04-10), Sessions 3–S (2026-04 through 2026-04-19), Pathoplexus/Loculus comparative analysis session (2026-04-28), Cleanup A–J operator-agnostic genericization session (2026-04-26 to 2026-04-28), Session 11 (2026-04-28 → 2026-04-29 — CDC DMI/STLT/CARE alignment, BYOP/eukaryotic design, phasing rework, P0d migration prep), Session 12 (2026-04-30 → 2026-05-01 — P0d execution in Claude Code + post-execution cleanup), Session 13 (2026-05-01 — Phase 22 periodic review), Session 14 (2026-05-02 — P0e `jackpot init` CLI + Phase 22 cleanup), Session 15 (2026-05-02 → 2026-05-03 — architecture synthesis reframing + P0f F-2 schema migration)
+
+**v2.8 changelog (2026-05-03):** Added Session 15 covering:
+(1) Architecture synthesis reframing — open-ended design conversation
+across the full platform stack against post-P0e reality. Pulled in
+research on Sapporo-WES (DDBJ Apache-2.0, 590 commits, 2.2.5 release),
+the CDC GitHub ecosystem (seqsender, MIRA-NF, PHoeNIx, MycoSNP-NF,
+aquascope, tostadas, MicrobeTrace), international data-exchange
+protocols (EU TESSy/EpiPulse, PHES-ODM wastewater, UKHSA CLIMB-BIG-DATA,
+DDBJ/Pathogens.jp, Japan-China-Korea Forum, BV-BRC), and GA4GH
+federation standards (WES, TES, DRS, htsget, refget, Crypt4GH,
+Passports/AAI, Beacon v2, Phenopackets, VRS, Service Info, Data Connect,
+DUO). (2) Deployment scenario rebalancing from 6 to 8 with on-prem as
+first-class — A laptop, B single on-prem server, C university RC-hosted,
+D single-org cloud, E multi-lab agency, F hosted SaaS, G federation
+member, H CI test. Marketing pivot: "JACKPOT runs on your laptop. Also
+scales to your university's HPC cluster. Same codebase." (3) Three
+Python packages locked: `jackpot` (installer + CLI, PyPI + Bioconda),
+`jackpot-sdk` (programmatic client, PyPI), `jackpot-schema` deferred.
+SDK directory already exists at `cli/jackpot/sdk/`. (4) Docker AND
+Apptainer as first-class container runtimes with systemd as common
+service manager on Linux. (5) File-references redesign — JACKPOT does
+not copy data on ingest; default `storage_state=EXTERNAL`, content-hash
+is the dedup primitive. (6) Per-run executor profile model unlocking
+scenario B + Slurm and scenario C in one design. (7) P0f F-2
+implementation — Alembic migration `34382b7b82c6` extending existing
+`sample_files` table with 12 new columns, `file_storage_state` ENUM,
+three indexes, updated_at trigger, md5→fingerprint backfill. Tests
+green: 891 passing, 0 failed. (8) Critical Rules 57-60 added (no copy
+on ingest; sample_files is dedup primitive; per-run executor selection;
+cluster runs work without weblog). (9) spec.md gained P0f / P0g / P0h
+specification sections; todo.md gained 33 sub-tasks across the three
+phases. (10) Surfaced post-monorepo housekeeping: missing runtime dep
+(`slowapi`), 5 missing dev deps (`pytest-cov`, `pytest-asyncio`,
+`testcontainers[postgres]`, `hypothesis`, `pytest-httpx`), Docker socket
+mounting for testcontainers in-container, `alembic.ini` cwd dependency,
+`/app/.venv` broken symlink, schema mount path inconsistency.
 
 **v2.7 changelog (2026-05-01):** Added Session 12 covering: (1) P0d execution in Claude Code on 2026-04-30 — 6 source repos consolidated into Midnight-Oil-Innovation/jackpot via two-pass git filter-repo, history preserved, p0d-complete tag at d32f40a. (2) Post-execution cleanup of four structural issues that prevented `docker compose up` from working: docker-compose.yml + Dockerfiles stayed in backend/, Dockerfiles needed workspace-aware path rewrites, the `backend/frontend/` canonical streamlit code was incorrectly deleted as a "shadow" then partially recovered via filter-repo of the archived gotero/jackpot-frontend (which turned out to be a uv-init stub), and finally restored from the parent of the bad-deletion commit. (3) Frontend now lives at `frontend/` at monorepo root (more aligned with P0d's "each component at top level" intent than P0d's actual `backend/frontend/` placement). (4) Local dev stack validated end-to-end: API healthy with all 17 alembic migrations, Streamlit on 8501 with 9 researcher pages, /health 200, p0d-validated tag added.
 
@@ -10,6 +46,8 @@
 
 **Changelog:**
 
+- **v2.7 (2026-05-01)** — Added Session 12 (P0d execution + post-execution cleanup). See full block above.
+- **v2.6 (2026-04-29)** — Added Session 11 (CDC DMI/STLT, BYOP/eukaryotic, phasing rework, P0d migration prep). See full block above.
 - **v2.5 (2026-04-28)** — Added new section `# Cleanup A–J — Operator-agnostic genericization (2026-04-26 to 2026-04-28)`. Records the completion of 10 cleanup phases (lettered A through J) that removed institutional references (ADHS, ASU, Linux Prophet, Otero Outpost, Sonora Quest, Maricopa, Phoenix, etc.) from the codebase to align with the operator-agnostic principle. Two phases (G — submodule schema-update scripts, J — Streamlit frontend) were no-ops. Net result: production code knows nothing about any specific operator; only the eventual `jackpot init` bootstrap step learns operator names at install time. Codebase is now ready for P0d (monorepo migration to `Midnight-Oil-Innovation/jackpot`).
 - **v2.4 (2026-04-28)** — Added new subsection `### Pathoplexus / Loculus comparative analysis backlog (April 2026)` with 34 B-XXX items grouped A–J by source platform. Generated from `jackpot_pathoplexus_loculus_overview.md`. Reflects the project pivot: AGPL-3.0 (was Apache 2.0), independence from ADHS/ASU, multi-deployment-target architecture (6 install scenarios A–F), monorepo migration to `Midnight-Oil-Innovation/jackpot`. Two-PII-gate architecture documented (NCBI SRA Human Scrubber for genomic PII, GCP Cloud DLP for metadata PII).
 - **v2.3** — Sessions 3–S content (April 2026 — pre-Claude-Code through Session 5 staging deploy).
@@ -2819,3 +2857,340 @@ Pending architectural follow-ups, in expected order:
 - **P1** — `POST /api/v1/auth/refresh` (real token-rotation work)
 
 The next session work depends on Glen's call. If P0f-as-next, the design alignment is already there in `jackpot_byop_and_eukaryotic_design.md`. If something else, P0e leaves the codebase in a state that supports any of the planned phases without prerequisite cleanup.
+
+
+------
+
+# Session 15 — 2026-05-02 → 2026-05-03 (Architecture Synthesis Reframing + P0f F-2 Schema Migration)
+
+## What we covered
+
+A bookended session: an open-ended architectural design conversation reviewing every layer of the platform against post-P0e reality, followed by the first concrete implementation chunk — P0f F-2, the Alembic migration for content-hash-keyed file deduplication. The synthesis half pulled in research on Sapporo-WES, the CDC GitHub ecosystem, international data-exchange protocols across Europe and Asia-Pacific, GA4GH federation standards, and forced a rebalancing of the deployment scenarios from 6 to 8 with on-prem becoming first-class. The implementation half landed Critical Rules 57-60, four new spec.md sections, three new todo.md phases (P0f / P0g / P0h covering 33 sub-tasks), and a working migration adding 12 columns to the existing `sample_files` table.
+
+**Tests:** 891 passing, 1 skipped, 0 failed (unchanged scope; F-2 was schema-only and didn't break any existing test).
+
+**Migration head:** `34382b7b82c6` (add_file_references) — 18 migrations deep, applies cleanly from empty DB per Critical Rule 44.
+
+**Critical Rules now go 1-60** (was 1-56 at session start).
+
+------
+
+## Topics covered
+
+### 1. Open-source landscape research
+
+#### Sapporo-WES vs GA4GH Starter Kit vs WESkit
+
+Three GA4GH WES implementations evaluated for adoption as JACKPOT's pipeline orchestration layer.
+
+- **Sapporo-WES** (sapporo-wes/sapporo-service): Apache-2.0, Python/FastAPI, 590 commits, 67 releases, latest 2.2.5 (Apr 8 2026), 0 open issues. Engines: cwltool, nextflow, Toil, Cromwell, snakemake, ep3, StreamFlow. JWT auth (built-in or external Keycloak). DDBJ-backed. RO-Crate metadata, sapporo-web GUI. Pros: active maintenance, Python stack matches JACKPOT, GA4GH WES 1.1.0 + 2.x extensions. Cons: Docker-in-Docker requirement, no first-class HPC, no webhooks, SQLite-per-run-dir.
+- **GA4GH Starter Kit WES**: ABANDONED ~2022, Java/Gradle, 5 stars, 3 contributors, WES 1.0.1 only. **Don't adopt.**
+- **WESkit** (gitlab.com/one-touch-pipeline/weskit/api): MIT, Python/Flask+Celery+Redis+MongoDB, 1475 commits, used at DKFZ + Sanger Tree-of-Life. First-class LSF+SLURM. Hold in reserve for HPC needs.
+
+**Decision:** spike on Sapporo-WES first (2 weeks). Drop Starter Kit. WESkit reserve for HPC.
+
+#### CDC GitHub ecosystem
+
+Comprehensive scan of CDCgov repos relevant to JACKPOT, all Apache-2.0 or public domain:
+
+- **Pipelines:** CDCgov/phoenix (AMR/healthcare-associated bacteria), CDCgov/MIRA-NF (Flu/SARS/RSV via IRMA+DAIS-Ribosome), CDCgov/mycosnp-nf (C. auris fungal), CDCgov/aquascope (wastewater SARS-CoV-2 with NWSS+Palantir), CDCgov/SC2CLIA (CLIA-validated SARS-CoV-2), CDCgov/tostadas (NCBI/GISAID submission via Liftoff/VADR/Bakta).
+- **Standalone tools:** CDCgov/seqsender (Python NCBI/GISAID/SRA submission — HIGH PRIORITY adoption), ncbi/sra-human-scrubber (already in JACKPOT), CDCgov/MicrobeTrace (browser-based outbreak visualization), CDCgov/phinvads-go (PHIN VADS rewrite — but PHIN sunsets Nov 30, 2026 — urgent vocab pull window).
+- **Data exchange:** CDCgov/data-exchange-upload + processing-status (PHDO architecture).
+
+**Decision:** concrete adoption priorities — adopt seqsender as pip dependency; add MIRA-NF and PHoeNIx to pipeline zoo (Month 3); pull PHIN VADS vocabularies as schema reference data **before Nov 30 2026** (hard deadline); embed MicrobeTrace as iframe link; align ingest API with PHDO conventions; aquascope drops in cleanly because the WastewaterSample class already has NWSS-aligned fields.
+
+#### International data-exchange protocols
+
+**Europe:** ECDC EpiPulse/TESSy is the EU's unified surveillance portal — 27 EU+EEA countries, ~60 communicable diseases, CSV/XML upload, per-disease reporting protocols (AMR-2024, MPX, INFLZOO, etc.). Member-state-nominated experts only. WGS upload supported. EU equivalent of HL7 ELR alignment in US. EU4S European Wastewater Surveillance Dashboard (JRC-operated, January 2025) covers SARS-CoV-2/RSV/influenza across 11 EU countries via DEEP platform with **PHES-ODM** as recommended data model.
+
+**PHES-ODM** (github.com/Big-Life-Lab/PHES-ODM): MIT-licensed, 23 countries adopted, EU+Canada+Ontario. Generates SQL DDL — high-leverage adoption target for WastewaterSample alignment. WHO/EU recommended.
+
+**ELIXIR ENA submission:** Webin-CLI (Java), Webin REST V2 (HTTPS programmatic, sync 1min / async 10min), ENA upload CLI (Python on PyPI/bioconda). Galaxy ENA tools wrap both for non-CLI users.
+
+**UK:** UKHSA Pathogen Genomics Strategy (Jan 2024, 5-year plan). Operates **mSCAPE** metagenomics surveillance on top of CLIMB-BIG-DATA (github.com/MRC-climb/) — UK academic/health microbiology shared compute, Ceph+OpenStack. Lodestone Mycobacterium pipeline (Pathogen-Genomics-Cymru/lodestone — UK Wales). The UK is the most JACKPOT-aligned national pathogen-genomics program — operator-agnostic-ish, open-source-friendly. CLIMB is a real-world equivalent of scenario C.
+
+**Asia-Pacific:** DDBJ as INSDC node — 2025 update added Pathogens.jp portal collaboration with Japan Institute of Health Security, mandatory metadata standards including geolocation and date, harmonization with KOBIC (Korea Bioinformation Center) and CNCB (China National Genomics Data Center). 14000 CPU cores, 50 PB Lustre, GPU nodes. Sapporo-WES architectural origin. Japan-China-Korea Forum on Communicable Disease Control and Prevention has run since 2006. KDCA (Korea Disease Control and Prevention Agency) most advanced on data analytics + forecasting per WHO Western Pacific reporting.
+
+**Global:** WHO IPSN (International Pathogen Surveillance Network), three Communities of Practice — CoP-Data (60 experts, harmonizing data standards), CoP-Emergency, CoP-Wastewater/Environmental. CoP-Data document on principles and attributes pathogen-genomic data sharing platforms should aspire to is forthcoming — track when published.
+
+**Decision:** highest international leverage is PHES-ODM compatibility for `WastewaterSample` (MIT-licensed, SQL DDL generation, EU+Canadian adoption). TESSy AMR record-format export is the EU-US bridge for scenario E. WHO IPSN CoP-Data principles are strategic alignment; track document when published.
+
+#### GA4GH federation standards
+
+Full federation-protocol set evaluated. Cheapest wins identified:
+
+| Protocol | Relevance |
+|---|---|
+| WES | High — Sapporo-WES adoption pending spike |
+| TES | Lower — Nextflow itself is the task layer |
+| **DRS** | High — perfect fit for our `fastq_r1_uri` indirection model; we're already 80% there |
+| htsget | Medium — useful for variant browsing UIs |
+| refget | Medium — for reproducibility of pipeline reference data |
+| Crypt4GH | High — relevant for scenarios D/E with sensitive data at rest |
+| Passports + AAI | High — directly relevant to scenarios C/G |
+| Beacon v2 | Medium — relevant to AMR surveillance federation |
+| Phenopackets | Medium — case-linked clinical metadata |
+| VRS | Medium — AMR variant + viral mutation reporting |
+| **Service Info** | **Cheapest win — single endpoint, makes JACKPOT discoverable** |
+| Data Connect | Medium — cross-lab outbreak detection |
+| DUO | High — machine-readable data use restrictions |
+
+**Decision:** quickest GA4GH adoption is `/service-info` endpoint (one afternoon's work) plus formalize DRS-style URIs internally. Both go in Month 3. Crypt4GH and Beacon v2 in Month 6+. FHIR Genomics Reporting export deferred to post-1.0.
+
+------
+
+### 2. Deployment scenario rebalancing — 6 to 8 scenarios
+
+The original six scenarios (A laptop, B single-org cloud, C multi-lab agency, D hosted SaaS, E federation member, F CI test) had wrong center of gravity. Public health labs as a category have characteristics that push hard against cloud-first deployment: hardware is already there, data sovereignty concerns are real, procurement cycles for cloud are painful, network constraints, budget reality, and the single-developer-laptop case is more common than the single-server case.
+
+Glen pushed back hard: a single lab on a single on-prem server is more likely than a lab deploying to GCP. And a multi-lab university research-computing-hosted scenario is structurally different from both single-lab and multi-lab-agency scenarios — multi-tenant per-PI trust boundary, RC team operates while labs use, compute on the institution's Slurm cluster, LDAP/SAML auth, grant accounting.
+
+**Decision:** revised scenario list with on-prem first-class:
+
+| Scenario | Description | Compute target | Operator | Trust boundary | Priority |
+|---|---|---|---|---|---|
+| **A** | Laptop | Local Docker | Single user | Self | Bulletproof |
+| **B** | Single on-prem server | Local Docker / local Slurm / **(stretch) cloud burst** | Lab IT or PI | One lab | Bulletproof |
+| **C** | University RC-hosted | Slurm/PBS HPC cluster + Apptainer | RC/HPC team | Per-lab within institution | Bulletproof |
+| **D** | Single-org cloud | GKE/EKS/AKS | Org IT | One org | Production |
+| **E** | Multi-lab agency | Agency cloud or datacenter | Agency platform team | Per-lab + surveillance mandate | Production |
+| **F** | Hosted SaaS | Operator's cloud | External operator | Per-tenant | Production |
+| **G** | Federation member | Variable | Federation node | Federation policies | Future |
+| **H** | CI test | Local containers | n/a | n/a | Bulletproof |
+
+A/B/C/H are bulletproof from day one — every developer, every interested lab, every academic adopter hits these first. D/E/F are production-hardened paths. G is future state.
+
+The marketing pivot: **"JACKPOT runs on your laptop. It also scales to your university's HPC cluster. Same codebase."** Cloud examples follow, they don't lead. This positioning is also more credible to the WHO IPSN equity story — "doesn't require cloud" is meaningful in low/middle-income country contexts.
+
+Note this brings the scenario count to 8. The earlier "Scenario T" (Tribal-sovereignty deployment) from Session 11 fits as a variant of E rather than its own letter — Tribal data sovereignty is governance and federation policy on top of the agency-cloud or federation-member scenarios, not a separate compute architecture.
+
+------
+
+### 3. Three Python packages
+
+Originally framed as one `jackpot` package; on closer look it's three distinct artifacts that share a version number:
+
+| Path in monorepo | Package | Distribution | Audience |
+|---|---|---|---|
+| `cli/` | **`jackpot`** | PyPI (`pipx install jackpot`) + Bioconda | Anyone deploying or running JACKPOT |
+| `cli/jackpot/sdk/` | **`jackpot-sdk`** | PyPI (`pip install jackpot-sdk`) | Devs writing notebooks, scripts, BYOPs, internal Streamlit pages |
+| `backend/` | Docker image on GHCR | `ghcr.io/midnight-oil-innovation/jackpot-backend:vX.Y.Z` | Pulled at runtime by `jackpot up` |
+| `frontend/` | Docker image on GHCR | Same | Same |
+| `schema/` | Bundled into both `jackpot` and `jackpot-sdk` for now | n/a (yet) | Internal |
+| `pipelines/` | Cloned at runtime from monorepo `pipelines/` directory | Pulled by Nextflow | Pipeline executor |
+| `deploy/` | Bundled inside `jackpot` CLI as package data | Embedded | Operators |
+
+Glen confirmed `cli/jackpot/sdk/` already exists from earlier work — the SDK directory landed during Session 14's P0e CLI implementation but the SDK content itself is still skeletal. Distributing it as a separate PyPI package (`jackpot-sdk`) rather than dragging it into every `jackpot` install via `pip install jackpot[sdk]`-style extras keeps operator installs lean.
+
+`jackpot-schema` is **deferred** until external need (ELIXIR / Pathoplexus / federation member asks for it). Schema artifacts ship inside the SDK for now.
+
+`jackpot-backend` is **not** a Python package in the user-facing sense. It's a containerized service. Internally a Python project, but its distribution unit is a Docker image, not a PyPI release.
+
+Pin Python `>=3.11,<3.13`. Recommend `pipx` or `conda` not bare `pip`.
+
+------
+
+### 4. Docker AND Apptainer as first-class container runtimes
+
+Universities (and increasingly federal HPC sites and many national labs) have a hard line: no Docker daemon on shared infrastructure. Apptainer (formerly Singularity) exists exactly for this environment — runs as the user, no daemon, SIF is a single file, plays nicely with Slurm, reads native Docker images via `apptainer pull docker://...`.
+
+For pipeline containers this is solved territory. The harder question is the stateful service containers — Postgres, MinIO, the JACKPOT backend itself, the frontend.
+
+Three sub-problems:
+
+1. **Adjacent-to-cluster vs inside-cluster.** For scenario B and most of scenario C, the JACKPOT services run on a Linux box adjacent to the HPC cluster, not on the cluster itself. Apptainer-on-the-cluster for service containers is the **exception**, not the rule. The constraint is narrower than "everything must be Apptainer" — it's: JACKPOT must work in a deployment where service containers cannot use Docker.
+
+2. **Apptainer can run service containers, but it's awkward.** No `docker compose up` equivalent (use systemd unit files), no daemon-managed networking (containers share host network namespace), bind mounts work but no named-volume lifecycle, image storage as SIF is bigger than Docker layers.
+
+3. **Host context determines what's possible.** Lab server with Apptainer (uncommon but possible), university RC team gives us a VM (most common — VM operator picks Docker or Apptainer), login/head node only (impossible — need a VM).
+
+**Decisions:**
+
+- Both runtimes supported, not "Apptainer instead of Docker." Docker default on macOS and most Linux servers; Apptainer for HPC-adjacent and air-gapped sites.
+- Same OCI images, both runtimes — published to GHCR, Apptainer pulls via `docker://` and converts to SIF on the fly.
+- **Systemd as the common service manager on Linux** regardless of runtime. macOS still uses Docker Compose (no systemd on Mac).
+- Pre-staging support: `jackpot images export` and `jackpot images import` produce a portable bundle for air-gapped install.
+- Allow host-installed Postgres/MinIO as alternatives — `jackpot init --use-existing-postgres postgres://...` skips the containerized Postgres entirely.
+- `jackpot doctor` runtime-aware: verifies the configured runtime is installed, has correct permissions, can reach configured Slurm endpoints.
+- Concrete work items: audit JACKPOT backend Dockerfile for Apptainer compatibility (UID assumptions, root-write paths), bundle systemd unit templates as CLI package data, CI matrix testing both runtimes on Linux.
+
+------
+
+### 5. Per-run executor profiles
+
+The architectural unlock for both scenario B + Slurm and scenario C. Executor selection is **not a deployment-time decision** — it's a per-launch choice driven by configured profiles.
+
+The execution-profile model:
+
+```
+[deployment-time]
+operator configures one or more execution profiles in jackpot config
+  - "local"        : Nextflow on the API server, Docker
+  - "slurm-mylab"  : Submit to lab Slurm queue, Apptainer
+  - "slurm-univ"   : Submit to university cluster, Apptainer, lab account
+  - "gcp-batch"    : Burst to GCP Batch (stretch)
+
+[launch-time]
+user picks a profile when launching a pipeline run, or accepts the
+per-pipeline default
+```
+
+This translates to Nextflow's `-profile` flag plus JACKPOT-aware metadata (Slurm account, scratch directory, container engine, work directory). Pipeline definitions in the zoo don't change — they're already nf-core-standards compatible. What changes is the JACKPOT-side machinery for storing profiles, surfacing them at launch time, and generating the right `nextflow.config` snippet.
+
+Resolution at launch time: explicit `profile_name` > pipeline's first matching default profile > deployment's `is_default=true` profile > error.
+
+**Stretch goal for scenario B: cloud burst to GCP Batch.** Nextflow has had Google Cloud Batch support since 23.x. Operationally this is `executor = 'google-batch'` plus credentials and data staging. JACKPOT's existing WIF + service account setup already covers credentials. Cost surfacing pre-launch is a real product feature, not optional.
+
+------
+
+### 6. File references with storage state — JACKPOT does not copy data on ingest
+
+The mental-model shift driving this: JACKPOT is a metadata database that knows where data lives, **not a storage system that holds your data**. Storage is something the operator already has — a lab NAS, a cluster filesystem, an institutional bucket, a cloud storage tier.
+
+Storage-state machine (`FileStorageState` enum):
+
+| State | Meaning | Lifecycle owner |
+|---|---|---|
+| `EXTERNAL` | URI not under JACKPOT control (default for ingest) | Operator/user |
+| `MANAGED` | JACKPOT-owned storage; full lifecycle | JACKPOT |
+| `MIRRORED` | Managed copy backed by external original | JACKPOT (with origin tracking) |
+| `STAGED` | Temp copy for a specific pipeline run; auto-cleaned | JACKPOT |
+| `BROKEN` | External file no longer accessible (terminal) | n/a |
+
+Behavioral defaults:
+
+- Ingest defaults to `EXTERNAL`. Pointing JACKPOT at a file path or URI registers it; no copy occurs.
+- Pipeline outputs default to `MANAGED`. When a pipeline produces results, JACKPOT owns those.
+- Pipeline inputs stay in their existing state. Running a pipeline doesn't take ownership of input data.
+- Cheap fingerprint at ingest, full SHA-256 lazily. Size + first-64KB hash + last-64KB hash for dedup-during-ingest. Full hash queued as a background job.
+- Periodic verification of EXTERNAL files: re-stat them and update `last_verified_at`, mark `BROKEN` if missing.
+- Pre-pipeline-launch verification: refuse launch if any input is `BROKEN`.
+- Explicit promotion: `jackpot files promote --to managed` for users who want JACKPOT to take ownership.
+
+**A correction to the original synthesis:** the initial design called for two new tables (`file_references` + `sample_files` association table). When implementing F-2 we discovered the existing `sample_files` table from the baseline migration is already substantial — `sample_id_fk`, `uri`, `raw_uri`, `filename`, `file_size_bytes`, `md5`, `file_type`, `library_layout`, `read_direction`, `lane`, `chunk_index`, `paired_file_id`, `scrub_status`, `pii_scan_status`, `ingest_method`, `ingest_timestamp`, `is_deleted`, `deleted_at`. Better to **extend the existing `sample_files` with the P0f columns** than create a parallel table. One fewer concept, no migration of existing rows, and `md5` already does primitive content-addressing that can be lazy-upgraded to SHA-256.
+
+------
+
+### 7. Architecture synthesis output
+
+The 10 design decisions consolidated into the synthesis:
+
+| # | Decision |
+|---|---|
+| 1 | The eight deployment scenarios (A-H), with on-prem first-class |
+| 2 | Three Python packages — `jackpot` (CLI/installer), `jackpot-sdk` (client), backend as Docker image only |
+| 3 | Both Docker and Apptainer as first-class container runtimes |
+| 4 | Executor profiles as per-pipeline-run choice |
+| 5 | File references with storage state, not file copies |
+| 6 | Open-source adoptions, prioritized (seqsender, MIRA-NF, PHoeNIx, MycoSNP, aquascope, tostadas, MicrobeTrace, PHES-ODM, GA4GH service-info + DRS, Sapporo-WES spike, Wave self-hosted) |
+| 7 | `jackpot init` as the centerpiece |
+| 8 | Sequencing — A/B/C bulletproof first, D/E/F upgrade paths |
+| 9 | What changes in the existing roadmap (GCP production becomes scenario D/E hardening, on-prem is the primary story) |
+| 10 | What stays the same (FastAPI/SQLAlchemy 2/Alembic/Pydantic v2 stack, Nextflow, 21 routers, all conventions, Critical Rules 1-56) |
+
+------
+
+### 8. P0f F-2 implementation — file_references schema migration
+
+The first concrete code chunk after the synthesis. F-2 creates the schema infrastructure that the rest of P0f (F-3 through F-12) will write to and read from.
+
+**Implementation arc** — landed cleanly but exposed multiple post-monorepo issues along the way:
+
+1. **Docker stack wouldn't start.** `docker compose up` returned `services: {}` because the docker-compose.yml was post-monorepo with profile-gated services and required `COMPOSE_PROFILES=laptop` (or `--env-file instances/local/.env.local`) to activate any service. Fix: documented + ran with profile.
+
+2. **API container crashed on startup with `ModuleNotFoundError: No module named 'slowapi'`.** The post-monorepo Dockerfile didn't include slowapi as a runtime dep even though `backend/main.py` imports it. Fix: `uv add` against the workspace root failed (no `[project]` table — workspace root is virtual), then `uv add --package backend` failed (workspace-member name lookup is by `[project] name`, not directory name), finally `cd backend && uv add slowapi` worked.
+
+3. **Doubled `backend/backend/` import path noticed.** `/app/backend/backend/main.py` works by accident — `WORKDIR=/app` plus `uvicorn backend.main:app` resolves the inner `backend/` package. Not blocking, flagged for cleanup.
+
+4. **Migration self-loop.** First attempt to write the migration created a file with `revision == down_revision == "00b4bd99ddee"`, which collided with the already-existing P0e cleanup migration of the same hex (rename example org and lab). Alembic refused to load the graph at all (`LoopDetected`). Fix: deleted the broken file, regenerated via `alembic revision -m` to get a fresh hex (`34382b7b82c6`), kept the legitimate `00b4bd99ddee` migration untouched.
+
+5. **DuplicateTable error on first migration apply.** The migration as drafted created a new `file_references` table and a new `sample_files` table — but `sample_files` already exists in the baseline migration with a rich schema (md5, scrub_status, paired_file_id, etc.). Pivot: **extend the existing `sample_files` with the P0f columns** rather than creating a parallel table. Net result is cleaner — one fewer table, no row migration, `md5` becomes the lazy-upgradable seed for `head64k_hash`/`tail64k_hash`.
+
+6. **File-write didn't land via str_replace approach.** The script that was supposed to overwrite the migration body silently didn't run because the regex looking for `revision = "..."` (no type annotation, double quotes) didn't match the alembic-generated form `revision: str = '34382b7b82c6'` (annotated, single quotes). Fix: hardcoded the known revision values in a v2 writer script, eliminating the regex.
+
+7. **Empty-DB test passed.** All 18 migrations from empty → head, including the new file_references migration. Critical Rule 44 verified for the new addition.
+
+8. **Dev-DB application succeeded.** Backfill populated `head64k_hash`/`tail64k_hash` from `md5` for every existing `sample_files` row.
+
+9. **Test suite green.** Ran into another series of missing deps in the api container: `pytest-cov` (coverage plugin), `pytest-asyncio` (async test discovery), `testcontainers[postgres]` (real-DB fixtures), `hypothesis` (property-based), `pytest-httpx` (CLI HTTPX mocking). Each `uv pip install` from inside the container peeled off another layer. Eventually pivoted to host-side `uv run pytest` which had all deps already from the workspace `uv sync`. **891 passed, 1 skipped, 0 failed.**
+
+------
+
+### 9. Critical Rules 57-60 added
+
+The four rules codify the new principles introduced by the synthesis:
+
+- **57. JACKPOT does not copy data on ingest. Default storage_state is `EXTERNAL`.** Copies happen in exactly four cases, all explicit (MANAGED intent at ingest, pipeline output materialization, `jackpot files promote`, pipeline staging across compute boundary).
+- **58. sample_files is the dedup primitive. content_hash, not URI, is the logical key.** Multiple URIs may point to the same file via `alternate_uris`. Cheap fingerprint at ingest, full SHA-256 lazily.
+- **59. Pipeline executor selection is per-run, not per-deployment.** Resolution: explicit > pipeline-default > deployment-default > error.
+- **60. Cluster-bound pipeline runs must work whether or not compute nodes can reach the API.** HTTP weblog receiver is best-effort (never raises); log poller is source of truth when `weblog_reachable=false`.
+
+The rules were originally numbered 46-49 in the synthesis output, then renumbered to 57-60 once Glen confirmed CLAUDE.md already had 56 rules (P0e closeout work in Session 14 had added more rules than memory tracked). One-shot Python script handled the renumbering across spec.md and the migration file.
+
+------
+
+### 10. Documents updated
+
+- **spec.md** gained three new sections — Phase P0f Specification, Phase P0g Specification, Phase P0h Specification (~250 new lines total). Stale Q-17 backlog line removed. Critical-rules count metadata updated 51 → 60.
+- **CLAUDE.md** gained four new Critical Rules (57-60), ~80 lines.
+- **todo.md** gained three new phase sections — P0f (12 items), P0g (11 items), P0h (10 items), 33 total sub-tasks across the three phases. Each phase has its own Sub-phase prefix (F-1 to F-12, G-1 to G-11, H-1 to H-10).
+- **`backend/db/migrations/versions/34382b7b82c6_add_file_references.py`** — the working Alembic migration. Revision `34382b7b82c6`, down_revision `00b4bd99ddee`. ALTER TABLE `sample_files` adding 12 columns, plus `file_storage_state` ENUM, three partial indexes, four CHECK constraints, `updated_at` trigger, table comment.
+
+------
+
+## Decisions
+
+- *On-prem first.* Marketing and docs lead with laptop and single-server scenarios; cloud is the upgrade path. WHO IPSN equity story benefits.
+- *Eight scenarios, not six.* B (single on-prem server) and C (university RC-hosted) are now first-class, distinct from D (single-org cloud). The earlier Scenario T (Tribal sovereignty) collapses into E/F+governance.
+- *Three Python packages.* `jackpot` (installer/CLI on PyPI + Bioconda), `jackpot-sdk` (programmatic client on PyPI), `jackpot-schema` deferred. Backend stays Docker-image-only. `cli/jackpot/sdk/` directory already exists from P0e.
+- *Docker AND Apptainer as peers.* Same OCI images, both runtimes. Systemd as common service manager on Linux. macOS stays Docker Compose.
+- *Executor profiles per-run, not per-deployment.* `execution_profiles` table, profile resolution at launch time. Pipeline definitions in the zoo don't change. Profile selection in launch UI.
+- *No copy on ingest.* `EXTERNAL` is default `storage_state`; copies are explicit.
+- *Extend `sample_files` with P0f columns.* Don't create a parallel `file_references` table — the existing schema already does most of what we needed.
+- *Critical Rules append-only.* New rules 57-60 numbered after the existing 56; renumber across all referencing documents in one script pass.
+- *Open-source adoption sequencing locked.* Month 3: seqsender, MIRA-NF, PHoeNIx, GA4GH `/service-info`, DRS URIs, PHIN VADS pull. Month 4: MycoSNP, aquascope, tostadas, MicrobeTrace, PHES-ODM, Sapporo-WES spike. Month 5+: Wave self-hosted, Crypt4GH, Beacon v2.
+
+------
+
+## Outcome
+
+P0f F-2 is in. The schema infrastructure for content-hash-keyed file deduplication is live in the dev DB; the migration applies cleanly from empty per Critical Rule 44; existing test suite is green. spec.md, CLAUDE.md, and todo.md all updated with the new architectural reframing.
+
+**Pending P0f items** (F-1 plus F-3 through F-12):
+
+- **F-1** — LinkML schema additions in `schema/schema/jackpot_schema.yaml` (`file_storage_state` enum + new columns on `sample_files`). Quick, ~15 minutes. Should land before F-3 so F-3 can import the right Pydantic types.
+- **F-3** — `backend/file_fingerprint.py`. Pure logic, fully unit-testable. The natural next implementation chunk after F-1.
+- **F-4** — `compute_full_content_hash` APScheduler job. Wraps F-3's fingerprint function in periodic execution.
+- **F-5** — `verify_file_references` APScheduler job.
+- **F-6** — Ingest API updates (default `EXTERNAL`, new `/api/v1/ingest/register` endpoint).
+- **F-7** — `pipeline_results_loader.py` updates (outputs default to `MANAGED`).
+- **F-8** — Pre-launch verification.
+- **F-9** — `jackpot files promote` CLI command.
+- **F-10** — UI surfacing of storage state.
+- **F-11** — Tests.
+- **F-12** — Docs (partial — spec.md and CLAUDE.md done; remaining: `docs/file_references.md`, operator-facing docs).
+
+**Post-monorepo housekeeping accumulated** (surfaced during F-2 prep, none blocking but worth a coordinated cleanup pass):
+
+- Add `slowapi` to backend runtime deps (currently imported in `main.py` but undeclared).
+- Add `pytest-cov`, `pytest-asyncio`, `testcontainers[postgres]`, `hypothesis`, `pytest-httpx` to backend dev deps (manually installed in the api container during F-2; missing from canonical workspace declaration).
+- Decide: Dockerfile.api lean prod image AND a dev image with `--dev` deps, or always include dev deps?
+- Mount `/var/run/docker.sock` into api service in `docker-compose.yml` so testcontainers-based tests can run inside the container (currently host-side `uv run pytest` is the only working path).
+- Document `COMPOSE_PROFILES=laptop` (or `--env-file instances/local/.env.local`) requirement loudly in README and `docs/local_dev_setup_guide_macos.md`.
+- Make `backend/alembic.ini` use `%(here)s/db/migrations` so alembic invocations work from any cwd, not just `backend/`.
+- Clean up the broken `.venv` symlink at `/app/.venv` inside the api container (different from `/opt/venv` which is the real venv).
+- Resolve schema mount path inconsistency (`ui` mounts at `/app/schema`, `api` mounts at `/schema`).
+
+**Pending architectural follow-ups**, in expected order:
+
+- **P0f F-1** — LinkML schema additions (next chunk).
+- **P0f F-3 through F-12** — file fingerprinting, background jobs, ingest API changes, UI.
+- **P0g** — execution profiles (schema + endpoints + profile templates + launch-time selection + cost estimation).
+- **P0h** — Slurm executor support (Slurm Jinja2 template, Apptainer container engine, log poller, GCP Batch stretch goal).
+- **Phase 24.5** — sovereignty + BYOP design lockdown (gates P0b).
+- **P0b** — Schema v5.0 (instances + tenants + federated_peers + BYOP/eukaryotic schema).
+- **P0c** — multi-tenancy middleware + sovereignty deletion path. Forced earlier by scenario C.
+- **B-FED-1** — central CA federation peer authentication.
+- **P1** — `POST /api/v1/auth/refresh` (real token-rotation work).
+
+The next session work depends on Glen's call. P0f F-3 (`backend/file_fingerprint.py`) is the natural continuation — pure logic, unit-testable, no DB writes, roughly half a day's work. After F-3 lands, F-4 becomes "wrap this in APScheduler and update rows." Alternatively, the post-monorepo housekeeping list could be done as one coordinated cleanup pass before any more new work — depends on whether the gaps are actively biting other workflows.

@@ -95,6 +95,66 @@ unblocked item.
 
 ---
 
+### Post-monorepo housekeeping (surfaced during F-2 prep)
+
+The P0f F-2 implementation in Session 15 surfaced multiple gaps from
+the monorepo migration. None blocked F-2 from landing, but they
+accumulate. Worth a coordinated cleanup pass before P0f F-3 starts.
+
+- [ ] **Establish branching workflow for the monorepo.** P0d migration
+      left only `main`. Decide between:
+      (a) feature branches off main, PR back (recommended for current
+          single-developer-with-AI-assistants reality), or
+      (b) restore a long-lived `development` branch with `main` as
+          released-state.
+      Document the choice in `docs/CLAUDE.md` "Current Baseline" and
+      `docs/jackpot_local_dev_setup_guide_macos.md`. Update the
+      staging deploy workflow trigger if it's still expecting a
+      `staging` branch push.
+- [ ] **Add `slowapi` to backend runtime deps.** Currently imported in
+      `backend/main.py` but missing from `backend/pyproject.toml`.
+      Manually installed during F-2; needs to be declared.
+- [ ] **Add dev deps to backend.** `pytest-cov`, `pytest-asyncio`,
+      `testcontainers[postgres]`, `hypothesis`, `pytest-httpx` were
+      manually installed in the api container during F-2 to get tests
+      running. They belong in `backend/[dependency-groups.dev]`
+      (or equivalent uv-supported form) and the Dockerfile should
+      `uv sync --dev` for the api image.
+- [ ] **Decide: lean prod image AND dev image, or always include
+      dev deps?** Either `Dockerfile.api` builds two variants
+      (`api-prod`, `api-dev`) or accepts the larger dev image
+      everywhere. Document the choice.
+- [ ] **Mount `/var/run/docker.sock` into api service** in
+      `docker-compose.yml` so testcontainers-based tests can run
+      inside the container. Currently host-side `uv run pytest` is the
+      only working path; in-container tests fail with
+      `docker.errors.DockerException` for every test that needs a
+      live Postgres fixture.
+- [ ] **Document `COMPOSE_PROFILES=laptop` requirement.** Add to README
+      and `docs/jackpot_local_dev_setup_guide_macos.md` — without it,
+      `docker compose up` returns `services: {}` and the next person
+      hits the same wall.
+- [ ] **Make `backend/alembic.ini` use `%(here)s/db/migrations`.**
+      Currently the relative `script_location = db/migrations` only
+      resolves correctly when alembic runs from `backend/`. Adding
+      `%(here)s` makes invocations work from any cwd.
+- [ ] **Clean up the broken `.venv` symlink at `/app/.venv`** inside
+      the api container. Different from `/opt/venv` which is the real
+      venv; the broken symlink trips `uv pip install` from the
+      container's WORKDIR.
+- [ ] **Resolve schema mount path inconsistency.** `ui` service mounts
+      schema at `/app/schema`, `api` mounts at `/schema`. Pick one
+      canonical path so streamlit and api can use the same import
+      logic.
+- [ ] **Audit `Dockerfile.api` and `Dockerfile.ui` for Apptainer
+      compatibility.** Required for scenario C where Docker isn't
+      allowed on the cluster. UID assumptions, root-write paths,
+      Docker-socket assumptions all need flagging or fixing. (Pairs
+      with the broader Apptainer support work in Phase P0e of the
+      jackpot init CLI.)
+
+---
+
 ## Phase 0 — Pre-Session Fixes (COMPLETE)
 
 These were the blocking bugs resolved before any router session began.
