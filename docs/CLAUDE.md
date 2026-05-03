@@ -1284,6 +1284,16 @@ response shape in a router — use the helpers from `backend/responses.py`.
 
 # Action with no resource to return (e.g. DELETE, state change)
 {"success": true, "message": "Sample archived."}
+
+# With non-fatal advisory warnings (Phase P0f F-6 — e.g. /api/v1/ingest/csv
+# surfacing the new EXTERNAL default when storage_intent column is absent)
+{
+  "success": true,
+  "data": {...},
+  "warnings": [
+    "storage_intent column missing from CSV. Files registered with the default storage_state='EXTERNAL'..."
+  ]
+}
 ```
 
 ### Error responses
@@ -1335,6 +1345,7 @@ response shape in a router — use the helpers from `backend/responses.py`.
 | `CONFLICT` | 409 | Duplicate sample_id, duplicate access request |
 | `SCRUB_PENDING` | 409 | Files not yet available (scrub in progress) |
 | `SCRUB_APPROVAL_REQUIRED` | 409 | Skip requested, awaiting Lab Director approval |
+| `FILE_UNREACHABLE` | 400 | URI provided to ingest cannot be read (404, permission denied, network error). Phase P0f F-6. |
 | `INTERNAL_ERROR` | 500 | Unexpected exception — log and return generic message |
 
 ### Response helpers (backend/responses.py)
