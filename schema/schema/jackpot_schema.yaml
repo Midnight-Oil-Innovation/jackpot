@@ -1728,6 +1728,87 @@ classes:
       pii_scan_status: { range: PIIScanStatusEnum, required: true }
       ingest_method:   { range: IngestMethodEnum, required: true }
 
+      # ── P0f file-reference fields ─────────────────────────────────────────
+      content_hash:
+        range: string
+        description: >
+          SHA-256 of the full file contents, hex-encoded (64 characters).
+          The dedup primitive — UNIQUE in the database when non-null. NULL
+          until the compute_full_content_hash background job populates it
+          lazily after registration. See Critical Rule 58.
+      head64k_hash:
+        range: string
+        description: >
+          SHA-256 of the first 64 KB of the file, hex-encoded. Cheap
+          fingerprint piece used together with file_size_bytes and
+          tail64k_hash to short-circuit dedup before the full content_hash
+          is available.
+      tail64k_hash:
+        range: string
+        description: >
+          SHA-256 of the last 64 KB of the file, hex-encoded. Cheap
+          fingerprint piece — see head64k_hash.
+      storage_state:
+        range: FileStorageState
+        required: true
+        ifabsent: "string(EXTERNAL)"
+        description: >
+          Lifecycle ownership of this file: EXTERNAL, MANAGED, MIRRORED,
+          STAGED, or BROKEN. Defaults to EXTERNAL — JACKPOT does not copy
+          bytes on ingest and references files in place. See Critical
+          Rule 57 and the FileStorageState enum.
+      alternate_uris:
+        range: string
+        multivalued: true
+        description: >
+          Additional URIs that point to the same content. Used when the
+          same FASTQ is reachable at multiple locations (e.g. on a local
+          NFS mount at /srv/seq/... and in a cloud archive at
+          gs://archive/...). The primary uri stays in the uri column;
+          everything else lands here.
+      first_seen_at:
+        range: datetime
+        required: true
+        description: >
+          Timestamp when JACKPOT first registered this file. Set DB-side
+          to NOW() at insert; never updated.
+      last_verified_at:
+        range: datetime
+        description: >
+          Timestamp of the most recent successful or attempted verification
+          by the verify_file_references background job. NULL until the job
+          first runs against this row.
+      last_verification_status:
+        range: string
+        description: >
+          Outcome of the most recent verification attempt: OK, MISSING,
+          SIZE_CHANGED, or READ_ERROR. NULL until the job first runs.
+      retention_policy:
+        range: string
+        required: true
+        ifabsent: "string(STANDARD)"
+        description: >
+          Retention class governing how long the file is kept: STANDARD,
+          LONG_TERM, or EPHEMERAL. Defaults to STANDARD.
+      original_uri:
+        range: string
+        description: >
+          For storage_state == MIRRORED only — the external URI that the
+          managed copy was made from. NULL for all other storage states.
+      staged_for_run_id:
+        range: string
+        description: >
+          For storage_state == STAGED only — the UUID of the pipeline run
+          that owns this temporary copy. The staging-cleanup job uses this
+          to identify which staged files are safe to remove. NULL for all
+          other storage states.
+      updated_at:
+        range: datetime
+        required: true
+        description: >
+          Timestamp of the most recent change to this row. Maintained by a
+          DB trigger on UPDATE; not user-writable.
+
 # ════════════════════════════════════════════════════════════════════════════
 # ENUMERATIONS
 # ════════════════════════════════════════════════════════════════════════════
@@ -2558,6 +2639,40 @@ enums:
         description: >
           Reverse read. Detected from: _R2, _2, _reads_2, _reverse
           naming conventions (case-insensitive).
+
+  # ── File Storage State (P0f lifecycle) ────────────────────────────────────
+
+  FileStorageState:
+    description: >
+      Lifecycle ownership of a file referenced by sample_files. Determines
+      whether JACKPOT controls the bytes (MANAGED, STAGED), references them
+      in place (EXTERNAL), keeps a managed copy alongside an external
+      original (MIRRORED), or has lost access (BROKEN). Default for ingest
+      is EXTERNAL — JACKPOT does not copy bytes on registration. See
+      Critical Rule 57.
+    permissible_values:
+      EXTERNAL:
+        description: >
+          URI is not under JACKPOT storage control; JACKPOT references the
+          file in place and never copies or deletes it. Default for ingest.
+      MANAGED:
+        description: >
+          File lives in JACKPOT-controlled storage. JACKPOT owns the full
+          lifecycle including retention enforcement and deletion.
+      MIRRORED:
+        description: >
+          JACKPOT-owned managed copy backed by an external original. Both
+          copies exist; original_uri identifies the external source.
+      STAGED:
+        description: >
+          Temporary copy made for a specific pipeline run. Cleaned up by
+          the staging-cleanup job after the run completes plus a retention
+          window. staged_for_run_id identifies the owning run.
+      BROKEN:
+        description: >
+          External file is no longer accessible (404, permission denied,
+          host unreachable). Terminal state — the row is retained for
+          audit but the bytes cannot be read.
 
   # ── Age Range (privacy-preserving decade buckets) ─────────────────────────
 
