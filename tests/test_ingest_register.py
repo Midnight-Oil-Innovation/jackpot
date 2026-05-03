@@ -241,9 +241,7 @@ async def test_register_invalid_storage_intent_returns_422(client, fastq_files):
             "/api/v1/ingest/register",
             json={
                 "sample_metadata": _base_metadata(sid),
-                "files": [
-                    {"role": "R1", "uri": f"file://{r1}", "storage_intent": bad}
-                ],
+                "files": [{"role": "R1", "uri": f"file://{r1}", "storage_intent": bad}],
             },
         )
         assert resp.status_code == 422, f"intent={bad}: {resp.text}"

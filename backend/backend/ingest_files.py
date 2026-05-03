@@ -79,9 +79,7 @@ def register_file(
             f"must be one of {sorted(VALID_STORAGE_INTENTS)}."
         )
     if role not in VALID_ROLES:
-        raise ValueError(
-            f"Invalid role {role!r}; must be one of {sorted(VALID_ROLES)}."
-        )
+        raise ValueError(f"Invalid role {role!r}; must be one of {sorted(VALID_ROLES)}.")
 
     if precomputed_fingerprint is not None:
         size_bytes, head_hash, tail_hash = precomputed_fingerprint

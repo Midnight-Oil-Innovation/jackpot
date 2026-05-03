@@ -92,11 +92,7 @@ async def test_csv_storage_intent_column_present_per_row(client):
     _cleanup_samples(prefix)
     a = f"{prefix}EXT"
     b = f"{prefix}MAN"
-    body = (
-        _CSV_HEADER_WITH_INTENT
-        + _row(a, "EXTERNAL")
-        + _row(b, "MANAGED")
-    )
+    body = _CSV_HEADER_WITH_INTENT + _row(a, "EXTERNAL") + _row(b, "MANAGED")
     resp = await client.post(
         "/api/v1/ingest/csv",
         files={"file": ("batch.csv", body.encode(), "text/csv")},
