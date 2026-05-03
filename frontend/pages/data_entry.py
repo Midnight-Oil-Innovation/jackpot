@@ -21,7 +21,7 @@ save only fires after explicit acknowledgement.
 from __future__ import annotations
 
 import time
-from datetime import datetime
+from datetime import UTC, datetime
 
 import streamlit as st
 
@@ -29,6 +29,7 @@ from frontend.components.badges import (
     SHARING_LEVELS,
     render_badge,
     sharing_badge,
+    storage_state_badge,
     tier_badge,
 )
 from frontend.lib.api import ApiError, get_client
@@ -86,6 +87,57 @@ def _autosave_draft() -> None:
     # "Auto-save" is local-only: the draft lives in st.session_state
     # until the user hits Save. Persisting drafts to the server is a
     # Month 3 feature gated on backlog item 57.
+
+
+def _format_relative(iso: str | None) -> str:
+    """Phase P0f F-10: short relative time for verification timestamps."""
+    if not iso:
+        return "—"
+    try:
+        ts = datetime.fromisoformat(iso.replace("Z", "+00:00"))
+    except ValueError:
+        return iso
+    if ts.tzinfo is None:
+        ts = ts.replace(tzinfo=UTC)
+    now = datetime.now(UTC)
+    delta = now - ts
+    seconds = int(delta.total_seconds())
+    if seconds < 60:
+        return f"{seconds}s ago"
+    if seconds < 3600:
+        return f"{seconds // 60}m ago"
+    if seconds < 86400:
+        return f"{seconds // 3600}h ago"
+    return f"{seconds // 86400}d ago"
+
+
+def _render_files_section(sample: dict) -> None:
+    """Phase P0f F-10: surface storage_state for each file on the sample.
+
+    A small inline section beneath the header badges showing one row
+    per ``sample_files`` entry with its filename, storage_state badge,
+    and last_verified_at relative time. Click on a BROKEN row routes
+    the user to the broken-files admin view for remediation.
+    """
+    files = sample.get("files") or []
+    if not files:
+        return
+    with st.expander(f"Files ({len(files)})", expanded=False):
+        header = st.columns([3, 1.4, 1.4, 1])
+        header[0].caption("**File**")
+        header[1].caption("**Storage**")
+        header[2].caption("**Last verified**")
+        header[3].caption("")
+        for f in files:
+            row = st.columns([3, 1.4, 1.4, 1])
+            uri = f.get("uri") or f.get("filename") or "—"
+            truncated = uri if len(uri) <= 60 else "…" + uri[-59:]
+            row[0].markdown(f"`{truncated}`", help=uri)
+            with row[1]:
+                render_badge(storage_state_badge(f.get("storage_state")))
+            row[2].caption(_format_relative(f.get("last_verified_at")))
+            if f.get("storage_state") == "BROKEN" and row[3].button("Fix", key=f"de.fix.{f['id']}"):
+                st.switch_page("pages/broken_files.py")
 
 
 def _render_form(sample: dict) -> dict:
@@ -200,6 +252,8 @@ def render() -> None:
         f"ingest: {sample.get('ingest_timestamp') or '—'} · "
         f"scrub: {sample.get('scrub_status') or '—'}"
     )
+
+    _render_files_section(sample)
 
     draft = _render_form(sample)
     _autosave_draft()

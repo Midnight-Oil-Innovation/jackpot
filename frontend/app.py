@@ -46,7 +46,8 @@ def main() -> None:
         "- **Datasets** — analytical datasets (Month 3 placeholder)\n"
         "- **Pipelines** — launch + monitor + resume\n"
         "- **Access requests** — request + review access\n"
-        "- **Notifications** — inbox (Month 3 placeholder)"
+        "- **Notifications** — inbox (Month 3 placeholder)\n"
+        "- **Broken files** — operator triage for unreachable file references (P0f)"
     )
 
 

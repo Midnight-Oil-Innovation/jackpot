@@ -69,6 +69,17 @@ def _render_sidebar() -> dict:
     date_to = st.sidebar.date_input("Collected to", value=None, key="search.date_to")
 
     st.sidebar.divider()
+    has_broken = st.sidebar.checkbox(
+        "Show only samples with broken files",
+        value=False,
+        key="search.has_broken_files",
+        help=(
+            "Phase P0f: filters to samples with at least one sample_files "
+            "row in BROKEN state. Use the Broken files page to remediate."
+        ),
+    )
+
+    st.sidebar.divider()
     st.sidebar.toggle(
         "Include external databases (NCBI / ENA / GISAID)",
         key=SS_EXTERNAL,
@@ -97,6 +108,8 @@ def _render_sidebar() -> dict:
         params["date_from"] = str(date_from)
     if date_to:
         params["date_to"] = str(date_to)
+    if has_broken:
+        params["has_broken_files"] = "true"
     return params
 
 

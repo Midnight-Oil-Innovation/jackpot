@@ -28,6 +28,8 @@ ALLOWED_SORT_COLUMNS = {
     "access_expires_at",
     "date_collected",
     "date_sequenced",
+    "last_verified_at",
+    "first_seen_at",
     "sample_id",
     "organism_name",
     "quality_status",
