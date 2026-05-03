@@ -22,7 +22,7 @@ class TestParseApiUrl:
     def test_reads_jackpot_api_url(self, tmp_path: Path):
         env_local = tmp_path / ".env.local"
         env_local.write_text(
-            "# Header comment\n" "JACKPOT_API_URL=https://api.example.org\n" "OTHER_VAR=ignored\n"
+            "# Header comment\nJACKPOT_API_URL=https://api.example.org\nOTHER_VAR=ignored\n"
         )
         assert parse_api_url_from_env_local(env_local) == "https://api.example.org"
 
@@ -258,7 +258,7 @@ class TestBootstrapCli:
         (instance_dir / "secrets").mkdir(parents=True)
         (instance_dir / "jackpot.toml").write_text('[scenario]\ncode = "F"\nname = "CI"\n')
         (instance_dir / ".env.local").write_text(
-            "JACKPOT_API_URL=http://localhost:8000\n" "DATABASE_URL=postgresql://j:j@localhost/j\n"
+            "JACKPOT_API_URL=http://localhost:8000\nDATABASE_URL=postgresql://j:j@localhost/j\n"
         )
         (instance_dir / "seed.sql").write_text("-- empty\n")
         (instance_dir / "secrets" / "jwt_signing_key.txt").write_text("deadbeef" * 8 + "\n")

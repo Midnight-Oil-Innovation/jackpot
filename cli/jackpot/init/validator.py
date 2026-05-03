@@ -107,13 +107,12 @@ def check_health(
             return HealthCheckResult(
                 ok=True,
                 detail=(
-                    f"healthy after {_now() - start:.1f}s "
-                    f"(version={payload.get('version', '?')})"
+                    f"healthy after {_now() - start:.1f}s (version={payload.get('version', '?')})"
                 ),
                 elapsed_seconds=_now() - start,
             )
 
-        last_detail = f"status={payload.get('status')!r} " f"database={payload.get('database')!r}"
+        last_detail = f"status={payload.get('status')!r} database={payload.get('database')!r}"
         _sleep(poll_interval_seconds)
 
 

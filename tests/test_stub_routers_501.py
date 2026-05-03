@@ -27,9 +27,9 @@ STUB_ROUTERS = [
 @pytest.mark.asyncio
 async def test_stub_router_returns_501(client, path, name):
     response = await client.get(path)
-    assert (
-        response.status_code == 501
-    ), f"{name} should be 501; got {response.status_code} (body: {response.text})"
+    assert response.status_code == 501, (
+        f"{name} should be 501; got {response.status_code} (body: {response.text})"
+    )
 
 
 @pytest.mark.parametrize("path,name", STUB_ROUTERS)

@@ -115,14 +115,14 @@ def init() -> None:
     type=str,
     default=None,
     help=(
-        "Skip the detector questions and use this scenario directly " "(A | B | C | D | E | F | T)."
+        "Skip the detector questions and use this scenario directly (A | B | C | D | E | F | T)."
     ),
 )
 @click.option(
     "--non-interactive",
     is_flag=True,
     default=False,
-    help=("Fail rather than prompt. Requires --scenario. Used by CI runners " "and shell scripts."),
+    help=("Fail rather than prompt. Requires --scenario. Used by CI runners and shell scripts."),
 )
 def detect_cmd(scenario_code: str | None, non_interactive: bool) -> None:
     """Run the scenario detector. Prints the chosen scenario + rationale.
@@ -172,7 +172,7 @@ def scenario_info_cmd(code: str, as_json: bool) -> None:
     code_upper = code.strip().upper()
     if code_upper not in SCENARIO_REGISTRY:
         raise click.UsageError(
-            f"Unknown scenario {code!r}. " f"Valid: {', '.join(sorted(SCENARIO_REGISTRY))}"
+            f"Unknown scenario {code!r}. Valid: {', '.join(sorted(SCENARIO_REGISTRY))}"
         )
 
     scenario = SCENARIO_REGISTRY[code_upper]  # type: ignore[index]
@@ -243,7 +243,7 @@ def _gather_operator_overrides(
         gh_value = gh_values.get(gh_var_name)
         if gh_value:
             click.echo(
-                f"  Found in GitHub vars ({gh_var_name}): " f"{click.style(gh_value, fg='green')}"
+                f"  Found in GitHub vars ({gh_var_name}): {click.style(gh_value, fg='green')}"
             )
             if click.confirm(f"  Use this for {field_name}?", default=True):
                 overrides[field_name] = gh_value
@@ -346,8 +346,7 @@ def configure_cmd(
     scenario_code_upper = scenario_code.strip().upper()
     if scenario_code_upper not in SCENARIO_REGISTRY:
         raise click.UsageError(
-            f"Unknown --scenario {scenario_code!r}. "
-            f"Valid: {', '.join(sorted(SCENARIO_REGISTRY))}"
+            f"Unknown --scenario {scenario_code!r}. Valid: {', '.join(sorted(SCENARIO_REGISTRY))}"
         )
     scenario = SCENARIO_REGISTRY[scenario_code_upper]  # type: ignore[index]
 
@@ -475,8 +474,7 @@ def secrets_cmd(
     instance_dir = Path(instances_dir_str) / _validate_instance_name(instance_name)
     if not instance_dir.exists():
         raise click.UsageError(
-            f"Instance directory {instance_dir} does not exist. "
-            "Run `jackpot init configure` first."
+            f"Instance directory {instance_dir} does not exist. Run `jackpot init configure` first."
         )
 
     scenario_code = _read_jackpot_toml_scenario(instance_dir)
@@ -552,7 +550,7 @@ def secrets_cmd(
 
     click.echo()
     click.echo(
-        "Next: `jackpot init bootstrap --instance " f"{instance_name}` to apply alembic + seed.sql."
+        f"Next: `jackpot init bootstrap --instance {instance_name}` to apply alembic + seed.sql."
     )
 
 
@@ -603,8 +601,7 @@ def validate_cmd(
     instance_dir = Path(instances_dir_str) / _validate_instance_name(instance_name)
     if not instance_dir.exists():
         raise click.UsageError(
-            f"Instance directory {instance_dir} does not exist. "
-            "Run `jackpot init configure` first."
+            f"Instance directory {instance_dir} does not exist. Run `jackpot init configure` first."
         )
 
     api_url = api_url_override or parse_api_url_from_env_local(instance_dir / ".env.local")
@@ -700,8 +697,7 @@ def bootstrap_cmd(
     instance_dir = Path(instances_dir_str) / _validate_instance_name(instance_name)
     if not instance_dir.exists():
         raise click.UsageError(
-            f"Instance directory {instance_dir} does not exist. "
-            "Run `jackpot init configure` first."
+            f"Instance directory {instance_dir} does not exist. Run `jackpot init configure` first."
         )
 
     # Critical Rule 56: refuse to apply seeds onto the committed CI dir.

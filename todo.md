@@ -1504,7 +1504,7 @@ lands in P0h; this phase makes that work possible.
       to operators with concrete examples for each executor type.
 - [ ] Update `spec.md` with the new endpoints and config fields.
 - [ ] Add CLAUDE.md Critical Rule: "Pipeline executor selection is
-      per-run, not per-deployment. Profile resolution: explicit > 
+      per-run, not per-deployment. Profile resolution: explicit >
       pipeline-default > deployment-default > error."
 
 ---
