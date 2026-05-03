@@ -359,6 +359,417 @@ soft delete.
 
 ---
 
+## Phase P0f Specification — File references
+
+> **Status:** Specification — implementation tracked in `todo.md` Phase P0f.
+> Lands schema, endpoints, and modules required for in-place file
+> registration with content-hash deduplication.
+
+### Schema additions
+
+New enum `FileStorageState` in `schema/schema/jackpot_schema.yaml`:
+
+| Value | Meaning | Lifecycle owner |
+|---|---|---|
+| `EXTERNAL` | URI not under JACKPOT control (default for ingest) | Operator/user |
+| `MANAGED` | JACKPOT-owned storage; full lifecycle | JACKPOT |
+| `MIRRORED` | Managed copy backed by external original | JACKPOT (with origin tracking) |
+| `STAGED` | Temp copy for a specific pipeline run; auto-cleaned | JACKPOT |
+| `BROKEN` | External file no longer accessible (terminal) | n/a |
+
+New class `file_references`:
+
+| Field | Type | Notes |
+|---|---|---|
+| `file_ref_id` | UUID | PK |
+| `content_hash` | string(64) | SHA-256 hex; UNIQUE when non-null; nullable until full hash computed |
+| `size_bytes` | integer | Nullable until verified |
+| `head64k_hash` | string(64) | Cheap fingerprint piece |
+| `tail64k_hash` | string(64) | Cheap fingerprint piece |
+| `storage_state` | FileStorageState | NOT NULL |
+| `primary_uri` | string | NOT NULL |
+| `alternate_uris` | list[string] | Same content at multiple URIs |
+| `first_seen_at` | datetime | NOT NULL |
+| `last_verified_at` | datetime | Updated by verification job |
+| `last_verification_status` | string | `OK`, `MISSING`, `SIZE_CHANGED`, `READ_ERROR` |
+| `retention_policy` | string | `STANDARD`, `LONG_TERM`, `EPHEMERAL` |
+| `original_uri` | string | For MIRRORED — the external source |
+| `staged_for_run_id` | UUID | For STAGED — the pipeline run that owns it |
+| `created_by_id` | integer | FK users |
+| `created_at` | datetime | NOT NULL |
+| `updated_at` | datetime | NOT NULL |
+
+New association class `sample_files`:
+
+| Field | Type | Notes |
+|---|---|---|
+| `id` | UUID | PK |
+| `sample_id` | integer | FK samples |
+| `file_ref_id` | UUID | FK file_references |
+| `role` | enum | `R1`, `R2`, `LONG_READ`, `ASSEMBLY`, `OTHER` |
+| `lane` | integer | Nullable; for multi-lane Illumina |
+| `chunk` | integer | Nullable; for nanopore |
+| `created_at` | datetime | NOT NULL |
+
+UNIQUE constraint: `(sample_id, role, lane, chunk)`.
+
+Deprecated columns on `samples` (kept for one release with backfill
+trigger): `fastq_r1_uri`, `fastq_r2_uri`, `long_read_uri`, `assembly_uri`.
+
+### New endpoints
+
+**POST `/api/v1/ingest/register`** — Path/URI-only registration. No file
+upload body; metadata + URI(s) only. Authenticated users may register
+files into projects they have access to.
+
+Request body:
+
+```json
+{
+  "sample_metadata": {...},
+  "files": [
+    {"role": "R1", "uri": "file:///srv/seq/runs/240501/sample01_R1.fastq.gz",
+     "storage_intent": "EXTERNAL"},
+    {"role": "R2", "uri": "file:///srv/seq/runs/240501/sample01_R2.fastq.gz",
+     "storage_intent": "EXTERNAL"}
+  ]
+}
+```
+
+`storage_intent` values: `EXTERNAL` (default), `MANAGED`, `MIRRORED`.
+
+Response: standard `success` envelope with the registered sample plus
+`file_references` summaries (one per file).
+
+**POST `/api/v1/files/{file_ref_id}/promote`** — Change storage state.
+Body: `{"to": "MANAGED" | "MIRRORED", "retention_policy": "..."}`.
+Returns 202 Accepted with a job ID; copy runs as a background job.
+
+**GET `/api/v1/files/{file_ref_id}`** — Retrieve a file_reference and
+the samples that reference it.
+
+**GET `/api/v1/files/`** — Paginated list with filters: `storage_state`,
+`broken_only`, `project_id`. Standard pagination convention.
+
+**POST `/api/v1/files/{file_ref_id}/verify`** — Force re-verification of
+a single file_reference. Useful from the UI when a user has just put a
+missing file back.
+
+### New modules
+
+**`backend/file_fingerprint.py`** —
+`cheap_fingerprint(uri) -> tuple[int, str, str]`
+returning `(size_bytes, head64k_sha256, tail64k_sha256)`. Reads only
+the first and last 64 KB. Implementations per scheme: `file://` via
+`os.open`/`os.pread`; `gs://` and `s3://` via Range requests through
+`backend/storage.py`; `sra://` via NCBI metadata API. Treats gzip/BGZF
+content transparently — fingerprints compressed bytes, not decompressed.
+
+**`backend/file_references.py`** — CRUD operations and dedup logic.
+`register_file(uri, storage_intent, conn) -> FileReference`. Checks for
+existing file_references with matching cheap fingerprint before
+INSERT; appends to `alternate_uris` on dedup hit. All writes accept
+`conn=db` to participate in caller transactions.
+
+**`backend/jobs/file_jobs.py`** — Two new APScheduler jobs:
+
+- `compute_full_content_hash` — finds rows with `content_hash IS NULL`,
+  streams full SHA-256 in 8 MB buffers, reconciles fingerprint
+  collisions. Default interval 5 min; configurable via
+  `Settings.full_hash_interval_seconds`. Honors
+  `Settings.skip_remote_full_hash` for slow networks.
+- `verify_file_references` — re-stats `EXTERNAL` and `MIRRORED` rows,
+  updates `last_verified_at` and `last_verification_status`.
+  Transitions to `BROKEN` on missing or size-changed files, with
+  `log_audit()` and notification emit. Default interval 24 hours.
+
+### Key rules
+
+- `EXTERNAL` is the default storage_state for any registered file.
+- `file_detector.py` remains the sole owner of file-type and naming
+  logic; `file_fingerprint.py` adds hashing only — never duplicates
+  file-type detection.
+- Pipeline outputs default to `MANAGED`; pipeline inputs are not
+  state-transitioned by running a pipeline.
+- `pipeline_results` rows remain immutable and append-only — file
+  references attached to results are new file_reference rows, not
+  mutations of input rows.
+- Pre-launch verification iterates all input file_references; refuses
+  launch if any are `BROKEN`.
+- All writes participate in caller transaction via `conn` parameter
+  (matches existing `execute_write` and `log_audit` conventions).
+- Audit actions added: `REGISTER_FILE`, `PROMOTE_FILE`,
+  `VERIFY_FILE_FAILED`, `MARK_FILE_BROKEN`.
+
+### Tests
+
+- Unit tests for `cheap_fingerprint()` covering local files, gzip, BGZF,
+  mocked `gs://`, mocked `s3://`, mocked `sra://`.
+- Unit tests for the dedup path: same fingerprint produces one
+  `file_reference` row referenced by multiple samples.
+- Integration tests for both ingest paths (`/api/v1/ingest/csv` and
+  the new `/api/v1/ingest/register`) covering all three storage intents.
+- Integration test for `verify_file_references` marking a file
+  `BROKEN` when it disappears from disk.
+- Integration test for pipeline launch refusing to start with a
+  `BROKEN` input.
+- End-to-end test in `tests/e2e/`: register `EXTERNAL`, run a fixture
+  pipeline, verify the input file_reference is still `EXTERNAL` and
+  only outputs are `MANAGED`.
+
+---
+
+## Phase P0g Specification — Execution profiles
+
+> **Status:** Specification — implementation tracked in `todo.md` Phase P0g.
+> Pipeline executor selection becomes a per-run choice driven by
+> operator-configured profiles. Pairs with P0f (file references) to
+> unlock scenarios B + Slurm and C.
+
+### Schema additions
+
+New class `execution_profiles`:
+
+| Field | Type | Notes |
+|---|---|---|
+| `profile_id` | UUID | PK |
+| `name` | string | UNIQUE within deployment |
+| `executor_type` | enum | `LOCAL`, `SLURM`, `PBS`, `LSF`, `GCP_BATCH`, `AWS_BATCH`, `KUBERNETES` |
+| `container_engine` | enum | `DOCKER`, `APPTAINER`, `SINGULARITY`, `NONE` |
+| `work_dir` | string | Path or `gs://` / `s3://` URI for work directory |
+| `config_overrides` | JSON | Executor-specific fields (account/partition/QOS/project/region/etc.) |
+| `is_default` | boolean | At most one row may have `is_default=true` |
+| `created_by_id` | integer | FK users |
+| `created_at` | datetime | NOT NULL |
+| `active` | boolean | Soft delete via `active=false` |
+
+New association class `pipeline_default_profile`:
+
+| Field | Type | Notes |
+|---|---|---|
+| `pipeline_id` | UUID | FK pipelines |
+| `profile_id` | UUID | FK execution_profiles |
+| `priority` | integer | Lower = preferred when multiple match |
+
+UNIQUE constraint: `(pipeline_id, profile_id)`.
+
+### New endpoints
+
+**GET `/api/v1/profiles/`** — Paginated list of execution_profiles
+visible to the requesting user. All authenticated users may list;
+only Platform Admin or the operator may create.
+
+**POST `/api/v1/profiles/`** — Create a new profile (Platform Admin
+only). Body shape mirrors the schema fields.
+
+**GET `/api/v1/profiles/{profile_id}`** — Get a single profile.
+
+**PATCH `/api/v1/profiles/{profile_id}`** — Update (Platform Admin
+only). Partial update via `model_dump(exclude_none=True)`.
+
+**DELETE `/api/v1/profiles/{profile_id}`** — Soft delete via
+`active=false`. Refused if any pipeline still has it as a default;
+the response lists the blocking pipelines.
+
+**POST `/api/v1/profiles/{profile_id}/test`** — Submit a fixture
+single-process Nextflow job through the profile to verify end-to-end
+reachability. Used by `jackpot doctor` and the UI's "Test connection"
+button. Returns 202 with a job ID.
+
+**POST `/api/v1/pipelines/{pipeline_id}/default-profiles`** —
+Associate a profile as default for a pipeline.
+Body: `{"profile_id": "...", "priority": 1}`.
+
+**Updated** `POST /api/v1/pipelines/{pipeline_id}/launch`: now accepts
+optional `profile_name` (or `profile_id`) in the request body. If
+omitted, resolution order is:
+
+1. Pipeline's first matching default profile by priority.
+2. Deployment's `is_default=true` profile.
+3. Error `400 NO_PROFILE_AVAILABLE` listing configured profiles.
+
+If `profile_name` is provided but the profile is missing or inactive,
+return `400 PROFILE_NOT_FOUND` with the list of available names.
+
+### New modules
+
+**`backend/pipeline_config/profile_renderer.py`** —
+`render_nextflow_config(profile, pipeline, run_id) -> str`. Selects the
+right Jinja2 template based on `profile.executor_type`, layers in
+profile fields and pipeline-specific overrides, returns the full
+`nextflow.config` body. The launch endpoint writes this to
+`<work_dir>/runs/<run_id>/jackpot_run.config` and passes
+`-c jackpot_run.config` to Nextflow.
+
+**`backend/pipeline_config/profile_templates/`** — One Jinja2 template
+per executor type:
+
+profile_templates/
+├── base.config.j2          # shared settings (process defaults, plugins)
+├── local.config.j2
+├── slurm.config.j2
+├── pbs.config.j2
+├── lsf.config.j2
+├── gcp_batch.config.j2
+├── aws_batch.config.j2
+└── kubernetes.config.j2
+
+Each template extends `base.config.j2` and renders the executor-specific
+block. Container-engine-aware: when `container_engine=APPTAINER`, the
+rendered config sets `apptainer.enabled=true` and disables Docker; vice
+versa for `DOCKER`.
+
+**`backend/pipeline_config/cost_estimator.py`** —
+`estimate_cost(profile, pipeline, sample_count) -> CostEstimate`.
+Pluggable backend; stub for non-cloud profiles, concrete for
+`GCP_BATCH` using cached pricing tables refreshed weekly via a new
+APScheduler job `refresh_gcp_pricing`. Logged on every launch for
+actuals-vs-estimate analysis.
+
+**`backend/jobs/work_dir_jobs.py`** —
+`cleanup_old_work_dirs` APScheduler job. Removes `STAGED`
+file_references and entire run directories older than configurable
+retention (default 7 days). Honors a per-profile retention override.
+
+### Key rules
+
+- `Settings.work_dir` is the default `JACKPOT_WORK_DIR` for runs that
+  don't override via profile. Default per scenario:
+  - Scenario A: `~/.jackpot/work/`
+  - Scenario B (Docker): `/srv/jackpot/work/`
+  - Scenario B/C (Slurm): operator-provided shared filesystem path
+  - Scenario D/E: `gs://<deployment>-jackpot-work/` or `s3://...`
+- Quick-fast pipelines (file_detector smoke runs, DLP scans, validation)
+  default to the deployment's `LOCAL` profile during seeding — they
+  always run on the API server.
+- Heavy pipelines (PHoeNIx, MIRA-NF, MycoSNP-NF, aquascope) have no
+  default seeded; operator picks at launch or sets a default.
+- Generated `nextflow.config` snippets are stored alongside run logs at
+  `<work_dir>/runs/<run_id>/jackpot_run.config` for audit and
+  reproducibility (extends Critical Rule 26).
+- Audit actions added: `CREATE_PROFILE`, `UPDATE_PROFILE`,
+  `DELETE_PROFILE`, `LAUNCH_WITH_PROFILE`.
+
+### Tests
+
+- Unit tests for the profile renderer covering each executor type
+  against fixture profile data; snapshot testing of rendered config.
+- Integration test: register profile → launch tiny pipeline →
+  verify generated `jackpot_run.config` matches expectations.
+- Integration test for the resolution logic (explicit > pipeline
+  default > deployment default > error).
+- Integration test for `cleanup_old_work_dirs` — `STAGED` files older
+  than retention disappear; `MANAGED` files do not.
+- Mocked-Slurm and mocked-GCP-Batch tests verifying generated configs
+  contain the right executor-specific fields.
+
+---
+
+## Phase P0h Specification — Slurm executor support
+
+> **Status:** Specification — implementation tracked in `todo.md` Phase P0h.
+> Builds on P0g profile model; makes Slurm a peer of the local executor
+> for scenarios B and C without code duplication.
+
+### Schema additions
+
+None of its own — uses `execution_profiles` from P0g. Slurm-specific
+fields live in the `config_overrides` JSON column:
+
+```json
+{
+  "account": "mylab-2026",
+  "partition": "compute",
+  "qos": "normal",
+  "time": "24:00:00",
+  "default_memory": "8 GB",
+  "default_cpus": 4,
+  "queueSize": 50,
+  "clusterOptions": "--nodes=1 --exclusive",
+  "scratch_dir": "/scratch/$USER/jackpot",
+  "weblog_reachable": false
+}
+```
+
+### New endpoints
+
+None of its own — extends the launch flow from P0g.
+
+### New modules
+
+**`backend/pipelines/log_poller.py`** — Fallback for cluster runs where
+compute nodes can't reach the API. Tails
+`<work_dir>/runs/<run_id>/.nextflow.log` on the shared filesystem,
+parses Nextflow's known event patterns, emits synthetic weblog events
+to the same handler the HTTP receiver uses. Started as an APScheduler
+job per active cluster run; polls every 30 seconds. Idempotent on
+`(run_id, task_id, status)` so it can coexist with HTTP weblog.
+
+**`backend/pipelines/cluster_health.py`** —
+`check_slurm_reachable(profile) -> ReachabilityResult`. Runs `sinfo`
+with a 10-second timeout. Cached for 60 seconds to avoid hammering
+the cluster on bulk launches. Called by the pre-launch check (extends
+P0f's input-verification step).
+
+**`pipelines/<name>/apptainer_images.txt`** — One per pipeline in the
+zoo. Lists the OCI image references the pipeline pulls, used by
+`jackpot images export` to pre-stage SIF files for air-gapped clusters.
+
+### Updated modules
+
+**`backend/pipeline_config/profile_templates/slurm.config.j2`** —
+Renders the full Slurm field set: `account`, `partition`, `qos`,
+`clusterOptions`, `time`, `default_memory`, `default_cpus`,
+`queueSize`. Apptainer is the default container engine for Slurm
+profiles (university policy norm). When the profile has
+`weblog_reachable=false`, the template omits the `weblog` directive
+from the generated config — the log poller is the source of truth.
+
+**`backend/pipelines/launch.py`** — Pre-launch verification extended:
+when launch profile is Slurm, additionally call
+`check_slurm_reachable()` and refuse with a clear error if the
+cluster is unreachable. For multi-tenant launches, validate optional
+`launch_account` override against the user's lab memberships
+(P0c multi-tenancy guard).
+
+**Pipeline definitions in `pipelines/`** — Audit each for an
+`apptainer` profile; add where missing. Most are nf-core-standards and
+already have one.
+
+### Key rules
+
+- Cluster-bound runs must work whether or not compute nodes can reach
+  the API. The HTTP weblog receiver remains best-effort and never
+  raises on errors. The log poller is the source of truth when
+  `weblog_reachable=false` in the profile.
+- Per-launch `launch_account` override (for grant accounting in
+  scenario C) is validated against the user's lab memberships, never
+  trusted from the request body alone.
+- Apptainer is the default container engine for Slurm profiles. Docker
+  remains an option for lab-Slurm cases where the cluster allows it.
+- Compute-side scratch and stage directories use Nextflow's
+  `process.scratch=true` plus shared-filesystem `process.stageInMode`
+  to avoid copies between control plane and compute plane.
+- Audit actions added: `LAUNCH_TO_CLUSTER`, `CLUSTER_UNREACHABLE`,
+  `LOG_POLLER_STARTED`, `LOG_POLLER_FAILED`.
+
+### Tests
+
+- Unit tests for the Slurm profile renderer covering all field
+  combinations and the `weblog_reachable=false` branch.
+- Mocked-Slurm integration tests capturing the rendered `sbatch`
+  command line and verifying expected flags.
+- Unit tests for the log poller against fixture `.nextflow.log`
+  files.
+- CI matrix entry running a hermetic end-to-end pipeline test against
+  `giovtorres/slurm-docker-cluster` on every PR that touches
+  `backend/pipeline_config/` or `pipelines/`.
+- Manual end-to-end smoke tests against a real Slurm cluster covering:
+  weblog-reachable run, weblog-blocked run with poller, 10-sample
+  batch with queueSize throttling, and a mid-run BROKEN-input failure.
+
+---
+
 ### Session B — labs + lab_membership
 
 **Endpoints:**
