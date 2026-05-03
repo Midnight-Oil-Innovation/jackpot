@@ -26,7 +26,7 @@ class ConfiguredBaseModel(BaseModel):
 
     pass
 
-
+        
 
 class OrganismNameEnum(str, Enum):
     """
@@ -201,11 +201,11 @@ class OrganismNameEnum(str, Enum):
     # Reportable category typically: 'Emerging or exotic disease'. Use when a novel pathogen is identified but has no stable NCBI Taxonomy name yet. Platform Admin assigns permanent name when NCBI Taxonomy provides one.
 
     novel_pathogen = "novel pathogen"
-
-
+    
+    
 
 class SourceTypeEnum(str, Enum):
-
+    
     # Clinical or surveillance sample from a human host
     Human = "Human"
     # Sample from a wild animal
@@ -230,13 +230,13 @@ class SourceTypeEnum(str, Enum):
     Food = "Food"
     # Sample from an agricultural crop
     ProduceAg = "ProduceAg"
-
+    
     Other = "Other"
-
-
+    
+    
 
 class ExperimentTypeEnum(str, Enum):
-
+    
     # Whole genome sequencing
     WGS = "WGS"
     # Whole exome sequencing
@@ -249,11 +249,11 @@ class ExperimentTypeEnum(str, Enum):
     amplicon_sequencing = "amplicon_sequencing"
     # Other targeted sequencing
     targeted_sequencing = "targeted_sequencing"
-
-
+    
+    
 
 class CaseTypeEnum(str, Enum):
-
+    
     # Part of a named outbreak investigation
     outbreak = "outbreak"
     # Genomic or epidemiological cluster, not yet a named outbreak
@@ -266,11 +266,11 @@ class CaseTypeEnum(str, Enum):
     contact_investigation = "contact_investigation"
     # Sentinel surveillance site sample
     sentinel = "sentinel"
-
-
+    
+    
 
 class SectorEnum(str, Enum):
-
+    
     # Human clinical diagnosis or treatment context
     clinical = "clinical"
     # Animal health — companion, livestock, or zoo animals
@@ -285,22 +285,22 @@ class SectorEnum(str, Enum):
     wildlife = "wildlife"
     # Research sample not part of active public health surveillance
     research = "research"
-
-
+    
+    
 
 class SurveillanceOverrideCategoryEnum(str, Enum):
-
+    
     # Reportable organism present but sample is outside surveillance scope. Requires governance board approval (TRUE → FALSE override).
     reportable_organism_exception = "reportable_organism_exception"
     # Untargeted metagenome conservatively flagged TRUE, but sample is confirmed research-only with no surveillance purpose. Lab Director self-approval permitted.
     untargeted_metagenome_research = "untargeted_metagenome_research"
     # Non-reportable organism or research sample voluntarily brought under surveillance oversight (FALSE → TRUE override). No approval required.
     voluntary_opt_in = "voluntary_opt_in"
-
-
+    
+    
 
 class QualityStatusEnum(str, Enum):
-
+    
     # Tier 1 — minimum viable metadata present. Sample is immediately ingested and available for pipeline runs and basic search. May lack date precision, geographic detail, or source-type fields.
     PRELIMINARY = "PRELIMINARY"
     # Tier 2 — sufficient metadata for epidemiological analysis including time-series (date to at least month precision) and geographic aggregation. Eligible for MMWR epiweek computation.
@@ -313,22 +313,22 @@ class QualityStatusEnum(str, Enum):
     UNDER_REVIEW = "UNDER_REVIEW"
     # Previously released data that has been withdrawn by the submitting lab or Platform Admin. Not shown in catalog; audit record preserved.
     RETRACTED = "RETRACTED"
-
-
+    
+    
 
 class DatePrecisionEnum(str, Enum):
-
+    
     # Full ISO 8601 date known (YYYY-MM-DD). Default when date is entered in full. Required for Tier 3 (SUBMITTABLE) quality status.
     day = "day"
     # Only year and month known. Store date_collected as YYYY-MM-01. Epiweek computation uses mid-month estimate with warning. Sufficient for Tier 2 (ANALYZABLE) monthly aggregation.
     month = "month"
     # Only year known. Store date_collected as YYYY-01-01. Epiweek computation suppressed. Sufficient for Tier 1 (PRELIMINARY) annual surveillance counts.
     year = "year"
-
-
+    
+    
 
 class ReadTypeEnum(str, Enum):
-
+    
     # Illumina or Ion Torrent — reads <1000bp
     short_read = "short_read"
     # ONT or PacBio — reads >1000bp, typically 10–100kb
@@ -337,11 +337,11 @@ class ReadTypeEnum(str, Enum):
     hybrid = "hybrid"
     # ONT ultra-long reads >100kb — used for complete chromosome assembly
     ultra_long = "ultra_long"
-
-
+    
+    
 
 class AssemblyTypeEnum(str, Enum):
-
+    
     # Single organism isolate — standard WGS assembly from pure culture. Coverage depth and genome completeness QC apply.
     isolate = "isolate"
     # Metagenome-assembled genome — binned from metagenomic data. CheckM2 completeness and contamination QC apply instead of coverage/VADR metrics.
@@ -352,11 +352,11 @@ class AssemblyTypeEnum(str, Enum):
     consensus = "consensus"
     # RNA-based metagenomic assembly — transcriptome from community.
     metatranscriptome = "metatranscriptome"
-
-
+    
+    
 
 class DataUseTermsEnum(str, Enum):
-
+    
     # No restrictions — submitter does not retain rights. Data may be freely used, shared, and republished with attribution.
     open_access = "open_access"
     # Access subject to a Data Use Agreement (DUA). Submitter protections apply. Users must agree to DUA terms before accessing data.
@@ -365,11 +365,11 @@ class DataUseTermsEnum(str, Enum):
     restricted = "restricted"
     # Under publication embargo. Data is accessible internally but embargo_release_date controls when external access is permitted.
     embargo = "embargo"
-
-
+    
+    
 
 class SharingLevelEnum(str, Enum):
-
+    
     # Owner and Lab Director only
     PRIVATE = "PRIVATE"
     # All members of the owning Lab
@@ -380,39 +380,39 @@ class SharingLevelEnum(str, Enum):
     REGISTERED_ACCESS = "REGISTERED_ACCESS"
     # Metadata and files open to all authenticated users
     PUBLIC = "PUBLIC"
-
-
+    
+    
 
 class ScrubStatusEnum(str, Enum):
-
-
+    
+    
     PENDING = "PENDING"
-
+    
     IN_PROGRESS = "IN_PROGRESS"
-
+    
     COMPLETE = "COMPLETE"
-
+    
     FAILED = "FAILED"
     # Non-human sample; scrubber not applicable
     SKIPPED = "SKIPPED"
-
-
+    
+    
 
 class PIIScanStatusEnum(str, Enum):
-
-
+    
+    
     PENDING = "PENDING"
-
+    
     COMPLETE = "COMPLETE"
-
+    
     PII_DETECTED = "PII_DETECTED"
-
+    
     FAILED = "FAILED"
-
-
+    
+    
 
 class VADRStatusEnum(str, Enum):
-
+    
     # Passes VADR — eligible for NCBI submission
     PASS = "PASS"
     # Fails VADR — review alerts before submitting
@@ -421,454 +421,454 @@ class VADRStatusEnum(str, Enum):
     SKIP = "SKIP"
     # VADR not yet run
     PENDING = "PENDING"
-
-
+    
+    
 
 class SubmissionStatusEnum(str, Enum):
-
-
+    
+    
     NOT_SUBMITTED = "NOT_SUBMITTED"
-
+    
     PENDING = "PENDING"
-
+    
     SUBMITTED = "SUBMITTED"
-
+    
     ACCEPTED = "ACCEPTED"
-
+    
     FAILED = "FAILED"
-
+    
     WITHDRAWN = "WITHDRAWN"
-
-
+    
+    
 
 class IngestMethodEnum(str, Enum):
-
-
+    
+    
     gui = "gui"
-
+    
     csv = "csv"
-
+    
     rsync = "rsync"
-
+    
     curl = "curl"
-
+    
     globus = "globus"
-
-
+    
+    
 
 class ProjectStatusEnum(str, Enum):
-
-
+    
+    
     ACTIVE = "ACTIVE"
-
+    
     ARCHIVED = "ARCHIVED"
-
-
+    
+    
 
 class SequencingPlatformEnum(str, Enum):
-
-
+    
+    
     Illumina = "Illumina"
-
+    
     Oxford_Nanopore = "Oxford_Nanopore"
-
+    
     PacBio = "PacBio"
-
+    
     Ion_Torrent = "Ion_Torrent"
-
+    
     Other = "Other"
-
-
+    
+    
 
 class LibraryLayoutEnum(str, Enum):
-
-
+    
+    
     PAIRED = "PAIRED"
-
+    
     SINGLE = "SINGLE"
-
-
+    
+    
 
 class BiologicalSexEnum(str, Enum):
-
-
+    
+    
     Male = "Male"
-
+    
     Female = "Female"
     # DSD
     Differences_of_Sex_Development = "Differences_of_Sex_Development"
-
+    
     unknown = "unknown"
-
-
+    
+    
 
 class AgeUnitEnum(str, Enum):
-
-
+    
+    
     years = "years"
-
+    
     months = "months"
-
+    
     days = "days"
-
-
+    
+    
 
 class BiospecimenTypeEnum(str, Enum):
-
-
+    
+    
     nasopharyngeal_swab = "nasopharyngeal_swab"
-
+    
     oropharyngeal_swab = "oropharyngeal_swab"
-
+    
     saliva = "saliva"
-
+    
     blood = "blood"
-
+    
     serum = "serum"
-
+    
     plasma = "plasma"
-
+    
     urine = "urine"
-
+    
     stool = "stool"
-
+    
     skin_biopsy = "skin_biopsy"
-
+    
     tissue_biopsy = "tissue_biopsy"
-
+    
     bronchoalveolar_lavage = "bronchoalveolar_lavage"
-
+    
     lung_tissue = "lung_tissue"
     # For avian samples
     cloacal_swab = "cloacal_swab"
-
+    
     feather = "feather"
     # For vectors — whole arthropod homogenate
     homogenized = "homogenized"
     # For vectors — saliva/excreta
     non_destructive_extraction = "non_destructive_extraction"
-
+    
     other = "other"
-
-
+    
+    
 
 class ReasonForCollectionEnum(str, Enum):
-
+    
     # Obtained during clinical care
     clinical = "clinical"
     # Collected as part of a research study
     research = "research"
     # Collected as part of public health surveillance
     surveillance = "surveillance"
-
-
+    
+    
 
 class VaccineStatusEnum(str, Enum):
-
-
+    
+    
     never_vaccinated = "never_vaccinated"
-
+    
     current = "current"
-
+    
     overdue = "overdue"
-
+    
     unknown = "unknown"
-
-
+    
+    
 
 class SymptomaticEnum(str, Enum):
-
-
+    
+    
     true = "True"
-
+    
     false = "False"
-
+    
     uncertain = "uncertain"
-
-
+    
+    
 
 class CompanionAnimalLocationEnum(str, Enum):
-
-
+    
+    
     residence_indoor = "residence_indoor"
-
+    
     residence_outdoor_enclosure = "residence_outdoor_enclosure"
-
+    
     shelter = "shelter"
-
+    
     roaming = "roaming"
-
+    
     other = "other"
-
-
+    
+    
 
 class LivestockLocationEnum(str, Enum):
-
+    
     # Concentrated Animal Feeding Operation
     CAFO = "CAFO"
-
+    
     open_pasture = "open_pasture"
-
+    
     broiler_house = "broiler_house"
-
+    
     hoop_barn = "hoop_barn"
-
+    
     free_range = "free_range"
-
+    
     feedlot = "feedlot"
-
+    
     other = "other"
-
-
+    
+    
 
 class LivestockProductEnum(str, Enum):
-
-
+    
+    
     meat = "meat"
-
+    
     dairy = "dairy"
-
+    
     eggs = "eggs"
-
+    
     textile_fibers = "textile_fibers"
-
+    
     other = "other"
-
-
+    
+    
 
 class AntibioticUseEnum(str, Enum):
-
-
+    
+    
     current = "current"
-
+    
     recent = "recent"
-
+    
     never = "never"
-
+    
     unknown = "unknown"
-
-
+    
+    
 
 class VectorBiospecimenTypeEnum(str, Enum):
-
+    
     # Whole arthropod homogenate — single specimen
     homogenized = "homogenized"
     # Multiple arthropods homogenized together as a surveillance pool (e.g. mosquito pool). Record number of individuals in pool_size_min/pool_size_max.
     pooled_homogenate = "pooled_homogenate"
     # Saliva/excreta without destroying specimen
     non_destructive_extraction = "non_destructive_extraction"
-
+    
     other = "other"
-
-
+    
+    
 
 class WastewaterSampleTypeEnum(str, Enum):
-
-
+    
+    
     grab = "grab"
-
+    
     composite_24hr_flow_weighted = "composite_24hr_flow_weighted"
-
+    
     composite_24hr_time_weighted = "composite_24hr_time_weighted"
-
+    
     other = "other"
-
-
+    
+    
 
 class SampleMatrixEnum(str, Enum):
-
-
+    
+    
     raw_wastewater = "raw_wastewater"
-
+    
     post_grit_removal = "post_grit_removal"
-
+    
     primary_sludge = "primary_sludge"
-
+    
     primary_effluent = "primary_effluent"
-
+    
     secondary_sludge = "secondary_sludge"
-
+    
     secondary_effluent = "secondary_effluent"
-
+    
     septage = "septage"
-
+    
     holding_tank = "holding_tank"
-
-
+    
+    
 
 class PretreatmentEnum(str, Enum):
-
-
+    
+    
     none = "none"
-
+    
     chlorine = "chlorine"
-
+    
     ozone = "ozone"
-
+    
     UV = "UV"
-
+    
     other = "other"
-
-
+    
+    
 
 class ConcentrationMethodEnum(str, Enum):
-
-
+    
+    
     none = "none"
-
+    
     ceres_nanotrap = "ceres_nanotrap"
-
+    
     membrane_filtration_MgCl2 = "membrane_filtration_MgCl2"
-
+    
     ultrafiltration = "ultrafiltration"
-
+    
     polyethylene_glycol_precipitation = "polyethylene_glycol_precipitation"
-
+    
     ultracentrifugation = "ultracentrifugation"
-
+    
     other = "other"
-
-
+    
+    
 
 class WaterSourceEnum(str, Enum):
-
-
+    
+    
     municipal_tap = "municipal_tap"
-
+    
     irrigation_line = "irrigation_line"
-
+    
     pond = "pond"
-
+    
     lake = "lake"
-
+    
     stream = "stream"
-
+    
     canal = "canal"
-
+    
     desert_wash = "desert_wash"
-
+    
     glacier = "glacier"
-
+    
     groundwater = "groundwater"
-
+    
     reclaimed_water = "reclaimed_water"
-
+    
     other = "other"
-
-
+    
+    
 
 class AirSourceEnum(str, Enum):
-
-
+    
+    
     cooling_tower = "cooling_tower"
-
+    
     internal_vent = "internal_vent"
-
+    
     urban = "urban"
-
+    
     plane = "plane"
-
+    
     hospital_room = "hospital_room"
-
+    
     HEPA_exhaust = "HEPA_exhaust"
-
+    
     other = "other"
-
-
+    
+    
 
 class FoodLocationTypeEnum(str, Enum):
-
-
+    
+    
     residence = "residence"
-
+    
     store = "store"
-
+    
     in_transit = "in_transit"
-
+    
     warehouse = "warehouse"
-
+    
     manufacturing_plant = "manufacturing_plant"
-
+    
     restaurant = "restaurant"
-
+    
     other = "other"
-
-
+    
+    
 
 class FoodProductTypeEnum(str, Enum):
-
-
+    
+    
     fresh_produce = "fresh_produce"
-
+    
     meat = "meat"
-
+    
     poultry = "poultry"
-
+    
     seafood = "seafood"
-
+    
     dairy_products = "dairy_products"
-
+    
     eggs = "eggs"
-
+    
     processed_foods = "processed_foods"
-
+    
     deli_meats = "deli_meats"
-
+    
     grains = "grains"
-
+    
     other = "other"
-
-
+    
+    
 
 class ProduceWaterSourceEnum(str, Enum):
-
-
+    
+    
     irrigation_lines = "irrigation_lines"
-
+    
     reclaimed_water = "reclaimed_water"
-
+    
     freshwater = "freshwater"
-
+    
     municipal = "municipal"
-
+    
     rainwater = "rainwater"
-
+    
     other = "other"
-
-
+    
+    
 
 class FertilizerTypeEnum(str, Enum):
-
-
+    
+    
     organic = "organic"
-
+    
     inorganic = "inorganic"
-
+    
     compost = "compost"
-
+    
     manure = "manure"
-
+    
     none = "none"
-
-
+    
+    
 
 class DistributionScaleEnum(str, Enum):
-
-
+    
+    
     local = "local"
-
+    
     county = "county"
-
+    
     state = "state"
-
+    
     national = "national"
-
+    
     global_export = "global_export"
-
-
+    
+    
 
 class SampleAssociationTypeEnum(str, Enum):
-
+    
     # Both samples from same household
     same_household = "same_household"
     # Both samples from same outbreak cluster
@@ -883,10 +883,10 @@ class SampleAssociationTypeEnum(str, Enum):
     environmental_clinical = "environmental_clinical"
     # Serial samples from the same host over time
     longitudinal = "longitudinal"
-
+    
     other = "other"
-
-
+    
+    
 
 class SampleFileTypeEnum(str, Enum):
     """
@@ -898,8 +898,8 @@ class SampleFileTypeEnum(str, Enum):
     FASTA = "FASTA"
     # Any file type not covered by FASTQ or FASTA
     OTHER = "OTHER"
-
-
+    
+    
 
 class SampleFileLayoutEnum(str, Enum):
     """
@@ -915,8 +915,8 @@ class SampleFileLayoutEnum(str, Enum):
     # Genuinely single-end read or a nanopore/multi-file chunk. Not expected to have a partner.
 
     UNPAIRED = "UNPAIRED"
-
-
+    
+    
 
 class ReadDirectionEnum(str, Enum):
     """
@@ -928,8 +928,31 @@ class ReadDirectionEnum(str, Enum):
     # Reverse read. Detected from: _R2, _2, _reads_2, _reverse naming conventions (case-insensitive).
 
     R2 = "R2"
+    
+    
 
+class FileStorageState(str, Enum):
+    """
+    Lifecycle ownership of a file referenced by sample_files. Determines whether JACKPOT controls the bytes (MANAGED, STAGED), references them in place (EXTERNAL), keeps a managed copy alongside an external original (MIRRORED), or has lost access (BROKEN). Default for ingest is EXTERNAL — JACKPOT does not copy bytes on registration. See Critical Rule 57.
 
+    """
+    # URI is not under JACKPOT storage control; JACKPOT references the file in place and never copies or deletes it. Default for ingest.
+
+    EXTERNAL = "EXTERNAL"
+    # File lives in JACKPOT-controlled storage. JACKPOT owns the full lifecycle including retention enforcement and deletion.
+
+    MANAGED = "MANAGED"
+    # JACKPOT-owned managed copy backed by an external original. Both copies exist; original_uri identifies the external source.
+
+    MIRRORED = "MIRRORED"
+    # Temporary copy made for a specific pipeline run. Cleaned up by the staging-cleanup job after the run completes plus a retention window. staged_for_run_id identifies the owning run.
+
+    STAGED = "STAGED"
+    # External file is no longer accessible (404, permission denied, host unreachable). Terminal state — the row is retained for audit but the bytes cannot be read.
+
+    BROKEN = "BROKEN"
+    
+    
 
 class AgeRangeEnum(str, Enum):
     """
@@ -943,24 +966,24 @@ class AgeRangeEnum(str, Enum):
     number_5_14_years = "5-14 years"
     # Young adult
     number_15_24_years = "15-24 years"
-
+    
     number_25_34_years = "25-34 years"
-
+    
     number_35_44_years = "35-44 years"
-
+    
     number_45_54_years = "45-54 years"
-
+    
     number_55_64_years = "55-64 years"
-
+    
     number_65_74_years = "65-74 years"
-
+    
     number_75_84_years = "75-84 years"
     # Oldest old — highest risk for many pathogens
     number_85PLUS_SIGN_years = "85+ years"
-
+    
     unknown = "unknown"
-
-
+    
+    
 
 class CollectionMethodEnum(str, Enum):
     """
@@ -1004,8 +1027,8 @@ class CollectionMethodEnum(str, Enum):
     environmental_swab = "environmental_swab"
     # Collection method not listed — describe in comments
     other = "other"
-
-
+    
+    
 
 class PangoQCStatusEnum(str, Enum):
     """
@@ -1019,8 +1042,8 @@ class PangoQCStatusEnum(str, Enum):
     ambiguous = "ambiguous"
     # Pangolin not yet run or not applicable (non-SARS-CoV-2)
     not_run = "not_run"
-
-
+    
+    
 
 class MLSTConfidenceEnum(str, Enum):
     """
@@ -1034,11 +1057,11 @@ class MLSTConfidenceEnum(str, Enum):
     low = "low"
     # Insufficient data for MLST — not applicable or failed
     unknown = "unknown"
-
-
+    
+    
 
 class OutbreakStatusEnum(str, Enum):
-
+    
     # Investigation ongoing — new cases still being identified
     active = "active"
     # No new cases for ≥2 incubation periods — pending formal closure
@@ -1047,8 +1070,8 @@ class OutbreakStatusEnum(str, Enum):
     closed = "closed"
     # Cluster resolved; enhanced surveillance continues
     surveillance_only = "surveillance_only"
-
-
+    
+    
 
 class Organization(ConfiguredBaseModel):
     """
@@ -1057,8 +1080,8 @@ class Organization(ConfiguredBaseModel):
     """
     display_name: str = Field(...)
     default_approve_analytical_dataset_requests: Optional[bool] = Field(None, description="""Auto-approve dataset access requests from this org""")
-
-
+    
+    
 
 class Lab(ConfiguredBaseModel):
     """
@@ -1067,8 +1090,8 @@ class Lab(ConfiguredBaseModel):
     display_name: str = Field(...)
     organization: str = Field(...)
     description: Optional[str] = Field(None)
-
-
+    
+    
 
 class Project(ConfiguredBaseModel):
     """
@@ -1078,8 +1101,8 @@ class Project(ConfiguredBaseModel):
     lab: str = Field(...)
     pathogen_scope: Optional[List[str]] = Field(default_factory=list)
     status: Optional[ProjectStatusEnum] = Field(None)
-
-
+    
+    
 
 class Sample(ConfiguredBaseModel):
     """
@@ -1225,8 +1248,8 @@ class Sample(ConfiguredBaseModel):
     contact_other: Optional[str] = Field(None, description="""APGAP: 'Contact (if other than user uploading data)'. Email format. Phase 2: allow non-user contacts.
 """)
     comments: Optional[str] = Field(None, description="""Free text comments""")
-
-
+    
+    
 
 class HumanSample(Sample):
     """
@@ -1400,8 +1423,8 @@ class HumanSample(Sample):
     contact_other: Optional[str] = Field(None, description="""APGAP: 'Contact (if other than user uploading data)'. Email format. Phase 2: allow non-user contacts.
 """)
     comments: Optional[str] = Field(None, description="""Free text comments""")
-
-
+    
+    
 
 class WildlifeSample(Sample):
     """
@@ -1553,8 +1576,8 @@ class WildlifeSample(Sample):
     contact_other: Optional[str] = Field(None, description="""APGAP: 'Contact (if other than user uploading data)'. Email format. Phase 2: allow non-user contacts.
 """)
     comments: Optional[str] = Field(None, description="""Free text comments""")
-
-
+    
+    
 
 class CompanionAnimalSample(Sample):
     """
@@ -1709,8 +1732,8 @@ class CompanionAnimalSample(Sample):
     contact_other: Optional[str] = Field(None, description="""APGAP: 'Contact (if other than user uploading data)'. Email format. Phase 2: allow non-user contacts.
 """)
     comments: Optional[str] = Field(None, description="""Free text comments""")
-
-
+    
+    
 
 class LivestockSample(Sample):
     """
@@ -1865,8 +1888,8 @@ class LivestockSample(Sample):
     contact_other: Optional[str] = Field(None, description="""APGAP: 'Contact (if other than user uploading data)'. Email format. Phase 2: allow non-user contacts.
 """)
     comments: Optional[str] = Field(None, description="""Free text comments""")
-
-
+    
+    
 
 class VectorSample(Sample):
     """
@@ -2020,8 +2043,8 @@ class VectorSample(Sample):
     contact_other: Optional[str] = Field(None, description="""APGAP: 'Contact (if other than user uploading data)'. Email format. Phase 2: allow non-user contacts.
 """)
     comments: Optional[str] = Field(None, description="""Free text comments""")
-
-
+    
+    
 
 class EnvironmentalSample(Sample):
     """
@@ -2167,8 +2190,8 @@ class EnvironmentalSample(Sample):
     contact_other: Optional[str] = Field(None, description="""APGAP: 'Contact (if other than user uploading data)'. Email format. Phase 2: allow non-user contacts.
 """)
     comments: Optional[str] = Field(None, description="""Free text comments""")
-
-
+    
+    
 
 class WastewaterSample(EnvironmentalSample):
     """
@@ -2348,8 +2371,8 @@ class WastewaterSample(EnvironmentalSample):
     contact_other: Optional[str] = Field(None, description="""APGAP: 'Contact (if other than user uploading data)'. Email format. Phase 2: allow non-user contacts.
 """)
     comments: Optional[str] = Field(None, description="""Free text comments""")
-
-
+    
+    
 
 class WaterSample(EnvironmentalSample):
     """
@@ -2505,8 +2528,8 @@ class WaterSample(EnvironmentalSample):
     contact_other: Optional[str] = Field(None, description="""APGAP: 'Contact (if other than user uploading data)'. Email format. Phase 2: allow non-user contacts.
 """)
     comments: Optional[str] = Field(None, description="""Free text comments""")
-
-
+    
+    
 
 class AirSample(EnvironmentalSample):
     """
@@ -2660,8 +2683,8 @@ class AirSample(EnvironmentalSample):
     contact_other: Optional[str] = Field(None, description="""APGAP: 'Contact (if other than user uploading data)'. Email format. Phase 2: allow non-user contacts.
 """)
     comments: Optional[str] = Field(None, description="""Free text comments""")
-
-
+    
+    
 
 class SoilSample(EnvironmentalSample):
     """
@@ -2822,8 +2845,8 @@ class SoilSample(EnvironmentalSample):
     contact_other: Optional[str] = Field(None, description="""APGAP: 'Contact (if other than user uploading data)'. Email format. Phase 2: allow non-user contacts.
 """)
     comments: Optional[str] = Field(None, description="""Free text comments""")
-
-
+    
+    
 
 class SurfaceSample(EnvironmentalSample):
     """
@@ -2994,8 +3017,8 @@ class SurfaceSample(EnvironmentalSample):
     contact_other: Optional[str] = Field(None, description="""APGAP: 'Contact (if other than user uploading data)'. Email format. Phase 2: allow non-user contacts.
 """)
     comments: Optional[str] = Field(None, description="""Free text comments""")
-
-
+    
+    
 
 class FoodSample(EnvironmentalSample):
     """
@@ -3150,8 +3173,8 @@ class FoodSample(EnvironmentalSample):
     contact_other: Optional[str] = Field(None, description="""APGAP: 'Contact (if other than user uploading data)'. Email format. Phase 2: allow non-user contacts.
 """)
     comments: Optional[str] = Field(None, description="""Free text comments""")
-
-
+    
+    
 
 class ProduceAgSample(EnvironmentalSample):
     """
@@ -3307,8 +3330,8 @@ class ProduceAgSample(EnvironmentalSample):
     contact_other: Optional[str] = Field(None, description="""APGAP: 'Contact (if other than user uploading data)'. Email format. Phase 2: allow non-user contacts.
 """)
     comments: Optional[str] = Field(None, description="""Free text comments""")
-
-
+    
+    
 
 class SampleAssociation(ConfiguredBaseModel):
     """
@@ -3319,8 +3342,8 @@ class SampleAssociation(ConfiguredBaseModel):
     target_sample_id: str = Field(...)
     association_type: Optional[SampleAssociationTypeEnum] = Field(None)
     notes: Optional[str] = Field(None, description="""Free text notes about the association""")
-
-
+    
+    
 
 class OutbreakInvestigation(ConfiguredBaseModel):
     """
@@ -3338,8 +3361,8 @@ Maps to: CDC NNDSS OutbreakNumber, WHO Situation Report investigation ID.
     case_count: Optional[int] = Field(None, description="""Current confirmed case count. Updated as investigation progresses.""")
     nndss_outbreak_number: Optional[str] = Field(None, description="""CDC NNDSS OutbreakNumber if this investigation has been reported to NNDSS. Links JACKPOT investigation to national outbreak tracking.""")
     notes: Optional[str] = Field(None, description="""Free text investigation notes. Not displayed in catalog.""")
-
-
+    
+    
 
 class PipelineProvenance(ConfiguredBaseModel):
     """
@@ -3356,8 +3379,8 @@ class PipelineProvenance(ConfiguredBaseModel):
     input_sample_ids: Optional[List[str]] = Field(default_factory=list)
     output_uris: Optional[List[str]] = Field(default_factory=list)
     completed_at: Optional[datetime ] = Field(None)
-
-
+    
+    
 
 class SampleFile(ConfiguredBaseModel):
     """
@@ -3397,8 +3420,32 @@ Supported extensions (case-insensitive):
     scrub_status: ScrubStatusEnum = Field(...)
     pii_scan_status: PIIScanStatusEnum = Field(...)
     ingest_method: IngestMethodEnum = Field(...)
-
-
+    content_hash: Optional[str] = Field(None, description="""SHA-256 of the full file contents, hex-encoded (64 characters). The dedup primitive — UNIQUE in the database when non-null. NULL until the compute_full_content_hash background job populates it lazily after registration. See Critical Rule 58.
+""")
+    head64k_hash: Optional[str] = Field(None, description="""SHA-256 of the first 64 KB of the file, hex-encoded. Cheap fingerprint piece used together with file_size_bytes and tail64k_hash to short-circuit dedup before the full content_hash is available.
+""")
+    tail64k_hash: Optional[str] = Field(None, description="""SHA-256 of the last 64 KB of the file, hex-encoded. Cheap fingerprint piece — see head64k_hash.
+""")
+    storage_state: FileStorageState = Field("EXTERNAL", description="""Lifecycle ownership of this file: EXTERNAL, MANAGED, MIRRORED, STAGED, or BROKEN. Defaults to EXTERNAL — JACKPOT does not copy bytes on ingest and references files in place. See Critical Rule 57 and the FileStorageState enum.
+""")
+    alternate_uris: Optional[List[str]] = Field(default_factory=list, description="""Additional URIs that point to the same content. Used when the same FASTQ is reachable at multiple locations (e.g. on a local NFS mount at /srv/seq/... and in a cloud archive at gs://archive/...). The primary uri stays in the uri column; everything else lands here.
+""")
+    first_seen_at: datetime  = Field(..., description="""Timestamp when JACKPOT first registered this file. Set DB-side to NOW() at insert; never updated.
+""")
+    last_verified_at: Optional[datetime ] = Field(None, description="""Timestamp of the most recent successful or attempted verification by the verify_file_references background job. NULL until the job first runs against this row.
+""")
+    last_verification_status: Optional[str] = Field(None, description="""Outcome of the most recent verification attempt: OK, MISSING, SIZE_CHANGED, or READ_ERROR. NULL until the job first runs.
+""")
+    retention_policy: str = Field("STANDARD", description="""Retention class governing how long the file is kept: STANDARD, LONG_TERM, or EPHEMERAL. Defaults to STANDARD.
+""")
+    original_uri: Optional[str] = Field(None, description="""For storage_state == MIRRORED only — the external URI that the managed copy was made from. NULL for all other storage states.
+""")
+    staged_for_run_id: Optional[str] = Field(None, description="""For storage_state == STAGED only — the UUID of the pipeline run that owns this temporary copy. The staging-cleanup job uses this to identify which staged files are safe to remove. NULL for all other storage states.
+""")
+    updated_at: datetime  = Field(..., description="""Timestamp of the most recent change to this row. Maintained by a DB trigger on UPDATE; not user-writable.
+""")
+    
+    
 
 
 # Model rebuild
