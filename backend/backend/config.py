@@ -41,6 +41,12 @@ class Settings(BaseSettings):
     rate_limit_auth: str = "5/minute"
     rate_limit_ingest: str = "60/minute"
 
+    # Phase P0f F-4: full-content-hash background job
+    full_hash_interval_seconds: int = 300
+    full_hash_max_seconds_per_tick: int = 1800
+    compute_sra_full_hash: bool = False
+    skip_remote_full_hash: bool = False
+
     @field_validator("cors_origins", mode="before")
     @classmethod
     def _parse_cors_origins(cls, v: object) -> list[str]:

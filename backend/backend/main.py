@@ -10,7 +10,11 @@ from slowapi.middleware import SlowAPIMiddleware
 
 from backend.config import get_settings
 from backend.database import execute_query
-from backend.jobs import run_access_request_job, run_scrubber_queue_job
+from backend.jobs import (
+    compute_full_content_hash,
+    run_access_request_job,
+    run_scrubber_queue_job,
+)
 from backend.logging_config import configure_logging
 from backend.middleware import RequestIDMiddleware
 from backend.rate_limit import limiter
@@ -61,6 +65,14 @@ async def lifespan(app: FastAPI):
             hour=2,
             minute=0,
             id="access_request_expiry",
+        )
+        scheduler.add_job(
+            compute_full_content_hash,
+            "interval",
+            seconds=get_settings().full_hash_interval_seconds,
+            id="compute_full_content_hash",
+            replace_existing=True,
+            max_instances=1,
         )
         scheduler.start()
     yield

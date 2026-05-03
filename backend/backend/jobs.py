@@ -7,14 +7,20 @@ trigger endpoint so local dev and Cloud Scheduler hit identical code.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
+from time import monotonic
+from urllib.parse import urlparse
 
 from backend.audit import AuditActions, log_audit
+from backend.config import get_settings
 from backend.database import execute_query, execute_write, get_db
 from backend.notifications import NotificationEvents, create_notification
 
 logger = logging.getLogger(__name__)
+
+FULL_HASH_CHUNK_SIZE = 8 * 1024 * 1024  # 8 MB streaming buffer for SHA-256.
 
 
 async def run_scrubber_queue_job() -> None:
@@ -309,3 +315,225 @@ def _moot_public_sample_requests(db) -> int:
             db_conn=db,
         )
     return len(rows)
+
+
+# ── Phase P0f F-4: full-content-hash background job ────────────────────────
+
+
+async def compute_full_content_hash() -> dict[str, int]:
+    """Compute SHA-256 for sample_files rows where content_hash IS NULL.
+
+    Reconciles fingerprint-collision dedup that the cheap fingerprint
+    missed (vanishingly rare for distinct content). See
+    ``spec.md`` Phase P0f Specification (the "New modules" subsection)
+    and Critical Rule 58 (sample_files is the dedup primitive,
+    content_hash is the logical key). Per Critical Rule 22, this job
+    is idempotent and triggerable via the admin manual-trigger
+    endpoint.
+
+    Returns a counts dict ``{"hashed", "reconciled", "skipped",
+    "errors"}`` for monitoring.
+    """
+    settings = get_settings()
+    counters = {"hashed": 0, "reconciled": 0, "skipped": 0, "errors": 0}
+    deadline = monotonic() + settings.full_hash_max_seconds_per_tick
+
+    rows = _select_rows_to_hash(
+        skip_remote=settings.skip_remote_full_hash,
+        include_sra=settings.compute_sra_full_hash,
+    )
+    if not rows:
+        return counters
+
+    for row in rows:
+        if monotonic() >= deadline:
+            counters["skipped"] += 1
+            continue
+
+        try:
+            digest = _stream_full_sha256(row["uri"])
+        except Exception as exc:  # noqa: BLE001 — leave row NULL, retry next tick
+            logger.warning(
+                "compute_full_content_hash: failed to hash %s: %s",
+                row["uri"],
+                exc,
+            )
+            counters["errors"] += 1
+            continue
+
+        with get_db() as db:
+            collision = execute_query(
+                """
+                SELECT id, alternate_uris
+                FROM sample_files
+                WHERE content_hash = :h
+                  AND id != :self_id
+                """,
+                {"h": digest, "self_id": row["id"]},
+                conn=db,
+            )
+            if collision:
+                _reconcile_collision(row, digest, collision[0], db)
+                counters["reconciled"] += 1
+            else:
+                execute_write(
+                    "UPDATE sample_files SET content_hash = :h WHERE id = :id",
+                    {"h": digest, "id": row["id"]},
+                    conn=db,
+                )
+                counters["hashed"] += 1
+
+    logger.info("compute_full_content_hash: %s", json.dumps(counters))
+    return counters
+
+
+def _select_rows_to_hash(skip_remote: bool, include_sra: bool) -> list[dict]:
+    """Find sample_files rows that still need a full content hash.
+
+    Filters out schemes the operator has opted out of (remote, SRA).
+    Ordered by ``first_seen_at`` so the oldest unhashed rows go first
+    — bounded-progress under wall-clock pressure.
+    """
+    excluded_prefixes: list[str] = []
+    if skip_remote:
+        excluded_prefixes += ["gs://", "s3://", "http://", "https://"]
+    if not include_sra:
+        excluded_prefixes.append("sra://")
+
+    where_clauses = ["content_hash IS NULL"]
+    params: dict = {}
+    for i, prefix in enumerate(excluded_prefixes):
+        key = f"prefix_{i}"
+        where_clauses.append(f"uri NOT LIKE :{key}")
+        params[key] = f"{prefix}%"
+
+    sql = (
+        "SELECT id, uri, alternate_uris FROM sample_files "
+        f"WHERE {' AND '.join(where_clauses)} "
+        "ORDER BY first_seen_at ASC"
+    )
+    return execute_query(sql, params)
+
+
+def _stream_full_sha256(uri: str) -> str:
+    """Stream the full URI contents into a SHA-256 in 8 MB chunks.
+
+    Schemes mirror ``backend.file_fingerprint`` — local, gs/s3 via the
+    storage layer, http(s) via httpx. Compressed bytes are hashed as-is
+    (no decompression), matching the F-3 convention.
+    """
+    parsed = urlparse(uri)
+    scheme = parsed.scheme.lower()
+    if scheme in ("", "file"):
+        path = parsed.path if scheme == "file" else uri
+        return _stream_local(path)
+    if scheme in ("gs", "s3"):
+        return _stream_object_storage(parsed.netloc, parsed.path.lstrip("/"))
+    if scheme in ("http", "https"):
+        return _stream_http(uri)
+    if scheme == "sra":
+        # The select-rows filter normally excludes these, but defend
+        # against direct calls. SRA accessions can't be byte-streamed
+        # without fasterq-dump; F-4 leaves that to a future enhancement.
+        raise ValueError(f"sra:// URIs cannot be streamed by F-4: {uri}")
+    raise ValueError(f"Unsupported URI scheme for full hash: {scheme!r}")
+
+
+def _stream_local(path: str) -> str:
+    sha = hashlib.sha256()
+    with open(path, "rb") as f:
+        while True:
+            chunk = f.read(FULL_HASH_CHUNK_SIZE)
+            if not chunk:
+                break
+            sha.update(chunk)
+    return sha.hexdigest()
+
+
+def _stream_object_storage(bucket: str, key: str) -> str:
+    from backend.storage import _get_client
+
+    client = _get_client()
+    body = client.get_object(Bucket=bucket, Key=key)["Body"]
+    sha = hashlib.sha256()
+    try:
+        for chunk in body.iter_chunks(chunk_size=FULL_HASH_CHUNK_SIZE):
+            sha.update(chunk)
+    finally:
+        body.close()
+    return sha.hexdigest()
+
+
+def _stream_http(uri: str) -> str:
+    import httpx
+
+    sha = hashlib.sha256()
+    with (
+        httpx.Client(follow_redirects=True) as client,
+        client.stream("GET", uri) as resp,
+    ):
+        resp.raise_for_status()
+        for chunk in resp.iter_bytes(chunk_size=FULL_HASH_CHUNK_SIZE):
+            sha.update(chunk)
+    return sha.hexdigest()
+
+
+def _reconcile_collision(
+    row: dict,
+    digest: str,
+    survivor: dict,
+    db,
+) -> None:
+    """Merge ``row`` into ``survivor`` when both share the same content.
+
+    Appends ``row.uri`` to the survivor's ``alternate_uris`` (deduped),
+    redirects any inbound ``paired_file_id`` references to the survivor,
+    deletes ``row``, and emits a ``RECONCILE_SAMPLE_FILES_HASH_COLLISION``
+    audit entry. Same-transaction so a partial failure leaves either
+    state fully reconciled or fully untouched.
+    """
+    existing = list(survivor.get("alternate_uris") or [])
+    if row["uri"] not in existing:
+        execute_write(
+            """
+            UPDATE sample_files
+            SET alternate_uris = array_append(alternate_uris, :u)
+            WHERE id = :id
+            """,
+            {"u": row["uri"], "id": survivor["id"]},
+            conn=db,
+        )
+    execute_write(
+        "UPDATE sample_files SET paired_file_id = :sid WHERE paired_file_id = :rid",
+        {"sid": survivor["id"], "rid": row["id"]},
+        conn=db,
+    )
+    execute_write(
+        "DELETE FROM sample_files WHERE id = :id",
+        {"id": row["id"]},
+        conn=db,
+    )
+    log_audit(
+        action=AuditActions.RECONCILE_SAMPLE_FILES_HASH_COLLISION,
+        actor_id=None,
+        resource_type="sample_files",
+        resource_id=str(survivor["id"]),
+        before=None,
+        after=None,
+        metadata={
+            "survivor_id": survivor["id"],
+            "merged_id": row["id"],
+            "merged_uri": row["uri"],
+            "content_hash": digest,
+        },
+        db_conn=db,
+    )
+
+
+# Re-export for tests and ergonomic imports.
+__all__ = [
+    "compute_full_content_hash",
+    "run_access_request_job",
+    "run_scrubber_queue_job",
+    "FULL_HASH_CHUNK_SIZE",
+]
