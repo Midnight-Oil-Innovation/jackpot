@@ -16,7 +16,7 @@ the new URI lights up as the live row.
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import streamlit as st
 
@@ -60,9 +60,9 @@ def _relative_time(iso: str | None) -> str:
         ts = datetime.fromisoformat(iso.replace("Z", "+00:00"))
     except ValueError:
         return iso
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     if ts.tzinfo is None:
-        ts = ts.replace(tzinfo=timezone.utc)
+        ts = ts.replace(tzinfo=UTC)
     delta = now - ts
     seconds = int(delta.total_seconds())
     if seconds < 60:
@@ -212,10 +212,7 @@ def _render_table(client, rows: list[dict]) -> None:
 def render() -> None:
     _init_state()
     st.title(PAGE_TITLE)
-    st.caption(
-        "Files that JACKPOT can no longer reach. Re-locate or re-upload "
-        "to restore access."
-    )
+    st.caption("Files that JACKPOT can no longer reach. Re-locate or re-upload to restore access.")
 
     if current_user() is None:
         st.warning("API unreachable — broken-files needs the backend.")
@@ -232,8 +229,7 @@ def render() -> None:
 
     client = get_client()
 
-    # Filters
-    cols = st.sidebar.columns(1)
+    # Filters live in the sidebar so the table area stays the focus.
     project_id = st.sidebar.number_input(
         "Project ID (0 = any)",
         min_value=0,

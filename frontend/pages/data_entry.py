@@ -21,7 +21,7 @@ save only fires after explicit acknowledgement.
 from __future__ import annotations
 
 import time
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import streamlit as st
 
@@ -98,8 +98,8 @@ def _format_relative(iso: str | None) -> str:
     except ValueError:
         return iso
     if ts.tzinfo is None:
-        ts = ts.replace(tzinfo=timezone.utc)
-    now = datetime.now(timezone.utc)
+        ts = ts.replace(tzinfo=UTC)
+    now = datetime.now(UTC)
     delta = now - ts
     seconds = int(delta.total_seconds())
     if seconds < 60:
@@ -136,9 +136,8 @@ def _render_files_section(sample: dict) -> None:
             with row[1]:
                 render_badge(storage_state_badge(f.get("storage_state")))
             row[2].caption(_format_relative(f.get("last_verified_at")))
-            if f.get("storage_state") == "BROKEN":
-                if row[3].button("Fix", key=f"de.fix.{f['id']}"):
-                    st.switch_page("pages/broken_files.py")
+            if f.get("storage_state") == "BROKEN" and row[3].button("Fix", key=f"de.fix.{f['id']}"):
+                st.switch_page("pages/broken_files.py")
 
 
 def _render_form(sample: dict) -> dict:
