@@ -714,9 +714,7 @@ async def test_launch_lists_all_broken_files_on_one_sample(client, as_platform_a
         assert body["error"]["code"] == "BROKEN_INPUTS"
         ids_in_error = {row["sample_files_id"] for row in body["error"]["detail"]["broken_files"]}
         assert ids_in_error == {r1_id, r2_id}
-        sample_ids_in_error = {
-            row["sample_id"] for row in body["error"]["detail"]["broken_files"]
-        }
+        sample_ids_in_error = {row["sample_id"] for row in body["error"]["detail"]["broken_files"]}
         assert sample_ids_in_error == {sample["sample_id"]}
         assert "2 input files" in body["error"]["message"]
     finally:
