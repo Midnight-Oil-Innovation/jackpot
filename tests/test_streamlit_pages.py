@@ -250,6 +250,7 @@ PAGE_MODULES = [
     "frontend.pages.access_requests",
     "frontend.pages.notifications",
     "frontend.pages.pipelines",
+    "frontend.pages.broken_files",
 ]
 
 

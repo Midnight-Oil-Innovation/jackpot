@@ -207,6 +207,7 @@ def list_samples(
     date_from: str | None = None,
     date_to: str | None = None,
     surveillance_relevant: bool | None = None,
+    has_broken_files: bool | None = None,
     select_all: bool = False,
     page: int = 1,
     per_page: int = Query(50, ge=1, le=500),
@@ -259,6 +260,15 @@ def list_samples(
     if surveillance_relevant is not None:
         where.append("s.surveillance_relevant = :surveillance_relevant")
         params["surveillance_relevant"] = surveillance_relevant
+    if has_broken_files:
+        # Phase P0f F-10: include only samples that have at least one
+        # sample_files row in BROKEN state. EXISTS keeps the join lazy.
+        where.append(
+            "EXISTS (SELECT 1 FROM sample_files sf "
+            "WHERE sf.sample_id_fk = s.id "
+            "AND sf.storage_state = 'BROKEN' "
+            "AND sf.is_deleted = FALSE)"
+        )
 
     where_sql = " AND ".join(where)
 

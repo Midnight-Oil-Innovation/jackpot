@@ -28,6 +28,7 @@ from backend.routers import (
     dataset_access,
     datasets,
     domain_whitelist,
+    files,
     gisaid,
     ingest,
     labs,
@@ -109,6 +110,7 @@ app.include_router(dataharmonizer.router)
 app.include_router(dataset_access.router)
 app.include_router(datasets.router)
 app.include_router(domain_whitelist.router)
+app.include_router(files.router)
 app.include_router(gisaid.router)
 app.include_router(ingest.router)
 app.include_router(labs.router)
