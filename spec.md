@@ -484,12 +484,28 @@ participate in caller transactions.
 - `pipeline_results` rows remain immutable and append-only — file
   references attached to results are new `sample_files` rows, not
   mutations of input rows.
-- Pre-launch verification iterates all input files; refuses launch if
-  any are `BROKEN`.
+- Pre-launch verification reads `sample_files.storage_state` for every
+  input row of every requested sample and refuses the launch with
+  `400 BROKEN_INPUTS` if any row is in `BROKEN` state. This is a fast
+  read of the verification job's last-known state — not a re-stat at
+  launch time. Stronger guarantees come from operator-tunable knobs:
+  shorten `Settings.verification_interval_seconds` or trigger
+  `POST /api/v1/admin/jobs/verify_file_references/run` before a
+  critical launch. The error response includes a `broken_files` list
+  (with `sample_files_id`, `sample_id`, `uri`,
+  `last_verification_status`) and a `suggestion` field telling the
+  user how to unblock.
 - All writes participate in caller transaction via `conn` parameter
   (matches existing `execute_write` and `log_audit` conventions).
-- Audit actions added: `REGISTER_FILE`, `PROMOTE_FILE`,
+- Audit actions added: `REGISTER_FILE`, `DEDUP_FILE`, `PROMOTE_FILE`,
   `VERIFY_FILE_FAILED`, `MARK_FILE_BROKEN`.
+- New error code `FILE_UNREACHABLE` (HTTP 400) — returned by
+  `/api/v1/ingest/register` when a URI cannot be read (and by any
+  future ingest path that does an at-ingest cheap fingerprint).
+- The success envelope (`backend/responses.py::success`) gains an
+  optional top-level `warnings` array carrying non-fatal advisories.
+  Used by `/api/v1/ingest/csv` to surface the EXTERNAL-by-default
+  behavior change when the `storage_intent` column is absent.
 - See Critical Rules 57 (no copy on ingest) and 58 (sample_files is
   the dedup primitive).
 

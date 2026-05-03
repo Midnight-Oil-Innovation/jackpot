@@ -435,6 +435,213 @@ async def test_launch_other_lab_project_returns_403(client, monkeypatch):
         _cleanup_users([email])
 
 
+# ────────────── POST /launch — Phase P0f F-8 BROKEN_INPUTS ──────────────
+
+
+def _insert_sample_file(
+    *,
+    sample_pk: int,
+    uri: str,
+    storage_state: str = "EXTERNAL",
+    last_verification_status: str | None = None,
+    file_size_bytes: int | None = None,
+) -> int:
+    # MANAGED/STAGED rows require file_size_bytes per the
+    # sample_files_managed_size_not_null check constraint.
+    if storage_state in ("MANAGED", "STAGED") and file_size_bytes is None:
+        file_size_bytes = 1024
+    rows = execute_write(
+        "INSERT INTO sample_files "
+        "    (sample_id_fk, uri, filename, file_type, library_layout, "
+        "     storage_state, last_verification_status, file_size_bytes) "
+        "VALUES (:sid, :uri, :fn, 'FASTQ', 'PAIRED', "
+        "        CAST(:state AS file_storage_state), :lvs, :sz) "
+        "RETURNING id",
+        {
+            "sid": sample_pk,
+            "uri": uri,
+            "fn": uri.rsplit("/", 1)[-1],
+            "state": storage_state,
+            "lvs": last_verification_status,
+            "sz": file_size_bytes,
+        },
+    )
+    return rows[0]["id"]
+
+
+@pytest.mark.asyncio
+async def test_launch_refuses_broken_inputs_returns_400(client, as_platform_admin):
+    """F-8: launch must refuse if any input sample_files row is BROKEN."""
+    prefix = _unique("BRK")
+    _cleanup_samples(prefix)
+    sample = _insert_sample(f"{prefix}-A")
+    ok_uri = f"file:///srv/seq/{prefix}/R1.fastq.gz"
+    broken_uri = f"file:///srv/seq/{prefix}/R2.fastq.gz"
+    _insert_sample_file(sample_pk=sample["id"], uri=ok_uri)
+    broken_id = _insert_sample_file(
+        sample_pk=sample["id"],
+        uri=broken_uri,
+        storage_state="BROKEN",
+        last_verification_status="MISSING_3",
+    )
+    cat_id = _insert_catalog(
+        pipeline_name=_unique("jp-brk"),
+        compatibility_rules={"source_types": ["Human"]},
+        pipeline_uri="https://github.com/jackpot-surv/pipelines",
+    )
+    try:
+        resp = await client.post(
+            "/api/v1/pipelines/launch",
+            json={
+                "pipeline_id": cat_id,
+                "sample_ids": [sample["sample_id"]],
+                "project_id": SEED_PROJECT_ID,
+            },
+        )
+        assert resp.status_code == 400, resp.text
+        body = resp.json()
+        assert body["success"] is False
+        assert body["error"]["code"] == "BROKEN_INPUTS"
+        broken = body["error"]["detail"]["broken_files"]
+        assert len(broken) == 1
+        assert broken[0]["sample_files_id"] == broken_id
+        assert broken[0]["sample_id"] == sample["sample_id"]
+        assert broken[0]["uri"] == broken_uri
+        assert broken[0]["last_verification_status"] == "MISSING_3"
+        assert "suggestion" in body["error"]["detail"]
+
+        # No pipeline_run row should exist for the refused launch.
+        runs = execute_query(
+            "SELECT 1 FROM pipeline_runs WHERE pipeline_catalog_id = :c",
+            {"c": cat_id},
+        )
+        assert runs == []
+    finally:
+        _cleanup_samples(prefix)
+        _cleanup_catalog_by_id(cat_id)
+
+
+@pytest.mark.asyncio
+async def test_launch_with_only_external_sample_files_succeeds(client, as_platform_admin):
+    """F-8 control: non-BROKEN sample_files rows must NOT trigger refusal."""
+    prefix = _unique("OKF")
+    _cleanup_samples(prefix)
+    sample = _insert_sample(f"{prefix}-A")
+    _insert_sample_file(
+        sample_pk=sample["id"],
+        uri=f"file:///srv/seq/{prefix}/R1.fastq.gz",
+    )
+    _insert_sample_file(
+        sample_pk=sample["id"],
+        uri=f"file:///srv/seq/{prefix}/R2.fastq.gz",
+        storage_state="MANAGED",
+    )
+    cat_id = _insert_catalog(
+        pipeline_name=_unique("jp-okf"),
+        compatibility_rules={"source_types": ["Human"]},
+        pipeline_uri="https://github.com/jackpot-surv/pipelines",
+        default_profile="gcp",
+    )
+    try:
+        resp = await client.post(
+            "/api/v1/pipelines/launch",
+            json={
+                "pipeline_id": cat_id,
+                "sample_ids": [sample["sample_id"]],
+                "project_id": SEED_PROJECT_ID,
+            },
+        )
+        assert resp.status_code == 201, resp.text
+        run_id = resp.json()["data"]["run_id"]
+        _cleanup_run(run_id)
+    finally:
+        _cleanup_samples(prefix)
+        _cleanup_catalog_by_id(cat_id)
+
+
+@pytest.mark.asyncio
+async def test_launch_broken_input_lists_every_broken_row(client, as_platform_admin):
+    """F-8: all BROKEN rows across all requested samples are surfaced."""
+    prefix = _unique("MBR")
+    _cleanup_samples(prefix)
+    sample_a = _insert_sample(f"{prefix}-A")
+    sample_b = _insert_sample(f"{prefix}-B")
+    _insert_sample_file(
+        sample_pk=sample_a["id"],
+        uri=f"file:///srv/seq/{prefix}/A_R1.fastq.gz",
+        storage_state="BROKEN",
+        last_verification_status="MISSING_3",
+    )
+    _insert_sample_file(
+        sample_pk=sample_b["id"],
+        uri=f"file:///srv/seq/{prefix}/B_R1.fastq.gz",
+        storage_state="BROKEN",
+        last_verification_status="SIZE_CHANGED",
+    )
+    cat_id = _insert_catalog(pipeline_name=_unique("jp-mbr"))
+    try:
+        resp = await client.post(
+            "/api/v1/pipelines/launch",
+            json={
+                "pipeline_id": cat_id,
+                "sample_ids": [sample_a["sample_id"], sample_b["sample_id"]],
+                "project_id": SEED_PROJECT_ID,
+            },
+        )
+        assert resp.status_code == 400
+        body = resp.json()
+        assert body["error"]["code"] == "BROKEN_INPUTS"
+        sample_ids_in_error = {r["sample_id"] for r in body["error"]["detail"]["broken_files"]}
+        assert sample_ids_in_error == {sample_a["sample_id"], sample_b["sample_id"]}
+        assert "2 input files" in body["error"]["message"]
+    finally:
+        _cleanup_samples(prefix)
+        _cleanup_catalog_by_id(cat_id)
+
+
+@pytest.mark.asyncio
+async def test_launch_ignores_deleted_broken_rows(client, as_platform_admin):
+    """F-8: soft-deleted (is_deleted=TRUE) BROKEN rows must not block launch."""
+    prefix = _unique("DBR")
+    _cleanup_samples(prefix)
+    sample = _insert_sample(f"{prefix}-A")
+    sf_id = _insert_sample_file(
+        sample_pk=sample["id"],
+        uri=f"file:///srv/seq/{prefix}/old.fastq.gz",
+        storage_state="BROKEN",
+        last_verification_status="MISSING_3",
+    )
+    execute_write(
+        "UPDATE sample_files SET is_deleted = TRUE WHERE id = :id",
+        {"id": sf_id},
+    )
+    _insert_sample_file(
+        sample_pk=sample["id"],
+        uri=f"file:///srv/seq/{prefix}/new.fastq.gz",
+    )
+    cat_id = _insert_catalog(
+        pipeline_name=_unique("jp-dbr"),
+        compatibility_rules={"source_types": ["Human"]},
+        pipeline_uri="https://github.com/jackpot-surv/pipelines",
+        default_profile="gcp",
+    )
+    try:
+        resp = await client.post(
+            "/api/v1/pipelines/launch",
+            json={
+                "pipeline_id": cat_id,
+                "sample_ids": [sample["sample_id"]],
+                "project_id": SEED_PROJECT_ID,
+            },
+        )
+        assert resp.status_code == 201, resp.text
+        run_id = resp.json()["data"]["run_id"]
+        _cleanup_run(run_id)
+    finally:
+        _cleanup_samples(prefix)
+        _cleanup_catalog_by_id(cat_id)
+
+
 # ───────────────────────── POST /events ─────────────────────────
 
 
