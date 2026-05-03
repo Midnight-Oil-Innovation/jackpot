@@ -1345,6 +1345,7 @@ response shape in a router — use the helpers from `backend/responses.py`.
 | `CONFLICT` | 409 | Duplicate sample_id, duplicate access request |
 | `SCRUB_PENDING` | 409 | Files not yet available (scrub in progress) |
 | `SCRUB_APPROVAL_REQUIRED` | 409 | Skip requested, awaiting Lab Director approval |
+| `BROKEN_INPUTS` | 400 | Pipeline launch refused because one or more input `sample_files` rows are in `BROKEN` storage state (Phase P0f F-8) |
 | `FILE_UNREACHABLE` | 400 | URI provided to ingest cannot be read (404, permission denied, network error). Phase P0f F-6. |
 | `INTERNAL_ERROR` | 500 | Unexpected exception — log and return generic message |
 

@@ -1262,17 +1262,28 @@ phase to lock in the dedup-primitive + EXTERNAL-default model.
 
 ### F-8: Pre-pipeline-launch verification
 
-- [ ] In `backend/pipelines/launch.py`, before submitting a run,
-      iterate over all input `file_references` and verify
-      accessibility — stat for `file://`, HEAD for `gs://`/`s3://`,
-      metadata fetch for `sra://`.
-- [ ] Fail fast with a clear error message identifying which file is
-      inaccessible — don't let pipelines start and crash on missing
-      input.
-- [ ] Verification timeout: 30 seconds total for the whole input set;
-      configurable.
-- [ ] If any input is `BROKEN`, refuse the launch outright and surface
-      the broken state in the error response.
+> **Design shift (vs. original draft):** F-8 is a fast *read* of the
+> verification job's last-known state, not a synchronous re-stat at
+> launch time. Per-file network round-trips (HEAD/stat/metadata-fetch)
+> would push 100ms × N file latency onto every launch and make batch
+> launches unusable. Instead, F-5 (`verify_file_references`) is the
+> source of truth for `sample_files.storage_state`, and F-8 trusts it.
+> Operators wanting stronger guarantees can shorten
+> `Settings.verification_interval_seconds` or trigger
+> `POST /api/v1/admin/jobs/verify_file_references/run` before a critical
+> launch.
+
+- [x] In `backend/routers/pipelines.py` `POST /launch`, after sample
+      resolution and access checks, query `sample_files` for any row
+      with `storage_state='BROKEN'` belonging to a requested sample.
+- [x] If any are `BROKEN`, refuse the launch with `400 BROKEN_INPUTS`
+      and surface a `broken_files` list (`sample_files_id`,
+      `sample_id`, `uri`, `last_verification_status`) plus a
+      `suggestion` field telling the user how to unblock.
+- [x] Add `BROKEN_INPUTS` to the standard error codes table in
+      `docs/CLAUDE.md` and the F-8 detail to `spec.md`.
+- [x] Integration test: pipeline launch refuses to start with a
+      `BROKEN` input.
 
 ### F-9: `jackpot files promote` CLI command
 

@@ -238,6 +238,50 @@ def launch_pipeline(
                 status_code=403,
             )
 
+    # Phase P0f F-8: refuse the launch if any input sample_files row is
+    # already known-BROKEN. The verification job (F-5) is the source of
+    # truth for storage_state; this is a fast read of that state, not a
+    # re-stat. See spec.md Phase P0f "Pre-launch verification" rule.
+    sample_pks = [s["id"] for s in sample_rows]
+    broken_files = execute_query(
+        "SELECT sf.id AS sample_files_id, s.sample_id AS sample_id, "
+        "       sf.uri, sf.last_verification_status "
+        "FROM sample_files sf "
+        "JOIN samples s ON s.id = sf.sample_id_fk "
+        "WHERE sf.sample_id_fk = ANY(:sids) "
+        "  AND sf.is_deleted = FALSE "
+        "  AND sf.storage_state = 'BROKEN' "
+        "ORDER BY s.sample_id, sf.id",
+        {"sids": sample_pks},
+        conn=db,
+    )
+    if broken_files:
+        n = len(broken_files)
+        return error(
+            "BROKEN_INPUTS",
+            f"Cannot launch pipeline: {n} input "
+            f"file{'s' if n != 1 else ''} "
+            f"{'are' if n != 1 else 'is'} in BROKEN state.",
+            detail={
+                "broken_files": [
+                    {
+                        "sample_files_id": row["sample_files_id"],
+                        "sample_id": row["sample_id"],
+                        "uri": row["uri"],
+                        "last_verification_status": row["last_verification_status"],
+                    }
+                    for row in broken_files
+                ],
+                "suggestion": (
+                    "Re-locate or re-upload the broken files, or remove "
+                    "the affected samples from the launch request. Run "
+                    "`jackpot files verify --sample <sample_id>` to "
+                    "re-check current state."
+                ),
+            },
+            status_code=400,
+        )
+
     report = compute_pipeline_compatibility(catalog, sample_rows)
     if report.is_hard_blocked:
         return error(
@@ -284,7 +328,7 @@ def launch_pipeline(
         logger.warning("Could not write run config to %s: %s", config_path, exc)
 
     # Translate sample_ids (string) → ingest DB id (int) for the run record
-    int_ids = [s["id"] for s in sample_rows]
+    int_ids = sample_pks
 
     insert_rows = execute_write(
         """
