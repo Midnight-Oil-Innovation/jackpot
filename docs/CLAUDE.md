@@ -848,6 +848,169 @@ The `jackpot init` CLI (P0e) is the only place where operator-specific values ar
 
 **56. `instances/ci/` is the only committed instance directory; it MUST contain zero secrets, zero PII, and zero real operator-specific values.** All other `instances/*/` paths are gitignored. The `instances/ci/` directory exists as the committed Scenario F (CI test) artifact set: pinned-forever values that produce reproducible green CI runs. It uses synthetic operator names (`CI Test Organization`, `ci@example.org`), `auth_method = "mock"` in jackpot.toml (no real OAuth client), filesystem storage (`STORAGE_ENDPOINT` empty in `.env.local`), and a randomly-generated-but-fixed JWT signing key (committed; CI is the only scenario where a known-fixed key is acceptable because there's no real auth to compromise). No GCS, no GISAID, no NCBI submission, no federation. The `jackpot init` CLI REFUSES to overwrite `instances/ci/` files; developers reproducing CI locally use `jackpot init --scenario F --instance-name ci-local` (or any name other than `ci`) and `instances/ci-local/` is gitignored.
 
+**57. JACKPOT does not copy data on ingest. Default storage_state is `EXTERNAL`.**
+
+Pointing JACKPOT at a file path or URI **registers** the file; it does
+not copy. The `file_references` row gets `storage_state='EXTERNAL'`,
+the original file stays where the operator put it, and JACKPOT reads
+in place at pipeline time. This is the inversion of the historical
+"ingest = copy" model and is the only way the platform stays viable
+on shared lab/cluster filesystems where a 4× duplication of FASTQ
+data would exhaust storage.
+
+Copies happen in exactly four cases, all explicit:
+
+1. The user sets `storage_intent='MANAGED'` (or `'MIRRORED'`) at ingest.
+2. A pipeline produces output files — outputs default to `MANAGED`
+   because JACKPOT owns the lifecycle of derived data.
+3. The user runs `jackpot files promote --to managed` (or
+   `--to mirrored`) on an existing `file_reference`.
+4. A pipeline run stages an input across a compute boundary
+   (e.g., on-prem to GCP Batch). Staging produces a `STAGED`
+   `file_reference` that is auto-cleaned after run completion +
+   retention window.
+
+The ingest UI must surface storage state plainly. Never default to
+copying "for safety" — that creates exactly the duplication problem
+this rule prevents. If the user wants JACKPOT to take ownership, they
+say so.
+
+**Related schema:** `file_references.storage_state`, the
+`FileStorageState` enum, the `sample_files` association table.
+
+**Related backlog:** Phase P0f in `todo.md`, end-to-end test
+`tests/e2e/test_no_copy_on_ingest.py` verifying that running a
+pipeline against an `EXTERNAL` input leaves the input's
+`storage_state` unchanged.
+
+---
+
+**58. file_references is the dedup primitive. content_hash, not URI, is the logical key.**
+
+A `file_reference` row is uniquely identified by `content_hash`
+(SHA-256 hex). Multiple URIs may point to the same `file_reference`
+via the `alternate_uris` array. Multiple samples may reference the
+same `file_reference` via the `sample_files` association table. The
+common cases:
+
+- Two labs both register data from `SRR12345` — one `file_reference`,
+  two `sample_files` rows linking it to two different samples.
+- A control sample is reused across runs — one `file_reference`,
+  N `sample_files` rows.
+- The same FASTQ exists at `/srv/seq/runs/...` and at
+  `gs://lab-archive/...` — one `file_reference`, two URIs.
+
+When registering a new file, always check for an existing
+`file_reference` with matching cheap fingerprint
+(`size_bytes` + `head64k_hash` + `tail64k_hash`) before INSERTing a
+new row. The cheap fingerprint is computed in
+`backend/file_fingerprint.py` from the first 64 KB and last 64 KB of
+the file — no full read at ingest time. If the fingerprint matches,
+link to the existing row and append the new URI to `alternate_uris`
+if different. The full SHA-256 is computed lazily by the
+`compute_full_content_hash` APScheduler job and used to reconcile
+fingerprint collisions (vanishingly rare for distinct content).
+
+The deprecated `samples.fastq_r1_uri` / `fastq_r2_uri` /
+`long_read_uri` / `assembly_uri` columns are **not** the source of
+truth — they exist for one release for backward compatibility and
+will be removed. New code reads files via `sample_files` joined to
+`file_references`.
+
+**Related schema:** `file_references` table, indexes
+`file_references_content_hash_uniq` and
+`file_references_fingerprint_idx`.
+
+---
+
+**59. Pipeline executor selection is per-run, not per-deployment.**
+
+The same JACKPOT instance can submit one run to local Nextflow, the
+next to a Slurm cluster, the next to GCP Batch — using the same
+pipeline definitions in the zoo. This is the architectural unlock
+that makes scenarios A through G feasible from a single codebase.
+
+Selection happens via `execution_profiles`. Profiles are configured
+by the operator at deployment time (`jackpot init`) or later
+(`jackpot profiles add`). Each profile carries an `executor_type`
+(`LOCAL`, `SLURM`, `PBS`, `LSF`, `GCP_BATCH`, `AWS_BATCH`,
+`KUBERNETES`), a `container_engine` (`DOCKER`, `APPTAINER`,
+`SINGULARITY`, `NONE`), a `work_dir`, and executor-specific
+overrides in `config_overrides` JSONB.
+
+**Resolution at launch time:**
+
+1. Explicit `profile_name` in the launch request body wins.
+2. Otherwise, the pipeline's first matching default profile by
+   `pipeline_default_profile.priority` (lowest priority number wins).
+3. Otherwise, the deployment's `is_default=true` profile.
+4. Otherwise, fail with `400 NO_PROFILE_AVAILABLE` listing the
+   configured profiles.
+
+If `profile_name` is provided but the profile is missing or
+`active=false`, fail with `400 PROFILE_NOT_FOUND` listing the
+available names.
+
+The launch endpoint generates a `nextflow.config` per run from the
+chosen profile via `backend/pipeline_config/profile_renderer.py`
+(extends Critical Rule 26). The generated config is stored at
+`<work_dir>/runs/<run_id>/jackpot_run.config` for audit and
+reproducibility. Quick-fast pipelines (file_detector smoke runs, DLP
+scans, validation) default to the `LOCAL` profile during seeding —
+they always run on the API server. Heavy pipelines (PHoeNIx, MIRA-NF,
+MycoSNP-NF, aquascope) have no default seeded; the operator picks at
+launch or sets one.
+
+**Related schema:** `execution_profiles` table,
+`pipeline_default_profile` association table.
+
+**Related backlog:** Phase P0g in `todo.md`.
+
+---
+
+**60. Cluster-bound pipeline runs must work whether or not compute nodes can reach the API.**
+
+Many HPC clusters block outbound HTTPS from compute nodes. This
+breaks Nextflow's standard weblog mechanism, which expects to POST
+trace events to a URL during execution. JACKPOT handles this by
+treating the HTTP weblog receiver as **best-effort** and providing a
+log poller as the source of truth when reachability is uncertain.
+
+**Two paths, both supported:**
+
+- **HTTP weblog (default):** compute nodes POST to
+  `/api/v1/pipelines/events`. The receiver in `backend/routers/pipelines.py`
+  **never raises on errors** — Nextflow does not retry weblog
+  delivery. Receiver tolerates duplicate events idempotently on
+  `(run_id, task_id, status)`.
+- **Log poller (fallback):** when the launch profile has
+  `weblog_reachable=false`, the launch endpoint omits the weblog
+  directive from the generated `nextflow.config` and instead starts
+  an APScheduler job in `backend/pipelines/log_poller.py`. The poller
+  tails `<work_dir>/runs/<run_id>/.nextflow.log` over the shared
+  filesystem every 30 seconds, parses Nextflow's known event
+  patterns, and emits synthetic events to the same handler the HTTP
+  receiver uses.
+
+The two paths can coexist for redundancy without duplicating writes,
+because the receiver dedups on the `(run_id, task_id, status)`
+tuple. Operators in scenario C (university research-computing
+hosted) typically run with `weblog_reachable=false` and rely solely
+on the poller; scenario B operators with their own server typically
+run with `weblog_reachable=true`.
+
+**For multi-tenant scenario C deployments**, per-launch
+`launch_account` overrides (which Slurm account to charge) must be
+validated against the user's lab memberships via the P0c
+multi-tenancy guard. Never trust `launch_account` from the request
+body alone.
+
+**Related schema:** `execution_profiles.config_overrides`
+(`weblog_reachable` boolean for Slurm/PBS/LSF profiles).
+
+**Related backlog:** Phase P0h in `todo.md`,
+`backend/pipelines/log_poller.py`, `backend/pipelines/cluster_health.py`.
+
 ---
 
 ## Local Dev Role Switching

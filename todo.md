@@ -1036,6 +1036,558 @@ If grabbing low-effort high-ROI items between sprints:
 
 ---
 
+## Phase P0f — File references redesign
+
+The mental-model shift: JACKPOT is a metadata database that knows where
+data lives, not a storage system that holds it. Pointing JACKPOT at a
+file path or URI registers the file; it does **not** copy. This phase
+adds the `file_references` table, the `FileStorageState` enum, the
+cheap-fingerprint + lazy-SHA-256 dedup model, the periodic verification
+job, and the API/UI surfaces that make storage state explicit to users.
+
+Pairs with P0g (execution profiles) — together they unlock scenario B
++ Slurm and scenario C without any FASTQ duplication.
+
+**Critical Rule precedent:** Critical Rule 20 (`file_detector.py` is
+the sole owner of file type and naming logic) stays. This phase does
+not introduce parallel file-type logic anywhere; `file_detector.py` is
+called once per file_reference at registration.
+
+### F-1: Schema design — `FileStorageState` enum + tables
+
+- [ ] Add `FileStorageState` enum to
+      `schema/schema/jackpot_schema.yaml` with values: `EXTERNAL`,
+      `MANAGED`, `MIRRORED`, `STAGED`, `BROKEN`.
+- [ ] Add `file_references` class to schema with fields:
+      `file_ref_id` (UUID, PK), `content_hash` (SHA-256, indexed,
+      logical key), `size_bytes`, `storage_state`, `primary_uri`,
+      `alternate_uris` (multivalued), `first_seen_at`,
+      `last_verified_at`, `last_verification_status`,
+      `retention_policy`, `original_uri` (for MIRRORED — the external
+      source the managed copy came from), `staged_for_run_id` (for
+      STAGED — the pipeline run that owns this temp copy).
+- [ ] Add `sample_files` association class with fields: `sample_id`
+      (FK), `file_ref_id` (FK), `role` (enum: `R1`, `R2`, `LONG_READ`,
+      `ASSEMBLY`, `OTHER`), `lane`, `chunk` (for nanopore).
+- [ ] Deprecate `samples.fastq_r1_uri`, `samples.fastq_r2_uri`,
+      `samples.long_read_uri`, `samples.assembly_uri` — keep columns
+      for one release as `@deprecated`, populated by trigger from the
+      new association table for backward compatibility.
+- [ ] Update LinkML generation to produce Pydantic v2 models for the
+      new classes; verify `from jose import jwt` style imports unaffected.
+- [ ] Update `schema/schema/templates/` TSV/Excel templates to surface
+      file URIs as path strings (no change in user-visible format).
+
+### F-2: Alembic migration
+
+- [ ] New revision `add_file_references` chained after current head.
+- [ ] Create `file_references` table with `content_hash` UNIQUE index
+      and partial index on `storage_state IN ('EXTERNAL', 'STAGED')`
+      for the verification job's hot path.
+- [ ] Create `sample_files` table with `(sample_id, role, lane, chunk)`
+      composite UNIQUE constraint.
+- [ ] Backfill: for every existing sample row with a populated URI
+      column, INSERT a `file_references` row (storage_state=EXTERNAL,
+      content_hash NULL until F-4 backfills it) and a corresponding
+      `sample_files` row.
+- [ ] Verify: `alembic upgrade head` from empty DB lands cleanly,
+      `alembic downgrade -1` reverses cleanly, backfill produces one
+      file_reference per existing FASTQ URI in the seed dataset.
+- [ ] Test against staging clone before merging.
+
+### F-3: Cheap fingerprint at ingest
+
+- [ ] New module `backend/file_fingerprint.py` with function
+      `cheap_fingerprint(uri) -> tuple[int, str, str]` returning
+      `(size_bytes, head64k_sha256, tail64k_sha256)`.
+- [ ] Implementation reads the first 64 KB and last 64 KB only — for
+      `file://` paths via `os.open`/`os.pread`, for `gs://` and `s3://`
+      via Range requests through `backend/storage.py`, for `sra://` by
+      delegating to NCBI metadata API rather than downloading.
+- [ ] Handle gzip/BGZF transparently — fingerprint compressed bytes,
+      not decompressed content (cheaper, content-hash-stable as long
+      as compression is deterministic).
+- [ ] Wire into `backend/ingest/upload.py`,
+      `backend/ingest/csv.py`, `backend/ingest/globus.py` to compute
+      fingerprint at registration time, store on the `file_references`
+      row, and check for an existing row with the same fingerprint
+      before INSERTing a new one.
+- [ ] Dedup behavior: if fingerprint matches an existing row, link the
+      new `sample_files` row to the existing `file_reference` and
+      append the new URI to `alternate_uris` if different.
+
+### F-4: Background job — full SHA-256
+
+- [ ] New APScheduler job `compute_full_content_hash` that scans for
+      `file_references` rows with `content_hash IS NULL` and computes
+      the full SHA-256, updating the row and reconciling any
+      fingerprint-collision dedup that cheap fingerprinting missed.
+- [ ] Streaming hash for large files — never `.read()` the whole thing
+      into memory; use 8 MB buffers.
+- [ ] Throttle: max one file at a time, max 30 minutes per run; pick
+      up where it left off on next tick.
+- [ ] Job interval: every 5 minutes in production, configurable via
+      `Settings.full_hash_interval_seconds`.
+- [ ] Job is no-op for `EXTERNAL` files on slow networks if the
+      operator sets `Settings.skip_remote_full_hash=true` (scenario B
+      with cluster-mounted storage).
+
+### F-5: Periodic verification job
+
+- [ ] New APScheduler job `verify_file_references` that re-stats every
+      `EXTERNAL` and `MIRRORED` file_reference, updating
+      `last_verified_at` and `last_verification_status`.
+- [ ] If file is missing or unreadable, transition state to `BROKEN`
+      and `log_audit()` the transition.
+- [ ] If file is present but size has changed, transition to `BROKEN`
+      and emit a notification — content under the URI changed
+      out-of-band, samples may be referencing different data than
+      registered.
+- [ ] Job interval: every 24 hours by default, configurable.
+- [ ] Skip `MANAGED` and `STAGED` files (JACKPOT owns them, no
+      external drift possible).
+- [ ] Skip `BROKEN` files (terminal state until operator intervention).
+
+### F-6: Update ingest API — `EXTERNAL` is the default
+
+- [ ] `backend/ingest/upload.py`: keep current upload-and-stage path
+      for browser uploads (laptop scenario A small files), but mark
+      result as `MANAGED` since the user explicitly uploaded.
+- [ ] `backend/ingest/csv.py`: when CSV row contains a URI or path,
+      register as `EXTERNAL` by default. Add column `storage_intent`
+      to the CSV template — values `EXTERNAL` (default), `MANAGED`
+      (operator wants JACKPOT to copy), `MIRRORED` (copy but track
+      origin).
+- [ ] `backend/ingest/globus.py`: register as `EXTERNAL` referencing
+      the Globus collection URI. Pipeline staging will pull data via
+      Globus on demand.
+- [ ] New endpoint `POST /api/v1/ingest/register` for the path-only
+      registration flow — no file upload, just metadata + URI(s).
+- [ ] Update `backend/responses.py` to include `storage_state` in the
+      ingest success response so users see "registered" vs "uploaded"
+      explicitly.
+
+### F-7: Update `pipeline_results_loader.py` for output ownership
+
+- [ ] Pipeline outputs default to `MANAGED` — the pipeline produced
+      them under JACKPOT-controlled paths, JACKPOT owns the lifecycle.
+- [ ] Pipeline inputs are not transitioned by running a pipeline — an
+      `EXTERNAL` input file remains `EXTERNAL` after a pipeline run
+      reads it.
+- [ ] When a pipeline emits a derived file that should be linked to a
+      sample (e.g., trimmed FASTQ, assembly), create a new
+      `file_reference` row with `storage_state=MANAGED` and a new
+      `sample_files` row with the appropriate role.
+- [ ] Maintain Critical Rule: `pipeline_results` rows remain immutable
+      and append-only — every run gets a new INSERT.
+
+### F-8: Pre-pipeline-launch verification
+
+- [ ] In `backend/pipelines/launch.py`, before submitting a run,
+      iterate over all input `file_references` and verify
+      accessibility — stat for `file://`, HEAD for `gs://`/`s3://`,
+      metadata fetch for `sra://`.
+- [ ] Fail fast with a clear error message identifying which file is
+      inaccessible — don't let pipelines start and crash on missing
+      input.
+- [ ] Verification timeout: 30 seconds total for the whole input set;
+      configurable.
+- [ ] If any input is `BROKEN`, refuse the launch outright and surface
+      the broken state in the error response.
+
+### F-9: `jackpot files promote` CLI command
+
+- [ ] Add subcommand under the `jackpot` CLI (lives in `cli/jackpot/`)
+      that calls a new endpoint `POST /api/v1/files/{file_ref_id}/promote`.
+- [ ] Promotion modes: `--to managed` (copy to JACKPOT-owned storage,
+      transition state), `--to mirrored` (copy but keep external
+      reference), `--from staged --to managed` (preserve a STAGED
+      file beyond run end).
+- [ ] Bulk variant: `jackpot files promote --project <id> --to managed`
+      promotes every file referenced by samples in the project.
+- [ ] Backend endpoint kicks off a background job for the actual copy;
+      returns 202 Accepted with a job ID for status polling.
+
+### F-10: UI surfacing of storage state
+
+- [ ] In `frontend/pages/my_samples.py` and the search results table,
+      add a column showing storage state with color coding —
+      `EXTERNAL` (gray), `MANAGED` (green), `MIRRORED` (blue),
+      `STAGED` (yellow), `BROKEN` (red).
+- [ ] On the sample detail page, show the full file_reference for each
+      sample_file: state, primary URI, alternate URIs, content hash,
+      last verified timestamp, and a "Promote to managed" button when
+      applicable.
+- [ ] On ingest pages (`upload.py`, `data_entry.py`), show a banner
+      explaining "JACKPOT will register this file in place — it will
+      not be moved or copied. To make a managed copy, set Storage
+      Intent to Managed."
+- [ ] Broken files surface a prominent banner with options: re-locate
+      (provide a new URI), re-upload, or mark the sample inactive.
+
+### F-11: Tests
+
+- [ ] Unit tests for `cheap_fingerprint()` covering local files, gzip,
+      BGZF, gcs:// (mocked), s3:// (mocked), sra:// (mocked).
+- [ ] Unit tests for the dedup path — same fingerprint produces one
+      `file_reference` row referenced by multiple samples.
+- [ ] Integration tests for the ingest endpoints covering all three
+      storage intents.
+- [ ] Integration test for the verification job marking a file
+      `BROKEN` when it disappears from disk between registrations.
+- [ ] Integration test for pipeline-launch refusing to launch with a
+      `BROKEN` input.
+- [ ] End-to-end test in `tests/e2e/` that registers an `EXTERNAL`
+      file, runs a fixture pipeline against it, and verifies no copy
+      was made (file_reference still `EXTERNAL`, only the output is
+      `MANAGED`).
+- [ ] Verify all 477 existing tests still pass; add new tests to keep
+      coverage above 86.99%.
+
+### F-12: Docs
+
+- [ ] Add `docs/file_references.md` explaining the storage-state model
+      to operators and end users.
+- [ ] Update `spec.md` API conventions section with the new
+      `/api/v1/ingest/register` and `/api/v1/files/{id}/promote`
+      endpoints.
+- [ ] Add CLAUDE.md Critical Rule: "JACKPOT does not copy data on
+      ingest. The default storage_state is `EXTERNAL`. Copies happen
+      only via explicit `MANAGED` intent at ingest, via pipeline
+      output materialization, via `jackpot files promote`, or via
+      pipeline staging (which is auto-cleaned)."
+- [ ] Update `local_test_checklist.md` with file-reference verification
+      steps.
+
+---
+
+## Phase P0g — Execution profiles
+
+Executor selection becomes a per-pipeline-run choice driven by
+operator-configured profiles, not a deployment-time decision. The same
+JACKPOT instance can submit one run to local Nextflow, the next to a
+Slurm cluster, the next to GCP Batch — all using the same pipeline
+definitions in the zoo.
+
+This phase ships the schema, the profile templates, the
+`nextflow.config` generation, the launch-time profile selection, and
+the `JACKPOT_WORK_DIR` abstraction. The actual Slurm-specific work
+lands in P0h; this phase makes that work possible.
+
+### G-1: Schema design — `execution_profiles` class
+
+- [ ] Add `execution_profiles` class to
+      `schema/schema/jackpot_schema.yaml` with fields: `profile_id`
+      (UUID, PK), `name` (unique within deployment), `executor_type`
+      (enum: `LOCAL`, `SLURM`, `PBS`, `LSF`, `GCP_BATCH`, `AWS_BATCH`,
+      `KUBERNETES`), `container_engine` (enum: `DOCKER`, `APPTAINER`,
+      `SINGULARITY`, `NONE`), `work_dir`, `config_overrides` (JSONB
+      for executor-specific fields like Slurm account/partition/QOS,
+      GCP project/region, K8s namespace), `is_default`, `created_by`,
+      `created_at`, `active`.
+- [ ] Add `pipeline_default_profile` association class with fields:
+      `pipeline_id` (FK to pipelines), `profile_id` (FK), `priority`
+      (lower = preferred default if multiple match).
+- [ ] Update LinkML generation; verify Pydantic v2 models compile.
+
+### G-2: Alembic migration
+
+- [ ] New revision `add_execution_profiles` chained after P0f's
+      revision.
+- [ ] Create `execution_profiles` table with `(name)` UNIQUE
+      constraint at deployment scope.
+- [ ] Create `pipeline_default_profile` table.
+- [ ] Seed migration: insert a `LOCAL` default profile so existing
+      installations have something to launch with after upgrade.
+- [ ] Verify `alembic upgrade head` from empty + downgrade.
+
+### G-3: Profile templates
+
+- [ ] New directory `backend/pipeline_config/profile_templates/` with
+      Jinja2 templates for each executor type:
+      - `local.config.j2`
+      - `slurm.config.j2`
+      - `pbs.config.j2`
+      - `lsf.config.j2`
+      - `gcp_batch.config.j2`
+      - `aws_batch.config.j2`
+      - `kubernetes.config.j2`
+- [ ] Each template renders a complete `nextflow.config` snippet
+      using profile fields. Slurm template handles
+      `account`/`partition`/`qos`/`time`/`memory` with sensible
+      defaults that operator can override.
+- [ ] Container-engine-aware: when `container_engine=APPTAINER`, the
+      rendered config sets `apptainer.enabled=true` and disables
+      Docker; vice versa for `DOCKER`.
+- [ ] Templates pull common settings from
+      `backend/pipeline_config/base.config.j2` so changes propagate.
+
+### G-4: `nextflow.config` generation at launch
+
+- [ ] New module `backend/pipeline_config/profile_renderer.py` with
+      function `render_nextflow_config(profile, pipeline, run_id) -> str`.
+- [ ] Renderer picks the right template based on
+      `profile.executor_type`, fills in profile fields, layers
+      pipeline-specific overrides, and writes the result to the run's
+      work directory as `nextflow.config`.
+- [ ] Call site: `backend/pipelines/launch.py` calls the renderer
+      after profile selection and before `nextflow run` invocation.
+- [ ] Generated configs stored alongside run logs for audit and
+      reproducibility.
+
+### G-5: Per-pipeline default profile
+
+- [ ] New endpoint `POST /api/v1/pipelines/{id}/default-profiles`
+      to associate a profile as default for a pipeline.
+- [ ] Resolution logic at launch: explicit profile in launch request
+      wins, else pipeline's first matching default profile, else
+      deployment's `is_default=true` profile, else error.
+- [ ] Quick-fast pipelines (file detection, DLP scan, validation) get
+      their default set to the deployment's `LOCAL` profile during
+      seeding — they always run on the API server.
+- [ ] Heavy pipelines (PHoeNIx, MIRA-NF, MycoSNP-NF, aquascope) have
+      no default seeded; operator picks at launch or sets a default.
+
+### G-6: `JACKPOT_WORK_DIR` abstraction
+
+- [ ] New `Settings.work_dir` field, peer to existing
+      `Settings.storage_backend`. Default per scenario:
+      - Scenario A: `~/.jackpot/work/`
+      - Scenario B (Docker): `/srv/jackpot/work/`
+      - Scenario B (Slurm): operator-provided shared filesystem
+      - Scenario C: institutional shared filesystem path
+      - Scenario D/E (cloud): `gs://<deployment>-jackpot-work/` or
+        `s3://...`
+- [ ] All pipeline runs use `<work_dir>/runs/<run_id>/` as their work
+      directory. Profile renderer reads `Settings.work_dir` and
+      injects it into the generated `nextflow.config`.
+- [ ] Work directory layout documented in `docs/work_directory.md` so
+      operators understand what lives there and how to back up or
+      clean it.
+- [ ] Cleanup job: APScheduler task `cleanup_old_work_dirs` that
+      removes `STAGED` files and entire run directories older than
+      configurable retention (default 7 days, operator-configurable).
+
+### G-7: Launch-time profile selection
+
+- [ ] Update `POST /api/v1/pipelines/{id}/launch` request body to
+      accept optional `profile_name` field.
+- [ ] If omitted, resolve via the rules in G-5.
+- [ ] If provided but the profile doesn't exist or isn't `active`,
+      return 400 with available profile names.
+- [ ] Update `frontend/pages/pipelines.py` launch UI to show a
+      profile dropdown populated from `GET /api/v1/profiles/` —
+      labeled with executor type and a friendly summary
+      (e.g., "Slurm — mylab — apptainer").
+
+### G-8: Cost estimation hooks for cloud profiles
+
+- [ ] New module `backend/pipeline_config/cost_estimator.py` with a
+      pluggable interface — `estimate_cost(profile, pipeline,
+      sample_count) -> CostEstimate`.
+- [ ] Implementations stub-only for non-cloud profiles (return
+      `unknown`); concrete for `GCP_BATCH` using current Compute
+      Engine + Cloud Storage pricing tables (refreshed weekly via a
+      scheduled job, cached in DB).
+- [ ] Launch UI shows estimate before confirmation when profile is
+      cloud-based: "Estimated cost: $X (range $Y–$Z based on
+      historical runs)".
+- [ ] Logged on every launch for actuals-vs-estimate analysis later.
+
+### G-9: `jackpot profiles` CLI commands
+
+- [ ] `jackpot profiles list` — print configured profiles in a table.
+- [ ] `jackpot profiles add` — interactive add of a new profile,
+      prompting for executor type and the relevant fields.
+- [ ] `jackpot profiles edit <name>` — update an existing profile.
+- [ ] `jackpot profiles remove <name>` — soft-delete (`active=false`);
+      refuses if any pipeline has it as default.
+- [ ] `jackpot profiles test <name>` — submit a fixture
+      single-process Nextflow job through the profile to verify it
+      works end-to-end. Used by `jackpot doctor`.
+
+### G-10: Tests
+
+- [ ] Unit tests for the profile renderer covering each executor type
+      against fixture profile data.
+- [ ] Integration test: register a profile, launch a tiny pipeline
+      against it, verify the generated `nextflow.config` matches
+      expectations.
+- [ ] Integration test for the resolution logic: explicit profile,
+      pipeline default, deployment default, error cases.
+- [ ] Integration test for the cleanup job — STAGED files older than
+      retention disappear; MANAGED files do not.
+- [ ] Coverage target: keep above 86.99%.
+
+### G-11: Docs
+
+- [ ] Add `docs/execution_profiles.md` explaining the profile model
+      to operators with concrete examples for each executor type.
+- [ ] Update `spec.md` with the new endpoints and config fields.
+- [ ] Add CLAUDE.md Critical Rule: "Pipeline executor selection is
+      per-run, not per-deployment. Profile resolution: explicit > 
+      pipeline-default > deployment-default > error."
+
+---
+
+## Phase P0h — Slurm executor support for scenario B (and C)
+
+Single-lab on-prem deployments often have access to a Slurm queue —
+either local on the same box, or on a department/university cluster.
+This phase makes Slurm a peer of the local executor for scenario B,
+and lays the cluster-side groundwork that scenario C (university
+research-computing hosted) needs.
+
+Builds on P0f (file_references — pipelines read inputs in place from
+the shared filesystem) and P0g (execution profiles — Slurm is one
+profile among several).
+
+**Prerequisite for end-to-end test:** access to a real Slurm cluster.
+A small institutional one or a stood-up scratch cluster on GCP/AWS
+both work; CI can use a containerized SLURM (e.g., `giovtorres/slurm-
+docker-cluster`) for unit-level testing.
+
+### H-1: Slurm Nextflow config template (refines G-3)
+
+- [ ] In `backend/pipeline_config/profile_templates/slurm.config.j2`,
+      handle the full Slurm field set: `account`, `partition`, `qos`,
+      `clusterOptions` (free-form sbatch flags), `time`, `memory`,
+      `cpus`, and `queueSize` (max concurrent submissions).
+- [ ] Default `process.executor='slurm'` and per-process `cpus` /
+      `memory` / `time` from `pipeline_config/base.config.j2`,
+      overridable per profile.
+- [ ] Apptainer is the default container engine for Slurm profiles
+      (university policy norm). Docker remains an option for lab-Slurm
+      cases where the cluster allows it.
+
+### H-2: Apptainer container engine support in pipeline zoo
+
+- [ ] Audit each pipeline in `pipelines/` for Apptainer profile
+      compatibility — most are already nf-core-standards and have it.
+- [ ] For pipelines that don't, add an `apptainer` profile to their
+      `nextflow.config` mirroring the existing `docker` profile but
+      with `apptainer.enabled=true`, `apptainer.autoMounts=true`, and
+      Apptainer-friendly cache directory.
+- [ ] Document the per-pipeline container-image inventory: which OCI
+      images each pipeline pulls, so operators can pre-stage SIF files
+      for air-gapped clusters.
+- [ ] Add a manifest file `pipelines/<name>/apptainer_images.txt` per
+      pipeline listing the required OCI image references — fed to
+      `jackpot images export` for pre-staging.
+
+### H-3: Account / partition / QOS handling
+
+- [ ] Profile fields for Slurm carry `account`, `partition`, `qos`,
+      and `clusterOptions` — all optional, all rendered as `sbatch`
+      flags in the generated config when present.
+- [ ] For multi-tenant scenario C: the profile holds the *default*
+      account, but a per-launch override field `launch_account` lets a
+      lab member charge a specific grant. P0c multi-tenancy middleware
+      validates the override against the user's lab memberships.
+- [ ] CLAUDE.md note: profile account defaults are written by the
+      operator; per-launch overrides are validated against user's lab
+      memberships, never trusted blindly.
+
+### H-4: Weblog reachability for cluster-submitted runs
+
+- [ ] Document in `docs/slurm_executor.md` the network requirement:
+      compute nodes need outbound HTTP access to the JACKPOT API's
+      `/api/v1/pipelines/events` endpoint.
+- [ ] If outbound is blocked (common for scenario C), provide the
+      polling fallback: a sidecar process on the API server polls
+      `<work_dir>/runs/<run_id>/.nextflow.log` over the shared
+      filesystem and emits synthetic weblog events.
+- [ ] Sidecar implementation: `backend/pipelines/log_poller.py` as an
+      APScheduler job, runs every 30 seconds for active cluster runs,
+      tails the log and matches Nextflow's known event patterns.
+- [ ] Receiver tolerates duplicate events (idempotent on
+      `(run_id, task_id, status)` tuple) so weblog and poller can
+      coexist for redundancy.
+
+### H-5: Shared-filesystem JACKPOT_WORK_DIR for cluster execution
+
+- [ ] In Slurm profiles, `work_dir` must be a path visible to both
+      the API server and the compute nodes. Profile validation at
+      `jackpot profiles add/edit` time stats the path locally and
+      warns if it doesn't exist or isn't writable.
+- [ ] `jackpot doctor` for Slurm profiles: submits a tiny `srun
+      --pty hostname` against the configured account/partition,
+      verifies the work directory is reachable from the compute node.
+- [ ] Document scenarios where the API server's view of the
+      filesystem differs from the cluster's (NFS mount paths, etc.)
+      and how to align them via Nextflow's `process.scratch` and
+      `process.stageInMode`.
+
+### H-6: Pre-pipeline-launch Slurm reachability check
+
+- [ ] Refines F-8: when launch profile is Slurm, additionally verify
+      the cluster is reachable — `sinfo` returns 0 within 10 seconds.
+- [ ] If unreachable, fail the launch with a clear error and a
+      pointer to `jackpot doctor`.
+- [ ] Cache reachability for 60 seconds to avoid hammering `sinfo` on
+      bulk launches.
+
+### H-7: GCP Batch executor profile (stretch goal)
+
+- [ ] Implement `GCP_BATCH` profile template under G-3 if not yet
+      done.
+- [ ] Required profile fields: `gcp_project`, `gcp_region`,
+      `gcp_service_account`, `gcs_bucket` (for staging), `machine_type`.
+- [ ] Cloud-burst-from-scenario-B story: when a Slurm queue is
+      backed up, operator can switch a launch to the `gcp-batch`
+      profile manually. Auto-burst (queue-depth-triggered) is
+      explicitly out of scope for this phase.
+- [ ] Input staging: F-7 STAGED file_references with `gs://`
+      `primary_uri`, materialized at launch by copying from local
+      paths to GCS, cleaned up after run completion.
+- [ ] Cost estimation hook from G-8 wired up for this profile.
+- [ ] Stretch — defer if other H items run long; track in Phase 25.
+
+### H-8: End-to-end smoke test on a real Slurm cluster
+
+- [ ] Stand up a test cluster (options: small institutional partner,
+      `giovtorres/slurm-docker-cluster` in CI for hermetic testing,
+      or a one-day GCP cluster via Slurm-on-GCP for full end-to-end).
+- [ ] Test scenarios:
+      1. Single-sample MIRA-NF run, Apptainer engine, weblog over
+         HTTP — verify run completes, weblog events arrive, results
+         loaded.
+      2. Same with weblog blocked, poller path active — verify
+         results still loaded via log polling.
+      3. 10-sample batch via PHoeNIx, verifying queueSize throttling.
+      4. Failure case: input file_reference becomes BROKEN
+         mid-run — verify graceful failure and clear error to user.
+- [ ] Document the test cluster setup in `docs/test_cluster.md` so
+      anyone can reproduce.
+
+### H-9: Tests
+
+- [ ] Unit tests for the Slurm profile rendering covering all field
+      combinations.
+- [ ] Mocked-Slurm integration tests that capture the rendered
+      `sbatch` command line and verify expected flags.
+- [ ] CI matrix entry for the containerized Slurm cluster — run a
+      hermetic end-to-end pipeline test on every PR that touches
+      `backend/pipeline_config/` or `pipelines/`.
+- [ ] Coverage target: keep above 86.99%.
+
+### H-10: Docs
+
+- [ ] Add `docs/slurm_executor.md` covering profile setup, network
+      requirements, Apptainer pre-staging, weblog vs poller, and
+      common cluster-policy gotchas.
+- [ ] Add `docs/cloud_burst.md` for the GCP Batch path (if H-7
+      lands).
+- [ ] Update README scenario B section to show "Lab with Slurm
+      cluster" as the second example after laptop, before any cloud
+      example.
+- [ ] Add CLAUDE.md Critical Rule: "Cluster-bound runs must work
+      whether or not compute nodes can reach the API. The weblog
+      receiver is best-effort; the log poller is the source of truth
+      when reachability is in doubt."
+
+---
+
 ## Phase 27 — CDC DMI / North Star / STLT Alignment Backlog (Tracked, Not Scheduled)
 
 **Source:** `jackpot_cdc_dmi_stlt_overview.md` (April 2026 working session). This is parallel to Phase 26 — different lens. Where Phase 26 covers "things lifted from open-source peer platforms" (Loculus, Pathogenwatch, etc.), Phase 27 covers "things adapted from US public-health-data ecosystem" (CDC DMI, North Star Architecture, STLT operator needs, CARE Principles for Indigenous Data Sovereignty). 14 items total across 3 groups.

@@ -10,7 +10,7 @@ updated_at trigger.
 The existing sample_files table already carries sample_id_fk, uri,
 md5, file_size_bytes, scrub_status, paired_file_id, etc. — P0f
 extends it rather than introducing a parallel file_references table.
-See spec.md Phase P0f and Critical Rules 46 and 47.
+See spec.md Phase P0f and Critical Rules 57 and 58.
 
 Revision ID: 34382b7b82c6
 Revises:    00b4bd99ddee
@@ -159,7 +159,7 @@ def upgrade() -> None:
             'Sample-to-file association with file metadata. Phase P0f '
             'extended this table with content_hash, cheap fingerprint, '
             'storage_state, alternate_uris, and verification metadata. '
-            'See Critical Rules 46 and 47.';
+            'See Critical Rules 57 and 58.';
     """)
     )
 

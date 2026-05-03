@@ -358,6 +358,7 @@ These blocking bugs were resolved before any router session began:
 soft delete.
 
 ---
+---
 
 ## Phase P0f Specification — File references
 
@@ -367,7 +368,7 @@ soft delete.
 
 ### Schema additions
 
-New enum `FileStorageState` in `schema/schema/jackpot_schema.yaml`:
+New enum `file_storage_state` in `schema/schema/jackpot_schema.yaml`:
 
 | Value | Meaning | Lifecycle owner |
 |---|---|---|
@@ -377,41 +378,30 @@ New enum `FileStorageState` in `schema/schema/jackpot_schema.yaml`:
 | `STAGED` | Temp copy for a specific pipeline run; auto-cleaned | JACKPOT |
 | `BROKEN` | External file no longer accessible (terminal) | n/a |
 
-New class `file_references`:
+**Existing `sample_files` table extended with P0f columns:**
 
-| Field | Type | Notes |
+| Column | Type | Notes |
 |---|---|---|
-| `file_ref_id` | UUID | PK |
-| `content_hash` | string(64) | SHA-256 hex; UNIQUE when non-null; nullable until full hash computed |
-| `size_bytes` | integer | Nullable until verified |
-| `head64k_hash` | string(64) | Cheap fingerprint piece |
-| `tail64k_hash` | string(64) | Cheap fingerprint piece |
-| `storage_state` | FileStorageState | NOT NULL |
-| `primary_uri` | string | NOT NULL |
-| `alternate_uris` | list[string] | Same content at multiple URIs |
-| `first_seen_at` | datetime | NOT NULL |
-| `last_verified_at` | datetime | Updated by verification job |
-| `last_verification_status` | string | `OK`, `MISSING`, `SIZE_CHANGED`, `READ_ERROR` |
-| `retention_policy` | string | `STANDARD`, `LONG_TERM`, `EPHEMERAL` |
-| `original_uri` | string | For MIRRORED — the external source |
+| `content_hash` | VARCHAR(64) | SHA-256 hex; UNIQUE when non-null; nullable until full hash computed |
+| `head64k_hash` | VARCHAR(64) | Cheap fingerprint piece (first 64 KB) |
+| `tail64k_hash` | VARCHAR(64) | Cheap fingerprint piece (last 64 KB) |
+| `storage_state` | file_storage_state | NOT NULL DEFAULT 'EXTERNAL' |
+| `alternate_uris` | TEXT[] | Same content at multiple URIs |
+| `first_seen_at` | TIMESTAMPTZ | NOT NULL DEFAULT NOW() |
+| `last_verified_at` | TIMESTAMPTZ | Updated by verification job |
+| `last_verification_status` | VARCHAR(32) | OK, MISSING, SIZE_CHANGED, READ_ERROR |
+| `retention_policy` | VARCHAR(32) | STANDARD, LONG_TERM, EPHEMERAL |
+| `original_uri` | TEXT | For MIRRORED — the external source |
 | `staged_for_run_id` | UUID | For STAGED — the pipeline run that owns it |
-| `created_by_id` | integer | FK users |
-| `created_at` | datetime | NOT NULL |
-| `updated_at` | datetime | NOT NULL |
+| `updated_at` | TIMESTAMPTZ | NOT NULL, maintained by trigger |
 
-New association class `sample_files`:
-
-| Field | Type | Notes |
-|---|---|---|
-| `id` | UUID | PK |
-| `sample_id` | integer | FK samples |
-| `file_ref_id` | UUID | FK file_references |
-| `role` | enum | `R1`, `R2`, `LONG_READ`, `ASSEMBLY`, `OTHER` |
-| `lane` | integer | Nullable; for multi-lane Illumina |
-| `chunk` | integer | Nullable; for nanopore |
-| `created_at` | datetime | NOT NULL |
-
-UNIQUE constraint: `(sample_id, role, lane, chunk)`.
+Existing columns (`uri`, `raw_uri`, `filename`, `file_size_bytes`,
+`md5`, `file_type`, `library_layout`, `read_direction`, `lane`,
+`chunk_index`, `paired_file_id`, `scrub_status`, `pii_scan_status`,
+`ingest_method`, `ingest_timestamp`, `is_deleted`, `deleted_at`)
+are unchanged. P0f does not introduce a separate `file_references`
+table; the existing `sample_files` serves the dedup-primitive role
+with the new columns.
 
 Deprecated columns on `samples` (kept for one release with backfill
 trigger): `fastq_r1_uri`, `fastq_r2_uri`, `long_read_uri`, `assembly_uri`.
@@ -439,21 +429,21 @@ Request body:
 `storage_intent` values: `EXTERNAL` (default), `MANAGED`, `MIRRORED`.
 
 Response: standard `success` envelope with the registered sample plus
-`file_references` summaries (one per file).
+`sample_files` summaries (one per file).
 
-**POST `/api/v1/files/{file_ref_id}/promote`** — Change storage state.
+**POST `/api/v1/files/{file_id}/promote`** — Change storage state.
 Body: `{"to": "MANAGED" | "MIRRORED", "retention_policy": "..."}`.
 Returns 202 Accepted with a job ID; copy runs as a background job.
 
-**GET `/api/v1/files/{file_ref_id}`** — Retrieve a file_reference and
+**GET `/api/v1/files/{file_id}`** — Retrieve a sample_files row and
 the samples that reference it.
 
 **GET `/api/v1/files/`** — Paginated list with filters: `storage_state`,
 `broken_only`, `project_id`. Standard pagination convention.
 
-**POST `/api/v1/files/{file_ref_id}/verify`** — Force re-verification of
-a single file_reference. Useful from the UI when a user has just put a
-missing file back.
+**POST `/api/v1/files/{file_id}/verify`** — Force re-verification of
+a single file. Useful from the UI when a user has just put a missing
+file back.
 
 ### New modules
 
@@ -466,10 +456,10 @@ the first and last 64 KB. Implementations per scheme: `file://` via
 content transparently — fingerprints compressed bytes, not decompressed.
 
 **`backend/file_references.py`** — CRUD operations and dedup logic.
-`register_file(uri, storage_intent, conn) -> FileReference`. Checks for
-existing file_references with matching cheap fingerprint before
-INSERT; appends to `alternate_uris` on dedup hit. All writes accept
-`conn=db` to participate in caller transactions.
+`register_file(uri, storage_intent, conn) -> SampleFile`. Checks for
+existing rows with matching cheap fingerprint before INSERT; appends
+to `alternate_uris` on dedup hit. All writes accept `conn=db` to
+participate in caller transactions.
 
 **`backend/jobs/file_jobs.py`** — Two new APScheduler jobs:
 
@@ -492,21 +482,23 @@ INSERT; appends to `alternate_uris` on dedup hit. All writes accept
 - Pipeline outputs default to `MANAGED`; pipeline inputs are not
   state-transitioned by running a pipeline.
 - `pipeline_results` rows remain immutable and append-only — file
-  references attached to results are new file_reference rows, not
+  references attached to results are new `sample_files` rows, not
   mutations of input rows.
-- Pre-launch verification iterates all input file_references; refuses
-  launch if any are `BROKEN`.
+- Pre-launch verification iterates all input files; refuses launch if
+  any are `BROKEN`.
 - All writes participate in caller transaction via `conn` parameter
   (matches existing `execute_write` and `log_audit` conventions).
 - Audit actions added: `REGISTER_FILE`, `PROMOTE_FILE`,
   `VERIFY_FILE_FAILED`, `MARK_FILE_BROKEN`.
+- See Critical Rules 57 (no copy on ingest) and 58 (sample_files is
+  the dedup primitive).
 
 ### Tests
 
 - Unit tests for `cheap_fingerprint()` covering local files, gzip, BGZF,
   mocked `gs://`, mocked `s3://`, mocked `sra://`.
 - Unit tests for the dedup path: same fingerprint produces one
-  `file_reference` row referenced by multiple samples.
+  `sample_files` row referenced by multiple samples.
 - Integration tests for both ingest paths (`/api/v1/ingest/csv` and
   the new `/api/v1/ingest/register`) covering all three storage intents.
 - Integration test for `verify_file_references` marking a file
@@ -514,8 +506,8 @@ INSERT; appends to `alternate_uris` on dedup hit. All writes accept
 - Integration test for pipeline launch refusing to start with a
   `BROKEN` input.
 - End-to-end test in `tests/e2e/`: register `EXTERNAL`, run a fixture
-  pipeline, verify the input file_reference is still `EXTERNAL` and
-  only outputs are `MANAGED`.
+  pipeline, verify the input file is still `EXTERNAL` and only outputs
+  are `MANAGED`.
 
 ---
 
@@ -627,9 +619,9 @@ APScheduler job `refresh_gcp_pricing`. Logged on every launch for
 actuals-vs-estimate analysis.
 
 **`backend/jobs/work_dir_jobs.py`** —
-`cleanup_old_work_dirs` APScheduler job. Removes `STAGED`
-file_references and entire run directories older than configurable
-retention (default 7 days). Honors a per-profile retention override.
+`cleanup_old_work_dirs` APScheduler job. Removes `STAGED` files and
+entire run directories older than configurable retention (default 7
+days). Honors a per-profile retention override.
 
 ### Key rules
 
@@ -649,6 +641,7 @@ retention (default 7 days). Honors a per-profile retention override.
   reproducibility (extends Critical Rule 26).
 - Audit actions added: `CREATE_PROFILE`, `UPDATE_PROFILE`,
   `DELETE_PROFILE`, `LAUNCH_WITH_PROFILE`.
+- See Critical Rule 59 (executor selection is per-run).
 
 ### Tests
 
@@ -752,6 +745,7 @@ already have one.
   to avoid copies between control plane and compute plane.
 - Audit actions added: `LAUNCH_TO_CLUSTER`, `CLUSTER_UNREACHABLE`,
   `LOG_POLLER_STARTED`, `LOG_POLLER_FAILED`.
+- See Critical Rule 60 (cluster runs work without API reachability).
 
 ### Tests
 
@@ -1828,8 +1822,6 @@ stuck `pending-upgrade` states.
 **Q-16 (P2):** Bump GitHub Actions to Node 24 (Node 20 deprecated
 2026-09-16).
 
-**Q-17 (P2):** Add Session 5 lessons to CLAUDE.md Critical Rules 42-47.
-
 **Q-18 (P2):** Fix misleading "API unreachable" banner on Streamlit landing
 page — distinguish network failure from auth failure.
 
@@ -1895,7 +1887,7 @@ These three documents are the source of truth for the post-P0d roadmap. Cross-re
   validation (API + UI parts)
 - `jackpot-iac/docs/staging_access.md` — staging access + bootstrap Job +
   troubleshooting
-- `docs/CLAUDE.md` — 51 Critical Rules
+- `docs/CLAUDE.md` — 60 Critical Rules
 
 ### Code quality / CI
 
