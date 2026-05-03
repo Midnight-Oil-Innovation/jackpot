@@ -35,6 +35,8 @@ class NotificationEvents:
 
     # File references (Phase P0f)
     FILE_REFERENCE_BROKEN = "FILE_REFERENCE_BROKEN"
+    # Default-disabled (high volume); operators can enable for diagnostics.
+    FILE_DEDUPLICATED = "FILE_DEDUPLICATED"
 
 
 def create_notification(
