@@ -231,10 +231,38 @@ Notification System sections for their exact interfaces.
   migration `5adf11b77c19` seeds operator-agnostic Example Org/Lab/
   admin/Sequencing Lab/Reference Lab directly (P0e A.3); the 3 rename
   migrations after it are historical-no-op on fresh installs.
-- Both `development` and `main` are at the same commit; `staging` branch triggers the GCP deploy
 - The `jackpot init` CLI (P0e) bootstraps any of the 7 install
   scenarios from a fresh clone in under 10 minutes — see
   `docs/install/quickstart.md` and `docs/architecture/jackpot-init-cli.md`.
+- **Branching workflow (formally adopted, May 2026):** long-lived
+  `development` integration branch.
+  - **Feature branches** are cut from `development` and PR back into
+    `development`. Squash-merge, delete the branch.
+  - **`development`** is the integration branch. Every feature lands
+    here first. CI runs on every push and on every PR targeting
+    `development`. `development` is allowed to be temporarily
+    inconsistent between merges — that is the point of having it.
+  - **`main`** represents released code. `development` → `main` is a
+    deliberate release act — open a PR from `development` to `main`
+    when a coherent batch of features is ready to ship, review the
+    aggregate diff, squash- or merge-commit. CI runs on PRs to
+    `main` as a safety net.
+  - **`staging`** is push-triggered for the GCP staging deploy
+    (`.github/workflows/deploy-staging.yml`). Promote
+    `development` → `staging` to test the integrated stack in cloud,
+    then `staging` → `main` (or `development` → `main` directly,
+    if the staging slot has already validated that commit) for
+    release.
+  - **Production deploys** are `workflow_dispatch`-only with a
+    Required-Reviewer gate (`deploy-production.yml`). The branch
+    flow does not auto-deploy to production.
+  - Never push directly to `main` or `staging`. Do not bypass the
+    `development` integration step except for emergency fixes,
+    which still require a PR (just retroactive).
+  - **PR #1 (F-1, 2026-05-03)** and **PR #4 (this housekeeping
+    batch)** were the last two PRs cut against `main` directly —
+    historical artefacts of the interim period before this decision.
+    All subsequent PRs target `development`.
 
 Do not regress the test count or coverage without a deliberate reason.
 Do not lower the 80% threshold without a documented architectural

@@ -151,7 +151,7 @@ def prompt_for_scenario(
 
     if non_interactive:
         raise click.UsageError(
-            "--non-interactive requires --scenario <CODE> " "(scenario detector needs prompts)."
+            "--non-interactive requires --scenario <CODE> (scenario detector needs prompts)."
         )
 
     answers = _gather_answers()

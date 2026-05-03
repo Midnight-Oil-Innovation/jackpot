@@ -64,7 +64,7 @@ def probe_gh() -> GhProbeResult:
         return GhProbeResult(
             available=False,
             repo_slug=None,
-            detail=("gh CLI installed but not authenticated " "(`gh auth login` to fix)"),
+            detail=("gh CLI installed but not authenticated (`gh auth login` to fix)"),
         )
 
     # Try to detect the current repo from gh's view of the cwd.

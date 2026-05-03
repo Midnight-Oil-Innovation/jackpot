@@ -250,7 +250,7 @@ class TestSeedSql:
             },
             instance_dir=Path("instances/staging"),
         )
-        assert "WHERE email = 'admin@example.org' OR " "email = 'admin@hospital.example.org'" in sql
+        assert "WHERE email = 'admin@example.org' OR email = 'admin@hospital.example.org'" in sql
 
     def test_sql_quote_escaped(self):
         # Operator name with a literal apostrophe — must be doubled.

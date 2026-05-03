@@ -101,14 +101,15 @@ The P0f F-2 implementation in Session 15 surfaced multiple gaps from
 the monorepo migration. None blocked F-2 from landing, but they
 accumulate. Worth a coordinated cleanup pass before P0f F-3 starts.
 
-- [ ] **Establish branching workflow for the monorepo.** P0d migration
-      left only `main`. Option (a) chosen and used for F-1: feature
-      branches off main, PR back, squash-merge, branch deleted (PR #1
-      merged 2026-05-03 as squash commit `4504c21`). Still pending:
-      document the choice in `docs/CLAUDE.md` "Current Baseline" and
-      `docs/jackpot_local_dev_setup_guide_macos.md`. Update the
-      staging deploy workflow trigger if it's still expecting a
-      `staging` branch push.
+- [x] **Establish branching workflow for the monorepo.** Resolved
+      2026-05-03 via PR #4: option (c) — long-lived `development`
+      integration branch. Feature PRs target `development`; release
+      PRs go `development` → `main`; `staging` branch push triggers
+      the GCP staging deploy (`.github/workflows/deploy-staging.yml`,
+      unchanged). Documented in `docs/CLAUDE.md` "Current Baseline";
+      `.github/workflows/test.yml` updated so PRs to `development`
+      trigger CI. The interim option (a) used for PRs #1 and #4 is
+      called out as historical in CLAUDE.md.
 - [ ] **Add `slowapi` to backend runtime deps.** Currently imported in
       `backend/main.py` but missing from `backend/pyproject.toml`.
       Manually installed during F-2; needs to be declared.
@@ -1503,7 +1504,7 @@ lands in P0h; this phase makes that work possible.
       to operators with concrete examples for each executor type.
 - [ ] Update `spec.md` with the new endpoints and config fields.
 - [ ] Add CLAUDE.md Critical Rule: "Pipeline executor selection is
-      per-run, not per-deployment. Profile resolution: explicit > 
+      per-run, not per-deployment. Profile resolution: explicit >
       pipeline-default > deployment-default > error."
 
 ---

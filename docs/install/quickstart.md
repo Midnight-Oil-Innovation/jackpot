@@ -36,6 +36,17 @@ uv sync
 The workspace pulls down backend + CLI + schema in one resolution.
 Takes ~30 seconds on a warm cache.
 
+## Required env: `COMPOSE_PROFILES`
+
+> **Required:** before any `docker compose up`, `COMPOSE_PROFILES` must
+> be set (e.g. `COMPOSE_PROFILES=laptop`) — either explicitly in the
+> shell or via `--env-file instances/<name>/.env.local`, which
+> `jackpot init configure` writes for you. Without one of these,
+> `docker-compose.yml` resolves to **`services: {}`**: no errors, no
+> warnings, just no running containers. Every service in the file is
+> `profiles:`-gated so the same compose file serves all 7 install
+> scenarios.
+
 ## Step 3 — run `jackpot init`
 
 For laptop dev, the entire bootstrap takes 3 commands:

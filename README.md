@@ -93,6 +93,12 @@ uv run jackpot init bootstrap --instance local
 uv run pytest
 ```
 
+> **Heads-up:** `docker compose up` requires `COMPOSE_PROFILES` to be
+> set, either via `--env-file instances/<name>/.env.local` (as above)
+> or explicitly (`COMPOSE_PROFILES=laptop docker compose up`). Without
+> it, every service in `docker-compose.yml` is profile-gated and the
+> command silently brings nothing up.
+
 For other scenarios:
 
 ```bash

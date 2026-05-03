@@ -63,6 +63,6 @@ async def test_cors_preflight_rejects_disallowed_origin(client):
     # A future Starlette version that returns "null" or echoes back something
     # else for an unknown reason should still fail this test.
     allow_origin = resp.headers.get("access-control-allow-origin", "")
-    assert (
-        allow_origin == ""
-    ), f"Access-Control-Allow-Origin must be absent for disallowed origins; got {allow_origin!r}"
+    assert allow_origin == "", (
+        f"Access-Control-Allow-Origin must be absent for disallowed origins; got {allow_origin!r}"
+    )

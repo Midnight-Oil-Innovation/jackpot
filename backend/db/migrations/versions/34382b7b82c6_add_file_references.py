@@ -165,9 +165,7 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    op.execute(
-        sa.text("DROP TRIGGER IF EXISTS sample_files_updated_at_trigger " "ON sample_files;")
-    )
+    op.execute(sa.text("DROP TRIGGER IF EXISTS sample_files_updated_at_trigger ON sample_files;"))
     op.execute(sa.text("DROP FUNCTION IF EXISTS set_sample_files_updated_at();"))
     op.execute(sa.text("DROP INDEX IF EXISTS sample_files_verification_idx;"))
     op.execute(sa.text("DROP INDEX IF EXISTS sample_files_fingerprint_idx;"))
