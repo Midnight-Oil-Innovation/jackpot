@@ -47,6 +47,12 @@ class Settings(BaseSettings):
     compute_sra_full_hash: bool = False
     skip_remote_full_hash: bool = False
 
+    # Phase P0f F-5: verify_file_references background job
+    verification_interval_seconds: int = 86400  # 24 hours
+    verification_files_per_tick: int = 100
+    verification_consecutive_failures_to_break: int = 3
+    verification_re_fingerprint: bool = False
+
     @field_validator("cors_origins", mode="before")
     @classmethod
     def _parse_cors_origins(cls, v: object) -> list[str]:

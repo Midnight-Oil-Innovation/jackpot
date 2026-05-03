@@ -14,6 +14,7 @@ from backend.jobs import (
     compute_full_content_hash,
     run_access_request_job,
     run_scrubber_queue_job,
+    verify_file_references,
 )
 from backend.logging_config import configure_logging
 from backend.middleware import RequestIDMiddleware
@@ -71,6 +72,14 @@ async def lifespan(app: FastAPI):
             "interval",
             seconds=get_settings().full_hash_interval_seconds,
             id="compute_full_content_hash",
+            replace_existing=True,
+            max_instances=1,
+        )
+        scheduler.add_job(
+            verify_file_references,
+            "interval",
+            seconds=get_settings().verification_interval_seconds,
+            id="verify_file_references",
             replace_existing=True,
             max_instances=1,
         )
