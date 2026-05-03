@@ -9,8 +9,13 @@ COPY backend/ ./backend/
 COPY cli/ ./cli/
 COPY schema/ ./schema/
 
-# Install dependencies with the workspace fully present
-RUN uv sync --frozen --no-dev
+# Install dependencies with the workspace fully present.
+#
+# `--all-groups` includes the `dev` dependency-group so the same image
+# can run the test suite (pytest, testcontainers, hypothesis, etc.)
+# without a follow-up `uv pip install`. See docs/dockerfile_strategy.md
+# for the rationale and the size tradeoff vs. a lean prod image.
+RUN uv sync --frozen --all-groups
 
 # Promote entrypoint script to system path
 RUN install -m 0755 backend/backend/entrypoint.sh /usr/local/bin/jackpot-entrypoint.sh
