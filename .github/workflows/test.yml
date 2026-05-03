@@ -2,7 +2,7 @@ name: Test & Lint
 
 on:
   push:
-    branches: [main, development]
+    branches: [main, development, staging]
     paths:
       - 'backend/**'
       - 'cli/**'
@@ -12,7 +12,10 @@ on:
       - 'uv.lock'
       - '.github/workflows/test.yml'
   pull_request:
-    branches: [main]
+    # Branching workflow per docs/CLAUDE.md "Current Baseline":
+    # feature PRs target `development` (the integration branch);
+    # release PRs target `main` (development → main). Both run CI.
+    branches: [development, main]
     paths:
       - 'backend/**'
       - 'cli/**'
