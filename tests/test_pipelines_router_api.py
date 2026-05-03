@@ -642,6 +642,200 @@ async def test_launch_ignores_deleted_broken_rows(client, as_platform_admin):
         _cleanup_catalog_by_id(cat_id)
 
 
+@pytest.mark.asyncio
+async def test_launch_succeeds_with_only_managed_inputs(client, as_platform_admin):
+    """F-8: pure-MANAGED storage_state must not trigger refusal."""
+    prefix = _unique("MGD")
+    _cleanup_samples(prefix)
+    sample = _insert_sample(f"{prefix}-A")
+    _insert_sample_file(
+        sample_pk=sample["id"],
+        uri=f"gs://jackpot-managed/{prefix}/R1.fastq.gz",
+        storage_state="MANAGED",
+    )
+    _insert_sample_file(
+        sample_pk=sample["id"],
+        uri=f"gs://jackpot-managed/{prefix}/R2.fastq.gz",
+        storage_state="MANAGED",
+    )
+    cat_id = _insert_catalog(
+        pipeline_name=_unique("jp-mgd"),
+        compatibility_rules={"source_types": ["Human"]},
+        pipeline_uri="https://github.com/jackpot-surv/pipelines",
+        default_profile="gcp",
+    )
+    try:
+        resp = await client.post(
+            "/api/v1/pipelines/launch",
+            json={
+                "pipeline_id": cat_id,
+                "sample_ids": [sample["sample_id"]],
+                "project_id": SEED_PROJECT_ID,
+            },
+        )
+        assert resp.status_code == 201, resp.text
+        run_id = resp.json()["data"]["run_id"]
+        _cleanup_run(run_id)
+    finally:
+        _cleanup_samples(prefix)
+        _cleanup_catalog_by_id(cat_id)
+
+
+@pytest.mark.asyncio
+async def test_launch_lists_all_broken_files_on_one_sample(client, as_platform_admin):
+    """F-8: a single sample with two BROKEN sample_files rows surfaces both."""
+    prefix = _unique("PAIR")
+    _cleanup_samples(prefix)
+    sample = _insert_sample(f"{prefix}-A")
+    r1_id = _insert_sample_file(
+        sample_pk=sample["id"],
+        uri=f"file:///srv/seq/{prefix}/R1.fastq.gz",
+        storage_state="BROKEN",
+        last_verification_status="MISSING_3",
+    )
+    r2_id = _insert_sample_file(
+        sample_pk=sample["id"],
+        uri=f"file:///srv/seq/{prefix}/R2.fastq.gz",
+        storage_state="BROKEN",
+        last_verification_status="MISSING_3",
+    )
+    cat_id = _insert_catalog(pipeline_name=_unique("jp-pair"))
+    try:
+        resp = await client.post(
+            "/api/v1/pipelines/launch",
+            json={
+                "pipeline_id": cat_id,
+                "sample_ids": [sample["sample_id"]],
+                "project_id": SEED_PROJECT_ID,
+            },
+        )
+        assert resp.status_code == 400, resp.text
+        body = resp.json()
+        assert body["error"]["code"] == "BROKEN_INPUTS"
+        ids_in_error = {row["sample_files_id"] for row in body["error"]["detail"]["broken_files"]}
+        assert ids_in_error == {r1_id, r2_id}
+        sample_ids_in_error = {
+            row["sample_id"] for row in body["error"]["detail"]["broken_files"]
+        }
+        assert sample_ids_in_error == {sample["sample_id"]}
+        assert "2 input files" in body["error"]["message"]
+    finally:
+        _cleanup_samples(prefix)
+        _cleanup_catalog_by_id(cat_id)
+
+
+@pytest.mark.asyncio
+async def test_launch_response_includes_suggestion(client, as_platform_admin):
+    """F-8: the error response must surface a non-empty suggestion field."""
+    prefix = _unique("SUGG")
+    _cleanup_samples(prefix)
+    sample = _insert_sample(f"{prefix}-A")
+    _insert_sample_file(
+        sample_pk=sample["id"],
+        uri=f"file:///srv/seq/{prefix}/missing.fastq.gz",
+        storage_state="BROKEN",
+        last_verification_status="MISSING_3",
+    )
+    cat_id = _insert_catalog(pipeline_name=_unique("jp-sugg"))
+    try:
+        resp = await client.post(
+            "/api/v1/pipelines/launch",
+            json={
+                "pipeline_id": cat_id,
+                "sample_ids": [sample["sample_id"]],
+                "project_id": SEED_PROJECT_ID,
+            },
+        )
+        assert resp.status_code == 400
+        suggestion = resp.json()["error"]["detail"]["suggestion"]
+        assert isinstance(suggestion, str) and suggestion.strip()
+        assert "jackpot files verify" in suggestion
+    finally:
+        _cleanup_samples(prefix)
+        _cleanup_catalog_by_id(cat_id)
+
+
+@pytest.mark.asyncio
+async def test_launch_mixed_inputs_only_broken_listed(client, as_platform_admin):
+    """F-8: with 4 inputs (3 OK, 1 BROKEN), only the BROKEN row is reported."""
+    prefix = _unique("MIX")
+    _cleanup_samples(prefix)
+    sample = _insert_sample(f"{prefix}-A")
+    ok_ids = [
+        _insert_sample_file(
+            sample_pk=sample["id"],
+            uri=f"file:///srv/seq/{prefix}/ok_{i}.fastq.gz",
+            storage_state="EXTERNAL",
+        )
+        for i in range(3)
+    ]
+    broken_uri = f"file:///srv/seq/{prefix}/broken.fastq.gz"
+    broken_id = _insert_sample_file(
+        sample_pk=sample["id"],
+        uri=broken_uri,
+        storage_state="BROKEN",
+        last_verification_status="SIZE_CHANGED",
+    )
+    cat_id = _insert_catalog(pipeline_name=_unique("jp-mix"))
+    try:
+        resp = await client.post(
+            "/api/v1/pipelines/launch",
+            json={
+                "pipeline_id": cat_id,
+                "sample_ids": [sample["sample_id"]],
+                "project_id": SEED_PROJECT_ID,
+            },
+        )
+        assert resp.status_code == 400, resp.text
+        body = resp.json()
+        broken_files = body["error"]["detail"]["broken_files"]
+        assert len(broken_files) == 1
+        assert broken_files[0]["sample_files_id"] == broken_id
+        assert broken_files[0]["uri"] == broken_uri
+        assert broken_files[0]["last_verification_status"] == "SIZE_CHANGED"
+        ids_in_error = {row["sample_files_id"] for row in broken_files}
+        assert ids_in_error.isdisjoint(set(ok_ids))
+        assert "1 input file is in BROKEN" in body["error"]["message"]
+    finally:
+        _cleanup_samples(prefix)
+        _cleanup_catalog_by_id(cat_id)
+
+
+@pytest.mark.asyncio
+async def test_launch_proceeds_when_sample_has_no_sample_files(client, as_platform_admin):
+    """F-8 edge case: sample with zero sample_files rows must not be refused.
+
+    The launch endpoint requires at least one sample_id (Pydantic
+    min_length=1), so a truly input-less launch isn't reachable; the
+    analogous degenerate case is a sample whose sample_files set is
+    empty. F-8's BROKEN check finds nothing and lets the launch proceed.
+    """
+    prefix = _unique("EMP")
+    _cleanup_samples(prefix)
+    sample = _insert_sample(f"{prefix}-A")
+    cat_id = _insert_catalog(
+        pipeline_name=_unique("jp-emp"),
+        compatibility_rules={"source_types": ["Human"]},
+        pipeline_uri="https://github.com/jackpot-surv/pipelines",
+        default_profile="gcp",
+    )
+    try:
+        resp = await client.post(
+            "/api/v1/pipelines/launch",
+            json={
+                "pipeline_id": cat_id,
+                "sample_ids": [sample["sample_id"]],
+                "project_id": SEED_PROJECT_ID,
+            },
+        )
+        assert resp.status_code == 201, resp.text
+        run_id = resp.json()["data"]["run_id"]
+        _cleanup_run(run_id)
+    finally:
+        _cleanup_samples(prefix)
+        _cleanup_catalog_by_id(cat_id)
+
+
 # ───────────────────────── POST /events ─────────────────────────
 
 
