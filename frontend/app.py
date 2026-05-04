@@ -47,7 +47,8 @@ def main() -> None:
         "- **Pipelines** — launch + monitor + resume\n"
         "- **Access requests** — request + review access\n"
         "- **Notifications** — inbox (Month 3 placeholder)\n"
-        "- **Broken files** — operator triage for unreachable file references (P0f)"
+        "- **Broken files** — operator triage for unreachable file references (P0f)\n"
+        "- **Import spreadsheet** — interactive xlsx/csv/tsv import wizard (I-1)"
     )
 
 

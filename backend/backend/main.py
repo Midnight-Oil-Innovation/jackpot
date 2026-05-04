@@ -11,6 +11,7 @@ from slowapi.middleware import SlowAPIMiddleware
 from backend.config import get_settings
 from backend.database import execute_query
 from backend.jobs import (
+    cleanup_expired_import_sessions,
     compute_full_content_hash,
     run_access_request_job,
     run_scrubber_queue_job,
@@ -30,6 +31,8 @@ from backend.routers import (
     domain_whitelist,
     files,
     gisaid,
+    import_mappings,
+    imports,
     ingest,
     labs,
     ncbi_submissions,
@@ -84,6 +87,14 @@ async def lifespan(app: FastAPI):
             replace_existing=True,
             max_instances=1,
         )
+        scheduler.add_job(
+            cleanup_expired_import_sessions,
+            "interval",
+            seconds=get_settings().import_session_cleanup_interval_seconds,
+            id="cleanup_expired_import_sessions",
+            replace_existing=True,
+            max_instances=1,
+        )
         scheduler.start()
     yield
     if scheduler.running:
@@ -112,6 +123,8 @@ app.include_router(datasets.router)
 app.include_router(domain_whitelist.router)
 app.include_router(files.router)
 app.include_router(gisaid.router)
+app.include_router(import_mappings.router)
+app.include_router(imports.router)
 app.include_router(ingest.router)
 app.include_router(labs.router)
 app.include_router(ncbi_submissions.router)

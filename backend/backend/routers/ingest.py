@@ -577,21 +577,16 @@ _CSV_STORAGE_INTENT_MISSING_WARNING = (
 )
 
 
-@router.post("/csv")
-@limiter.limit(_INGEST_LIMIT)
-async def ingest_csv(
-    request: Request,
-    file: UploadFile = File(...),  # noqa: B008
-    db=Depends(get_db_dep),  # noqa: B008
-):
-    user = get_current_user(request)
-    content = await file.read()
-    try:
-        text = content.decode("utf-8")
-    except UnicodeDecodeError as exc:
-        raise HTTPException(status_code=422, detail=f"CSV must be UTF-8 encoded: {exc}") from exc
+def run_csv_ingest(*, csv_text: str, user: dict, db) -> dict:
+    """Process a CSV string through the standard ingest pipeline.
 
-    reader = csv.DictReader(io.StringIO(text))
+    I-1 extracted this as a standalone callable so the importer wizard
+    (``backend/imports.py::execute_import``) can submit a CSV without
+    going through HTTP. The HTTP endpoint :func:`ingest_csv` delegates
+    here. Returns the envelope-shaped result dict (``data`` plus
+    optional ``warnings``); callers re-wrap as needed.
+    """
+    reader = csv.DictReader(io.StringIO(csv_text))
     fieldnames = reader.fieldnames or []
     storage_intent_column_present = "storage_intent" in fieldnames
     successes = 0
@@ -658,15 +653,33 @@ async def ingest_csv(
     if not storage_intent_column_present:
         warnings.append(_CSV_STORAGE_INTENT_MISSING_WARNING)
 
-    return success(
-        data={
+    return {
+        "data": {
             "success": successes,
             "failed": failures,
             "errors": errors,
             "created_ids": created_ids,
         },
-        warnings=warnings or None,
-    )
+        "warnings": warnings or None,
+    }
+
+
+@router.post("/csv")
+@limiter.limit(_INGEST_LIMIT)
+async def ingest_csv(
+    request: Request,
+    file: UploadFile = File(...),  # noqa: B008
+    db=Depends(get_db_dep),  # noqa: B008
+):
+    user = get_current_user(request)
+    content = await file.read()
+    try:
+        text = content.decode("utf-8")
+    except UnicodeDecodeError as exc:
+        raise HTTPException(status_code=422, detail=f"CSV must be UTF-8 encoded: {exc}") from exc
+
+    result = run_csv_ingest(csv_text=text, user=user, db=db)
+    return success(data=result["data"], warnings=result["warnings"])
 
 
 @router.post("/register", status_code=201)
