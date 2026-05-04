@@ -195,9 +195,7 @@ def _render_create(client) -> None:
         except ApiError as exc:
             st.error(f"Sample lookup failed: {exc.message}")
             return
-        samples = (
-            sample_body if isinstance(sample_body, list) else sample_body.get("data", [])
-        )
+        samples = sample_body if isinstance(sample_body, list) else sample_body.get("data", [])
         selected: list[int] = list(draft.get("sample_ids", []))
         for s in samples:
             checked = st.checkbox(
@@ -273,9 +271,7 @@ def _render_create(client) -> None:
         if result.get("valid"):
             st.success("All samples pass readiness validation.")
         else:
-            st.warning(
-                f"{len(result.get('per_sample') or [])} sample(s) have issues."
-            )
+            st.warning(f"{len(result.get('per_sample') or [])} sample(s) have issues.")
             for ps in result.get("per_sample") or []:
                 with st.expander(ps["sample_id"]):
                     for issue in ps["issues"]:
@@ -426,9 +422,7 @@ def _render_detail_actions(client, sub: dict) -> None:
                 st.rerun()
             except ApiError as exc:
                 st.error(f"Register accessions failed: {exc.message}")
-        rejection_reason = st.text_input(
-            "Rejection reason", key=f"subs.detail.reject.{sid}"
-        )
+        rejection_reason = st.text_input("Rejection reason", key=f"subs.detail.reject.{sid}")
         if cols[1].button("Mark rejected", disabled=not rejection_reason):
             try:
                 client.post(
