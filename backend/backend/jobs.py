@@ -1526,6 +1526,54 @@ def verify_sample_file(file_id: int) -> dict:
 
 
 # Re-export for tests and ergonomic imports.
+async def release_embargoed_submissions() -> dict[str, int]:
+    """I-2 daily job that promotes EMBARGOED submissions whose
+    ``release_date`` has passed to ``RELEASED`` and notifies the
+    creator. Idempotent — running twice is a no-op the second time.
+    """
+    released_ids: list[int] = []
+    with get_db() as db:
+        rows = execute_query(
+            """
+            SELECT id, created_by_user_id, title FROM submissions
+             WHERE status = 'EMBARGOED'
+               AND release_date <= CURRENT_DATE
+               AND is_deleted = FALSE
+            """,
+            conn=db,
+        )
+        for row in rows:
+            sid = row["id"]
+            execute_write(
+                "UPDATE submissions SET status = 'RELEASED' WHERE id = :id",
+                {"id": sid},
+                conn=db,
+            )
+            log_audit(
+                action="SUBMISSION_RELEASED",
+                actor_id=None,
+                resource_type="submission",
+                resource_id=str(sid),
+                before={"status": "EMBARGOED"},
+                after={"status": "RELEASED"},
+                metadata={"job": "release_embargoed_submissions"},
+                db_conn=db,
+            )
+            create_notification(
+                recipient_id=row["created_by_user_id"],
+                event_type="SUBMISSION_RELEASED",
+                title=f"Submission released: {row['title']}",
+                body="Embargo period has ended. The submission is now public.",
+                resource_type="submission",
+                resource_id=str(sid),
+                action_url=f"/submissions/{sid}",
+                db_conn=db,
+            )
+            released_ids.append(sid)
+    logger.info("release_embargoed_submissions: released %d", len(released_ids))
+    return {"released": len(released_ids)}
+
+
 async def cleanup_expired_import_sessions() -> dict[str, int]:
     """I-1 hourly cleanup for import_sessions.
 
@@ -1590,6 +1638,7 @@ __all__ = [
     "compute_full_content_hash",
     "get_promote_job_status",
     "promote_file_storage",
+    "release_embargoed_submissions",
     "run_access_request_job",
     "run_scrubber_queue_job",
     "verify_file_references",

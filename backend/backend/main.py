@@ -13,6 +13,7 @@ from backend.database import execute_query
 from backend.jobs import (
     cleanup_expired_import_sessions,
     compute_full_content_hash,
+    release_embargoed_submissions,
     run_access_request_job,
     run_scrubber_queue_job,
     verify_file_references,
@@ -44,6 +45,7 @@ from backend.routers import (
     samples,
     saved_searches,
     sequencing_labs,
+    submissions,
     templates,
     tokens,
     users,
@@ -95,6 +97,15 @@ async def lifespan(app: FastAPI):
             replace_existing=True,
             max_instances=1,
         )
+        scheduler.add_job(
+            release_embargoed_submissions,
+            "cron",
+            hour=get_settings().embargo_release_check_hour,
+            minute=0,
+            id="release_embargoed_submissions",
+            replace_existing=True,
+            max_instances=1,
+        )
         scheduler.start()
     yield
     if scheduler.running:
@@ -136,6 +147,7 @@ app.include_router(sample_access.router)
 app.include_router(samples.router)
 app.include_router(saved_searches.router)
 app.include_router(sequencing_labs.router)
+app.include_router(submissions.router)
 app.include_router(tokens.router)
 app.include_router(users.router)
 app.include_router(templates.router)

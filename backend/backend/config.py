@@ -59,6 +59,16 @@ class Settings(BaseSettings):
     import_session_max_per_user: int = 5
     import_session_cleanup_interval_seconds: int = 3600  # hourly
 
+    # I-2 submission package generation
+    # submissions_output_root has no default — operators must set the
+    # filesystem (or gs://) path where packages are written. Examples:
+    #   /var/jackpot/submissions
+    #   gs://jackpot-managed/submissions
+    submissions_output_root: str = ""
+    submission_package_link_files: bool = True
+    submission_max_samples_per_package: int = 1000
+    embargo_release_check_hour: int = 0  # midnight UTC daily run
+
     # Phase P0f F-9: promote_file_storage one-shot job
     # managed_storage_root has no default — operators must set it at
     # deployment time. Failure to configure surfaces at job execution

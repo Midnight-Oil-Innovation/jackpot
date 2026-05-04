@@ -252,6 +252,7 @@ PAGE_MODULES = [
     "frontend.pages.pipelines",
     "frontend.pages.broken_files",
     "frontend.pages.import_spreadsheet",
+    "frontend.pages.submissions",
 ]
 
 
