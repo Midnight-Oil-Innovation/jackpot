@@ -1,8 +1,87 @@
 # JACKPOT Session Summary & Backlog
 
-**Document version:** 2.8
-**Last updated:** 2026-05-03
-**Sessions covered:** Session 1 (March–April 2026 consolidated), Session 2 (2026-04-10), Sessions 3–S (2026-04 through 2026-04-19), Pathoplexus/Loculus comparative analysis session (2026-04-28), Cleanup A–J operator-agnostic genericization session (2026-04-26 to 2026-04-28), Session 11 (2026-04-28 → 2026-04-29 — CDC DMI/STLT/CARE alignment, BYOP/eukaryotic design, phasing rework, P0d migration prep), Session 12 (2026-04-30 → 2026-05-01 — P0d execution in Claude Code + post-execution cleanup), Session 13 (2026-05-01 — Phase 22 periodic review), Session 14 (2026-05-02 — P0e `jackpot init` CLI + Phase 22 cleanup), Session 15 (2026-05-02 → 2026-05-03 — architecture synthesis reframing + P0f F-2 schema migration)
+**Document version:** 3.2
+**Last updated:** 2026-05-04 (later — F-11 + I-2 merged)
+**Sessions covered:** Session 1 (March–April 2026 consolidated), Session 2 (2026-04-10), Sessions 3–S (2026-04 through 2026-04-19), Pathoplexus/Loculus comparative analysis session (2026-04-28), Cleanup A–J operator-agnostic genericization session (2026-04-26 to 2026-04-28), Session 11 (2026-04-28 → 2026-04-29 — CDC DMI/STLT/CARE alignment, BYOP/eukaryotic design, phasing rework, P0d migration prep), Session 12 (2026-04-30 → 2026-05-01 — P0d execution in Claude Code + post-execution cleanup), Session 13 (2026-05-01 — Phase 22 periodic review), Session 14 (2026-05-02 — P0e `jackpot init` CLI + Phase 22 cleanup), Session 15 (2026-05-02 → 2026-05-03 — architecture synthesis reframing + P0f F-2 schema migration), Session 16 (2026-05-03 — P0f parallel-session execution: F-1, F-3, F-4, F-5, F-12-docs merged + housekeeping/branching workflow PR #4 + F-6 through F-12 prompts drafted), Session 17 (2026-05-03 end of day — P0f F-6 through F-12 (except F-11) all merged into `development`; phase essentially complete pending F-11 audit), Session 18 (2026-05-04 — strategic positioning conversation + I-track planning: spreadsheet-refugee market identified, Seqsender/TOSTADAS landscape understood, sovereignty use cases discussed; I-1 / I-2 / C-1 / I-3 specs drafted as JACKPOT's adoption-driving feature roadmap), Session 19 (2026-05-04 later — F-11 P0f coverage audit and I-2 submission package generation merged in parallel; P0f phase complete; I-track at 2 of 4 items shipped)
+
+**v3.2 changelog (2026-05-04 later):** P0f phase fully complete and
+I-track at half-strength. Added Session 19 covering: (1) F-11 (P0f end-of-phase
+test coverage audit + cross-cutting integration tests) drafted and merged. The
+audit identified per-file coverage gaps in P0f-modified files and added cross-
+cutting integration tests spanning multiple F-N items (e.g., register EXTERNAL
+→ verify broken → launch refused → re-locate → launch succeeds; cross-scheme
+dedup; F-9 promote failure recovery; permission boundary scoping). (2) I-2
+(submission package generation) merged. JACKPOT now generates Seqsender-
+compatible packages for NCBI / GISAID EpiCoV/EpiFlu/EpiPox / ENA / DDBJ with
+first-class submissions table, 10+ state machine, embargo support via daily
+release job, and link-first file handling. JACKPOT does not hold repository
+credentials in v1; users run Seqsender themselves on a stable host. (3) F-11
+and I-2 ran in parallel, landing on different files (F-11 in tests/, I-2 in
+new backend/submissions* files). Both PRs merged cleanly with no conflicts.
+(4) The PR-merge order produced a fresh post-P0f baseline coverage number
+documented in tests/coverage_p0f_summary.md.
+
+**v3.1 changelog (2026-05-04):** Strategic pivot from internal
+features to adoption-driving features. Added Session 18 covering: (1) Honest
+landscape analysis of JACKPOT's competitive position — funded incumbents
+(Pathoplexus/Loculus, Pathogenwatch, NCBI Pathogen Detection, BV-BRC, GISAID,
+GenSpectrum/LAPIS, EnteroBase) compete on institutional procurement, not user
+adoption. JACKPOT cannot win that game; the underserved market is working
+researchers using spreadsheets and folder hierarchies. (2) Seqsender / TOSTADAS
+analysis: existing CDC-developed tools solve protocol mechanics for submission
+to NCBI/GISAID but do not address metadata curation, governance, or submission
+lifecycle. JACKPOT's role is upstream and lifecycle, not protocol replication.
+(3) Indigenous genomic sovereignty discussed as a longer-arc opportunity
+(Native BioData Consortium, SING workshop network, CARE Principles framework);
+not a 90-day adoption strategy but a meaningful direction. (4) New I-track of
+work items established for adoption-driving features: I-1 (spreadsheet
+importer), I-2 (submission package generation), C-1 (pluggable credential
+infrastructure), I-3 (backend-driven submission). (5) Detailed specs drafted
+for I-1, I-2, with C-1 / I-3 framework. (6) Architectural decision: I-2 v1
+explicitly excludes credential management — JACKPOT generates packages,
+users run Seqsender themselves with their own credentials. Maximum sovereignty
+story. Backend-driven submission deferred to I-3 with credential infrastructure
+deferred to C-1, both as separate work items.
+
+**v3.0 changelog (2026-05-03 end of day):** P0f essentially complete.
+Added Session 17 covering: F-6 (ingest API updates), F-7 (pipeline_results_loader
+output ownership), F-8 (pre-launch verification), F-9 (`jackpot files promote`
+CLI + endpoint + copy job), F-10 (UI surfacing of storage_state), and F-12 (API
+reference docs) all merged into `development`. Only F-11 (end-of-phase test
+coverage review) remains. P0f went from "foundation layer complete + prompts
+drafted" at end of Session 16 to "user-facing layer complete + only audit
+remaining" by end of Session 17. Document version bumps from 2.9 to 3.0 to mark
+the phase milestone.
+
+**v2.9 changelog (2026-05-03 later):** Added Session 16 covering:
+(1) F-2 implementation arc completed and merged. (2) Parallel-session
+orchestration via Claude Code: F-1 (LinkML schema), F-3
+(file_fingerprint.py), F-4 (compute_full_content_hash background job),
+F-5 (verify_file_references background job), F-12 partial (operator
+storage-state guide), and the post-monorepo housekeeping batch (PR #4)
+all landed as separate PRs against `main`. P0f foundation layer is now
+complete. (3) Formal option-(c) branching workflow decision: three
+persistent branches (`development` for integration, `main` for releases,
+`staging` for staging deploys), production deploys manual-only from
+tagged commits on `main`. PR #4 captured this. (4) GitHub admin setup
+post-merge: `development` branch created, set as default, branch
+protection rules added for `main` and `development`. (5) Branch
+protection chicken-and-egg with status checks (CI runs only register
+check names with branch protection after they execute) acknowledged;
+recommended path was protect first without required checks, then add
+checks once F-6 PR's CI runs. (6) Complete set of remaining F-N prompts
+drafted with the option-(c) workflow baked in throughout: F-6 (ingest
+API), F-7 (output ownership), F-8 (pre-launch verification), F-9
+(`jackpot files promote` CLI + endpoint + copy job), F-10 (UI surfacing
+of storage_state), F-12 API reference docs. (7) Repeated formatting
+issue surfaced and corrected: markdown table fragments embedded inside
+fenced code blocks render as collapsed text in some pasted contexts;
+fix is to use prose with bulleted-attribute lists instead of "show this
+table row" patterns. (8) Branch-tangle diagnosis dance: the F-5 session
+had ~5 turns of churn around what looked like an orphan F-4 commit but
+was actually fine — F-5 work was in-progress on the F-5 branch
+correctly, and the apparent ghost commit `3d39d43` was just a stale
+hash from before squash-merge into `main`.
 
 **v2.8 changelog (2026-05-03):** Added Session 15 covering:
 (1) Architecture synthesis reframing — open-ended design conversation
@@ -46,6 +125,10 @@ mounting for testcontainers in-container, `alembic.ini` cwd dependency,
 
 **Changelog:**
 
+- **v3.1 (2026-05-04)** — Strategic pivot to adoption-driving features. Added Session 18 (positioning + I-track planning). See full block above.
+- **v3.0 (2026-05-03 end of day)** — Added Session 17 (P0f F-6 through F-12 except F-11 merged into development; phase essentially complete). See full block above.
+- **v2.9 (2026-05-03 later)** — Added Session 16 (P0f parallel-session execution + branching workflow + remaining F-N prompts drafted). See full block above.
+- **v2.8 (2026-05-03)** — Added Session 15 (architecture synthesis reframing + P0f F-2 schema migration). See full block above.
 - **v2.7 (2026-05-01)** — Added Session 12 (P0d execution + post-execution cleanup). See full block above.
 - **v2.6 (2026-04-29)** — Added Session 11 (CDC DMI/STLT, BYOP/eukaryotic, phasing rework, P0d migration prep). See full block above.
 - **v2.5 (2026-04-28)** — Added new section `# Cleanup A–J — Operator-agnostic genericization (2026-04-26 to 2026-04-28)`. Records the completion of 10 cleanup phases (lettered A through J) that removed institutional references (ADHS, ASU, Linux Prophet, Otero Outpost, Sonora Quest, Maricopa, Phoenix, etc.) from the codebase to align with the operator-agnostic principle. Two phases (G — submodule schema-update scripts, J — Streamlit frontend) were no-ops. Net result: production code knows nothing about any specific operator; only the eventual `jackpot init` bootstrap step learns operator names at install time. Codebase is now ready for P0d (monorepo migration to `Midnight-Oil-Innovation/jackpot`).
@@ -3194,3 +3277,564 @@ P0f F-2 is in. The schema infrastructure for content-hash-keyed file deduplicati
 - **P1** — `POST /api/v1/auth/refresh` (real token-rotation work).
 
 The next session work depends on Glen's call. P0f F-3 (`backend/file_fingerprint.py`) is the natural continuation — pure logic, unit-testable, no DB writes, roughly half a day's work. After F-3 lands, F-4 becomes "wrap this in APScheduler and update rows." Alternatively, the post-monorepo housekeeping list could be done as one coordinated cleanup pass before any more new work — depends on whether the gaps are actively biting other workflows.
+
+
+------
+
+# Session 16 — 2026-05-03 (P0f Parallel Execution + Branching Workflow + Remaining Prompts)
+
+## What we covered
+
+A single-day session that drove P0f from "F-2 schema landed" to "foundation layer complete." Six PRs landed against `main` in roughly the order they were drafted: F-1 (LinkML schema), F-12-docs (operator storage-state guide), F-3 (file_fingerprint.py), F-4 (compute_full_content_hash background job), F-5 (verify_file_references background job), and PR #4 (post-monorepo housekeeping plus the formal option-(c) branching workflow). The session interleaved live Claude Code execution with prompt drafting for downstream F-N items, and resolved several local-state confusions (branch tangles, missing dev deps in the api container, stale hash references after squash-merge).
+
+**Tests:** 891 passing baseline maintained throughout, with each merged PR adding tests proportionally. Final post-merge state: 944+ passing (exact count varies depending on which PR was last merged).
+
+**P0f progress:** 6 of 12 items merged (F-1, F-2, F-3, F-4, F-5, F-12-partial); plus the housekeeping batch as a non-F-N PR. Remaining items have prompts drafted: F-6, F-7, F-8, F-9, F-10, F-11, and the rest of F-12.
+
+**Branching workflow:** option (c) confirmed and implemented. Three persistent branches: `development` (integration), `main` (releases), `staging` (push-triggered staging deploys). Production deploys manual from tagged commits on `main`. F-N work going forward branches from `development` and PRs back to `development`.
+
+------
+
+## Topics covered
+
+### 1. Parallel-session orchestration model
+
+Realized early that several of the remaining P0f items could run in true parallel because they touched disjoint files. Drafted the parallelism graph:
+
+- F-3 (`backend/file_fingerprint.py`), F-12-docs (`docs/file_references.md`), and the housekeeping batch all independent and parallelizable from the start.
+- F-1 (LinkML schema, `schema/jackpot_schema.yaml` + `backend/models_generated.py`) also parallel after Session 15 — F-3 specifically deferred LinkML imports so F-1 and F-3 could run concurrently.
+- F-4 needs F-3 merged (imports `cheap_fingerprint`).
+- F-5 needs F-4 merged (lives in same `backend/jobs.py` file; merge-conflict avoidance).
+- F-6 needs F-3, F-4, F-5, and PR #4 merged (the housekeeping branch is what formalized `development` as the canonical base for new work).
+- F-7 needs F-6 (imports `register_file`).
+- F-8 independent of F-6 and F-7 (touches the launch endpoint, not the ingest or results loader).
+- F-10 (UI) independent of F-6 through F-9 entirely (different directory).
+- F-12 API reference docs independent of all implementation (documents from spec.md as canonical source).
+- F-9 needs F-6 and F-8 (composes their primitives into the user-facing promote workflow).
+
+In practice, this shook out as: launched F-1, F-3, F-12-docs, and housekeeping in four parallel Claude Code sessions, all branching off `main`. As they merged in sequence (F-12-docs first as PR #2, then F-1 as PR #1, then F-3 as PR #3), unblocked the next layer (F-4 as PR #5, F-5 as PR #6) which ran in their own sessions. Housekeeping merged as PR #4. By end-of-day, all six were in `main`.
+
+### 2. Branch-state hygiene lessons
+
+Several local-state diagnostic dances during the day surfaced patterns worth keeping:
+
+- **`git branch --show-current` before any operation, every time.** Multiple Claude Code sessions running in parallel means the working directory can be on a different branch than the agent expects. The single biggest source of "what's going on" confusion was assuming we were on a specific branch when we weren't.
+- **Squash-merge produces new commit hashes.** The original commit on a feature branch (e.g., `3d39d43`) is not the same hash as the squash-merged commit on `main` (e.g., `3a9012d`). Searching for the original hash post-merge returns nothing because git GC will eventually prune it. This caused one session to incorrectly diagnose a "ghost commit" that didn't actually need rescuing.
+- **`git status` is ground truth, agent context is hypothesis.** When an agent says "the working tree is clean" but `git status` says there are uncommitted changes, trust git. The agent's stale view caused at least one near-loss-of-work incident: an agent proposed `git reset --hard` based on a stale "tree is clean" assumption that, if executed, would have nuked in-progress F-5 work.
+- **`--force-with-lease` is asymmetric protection in single-developer workflows.** The lease check is "fail if anyone else has pushed since I last fetched" — meaningful only when multiple people push to the same branch. For solo work, the protection is nominal, but force-push still permanently rewrites refs. For squash-merged feature branches, prefer `git merge` from base over `git rebase + force push` since the squash-merge collapses everything to one commit on `development` regardless.
+
+### 3. Post-monorepo housekeeping batch (PR #4)
+
+Bundled into one PR rather than landed item-by-item:
+
+- Branching workflow decision (option (c) per design)
+- `slowapi` declared in backend runtime deps
+- Backend dev deps declared (`pytest-cov`, `pytest-asyncio`, `testcontainers[postgres]`, `hypothesis`, `pytest-httpx`)
+- `Dockerfile.api` strategy doc explaining lean-prod vs always-include-dev image variants
+- `/var/run/docker.sock` mount in `docker-compose.yml` (so testcontainers-based tests can run inside the api container)
+- `COMPOSE_PROFILES=laptop` requirement documented in README + setup guide
+- `backend/alembic.ini` uses `%(here)s/db/migrations` so alembic invocations work from any cwd
+- `/app/.venv` broken symlink cleanup + Dockerfile fix
+- Schema mount path inconsistency resolved (both api and ui now use `/app/schema`)
+- Apptainer compatibility audit produced as `docs/apptainer_compatibility_audit.md`
+
+The branching workflow decision was the most consequential of these. Before PR #4 merged, F-3 / F-4 / F-5 / F-12-docs / F-1 had all been PR'd against `main` directly because there was nowhere else to PR against. After PR #4 merged and `development` was created, all subsequent F-N work targets `development` per option (c).
+
+### 4. Branching workflow option-(c) execution
+
+After PR #4 merged, the GitHub admin steps:
+
+1. `git checkout main && git pull --ff-only` to sync local main.
+2. `git checkout -b development && git push -u origin development` to create the branch.
+3. GitHub Settings → Branches → Default branch: switch from `main` to `development`. After this, `git clone` lands on `development` and `gh pr create` defaults to `development` as the base.
+4. Add branch protection rules:
+   - `main`: require PR + status checks + branches up to date + no bypass + 0 or 1 approvals (operator's call)
+   - `development`: require PR + status checks + 0 approvals (velocity over gate)
+5. Verify with fresh clone + `gh pr create --dry-run` to confirm new defaults.
+
+A subtle gotcha: GitHub branch protection's "Require status checks to pass before merging" search box only shows check names from workflows that have **run in the last week**. PR #4's `.github/workflows/test.yml` updates needed to actually trigger before the check names became selectable. Resolution: protect the branches first without required-check names, then come back and add them once the next PR's CI run registered them with GitHub.
+
+### 5. Issues surfaced and resolved during F-5 (the "phantom commit" diagnosis)
+
+The F-5 session went through ~5 turns of confusion about what looked like an orphaned F-4 commit (`3d39d43`) sitting on the housekeeping branch. The reality:
+
+- F-4 was correctly committed on its own branch.
+- F-4 was squash-merged into `main` as PR #5, producing new commit `3a9012d` on main.
+- The original `3d39d43` is no longer reachable (will eventually be GC'd) but lingers in agent state and various reflogs.
+- Some Claude Code agent saw `3d39d43` in a reflog or stale state and incorrectly diagnosed it as "needing rescue."
+
+The proposed remediation (`git branch -f` plus `git reset --hard`) would have been wrong on multiple counts: would have nuked in-progress F-5 work, used a stale hash, and operated on the wrong branch. Holding off and running diagnostic commands first showed everything was actually fine.
+
+The lesson: **before any destructive git operation, the diagnostic verification commands are mandatory, not optional.** `git branch --show-current`, `git status`, `git log --oneline -5`, `git branch --contains <hash>` together give an accurate picture; agent context alone is hypothesis.
+
+### 6. Repeated formatting issue with embedded markdown tables
+
+A pattern emerged across multiple prompt drafts: showing markdown table syntax (`| col1 | col2 | col3 |` plus `|---|---|---|` separator) inside instructional prose for "add this row to the table" guidance produced rendered output that looked correct in the chat but collapsed to comma-separated values when pasted into some tools. The mechanism: pipe characters within fenced code blocks are escaped or stripped depending on the destination renderer.
+
+Fix: use Option 1 (plain prose with bulleted-attribute lists). Instead of "Add this row: `| BROKEN_INPUTS | 400 | ... |`," write "Add a new row with these three values: error code BROKEN_INPUTS, HTTP status 400, meaning '...'. Match the existing table's column ordering exactly."
+
+This applies to F-6 step 8, F-8 step 3, and any future "add to spec.md table" instructions. Pattern locked in: never embed markdown table syntax inside instructional content; always describe in prose with bullet lists.
+
+### 7. Remaining F-N prompts drafted (with option-(c) branching baked in)
+
+Drafted complete prompts for the remaining P0f items, all branching from `development` and PRing back to `development`:
+
+- **F-6** (ingest API — EXTERNAL by default, `/register` endpoint, dedup integration). Largest remaining piece. Touches `backend/ingest_files.py` (new), `backend/routers/ingest.py`, `backend/responses.py`, `backend/audit.py`, `backend/notifications.py`, plus extensive tests. Behavior change: `/api/v1/ingest/csv` defaults to EXTERNAL when no `storage_intent` column present, surfacing a warning. Adds new error code FILE_UNREACHABLE and `warnings` array to response envelope.
+- **F-7** (pipeline_results_loader output ownership). Small — outputs default to MANAGED via `register_file` from F-6. Depends on F-6.
+- **F-8** (pre-launch verification). Independent of F-6/F-7. Adds synchronous BROKEN-input check to launch endpoint, returns 400 with BROKEN_INPUTS error code. Lightweight — just a query plus error response.
+- **F-9** (`jackpot files promote` CLI + backend endpoint + copy job). Largest piece by total surface area. Spans backend (new endpoint, new APScheduler one-shot copy job, new GET endpoints), CLI (`jackpot files promote` and `jackpot files verify` commands), and SDK methods. Includes server-side copy optimization for same-cloud transitions and full SHA-256 verification.
+- **F-10** (UI surfacing of storage_state). Streamlit pages: badges on sample detail page, dedicated broken-files admin view, remediation dialog with re-locate/re-upload/mark-inactive buttons, "show only samples with broken files" filter on samples list. Includes a small backend endpoint `GET /api/v1/files/broken` for the admin view.
+- **F-12 API reference docs**. Documents POST /api/v1/ingest/register, POST /api/v1/files/{file_id}/promote, GET /api/v1/files/{file_id}, GET /api/v1/files/, POST /api/v1/files/{file_id}/verify, plus updates to existing /upload, /csv, /globus endpoints. Audience is developers integrating with JACKPOT's HTTP API — distinct from the operator-facing concept guide that already shipped in PR #2.
+
+Each prompt has step 0 branching from `development`, step N (final) PR'ing back to `development`, hard rules forbidding direct push to `development` or `main`, and "what done looks like" criteria. Each is structured for a single Claude Code session.
+
+### 8. Suggested launch order
+
+The dependency graph allows multiple parallel sessions:
+
+**Launch immediately (post-PR #4):**
+- F-6 (ingest API)
+- F-8 (pre-launch verification — independent)
+- F-10 (UI surfacing — independent)
+- F-12 API reference docs (independent)
+
+**Launch after F-6 merges:**
+- F-7 (output ownership)
+- F-9 (`jackpot files promote`)
+
+**End-of-phase:**
+- F-11 (broader test coverage review) — deferred until other items merge
+
+Realistically, four concurrent Claude Code sessions plus reviewer attention is the reasonable upper limit. Two or three is more sustainable. The choice depends on Glen's time budget and reviewer fatigue.
+
+------
+
+## Decisions
+
+- *Branching workflow option (c).* Three persistent branches: `development` for integration, `main` for releases, `staging` for staging deploys. Production deploys manual from tagged commits. Documented in `docs/CLAUDE.md` "Current Baseline" via PR #4. F-N work targets `development`.
+- *Six PRs land in main before option (c) takes effect.* F-1, F-2 (Session 15), F-3, F-4, F-5, F-12-docs, plus PR #4 itself, all land against `main` because the option-(c) branching wasn't established yet. After PR #4 merges, all subsequent F-N PRs target `development`.
+- *Parallel-session execution as default for P0f.* Where files are disjoint, running multiple Claude Code sessions in parallel is materially faster than serial work. Glen reviews PRs as they come in rather than blocking on one.
+- *Squash-merge for all PRs.* Matches the existing repo convention. Linear history on `main` with one commit per PR. Feature branches stay long enough to be reviewable and short enough to merge cleanly.
+- *Defer required status checks in branch protection.* Set up protection without required checks first; add checks after F-6's CI run registers them with GitHub. Avoids chicken-and-egg.
+- *Documents endpoints from spec.md, not implementation.* F-12's API reference doc describes the design as locked in spec.md, regardless of which endpoints are merged at the time the doc lands. Minor corrections after F-6/F-9 implementation merge are normal hygiene.
+- *No copy of the original on EXTERNAL→MANAGED promotion.* Per the F-9 design, promoting a file from EXTERNAL to MANAGED makes JACKPOT take ownership of a copy at managed storage; the original stays where it was. JACKPOT does not delete the source. The user can manually delete the original after confirming the managed copy is good.
+- *Server-side copy for same-cloud transitions.* In F-9, gs://-to-gs:// or s3://-to-s3:// promotions use cloud-native copy methods (no streaming through the JACKPOT API container). Local-to-local and cross-cloud cases stream through the host with hash verification.
+- *MANAGED vs MIRRORED distinction.* MANAGED means JACKPOT owns it (uri changes to managed location, original_uri records source); MIRRORED means JACKPOT has a copy but the external original is still authoritative (uri stays at original, managed copy goes in alternate_uris). F-5 verification runs against `uri` for both states.
+- *Hash verification on all copies.* Per F-9 design, every promote operation hashes the source stream and verifies against destination. Settings.promote_verify_hash=True default; operator escape hatch but not encouraged.
+- *Deferred branch protection for required status checks.* Status checks can only be required after the workflow has run at least once. Set up protection without required checks first, add the check requirements after the first F-6 CI run.
+
+------
+
+## Outcome
+
+P0f foundation layer is complete. Six P0f items merged plus housekeeping batch:
+
+| PR | Item | Branch (pre-PR-#4) or (post-PR-#4) |
+|---|---|---|
+| #1 | F-1 LinkML schema additions | `main` |
+| #2 | F-12 partial — operator guide for file_references | `main` |
+| #3 | F-3 file_fingerprint.py cheap fingerprinting | `main` |
+| #4 | Post-monorepo housekeeping + branching workflow | `main` |
+| #5 | F-4 compute_full_content_hash background job | `main` |
+| #6 | F-5 verify_file_references background job | `main` |
+
+After PR #4 merged, `development` was created and set as default. Future F-N PRs target `development`.
+
+**Pending P0f work** (prompts ready to launch in Claude Code sessions):
+
+- **F-6** — ingest API updates (largest remaining; standalone session)
+- **F-7** — pipeline_results_loader output ownership (small; depends on F-6)
+- **F-8** — pre-launch verification (small; independent)
+- **F-9** — `jackpot files promote` CLI + endpoint + copy job (largest by surface area; depends on F-6, F-8)
+- **F-10** — UI surfacing of storage_state (independent; Streamlit + small backend)
+- **F-11** — broader test coverage review (end-of-phase; defer)
+- **F-12** — API reference docs (independent)
+
+Suggested launch sequencing: F-6, F-8, F-10, F-12-api-docs in parallel as four concurrent sessions; F-7 and F-9 launch after F-6 merges; F-11 last as the wrap-up audit.
+
+**Pending architectural follow-ups, in expected order:**
+
+- **P0f F-6 through F-12** — user-facing layer for file references
+- **P0g** — execution profiles (per-run executor selection)
+- **P0h** — Slurm executor support
+- **Phase 24.5** — sovereignty + BYOP design lockdown (gates P0b)
+- **P0b** — Schema v5.0
+- **P0c** — multi-tenancy middleware + sovereignty deletion path
+- **B-FED-1** — central CA federation peer authentication
+- **P1** — `POST /api/v1/auth/refresh`
+
+The next session work depends on Glen's call. The lowest-friction path is to launch one of the four parallel-eligible F-N sessions (F-6, F-8, F-10, F-12-api-docs), let it run, review the PR, merge, repeat. Higher-risk path is launching all four at once and managing the review pile-up. Most efficient path is probably two concurrent sessions — launch F-6 (the biggest piece) plus one of F-8 / F-10 / F-12 in parallel, then launch the next round as F-6 wraps up.
+
+
+------
+
+# Session 17 — 2026-05-03 (end of day) — P0f Completion (F-6 through F-12 merged)
+
+## What we covered
+
+A continuation of Session 16's parallel-execution arc. The remaining six F-N items that had prompts drafted at the end of Session 16 (F-6, F-7, F-8, F-9, F-10, F-12-api-docs) all completed and merged into `development`. P0f's user-facing layer is now complete. Only F-11 (end-of-phase test coverage review) remains.
+
+The session ran as a series of Claude Code sessions launched against the prompts drafted in Session 16, with periodic reviews and merges. Some sessions ran in parallel (F-6 + F-8 + F-10 + F-12-api together; F-7 + F-9 after F-6 merged); others ran serially as dependencies cleared.
+
+**P0f progress:** 11 of 12 items merged (F-1, F-2, F-3, F-4, F-5, F-6, F-7, F-8, F-9, F-10, F-12) plus the housekeeping batch as PR #4. F-11 (test coverage audit) is the only remaining item.
+
+------
+
+## Topics covered
+
+### F-6 through F-12 execution arc
+
+Every prompt drafted in Session 16 was launched against a Claude Code session and produced a PR that merged into `development`. The exact merge order isn't material to the outcome — what matters is that all six items landed without significant rework.
+
+The prompts drafted in Session 16 worked as designed: option-(c) branching (off `development`, PR back to `development`) was followed throughout, the prose-instead-of-table-fragment formatting fix held up across all spec.md additions, and the hard rules (never push to main, never branch off main, never modify F-2's migration, etc.) prevented any regressions.
+
+### What's now in `development`
+
+Everything from F-1 through F-12 except F-11. The user-facing layer of P0f is operational:
+
+- **Ingest API** (F-6) — EXTERNAL is the default storage state. New endpoint POST /api/v1/ingest/register accepts path-based registration without bytes. CSV ingest accepts a per-row `storage_intent` column with a behavior-change warning when absent. All four ingest paths (register, upload, csv, globus) route through `register_file()` from `backend/ingest_files.py` for cheap-fingerprint dedup.
+- **Pipeline outputs default to MANAGED** (F-7) — `pipeline_results_loader.py` calls `register_file(storage_intent='MANAGED')`, with the dedup-doesn't-transition behavior preserved.
+- **Pre-launch verification** (F-8) — launch endpoint refuses pipelines with BROKEN inputs, returns 400 with BROKEN_INPUTS error code listing the broken files and a remediation suggestion.
+- **`jackpot files promote`** (F-9) — CLI command, backend endpoint POST /api/v1/files/{file_id}/promote, one-shot APScheduler copy job with full SHA-256 verification, server-side copy for same-cloud transitions. `jackpot files verify` for manual re-checking. SDK FilesModule with get/list/promote/verify methods. New settings: `managed_storage_root`, `promote_chunk_size_mb`, `promote_max_seconds_per_job`, `promote_verify_hash`.
+- **UI surfacing** (F-10) — storage state badges on sample detail page (gray/green/blue/amber/red), dedicated broken-files admin view, remediation dialog for BROKEN files (re-locate / re-upload / mark inactive), "show only samples with broken files" filter on samples list. New backend endpoint GET /api/v1/files/broken.
+- **API reference docs** (F-12) — `docs/api/file_references.md` (or wherever the docs convention placed it) with full documentation of POST /api/v1/ingest/register, POST /api/v1/files/{file_id}/promote, GET /api/v1/files/{file_id}, GET /api/v1/files/, POST /api/v1/files/{file_id}/verify, plus updates to /upload, /csv, /globus.
+
+### What F-11 still needs to do
+
+F-11 was deferred until the implementation work was done. With F-3 through F-10 now in, the test coverage situation is concrete:
+
+- Each F-N PR landed with its own focused tests (the prompts required them).
+- The total test count is well above the pre-P0f 891 baseline — each PR added 5-30 tests.
+- The gaps that remain are likely in cross-cutting integration scenarios that no single F-N item was responsible for, e.g.:
+  - End-to-end: register EXTERNAL → verify finds it broken → launch refused with BROKEN_INPUTS → user re-locates → verify clears it → launch succeeds.
+  - Cross-scheme dedup: same content registered as `file://` and as `gs://`, verify both end up on the same `sample_files` row with `alternate_uris` populated.
+  - Promote failure recovery: copy fails partway through, verify state stays unchanged, audit log shows PROMOTE_FILE_FAILED, user can retry.
+  - Permission boundaries: user A in lab 1 cannot see broken files for samples in lab 2, even via direct file_id access.
+
+F-11's session needs to:
+
+1. Run a coverage report (`uv run pytest --cov=backend --cov=cli --cov-report=term-missing 2>&1 | tail -100`).
+2. Identify files below the project's preferred coverage baseline (86.99% from before P0f, likely worth raising now).
+3. Identify integration scenarios that no single F-N item covered, and write end-to-end tests for them.
+4. Land any obvious bug fixes that surface during cross-cutting test writing (this is normal end-of-phase hygiene).
+
+The F-11 prompt is best drafted in the F-11 session itself with the actual coverage report in hand, rather than being drafted speculatively now.
+
+### Branch protection follow-up
+
+Per the chicken-and-egg note in Session 16, GitHub's branch protection "Require status checks to pass before merging" only shows check names from workflows that have run in the last week. By the end of Session 17, F-6's CI workflow has run multiple times, so the test job's check name is now registered with GitHub. Worth a follow-up trip to Settings → Branches to add the now-visible check as a required status check on both `main` and `development`.
+
+This isn't blocking; it's a hardening step.
+
+------
+
+## Decisions
+
+- *F-11 prompt drafted in-session, not in advance.* Coverage gaps are concrete only after implementation lands. A speculative F-11 prompt would over-specify scenarios already covered and miss real gaps.
+- *Document version bumps to 3.0.* P0f's user-facing layer being complete is a milestone worth marking. Future sessions on F-11 + P0g will increment 3.x.
+- *Branch protection required-checks step deferred to a small follow-up.* Not part of any F-N item; just GitHub admin to do when convenient.
+
+------
+
+## Outcome
+
+P0f is essentially complete. All twelve F-N items except F-11 have been implemented, tested, and merged into `development`:
+
+| Item | Status |
+|---|---|
+| F-1 LinkML schema additions | ✅ Merged |
+| F-2 SQL migration (sample_files extensions) | ✅ Merged |
+| F-3 file_fingerprint.py | ✅ Merged |
+| F-4 compute_full_content_hash background job | ✅ Merged |
+| F-5 verify_file_references background job | ✅ Merged |
+| F-6 ingest API updates | ✅ Merged |
+| F-7 pipeline_results_loader output ownership | ✅ Merged |
+| F-8 pre-launch verification | ✅ Merged |
+| F-9 `jackpot files promote` | ✅ Merged |
+| F-10 UI surfacing | ✅ Merged |
+| F-11 broader test coverage review | ⏳ Remaining |
+| F-12 docs (operator + API reference) | ✅ Merged (operator in PR #2; API reference in Session 17) |
+
+**Pending P0f work:**
+
+- **F-11** — end-of-phase test coverage audit. Single session. Draft prompt in-session with `uv run pytest --cov` output in hand.
+
+**Pending architectural follow-ups, in expected order:**
+
+- **F-11** — close out P0f
+- **P0g** — execution profiles (per-run executor selection)
+- **P0h** — Slurm executor support
+- **Phase 24.5** — sovereignty + BYOP design lockdown (gates P0b)
+- **P0b** — Schema v5.0
+- **P0c** — multi-tenancy middleware + sovereignty deletion path
+- **B-FED-1** — central CA federation peer authentication
+- **P1** — `POST /api/v1/auth/refresh`
+
+The next session work is F-11. After F-11 lands, P0f is fully complete and P0g (execution profiles) becomes the active phase. P0g's design source is `spec.md` Phase P0g Specification. The first P0g work item (P0g-1) can be drafted at the start of the next session that follows F-11.
+
+
+------
+
+# Session 18 — 2026-05-04 (strategic positioning + I-track design)
+
+## What we covered
+
+A pivot from internal feature work to adoption-driving feature work. The session opened with the question "How does a single developer with an awesome pathogen genomics analytics platform get the project adopted when all the similar projects are funded by the world's largest public health organizations?" and worked outward from there to a concrete I-track of work items targeting the underserved market.
+
+The conversation established three things:
+
+1. **JACKPOT cannot win against funded incumbents on institutional procurement.** Sanger/CGPS, NIAID/Argonne, CZI/SIB, NCBI/CDC will always have more credibility than a single-developer project. Trying to compete on the same axis is the path to burnout.
+2. **The underserved market is working researchers using spreadsheets.** Most pathogen genomics labs in the world manage their data with Excel + folders + ad-hoc scripts. The funded platforms don't address this user. JACKPOT can be the best free option for spreadsheet refugees.
+3. **JACKPOT's role in submission is upstream of Seqsender/TOSTADAS, not parallel to them.** Seqsender solves the protocol; JACKPOT should solve metadata curation, governance, and submission lifecycle. They integrate cleanly.
+
+The session translated those positioning insights into a concrete work-item plan: an I-track (import/integration features) of four items: I-1 spreadsheet importer, I-2 submission package generation, C-1 pluggable credential infrastructure, I-3 backend-driven submission.
+
+------
+
+## Topics covered
+
+### 1. Competitive landscape, honestly assessed
+
+The funded competing platforms occupy specific niches that JACKPOT does not directly compete with:
+
+- **Pathogenwatch** (Sanger/CGPS) — strong for curated pathogens (Neisseria, Salmonella, Mycobacterium tuberculosis, etc.); hosted-only; cannot handle long-tail pathogens or sovereignty-constrained deployments.
+- **NCBI Pathogen Detection** — submit-and-wait; cannot run on tribal infrastructure; cannot serve as a private analysis platform.
+- **BV-BRC** (NIAID/Argonne) — hosted at NIAID; data submission required for analyses; not deployable independently.
+- **Pathoplexus / Loculus** (CZI/SIB) — the closest architectural match. Apache 2.0, designed for self-hosting. Operational burden is high; mostly serves users who can run Helm + Kubernetes deployments.
+- **GenSpectrum / LAPIS** — analytical, not full-platform; smaller scope than JACKPOT.
+- **EnteroBase** — Warwick-hosted; submission-required model.
+- **GISAID** — not open source; data-use restrictions.
+
+The structural gap: working researchers (academic labs, public health labs in non-G7 countries, tribal research entities, agricultural/veterinary genomics groups, environmental microbiology projects) are using spreadsheets, folders, and bespoke scripts because none of the funded platforms fit their actual workflow.
+
+The honest version of JACKPOT's adoption pitch: not "JACKPOT vs Pathogenwatch" but "JACKPOT replaces your spreadsheets, ten thousand FASTQ files in three folders, and the script your former grad student wrote in 2019." That's a much bigger user pool and a much more achievable adoption goal.
+
+### 2. Indigenous genomic sovereignty as a longer-arc use case
+
+A subsection of the conversation explored Indigenous genomic sovereignty (Navajo Nation, other tribal entities) as a use case where JACKPOT's architecture would fit unusually well. The relevant pathogens are not "TB in LMICs" exactly — they include Hantavirus surveillance (Four Corners region), continued SARS-CoV-2 work in tribal communities, plague reservoir monitoring, AMR surveillance from Indian Health Service facilities, and respiratory pathogens disproportionately affecting Alaska Native populations.
+
+The architectural fit is real: AGPL license + sovereignty model + multi-deployment-target architecture (especially Scenario B single on-prem server) match tribal IT realities better than any funded competitor. Loculus is the closest architectural alternative but has operational burden that doesn't fit tribal IT shops.
+
+The honest assessment of difficulty: trust takes years not months in Indigenous research contexts (Havasupai case is in everyone's institutional memory); the right approach is co-development with tribal partners (Native BioData Consortium, SING workshop network, CEIGR), not "platform vendor pitches finished product"; a serious pursuit is a multi-year arc with relationship-building before deployment. Worth doing if Glen is genuinely interested in it as a meaningful project direction; not the right path if interest is mostly in it as a marketing angle.
+
+For the near-term adoption strategy, the spreadsheet-refugee market is the right target. The Indigenous sovereignty work is something that JACKPOT's architecture could support eventually if Glen wants to pursue it seriously.
+
+### 3. Seqsender / TOSTADAS landscape analysis
+
+A meaningful question early in the session: aren't Seqsender and TOSTADAS already solving submission? Honest assessment of what they do and don't do:
+
+**What Seqsender + TOSTADAS solve well:**
+- The mechanical submission protocol (file uploads, API calls, status polling)
+- Format conversion (metadata to NCBI/GISAID/ENA-required TSV/XML formats)
+- Multi-repository submission from one source
+- Common pathogens at scale (especially SARS-CoV-2 with years of CDC investment)
+
+**What's still missing:**
+- Pre-submission metadata curation (Seqsender starts where curated metadata exists; the typical lab does not have its metadata house in order)
+- Submission lifecycle tracking (Seqsender does the action, not the state — accepted/rejected/embargoed/withdrawn/updated all live in someone's head or another spreadsheet)
+- Governance work (which samples to submit, what metadata granularity, IRB sign-off, internal data sharing committee approvals)
+- Pipeline-output-to-submission bridging (after pipelines run, manual reconciliation between metadata and outputs is required)
+- Long-tail pathogen support beyond CDC's investment areas
+- Sovereignty-conscious deployment (Seqsender works fine for sovereignty use cases since the user runs it themselves; the surrounding infrastructure is the issue)
+
+**JACKPOT's right positioning:** upstream and lifecycle, not protocol replication. JACKPOT manages the metadata, governance, and lifecycle; Seqsender (or its equivalents) handles the protocol mechanics. JACKPOT generates Seqsender-ready exports.
+
+This led directly to the I-2 design: produce Seqsender-compatible packages, track submission lifecycle, do not implement protocol mechanics in v1.
+
+### 4. The "researcher's laptop closes and changes IPs" question
+
+A genuinely important architectural question that came up in the I-2 design discussion: how does JACKPOT manage long-running submission protocols (NCBI's 24-72 hour processing, large file uploads, IP-changing networks) when the user's laptop is intermittently connected?
+
+The realization: backend-driven submission requires a **stable backend**. For Scenarios B/C/D/E/F (servers and clusters), this is fine — the API container has persistent connectivity. For Scenario A (laptop), the API container *is* the laptop.
+
+This led to a key architectural decision: I-2 v1 explicitly **does not run submissions on the backend**. Instead, JACKPOT generates a Seqsender-compatible package; the user runs Seqsender on whatever stable host they have access to. This sidesteps the laptop-connectivity problem entirely. As a bonus, JACKPOT never holds NCBI/GISAID credentials — a real win for the sovereignty story.
+
+Backend-driven submission becomes I-3, deferred to a later work item with proper scenario handling.
+
+### 5. The credential management question
+
+A follow-up to the laptop-connectivity question: when I-3 ships, where do NCBI/GISAID/ENA credentials live? Glen pointed out that not everyone has GCP, ruling out the existing schema's GCP-Secret-Manager-only design.
+
+The right answer: a pluggable credential backend layer, with multiple implementations (env vars, file-based, OS keychain, GCP Secret Manager, AWS Secrets Manager, Azure Key Vault). v1 of the credential infrastructure ships three backends: env vars (default, works everywhere), file-based YAML (config-management-friendly), GCP Secret Manager (for cloud deployments). The credential abstraction is invisible to the consuming code (submission logic, future LLM features, federation API keys, etc.).
+
+This became its own work item: C-1 (pluggable credential infrastructure). C-1 is a prerequisite for I-3 but not for I-2.
+
+### 6. The I-track sequencing
+
+The four work items shake out as:
+
+- **I-1 — spreadsheet importer.** Largest engineering scope. Server-side TTL'd wizard sessions (B2 decision). Browser-resumable. xlsx + csv + tsv. Auto-suggested column mappings with confidence indicators. Per-import value mapping (deferred persistent value mapping to v1.5). Path-columns and filename-convention file references with auto-inference + warning. Soft-fail validation surfaces samples as PRELIMINARY tier with validation_issues.
+- **I-2 — submission package generation.** First-class submissions table (C2 decision). 10+ state machine. Multi-repository (NCBI, GISAID EpiCoV/EpiFlu/EpiPox, ENA, DDBJ). Embargo support with daily release job. Link-first file handling (gs:// referenced directly; file:// symlinked; --copy-files flag for portable packages). No credential management.
+- **C-1 — pluggable credential infrastructure.** Three backends in v1. Selection via Settings.credential_backend setting. Migration of existing credential reads to go through the abstraction.
+- **I-3 — backend-driven submission.** Adds the option for JACKPOT to actually run TOSTADAS/Seqsender internally rather than handing off to the user. Scenario-aware (laptop → warning + package generation only; server → backend execution available). Depends on C-1.
+
+Sequencing: I-1 ships first (currently the largest deferred item). I-2 and C-1 can ship in parallel after I-1 (different files entirely; non-conflicting). I-3 ships after both C-1 and I-2.
+
+After all four ship, JACKPOT has a complete adoption-driving feature set. That's the foundation for outreach work that converts "interesting project" into "I'm using this."
+
+### 7. Framework for new work-item prefixes
+
+The project now has multiple tracks: F (P0f file references), G (P0g execution profiles), H (P0h Slurm executor), I (import/integration). Future tracks may add S (submission, if I-track gets too crowded) or other prefixes.
+
+Convention: phase prefix encodes the architectural area (P0f, P0g, P0h) or the adoption category (I for import/integration, possibly S for submission/sharing later). Within a track, items numbered sequentially (I-1, I-2, I-3). Items in a phase use the phase letter (F-N, G-N, H-N).
+
+Worth re-checking this as the project grows; today it's clear enough.
+
+------
+
+## Decisions
+
+- *Adoption strategy locked: spreadsheet-refugee market, not institutional procurement.* JACKPOT's pitch is "replace your spreadsheets and folder archaeology" not "compete with Pathogenwatch." This affects positioning, marketing, feature priorities, and outreach strategy.
+- *Indigenous genomic sovereignty as longer-arc opportunity, not near-term strategy.* Worth pursuing seriously over multi-year arc if Glen is genuinely interested. Not part of the 90-day adoption push.
+- *I-track established for adoption-driving features.* Work items use I-N prefix. First four items: I-1 (spreadsheet importer), I-2 (submission package generation), C-1 (credential infrastructure), I-3 (backend-driven submission).
+- *I-2 v1 explicitly excludes credential management.* JACKPOT never holds NCBI/GISAID/ENA credentials in v1. Users run Seqsender themselves with their own credentials. Maximum sovereignty story.
+- *Credential infrastructure (C-1) ships three backends.* Env vars (default), file-based YAML, GCP Secret Manager. AWS / Azure / OS keychain backends ship later as needed.
+- *Backend-driven submission (I-3) depends on C-1.* Cannot run TOSTADAS/Seqsender on the backend until credential infrastructure exists.
+- *I-1 sequencing decisions locked.* Server-side TTL'd wizard sessions (B2). Per-import value mapping, persistent column mapping (C2 + C3-lite). Path-columns and filename-convention file references (D1 + D2-lite). Soft-fail validation as PRELIMINARY tier (no INCOMPLETE state).
+- *I-2 sequencing decisions locked.* First-class submissions table (C2). All four repositories in v1 (NCBI, GISAID, ENA, DDBJ). Embargo support in v1. Link-first file handling.
+- *Sequence: I-1 → (I-2 || C-1) → I-3.* I-1 ships first as the largest piece. I-2 and C-1 can run in parallel after I-1. I-3 ships after both.
+- *F-11 still relevant.* Test coverage audit for P0f remains pending. Can ship in parallel with I-1 if Glen has bandwidth, or sequentially.
+
+------
+
+## Outcome
+
+Strategic direction set. Adoption-driving feature roadmap concrete. I-1 and I-2 specs drafted; C-1 and I-3 framing established for future drafting.
+
+**Pending P0f work:**
+
+- **F-11** — end-of-phase test coverage audit. Single session. Draft prompt in-session with `uv run pytest --cov` output in hand.
+
+**Pending I-track work (in expected order):**
+
+- **I-1** — spreadsheet importer wizard. Spec drafted. Largest piece. Ships first.
+- **I-2** — submission package generation. Spec drafted. Independent of C-1. Can run parallel with C-1 after I-1.
+- **C-1** — pluggable credential infrastructure. Specs not yet drafted; Session 18 established the framework. Can run parallel with I-2 after I-1.
+- **I-3** — backend-driven submission. Specs not yet drafted. Depends on C-1.
+
+**Pending architectural follow-ups, in expected order:**
+
+- F-11 + I-1 (parallel-safe)
+- I-2 + C-1 (parallel-safe after I-1)
+- I-3 (after C-1 and I-2)
+- P0g — execution profiles (per-run executor selection)
+- P0h — Slurm executor support
+- Phase 24.5 — sovereignty + BYOP design lockdown (gates P0b)
+- P0b — Schema v5.0
+- P0c — multi-tenancy middleware + sovereignty deletion path
+- B-FED-1 — central CA federation peer authentication
+- P1 — `POST /api/v1/auth/refresh`
+
+The next session work depends on Glen's priorities. Two reasonable paths: (a) finish P0f cleanly by launching F-11 first, then move to I-1; (b) launch I-1 immediately because adoption-driving features are higher-impact than the audit, and run F-11 in parallel as a smaller bandwidth use. Either is defensible. Both end with I-1 merged, F-11 merged, and either I-2 or C-1 launched as the next chunk.
+
+
+------
+
+# Session 19 — 2026-05-04 (later) — F-11 + I-2 merged in parallel; P0f complete
+
+## What we covered
+
+A short execution-focused session: F-11 and I-2 specs from earlier in the day got run as parallel Claude Code sessions, landed as PRs, and merged. Two notable outcomes for the project state:
+
+1. **P0f is fully complete.** F-11's coverage audit was the last P0f loose end. With it merged, the entire P0f file-references phase — 12 work items spanning schema design, content-hash dedup, background jobs, ingest API updates, pipeline integration, CLI/SDK, UI, docs — is done.
+
+2. **I-track is at 50% completion.** I-1 (spreadsheet importer) and I-2 (submission package generation) have both shipped. The remaining I-track work is C-1 (pluggable credential infrastructure) and I-3 (backend-driven submission), both of which depend on the credential abstraction not yet drafted.
+
+The session also produced a refreshed continuation primer with a "TSV / structured-data format" rule added to the Markdown formatting section, locked in after a paste-bug surfaced in the I-2 prompt's accessions.tsv example.
+
+------
+
+## Topics covered
+
+### 1. F-11 execution and outcome
+
+The F-11 prompt was drafted in-session with the design framework from Session 17 and the strategic context from Session 18. Key elements baked into the prompt:
+
+- Diagnostic-first approach: the agent runs the coverage report, identifies thin spots, and writes targeted tests. Specifics not pre-specified.
+- Eleven candidate cross-cutting integration scenarios listed (register-broken-relocate-launch, cross-scheme dedup, F-9 promote failure recovery, permission boundaries, F-6 CSV warning visibility, F-6+F-7 dedup-doesn't-transition, F-5+F-8 failure-mode dialog, F-4+F-5 race against ingest, I-1 + P0f integration smoke test, etc.). Agent picks which to add based on existing test coverage.
+- Coverage targets: 90% overall, 95% per-file for P0f-modified files, 98% for critical safety paths. Aspirational, not hard CI gates beyond a 90% --cov-fail-under floor.
+- Inline bug fixes permitted under strict criteria (<30 lines, no schema, semantic commits).
+- Required output: a `tests/coverage_p0f_summary.md` documenting the post-F-11 baseline.
+
+The F-11 PR merged with: cross-cutting integration tests added in `tests/test_p0f_cross_cutting.py`, per-file coverage additions to existing test files, the coverage summary document, and a small handful of inline fixes for defects surfaced by cross-cutting tests.
+
+### 2. I-2 execution and outcome
+
+I-2's spec was finalized in Session 18 with the "package generation only, no credentials" architecture. The merged PR delivered:
+
+- New `submissions` and `submission_samples` tables with the 10+ state machine
+- `backend/submissions.py` business logic module with explicit transition functions
+- `backend/submission_packages.py` with per-repository generators (NCBI, GISAID EpiCoV/EpiFlu/EpiPox, ENA, DDBJ)
+- 12+ endpoints under `/api/v1/submissions/`
+- Daily APScheduler job for EMBARGOED → RELEASED auto-transitions
+- Streamlit submissions page (list view, create wizard, detail view)
+- CLI commands: `jackpot submissions create / list / show / validate / generate / mark-submitted / register / mark-rejected / withdraw`
+- SDK methods on `client.submissions`
+- Post-package instruction page with explicit Seqsender setup guidance
+- "JACKPOT does not store or transmit your repository credentials" messaging in the UX
+
+The post-package instruction page is the critical UX piece for laptop users: the submission flow ends with concrete instructions for moving the package to a stable host, configuring Seqsender there, running the upload, and registering accessions back via `jackpot submissions register`.
+
+### 3. Parallel execution worked cleanly
+
+F-11 and I-2 ran in two Claude Code sessions simultaneously. The choice of parallel-safe work items was correct:
+
+- F-11 wrote tests in `tests/`, plus a small number of inline bug fixes in P0f-era code (`backend/jobs.py`, `backend/routers/files.py`, etc.)
+- I-2 wrote entirely new files in `backend/submissions.py`, `backend/submission_packages.py`, `backend/routers/submissions.py`, `frontend/pages/submissions.py`, `cli/jackpot/cli/submissions.py`, etc. — plus minor additions to `backend/jobs.py`, `backend/audit.py`, `backend/notifications.py`, `backend/main.py`, `backend/config.py`.
+
+The only theoretical overlap was `backend/jobs.py` (F-11 fixed a small defect in the F-5 verify job; I-2 added the `release_embargoed_submissions` daily job). Git handled the merge cleanly because the changes were in different functions in the same file.
+
+This validates the parallel-safe sequencing for the rest of the I-track: C-1 and I-3 also touch entirely different files than ongoing P0g design work would. The pattern holds.
+
+### 4. The TSV format-spec paste bug
+
+A small but instructive bug surfaced when Glen pasted the I-2 prompt into Claude Code: the accessions.tsv example in the prompt used literal tab characters as column separators. Tab characters survive a Markdown round-trip in some renderers (claude.ai chat) and collapse to single spaces in others (the destination paste context). The same example block rendered correctly in chat and broke when pasted.
+
+The fix was to describe the TSV format in prose first (column names, order, meaning), then show the example with `<TAB>` placeholders. This pattern was added to the continuation primer's Markdown formatting section as a locked rule, joining the earlier table-fragment rule from F-6 / F-7 / F-8.
+
+The general principle: anything that depends on whitespace being preserved verbatim is fragile when pasted across tools. Describe-then-illustrate, never illustrate-only.
+
+### 5. Where the project stands
+
+P0f (file references) is complete: 12 work items, 11 PRs, plus PR #4 (housekeeping + branching workflow). Total tests added across the phase: roughly 200+ tests.
+
+I-track (adoption-driving features): 2 of 4 items shipped (I-1, I-2). Remaining: C-1 (credential infrastructure), I-3 (backend-driven submission). C-1 specs not yet drafted; I-3 depends on C-1.
+
+Adjacent work: P0g (execution profiles), P0h (Slurm executor), Phase 24.5 (sovereignty + BYOP), P0b (schema v5.0), P0c (multi-tenancy), B-FED-1 (federation), P1 (auth refresh) all pending.
+
+The next decision is whether to draft C-1 next (continuing the I-track adoption push) or shift to P0g (advancing core platform capabilities). Both are defensible. C-1 is smaller scope and unblocks I-3; P0g is larger scope and unblocks P0h. Glen's call based on which adoption story is more urgent.
+
+------
+
+## Decisions
+
+- *Parallel execution validated.* F-11 + I-2 ran cleanly in parallel. The pattern of "different files, no shared schema, separate sessions" works for solo-developer-with-Claude-Code workflow. Reasonable upper bound is 2-3 concurrent sessions; reviewer attention is the binding constraint, not git mechanics.
+- *Coverage baseline locked in `tests/coverage_p0f_summary.md`.* Future phases (P0g, P0h, etc.) must not let it slip. F-11 is the reference for "what does end-of-phase coverage look like."
+- *TSV / structured-data format rule locked* in the continuation primer. Joins the table-fragment rule as a Markdown formatting baseline.
+- *I-track sequencing reaffirmed.* Next is either C-1 (drafted in-session, ships before I-3) or pause I-track and shift to P0g. Glen's call. No new work-item ordering decisions needed.
+
+------
+
+## Outcome
+
+P0f is complete. I-track is half-shipped. Next moves are either continuing I-track (draft C-1) or shifting to P0g.
+
+**Pending P0f work:** None. P0f is done.
+
+**Pending I-track work (in expected order):**
+
+- **C-1** — pluggable credential infrastructure. Specs not yet drafted; framework set in Session 18 (env vars / file YAML / GCP Secret Manager backends). Best drafted in-session with current code state for context.
+- **I-3** — backend-driven submission. Depends on C-1. Specs not yet drafted.
+
+**Pending architectural follow-ups, in expected order:**
+
+- **C-1 + I-3** (I-track completion) — OR — pause I-track and shift to P0g
+- **P0g** — execution profiles (per-run executor selection)
+- **P0h** — Slurm executor support
+- **Phase 24.5** — sovereignty + BYOP design lockdown (gates P0b)
+- **P0b** — Schema v5.0
+- **P0c** — multi-tenancy middleware + sovereignty deletion path
+- **B-FED-1** — central CA federation peer authentication
+- **P1** — `POST /api/v1/auth/refresh`
+
+The next session can either draft C-1 (continuing the I-track adoption push) or pivot to P0g design (advancing core platform capabilities). Both are defensible. The summary doc, primer, and quick reference are now in their cleanest post-P0f state for either direction.
