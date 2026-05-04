@@ -284,7 +284,7 @@ async def test_external_broken_relocate_launch_succeeds(client, as_platform_admi
 
         # Confirm BROKEN
         rows = execute_query(
-            "SELECT storage_state, last_verification_status FROM sample_files " "WHERE id = :id",
+            "SELECT storage_state, last_verification_status FROM sample_files WHERE id = :id",
             {"id": file_id},
         )
         assert rows[0]["storage_state"] == "BROKEN"
@@ -741,8 +741,7 @@ def test_register_file_uses_precomputed_fingerprint(tmp_path):
             )
         assert dedup is False
         rows = execute_query(
-            "SELECT file_size_bytes, head64k_hash, tail64k_hash "
-            "FROM sample_files WHERE id = :id",
+            "SELECT file_size_bytes, head64k_hash, tail64k_hash FROM sample_files WHERE id = :id",
             {"id": sf_id},
         )
         assert rows[0]["file_size_bytes"] == 1024
