@@ -251,6 +251,7 @@ PAGE_MODULES = [
     "frontend.pages.notifications",
     "frontend.pages.pipelines",
     "frontend.pages.broken_files",
+    "frontend.pages.import_spreadsheet",
 ]
 
 

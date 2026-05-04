@@ -53,6 +53,12 @@ class Settings(BaseSettings):
     verification_consecutive_failures_to_break: int = 3
     verification_re_fingerprint: bool = False
 
+    # I-1 spreadsheet importer wizard
+    import_session_ttl_hours: int = 24
+    import_session_max_file_size_mb: int = 10
+    import_session_max_per_user: int = 5
+    import_session_cleanup_interval_seconds: int = 3600  # hourly
+
     # Phase P0f F-9: promote_file_storage one-shot job
     # managed_storage_root has no default — operators must set it at
     # deployment time. Failure to configure surfaces at job execution

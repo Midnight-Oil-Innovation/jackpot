@@ -1526,7 +1526,67 @@ def verify_sample_file(file_id: int) -> dict:
 
 
 # Re-export for tests and ergonomic imports.
+async def cleanup_expired_import_sessions() -> dict[str, int]:
+    """I-1 hourly cleanup for import_sessions.
+
+    Two sweeps:
+
+    1. Expired in-progress sessions (``expires_at < NOW()``) are
+       deleted outright — file bytes are too large to leave in the
+       table indefinitely.
+    2. Terminal-status (``imported`` / ``abandoned``) sessions older
+       than 7 days are deleted. We keep recent terminal rows around
+       so the UI can show "you imported X 3 days ago", but not
+       forever.
+
+    Idempotent: running twice produces the same final state. The
+    audit log records counts so operators can see the working set
+    over time.
+    """
+    deleted_expired = 0
+    deleted_old_terminal = 0
+    with get_db() as db:
+        rows = execute_write(
+            "DELETE FROM import_sessions "
+            "WHERE status = 'in_progress' AND expires_at < NOW() "
+            "RETURNING id",
+            conn=db,
+        )
+        deleted_expired = len(rows)
+        rows = execute_write(
+            "DELETE FROM import_sessions "
+            "WHERE status IN ('imported', 'abandoned') "
+            "AND created_at < NOW() - INTERVAL '7 days' "
+            "RETURNING id",
+            conn=db,
+        )
+        deleted_old_terminal = len(rows)
+        log_audit(
+            action="CLEANUP_IMPORT_SESSIONS",
+            actor_id=None,
+            resource_type="import_sessions",
+            resource_id="*",
+            before=None,
+            after={
+                "deleted_expired": deleted_expired,
+                "deleted_old_terminal": deleted_old_terminal,
+            },
+            metadata={"job": "cleanup_expired_import_sessions"},
+            db_conn=db,
+        )
+    logger.info(
+        "cleanup_expired_import_sessions: expired=%d, terminal=%d",
+        deleted_expired,
+        deleted_old_terminal,
+    )
+    return {
+        "deleted_expired": deleted_expired,
+        "deleted_old_terminal": deleted_old_terminal,
+    }
+
+
 __all__ = [
+    "cleanup_expired_import_sessions",
     "compute_full_content_hash",
     "get_promote_job_status",
     "promote_file_storage",
