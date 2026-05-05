@@ -1,0 +1,26 @@
+{# Expected config_overrides keys:
+     namespace               string  required
+     service_account         string  optional
+     compute_resource_type   string  optional ('Job' or 'Pod')
+     pull_policy             string  optional ('Always', 'IfNotPresent', 'Never')
+#}
+{% extends "base.config.j2" %}
+{% block executor_block %}
+{%- set ov = profile.config_overrides %}
+process {
+    executor = 'k8s'
+}
+
+k8s {
+    namespace = '{{ ov["namespace"] }}'
+{%- if ov.get('service_account') %}
+    serviceAccount = '{{ ov['service_account'] }}'
+{%- endif %}
+{%- if ov.get('compute_resource_type') %}
+    computeResourceType = '{{ ov['compute_resource_type'] }}'
+{%- endif %}
+{%- if ov.get('pull_policy') %}
+    pullPolicy = '{{ ov['pull_policy'] }}'
+{%- endif %}
+}
+{% endblock %}

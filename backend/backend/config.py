@@ -1,8 +1,9 @@
 import json
+import os
 from functools import lru_cache
 from typing import Annotated, Literal
 
-from pydantic import field_validator
+from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, NoDecode
 
 
@@ -42,6 +43,16 @@ class Settings(BaseSettings):
     jackpot_api_url: str = "http://localhost:8000"
     work_bucket: str = "jackpot-work"
     results_bucket: str = "jackpot-results"
+    # P0g G-4: per-deployment default work dir for runs whose chosen
+    # execution profile does not override `work_dir` (and the legacy
+    # GCP-Batch fallback path, which still uses `work_bucket`). Tilde
+    # is expanded eagerly so downstream code can pass the value to
+    # filesystem APIs without re-expanding. Cloud URIs (gs://, s3://)
+    # pass through untouched. Override via the JACKPOT_WORK_DIR env.
+    work_dir: str = Field(
+        default="~/.jackpot/work/",
+        validation_alias="JACKPOT_WORK_DIR",
+    )
     gcp_region: str = "us-central1"
     rate_limit_enabled: bool = True
     rate_limit_auth: str = "5/minute"
@@ -129,6 +140,15 @@ class Settings(BaseSettings):
     # location in our api Dockerfile (/opt/seqsender/seqsender-kickoff).
     # Operators with a different install layout override this setting.
     seqsender_binary_path: str = "/opt/seqsender/seqsender-kickoff"
+
+    @field_validator("work_dir")
+    @classmethod
+    def _expand_work_dir(cls, v: str) -> str:
+        # P0g G-4: tilde expansion happens once at Settings load.
+        # gs://, s3://, file://, and absolute paths pass through.
+        if v.startswith("~"):
+            return os.path.expanduser(v)
+        return v
 
     @field_validator("cors_origins", mode="before")
     @classmethod

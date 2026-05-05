@@ -1,0 +1,24 @@
+{# Expected config_overrides keys:
+     region     string  required (AWS region)
+     queue      string  required (Batch job queue)
+     cli_path   string  optional → 'aws.batch.cliPath'
+     volumes    string  optional → 'aws.batch.volumes'
+#}
+{% extends "base.config.j2" %}
+{% block executor_block %}
+{%- set ov = profile.config_overrides %}
+process {
+    executor = 'awsbatch'
+    queue = '{{ ov["queue"] }}'
+}
+
+aws {
+    region = '{{ ov["region"] }}'
+{%- if ov.get('cli_path') %}
+    batch.cliPath = '{{ ov['cli_path'] }}'
+{%- endif %}
+{%- if ov.get('volumes') %}
+    batch.volumes = '{{ ov['volumes'] }}'
+{%- endif %}
+}
+{% endblock %}

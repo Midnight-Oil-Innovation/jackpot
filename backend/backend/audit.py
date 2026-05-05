@@ -74,6 +74,9 @@ class AuditActions:
     RESUME_PIPELINE_RUN = "RESUME_PIPELINE_RUN"
     REGISTER_CUSTOM_PIPELINE = "REGISTER_CUSTOM_PIPELINE"
     PROMOTE_PIPELINE = "PROMOTE_PIPELINE"
+    # P0g G-4: launch resolved an execution_profiles row and rendered
+    # nextflow.config from that profile (vs. the legacy GCP-Batch path).
+    LAUNCH_WITH_PROFILE = "LAUNCH_WITH_PROFILE"
 
     # File references (Phase P0f)
     RECONCILE_SAMPLE_FILES_HASH_COLLISION = "RECONCILE_SAMPLE_FILES_HASH_COLLISION"
