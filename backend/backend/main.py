@@ -52,6 +52,9 @@ from backend.routers import (
     tokens,
     users,
 )
+from backend.routers import (
+    settings as settings_router,
+)
 from backend.submissions import recover_interrupted_executions
 from backend.version import __version__
 
@@ -168,6 +171,7 @@ app.include_router(sample_access.router)
 app.include_router(samples.router)
 app.include_router(saved_searches.router)
 app.include_router(sequencing_labs.router)
+app.include_router(settings_router.router)
 app.include_router(submissions.router)
 app.include_router(tokens.router)
 app.include_router(users.router)

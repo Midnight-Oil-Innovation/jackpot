@@ -201,11 +201,19 @@ def render_env_local(
         f"RATE_LIMIT_AUTH={defaults.rate_limit_auth}",
         f"RATE_LIMIT_INGEST={defaults.rate_limit_ingest}",
         "",
+        "# ── Backend submission (I-3) ─────────────────────────────────────",
+        f"ALLOW_BACKEND_SUBMISSION="
+        f"{'true' if resolved.get('allow_backend_submission') else 'false'}",
+        # Comma-separated list per Critical Rule 53; empty when disabled.
+        f"BACKEND_SUBMISSION_REPOS={','.join(resolved.get('backend_submission_repos') or [])}",
+        "",
         "# ── Secrets (sourced from instances/<name>/secrets/ at runtime) ───",
         "# SECRET_KEY: see secrets/jwt_signing_key.txt",
         "# GOOGLE_OAUTH_CLIENT_SECRET: see secrets/oauth_client_secret.txt",
         "# NCBI_API_KEY: operator-provided",
         "# JACKPOT_API_TOKEN: operator-provided",
+        "# JACKPOT_CRED_NCBI_SUBMISSION_USERNAME / _PASSWORD: I-3 backend execution",
+        "# JACKPOT_CRED_ENA_WEBIN_USERNAME / _PASSWORD: I-3 backend execution",
     ]
     return "\n".join(env_lines) + "\n"
 
