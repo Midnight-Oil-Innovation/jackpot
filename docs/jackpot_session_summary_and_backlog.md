@@ -1,8 +1,10 @@
 # JACKPOT Session Summary & Backlog
 
-**Document version:** 4.0
-**Last updated:** 2026-05-04 (later still — I-track complete)
-**Sessions covered:** Session 1 (March–April 2026 consolidated), Session 2 (2026-04-10), Sessions 3–S (2026-04 through 2026-04-19), Pathoplexus/Loculus comparative analysis session (2026-04-28), Cleanup A–J operator-agnostic genericization session (2026-04-26 to 2026-04-28), Session 11 (2026-04-28 → 2026-04-29 — CDC DMI/STLT/CARE alignment, BYOP/eukaryotic design, phasing rework, P0d migration prep), Session 12 (2026-04-30 → 2026-05-01 — P0d execution in Claude Code + post-execution cleanup), Session 13 (2026-05-01 — Phase 22 periodic review), Session 14 (2026-05-02 — P0e `jackpot init` CLI + Phase 22 cleanup), Session 15 (2026-05-02 → 2026-05-03 — architecture synthesis reframing + P0f F-2 schema migration), Session 16 (2026-05-03 — P0f parallel-session execution: F-1, F-3, F-4, F-5, F-12-docs merged + housekeeping/branching workflow PR #4 + F-6 through F-12 prompts drafted), Session 17 (2026-05-03 end of day — P0f F-6 through F-12 (except F-11) all merged into `development`; phase essentially complete pending F-11 audit), Session 18 (2026-05-04 — strategic positioning conversation + I-track planning: spreadsheet-refugee market identified, Seqsender/TOSTADAS landscape understood, sovereignty use cases discussed; I-1 / I-2 / C-1 / I-3 specs drafted as JACKPOT's adoption-driving feature roadmap), Session 19 (2026-05-04 later — F-11 P0f coverage audit and I-2 submission package generation merged in parallel; P0f phase complete; I-track at 2 of 4 items shipped), Session 20 (2026-05-04 later still — I-track completion: C-1 + I-3a + I-3b + I-3c shipped in sequence; full adoption-driving feature set operational; I-2 CLI/SDK gap from Session 19 closed retroactively in I-3c; ruff-version pre-commit/CI mismatch surfaced as out-of-band housekeeping)
+**Document version:** 4.5
+**Last updated:** 2026-05-05 (post-Session 21 — P1 + P0g G-1+G-2 + housekeeping)
+**Sessions covered:** Session 1 (March–April 2026 consolidated), Session 2 (2026-04-10), Sessions 3–S (2026-04 through 2026-04-19), Pathoplexus/Loculus comparative analysis session (2026-04-28), Cleanup A–J operator-agnostic genericization session (2026-04-26 to 2026-04-28), Session 11 (2026-04-28 → 2026-04-29 — CDC DMI/STLT/CARE alignment, BYOP/eukaryotic design, phasing rework, P0d migration prep), Session 12 (2026-04-30 → 2026-05-01 — P0d execution in Claude Code + post-execution cleanup), Session 13 (2026-05-01 — Phase 22 periodic review), Session 14 (2026-05-02 — P0e `jackpot init` CLI + Phase 22 cleanup), Session 15 (2026-05-02 → 2026-05-03 — architecture synthesis reframing + P0f F-2 schema migration), Session 16 (2026-05-03 — P0f parallel-session execution: F-1, F-3, F-4, F-5, F-12-docs merged + housekeeping/branching workflow PR #4 + F-6 through F-12 prompts drafted), Session 17 (2026-05-03 end of day — P0f F-6 through F-12 (except F-11) all merged into `development`; phase essentially complete pending F-11 audit), Session 18 (2026-05-04 — strategic positioning conversation + I-track planning: spreadsheet-refugee market identified, Seqsender/TOSTADAS landscape understood, sovereignty use cases discussed; I-1 / I-2 / C-1 / I-3 specs drafted as JACKPOT's adoption-driving feature roadmap), Session 19 (2026-05-04 later — F-11 P0f coverage audit and I-2 submission package generation merged in parallel; P0f phase complete; I-track at 2 of 4 items shipped), Session 20 (2026-05-04 later still — I-track completion: C-1 + I-3a + I-3b + I-3c shipped in sequence; full adoption-driving feature set operational; I-2 CLI/SDK gap from Session 19 closed retroactively in I-3c; ruff-version pre-commit/CI mismatch surfaced as out-of-band housekeeping), **Session 21** (2026-05-04 → 2026-05-05 — P0g G-1+G-2 foundation shipped (PR #21); P1 auth refresh endpoint shipped (PR #22) closing the deferred Phase 22 review item 12 / spec.md §13 fix #5; docs bundle refresh shipped (PR #23); ruff-version pin shipped (PR #25) as permanent fix for the recurring CI loop; severe worktree-contamination saga during parallel-track execution recovered without work loss; verification ritual codified as cheapest-possible insurance against repeat)
+
+**v4.5 changelog (2026-05-05):** Session 21 added covering four PRs and one significant recovery saga. Minor version bump rather than major because this session is a closeout of deferred items (P1 from P0e C.5 deferral) + start of a new phase's foundation (P0g G-1+G-2 only; G-3 onward still open) + housekeeping, rather than a fresh architectural track completion. The I-track-as-architectural-milestone framing from v4.0 stands; v4.5 documents the natural follow-on work and the operational lessons that came with it. Going-forward: when parallel-track Claude Code sessions are used, every session in a worktree must run a verification ritual (assert `pwd` matches expected worktree path AND `git branch --show-current` matches expected branch, refuse to proceed if either fails) as the first thing it does. This is the cheapest insurance against the cross-tree contamination that consumed significant time recovering from in this session.
 
 **v4.0 changelog (2026-05-04 later still):** I-track complete and the
 adoption-driving feature set is fully operational on `development`. Major
@@ -4074,3 +4076,242 @@ P0f and the I-track are both complete. Bundle refresh ahead of next session.
 - Branch protection follow-up: add the now-visible CI test check as a required status check on `main` and `development` in GitHub Settings → Branches. Long-pending one-time admin task.
 
 The next session can pivot to P0g (most-natural-architectural-next) or to another track based on Glen's priorities. The summary doc, primer, and quick reference are now in their cleanest post-I-track state for either direction.
+
+------
+
+# Session 21 — 2026-05-04 → 2026-05-05 — P0g G-1+G-2 foundation + P1 auth refresh + housekeeping (with recovery saga)
+
+## What we covered
+
+A focused execution session that shipped four PRs (one feature foundation, one feature, one docs refresh, one chore) and surfaced one significant operational lesson in parallel-track Claude Code workflow. The four merges close the deferred refresh-endpoint item from P0e C.5, lay the schema foundation for the P0g execution-profiles phase, refresh the bundle docs to v4.0 covering the I-track close, and permanently fix the ruff-version mismatch that bit the previous two PRs on first runs.
+
+The recovery saga — a severe case of cross-tree contamination during parallel-track execution that almost cost the P1 work — consumed roughly half the session in diagnosis and surgical extraction. No work was ultimately lost. The mitigation (a verification ritual that every Claude Code session in a worktree runs as its first action) is now codified.
+
+**Track progress at session end:**
+- I-track: 6 of 6 shipped (P1 closes the deferred item from Phase 22 review item 12).
+- P0g: 2 of 11 shipped (G-1 + G-2 foundation; G-3 through G-11 ready to spec).
+- Phase 24.5: design-doc draft prompted but not executed; awaiting NPAIHB outreach + Tribal-authority designee feedback before final lockdown.
+- Out-of-band housekeeping: ruff pin (PR #25) permanent; bundle refresh (PR #23) shipped; smaller follow-ups documented in todo.md "Post-Sessions-21+ housekeeping" subsection.
+
+------
+
+## Topics covered
+
+### 1. Three parallel-track prompts drafted in one go
+
+Session opened with grounding (`grep` for existing schema/auth/work_dir state across the relevant files) and a design-Q&A round covering all three intended parallel tracks: P0g G-1+G-2 (execution-profiles foundation), Phase 24.5 (sovereignty-compliant deletion design), and P1 (auth refresh endpoint). Glen confirmed all design defaults across one Q&A round, and three full paste-ready spec prompts were delivered in one response, each as a fenced `===== BEGIN PROMPT ===== / ===== END PROMPT =====` block for paste-into-Claude-Code execution.
+
+The three prompts were file-disjoint by design — P0g touches `schema/` and `backend/db/migrations/versions/`; Phase 24.5 touches `docs/architecture/` and `spec.md`; P1 touches `backend/backend/auth/`, `routers/auth.py`, `jobs.py`, `main.py`, `config.py`, `audit.py`, plus schema for the RefreshToken class. Zero overlap; truly parallel.
+
+**Design decisions locked across the three prompts:**
+
+- **P0g foundation**: bundle G-1 (LinkML class additions) + G-2 (Alembic migration + seed) into a single PR. Skip G-3 onward (templates, renderer, CLI, etc.) — those land separately. Migration chains after I-3a's head, NOT P0f's head as originally specced (I-3a was the actual current head). Seed strategy is the conditional one (PL/pgSQL guard on user existence with `ON CONFLICT (name) DO NOTHING`) so the migration is idempotent and works against fresh databases.
+- **Phase 24.5**: docs-only, comprehensive first-draft for collaborator review. 15-section structure covering the lifecycle, state machine, tombstone-vs-vacuum distinction, vacuum cadence, derivative-analysis policy, already-published handling, federation propagation requirements (deferred to B-CARE-4 in P0c federation phase), auth model, edge cases, schema constraints for P0b, implementation handoff to P0c (B-CARE-3a through B-CARE-3g), and open questions for collaborator review.
+- **P1**: explicit refresh endpoint with single-use rotation. New `refresh_tokens` LinkML class + table tracking JTIs server-side. Six distinct error codes (`MISSING_REFRESH_TOKEN`, `INVALID_REFRESH_TOKEN`, `WRONG_TOKEN_TYPE`, `TOKEN_NOT_TRACKED`, `TOKEN_REVOKED`, `TOKEN_REPLAY_DETECTED`). Replay detection bulk-revokes user's active tokens. Modified login (registers JTI) and logout (revocation-aware). Daily APScheduler cleanup job. Three new audit-action constants. Critically: only refresh tokens are tracked server-side; access tokens stay stateless and short-lived (15min default).
+
+The P1 spec corrected my earlier assumption that the logout endpoint would be NEW — verification grep confirmed `POST /logout` already existed (just deleted both cookies) and the work was to MODIFY it to be revocation-aware rather than add a new endpoint.
+
+### 2. Worktree workflow setup and the contamination saga
+
+Glen set up three sibling worktrees per the parallel-tracks plan:
+
+```
+~/Projects/jackpot              # main clone, on phase-24-5-sovereignty-design (initially)
+~/Projects/jackpot-p0g          # p0g-g1-g2-execution-profiles-foundation branch
+~/Projects/jackpot-phase24-5    # phase-24-5-sovereignty-design branch
+~/Projects/jackpot-p1           # p1-auth-refresh-with-rotation branch
+```
+
+The intent was that each Claude Code session would be anchored to a different worktree, with `cd` into the worktree directory before launching `claude`. Worktrees share `.git` but have independent working trees, so a session in one tree literally cannot see another tree's working-state mutations.
+
+**What went wrong:** at some point, the original P1 agent ended up running in `~/Projects/jackpot` (the main clone, on `phase-24-5-sovereignty-design`) instead of in the dedicated `~/Projects/jackpot-p1` worktree. It did all eight P1 implementation tasks (migration, auth/oauth.py, routers/auth.py, jobs.py, main.py, audit.py, config.py) in the wrong working tree. A subsequent recovery attempt stashed the in-flight work onto the wrong-branch with a label `"phase-24.5: WIP across branches before rebase"` — capturing the P1 work alongside whatever P0g content was also present in the working tree from another contaminating operation. The local `chore/pin-ruff-version` branch ref also vanished at some point, and the main clone ended up parked on a non-development branch, which is unusual.
+
+**The diagnosis ritual** Glen used (after pausing the agent) extracted the picture from quiet diagnostic queries:
+
+```bash
+git stash list
+git stash show stash@{0} --stat
+git log -1 --oneline "stash@{0}^"
+git worktree list
+git worktree list --porcelain | awk '/^worktree / {print $2}' | while read dir; do
+    echo "--- $dir ---"
+    (cd "$dir" && echo "branch: $(git branch --show-current)" && git status --short)
+done
+git branch -v
+```
+
+The stash file list confirmed the work was P1-shaped (auth files + the new migration). The class diff between the stash and development's `models_generated.py` showed only P0g classes were new (ExecutionProfile, PipelineDefaultProfile, ExecutorTypeEnum, ContainerEngineEnum) — there was NO `RefreshToken` class added to the LinkML schema, meaning the P1 agent had skipped the LinkML class additions and just shipped the migration + endpoint code. The schema yaml in the stash was identical to the p0g branch's schema yaml, confirming Scenario A (agent didn't add LinkML class) rather than Scenario B (agent added it but somehow lost it).
+
+**The surgical recovery:**
+
+1. Created a fresh `~/Projects/jackpot-p1` worktree on the `p1-auth-refresh-with-rotation` branch (which existed but had zero commits).
+2. Extracted only the truly-pure-P1 files via `git checkout 'stash@{0}' -- <pathspec>` for the seven non-schema files (six modified + one new migration). Did NOT extract `schema/schema/jackpot_schema.yaml`, `schema/schema/jackpot_schema.json`, or `backend/backend/models_generated.py` — those were contaminated with P0g content that didn't belong on the p1 branch.
+3. Verified the migration's `down_revision = "3644749bf4c6"` was correct (chains after I-3a's head).
+4. Committed the seven extracted files as `feat(p1): /auth/refresh endpoint + refresh_tokens table + rotation-aware login/logout + cleanup job` (commit `61a9d20`).
+5. Dropped the stash.
+6. Started a fresh Claude Code session in `~/Projects/jackpot-p1` with an explicit resume message that: (a) verified the post-recovery state, (b) listed what was already committed, (c) directed the agent to add the missing `RefreshToken` LinkML class as Task 1, regenerate models, write tests, and open the PR.
+7. The fresh agent landed PR #22 cleanly. Later squash-merged at `ba03143`.
+
+**The contamination root cause (best guess):** the original P1 agent was started in a Claude Code session that opened in the main clone rather than in `~/Projects/jackpot-p1`. The agent ran `git status` and `git branch --show-current` at start and saw `phase-24-5-sovereignty-design` — which it should have flagged as wrong-branch and stopped. Instead it proceeded with P1 file edits, treating the wrong working tree as if it were the right one.
+
+**The verification ritual** that prevents this going forward:
+
+```bash
+EXPECTED_WORKTREE="$HOME/Projects/jackpot-p1"
+EXPECTED_BRANCH="p1-auth-refresh-with-rotation"
+[ "$(pwd -P)" = "$EXPECTED_WORKTREE" ] || { echo "FATAL: wrong cwd ($(pwd -P)). Stop." >&2; exit 1; }
+[ "$(git branch --show-current)" = "$EXPECTED_BRANCH" ] || { echo "FATAL: wrong branch ($(git branch --show-current)). Stop." >&2; exit 1; }
+echo "Worktree + branch verified."
+```
+
+This goes at the top of every parallel-track Claude Code session's pre-flight script, with the expected values customized per session. If either assertion fails, the agent stops and screams instead of silently doing work in the wrong place. Codified in todo.md "Post-Sessions-21+ housekeeping" as a follow-up to add to docs/CLAUDE.md as a Critical Rule.
+
+### 3. PR #21 — P0g G-1+G-2 (execution profiles foundation)
+
+Merged 2026-05-04 at `a682788`. Single PR covering both G-1 (LinkML schema additions) and G-2 (Alembic migration + seed).
+
+**What landed:**
+- LinkML classes `ExecutionProfile` (10 fields) + `PipelineDefaultProfile` (3 fields, composite PK on `(pipeline_id, profile_id)`)
+- Two new enums: `ExecutorTypeEnum` (`LOCAL` / `SLURM` / `PBS` / `LSF` / `GCP_BATCH` / `AWS_BATCH` / `KUBERNETES`) and `ContainerEngineEnum` (`DOCKER` / `APPTAINER` / `SINGULARITY` / `NONE`)
+- Regenerated Pydantic v2 models + JSON schema export
+- Alembic migration `bac8dbb11c0b_add_execution_profiles_and_.py` chained after I-3a's head (`3644749bf4c6`)
+- Partial unique index `idx_execution_profiles_one_default` enforcing "at most one default" via `WHERE is_default = TRUE`
+- FK from `pipeline_default_profile.profile_id` → `execution_profiles.profile_id` ON DELETE CASCADE
+- CHECK constraints on `executor_type` and `container_engine` matching the LinkML enum values
+- `default-local` seed inserted via PL/pgSQL guard on user existence with `ON CONFLICT (name) DO NOTHING` for idempotency
+- 32 tests added: 20 schema (Pydantic model validation) + 8 migration (round-trip, FK cascade, partial unique index enforcement, idempotent re-apply) + 4 seed (presence, idempotency, zero-users case)
+
+**Process notes from this PR's flow:**
+- The agent recognized the documented ruff-version mismatch from Session 20 on the first CI run and ran `pre-commit run --all-files` locally to align formatting before re-pushing. Second CI run all green. This was a one-time workaround; the permanent fix landed later as PR #25.
+- Migration chained after I-3a's head, NOT P0f's head as the original P0g spec suggested. The agent verified the actual current Alembic head via `alembic heads` rather than picking from a `tail -5` listing of migration files. Right call.
+- Pipelines table FK note: the spec asked the agent to FK `pipeline_default_profile.pipeline_id` to `pipelines.pipeline_id` if a `pipelines` LinkML class existed; otherwise omit. The agent verified pipelines exists as a LinkML class and added the FK. (If it hadn't existed, the FK would have been omitted with a note in the PR body — which was the correct fallback.)
+
+### 4. PR #22 — P1 (auth refresh endpoint with single-use rotation)
+
+Merged 2026-05-05 at `ba03143`. Closes the I-track entirely (P1 was the last open item from Phase 22 review item 12 / spec.md §13 fix #5).
+
+**What landed (post-recovery):**
+
+The squash commit includes six logical commits captured during the recovery + tests phase:
+- `feat(p1)` — base implementation (recovered from stash extraction)
+- `fix(p1)` — replay-detected revocation must happen before raising the HTTPException so the audit event fires
+- `test(p1)` — 31 tests across 5 files
+- `chore(p1)` — coverage omit list cleanup for the new modules
+- `chore(p1)` — ruff-format alignment to 0.11.6 (pre-PR-#25 workaround)
+- `fix(p1)` — migration chained after P0g (rebase-fix once G-1+G-2 landed)
+
+The migration's `down_revision` was originally `3644749bf4c6` (I-3a's head, which was current at time of P1 spec), then later updated to `bac8dbb11c0b` (G-1+G-2's migration) once P0g foundation merged ahead of P1.
+
+**Functional surface:**
+- `POST /api/v1/auth/refresh` endpoint accepting refresh token from `refresh` cookie (priority) or JSON body `refresh_token` field, with cookie-wins-when-both-present logic for confused-deputy defense
+- Six distinct error codes per the spec; each surfaces to the client with a clear message
+- Replay detection: when a refresh token marked `revoked_reason=rotated` is presented again, this triggers `TOKEN_REPLAY_DETECTED` PLUS bulk-revocation of all the user's active refresh tokens (defense in depth) PLUS an `AUTH_TOKEN_REPLAY_DETECTED` audit event
+- Modified `POST /google/login` to register JTI in the `refresh_tokens` table at issue time
+- Modified `POST /logout` to revoke the current refresh token (best-effort; works with missing/malformed/expired cookie too) before clearing cookies
+- Settings: `access_token_lifetime_seconds=900` (15min), `refresh_token_lifetime_seconds=604800` (7d), `refresh_token_cleanup_interval_seconds=86400` (daily), `refresh_token_retention_after_revoke_seconds=2592000` (30d)
+- APScheduler job `cleanup_old_refresh_tokens` purges old revoked + expired rows past retention; active rows untouched
+- Three new `AuditActions` constants: `AUTH_TOKEN_REFRESHED`, `AUTH_TOKEN_REPLAY_DETECTED`, `AUTH_LOGOUT`. Reserved `AUTH_TOKEN_REVOKED_BY_ADMIN` for future admin-revoke functionality
+
+**Deferred work (broader auth-architecture review)** intentionally not bundled into P1 because it's a design conversation rather than a single PR; could become P1.5 or fold into P0c. Logged in todo.md Phase P1 "What's deferred" subsection: session-management UI, refresh-token-family tracking, cross-device session detection, configurable token lifetimes per-user/per-role, token introspection endpoint, MFA, new auth providers (OIDC / SAML), API-token rotation. Plus B-FED-1 (central CA federation peer authentication) which gates on federation network growth.
+
+### 5. PR #23 — docs bundle refresh
+
+Pure docs change: `docs/jackpot_session_summary_and_backlog.md` bumped from v3.2 → v4.0 covering Sessions 19 and 20 (the I-track close). Auto-merged once CI green-lit. Pulled the local `c389d0f` commit that was sitting ahead of `origin/development` for two days into a proper reviewable PR.
+
+### 6. PR #25 — chore: pin ruff at 0.11.6 (permanent fix)
+
+Permanent alignment of ruff version across all sources of truth. Eliminates the recurring "format-clean-locally, fail-on-CI" loop that bit PRs #21 and #22 on first runs, and was previously documented in Session 20 as a process gotcha worth fixing.
+
+**Root cause analysis** (done in chat, then implemented):
+
+| Source | Old version | New version |
+|---|---|---|
+| `.pre-commit-config.yaml` | `v0.11.6` (April 2025) | `v0.11.6` (unchanged) |
+| `backend/pyproject.toml` dev deps | `ruff==0.4.4` (May 2024) | `ruff==0.11.6` |
+| `cli/pyproject.toml` dev deps | `ruff>=0.4.0` (resolved to 0.4.4) | `ruff==0.11.6` |
+| `uv.lock` | `0.4.4` (per backend's pin) | regenerated to `0.11.6` |
+
+The mismatch was ~1 year of formatter rule changes. CI was running `uv run pre-commit run --all-files` (which uses pre-commit's `0.11.6`); local `gac` was falling through to `uv run ruff` (which used backend's pinned `0.4.4` from uv.lock). Format outputs disagreed on every PR.
+
+PR #22's "chore(p1) — ruff-format 0.11.6 alignment" commit was a one-time reformat to satisfy 0.11.6's check, not a version bump. The version pins were untouched until this PR. The next PR after P1 would have hit the same loop without this fix.
+
+**`docs/CLAUDE.md` addition** documenting the three-source pin and the post-bump ritual:
+
+```markdown
+### ruff version is pinned across three sources of truth
+
+ruff is pinned to one specific version in three independent places that
+all must match:
+
+| Where | What |
+|---|---|
+| `.pre-commit-config.yaml` | `rev: v<version>` under `astral-sh/ruff-pre-commit` |
+| `backend/pyproject.toml` | `ruff==<version>` in the `dev` dependency group |
+| `cli/pyproject.toml` | `ruff==<version>` in the `dev` dependency group |
+
+Plus `schema/pyproject.toml` if it lists ruff (currently does not).
+
+After bumping the version in any of these places, all of them must be
+bumped together, then everyone pulling the change must run:
+    pre-commit clean && pre-commit install --install-hooks && uv sync
+```
+
+(Note: the documented ritual uses bare `pre-commit` commands. In this environment pre-commit isn't on global PATH — it lives inside the uv environment. The correct invocation is `uv run pre-commit clean` etc. Logged in todo.md "Post-Sessions-21+ housekeeping" as a small follow-up docs PR.)
+
+**PR-numbering wrinkle:** there were transient duplicate branches during this work — a `chore/pin-ruff-version` branch (eventually empty, became PR #24 which was closed) and a `chore/pin-ruff-version2` branch (had the actual fix, became PR #25). The "2" suffix is cosmetic; the canonical merged PR is #25.
+
+### 7. End-of-session cleanup pass
+
+After the four PRs landed and the recovery dust settled, full housekeeping:
+
+- Local `development` reset to `origin/development` (which now had P0g + P1 merged); the obsolete local-only `c389d0f` (docs commit) was overwritten — its content was preserved on origin via PR #23's squash-merge.
+- Stale local branches deleted: `chore/pin-ruff-version` (the empty one), `docs/session-20-backlog-v4`, `phase-24-5-sovereignty-design` (was at `d59dc79` with the sovereignty doc commit), `p0g-g1-g2-execution-profiles-foundation`. Note: the local `phase-24-5-sovereignty-design` branch was deleted, but the sovereignty doc commit at `d59dc79` may or may not still be on origin — needs verification before next sprint if Phase 24.5 work is to continue.
+- Stale remote branches: GitHub auto-deleted on PR merge for the merged ones; the `git push origin --delete <branch>` calls were no-ops with "remote ref does not exist" errors (informational, not failures).
+- Worktrees removed: `~/Projects/jackpot-p0g` and `~/Projects/jackpot-p1` removed via `git worktree remove --force` + `git worktree prune`. (The first attempt at removing `jackpot-p1` failed with "Directory not empty" because of a leftover `.DS_Store` from macOS Finder; second attempt with `--force` cleaned it up. The remaining macOS metadata file is logged as an environmental quirk, not a workflow issue.)
+- `git stash list` ended with seven stale entries from earlier parallel sessions; flagged for batch-drop as a follow-up housekeeping action (not done in-session).
+- Final state: single worktree at `~/Projects/jackpot` on `development` at `ba03143`, matching origin, no stale tracking refs after `git fetch --prune origin`.
+
+------
+
+## Decisions
+
+- **P0g foundation strategy: bundle G-1 + G-2 into one PR.** Migration + schema together so the foundation lands as a coherent unit; G-3 onward (templates, renderer, etc.) can run in parallel after the foundation is in place. Confirmed working — PR #21 merged cleanly.
+- **P1 deferred-work scope: refresh endpoint only, not the broader auth-architecture review.** The "broader auth-architecture review" mentioned in P0e C.5 is a design conversation rather than a code phase; deferred to a future P1.5 or folded into P0c. P1 ships only the explicit refresh endpoint + rotation + cleanup job.
+- **Worktree contamination mitigation: verification ritual at session start.** Every Claude Code session in a worktree must run a `pwd` + `git branch --show-current` check as its first action and refuse to proceed if either is wrong. Codified in todo.md follow-up.
+- **Ruff pin permanent fix: align all three sources at `0.11.6`.** Not bumping to a newer version (e.g., 0.13.x or 0.14.x that would be current as of May 2026) because the stability is more valuable than the new rules; can bump later in a separate dedicated PR if desired.
+- **PR #24 disposition: close, replace with PR #25.** The empty branch couldn't be cleaned up to host the actual fix without force-push churn, so the cleaner path was close-and-recreate. Lost only ~40 minutes of PR-existence; nothing of value lost.
+- **Stale stashes: batch-drop deferred.** Seven leftover stashes flagged in todo.md "Post-Sessions-21+ housekeeping" but not dropped in-session. Lower priority than the actual feature work; can be cleaned up at any natural breakpoint.
+- **Bundle refresh approach: single docs PR per session-completion milestone.** PR #23 covered Session 20's I-track close; this update covers Session 21's work. Minor version bump (4.0 → 4.5) rather than major because Session 21 is closeout-of-deferred + foundation-only + housekeeping, not a fresh architectural-track completion.
+
+------
+
+## Outcome
+
+Session 21 closes Sessions 20-21's combined work cycle. The natural breakpoint for the next session is fully clean — single worktree, clean development, no stale refs, ruff pin permanent, P1 closing the I-track entirely.
+
+**Pending P0g work:** G-3 + G-4 (templates + renderer, tightly coupled, recommended as one PR), G-5 (per-pipeline default profile + resolution endpoint), G-6 (`Settings.work_dir` + cleanup job), G-7 (launch-time profile selection), G-8 (cost estimator), G-9 (`jackpot profiles` CLI), G-10 (full feature tests), G-11 (operator docs).
+
+**Pending P1 follow-up work:** the deferred broader-auth-architecture review items (session-management UI, refresh-token-family tracking, cross-device session detection, configurable token lifetimes per-user/per-role, MFA, new auth providers, API-token rotation, B-FED-1 federation CA infrastructure). All non-blocking; could become P1.5 or fold into P0c.
+
+**Pending Phase 24.5 work:** design doc draft was prompted but not executed (the worktree contamination saga distracted from this track). The local `phase-24-5-sovereignty-design` branch was deleted in cleanup; the sovereignty doc commit may or may not still exist on origin. **Action item for next session start:** verify `git fetch && git branch -a | grep phase-24-5` and resurrect the doc commit if the remote still has it; if both local and remote are gone, restart the Phase 24.5 design draft. NPAIHB outreach (per todo.md B-CARE-6) should happen in parallel with the design doc rather than gating on it.
+
+**Pending out-of-band housekeeping** (in priority order):
+1. Fix `uv run pre-commit` prefix in `docs/CLAUDE.md` ruff section. One-line docs PR.
+2. Update `gac` zsh function to prefer pre-commit over `uv run ruff` directly. Glen-side `~/.zshrc` change; not a repo PR.
+3. GitHub branch protection: add the now-stable CI test check as a required status check on `main` and `development` in GitHub Settings → Branches.
+4. Spec.md: drop the ⚠️ note from §13 fix #5 since P1 shipped the explicit refresh endpoint. Tiny docs PR; fold into the next docs-shaped one.
+5. Drop stale stashes (7 entries flagged). Glen-side; no PR.
+6. Audit and delete obsolete local feature branches (`p0f-f8-pre-launch-verification` and others may still be present).
+7. Add the verification ritual as a Critical Rule in `docs/CLAUDE.md`. Tied to the recovery-saga lesson.
+
+**Architectural follow-ups remaining (in expected order):**
+
+- **P0g** — execution profiles continuation (G-3 through G-11). Foundation is in place.
+- **P0h** — Slurm executor support (depends on P0g).
+- **Phase 24.5** — sovereignty + BYOP design lockdown (gates P0b). Awaiting collaborator review.
+- **P0b** — Schema v5.0 (gated on Phase 24.5 lockdown + BYOP/eukaryotic design).
+- **P0c** — multi-tenancy middleware + sovereignty deletion path (B-CARE-3a through B-CARE-3g implementation).
+- **B-FED-1** — central CA federation peer authentication.
+- **P1.5 / P1 broader auth-architecture review** — session-management UI, refresh-token-family tracking, etc.
+
+The next session can pivot to any of: P0g G-3+G-4 (most natural continuation), Phase 24.5 collaborator review push (people-time-bound, not developer-time-bound — runs in background), Phase 24.7 / P0f BYOP infrastructure (heavier lift), or smaller housekeeping pile cleanup. My non-prescriptive recommendation: the housekeeping pile first (~30-60 min) followed by P0g G-3+G-4 for momentum, with Phase 24.5 collaborator outreach running in parallel since it's people-time-bound rather than developer-time-bound.
