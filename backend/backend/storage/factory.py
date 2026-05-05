@@ -10,10 +10,10 @@ and endpoint.
 
 from __future__ import annotations
 
-import os
 from functools import cache
 
 from backend.config import get_settings
+from backend.credentials import credentials
 from backend.storage.base import StorageBackend
 from backend.storage.s3 import S3StorageBackend
 from backend.storage.settings import JackpotBucket, get_bucket_name
@@ -35,7 +35,7 @@ def get_storage_backend(bucket: JackpotBucket = JackpotBucket.STAGING) -> Storag
             region="us-east-1",
             endpoint_url=settings.storage_endpoint,
             access_key=settings.storage_access_key,
-            secret_key=settings.storage_secret_key,
+            secret_key=credentials.get("s3_storage_secret_key"),
             use_path_style=True,
             backend_name="s3",
         )
@@ -45,8 +45,8 @@ def get_storage_backend(bucket: JackpotBucket = JackpotBucket.STAGING) -> Storag
         bucket_name=bucket_name,
         region="auto",
         endpoint_url="https://storage.googleapis.com",
-        access_key=os.environ.get("GCS_HMAC_ACCESS_KEY"),
-        secret_key=os.environ.get("GCS_HMAC_SECRET"),
+        access_key=credentials.get("gcs_hmac_access_key"),
+        secret_key=credentials.get("gcs_hmac_secret"),
         use_path_style=False,
         backend_name="gcs",
     )

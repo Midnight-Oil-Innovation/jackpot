@@ -9,6 +9,7 @@ from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
 
 from backend.config import get_settings
+from backend.credentials import credentials
 from backend.database import execute_query
 from backend.jobs import (
     cleanup_expired_import_sessions,
@@ -59,6 +60,7 @@ scheduler = AsyncIOScheduler()
 async def lifespan(app: FastAPI):
     configure_logging()
     get_settings().validate_for_production()
+    credentials.validate_required()
     if get_settings().scheduler_enabled:
         scheduler.add_job(
             run_scrubber_queue_job,
