@@ -29,7 +29,7 @@ federated_peers + BYOP/eukaryotic schema) → P0c (multi-tenancy middleware
 
 1. Read `spec.md` — understand the goals and constraints for the current sprint
 2. Read `todo.md` — find the next unchecked task
-3. Re-read this file (`docs/CLAUDE.md`) — all 56 Critical Rules apply at all times
+3. Re-read this file (`docs/CLAUDE.md`) — all 61 Critical Rules apply at all times
 4. Confirm the baseline is stable: `uv run pytest tests/ schema/tests/ cli/tests/` from the workspace root — **≥970 tests passing, ≥80% coverage** (post-P0e baseline). The post-P0d 39% number we carried briefly was a pytest-cov misconfiguration (omit list wasn't reaching the report-time matcher); fixed by making `--cov-config=pyproject.toml` explicit in addopts — see `docs/learnings.md` "Coverage measurement bug" entry. P0e (`docs/architecture/jackpot-init-cli.md`) shipped `jackpot init` operator-bootstrap CLI plus 13 absorbed Phase 22 cleanup items; see `docs/review_log.md` "P0e closeout" section.
 
 ### Work Loop
@@ -130,8 +130,8 @@ After bumping the version in any of these places, **all** of them must be
 bumped together, then everyone pulling the change must run:
 
 ```bash
-pre-commit clean
-pre-commit install --install-hooks
+uv run pre-commit clean
+uv run pre-commit install --install-hooks
 uv sync
 ```
 
@@ -1070,6 +1070,27 @@ body alone.
 `backend/pipelines/log_poller.py`, `backend/pipelines/cluster_health.py`.
 
 ---
+
+**61. Worktree + branch verification at session start.**
+
+Every Claude Code session that runs in a git worktree must run a verification
+check as its first action and refuse to proceed if either assertion fails.
+The check (with `<branch>` filled in per session):
+
+```bash
+EXPECTED_WORKTREE="$HOME/Projects/jackpot-<branch>"
+EXPECTED_BRANCH="<branch-name>"
+[ "$(pwd -P)" = "$EXPECTED_WORKTREE" ] || { echo "FATAL: wrong cwd ($(pwd -P)). Stop." >&2; exit 1; }
+[ "$(git branch --show-current)" = "$EXPECTED_BRANCH" ] || { echo "FATAL: wrong branch ($(git branch --show-current)). Stop." >&2; exit 1; }
+echo "Worktree + branch verified."
+```
+
+Why this matters: parallel Claude Code sessions sharing one filesystem can
+silently cross-pollute working trees when an agent starts in the wrong cwd
+or when `git switch` is run inside a worktree. The Sessions 20-21
+worktree-contamination saga consumed significant recovery time and prompted
+this rule. Never `git switch` inside a worktree — each worktree is pinned
+to its anchor branch by virtue of being created with `-b`.
 
 ## Local Dev Role Switching
 
