@@ -19,7 +19,7 @@ from sqlalchemy.exc import IntegrityError
 from backend.database import execute_query, execute_write, reset_engine
 
 REVISION = "9b62dcbacaeb"
-PREV = "3644749bf4c6"
+PREV = "bac8dbb11c0b"
 _BACKEND_DIR = Path(__file__).resolve().parent.parent / "backend"
 
 

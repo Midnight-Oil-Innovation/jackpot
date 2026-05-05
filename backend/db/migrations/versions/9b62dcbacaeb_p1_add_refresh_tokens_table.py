@@ -19,7 +19,7 @@ Indexes:
   cleanup job sweep efficiently as the table grows.
 
 Revision ID: 9b62dcbacaeb
-Revises:    3644749bf4c6
+Revises:    bac8dbb11c0b
 """
 
 from __future__ import annotations
@@ -29,7 +29,7 @@ from alembic import op
 
 # revision identifiers, used by Alembic.
 revision = "9b62dcbacaeb"
-down_revision = "3644749bf4c6"
+down_revision = "bac8dbb11c0b"
 branch_labels = None
 depends_on = None
 
