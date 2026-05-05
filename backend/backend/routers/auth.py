@@ -233,6 +233,10 @@ async def refresh(
                 metadata={"jti": jti, "user_id": user_id},
                 db_conn=db,
             )
+            # Defense in depth must persist even though the response is
+            # 401: commit the bulk-revoke + audit row before raising,
+            # otherwise get_db_dep's rollback nukes the side effect.
+            db.commit()
             raise HTTPException(
                 status_code=401,
                 detail=_error_detail(
