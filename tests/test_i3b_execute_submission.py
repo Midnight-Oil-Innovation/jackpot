@@ -50,8 +50,7 @@ def _cleanup() -> None:
             {"id": sid},
         )
         execute_write(
-            "DELETE FROM notifications WHERE resource_type = 'submission' "
-            "AND resource_id = :rid",
+            "DELETE FROM notifications WHERE resource_type = 'submission' AND resource_id = :rid",
             {"rid": str(sid)},
         )
         execute_write(
@@ -416,9 +415,7 @@ async def test_credential_values_not_in_uploaded_log(temp_working_root, captured
     leaky = SeqsenderRunResult(
         exit_code=0,
         stdout_bytes=(
-            b"Connecting with submitter@example.org\n"
-            b"Authentication: ncbi-test-secret\n"
-            b"Done.\n"
+            b"Connecting with submitter@example.org\nAuthentication: ncbi-test-secret\nDone.\n"
         ),
         stderr_bytes=b"Reminder: ncbi-test-secret was used\n",
         wall_time_seconds=1.0,
@@ -623,6 +620,6 @@ async def test_config_file_always_deleted(temp_working_root, captured_uploads, m
         await execute_submission(sub_id)
 
     assert len(captured_paths) == 1
-    assert not captured_paths[
-        0
-    ].exists(), f"config file {captured_paths[0]} should have been deleted"
+    assert not captured_paths[0].exists(), (
+        f"config file {captured_paths[0]} should have been deleted"
+    )

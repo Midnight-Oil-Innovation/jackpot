@@ -37,9 +37,7 @@ async def test_upload_returns_canonical_uri():
             content=b"log content",
             completed_at=datetime(2026, 5, 4, 12, 30, 45, tzinfo=UTC),
         )
-    assert uri == (
-        "s3://jackpot-submissions/executions/42/" "execution_20260504T123045Z_attempt1.log"
-    )
+    assert uri == ("s3://jackpot-submissions/executions/42/execution_20260504T123045Z_attempt1.log")
     fake_backend.upload.assert_called_once()
     args, kwargs = fake_backend.upload.call_args
     # Positional: key, fileobj. Kwargs include content_type and metadata.
