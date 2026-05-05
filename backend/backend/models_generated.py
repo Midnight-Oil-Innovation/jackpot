@@ -1073,6 +1073,42 @@ class OutbreakStatusEnum(str, Enum):
 
 
 
+class ExecutorTypeEnum(str, Enum):
+    """
+    Which Nextflow executor a profile drives. LOCAL runs Nextflow against the API host; the remaining values map to the well-known Nextflow executor names. See Critical Rule 59.
+    """
+    # Nextflow runs in-process on the API host.
+    LOCAL = "LOCAL"
+    # Nextflow submits jobs to a Slurm cluster.
+    SLURM = "SLURM"
+    # Nextflow submits jobs to PBS / OpenPBS / Torque.
+    PBS = "PBS"
+    # Nextflow submits jobs to IBM Spectrum LSF.
+    LSF = "LSF"
+    # Nextflow submits jobs to Google Cloud Batch.
+    GCP_BATCH = "GCP_BATCH"
+    # Nextflow submits jobs to AWS Batch.
+    AWS_BATCH = "AWS_BATCH"
+    # Nextflow submits jobs to a Kubernetes cluster.
+    KUBERNETES = "KUBERNETES"
+
+
+
+class ContainerEngineEnum(str, Enum):
+    """
+    Container runtime used to materialize pipeline processes for a profile. APPTAINER and SINGULARITY are listed separately because their CLI flags and Nextflow configuration differ; choose APPTAINER on modern HPC systems and SINGULARITY only when the operator's site has not migrated. NONE means processes run as native binaries on the host.
+    """
+    # Docker engine — typical for laptops and cloud.
+    DOCKER = "DOCKER"
+    # Apptainer — typical for modern HPC clusters.
+    APPTAINER = "APPTAINER"
+    # SingularityCE — legacy HPC sites.
+    SINGULARITY = "SINGULARITY"
+    # No container — processes run as native binaries.
+    NONE = "NONE"
+
+
+
 class Organization(ConfiguredBaseModel):
     """
     An institution (e.g. a public health agency, academic lab, NGO, or CDC). Maps to APGAP Organization model.
@@ -3447,6 +3483,48 @@ Supported extensions (case-insensitive):
 
 
 
+class ExecutionProfile(ConfiguredBaseModel):
+    """
+    A named, operator-configured set of execution settings that the launch endpoint applies to a single pipeline run. Each profile carries an executor type (LOCAL, SLURM, GCP_BATCH, ...), a container engine, a work directory, and executor-specific overrides in config_overrides JSONB. At most one profile per deployment may carry is_default=true; that profile is the fallback when neither the launch request nor the pipeline's default-profile association picks one. Soft-deleted via active=false. See Critical Rule 59 and spec.md Phase P0g.
+
+    """
+    profile_id: str = Field(..., description="""UUID primary key. Generated DB-side via gen_random_uuid() on insert.
+""")
+    name: str = Field(..., description="""Operator-friendly profile name; UNIQUE within a deployment. Examples: \"default-local\", \"slurm-mylab-apptainer\", \"gcp-batch-spot-us-central1\".
+""")
+    executor_type: ExecutorTypeEnum = Field(..., description="""Which Nextflow executor this profile drives.
+""")
+    container_engine: ContainerEngineEnum = Field(..., description="""Container runtime used to materialize pipeline processes. NONE means processes run as native binaries on the host.
+""")
+    work_dir: str = Field(..., description="""Filesystem path or cloud URI (gs://, s3://) where Nextflow stages task work directories for runs that select this profile.
+""")
+    config_overrides: str = Field("{}", description="""Executor-specific fields rendered into the per-run nextflow.config — e.g. Slurm account/partition/QOS, GCP project/region, Kubernetes namespace, weblog_reachable. Stored as JSONB at the database level; modeled as a string here because LinkML has no native JSONB range. The renderer (G-4) parses this column with json.loads. Defaults to the empty object.
+""")
+    is_default: bool = Field(False, description="""True for the deployment-default profile. The migration enforces \"at most one row with is_default=true\" via a partial unique index. Defaults to false.
+""")
+    created_by_id: int = Field(..., description="""FK to users.id — the operator who created the profile.
+""")
+    created_at: datetime  = Field(..., description="""Timestamp the profile was created. Set DB-side to NOW() at insert; never updated.
+""")
+    active: bool = Field(True, description="""Soft-delete flag. Inactive profiles are hidden from launch selection but retained for audit. Defaults to true.
+""")
+
+
+
+class PipelineDefaultProfile(ConfiguredBaseModel):
+    """
+    Association linking a pipeline to one or more execution profiles that the launch endpoint should consider as defaults when the request does not name a profile explicitly. A pipeline may have multiple default profiles; the launcher picks the lowest priority value (priority=1 wins over priority=100). pipeline_id is intentionally a string-typed UUID reference rather than a typed FK because the pipelines surface is not yet represented as a LinkML class — only at the SQL level via pipeline_catalog (which carries a SERIAL id, not a UUID). When the pipelines surface gets a LinkML class with a UUID PK, this field becomes a typed range. See spec.md Phase P0g and the Phase P0g G-1 prompt's \"FK fallback\" guidance.
+
+    """
+    pipeline_id: str = Field(..., description="""UUID of the pipeline this association applies to. Composite PK component with profile_id.
+""")
+    profile_id: str = Field(..., description="""The default profile for the named pipeline. Composite PK component with pipeline_id.
+""")
+    priority: int = Field(100, description="""Tie-breaker when a pipeline has multiple default profiles — lower numeric values are preferred. Defaults to 100.
+""")
+
+
+
 
 # Model rebuild
 # see https://pydantic-docs.helpmanual.io/usage/models/#rebuilding-a-model
@@ -3471,3 +3549,5 @@ SampleAssociation.model_rebuild()
 OutbreakInvestigation.model_rebuild()
 PipelineProvenance.model_rebuild()
 SampleFile.model_rebuild()
+ExecutionProfile.model_rebuild()
+PipelineDefaultProfile.model_rebuild()

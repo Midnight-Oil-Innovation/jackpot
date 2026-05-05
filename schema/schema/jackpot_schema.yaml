@@ -1810,6 +1810,127 @@ classes:
           DB trigger on UPDATE; not user-writable.
 
 # ════════════════════════════════════════════════════════════════════════════
+# EXECUTION PROFILES  (Phase P0g — per-run executor selection)
+# Per Critical Rule 59, pipeline executor selection is a per-run choice
+# driven by operator-configured profiles, not a deployment-time decision.
+# ════════════════════════════════════════════════════════════════════════════
+
+  ExecutionProfile:
+    description: >
+      A named, operator-configured set of execution settings that the
+      launch endpoint applies to a single pipeline run. Each profile
+      carries an executor type (LOCAL, SLURM, GCP_BATCH, ...), a
+      container engine, a work directory, and executor-specific
+      overrides in config_overrides JSONB. At most one profile per
+      deployment may carry is_default=true; that profile is the
+      fallback when neither the launch request nor the pipeline's
+      default-profile association picks one. Soft-deleted via
+      active=false. See Critical Rule 59 and spec.md Phase P0g.
+    attributes:
+      profile_id:
+        identifier: true
+        required: true
+        description: >
+          UUID primary key. Generated DB-side via gen_random_uuid()
+          on insert.
+      name:
+        required: true
+        description: >
+          Operator-friendly profile name; UNIQUE within a deployment.
+          Examples: "default-local", "slurm-mylab-apptainer",
+          "gcp-batch-spot-us-central1".
+      executor_type:
+        range: ExecutorTypeEnum
+        required: true
+        description: >
+          Which Nextflow executor this profile drives.
+      container_engine:
+        range: ContainerEngineEnum
+        required: true
+        description: >
+          Container runtime used to materialize pipeline processes.
+          NONE means processes run as native binaries on the host.
+      work_dir:
+        required: true
+        description: >
+          Filesystem path or cloud URI (gs://, s3://) where Nextflow
+          stages task work directories for runs that select this
+          profile.
+      config_overrides:
+        range: string
+        required: true
+        ifabsent: "string({})"
+        description: >
+          Executor-specific fields rendered into the per-run
+          nextflow.config — e.g. Slurm account/partition/QOS, GCP
+          project/region, Kubernetes namespace, weblog_reachable.
+          Stored as JSONB at the database level; modeled as a string
+          here because LinkML has no native JSONB range. The renderer
+          (G-4) parses this column with json.loads. Defaults to the
+          empty object.
+      is_default:
+        range: boolean
+        required: true
+        ifabsent: "false"
+        description: >
+          True for the deployment-default profile. The migration
+          enforces "at most one row with is_default=true" via a
+          partial unique index. Defaults to false.
+      created_by_id:
+        range: integer
+        required: true
+        description: >
+          FK to users.id — the operator who created the profile.
+      created_at:
+        range: datetime
+        required: true
+        description: >
+          Timestamp the profile was created. Set DB-side to NOW() at
+          insert; never updated.
+      active:
+        range: boolean
+        required: true
+        ifabsent: "true"
+        description: >
+          Soft-delete flag. Inactive profiles are hidden from launch
+          selection but retained for audit. Defaults to true.
+
+  PipelineDefaultProfile:
+    description: >
+      Association linking a pipeline to one or more execution
+      profiles that the launch endpoint should consider as defaults
+      when the request does not name a profile explicitly. A pipeline
+      may have multiple default profiles; the launcher picks the
+      lowest priority value (priority=1 wins over priority=100).
+      pipeline_id is intentionally a string-typed UUID reference
+      rather than a typed FK because the pipelines surface is not yet
+      represented as a LinkML class — only at the SQL level via
+      pipeline_catalog (which carries a SERIAL id, not a UUID). When
+      the pipelines surface gets a LinkML class with a UUID PK, this
+      field becomes a typed range. See spec.md Phase P0g and the
+      Phase P0g G-1 prompt's "FK fallback" guidance.
+    attributes:
+      pipeline_id:
+        range: string
+        required: true
+        description: >
+          UUID of the pipeline this association applies to.
+          Composite PK component with profile_id.
+      profile_id:
+        range: ExecutionProfile
+        required: true
+        description: >
+          The default profile for the named pipeline. Composite PK
+          component with pipeline_id.
+      priority:
+        range: integer
+        required: true
+        ifabsent: "int(100)"
+        description: >
+          Tie-breaker when a pipeline has multiple default profiles —
+          lower numeric values are preferred. Defaults to 100.
+
+# ════════════════════════════════════════════════════════════════════════════
 # ENUMERATIONS
 # ════════════════════════════════════════════════════════════════════════════
 
@@ -2790,3 +2911,44 @@ enums:
         description: "Formally closed — investigation_close_date populated"
       surveillance_only:
         description: "Cluster resolved; enhanced surveillance continues"
+
+  # ── Execution profiles (Phase P0g) ────────────────────────────────────────
+
+  ExecutorTypeEnum:
+    description: >-
+      Which Nextflow executor a profile drives. LOCAL runs Nextflow
+      against the API host; the remaining values map to the well-known
+      Nextflow executor names. See Critical Rule 59.
+    permissible_values:
+      LOCAL:
+        description: "Nextflow runs in-process on the API host."
+      SLURM:
+        description: "Nextflow submits jobs to a Slurm cluster."
+      PBS:
+        description: "Nextflow submits jobs to PBS / OpenPBS / Torque."
+      LSF:
+        description: "Nextflow submits jobs to IBM Spectrum LSF."
+      GCP_BATCH:
+        description: "Nextflow submits jobs to Google Cloud Batch."
+      AWS_BATCH:
+        description: "Nextflow submits jobs to AWS Batch."
+      KUBERNETES:
+        description: "Nextflow submits jobs to a Kubernetes cluster."
+
+  ContainerEngineEnum:
+    description: >-
+      Container runtime used to materialize pipeline processes for a
+      profile. APPTAINER and SINGULARITY are listed separately because
+      their CLI flags and Nextflow configuration differ; choose
+      APPTAINER on modern HPC systems and SINGULARITY only when the
+      operator's site has not migrated. NONE means processes run as
+      native binaries on the host.
+    permissible_values:
+      DOCKER:
+        description: "Docker engine — typical for laptops and cloud."
+      APPTAINER:
+        description: "Apptainer — typical for modern HPC clusters."
+      SINGULARITY:
+        description: "SingularityCE — legacy HPC sites."
+      NONE:
+        description: "No container — processes run as native binaries."
