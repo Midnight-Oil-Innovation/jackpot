@@ -1,8 +1,37 @@
 # JACKPOT Session Summary & Backlog
 
-**Document version:** 3.2
-**Last updated:** 2026-05-04 (later — F-11 + I-2 merged)
-**Sessions covered:** Session 1 (March–April 2026 consolidated), Session 2 (2026-04-10), Sessions 3–S (2026-04 through 2026-04-19), Pathoplexus/Loculus comparative analysis session (2026-04-28), Cleanup A–J operator-agnostic genericization session (2026-04-26 to 2026-04-28), Session 11 (2026-04-28 → 2026-04-29 — CDC DMI/STLT/CARE alignment, BYOP/eukaryotic design, phasing rework, P0d migration prep), Session 12 (2026-04-30 → 2026-05-01 — P0d execution in Claude Code + post-execution cleanup), Session 13 (2026-05-01 — Phase 22 periodic review), Session 14 (2026-05-02 — P0e `jackpot init` CLI + Phase 22 cleanup), Session 15 (2026-05-02 → 2026-05-03 — architecture synthesis reframing + P0f F-2 schema migration), Session 16 (2026-05-03 — P0f parallel-session execution: F-1, F-3, F-4, F-5, F-12-docs merged + housekeeping/branching workflow PR #4 + F-6 through F-12 prompts drafted), Session 17 (2026-05-03 end of day — P0f F-6 through F-12 (except F-11) all merged into `development`; phase essentially complete pending F-11 audit), Session 18 (2026-05-04 — strategic positioning conversation + I-track planning: spreadsheet-refugee market identified, Seqsender/TOSTADAS landscape understood, sovereignty use cases discussed; I-1 / I-2 / C-1 / I-3 specs drafted as JACKPOT's adoption-driving feature roadmap), Session 19 (2026-05-04 later — F-11 P0f coverage audit and I-2 submission package generation merged in parallel; P0f phase complete; I-track at 2 of 4 items shipped)
+**Document version:** 4.0
+**Last updated:** 2026-05-04 (later still — I-track complete)
+**Sessions covered:** Session 1 (March–April 2026 consolidated), Session 2 (2026-04-10), Sessions 3–S (2026-04 through 2026-04-19), Pathoplexus/Loculus comparative analysis session (2026-04-28), Cleanup A–J operator-agnostic genericization session (2026-04-26 to 2026-04-28), Session 11 (2026-04-28 → 2026-04-29 — CDC DMI/STLT/CARE alignment, BYOP/eukaryotic design, phasing rework, P0d migration prep), Session 12 (2026-04-30 → 2026-05-01 — P0d execution in Claude Code + post-execution cleanup), Session 13 (2026-05-01 — Phase 22 periodic review), Session 14 (2026-05-02 — P0e `jackpot init` CLI + Phase 22 cleanup), Session 15 (2026-05-02 → 2026-05-03 — architecture synthesis reframing + P0f F-2 schema migration), Session 16 (2026-05-03 — P0f parallel-session execution: F-1, F-3, F-4, F-5, F-12-docs merged + housekeeping/branching workflow PR #4 + F-6 through F-12 prompts drafted), Session 17 (2026-05-03 end of day — P0f F-6 through F-12 (except F-11) all merged into `development`; phase essentially complete pending F-11 audit), Session 18 (2026-05-04 — strategic positioning conversation + I-track planning: spreadsheet-refugee market identified, Seqsender/TOSTADAS landscape understood, sovereignty use cases discussed; I-1 / I-2 / C-1 / I-3 specs drafted as JACKPOT's adoption-driving feature roadmap), Session 19 (2026-05-04 later — F-11 P0f coverage audit and I-2 submission package generation merged in parallel; P0f phase complete; I-track at 2 of 4 items shipped), Session 20 (2026-05-04 later still — I-track completion: C-1 + I-3a + I-3b + I-3c shipped in sequence; full adoption-driving feature set operational; I-2 CLI/SDK gap from Session 19 closed retroactively in I-3c; ruff-version pre-commit/CI mismatch surfaced as out-of-band housekeeping)
+
+**v4.0 changelog (2026-05-04 later still):** I-track complete and the
+adoption-driving feature set is fully operational on `development`. Major
+version bump because completion of an entire architectural track is a
+milestone worth marking. Added Session 20 covering: (1) C-1 (pluggable
+credential infrastructure) shipped — three backends (env/file/GCP Secret
+Manager), TTL cache, audit on every read, six existing credential read
+sites migrated, backward compat preserved via legacy_env_names. (2) I-3a
+(backend submission foundation) shipped — three new states (EXECUTING,
+EXECUTION_FAILED, EXECUTION_INTERRUPTED), six tracking columns, six
+transition functions, lifespan recovery hook for API-restart-during-
+execution, four new conditional credentials (NCBI + ENA), all audit and
+notification event constants for the full I-3 lifecycle pre-declared.
+(3) I-3b (Seqsender execution path) shipped — async execute_submission
+job with per-repo asyncio.Lock serialization, defense-in-depth credential
+redaction (config file outside working dir + post-hoc value filter),
+log file capture and registration as MANAGED file via F-9 model,
+Seqsender baked into api Dockerfile. (4) I-3c (user-facing surface)
+shipped — three new REST endpoints with five distinct error codes for
+pre-flight gating, full submissions CLI (16 commands), full
+SubmissionsModule SDK class, Streamlit UI additions with 5s auto-refresh
+during EXECUTING, jackpot init wizard updates per scenario. The PR
+also closed the I-2 CLI/SDK gap discovered during grounding-grep:
+Session 19's outcome summary recorded I-2's CLI and SDK as shipped, but
+the reality was endpoints + Streamlit page only. (5) Process observation
+logged: pre-commit ruff-format consistently failed on CI for all four
+PRs despite local pre-commit being green; root cause is pre-commit
+re-using ambient ruff binary even after `pre-commit clean`. Tracked as
+out-of-band housekeeping (suggested branch: chore/pin-ruff-version).
 
 **v3.2 changelog (2026-05-04 later):** P0f phase fully complete and
 I-track at half-strength. Added Session 19 covering: (1) F-11 (P0f end-of-phase
@@ -20,8 +49,6 @@ and I-2 ran in parallel, landing on different files (F-11 in tests/, I-2 in
 new backend/submissions* files). Both PRs merged cleanly with no conflicts.
 (4) The PR-merge order produced a fresh post-P0f baseline coverage number
 documented in tests/coverage_p0f_summary.md.
-
-**v3.2.1 changelog (2026-05-04 later — same day, post-InsForge review):** Added two backlog items derived from a comparative review of InsForge (https://github.com/InsForge/InsForge), an agent-MCP-friendly Backend-as-a-Service. InsForge is not a foundation for JACKPOT (different architectural genre: horizontal infrastructure platform vs. vertical domain platform), but its agent-MCP pattern is worth pursuing for JACKPOT's domain operations once the I-track and P0g settle. (1) **B-MCP-1** — JACKPOT MCP server exposing domain operations (samples search, ingest, submission lifecycle, pipeline launch) as agent-callable tools. Multi-week effort; post-I-track / post-P0g territory. (2) **Documentation organization tweak** for C-1 / I-3 — per-provider credential setup files (`docs/credentials/ncbi.md`, `docs/credentials/gisaid.md`, etc.) rather than one combined guide. Cheap and improves discoverability.
 
 **v3.1 changelog (2026-05-04):** Strategic pivot from internal
 features to adoption-driving features. Added Session 18 covering: (1) Honest
@@ -3837,9 +3864,213 @@ P0f is complete. I-track is half-shipped. Next moves are either continuing I-tra
 - **P0b** — Schema v5.0
 - **P0c** — multi-tenancy middleware + sovereignty deletion path
 - **B-FED-1** — central CA federation peer authentication
-- **B-MCP-1** — JACKPOT MCP server exposing domain operations as agent-callable tools (samples search, ingest, submission lifecycle, pipeline launch). Surfaces JACKPOT's domain semantics to AI coding agents and assistants via MCP, the way InsForge surfaces generic backend primitives. The "Year 2 LLM assistant" architecture mentioned in spec.md belongs here. Multi-week effort. Belongs in post-I-track / post-P0g territory. Reference: InsForge (https://github.com/InsForge/InsForge) is a worked example of the agent-MCP contract, though for generic backend primitives rather than domain-specific operations.
 - **P1** — `POST /api/v1/auth/refresh`
 
-**Documentation organization tweak (lands alongside C-1 / I-3):** when per-provider credential setup is needed, organize as separate top-level files — `docs/credentials/ncbi.md`, `docs/credentials/gisaid.md`, `docs/credentials/ena.md`, etc. — rather than one combined credentials guide. Pattern borrowed from InsForge (`GOOGLE_OAUTH_SETUP.md`, `GITHUB_OAUTH_SETUP.md`). Better discoverability when users only need one provider; better diff-able for per-provider updates. Minor; bake into C-1 / I-3 work-item specs when drafted.
-
 The next session can either draft C-1 (continuing the I-track adoption push) or pivot to P0g design (advancing core platform capabilities). Both are defensible. The summary doc, primer, and quick reference are now in their cleanest post-P0f state for either direction.
+
+
+------
+
+# Session 20 — 2026-05-04 (later still) — I-track completion (C-1 → I-3a → I-3b → I-3c shipped)
+
+## What we covered
+
+A focused execution session: four PRs drafted, executed via Claude Code, merged into `development`. Each PR built on the previous one. By the end of the session, the I-track was complete — six work items total (I-1, I-2, C-1, I-3a, I-3b, I-3c) covering the full adoption-driving feature set from spreadsheet-refugee data ingest through backend-driven submission to NCBI and ENA.
+
+The session also surfaced one undocumented gap from prior work (I-2's CLI and SDK module were recorded as shipped in Session 19 but didn't actually exist) and one process gotcha (ruff-version mismatch between local pre-commit and CI).
+
+**I-track progress at session end:** 6 of 6 items shipped. Full adoption-driving feature set operational on the `development` branch.
+
+------
+
+## Topics covered
+
+### 1. C-1 — pluggable credential infrastructure
+
+The first PR of the session. Specs were not pre-drafted in the handoff bundle; the session opened with a grounding step (grep for existing credential read sites) and a design Q&A round, then a single comprehensive spec drafted in chat for paste-into-Claude-Code execution.
+
+**Design decisions locked in-session:**
+
+- Single PR for all three backends + all migration sites (rather than splitting into PR-per-backend)
+- Synchronous API: `credentials.get(key) -> str`, `credentials.get_optional(key) -> str | None`, `credentials.list_keys() -> list[str]`
+- In-memory TTL cache configurable via `Settings.credential_cache_ttl_seconds` (default 300s); shared across all backends; cache key includes backend class name to handle test fixture swaps; negative results (CredentialNotFoundError) are NOT cached
+- Audit events on every successful read (`CREDENTIAL_READ`) and every failed read (`CREDENTIAL_READ_FAILED`); cache hits do NOT emit; payloads never contain credential values
+- YAML file format for FileBackend: flat top-level key-value, `0600` permissions enforced at instantiation (failure-loud chmod hint)
+- GCP Secret Manager backend: ADC-based auth, secret-name convention `{prefix}{key.replace('_','-')}`, both fully-mocked unit tests AND optional integration test gated on `JACKPOT_GCP_INTEGRATION_TEST=1`
+- Out of scope (deferred): AWS, Azure, OS keychain backends; rotation/refresh; per-tenant credential isolation (lands with P0c)
+
+**Settings changes:**
+
+- Added: `credential_backend`, `credential_file_path`, `credential_gcp_secret_prefix`, `credential_cache_ttl_seconds`
+- Removed: `secret_key`, `google_oauth_client_secret`, `storage_secret_key` (these become credentials, not settings fields)
+- Removed: `_validate_production_settings` (subsumed by `credentials.validate_required()`)
+
+**Migration sites cut over (six logical credentials across five files):**
+
+- `auth/guards.py` — JWT signing key
+- `auth/oauth.py` — Google OAuth client secret + JWT signing key (3 references)
+- `storage/__init__.py` — S3 secret key + GCS HMAC pair
+- `storage/factory.py` — same shape
+- `storage/local.py` (via factory) — local presign secret
+
+**Backward compatibility preserved** via `legacy_env_names` per credential. Existing deployments with bare env-var names (`SECRET_KEY`, `GCS_HMAC_*`, etc.) keep working without operator action.
+
+PR landed clean as commit `b5bb80c` on `origin/development`.
+
+### 2. I-3a — backend submission foundation
+
+Second PR. Specs drafted in-session after C-1 merged. Pure foundation work — laid the seams for I-3b/c without any execution behavior.
+
+**Scope:**
+
+- Three new submission states: `EXECUTING`, `EXECUTION_FAILED`, `EXECUTION_INTERRUPTED`
+- Six new tracking columns on `submissions`: `execution_started_at`, `execution_completed_at`, `execution_log_uris (JSONB)`, `execution_error_message`, `execution_attempt_count`, `executor_backend`
+- Partial index `idx_submissions_status_executing` for efficient lifespan recovery query
+- Six new transition functions in `submissions.py`: `mark_execution_queued`, `mark_execution_retried`, `mark_execution_completed`, `mark_execution_failed`, `mark_execution_interrupted`, `recover_interrupted_executions`
+- Four new credentials in `REQUIRED_CREDENTIALS`: `ncbi_submission_username`, `ncbi_submission_password`, `ena_webin_username`, `ena_webin_password` (conditional predicates based on `allow_backend_submission` AND repo membership in `backend_submission_repos`)
+- Two new settings: `allow_backend_submission: bool = False`, `backend_submission_repos: list[str] = []`
+- Lifespan recovery hook in `main.py` after `credentials.validate_required()` — finds any submission left in `EXECUTING` from a prior shutdown and transitions it to `EXECUTION_INTERRUPTED`
+- All audit + notification event constants for the full I-3 lifecycle (some emitted in I-3a, the rest reserved for I-3b)
+
+**Design decisions locked in-session:**
+
+- `EXECUTING` is a single state; finer-grained timestamps live in audit events (`SUBMISSION_BACKEND_EXECUTION_QUEUED` → `_STARTED` → `_COMPLETED`/`_FAILED`). One state to recover from on API restart per Critical Rule 60.
+- All audit and notification event constants land in I-3a, even those I-3b will emit — keeps the constants file stable across sub-PRs
+- State transition functions land in I-3a (including retry), even though I-3b/c are the callers; tests in I-3a exercise them directly
+- `WITHDRAWN` reachability extended to `EXECUTION_FAILED` and `EXECUTION_INTERRUPTED`, but NOT `EXECUTING` (avoids "kill the running subprocess" complexity in v1)
+- `mark_execution_queued` increments `execution_attempt_count`; `mark_execution_retried` also increments and clears `execution_error_message`
+- `jackpot init` integration deferred to I-3c
+- Conditional-required predicate uses `Settings.backend_submission_repos` — operator declares which repos are in play; credential validation matches
+
+PR landed clean as commit `3f110fa` on `origin/development`.
+
+### 3. I-3b — Seqsender execution path
+
+Third PR. Specs drafted in-session after I-3a merged. Larger and more architecturally complex than I-3a — actual subprocess execution, log capture, per-repo concurrency.
+
+**Scope:**
+
+- New module `backend/backend/submission_executors/`: `seqsender.py` (config generation, subprocess wrapper, log assembly), `redaction.py` (credential-value scrubbing)
+- New async APScheduler job `execute_submission(submission_id)` in `backend/backend/jobs.py`
+- Per-repo `asyncio.Lock` infrastructure in `jobs.py` for serialization
+- Three new settings: `execution_timeout_seconds=3600`, `execution_working_dir_root="/tmp/jackpot-executions"`, `seqsender_binary_path="seqsender"`
+- Seqsender pip-installed in api Dockerfile
+
+**Design decisions locked in-session:**
+
+- Subprocess spawned via `asyncio.create_subprocess_exec` (NOT `subprocess.run`) — the scheduler is `AsyncIOScheduler`, blocking the event loop is forbidden
+- Seqsender config file written to a temp path OUTSIDE the working directory (`tempfile.NamedTemporaryFile`), `0600` permissions, deleted in `finally` regardless of outcome
+- Working directory at `{settings.execution_working_dir_root}/submission_{id}_attempt_{n}` — deleted on success, preserved on failure for forensic inspection (path captured in audit event payload)
+- Defense-in-depth credential redaction: never write the config-bearing file path into the log AND post-hoc filter captured stdout/stderr through `redact_credential_values_bytes` against the actual credential string values (longest-first replacement to avoid partial-replace anomalies)
+- Log file structure: header (redacted command, working dir, timestamps) + redacted stdout + redacted stderr + footer (exit code, wall time); written once at end of run (not streamed; live tail is v2)
+- Log file uploaded via storage abstraction's `.upload(...)` API (existed since F-9), registered as MANAGED via F-9's `register_file()`, URI appended to `execution_log_uris` JSONB array via SQL `||` concat for atomicity
+- Per-repo serialization: module-level `dict[str, asyncio.Lock]` per repo identifier; same-repo executions block, different repos parallelize. Single-process serialization; multi-instance deployments would need a Postgres advisory lock as a follow-up.
+- Output parsing: minimal v1. Successful run transitions to `SUBMITTED`; user runs `register-accessions` manually after the repo assigns accessions (typical lag is hours-to-days for NCBI). Skips brittle JSON-parsing of Seqsender output.
+- Tests fully mock subprocess; no real Seqsender calls in CI
+
+**Out of scope (deferred):** REST/CLI/SDK/UI (I-3c), GISAID/DDBJ executors, live log tail, auto-retry, idempotency-key-aware retry, multi-worker DB locks, TOSTADAS-via-Nextflow.
+
+PR landed clean as commit `0d20529` on `origin/development`.
+
+### 4. I-3c — backend submission user-facing surface, plus the I-2 CLI/SDK discovery
+
+Fourth and largest PR of the session. Specs drafted in-session after I-3b merged.
+
+**The I-2 CLI/SDK discovery.** During grounding-grep for I-3c, `cli/jackpot/cli/submissions.py` was confirmed not to exist. Same for `cli/jackpot/sdk/submissions.py`. Session 19's outcome summary had recorded both as shipped with I-2; the reality was endpoints + Streamlit page only. The CLI commands and SDK module were inadvertently left out — possibly a Claude Code session-end discrepancy where the summary captured intent rather than actual diff.
+
+This expanded I-3c's scope from "add the I-3 surface" to "add the full I-2 + I-3 surface." The PR ended up shipping:
+
+- 13 I-2 CLI commands (`create / list / show / update / delete / add-samples / remove-samples / validate / generate / mark-submitted / register-accessions / mark-rejected / withdraw`)
+- 3 I-3 CLI commands (`execute / retry-execution / execution-logs`)
+- A full `SubmissionsModule` SDK class with one method per endpoint (16 methods total)
+- 3 new REST endpoints (`/execute`, `/retry-execution`, `/execution-logs`)
+- Streamlit UI additions to the existing detail view (Execute button, status banner with 5s auto-refresh, Retry button, Execution logs expander)
+- `jackpot init` wizard updates for `allow_backend_submission` and `backend_submission_repos`
+
+Estimated diff size at spec time: 1500-2000 LOC. Glen explicitly confirmed single-PR scope despite the expansion. Granular commits per surface kept review tractable.
+
+**Design decisions locked in-session:**
+
+- Pre-flight credential check at the `/execute` endpoint via `_check_credentials_for_repo` — fails synchronously with `MISSING_CREDENTIALS` 400 if any required credential is missing, rather than letting the async job fail later
+- Five distinct error codes for execute pre-flight: `BACKEND_EXECUTION_DISABLED`, `REPO_NOT_ENABLED`, `REPO_NOT_SUPPORTED`, `INVALID_STATE`, `MISSING_CREDENTIALS`. Each has a friendly CLI error message that explains the fix.
+- Streamlit auto-refresh: 5 seconds while in `EXECUTING` state; matches existing page conventions
+- Manual post-package instructions (from I-2) remain visible regardless — backend execution is opt-in alongside the manual flow, not a replacement. Operators on Scenario A see the manual flow only; operators on B-F see both, with manual flow as always-available fallback.
+- `jackpot init` per-scenario defaults: A/H = disabled (no prompt); B-F = prompt with default True, then multi-select for repos from `["ncbi", "ena"]`
+- `jackpot init` does NOT prompt for actual credentials — those are operator's responsibility post-init via env vars / file YAML / GCP Secret Manager; wizard prints a closing reminder listing the env-var names to set
+- Authorization: backend execution doesn't introduce a new permission tier in v1 — anyone who can validate/generate can execute. Inherits I-2's existing RBAC.
+
+PR landed clean as commit `e6f8d27` on `origin/development`.
+
+### 5. Process observation: pre-commit ruff-format mismatch with CI
+
+Across all four PRs of this session, CI's pre-commit ruff-format step failed despite local pre-commit being green. Each PR required a pull-from-CI-format-rerun-push cycle.
+
+**Root cause:** `pre-commit` re-uses the locally-installed `ruff` binary even after `pre-commit clean`. The `clean` command only clears the hook-env cache, not the ambient `uv run ruff` install. Local has one ruff version (whatever `uv tool install ruff` resolved to most recently); CI has another (whatever `.pre-commit-config.yaml` pins or auto-resolves to in the CI environment).
+
+**Two viable fixes:**
+
+1. Pin ruff in `.pre-commit-config.yaml` to the exact version the codebase targets. The hook then installs that version into its own isolated env regardless of what's locally installed.
+2. Add a `uv tool install ruff@<pinned>` step to the developer setup docs (`README` or `docs/development.md`) so local and CI both end up on the same version.
+3. (Bonus) Both — pin in pre-commit-config AND document the dev-setup step. Belt-and-suspenders.
+
+Not blocking; the dev workflow tolerated the mismatch. Worth fixing because it'll otherwise bite every future contributor and burn a CI run every PR for the rest of project life.
+
+Tracked as out-of-band housekeeping. Suggested follow-up branch: `chore/pin-ruff-version`. Single small PR. Not phase-gated; can ship at any time.
+
+### 6. Where the project stands
+
+The I-track is complete. Six work items shipped:
+
+- I-1 — spreadsheet importer wizard (Session 19, before this session)
+- I-2 — submission package generation (Session 19; CLI and SDK module added in I-3c this session, closing the gap)
+- C-1 — pluggable credential infrastructure (this session)
+- I-3a — backend submission foundation (this session)
+- I-3b — Seqsender execution path (this session)
+- I-3c — backend submission user-facing surface (this session)
+
+The full adoption-driving feature set is operational on the `development` branch. From the spreadsheet-refugee market perspective laid out in Session 18: data ingest (I-1), curate-and-package (I-2 endpoints + UI + the now-existing CLI/SDK), and — for operators with stable backends — automated submission to NCBI and ENA (I-3a/b/c, gated on opt-in via `allow_backend_submission` and `backend_submission_repos`).
+
+The next architectural decision is **P0g (execution profiles, per-run executor selection)** — the pending core-platform-capability advancement. Critical Rule 59 sets the design constraint; the actual phase has been pending since P0f wrapped at the end of Session 17. P0g unblocks P0h (Slurm executor support), which makes the "scales to your university's HPC cluster" half of the marketing pitch real rather than aspirational.
+
+Other defensible directions: B-FED-1 (federation peer authentication), Phase 24.5 (sovereignty + BYOP design lockdown — gates P0b), or another adoption-driving track if outreach surfaces concrete asks.
+
+------
+
+## Decisions
+
+- *I-track complete.* Six work items shipped. The strategic-positioning push from Session 18 fully realized.
+- *Single-PR scope for I-3c despite the I-2 CLI/SDK expansion.* The expanded surface (1500-2000 LOC) was kept as one PR with granular commits per surface for review tractability rather than splitting into REST/SDK/CLI/UI sub-PRs.
+- *I-2 CLI/SDK gap closed.* The Session 19 outcome summary will be amended via this Session 20 record. Future agents reading the summary will see the corrected version and the explanation of what happened.
+- *Ruff version pre-commit gotcha logged as out-of-band housekeeping.* Not blocking; pinning fix can ship at any time.
+- *Audit and notification event constants pre-declared in I-3a.* Even constants only emitted by I-3b were declared in I-3a, keeping the constants file stable across sub-PRs. Pattern worth reusing for future multi-PR phases.
+- *State machine pattern locked.* Single `EXECUTING` state covers queued-and-running; finer-grained timestamps live in audit events. Lifespan recovery on restart is the explicit Critical Rule 60 honoring for submissions.
+- *Defense-in-depth credential redaction in execution logs.* Both architectural separation (config file outside working dir) AND post-hoc filtering (redact known credential values from captured stdout/stderr). No single-point-of-failure for credential leakage.
+- *Pre-flight credential check at REST endpoint.* `MISSING_CREDENTIALS` 400 is friendlier UX than letting the async job fail with the same condition.
+- *Backend execution is opt-in alongside, not replacement.* I-2's manual post-package instructions remain visible in UI regardless of `allow_backend_submission`. The two flows coexist; operators on Scenario A see the manual flow only, operators on B-F see both.
+
+------
+
+## Outcome
+
+P0f and the I-track are both complete. Bundle refresh ahead of next session.
+
+**Pending P0f work:** None. P0f is done.
+
+**Pending I-track work:** None. I-track is complete.
+
+**Pending architectural follow-ups, in expected order:**
+
+- **P0g** — execution profiles (per-run executor selection per Critical Rule 59). The next-most-natural-architectural-next.
+- **P0h** — Slurm executor support (depends on P0g)
+- **Phase 24.5** — sovereignty + BYOP design lockdown (gates P0b)
+- **P0b** — Schema v5.0
+- **P0c** — multi-tenancy middleware + sovereignty deletion path
+- **B-FED-1** — central CA federation peer authentication
+- **P1** — `POST /api/v1/auth/refresh`
+
+**Pending out-of-band housekeeping:**
+
+- Pin ruff in `.pre-commit-config.yaml` to match local; document `uv tool install ruff@<pinned>` in dev setup. Suggested branch: `chore/pin-ruff-version`. Single small PR. Not phase-gated.
+- Branch protection follow-up: add the now-visible CI test check as a required status check on `main` and `development` in GitHub Settings → Branches. Long-pending one-time admin task.
+
+The next session can pivot to P0g (most-natural-architectural-next) or to another track based on Glen's priorities. The summary doc, primer, and quick reference are now in their cleanest post-I-track state for either direction.
