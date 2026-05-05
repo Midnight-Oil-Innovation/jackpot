@@ -55,9 +55,9 @@ def test_configure_rejects_path_traversal_instance_name(
         ],
     )
     assert result.exit_code != 0, f"{bad_name!r} should be rejected"
-    assert "Invalid --instance-name" in result.output, (
-        f"{bad_name!r} did not produce a validation error: {result.output}"
-    )
+    assert (
+        "Invalid --instance-name" in result.output
+    ), f"{bad_name!r} did not produce a validation error: {result.output}"
 
 
 @pytest.mark.parametrize(
@@ -199,9 +199,9 @@ def test_bootstrap_alembic_env_pathos_calling_shell_not_env_local(
     assert captured_envs, "no subprocesses were invoked"
     alembic_env = captured_envs[0]
     assert "PATH" in alembic_env
-    assert "/tmp/evil" not in alembic_env["PATH"], (
-        f"alembic PATH was poisoned by .env.local: {alembic_env['PATH']!r}"
-    )
+    assert (
+        "/tmp/evil" not in alembic_env["PATH"]
+    ), f"alembic PATH was poisoned by .env.local: {alembic_env['PATH']!r}"
 
 
 def test_bootstrap_psql_env_pathos_calling_shell_not_env_local(runner: CliRunner, tmp_path: Path):

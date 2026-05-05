@@ -100,6 +100,21 @@ class Settings(BaseSettings):
     # cannot block startup; runtime path will check repo eligibility.
     backend_submission_repos: Annotated[list[str], NoDecode] = []
 
+    # P1: refresh-token rotation. ``access_token_lifetime_seconds`` and
+    # ``refresh_token_lifetime_seconds`` mirror the constants previously
+    # hard-coded in backend/auth/oauth.py (15 minutes / 7 days). Keeping
+    # the same numeric defaults preserves today's behavior; making them
+    # Settings fields lets operators tune the access-token blast radius
+    # vs. UX trade-off without code changes.
+    access_token_lifetime_seconds: int = 900
+    refresh_token_lifetime_seconds: int = 604800
+    # Daily sweep cadence for the cleanup_old_refresh_tokens job, plus
+    # how long revoked rows stick around before purge. 30 days is long
+    # enough for forensic queries on a recently-detected replay event,
+    # short enough that the table doesn't grow unboundedly.
+    refresh_token_cleanup_interval_seconds: int = 86400
+    refresh_token_retention_after_revoke_seconds: int = 2592000
+
     # I-3b: Seqsender subprocess execution.
     # Hard wall-time cap on a single Seqsender invocation. Above this
     # the executor kills the subprocess and transitions the submission

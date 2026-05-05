@@ -1663,6 +1663,42 @@ async def cleanup_expired_import_sessions() -> dict[str, int]:
     }
 
 
+# ── P1: refresh-token table cleanup ──────────────────────────────────
+
+
+async def cleanup_old_refresh_tokens() -> dict[str, int]:
+    """Daily sweep that purges revoked or expired refresh-token rows
+    older than ``Settings.refresh_token_retention_after_revoke_seconds``.
+
+    Active rows (``revoked_at IS NULL`` and ``expires_at >= cutoff``)
+    are never touched. The cleanup keeps the table from growing
+    forever; the partial index ``idx_refresh_tokens_expires_active``
+    keeps the active-row lookups in /refresh fast even with a large
+    archive of revoked rows.
+
+    Idempotent: running twice produces the same final state.
+    """
+    settings = get_settings()
+    purged = 0
+    with get_db() as db:
+        rows = execute_write(
+            """
+            DELETE FROM refresh_tokens
+             WHERE (revoked_at IS NOT NULL
+                    AND revoked_at < NOW() - make_interval(secs => :retain))
+                OR (expires_at < NOW() - make_interval(secs => :retain)
+                    AND revoked_at IS NULL)
+            RETURNING jti
+            """,
+            {"retain": settings.refresh_token_retention_after_revoke_seconds},
+            conn=db,
+        )
+        purged = len(rows)
+    counters = {"purged": purged}
+    logger.info("cleanup_old_refresh_tokens: %s", json.dumps(counters))
+    return counters
+
+
 # ── I-3b: backend submission execution ────────────────────────────────
 
 
@@ -2033,6 +2069,7 @@ async def _upload_execution_log(
 
 __all__ = [
     "cleanup_expired_import_sessions",
+    "cleanup_old_refresh_tokens",
     "compute_full_content_hash",
     "execute_submission",
     "get_promote_job_status",

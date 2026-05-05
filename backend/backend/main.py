@@ -14,6 +14,7 @@ from backend.credentials import credentials
 from backend.database import execute_query, get_db
 from backend.jobs import (
     cleanup_expired_import_sessions,
+    cleanup_old_refresh_tokens,
     compute_full_content_hash,
     release_embargoed_submissions,
     run_access_request_job,
@@ -127,6 +128,14 @@ async def lifespan(app: FastAPI):
             hour=get_settings().embargo_release_check_hour,
             minute=0,
             id="release_embargoed_submissions",
+            replace_existing=True,
+            max_instances=1,
+        )
+        scheduler.add_job(
+            cleanup_old_refresh_tokens,
+            "interval",
+            seconds=get_settings().refresh_token_cleanup_interval_seconds,
+            id="cleanup_old_refresh_tokens",
             replace_existing=True,
             max_instances=1,
         )
