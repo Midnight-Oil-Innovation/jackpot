@@ -1235,6 +1235,17 @@
             "title": "ConcentrationMethodEnum",
             "type": "string"
         },
+        "ContainerEngineEnum": {
+            "description": "Container runtime used to materialize pipeline processes for a profile. APPTAINER and SINGULARITY are listed separately because their CLI flags and Nextflow configuration differ; choose APPTAINER on modern HPC systems and SINGULARITY only when the operator's site has not migrated. NONE means processes run as native binaries on the host.",
+            "enum": [
+                "DOCKER",
+                "APPTAINER",
+                "SINGULARITY",
+                "NONE"
+            ],
+            "title": "ContainerEngineEnum",
+            "type": "string"
+        },
         "DataUseTermsEnum": {
             "description": "",
             "enum": [
@@ -1771,6 +1782,81 @@
             "title": "EnvironmentalSample",
             "type": "object"
         },
+        "ExecutionProfile": {
+            "additionalProperties": false,
+            "description": "A named, operator-configured set of execution settings that the launch endpoint applies to a single pipeline run. Each profile carries an executor type (LOCAL, SLURM, GCP_BATCH, ...), a container engine, a work directory, and executor-specific overrides in config_overrides JSONB. At most one profile per deployment may carry is_default=true; that profile is the fallback when neither the launch request nor the pipeline's default-profile association picks one. Soft-deleted via active=false. See Critical Rule 59 and spec.md Phase P0g.",
+            "properties": {
+                "active": {
+                    "description": "Soft-delete flag. Inactive profiles are hidden from launch selection but retained for audit. Defaults to true.\n",
+                    "type": "boolean"
+                },
+                "config_overrides": {
+                    "description": "Executor-specific fields rendered into the per-run nextflow.config \u2014 e.g. Slurm account/partition/QOS, GCP project/region, Kubernetes namespace, weblog_reachable. Stored as JSONB at the database level; modeled as a string here because LinkML has no native JSONB range. The renderer (G-4) parses this column with json.loads. Defaults to the empty object.\n",
+                    "type": "string"
+                },
+                "container_engine": {
+                    "$ref": "#/$defs/ContainerEngineEnum",
+                    "description": "Container runtime used to materialize pipeline processes. NONE means processes run as native binaries on the host.\n"
+                },
+                "created_at": {
+                    "description": "Timestamp the profile was created. Set DB-side to NOW() at insert; never updated.\n",
+                    "format": "date-time",
+                    "type": "string"
+                },
+                "created_by_id": {
+                    "description": "FK to users.id \u2014 the operator who created the profile.\n",
+                    "type": "integer"
+                },
+                "executor_type": {
+                    "$ref": "#/$defs/ExecutorTypeEnum",
+                    "description": "Which Nextflow executor this profile drives.\n"
+                },
+                "is_default": {
+                    "description": "True for the deployment-default profile. The migration enforces \"at most one row with is_default=true\" via a partial unique index. Defaults to false.\n",
+                    "type": "boolean"
+                },
+                "name": {
+                    "description": "Operator-friendly profile name; UNIQUE within a deployment. Examples: \"default-local\", \"slurm-mylab-apptainer\", \"gcp-batch-spot-us-central1\".\n",
+                    "type": "string"
+                },
+                "profile_id": {
+                    "description": "UUID primary key. Generated DB-side via gen_random_uuid() on insert.\n",
+                    "type": "string"
+                },
+                "work_dir": {
+                    "description": "Filesystem path or cloud URI (gs://, s3://) where Nextflow stages task work directories for runs that select this profile.\n",
+                    "type": "string"
+                }
+            },
+            "required": [
+                "profile_id",
+                "name",
+                "executor_type",
+                "container_engine",
+                "work_dir",
+                "config_overrides",
+                "is_default",
+                "created_by_id",
+                "created_at",
+                "active"
+            ],
+            "title": "ExecutionProfile",
+            "type": "object"
+        },
+        "ExecutorTypeEnum": {
+            "description": "Which Nextflow executor a profile drives. LOCAL runs Nextflow against the API host; the remaining values map to the well-known Nextflow executor names. See Critical Rule 59.",
+            "enum": [
+                "LOCAL",
+                "SLURM",
+                "PBS",
+                "LSF",
+                "GCP_BATCH",
+                "AWS_BATCH",
+                "KUBERNETES"
+            ],
+            "title": "ExecutorTypeEnum",
+            "type": "string"
+        },
         "ExperimentTypeEnum": {
             "description": "",
             "enum": [
@@ -1794,6 +1880,18 @@
                 "none"
             ],
             "title": "FertilizerTypeEnum",
+            "type": "string"
+        },
+        "FileStorageState": {
+            "description": "Lifecycle ownership of a file referenced by sample_files. Determines whether JACKPOT controls the bytes (MANAGED, STAGED), references them in place (EXTERNAL), keeps a managed copy alongside an external original (MIRRORED), or has lost access (BROKEN). Default for ingest is EXTERNAL \u2014 JACKPOT does not copy bytes on registration. See Critical Rule 57.",
+            "enum": [
+                "EXTERNAL",
+                "MANAGED",
+                "MIRRORED",
+                "STAGED",
+                "BROKEN"
+            ],
+            "title": "FileStorageState",
             "type": "string"
         },
         "FoodLocationTypeEnum": {
@@ -3766,6 +3864,31 @@
             "title": "PangoQCStatusEnum",
             "type": "string"
         },
+        "PipelineDefaultProfile": {
+            "additionalProperties": false,
+            "description": "Association linking a pipeline to one or more execution profiles that the launch endpoint should consider as defaults when the request does not name a profile explicitly. A pipeline may have multiple default profiles; the launcher picks the lowest priority value (priority=1 wins over priority=100). pipeline_id is intentionally a string-typed UUID reference rather than a typed FK because the pipelines surface is not yet represented as a LinkML class \u2014 only at the SQL level via pipeline_catalog (which carries a SERIAL id, not a UUID). When the pipelines surface gets a LinkML class with a UUID PK, this field becomes a typed range. See spec.md Phase P0g and the Phase P0g G-1 prompt's \"FK fallback\" guidance.",
+            "properties": {
+                "pipeline_id": {
+                    "description": "UUID of the pipeline this association applies to. Composite PK component with profile_id.\n",
+                    "type": "string"
+                },
+                "priority": {
+                    "description": "Tie-breaker when a pipeline has multiple default profiles \u2014 lower numeric values are preferred. Defaults to 100.\n",
+                    "type": "integer"
+                },
+                "profile_id": {
+                    "description": "The default profile for the named pipeline. Composite PK component with pipeline_id.\n",
+                    "type": "string"
+                }
+            },
+            "required": [
+                "pipeline_id",
+                "profile_id",
+                "priority"
+            ],
+            "title": "PipelineDefaultProfile",
+            "type": "object"
+        },
         "PipelineProvenance": {
             "additionalProperties": false,
             "description": "Structured provenance record for a pipeline run. Required for FAIR Reusability (R1.2 \u2014 detailed provenance). Serialized as JSON-LD alongside pipeline results in GCS.",
@@ -5015,9 +5138,20 @@
             "additionalProperties": false,
             "description": "A single read file (FASTQ or FASTA) associated with a sample. This is the canonical per-file registry and the source of truth for all file tracking.\nReplaces the flat fastq_r1_uri / fastq_r2_uri columns on Sample as the complete file record. Those columns are kept as convenience denormalized fields, populated automatically by file_detector.py for the common 2-file paired-end case only.\nHandles all real-world NGS file layouts:\n  - Simple paired-end (R1 + R2)\n  - Multi-lane Illumina (L001_R1, L001_R2, L002_R1, L002_R2 ...)\n  - Nanopore multi-chunk (sample_0.fq.gz, sample_1.fq.gz ...)\n  - Single-end / unpaired reads\n  - Mixed or non-standard naming\n\nSupported extensions (case-insensitive):\n  .fastq, .fq                  with optional .gz or .bz2\n  .fasta, .fa, .fna            with optional .gz",
             "properties": {
+                "alternate_uris": {
+                    "description": "Additional URIs that point to the same content. Used when the same FASTQ is reachable at multiple locations (e.g. on a local NFS mount at /srv/seq/... and in a cloud archive at gs://archive/...). The primary uri stays in the uri column; everything else lands here.\n",
+                    "items": {
+                        "type": "string"
+                    },
+                    "type": "array"
+                },
                 "chunk_index": {
                     "description": "Nanopore/multi-file chunk index (0-based). NULL for non-chunked data.\n",
                     "type": "integer"
+                },
+                "content_hash": {
+                    "description": "SHA-256 of the full file contents, hex-encoded (64 characters). The dedup primitive \u2014 UNIQUE in the database when non-null. NULL until the compute_full_content_hash background job populates it lazily after registration. See Critical Rule 58.\n",
+                    "type": "string"
                 },
                 "file_size_bytes": {
                     "type": "integer"
@@ -5030,11 +5164,29 @@
                     "description": "Original filename as uploaded. Examples: covid-19_sample_18_R1.fastq.gz, barcode01_0.fq.gz, wgs_L001_R1_001.fastq.gz\n",
                     "type": "string"
                 },
+                "first_seen_at": {
+                    "description": "Timestamp when JACKPOT first registered this file. Set DB-side to NOW() at insert; never updated.\n",
+                    "format": "date-time",
+                    "type": "string"
+                },
+                "head64k_hash": {
+                    "description": "SHA-256 of the first 64 KB of the file, hex-encoded. Cheap fingerprint piece used together with file_size_bytes and tail64k_hash to short-circuit dedup before the full content_hash is available.\n",
+                    "type": "string"
+                },
                 "ingest_method": {
                     "$ref": "#/$defs/IngestMethodEnum"
                 },
                 "lane": {
                     "description": "Illumina lane identifier, e.g. L001, L002. NULL for non-multi-lane runs.\n",
+                    "type": "string"
+                },
+                "last_verification_status": {
+                    "description": "Outcome of the most recent verification attempt: OK, MISSING, SIZE_CHANGED, or READ_ERROR. NULL until the job first runs.\n",
+                    "type": "string"
+                },
+                "last_verified_at": {
+                    "description": "Timestamp of the most recent successful or attempted verification by the verify_file_references background job. NULL until the job first runs against this row.\n",
+                    "format": "date-time",
                     "type": "string"
                 },
                 "library_layout": {
@@ -5043,6 +5195,10 @@
                 },
                 "md5": {
                     "description": "MD5 checksum populated post-upload for integrity verification",
+                    "type": "string"
+                },
+                "original_uri": {
+                    "description": "For storage_state == MIRRORED only \u2014 the external URI that the managed copy was made from. NULL for all other storage states.\n",
                     "type": "string"
                 },
                 "paired_file_id": {
@@ -5060,8 +5216,29 @@
                     "$ref": "#/$defs/ReadDirectionEnum",
                     "description": "R1 (forward) or R2 (reverse) for paired reads. NULL for unpaired, single-end, or BAM files.\n"
                 },
+                "retention_policy": {
+                    "description": "Retention class governing how long the file is kept: STANDARD, LONG_TERM, or EPHEMERAL. Defaults to STANDARD.\n",
+                    "type": "string"
+                },
                 "scrub_status": {
                     "$ref": "#/$defs/ScrubStatusEnum"
+                },
+                "staged_for_run_id": {
+                    "description": "For storage_state == STAGED only \u2014 the UUID of the pipeline run that owns this temporary copy. The staging-cleanup job uses this to identify which staged files are safe to remove. NULL for all other storage states.\n",
+                    "type": "string"
+                },
+                "storage_state": {
+                    "$ref": "#/$defs/FileStorageState",
+                    "description": "Lifecycle ownership of this file: EXTERNAL, MANAGED, MIRRORED, STAGED, or BROKEN. Defaults to EXTERNAL \u2014 JACKPOT does not copy bytes on ingest and references files in place. See Critical Rule 57 and the FileStorageState enum.\n"
+                },
+                "tail64k_hash": {
+                    "description": "SHA-256 of the last 64 KB of the file, hex-encoded. Cheap fingerprint piece \u2014 see head64k_hash.\n",
+                    "type": "string"
+                },
+                "updated_at": {
+                    "description": "Timestamp of the most recent change to this row. Maintained by a DB trigger on UPDATE; not user-writable.\n",
+                    "format": "date-time",
+                    "type": "string"
                 },
                 "uri": {
                     "description": "gs:// or drs:// URI of the scrubbed file. UNIQUE \u2014 the same physical file cannot be registered twice.\n",
@@ -5075,7 +5252,11 @@
                 "library_layout",
                 "scrub_status",
                 "pii_scan_status",
-                "ingest_method"
+                "ingest_method",
+                "storage_state",
+                "first_seen_at",
+                "retention_policy",
+                "updated_at"
             ],
             "title": "SampleFile",
             "type": "object"

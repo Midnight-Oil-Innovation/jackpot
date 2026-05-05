@@ -81,9 +81,9 @@ class TestCSVGeneration:
         labels = rows[1]
         # Labels should be Title Case, not snake_case
         for label in labels:
-            assert label[0].isupper() or label == "", (
-                f"Label '{label}' does not start with uppercase"
-            )
+            assert (
+                label[0].isupper() or label == ""
+            ), f"Label '{label}' does not start with uppercase"
 
     def test_row_3_has_valid_tier_tags(self):
         result = generate_csv_template("human", TemplateTier.SUBMITTABLE)
@@ -169,17 +169,17 @@ class TestTierFiltering:
     def test_preliminary_excludes_analyzable_fields(self):
         fields = _get_field_names(generate_csv_template("human", TemplateTier.PRELIMINARY))
         for af in ANALYZABLE_FIELDS:
-            assert af not in fields, (
-                f"ANALYZABLE field '{af}' should not be in PRELIMINARY template"
-            )
+            assert (
+                af not in fields
+            ), f"ANALYZABLE field '{af}' should not be in PRELIMINARY template"
 
     def test_preliminary_excludes_submittable_fields(self):
         fields = _get_field_names(generate_csv_template("human", TemplateTier.PRELIMINARY))
         for sf in SUBMITTABLE_FIELDS:
             if sf not in PRELIMINARY_FIELDS:
-                assert sf not in fields, (
-                    f"SUBMITTABLE field '{sf}' should not be in PRELIMINARY template"
-                )
+                assert (
+                    sf not in fields
+                ), f"SUBMITTABLE field '{sf}' should not be in PRELIMINARY template"
 
     def test_analyzable_excludes_submittable_only_fields(self):
         fields = _get_field_names(generate_csv_template("human", TemplateTier.ANALYZABLE))
@@ -362,6 +362,6 @@ class TestConsistency:
 
         # Order should be preserved (PRELIMINARY fields appear first in SUBMITTABLE)
         prelim_positions = [submit.index(f) for f in prelim if f in submit]
-        assert prelim_positions == sorted(prelim_positions), (
-            "PRELIMINARY field order is not preserved in SUBMITTABLE template"
-        )
+        assert prelim_positions == sorted(
+            prelim_positions
+        ), "PRELIMINARY field order is not preserved in SUBMITTABLE template"

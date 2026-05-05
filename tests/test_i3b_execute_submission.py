@@ -620,6 +620,6 @@ async def test_config_file_always_deleted(temp_working_root, captured_uploads, m
         await execute_submission(sub_id)
 
     assert len(captured_paths) == 1
-    assert not captured_paths[0].exists(), (
-        f"config file {captured_paths[0]} should have been deleted"
-    )
+    assert not captured_paths[
+        0
+    ].exists(), f"config file {captured_paths[0]} should have been deleted"
