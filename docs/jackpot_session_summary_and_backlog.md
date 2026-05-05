@@ -21,6 +21,8 @@ new backend/submissions* files). Both PRs merged cleanly with no conflicts.
 (4) The PR-merge order produced a fresh post-P0f baseline coverage number
 documented in tests/coverage_p0f_summary.md.
 
+**v3.2.1 changelog (2026-05-04 later — same day, post-InsForge review):** Added two backlog items derived from a comparative review of InsForge (https://github.com/InsForge/InsForge), an agent-MCP-friendly Backend-as-a-Service. InsForge is not a foundation for JACKPOT (different architectural genre: horizontal infrastructure platform vs. vertical domain platform), but its agent-MCP pattern is worth pursuing for JACKPOT's domain operations once the I-track and P0g settle. (1) **B-MCP-1** — JACKPOT MCP server exposing domain operations (samples search, ingest, submission lifecycle, pipeline launch) as agent-callable tools. Multi-week effort; post-I-track / post-P0g territory. (2) **Documentation organization tweak** for C-1 / I-3 — per-provider credential setup files (`docs/credentials/ncbi.md`, `docs/credentials/gisaid.md`, etc.) rather than one combined guide. Cheap and improves discoverability.
+
 **v3.1 changelog (2026-05-04):** Strategic pivot from internal
 features to adoption-driving features. Added Session 18 covering: (1) Honest
 landscape analysis of JACKPOT's competitive position — funded incumbents
@@ -3835,6 +3837,9 @@ P0f is complete. I-track is half-shipped. Next moves are either continuing I-tra
 - **P0b** — Schema v5.0
 - **P0c** — multi-tenancy middleware + sovereignty deletion path
 - **B-FED-1** — central CA federation peer authentication
+- **B-MCP-1** — JACKPOT MCP server exposing domain operations as agent-callable tools (samples search, ingest, submission lifecycle, pipeline launch). Surfaces JACKPOT's domain semantics to AI coding agents and assistants via MCP, the way InsForge surfaces generic backend primitives. The "Year 2 LLM assistant" architecture mentioned in spec.md belongs here. Multi-week effort. Belongs in post-I-track / post-P0g territory. Reference: InsForge (https://github.com/InsForge/InsForge) is a worked example of the agent-MCP contract, though for generic backend primitives rather than domain-specific operations.
 - **P1** — `POST /api/v1/auth/refresh`
+
+**Documentation organization tweak (lands alongside C-1 / I-3):** when per-provider credential setup is needed, organize as separate top-level files — `docs/credentials/ncbi.md`, `docs/credentials/gisaid.md`, `docs/credentials/ena.md`, etc. — rather than one combined credentials guide. Pattern borrowed from InsForge (`GOOGLE_OAUTH_SETUP.md`, `GITHUB_OAUTH_SETUP.md`). Better discoverability when users only need one provider; better diff-able for per-provider updates. Minor; bake into C-1 / I-3 work-item specs when drafted.
 
 The next session can either draft C-1 (continuing the I-track adoption push) or pivot to P0g design (advancing core platform capabilities). Both are defensible. The summary doc, primer, and quick reference are now in their cleanest post-P0f state for either direction.
