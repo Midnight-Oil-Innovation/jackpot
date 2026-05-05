@@ -105,9 +105,7 @@ def _print_credential_reminder(repos: list[str]) -> None:
     via the C-1 EnvVarBackend's legacy fallback.
     """
     click.echo()
-    click.secho(
-        f"Backend submission enabled for: {', '.join(repos)}", fg="green"
-    )
+    click.secho(f"Backend submission enabled for: {', '.join(repos)}", fg="green")
     click.echo("Configure credentials before triggering execution:")
     for repo in repos:
         if repo == "ncbi":

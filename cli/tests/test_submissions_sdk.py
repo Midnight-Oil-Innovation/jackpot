@@ -183,9 +183,7 @@ def test_execute_propagates_missing_credentials_400(sdk, fake_client):
 
 def test_retry_execution_calls_retry_endpoint(sdk, fake_client):
     sdk.retry_execution(42)
-    fake_client.post.assert_called_once_with(
-        "/api/v1/submissions/42/retry-execution"
-    )
+    fake_client.post.assert_called_once_with("/api/v1/submissions/42/retry-execution")
 
 
 def test_execution_logs_returns_entries_array(sdk, fake_client):
@@ -195,9 +193,7 @@ def test_execution_logs_returns_entries_array(sdk, fake_client):
     }
     result = sdk.execution_logs(42)
     assert result == [{"attempt": 1}, {"attempt": 2}]
-    fake_client.get.assert_called_once_with(
-        "/api/v1/submissions/42/execution-logs"
-    )
+    fake_client.get.assert_called_once_with("/api/v1/submissions/42/execution-logs")
 
 
 def test_execution_logs_empty_response(sdk, fake_client):

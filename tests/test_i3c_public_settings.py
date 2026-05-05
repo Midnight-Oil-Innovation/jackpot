@@ -27,9 +27,7 @@ async def test_public_settings_default_off(client, fresh_settings, monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_public_settings_reports_enabled_state(
-    client, fresh_settings, monkeypatch
-):
+async def test_public_settings_reports_enabled_state(client, fresh_settings, monkeypatch):
     monkeypatch.setenv("ALLOW_BACKEND_SUBMISSION", "true")
     monkeypatch.setenv("BACKEND_SUBMISSION_REPOS", "ncbi,ena")
     get_settings.cache_clear()

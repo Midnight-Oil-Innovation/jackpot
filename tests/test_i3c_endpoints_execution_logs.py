@@ -15,23 +15,17 @@ SUB_PREFIX = "I3C-LOGS-"
 
 
 def _cleanup() -> None:
-    rows = execute_query(
-        "SELECT id FROM submissions WHERE title LIKE :p", {"p": f"{SUB_PREFIX}%"}
-    )
+    rows = execute_query("SELECT id FROM submissions WHERE title LIKE :p", {"p": f"{SUB_PREFIX}%"})
     for r in rows:
         sid = r["id"]
-        execute_write(
-            "DELETE FROM submission_samples WHERE submission_id = :id", {"id": sid}
-        )
+        execute_write("DELETE FROM submission_samples WHERE submission_id = :id", {"id": sid})
         execute_write("DELETE FROM submissions WHERE id = :id", {"id": sid})
     rows = execute_query(
         "SELECT id FROM samples WHERE sample_id LIKE :p", {"p": f"{SAMPLE_PREFIX}%"}
     )
     for r in rows:
         sid = r["id"]
-        execute_write(
-            "DELETE FROM submission_samples WHERE sample_id_fk = :id", {"id": sid}
-        )
+        execute_write("DELETE FROM submission_samples WHERE sample_id_fk = :id", {"id": sid})
         execute_write("DELETE FROM sample_files WHERE sample_id_fk = :id", {"id": sid})
         execute_write("DELETE FROM samples WHERE id = :id", {"id": sid})
 
@@ -78,16 +72,14 @@ def _make_submission(suffix: str, *, log_uris: list[str] | None = None) -> int:
     )
     sub_id = rows[0]["id"]
     execute_write(
-        "INSERT INTO submission_samples (submission_id, sample_id_fk) "
-        "VALUES (:sub, :sid)",
+        "INSERT INTO submission_samples (submission_id, sample_id_fk) VALUES (:sub, :sid)",
         {"sub": sub_id, "sid": sample_id},
     )
     if log_uris:
         import json as _json
 
         execute_write(
-            "UPDATE submissions SET execution_log_uris = CAST(:uris AS jsonb) "
-            "WHERE id = :id",
+            "UPDATE submissions SET execution_log_uris = CAST(:uris AS jsonb) WHERE id = :id",
             {"uris": _json.dumps(log_uris), "id": sub_id},
         )
     return sub_id
@@ -112,9 +104,7 @@ async def test_logs_empty(client):
 
 @pytest.mark.asyncio
 async def test_logs_single_entry(client):
-    sub_id = _make_submission(
-        "ONE", log_uris=["file:///tmp/jackpot-execs/sub_42_attempt_1.log"]
-    )
+    sub_id = _make_submission("ONE", log_uris=["file:///tmp/jackpot-execs/sub_42_attempt_1.log"])
     resp = await client.get(f"/api/v1/submissions/{sub_id}/execution-logs")
     assert resp.status_code == 200
     entries = resp.json()["data"]["entries"]
@@ -143,9 +133,7 @@ async def test_logs_multiple_entries_ordered(client):
 async def test_logs_cloud_uri_presigned(client):
     """For ``s3://`` and ``gs://`` URIs, the helper presigns. We patch
     ``generate_presigned_url`` and assert the helper called it once."""
-    sub_id = _make_submission(
-        "CLOUD", log_uris=["s3://jackpot-submissions/exec/sub_42.log"]
-    )
+    sub_id = _make_submission("CLOUD", log_uris=["s3://jackpot-submissions/exec/sub_42.log"])
     with patch(
         "backend.storage.generate_presigned_url",
         return_value="https://signed.example.org/sub_42.log",
@@ -161,9 +149,7 @@ async def test_logs_cloud_uri_presigned(client):
 async def test_logs_presign_failure_falls_back_to_raw_uri(client):
     """If presign generation raises (network blip, missing IAM, etc.)
     the endpoint returns the raw URI rather than 500ing."""
-    sub_id = _make_submission(
-        "PRESIGN-FAIL", log_uris=["s3://bucket/key.log"]
-    )
+    sub_id = _make_submission("PRESIGN-FAIL", log_uris=["s3://bucket/key.log"])
     with patch(
         "backend.storage.generate_presigned_url",
         side_effect=RuntimeError("transient"),

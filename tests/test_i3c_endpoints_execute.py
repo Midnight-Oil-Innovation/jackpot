@@ -18,17 +18,12 @@ SUB_PREFIX = "I3C-EXEC-"
 
 
 def _cleanup() -> None:
-    rows = execute_query(
-        "SELECT id FROM submissions WHERE title LIKE :p", {"p": f"{SUB_PREFIX}%"}
-    )
+    rows = execute_query("SELECT id FROM submissions WHERE title LIKE :p", {"p": f"{SUB_PREFIX}%"})
     for r in rows:
         sid = r["id"]
+        execute_write("DELETE FROM submission_samples WHERE submission_id = :id", {"id": sid})
         execute_write(
-            "DELETE FROM submission_samples WHERE submission_id = :id", {"id": sid}
-        )
-        execute_write(
-            "DELETE FROM notifications WHERE resource_type = 'submission' "
-            "AND resource_id = :rid",
+            "DELETE FROM notifications WHERE resource_type = 'submission' AND resource_id = :rid",
             {"rid": str(sid)},
         )
         execute_write(
@@ -222,9 +217,7 @@ async def test_execute_gisaid_unsupported(client, enabled, fake_scheduler):
 
 
 @pytest.mark.asyncio
-async def test_execute_ddbj_unsupported_when_enabled(
-    client, fake_scheduler, monkeypatch
-):
+async def test_execute_ddbj_unsupported_when_enabled(client, fake_scheduler, monkeypatch):
     """If the operator enabled DDBJ in backend_submission_repos (which
     the predicate doesn't validate against the supported set), the
     REPO_NOT_SUPPORTED gate catches it."""
@@ -246,9 +239,7 @@ async def test_execute_ddbj_unsupported_when_enabled(
     "status",
     ["DRAFT", "SUBMITTED", "ACCEPTED", "EMBARGOED", "WITHDRAWN", "EXECUTING"],
 )
-async def test_execute_rejects_wrong_status(
-    client, enabled, fake_scheduler, status
-):
+async def test_execute_rejects_wrong_status(client, enabled, fake_scheduler, status):
     sub_id = _make_submission(f"BAD-{status}", status=status)
     resp = await client.post(f"/api/v1/submissions/{sub_id}/execute")
     assert resp.status_code == 409
@@ -264,9 +255,7 @@ async def test_execute_missing_credentials(client, enabled, fake_scheduler):
     # Re-bind backend without the password — username present but
     # password missing should still raise MISSING_CREDENTIALS naming
     # exactly the missing keys.
-    backend = InMemoryBackend(
-        {"ncbi_submission_username": "submitter@example.org"}
-    )
+    backend = InMemoryBackend({"ncbi_submission_username": "submitter@example.org"})
     _set_backend(backend)
     try:
         sub_id = _make_submission("MISS-CRED")

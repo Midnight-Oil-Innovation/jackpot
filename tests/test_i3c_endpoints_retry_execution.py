@@ -18,17 +18,12 @@ SUB_PREFIX = "I3C-RETRY-"
 
 
 def _cleanup() -> None:
-    rows = execute_query(
-        "SELECT id FROM submissions WHERE title LIKE :p", {"p": f"{SUB_PREFIX}%"}
-    )
+    rows = execute_query("SELECT id FROM submissions WHERE title LIKE :p", {"p": f"{SUB_PREFIX}%"})
     for r in rows:
         sid = r["id"]
+        execute_write("DELETE FROM submission_samples WHERE submission_id = :id", {"id": sid})
         execute_write(
-            "DELETE FROM submission_samples WHERE submission_id = :id", {"id": sid}
-        )
-        execute_write(
-            "DELETE FROM notifications WHERE resource_type = 'submission' "
-            "AND resource_id = :rid",
+            "DELETE FROM notifications WHERE resource_type = 'submission' AND resource_id = :rid",
             {"rid": str(sid)},
         )
         execute_write(
@@ -42,9 +37,7 @@ def _cleanup() -> None:
     )
     for r in rows:
         sid = r["id"]
-        execute_write(
-            "DELETE FROM submission_samples WHERE sample_id_fk = :id", {"id": sid}
-        )
+        execute_write("DELETE FROM submission_samples WHERE sample_id_fk = :id", {"id": sid})
         execute_write("DELETE FROM sample_files WHERE sample_id_fk = :id", {"id": sid})
         execute_write("DELETE FROM samples WHERE id = :id", {"id": sid})
 
@@ -96,8 +89,7 @@ def _make_submission(suffix: str, *, status: str) -> int:
     )
     sub_id = rows[0]["id"]
     execute_write(
-        "INSERT INTO submission_samples (submission_id, sample_id_fk) "
-        "VALUES (:sub, :sid)",
+        "INSERT INTO submission_samples (submission_id, sample_id_fk) VALUES (:sub, :sid)",
         {"sub": sub_id, "sid": sample_id},
     )
     return sub_id
@@ -135,9 +127,7 @@ def fake_scheduler():
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize(
-    "starting_status", ["EXECUTION_FAILED", "EXECUTION_INTERRUPTED"]
-)
+@pytest.mark.parametrize("starting_status", ["EXECUTION_FAILED", "EXECUTION_INTERRUPTED"])
 async def test_retry_202_path(client, enabled, fake_scheduler, starting_status):
     sub_id = _make_submission(f"OK-{starting_status}", status=starting_status)
     resp = await client.post(f"/api/v1/submissions/{sub_id}/retry-execution")
@@ -157,9 +147,7 @@ async def test_retry_202_path(client, enabled, fake_scheduler, starting_status):
     "starting_status",
     ["DRAFT", "READY_TO_SUBMIT", "SUBMITTED", "ACCEPTED", "EMBARGOED", "EXECUTING"],
 )
-async def test_retry_rejects_non_failure_states(
-    client, enabled, fake_scheduler, starting_status
-):
+async def test_retry_rejects_non_failure_states(client, enabled, fake_scheduler, starting_status):
     sub_id = _make_submission(f"BAD-{starting_status}", status=starting_status)
     resp = await client.post(f"/api/v1/submissions/{sub_id}/retry-execution")
     assert resp.status_code == 409

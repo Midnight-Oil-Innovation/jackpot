@@ -29,9 +29,7 @@ def _stub_credentials(monkeypatch):
     """Bypass the ConfigError raised when ~/.jackpot/config.toml is absent."""
     from jackpot.cli import submissions as submissions_mod
 
-    monkeypatch.setattr(
-        submissions_mod, "get_client_credentials", lambda: ("http://test", "tok")
-    )
+    monkeypatch.setattr(submissions_mod, "get_client_credentials", lambda: ("http://test", "tok"))
 
 
 def _patched_client():
@@ -295,9 +293,7 @@ def test_execution_logs_json_output(runner, monkeypatch):
         "entries": [{"attempt": 1, "log_uri": "x"}],
     }
     with cm:
-        result = runner.invoke(
-            cli, ["submissions", "execution-logs", "42", "--json"]
-        )
+        result = runner.invoke(cli, ["submissions", "execution-logs", "42", "--json"])
     assert result.exit_code == 0
     parsed = json.loads(result.output)
     assert parsed == [{"attempt": 1, "log_uri": "x"}]

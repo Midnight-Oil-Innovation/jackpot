@@ -149,9 +149,7 @@ def submissions_create(
     except Exception as exc:
         _handle_error(exc, "Create submission")
         return
-    click.echo(
-        f"Created submission {sub['id']} ({sub.get('title')}) status={sub.get('status')}"
-    )
+    click.echo(f"Created submission {sub['id']} ({sub.get('title')}) status={sub.get('status')}")
 
 
 @submissions.command("list")
@@ -265,10 +263,7 @@ def submissions_show(submission_id: int, output_json: bool) -> None:
     if samples:
         click.echo(f"  {'Samples':<24} {len(samples)}")
         for s in samples:
-            click.echo(
-                f"    - {s.get('sample_id')!s:<20} "
-                f"{s.get('per_sample_status') or '—'}"
-            )
+            click.echo(f"    - {s.get('sample_id')!s:<20} {s.get('per_sample_status') or '—'}")
 
 
 @submissions.command("update")
@@ -329,9 +324,7 @@ def submissions_update(
 @click.option("--yes", is_flag=True, default=False, help="Skip confirmation prompt.")
 def submissions_delete(submission_id: int, yes: bool) -> None:
     """Soft-delete a submission."""
-    if not yes and not click.confirm(
-        f"Soft-delete submission {submission_id}?", default=False
-    ):
+    if not yes and not click.confirm(f"Soft-delete submission {submission_id}?", default=False):
         click.echo("Aborted.")
         return
     try:
@@ -377,9 +370,7 @@ def submissions_add_samples(submission_id: int, sample_ids_str: tuple[str, ...])
 @submissions.command("remove-samples")
 @click.argument("submission_id", type=int)
 @click.option("--samples", "sample_ids_str", required=True, multiple=True)
-def submissions_remove_samples(
-    submission_id: int, sample_ids_str: tuple[str, ...]
-) -> None:
+def submissions_remove_samples(submission_id: int, sample_ids_str: tuple[str, ...]) -> None:
     """Detach samples from a DRAFT submission."""
     sample_ids = _parse_sample_ids(sample_ids_str)
     try:
@@ -478,9 +469,7 @@ def submissions_register_accessions(
             click.echo(f"Could not parse --accessions JSON: {exc}", err=True)
             raise SystemExit(2) from None
     else:
-        click.echo(
-            "Provide either --accessions-file or --accessions JSON.", err=True
-        )
+        click.echo("Provide either --accessions-file or --accessions JSON.", err=True)
         raise SystemExit(2)
     if not isinstance(accessions, list):
         click.echo("Accessions payload must be a list of entries.", err=True)
