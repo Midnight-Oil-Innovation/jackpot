@@ -47,8 +47,7 @@ def _cleanup() -> None:
             {"id": sid},
         )
         execute_write(
-            "DELETE FROM notifications WHERE resource_type = 'submission' "
-            "AND resource_id = :rid",
+            "DELETE FROM notifications WHERE resource_type = 'submission' AND resource_id = :rid",
             {"rid": str(sid)},
         )
         execute_write(
