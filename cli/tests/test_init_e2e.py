@@ -112,9 +112,9 @@ def test_e2e_configure_secrets_bootstrap(
     assert secrets.exit_code == 0, f"secrets failed for {scenario_code}: {secrets.output}"
 
     bootstrap = _run_bootstrap_dry(runner, tmp_path, instance_name)
-    assert (
-        bootstrap.exit_code == 0
-    ), f"bootstrap precondition check failed for {scenario_code}: {bootstrap.output}"
+    assert bootstrap.exit_code == 0, (
+        f"bootstrap precondition check failed for {scenario_code}: {bootstrap.output}"
+    )
     assert "Bootstrap complete." in bootstrap.output
 
 

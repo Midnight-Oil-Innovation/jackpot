@@ -275,9 +275,9 @@ class TestPopulateSecrets:
                 "federation_private_key.pem",
                 "federation_public_key.pem",
             }:
-                assert (
-                    rec.action == "wrote_new"
-                ), f"first write should be wrote_new, got {rec.action!r} for {rec.path.name}"
+                assert rec.action == "wrote_new", (
+                    f"first write should be wrote_new, got {rec.action!r} for {rec.path.name}"
+                )
 
     def test_second_write_with_regenerate_says_regenerated(self, tmp_path: Path):
         instance_dir = tmp_path / "rotate"

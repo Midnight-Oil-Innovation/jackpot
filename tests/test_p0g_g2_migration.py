@@ -116,9 +116,9 @@ def test_tables_and_index_present_at_head(test_db_url):
         "created_at",
         "active",
     }
-    assert expected_profile_cols.issubset(
-        profile_cols
-    ), f"missing columns: {expected_profile_cols - profile_cols}"
+    assert expected_profile_cols.issubset(profile_cols), (
+        f"missing columns: {expected_profile_cols - profile_cols}"
+    )
 
     assoc_cols = _column_names("pipeline_default_profile")
     assert {"pipeline_id", "profile_id", "priority"} == assoc_cols
