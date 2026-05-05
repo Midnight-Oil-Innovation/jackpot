@@ -5,6 +5,7 @@ from fastapi import HTTPException
 from jose import jwt
 
 from backend.config import get_settings
+from backend.credentials import credentials
 from backend.database import execute_query
 
 GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token"
@@ -21,7 +22,7 @@ async def exchange_google_code(code: str, redirect_uri: str) -> dict[str, str]:
             data={
                 "code": code,
                 "client_id": settings.google_oauth_client_id,
-                "client_secret": settings.google_oauth_client_secret,
+                "client_secret": credentials.get("google_oauth_client_secret"),
                 "redirect_uri": redirect_uri,
                 "grant_type": "authorization_code",
             },
@@ -33,7 +34,6 @@ async def exchange_google_code(code: str, redirect_uri: str) -> dict[str, str]:
 
 
 def issue_access_token(user_id: int, email: str) -> str:
-    settings = get_settings()
     return jwt.encode(
         {
             "sub": str(user_id),
@@ -41,13 +41,12 @@ def issue_access_token(user_id: int, email: str) -> str:
             "exp": datetime.now(UTC) + ACCESS_TOKEN_TTL,
             "type": "access",
         },
-        settings.secret_key,
+        credentials.get("jwt_signing_key"),
         algorithm="HS256",
     )
 
 
 def issue_refresh_token(user_id: int, email: str) -> str:
-    settings = get_settings()
     return jwt.encode(
         {
             "sub": str(user_id),
@@ -55,7 +54,7 @@ def issue_refresh_token(user_id: int, email: str) -> str:
             "exp": datetime.now(UTC) + REFRESH_TOKEN_TTL,
             "type": "refresh",
         },
-        settings.secret_key,
+        credentials.get("jwt_signing_key"),
         algorithm="HS256",
     )
 

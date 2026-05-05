@@ -8,6 +8,8 @@ from httpx import ASGITransport, AsyncClient
 from testcontainers.postgres import PostgresContainer
 
 from backend.config import get_settings
+from backend.credentials import _reset_backend, _set_backend
+from backend.credentials.test_helpers import InMemoryBackend
 from backend.database import reset_engine
 from backend.main import app
 
@@ -51,9 +53,23 @@ def override_settings(test_db_url, monkeypatch):
     monkeypatch.setenv("MOCK_USER_EMAIL", "admin@example.org")
     monkeypatch.setenv("STORAGE_ENDPOINT", "http://localhost:9000")
     monkeypatch.setenv("STORAGE_ACCESS_KEY", "minioadmin")
+    # Legacy env name resolves through EnvVarBackend's legacy_env_names
+    # fallback to the canonical credential key 's3_storage_secret_key'.
     monkeypatch.setenv("STORAGE_SECRET_KEY", "minioadmin")
+    # JWT signing key is now always required. Tests use a fixed value via
+    # the canonical JACKPOT_CRED_* env so EnvVarBackend resolves it under
+    # the default test config.
+    monkeypatch.setenv("JACKPOT_CRED_JWT_SIGNING_KEY", "test-jwt-signing-key")
+    # OAuth client secret: pre-C-1 tests relied on Settings.google_oauth_client_secret
+    # defaulting to an empty string so that hitting /auth/google/login during
+    # rate-limit tests would proceed to a 4xx response from Google. With the
+    # credential layer, an empty value is treated as not set and raises;
+    # provide a non-empty placeholder so Google still rejects the bogus code
+    # but the credential read itself succeeds.
+    monkeypatch.setenv("JACKPOT_CRED_GOOGLE_OAUTH_CLIENT_SECRET", "test-oauth-secret")
     monkeypatch.setenv("RATE_LIMIT_ENABLED", "false")
     get_settings.cache_clear()
+    _reset_backend()
     reset_engine()  # ← force engine rebuild with test URL
     # The slowapi limiter was constructed at import time with the original
     # rate_limit_enabled value. Re-evaluate it now so test runs aren't
@@ -63,7 +79,21 @@ def override_settings(test_db_url, monkeypatch):
     limiter.enabled = get_settings().rate_limit_enabled
     yield
     get_settings.cache_clear()
+    _reset_backend()
     reset_engine()
+
+
+@pytest.fixture
+def fake_credentials():
+    """In-memory credential backend for tests.
+
+    Populate with `fake_credentials.set('key', 'value')`. The fixture
+    swaps the active credential backend and restores it afterwards.
+    """
+    backend = InMemoryBackend()
+    _set_backend(backend)
+    yield backend
+    _reset_backend()
 
 
 @pytest_asyncio.fixture

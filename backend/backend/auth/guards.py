@@ -2,6 +2,7 @@ from fastapi import HTTPException, Request
 from jose import jwt
 
 from backend.config import get_settings
+from backend.credentials import credentials
 from backend.database import execute_query
 
 
@@ -30,7 +31,7 @@ def get_current_user(request: Request) -> dict:
     if not token:
         raise HTTPException(status_code=401, detail="Not authenticated.")
     try:
-        payload = jwt.decode(token, settings.secret_key, algorithms=["HS256"])
+        payload = jwt.decode(token, credentials.get("jwt_signing_key"), algorithms=["HS256"])
     except jwt.ExpiredSignatureError as exc:
         raise HTTPException(status_code=401, detail="Access token expired.") from exc
     except jwt.InvalidTokenError as exc:
