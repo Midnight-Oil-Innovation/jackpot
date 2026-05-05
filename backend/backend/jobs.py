@@ -7,11 +7,15 @@ trigger endpoint so local dev and Cloud Scheduler hit identical code.
 
 from __future__ import annotations
 
+import asyncio
 import contextlib
 import hashlib
 import json
 import logging
 import os
+import shutil
+from datetime import UTC, datetime
+from pathlib import Path
 from time import monotonic
 from urllib.parse import urlparse
 
@@ -20,6 +24,32 @@ from backend.config import get_settings
 from backend.database import execute_query, execute_write, get_db
 from backend.file_fingerprint import cheap_fingerprint
 from backend.notifications import NotificationEvents, create_notification
+from backend.submission_executors.redaction import redact_credential_values_bytes
+from backend.submission_executors.seqsender import (
+    build_execution_log,
+    run_seqsender,
+    write_seqsender_config,
+)
+
+# I-3b per-repo execution serialization. ``asyncio.Lock`` keyed by repo
+# identifier so two NCBI submissions queued at the same time run
+# sequentially while NCBI and ENA submissions can run in parallel.
+# Single-process only — when JACKPOT runs multi-instance this should be
+# replaced with a Postgres advisory lock keyed by repo. Tracked as a
+# follow-up; not a v1 limitation in practice.
+_repo_locks: dict[str, asyncio.Lock] = {}
+
+
+def _get_repo_lock(repo: str) -> asyncio.Lock:
+    """Get-or-create the asyncio.Lock for a repo identifier.
+
+    The dict is module-global so successive ``execute_submission`` calls
+    in the same event loop see the same lock instance.
+    """
+    if repo not in _repo_locks:
+        _repo_locks[repo] = asyncio.Lock()
+    return _repo_locks[repo]
+
 
 logger = logging.getLogger(__name__)
 
@@ -1633,9 +1663,378 @@ async def cleanup_expired_import_sessions() -> dict[str, int]:
     }
 
 
+# ── I-3b: backend submission execution ────────────────────────────────
+
+
+async def execute_submission(submission_id: int) -> dict[str, int]:
+    """Run Seqsender against a queued submission package.
+
+    Triggered by ``scheduler.add_job(execute_submission,
+    args=[submission_id], id=f"exec_submission_{submission_id}")`` from
+    the I-3c ``/execute`` endpoint. Tests invoke directly.
+
+    Lifecycle:
+
+    1. Verify the submission row is in EXECUTING (the I-3c caller has
+       already invoked :func:`mark_execution_queued` /
+       :func:`mark_execution_retried`; this is a defensive recheck).
+    2. For unsupported repos (anything that is not ``"NCBI"`` per
+       Seqsender's actual coverage), call :func:`mark_execution_failed`
+       with a clear, user-facing message and stop. ENA falls into this
+       branch in v1 because Seqsender doesn't speak ENA's protocol.
+    3. Acquire a per-repo ``asyncio.Lock``; different repos run in parallel.
+    4. Audit ``SUBMISSION_BACKEND_EXECUTION_STARTED``.
+    5. Build a per-execution working directory (preserved on failure,
+       deleted on success).
+    6. Write the credential-bearing Seqsender YAML to a temp file
+       OUTSIDE the working directory (mode 0600). Always deleted in the
+       ``finally`` clause.
+    7. Spawn Seqsender via :func:`asyncio.create_subprocess_exec`,
+       capture stdout/stderr, enforce
+       :attr:`Settings.execution_timeout_seconds`.
+    8. Redact credential values from captured output; assemble the
+       structured execution log; upload to managed storage; append the
+       returned URI to ``execution_log_uris``.
+    9. Transition the submission via :func:`mark_execution_completed` or
+       :func:`mark_execution_failed` per the subprocess outcome.
+
+    Returns a counter dict for caller-side logging.
+    """
+    settings = get_settings()
+    sub_row = _load_submission_for_execution(submission_id)
+    if sub_row is None:
+        logger.error("execute_submission: submission %s not found", submission_id)
+        return {"missing": 1}
+
+    if sub_row["status"] != "EXECUTING":
+        logger.error(
+            "execute_submission: submission %s in status %s, expected EXECUTING; refusing to run",
+            submission_id,
+            sub_row["status"],
+        )
+        return {"wrong_status": 1}
+
+    target_repo_raw = (sub_row.get("target_repository") or "").strip()
+    target_repo = target_repo_raw.upper()
+    attempt = sub_row["execution_attempt_count"] or 0
+    queued_at = sub_row.get("execution_started_at")
+    package_path = sub_row.get("package_path") or ""
+
+    # Defensive repo gate. The I-3c REST surface will check this earlier
+    # too; the duplication is intentional — a stale job can land here
+    # with state the surface didn't enforce.
+    if target_repo != "NCBI":
+        with get_db() as db:
+            from backend.submissions import mark_execution_failed
+
+            if target_repo == "ENA":
+                msg = (
+                    "ENA backend execution is not implemented in v1. Seqsender "
+                    "does not speak ENA's submission protocol; integrate Webin-CLI "
+                    "as a separate executor (tracked follow-up). Use the manual "
+                    "package workflow for ENA submissions in the meantime."
+                )
+            else:
+                msg = (
+                    f"Backend execution not supported for repository "
+                    f"'{target_repo_raw}'. Use the manual package workflow."
+                )
+            mark_execution_failed(
+                submission_id=submission_id,
+                error_message=msg,
+                conn=db,
+            )
+        return {"unsupported_repo": 1}
+
+    if not package_path:
+        with get_db() as db:
+            from backend.submissions import mark_execution_failed
+
+            mark_execution_failed(
+                submission_id=submission_id,
+                error_message=(
+                    "Submission has no package_path. Generate the submission "
+                    "package before queuing for backend execution."
+                ),
+                conn=db,
+            )
+        return {"missing_package": 1}
+
+    lock = _get_repo_lock(target_repo)
+    async with lock:
+        return await _execute_submission_locked(
+            submission_id=submission_id,
+            target_repo=target_repo,
+            attempt=attempt,
+            queued_at=queued_at,
+            package_path=package_path,
+            settings=settings,
+        )
+
+
+async def _execute_submission_locked(
+    *,
+    submission_id: int,
+    target_repo: str,
+    attempt: int,
+    queued_at: datetime | None,
+    package_path: str,
+    settings,
+) -> dict[str, int]:
+    """The core execution flow under the per-repo lock."""
+    # Submissions imports are kept lazy to avoid pulling the full
+    # submissions module graph at jobs.py import time.
+    from backend.submissions import mark_execution_completed, mark_execution_failed
+
+    started_at = datetime.now(UTC)
+    wall_clock_start = monotonic()
+    working_dir = (
+        Path(settings.execution_working_dir_root) / f"submission_{submission_id}_attempt_{attempt}"
+    )
+    working_dir.mkdir(parents=True, exist_ok=True)
+
+    # Audit STARTED.
+    with get_db() as db:
+        log_audit(
+            action=AuditActions.SUBMISSION_BACKEND_EXECUTION_STARTED,
+            actor_id=None,
+            resource_type="submission",
+            resource_id=str(submission_id),
+            before={"status": "EXECUTING"},
+            after={
+                "status": "EXECUTING",
+                "target_repository": target_repo,
+                "attempt": attempt,
+                "executor_backend": "seqsender_subprocess",
+                "working_dir": str(working_dir),
+            },
+            metadata={"job": "execute_submission"},
+            db_conn=db,
+        )
+
+    config_path: Path | None = None
+    credential_values: list[str] = []
+    error_message: str | None = None
+    log_uri: str | None = None
+    try:
+        try:
+            config_path, credential_values = write_seqsender_config(
+                submission_id=submission_id, target_repo=target_repo
+            )
+        except Exception as exc:
+            logger.exception("execute_submission: config generation failed")
+            error_message = f"Failed to generate Seqsender config: {exc}"
+            with get_db() as db:
+                mark_execution_failed(
+                    submission_id=submission_id,
+                    error_message=error_message,
+                    conn=db,
+                )
+            return {"failed": 1, "config_error": 1}
+
+        result = await run_seqsender(
+            working_dir=working_dir,
+            config_path=config_path,
+            package_dir=Path(package_path),
+            target_repo=target_repo,
+            binary_path=settings.seqsender_binary_path,
+            timeout_seconds=settings.execution_timeout_seconds,
+        )
+        completed_at = datetime.now(UTC)
+        wall_time = monotonic() - wall_clock_start
+
+        stdout_redacted = redact_credential_values_bytes(
+            result.stdout_bytes, credential_values
+        ).decode("utf-8", errors="replace")
+        stderr_redacted = redact_credential_values_bytes(
+            result.stderr_bytes, credential_values
+        ).decode("utf-8", errors="replace")
+
+        log_content = build_execution_log(
+            submission_id=submission_id,
+            attempt=attempt,
+            target_repo=target_repo,
+            executor_backend="seqsender_subprocess",
+            invocation_command=result.invocation_command,
+            working_dir=working_dir,
+            config_path=config_path,
+            queued_at=queued_at,
+            started_at=started_at,
+            completed_at=completed_at,
+            exit_code=result.exit_code,
+            timed_out=result.timed_out,
+            wall_time_seconds=result.wall_time_seconds,
+            stdout_redacted=stdout_redacted,
+            stderr_redacted=stderr_redacted,
+        )
+
+        log_uri = await _upload_execution_log(
+            submission_id=submission_id,
+            attempt=attempt,
+            content=log_content,
+            completed_at=completed_at,
+        )
+
+        succeeded = result.exit_code == 0 and not result.timed_out
+        with get_db() as db:
+            _append_execution_log_uri(db, submission_id, log_uri)
+            if succeeded:
+                mark_execution_completed(submission_id=submission_id, conn=db)
+            else:
+                if result.timed_out:
+                    error_message = (
+                        f"Execution exceeded timeout of "
+                        f"{settings.execution_timeout_seconds} seconds; "
+                        f"subprocess was killed."
+                    )
+                else:
+                    error_message = (
+                        f"Seqsender exited with non-zero status "
+                        f"{result.exit_code}. See execution log for details."
+                    )
+                mark_execution_failed(
+                    submission_id=submission_id,
+                    error_message=error_message,
+                    log_uri=None,  # already appended above
+                    conn=db,
+                )
+
+        if succeeded:
+            shutil.rmtree(working_dir, ignore_errors=True)
+            logger.info(
+                "execute_submission: submission %s completed (attempt %d, %.2fs)",
+                submission_id,
+                attempt,
+                wall_time,
+            )
+            return {"completed": 1}
+
+        # Failure path: preserve working dir and emit a follow-up audit
+        # event noting the path so operators can locate it for diagnosis.
+        with get_db() as db:
+            log_audit(
+                action=AuditActions.SUBMISSION_BACKEND_EXECUTION_FAILED,
+                actor_id=None,
+                resource_type="submission",
+                resource_id=str(submission_id),
+                before={"status": "EXECUTING"},
+                after={
+                    "status": "EXECUTION_FAILED",
+                    "working_dir_preserved": str(working_dir),
+                    "log_uri": log_uri,
+                    "error_message": error_message,
+                    "attempt": attempt,
+                    "wall_time_seconds": result.wall_time_seconds,
+                },
+                metadata={"job": "execute_submission", "exit_code": result.exit_code},
+                db_conn=db,
+            )
+        logger.warning(
+            "execute_submission: submission %s failed (attempt %d, exit=%d, timeout=%s)",
+            submission_id,
+            attempt,
+            result.exit_code,
+            result.timed_out,
+        )
+        return {"failed": 1, "timed_out": 1 if result.timed_out else 0}
+
+    finally:
+        # The credential-bearing config file MUST always be removed,
+        # success or failure, exception or not. This is the most
+        # important cleanup step — it's the one direct credential
+        # exposure on disk.
+        if config_path is not None:
+            try:
+                if config_path.exists():
+                    config_path.unlink()
+            except OSError:
+                logger.exception(
+                    "execute_submission: failed to delete config file %s",
+                    config_path,
+                )
+
+
+def _load_submission_for_execution(submission_id: int) -> dict | None:
+    """Load the submission row needed by ``execute_submission``."""
+    rows = execute_query(
+        """
+        SELECT id, status, target_repository, package_path,
+               execution_attempt_count, execution_started_at
+          FROM submissions
+         WHERE id = :id AND is_deleted = FALSE
+         LIMIT 1
+        """,
+        {"id": submission_id},
+    )
+    return rows[0] if rows else None
+
+
+def _append_execution_log_uri(db, submission_id: int, log_uri: str) -> None:
+    """Atomically append ``log_uri`` to ``submissions.execution_log_uris``.
+
+    Same psycopg2-typing dance as :func:`mark_execution_failed` —
+    ``CAST(:uri AS text)`` rather than ``:uri::text`` because SQLAlchemy
+    parses the bare-postfix form as a named bind.
+    """
+    execute_write(
+        """
+        UPDATE submissions
+           SET execution_log_uris =
+               execution_log_uris || to_jsonb(CAST(:uri AS text))
+         WHERE id = :id
+        """,
+        {"uri": log_uri, "id": submission_id},
+        conn=db,
+    )
+
+
+async def _upload_execution_log(
+    *,
+    submission_id: int,
+    attempt: int,
+    content: bytes,
+    completed_at: datetime,
+) -> str:
+    """Upload the assembled log content to managed storage; return a URI.
+
+    Uses the SUBMISSIONS bucket so execution logs sit alongside the
+    generated packages they pertain to. The storage backend's
+    :meth:`upload` is synchronous (it wraps boto3), so we run it in a
+    worker thread via :func:`asyncio.to_thread` to avoid blocking the
+    event loop. Other backend executors (TOSTADAS, etc.) will reuse
+    this helper.
+    """
+    import io
+
+    from backend.storage import JackpotBucket, get_storage_backend, get_uri_prefix
+    from backend.storage.settings import get_bucket_name
+
+    timestamp = completed_at.strftime("%Y%m%dT%H%M%SZ")
+    object_key = f"executions/{submission_id}/execution_{timestamp}_attempt{attempt}.log"
+    backend = get_storage_backend(JackpotBucket.SUBMISSIONS)
+    bucket_name = get_bucket_name(JackpotBucket.SUBMISSIONS)
+    uri_prefix = get_uri_prefix()
+
+    def _do_upload() -> None:
+        backend.upload(
+            object_key,
+            io.BytesIO(content),
+            content_type="text/plain; charset=utf-8",
+            metadata={
+                "jackpot_submission_id": str(submission_id),
+                "jackpot_attempt": str(attempt),
+                "jackpot_artifact_kind": "execution_log",
+            },
+        )
+
+    await asyncio.to_thread(_do_upload)
+    return f"{uri_prefix}://{bucket_name}/{object_key}"
+
+
 __all__ = [
     "cleanup_expired_import_sessions",
     "compute_full_content_hash",
+    "execute_submission",
     "get_promote_job_status",
     "promote_file_storage",
     "release_embargoed_submissions",

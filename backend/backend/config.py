@@ -100,6 +100,21 @@ class Settings(BaseSettings):
     # cannot block startup; runtime path will check repo eligibility.
     backend_submission_repos: Annotated[list[str], NoDecode] = []
 
+    # I-3b: Seqsender subprocess execution.
+    # Hard wall-time cap on a single Seqsender invocation. Above this
+    # the executor kills the subprocess and transitions the submission
+    # to EXECUTION_FAILED with a timeout error message.
+    execution_timeout_seconds: int = 3600
+    # Root scratch directory under which each execution gets a private
+    # `submission_{id}_attempt_{n}` subdirectory. Preserved on failure
+    # for diagnostic inspection; deleted on success.
+    execution_working_dir_root: str = "/tmp/jackpot-executions"
+    # Path to the Seqsender entry-point script. Default matches the
+    # CDCgov/seqsender shell wrapper installed at the conventional
+    # location in our api Dockerfile (/opt/seqsender/seqsender-kickoff).
+    # Operators with a different install layout override this setting.
+    seqsender_binary_path: str = "/opt/seqsender/seqsender-kickoff"
+
     @field_validator("cors_origins", mode="before")
     @classmethod
     def _parse_cors_origins(cls, v: object) -> list[str]:

@@ -3,6 +3,18 @@ COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
 ENV UV_PROJECT_ENVIRONMENT=/opt/venv
 WORKDIR /app
 
+# I-3b: install Seqsender (CDCgov/seqsender) for backend submission
+# execution. Seqsender is not on PyPI; we clone the upstream repo and
+# its Python deps go through the api venv via uv pip install. The
+# seqsender-kickoff shell wrapper is the entry point used by
+# Settings.seqsender_binary_path. git is needed for the clone.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends git \
+    && rm -rf /var/lib/apt/lists/*
+RUN git clone --depth 1 https://github.com/CDCgov/seqsender.git /opt/seqsender \
+    && chmod +x /opt/seqsender/seqsender-kickoff
+ENV PATH=/opt/seqsender:$PATH
+
 # Workspace root + all member projects (uv sync resolves them together)
 COPY pyproject.toml uv.lock ./
 COPY backend/ ./backend/
@@ -16,6 +28,18 @@ COPY schema/ ./schema/
 # without a follow-up `uv pip install`. See docs/dockerfile_strategy.md
 # for the rationale and the size tradeoff vs. a lean prod image.
 RUN uv sync --frozen --all-groups
+
+# Install Seqsender's Python requirements into the same venv so its
+# script can import them at runtime.
+RUN if [ -f /opt/seqsender/requirements.txt ]; then \
+        uv pip install --python /opt/venv/bin/python \
+            -r /opt/seqsender/requirements.txt; \
+    fi
+
+# Smoke-check at image build: verify the wrapper invokes without an
+# import error. Failure here surfaces a broken upstream pin rather
+# than a runtime error during the first execution.
+RUN /opt/venv/bin/python /opt/seqsender/seqsender.py version || true
 
 # Promote entrypoint script to system path
 RUN install -m 0755 backend/backend/entrypoint.sh /usr/local/bin/jackpot-entrypoint.sh
