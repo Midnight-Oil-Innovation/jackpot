@@ -113,6 +113,37 @@ After completing any router session or significant fix, append a new entry to
 - Environment management: uv — never use pip directly
 - Tests: pytest + testcontainers (real PostgreSQL container in tests)
 
+### ruff version is pinned across three sources of truth
+
+ruff is pinned to one specific version in three independent places that
+all must match:
+
+| Where | What |
+|---|---|
+| `.pre-commit-config.yaml` | `rev: v<version>` under `astral-sh/ruff-pre-commit` |
+| `backend/pyproject.toml` | `ruff==<version>` in the `dev` dependency group |
+| `cli/pyproject.toml` | `ruff==<version>` in the `dev` dependency group |
+
+Plus `schema/pyproject.toml` if it lists ruff (currently does not).
+
+After bumping the version in any of these places, **all** of them must be
+bumped together, then everyone pulling the change must run:
+
+```bash
+pre-commit clean
+pre-commit install --install-hooks
+uv sync
+```
+
+This refreshes the pre-commit hook cache (which doesn't auto-detect
+version changes) and the resolved lockfile.
+
+Why this matters: pre-commit caches hook environments by config hash, not
+by version. An ambient `uv tool install ruff` or stale cache produces a
+different ruff than CI runs. The result is "lint clean locally, fails on
+CI" — which bit PR #20 (P1) and PR #22 (P0g G-1+G-2) on their first runs
+before this pin was in place.
+
 ---
 
 ## Directory Structure
