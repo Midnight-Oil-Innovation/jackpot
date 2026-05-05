@@ -72,7 +72,7 @@ class GCPSecretManagerBackend(CredentialBackend):
             ) from exc
         except gax_exceptions.GoogleAPICallError as exc:
             raise CredentialError(
-                f"GCP error accessing secret " f"'{self._secret_prefix}{_secret_id(key)}': {exc}"
+                f"GCP error accessing secret '{self._secret_prefix}{_secret_id(key)}': {exc}"
             ) from exc
         return response.payload.data.decode("utf-8")
 
