@@ -88,11 +88,34 @@ class Settings(BaseSettings):
     promote_max_seconds_per_job: int = 3600
     promote_verify_hash: bool = True
 
+    # I-3a: backend-driven submission execution. Off by default — flipping
+    # this to True opts the deployment in to the I-3b/c surface (REST,
+    # CLI, UI). When False, package-only flow is the only path operators
+    # see, and the four NCBI/ENA credentials below are not required at
+    # startup.
+    allow_backend_submission: bool = False
+    # Operator-declared list of repo identifiers eligible for backend
+    # execution. Valid values in v1: "ncbi", "ena". Other values are
+    # silently ignored by the credential predicates so a stray entry
+    # cannot block startup; runtime path will check repo eligibility.
+    backend_submission_repos: Annotated[list[str], NoDecode] = []
+
     @field_validator("cors_origins", mode="before")
     @classmethod
     def _parse_cors_origins(cls, v: object) -> list[str]:
         # Critical Rule 53: list-typed Settings fields must accept JSON
         # arrays, comma-separated strings, empty strings, and real lists.
+        return cls._parse_str_list(v, field_name="cors_origins")
+
+    @field_validator("backend_submission_repos", mode="before")
+    @classmethod
+    def _parse_backend_submission_repos(cls, v: object) -> list[str]:
+        # Critical Rule 53. I-3a opt-in repo list; same JSON / CSV /
+        # empty-string / real-list shape as cors_origins.
+        return cls._parse_str_list(v, field_name="backend_submission_repos")
+
+    @staticmethod
+    def _parse_str_list(v: object, *, field_name: str) -> list[str]:
         if v is None or v == "":
             return []
         if isinstance(v, list):
@@ -103,9 +126,9 @@ class Settings(BaseSettings):
                 try:
                     return json.loads(s)
                 except json.JSONDecodeError as e:
-                    raise ValueError(f"cors_origins looks like JSON but won't parse: {e}") from e
+                    raise ValueError(f"{field_name} looks like JSON but won't parse: {e}") from e
             return [item.strip() for item in s.split(",") if item.strip()]
-        raise ValueError(f"cors_origins must be str or list, got {type(v).__name__}")
+        raise ValueError(f"{field_name} must be str or list, got {type(v).__name__}")
 
     class Config:
         env_file = ".env.local"

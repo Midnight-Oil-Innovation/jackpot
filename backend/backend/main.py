@@ -1,3 +1,4 @@
+import logging
 from contextlib import asynccontextmanager
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
@@ -10,7 +11,7 @@ from slowapi.middleware import SlowAPIMiddleware
 
 from backend.config import get_settings
 from backend.credentials import credentials
-from backend.database import execute_query
+from backend.database import execute_query, get_db
 from backend.jobs import (
     cleanup_expired_import_sessions,
     compute_full_content_hash,
@@ -51,9 +52,11 @@ from backend.routers import (
     tokens,
     users,
 )
+from backend.submissions import recover_interrupted_executions
 from backend.version import __version__
 
 scheduler = AsyncIOScheduler()
+logger = logging.getLogger(__name__)
 
 
 @asynccontextmanager
@@ -61,6 +64,22 @@ async def lifespan(app: FastAPI):
     configure_logging()
     get_settings().validate_for_production()
     credentials.validate_required()
+
+    # I-3a: recover any submissions left in EXECUTING by a prior shutdown.
+    # Per Critical Rule 60, the DB row survives a restart but the
+    # in-flight Seqsender subprocess does not; we transition each row to
+    # EXECUTION_INTERRUPTED so the user can decide whether to retry. The
+    # query is a no-op when no submissions are in EXECUTING — backed by
+    # the partial index added in migration 3644749bf4c6.
+    with get_db() as db:
+        counters = recover_interrupted_executions(db)
+        if counters.get("recovered", 0) > 0:
+            logger.warning(
+                "i3a recovery: transitioned %d submission(s) from EXECUTING "
+                "to EXECUTION_INTERRUPTED",
+                counters["recovered"],
+            )
+
     if get_settings().scheduler_enabled:
         scheduler.add_job(
             run_scrubber_queue_job,

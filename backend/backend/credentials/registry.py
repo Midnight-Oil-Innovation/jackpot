@@ -90,6 +90,59 @@ REQUIRED_CREDENTIALS: tuple[CredentialSpec, ...] = (
         # to a real predicate when storage_factory grows that backend.
         required_predicate=lambda _s: False,
     ),
+    # I-3a: backend-driven submission execution credentials. Required
+    # only when the operator opts in via Settings.allow_backend_submission
+    # AND lists the matching repo in Settings.backend_submission_repos.
+    # I-3b consumes these via credentials.get(...) inside the Seqsender
+    # subprocess invocation. Predicates intentionally skip startup-time
+    # enforcement when the repo isn't in the opt-in list, so an operator
+    # can run NCBI-only without setting ENA credentials.
+    CredentialSpec(
+        key="ncbi_submission_username",
+        description="NCBI submitter account username for backend execution "
+        "targeting NCBI repositories.",
+        legacy_env_names=(
+            "JACKPOT_NCBI_SUBMISSION_USERNAME",
+            "NCBI_SUBMISSION_USERNAME",
+        ),
+        required_predicate=lambda s: (
+            s.allow_backend_submission and "ncbi" in s.backend_submission_repos
+        ),
+    ),
+    CredentialSpec(
+        key="ncbi_submission_password",
+        description="NCBI submitter account password for backend execution "
+        "targeting NCBI repositories.",
+        legacy_env_names=(
+            "JACKPOT_NCBI_SUBMISSION_PASSWORD",
+            "NCBI_SUBMISSION_PASSWORD",
+        ),
+        required_predicate=lambda s: (
+            s.allow_backend_submission and "ncbi" in s.backend_submission_repos
+        ),
+    ),
+    CredentialSpec(
+        key="ena_webin_username",
+        description="ENA Webin submission username (e.g., 'Webin-12345').",
+        legacy_env_names=(
+            "JACKPOT_ENA_WEBIN_USERNAME",
+            "ENA_WEBIN_USERNAME",
+        ),
+        required_predicate=lambda s: (
+            s.allow_backend_submission and "ena" in s.backend_submission_repos
+        ),
+    ),
+    CredentialSpec(
+        key="ena_webin_password",
+        description="ENA Webin submission password.",
+        legacy_env_names=(
+            "JACKPOT_ENA_WEBIN_PASSWORD",
+            "ENA_WEBIN_PASSWORD",
+        ),
+        required_predicate=lambda s: (
+            s.allow_backend_submission and "ena" in s.backend_submission_repos
+        ),
+    ),
 )
 
 

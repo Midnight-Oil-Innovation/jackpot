@@ -45,6 +45,13 @@ VALID_REPOSITORIES: frozenset[str] = frozenset(
 
 # Status set kept here so tests + router can validate without going to
 # the DB CHECK constraint.
+#
+# I-3a added EXECUTING / EXECUTION_FAILED / EXECUTION_INTERRUPTED for
+# backend-driven submission execution. EXECUTING is the in-flight state
+# entered by ``mark_execution_queued``; EXECUTION_FAILED is set when
+# Seqsender returns non-zero (I-3b); EXECUTION_INTERRUPTED is set by
+# the lifespan recovery hook when an API restart abandons an in-flight
+# subprocess (Critical Rule 60).
 VALID_STATUSES: frozenset[str] = frozenset(
     {
         "DRAFT",
@@ -57,6 +64,10 @@ VALID_STATUSES: frozenset[str] = frozenset(
         "RELEASED",
         "WITHDRAWN",
         "FAILED",
+        # I-3a backend-execution states
+        "EXECUTING",
+        "EXECUTION_FAILED",
+        "EXECUTION_INTERRUPTED",
     }
 )
 
@@ -66,8 +77,12 @@ VALID_STATUSES: frozenset[str] = frozenset(
 # snapshot the operator can hand to Seqsender.
 _SAMPLES_LOCKED_STATUSES: frozenset[str] = frozenset(VALID_STATUSES - {"DRAFT"})
 
-# Statuses that allow the user to mark the submission rejected /
-# withdrawn after the fact.
+# Statuses that allow the user to withdraw the submission after the fact.
+# I-3a: also reachable from EXECUTION_FAILED and EXECUTION_INTERRUPTED so
+# the operator can give up on a failed backend execution. NOT reachable
+# from EXECUTING — withdrawing while a subprocess is running would leave
+# the executor mid-flight; we require the user to wait for completion or
+# failure first.
 _POST_SUBMITTED_STATUSES: frozenset[str] = frozenset(
     {
         "SUBMITTED",
@@ -76,7 +91,19 @@ _POST_SUBMITTED_STATUSES: frozenset[str] = frozenset(
         "EMBARGOED",
         "RELEASED",
         "REJECTED",
+        # I-3a
+        "EXECUTION_FAILED",
+        "EXECUTION_INTERRUPTED",
     }
+)
+
+# Statuses from which a backend execution can be (re)queued. The initial
+# queue happens from READY_TO_SUBMIT; retries from the two failure
+# states. EXECUTING is intentionally excluded — re-queuing while in
+# flight would race the existing subprocess.
+_EXECUTION_QUEUEABLE_STATUSES: frozenset[str] = frozenset({"READY_TO_SUBMIT"})
+_EXECUTION_RETRYABLE_STATUSES: frozenset[str] = frozenset(
+    {"EXECUTION_FAILED", "EXECUTION_INTERRUPTED"}
 )
 
 
@@ -894,6 +921,19 @@ def withdraw_submission(
     conn,
 ) -> dict:
     sub = _require_submission(submission_id, conn)
+    # I-3a: special-case EXECUTING with a clearer error message before the
+    # generic _require_status check fires. Without this branch the user
+    # gets the verbose "must be one of [...]" listing instead of an
+    # explanation of what to do.
+    if sub.get("status") == "EXECUTING":
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                "Cannot withdraw a submission while backend execution is "
+                "in progress. Wait for it to complete or fail; then "
+                "withdraw."
+            ),
+        )
     _require_status(sub, _POST_SUBMITTED_STATUSES)
     if not reason or not reason.strip():
         raise HTTPException(status_code=422, detail="reason is required.")
@@ -928,6 +968,363 @@ def withdraw_submission(
     return _serialise(rows[0])
 
 
+# ── I-3a: backend-driven execution transitions ────────────────────
+#
+# These functions implement the state-machine seams for backend
+# execution. None of them invoke a subprocess — that lives in I-3b.
+# The lifespan recovery hook (``recover_interrupted_executions``) is
+# the only one called from outside test code in I-3a.
+
+
+def mark_execution_queued(
+    *,
+    submission_id: int,
+    executor_backend: str,
+    actor_id: int | None,
+    conn,
+) -> dict:
+    """Transition READY_TO_SUBMIT → EXECUTING.
+
+    Stamps ``execution_started_at = NOW()``, sets ``executor_backend``,
+    increments ``execution_attempt_count`` from 0 to 1.
+
+    Emits ``SUBMISSION_BACKEND_EXECUTION_QUEUED`` audit and
+    ``SUBMISSION_EXECUTION_QUEUED`` notification.
+    """
+    sub = _require_submission(submission_id, conn)
+    _require_status(sub, _EXECUTION_QUEUEABLE_STATUSES)
+    rows = execute_write(
+        """
+        UPDATE submissions
+           SET status = 'EXECUTING',
+               execution_started_at = NOW(),
+               execution_completed_at = NULL,
+               execution_error_message = NULL,
+               execution_attempt_count = execution_attempt_count + 1,
+               executor_backend = :exec
+         WHERE id = :id
+         RETURNING *
+        """,
+        {"id": submission_id, "exec": executor_backend},
+        conn=conn,
+    )
+    updated = rows[0]
+    _audit(
+        AuditActions.SUBMISSION_BACKEND_EXECUTION_QUEUED,
+        actor_id=actor_id,
+        submission_id=submission_id,
+        before={"status": sub["status"]},
+        after={
+            "status": "EXECUTING",
+            "executor_backend": executor_backend,
+            "attempt": updated["execution_attempt_count"],
+        },
+        db=conn,
+    )
+    create_notification(
+        recipient_id=updated["created_by_user_id"],
+        event_type=NotificationEvents.SUBMISSION_EXECUTION_QUEUED,
+        title=f"Submission queued for backend execution: {updated['title']}",
+        body=(
+            f"Attempt {updated['execution_attempt_count']} via "
+            f"{executor_backend}. You'll be notified on completion or "
+            f"failure."
+        ),
+        resource_type="submission",
+        resource_id=str(submission_id),
+        action_url=f"/submissions/{submission_id}",
+        db_conn=conn,
+    )
+    return _serialise(updated)
+
+
+def mark_execution_retried(
+    *,
+    submission_id: int,
+    executor_backend: str,
+    actor_id: int | None,
+    conn,
+) -> dict:
+    """Transition EXECUTION_FAILED|EXECUTION_INTERRUPTED → EXECUTING.
+
+    Resets ``execution_started_at = NOW()``, clears the prior
+    ``execution_error_message``, increments ``execution_attempt_count``.
+    Preserves ``execution_log_uris`` (multiple attempts accumulate log
+    URIs in the array; I-3b appends, never overwrites).
+    """
+    sub = _require_submission(submission_id, conn)
+    _require_status(sub, _EXECUTION_RETRYABLE_STATUSES)
+    previous_status = sub["status"]
+    rows = execute_write(
+        """
+        UPDATE submissions
+           SET status = 'EXECUTING',
+               execution_started_at = NOW(),
+               execution_completed_at = NULL,
+               execution_error_message = NULL,
+               execution_attempt_count = execution_attempt_count + 1,
+               executor_backend = :exec
+         WHERE id = :id
+         RETURNING *
+        """,
+        {"id": submission_id, "exec": executor_backend},
+        conn=conn,
+    )
+    updated = rows[0]
+    _audit(
+        AuditActions.SUBMISSION_BACKEND_EXECUTION_RETRY_QUEUED,
+        actor_id=actor_id,
+        submission_id=submission_id,
+        before={"status": previous_status},
+        after={
+            "status": "EXECUTING",
+            "executor_backend": executor_backend,
+            "attempt": updated["execution_attempt_count"],
+            "previous_status": previous_status,
+        },
+        db=conn,
+    )
+    create_notification(
+        recipient_id=updated["created_by_user_id"],
+        event_type=NotificationEvents.SUBMISSION_EXECUTION_QUEUED,
+        title=f"Submission retry queued: {updated['title']}",
+        body=(
+            f"Retry attempt {updated['execution_attempt_count']} via "
+            f"{executor_backend} (previous status: {previous_status})."
+        ),
+        resource_type="submission",
+        resource_id=str(submission_id),
+        action_url=f"/submissions/{submission_id}",
+        db_conn=conn,
+    )
+    return _serialise(updated)
+
+
+def mark_execution_completed(
+    *,
+    submission_id: int,
+    actor_id: int | None = None,
+    conn,
+) -> dict:
+    """Transition EXECUTING → SUBMITTED on successful execution.
+
+    I-3b calls this from the executor's success path. The full
+    accession-registration flow stays separate (``register_accessions``)
+    — Seqsender's stdout doesn't always carry per-sample accessions, so
+    we only mark the submission as SUBMITTED here and let the existing
+    accession registration codepath fill in the per-sample accessions
+    when the operator (or the executor) provides them.
+    """
+    sub = _require_submission(submission_id, conn)
+    _require_status(sub, frozenset({"EXECUTING"}))
+    rows = execute_write(
+        """
+        UPDATE submissions
+           SET status = 'SUBMITTED',
+               submitted_at = COALESCE(submitted_at, NOW()),
+               execution_completed_at = NOW()
+         WHERE id = :id
+         RETURNING *
+        """,
+        {"id": submission_id},
+        conn=conn,
+    )
+    updated = rows[0]
+    _audit(
+        AuditActions.SUBMISSION_BACKEND_EXECUTION_COMPLETED,
+        actor_id=actor_id,
+        submission_id=submission_id,
+        before={"status": "EXECUTING"},
+        after={
+            "status": "SUBMITTED",
+            "attempt": updated["execution_attempt_count"],
+        },
+        db=conn,
+    )
+    create_notification(
+        recipient_id=updated["created_by_user_id"],
+        event_type=NotificationEvents.SUBMISSION_EXECUTION_COMPLETED,
+        title=f"Submission executed successfully: {updated['title']}",
+        body=(
+            f"Backend execution completed on attempt "
+            f"{updated['execution_attempt_count']}. Awaiting per-sample "
+            f"accession registration."
+        ),
+        resource_type="submission",
+        resource_id=str(submission_id),
+        action_url=f"/submissions/{submission_id}",
+        db_conn=conn,
+    )
+    return _serialise(updated)
+
+
+def mark_execution_failed(
+    *,
+    submission_id: int,
+    error_message: str,
+    log_uri: str | None = None,
+    actor_id: int | None = None,
+    conn,
+) -> dict:
+    """Transition EXECUTING → EXECUTION_FAILED.
+
+    Stamps ``execution_completed_at = NOW()``, populates
+    ``execution_error_message``. If ``log_uri`` is provided, appends to
+    ``execution_log_uris`` JSONB array.
+    """
+    sub = _require_submission(submission_id, conn)
+    _require_status(sub, frozenset({"EXECUTING"}))
+    if not error_message or not error_message.strip():
+        raise HTTPException(status_code=422, detail="error_message is required.")
+    if log_uri:
+        # to_jsonb(:uri) alone fails with "could not determine polymorphic
+        # type because input has type unknown" because psycopg2 ships
+        # bare parameter values as unknowns. Wrap with CAST(... AS text)
+        # so Postgres can resolve the polymorphic to_jsonb() variant.
+        # The shorter ::text postfix syntax is parsed as a SQLAlchemy
+        # named-bind by `:uri::text` and breaks at execute time.
+        update_sql = """
+            UPDATE submissions
+               SET status = 'EXECUTION_FAILED',
+                   execution_completed_at = NOW(),
+                   execution_error_message = :msg,
+                   execution_log_uris =
+                       execution_log_uris || to_jsonb(CAST(:uri AS text))
+             WHERE id = :id
+             RETURNING *
+        """
+        params = {
+            "id": submission_id,
+            "msg": error_message.strip(),
+            "uri": log_uri,
+        }
+    else:
+        update_sql = """
+            UPDATE submissions
+               SET status = 'EXECUTION_FAILED',
+                   execution_completed_at = NOW(),
+                   execution_error_message = :msg
+             WHERE id = :id
+             RETURNING *
+        """
+        params = {"id": submission_id, "msg": error_message.strip()}
+    rows = execute_write(update_sql, params, conn=conn)
+    updated = rows[0]
+    _audit(
+        AuditActions.SUBMISSION_BACKEND_EXECUTION_FAILED,
+        actor_id=actor_id,
+        submission_id=submission_id,
+        before={"status": "EXECUTING"},
+        after={
+            "status": "EXECUTION_FAILED",
+            "error_message": error_message.strip(),
+            "log_uri": log_uri,
+            "attempt": updated["execution_attempt_count"],
+        },
+        db=conn,
+    )
+    create_notification(
+        recipient_id=updated["created_by_user_id"],
+        event_type=NotificationEvents.SUBMISSION_EXECUTION_FAILED,
+        title=f"Submission execution failed: {updated['title']}",
+        body=error_message.strip(),
+        resource_type="submission",
+        resource_id=str(submission_id),
+        action_url=f"/submissions/{submission_id}",
+        db_conn=conn,
+    )
+    return _serialise(updated)
+
+
+def mark_execution_interrupted(
+    *,
+    submission_id: int,
+    error_message: str = "API restart detected during execution",
+    actor_id: int | None = None,
+    conn,
+) -> dict:
+    """Transition EXECUTING → EXECUTION_INTERRUPTED.
+
+    Called by ``recover_interrupted_executions`` during lifespan startup.
+    Distinct from ``mark_execution_failed`` because the cause is
+    environmental (Critical Rule 60) rather than submission-specific.
+    """
+    sub = _require_submission(submission_id, conn)
+    _require_status(sub, frozenset({"EXECUTING"}))
+    rows = execute_write(
+        """
+        UPDATE submissions
+           SET status = 'EXECUTION_INTERRUPTED',
+               execution_completed_at = NOW(),
+               execution_error_message = :msg
+         WHERE id = :id
+         RETURNING *
+        """,
+        {"id": submission_id, "msg": error_message},
+        conn=conn,
+    )
+    updated = rows[0]
+    _audit(
+        AuditActions.SUBMISSION_BACKEND_EXECUTION_INTERRUPTED,
+        actor_id=actor_id,
+        submission_id=submission_id,
+        before={"status": "EXECUTING"},
+        after={
+            "status": "EXECUTION_INTERRUPTED",
+            "error_message": error_message,
+            "attempt": updated["execution_attempt_count"],
+        },
+        db=conn,
+    )
+    create_notification(
+        recipient_id=updated["created_by_user_id"],
+        event_type=NotificationEvents.SUBMISSION_EXECUTION_INTERRUPTED,
+        title=f"Submission execution interrupted: {updated['title']}",
+        body=error_message,
+        resource_type="submission",
+        resource_id=str(submission_id),
+        action_url=f"/submissions/{submission_id}",
+        db_conn=conn,
+    )
+    return _serialise(updated)
+
+
+def recover_interrupted_executions(conn) -> dict[str, int]:
+    """Find every submission in EXECUTING and move it to
+    EXECUTION_INTERRUPTED. Called from the FastAPI lifespan startup so a
+    restart while a Seqsender subprocess was running doesn't leave the
+    DB row in a state nothing can transition out of.
+
+    Returns a counter dict ``{"recovered": <n>}`` for the lifespan code
+    to log.
+    """
+    rows = execute_query(
+        """
+        SELECT id FROM submissions
+         WHERE status = 'EXECUTING' AND is_deleted = FALSE
+        """,
+        conn=conn,
+    )
+    recovered = 0
+    for row in rows:
+        try:
+            mark_execution_interrupted(
+                submission_id=row["id"],
+                actor_id=None,
+                conn=conn,
+            )
+            recovered += 1
+        except HTTPException:
+            # Another path already moved this row out of EXECUTING (e.g.
+            # a concurrent retry). Idempotent skip — count only the
+            # rows we actually transitioned.
+            logger.debug(
+                "recover_interrupted_executions: submission %s no longer EXECUTING; skipping",
+                row["id"],
+            )
+    return {"recovered": recovered}
+
+
 __all__ = [
     "VALID_REPOSITORIES",
     "VALID_STATUSES",
@@ -939,10 +1336,16 @@ __all__ = [
     "get_submission",
     "list_submission_samples",
     "list_submissions",
+    "mark_execution_completed",
+    "mark_execution_failed",
+    "mark_execution_interrupted",
+    "mark_execution_queued",
+    "mark_execution_retried",
     "mark_package_generated",
     "mark_rejected",
     "mark_submitted",
     "parse_accessions_tsv",
+    "recover_interrupted_executions",
     "register_accessions",
     "remove_samples_from_submission",
     "soft_delete_submission",

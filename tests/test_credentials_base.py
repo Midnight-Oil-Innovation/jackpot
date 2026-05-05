@@ -23,8 +23,9 @@ def test_credential_backend_is_abstract() -> None:
     raise AssertionError("CredentialBackend should be abstract")
 
 
-def test_required_credentials_has_six_entries() -> None:
+def test_required_credentials_registry_shape() -> None:
     keys = [spec.key for spec in REQUIRED_CREDENTIALS]
+    # C-1 baseline (6) + I-3a backend-execution credentials (4).
     assert keys == [
         "jwt_signing_key",
         "google_oauth_client_secret",
@@ -32,6 +33,10 @@ def test_required_credentials_has_six_entries() -> None:
         "gcs_hmac_access_key",
         "gcs_hmac_secret",
         "local_storage_presign_secret",
+        "ncbi_submission_username",
+        "ncbi_submission_password",
+        "ena_webin_username",
+        "ena_webin_password",
     ]
 
 
