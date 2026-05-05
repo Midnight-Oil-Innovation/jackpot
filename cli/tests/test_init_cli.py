@@ -210,7 +210,8 @@ class TestConfigureInteractivePrompts:
 
     def test_configure_with_typed_operator_values(self, runner: CliRunner, tmp_path) -> None:
         # Inputs in order:
-        #   org name, email, deployment URL, accept derived CORS
+        #   org name, email, deployment URL, accept derived CORS,
+        #   I-3c backend-submission: enable? NCBI? ENA?
         result = runner.invoke(
             init,
             [
@@ -228,6 +229,9 @@ class TestConfigureInteractivePrompts:
                 "admin@hospital.example.org\n"
                 "https://api.hospital.example.org\n"
                 "y\n"
+                "y\n"
+                "y\n"
+                "n\n"
             ),
         )
         assert result.exit_code == 0, result.output

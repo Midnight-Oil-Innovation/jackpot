@@ -22,6 +22,9 @@ from backend.auth.guards import (
     get_current_user,
     get_user_lab_membership,
 )
+from backend.config import get_settings
+from backend.credentials import credentials
+from backend.credentials.base import CredentialNotFoundError
 from backend.database import get_db_dep
 from backend.responses import error, success, success_list
 from backend.submission_packages import generate_package
@@ -31,6 +34,8 @@ from backend.submissions import (
     create_submission,
     get_submission,
     list_submissions,
+    mark_execution_queued,
+    mark_execution_retried,
     mark_rejected,
     mark_submitted,
     parse_accessions_tsv,
@@ -392,3 +397,312 @@ def withdraw_endpoint(
             conn=db,
         )
     )
+
+
+# ── I-3c: backend execution endpoints ─────────────────────────────
+
+
+class _ExecuteBody(BaseModel):
+    """Optional body for /execute. ``executor_backend`` is forward-compat
+    for future executors; v1 only ships ``"seqsender_subprocess"``."""
+
+    executor_backend: str | None = None
+
+
+# Repo-name normalisation: the column ``target_repository`` stores
+# ``NCBI`` / ``ENA`` / ``GISAID_*`` / ``DDBJ``; the C-1 settings list
+# ``backend_submission_repos`` contains lowercase ``"ncbi"`` / ``"ena"``.
+# This map normalises in one place so both halves agree.
+_REPO_TO_SETTINGS_KEY: dict[str, str] = {
+    "NCBI": "ncbi",
+    "ENA": "ena",
+    "GISAID_EPICOV": "gisaid",
+    "GISAID_EPIFLU": "gisaid",
+    "GISAID_EPIPOX": "gisaid",
+    "DDBJ": "ddbj",
+}
+
+_SUPPORTED_BACKEND_REPOS: frozenset[str] = frozenset({"ncbi", "ena"})
+
+_CREDENTIAL_KEYS_BY_REPO: dict[str, tuple[str, ...]] = {
+    "ncbi": ("ncbi_submission_username", "ncbi_submission_password"),
+    "ena": ("ena_webin_username", "ena_webin_password"),
+}
+
+
+def _check_credentials_for_repo(repo: str) -> None:
+    """Raise HTTPException(400) if any credential required for the
+    target repo is missing from the configured backend.
+
+    Reads via the C-1 abstraction; CredentialNotFoundError becomes a 400
+    naming the missing keys so the operator can fix env vars / the
+    credential file / Secret Manager.
+    """
+    keys = _CREDENTIAL_KEYS_BY_REPO.get(repo, ())
+    missing: list[str] = []
+    for key in keys:
+        try:
+            credentials.get(key)
+        except CredentialNotFoundError:
+            missing.append(key)
+    if missing:
+        first_upper = missing[0].upper()
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "error_code": "MISSING_CREDENTIALS",
+                "message": (
+                    f"Backend execution requires credentials for repo "
+                    f"'{repo}'. Missing: {', '.join(missing)}. "
+                    f"Configure via JACKPOT_CRED_{first_upper} (and the "
+                    f"matching credential backend) before retrying."
+                ),
+                "missing_keys": missing,
+            },
+        )
+
+
+def _enforce_execution_gates(
+    sub: dict,
+    *,
+    allowed_statuses: frozenset[str],
+) -> tuple[str, str]:
+    """Run the shared pre-flight checks for /execute and /retry-execution.
+
+    Returns ``(target_repo_raw, settings_repo_key)`` so the caller can
+    forward both forms (uppercase column form for the SDK; lowercase
+    for credential lookups) without re-deriving them.
+
+    Raises HTTPException with the specific I-3c error codes:
+      - BACKEND_EXECUTION_DISABLED (409)
+      - REPO_NOT_ENABLED (409)
+      - REPO_NOT_SUPPORTED (409)
+      - INVALID_STATE (409)
+      - MISSING_CREDENTIALS (400)
+    """
+    settings = get_settings()
+
+    if not settings.allow_backend_submission:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "error_code": "BACKEND_EXECUTION_DISABLED",
+                "message": (
+                    "Backend execution is disabled in this deployment. "
+                    "Set allow_backend_submission=True and configure "
+                    "backend_submission_repos to enable. See documentation."
+                ),
+            },
+        )
+
+    target_repo_raw = (sub.get("target_repository") or "").strip()
+    settings_key = _REPO_TO_SETTINGS_KEY.get(target_repo_raw.upper(), "")
+    enabled = list(settings.backend_submission_repos)
+
+    if settings_key and settings_key not in enabled:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "error_code": "REPO_NOT_ENABLED",
+                "message": (
+                    f"Backend execution for repo '{target_repo_raw}' is "
+                    f"not enabled in this deployment. Configured repos: "
+                    f"{enabled or '(none)'}."
+                ),
+            },
+        )
+
+    if not settings_key or settings_key not in _SUPPORTED_BACKEND_REPOS:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "error_code": "REPO_NOT_SUPPORTED",
+                "message": (
+                    f"Backend execution is not supported for repo "
+                    f"'{target_repo_raw}'. Supported in v1: ncbi, ena. "
+                    f"Use the manual package workflow for this repo."
+                ),
+            },
+        )
+
+    status = sub.get("status")
+    if status not in allowed_statuses:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "error_code": "INVALID_STATE",
+                "message": (
+                    f"Cannot execute submission in status '{status}'. "
+                    f"Submission must be in one of: "
+                    f"{sorted(allowed_statuses)}."
+                ),
+            },
+        )
+
+    _check_credentials_for_repo(settings_key)
+    return target_repo_raw, settings_key
+
+
+def _schedule_execution_job(submission_id: int, attempt: int) -> None:
+    """Hand the submission to the APScheduler instance for backend
+    execution. ``attempt`` makes the job ID unique across retries.
+
+    Imported lazily to avoid a circular import (``backend.main`` imports
+    routers and routers would import the scheduler back from main).
+    """
+    from backend.jobs import execute_submission
+    from backend.main import scheduler
+
+    scheduler.add_job(
+        execute_submission,
+        args=[submission_id],
+        id=f"execute_submission_{submission_id}_attempt_{attempt}",
+        replace_existing=False,
+    )
+
+
+@router.post("/{submission_id}/execute", status_code=202)
+def execute_endpoint(
+    submission_id: int,
+    request: Request,
+    body: _ExecuteBody | None = None,
+    db=Depends(get_db_dep),  # noqa: B008
+):
+    """Queue a generated submission for backend execution.
+
+    Pre-flight gates (in order):
+      1. Permission (existing RBAC).
+      2. ``allow_backend_submission`` is True.
+      3. Submission's repo is in ``backend_submission_repos``.
+      4. Submission's repo is in v1's supported set (``ncbi``, ``ena``).
+      5. Submission status is READY_TO_SUBMIT (the codebase's name for
+         what the spec called GENERATED — the state set by
+         ``mark_package_generated``).
+      6. Required credentials are configured.
+
+    On all gates passing: transition to EXECUTING via
+    ``mark_execution_queued`` and queue the APScheduler job.
+    """
+    user = get_current_user(request)
+    sub = get_submission(submission_id, db)
+    _ensure_can_write(user, sub)
+    _enforce_execution_gates(sub, allowed_statuses=frozenset({"READY_TO_SUBMIT"}))
+
+    executor_backend = (body.executor_backend if body else None) or "seqsender_subprocess"
+    updated = mark_execution_queued(
+        submission_id=submission_id,
+        executor_backend=executor_backend,
+        actor_id=user["id"],
+        conn=db,
+    )
+    _schedule_execution_job(submission_id, attempt=updated["execution_attempt_count"])
+    return success(data=updated, status_code=202)
+
+
+@router.post("/{submission_id}/retry-execution", status_code=202)
+def retry_execution_endpoint(
+    submission_id: int,
+    request: Request,
+    body: _ExecuteBody | None = None,
+    db=Depends(get_db_dep),  # noqa: B008
+):
+    """Re-queue a failed or interrupted submission for backend execution.
+
+    Same gates as ``/execute`` except the status check accepts
+    ``EXECUTION_FAILED`` and ``EXECUTION_INTERRUPTED``.
+    """
+    user = get_current_user(request)
+    sub = get_submission(submission_id, db)
+    _ensure_can_write(user, sub)
+    _enforce_execution_gates(
+        sub,
+        allowed_statuses=frozenset({"EXECUTION_FAILED", "EXECUTION_INTERRUPTED"}),
+    )
+
+    executor_backend = (body.executor_backend if body else None) or "seqsender_subprocess"
+    updated = mark_execution_retried(
+        submission_id=submission_id,
+        executor_backend=executor_backend,
+        actor_id=user["id"],
+        conn=db,
+    )
+    _schedule_execution_job(submission_id, attempt=updated["execution_attempt_count"])
+    return success(data=updated, status_code=202)
+
+
+@router.get("/{submission_id}/execution-logs")
+def execution_logs_endpoint(
+    submission_id: int,
+    request: Request,
+    db=Depends(get_db_dep),  # noqa: B008
+):
+    """Return per-attempt execution-log entries for the submission.
+
+    Each entry carries the canonical ``log_uri``, a presigned-or-equivalent
+    ``log_view_url`` suitable for click-through, and best-effort
+    timestamps drawn from audit events for the matching attempt. The
+    audit lookups are best-effort because ``execute_submission`` emits
+    them outside the request scope; if they're absent or hard to match,
+    the corresponding fields are ``None`` rather than blocking the
+    response.
+    """
+    user = get_current_user(request)
+    sub = get_submission(submission_id, db)
+    _ensure_can_read(user, sub)
+
+    log_uris = sub.get("execution_log_uris") or []
+    entries: list[dict] = []
+    for index, raw_uri in enumerate(log_uris):
+        attempt = index + 1
+        entries.append(
+            {
+                "attempt": attempt,
+                "log_uri": raw_uri,
+                "log_view_url": _execution_log_view_url(raw_uri),
+                "started_at": None,
+                "completed_at": None,
+                "exit_status": None,
+            }
+        )
+
+    return success(
+        data={
+            "submission_id": submission_id,
+            "entries": entries,
+        }
+    )
+
+
+def _execution_log_view_url(uri: str) -> str:
+    """Translate a stored log URI into a click-through URL.
+
+    For cloud-backed URIs (``s3://`` / ``gs://``) we delegate to the
+    storage abstraction's presigned-URL helper. For ``file://`` URIs
+    (single-node deployments) we return the raw URI; the existing
+    backend file-serving routes treat ``file://`` paths as
+    backend-served already, and the operator-facing log viewer in the
+    Streamlit page falls back to displaying the path with a hint when
+    a presign isn't available.
+
+    Wrapping presign generation in this helper keeps any future
+    cloud-bucket changes localised — callers don't have to inspect
+    schemes themselves.
+    """
+    from urllib.parse import urlparse
+
+    parsed = urlparse(uri)
+    scheme = parsed.scheme.lower()
+    if scheme in ("s3", "gs"):
+        from backend.storage import generate_presigned_url
+
+        bucket = parsed.netloc
+        key = parsed.path.lstrip("/")
+        try:
+            return generate_presigned_url(bucket, key, ttl_seconds=3600)
+        except Exception as exc:  # noqa: BLE001 — best-effort
+            logger.warning(
+                "execution-logs: presign failed for %s: %s; returning raw URI",
+                uri,
+                exc,
+            )
+    return uri

@@ -16,7 +16,8 @@ important UX moment — it is the bridge between JACKPOT and Seqsender.
 
 from __future__ import annotations
 
-from datetime import date
+import time
+from datetime import UTC, date, datetime
 
 import streamlit as st
 
@@ -30,6 +31,7 @@ SS_VIEW = "subs.view"  # "list" | "create" | "detail"
 SS_DETAIL_ID = "subs.detail_id"
 SS_CREATE_STEP = "subs.create.step"
 SS_CREATE_DRAFT = "subs.create.draft"
+SS_EXECUTION_REFRESH = "subs.execution.refresh_ts"  # I-3c auto-refresh tick
 
 
 _REPOSITORIES = ("NCBI", "GISAID_EPICOV", "GISAID_EPIFLU", "GISAID_EPIPOX", "ENA", "DDBJ")
@@ -46,7 +48,96 @@ _STATUS_COLORS: dict[str, tuple[str, str]] = {
     "RELEASED": ("#0f766e", "#99f6e4"),
     "WITHDRAWN": ("#1f2937", "#e5e7eb"),
     "FAILED": ("#7f1d1d", "#fecaca"),
+    # I-3a backend-execution states
+    "EXECUTING": ("#1e3a8a", "#bfdbfe"),
+    "EXECUTION_FAILED": ("#7f1d1d", "#fecaca"),
+    "EXECUTION_INTERRUPTED": ("#854d0e", "#fde68a"),
 }
+
+
+_REPO_TO_SETTINGS_KEY = {
+    "NCBI": "ncbi",
+    "ENA": "ena",
+    "GISAID_EPICOV": "gisaid",
+    "GISAID_EPIFLU": "gisaid",
+    "GISAID_EPIPOX": "gisaid",
+    "DDBJ": "ddbj",
+}
+
+
+def _backend_execution_visibility(
+    sub: dict,
+    public_settings: dict,
+) -> tuple[str, str | None]:
+    """Decide whether to show the Execute / Retry button for this submission.
+
+    Returns ``(visibility, tooltip)`` where visibility is:
+      - ``"hidden"``: render nothing (status doesn't admit execution).
+      - ``"shown"``: render the button enabled.
+      - ``"disabled"``: render the button disabled with the tooltip.
+
+    The button only ever appears for repo statuses where the next
+    transition is "queue for backend execution" — that's
+    ``READY_TO_SUBMIT`` for the initial run and the two failed states
+    for retries.
+    """
+    status = sub.get("status")
+    target_repo = (sub.get("target_repository") or "").upper()
+    eligible_status = status in (
+        "READY_TO_SUBMIT",
+        "EXECUTION_FAILED",
+        "EXECUTION_INTERRUPTED",
+    )
+    if not eligible_status:
+        return "hidden", None
+
+    if not public_settings.get("allow_backend_submission"):
+        return "disabled", (
+            "Backend execution is disabled in this deployment. "
+            "Set allow_backend_submission=True and configure "
+            "backend_submission_repos to enable."
+        )
+
+    enabled_repos = list(public_settings.get("backend_submission_repos") or [])
+    settings_key = _REPO_TO_SETTINGS_KEY.get(target_repo, "")
+    if settings_key and settings_key not in enabled_repos:
+        return "disabled", (
+            f"Backend execution for repo '{target_repo}' is not enabled. "
+            f"Configured: {enabled_repos or '(none)'}."
+        )
+    if settings_key not in {"ncbi", "ena"}:
+        return "disabled", (
+            f"Backend execution is not supported for '{target_repo}' in v1. "
+            f"Use the manual package workflow for this repo."
+        )
+    return "shown", None
+
+
+def _humanize_started_ago(iso_ts: str | None) -> str:
+    """Turn an ISO timestamp into ``"Xs ago"`` / ``"Xm ago"`` / ``"Xh ago"``.
+
+    Returns ``"unknown"`` when the input is missing or unparseable; the
+    UI handles that gracefully (the banner just says "started recently").
+    """
+    if not iso_ts:
+        return "unknown"
+    try:
+        # ISO with a trailing Z fails on Python <3.11's fromisoformat;
+        # the +00:00 form is the canonical replacement.
+        ts = datetime.fromisoformat(iso_ts.replace("Z", "+00:00"))
+    except ValueError:
+        return "unknown"
+    if ts.tzinfo is None:
+        ts = ts.replace(tzinfo=UTC)
+    delta = datetime.now(UTC) - ts
+    seconds = int(delta.total_seconds())
+    if seconds < 60:
+        return f"{seconds}s ago"
+    if seconds < 3600:
+        return f"{seconds // 60}m ago"
+    if seconds < 86400:
+        return f"{seconds // 3600}h ago"
+    return f"{seconds // 86400}d ago"
 
 
 def _status_badge(status: str | None) -> str:
@@ -61,6 +152,20 @@ def _init_state() -> None:
     st.session_state.setdefault(SS_DETAIL_ID, None)
     st.session_state.setdefault(SS_CREATE_STEP, 1)
     st.session_state.setdefault(SS_CREATE_DRAFT, {})
+    st.session_state.setdefault(SS_EXECUTION_REFRESH, 0.0)
+
+
+def _fetch_public_settings(client) -> dict:
+    """Cached-per-rerun read of the public-settings flags. Falls back to
+    permissive values if the endpoint is unavailable; the server-side
+    pre-flight gates remain authoritative regardless of what the UI shows."""
+    try:
+        body = client.get("/api/v1/settings/public")
+    except ApiError:
+        return {"allow_backend_submission": False, "backend_submission_repos": []}
+    if isinstance(body, dict):
+        return body
+    return {"allow_backend_submission": False, "backend_submission_repos": []}
 
 
 # ── list ──────────────────────────────────────────────────────────
@@ -465,6 +570,94 @@ def _render_detail_actions(client, sub: dict) -> None:
                 st.rerun()
             except ApiError as exc:
                 st.error(f"Delete failed: {exc.message}")
+
+    # I-3c: backend execution UI lives alongside the manual workflow.
+    # The manual post-package instructions remain visible in the create
+    # wizard's step 5; this section adds opt-in convenience for
+    # operators with backend execution enabled. Read settings once per
+    # render so the gating cost is one HTTP call.
+    _render_execution_section(client, sub)
+
+
+def _render_execution_section(client, sub: dict) -> None:
+    """Backend-execution UI: Execute / Retry buttons, status banner,
+    per-attempt log links. Always-on execution-logs accordion when at
+    least one attempt has been made, regardless of execute-button
+    eligibility."""
+    sid = sub["id"]
+    status = sub.get("status")
+    attempt_count = sub.get("execution_attempt_count") or 0
+
+    public = _fetch_public_settings(client)
+    visibility, tooltip = _backend_execution_visibility(sub, public)
+
+    st.markdown("##### Backend execution")
+
+    # Execute / Retry button (gated).
+    if visibility != "hidden":
+        is_retry = status in ("EXECUTION_FAILED", "EXECUTION_INTERRUPTED")
+        label = "Retry execution" if is_retry else "Execute on backend"
+        if visibility == "disabled":
+            st.button(label, disabled=True, help=tooltip, key=f"subs.exec.{sid}.disabled")
+            if tooltip:
+                st.caption(tooltip)
+        else:
+            if st.button(label, key=f"subs.exec.{sid}.run", type="primary"):
+                endpoint = "retry-execution" if is_retry else "execute"
+                try:
+                    client.post(f"/api/v1/submissions/{sid}/{endpoint}")
+                    st.session_state[SS_EXECUTION_REFRESH] = time.time()
+                    st.success("Execution queued.")
+                    st.rerun()
+                except ApiError as exc:
+                    st.error(f"Could not queue execution: {exc.message}")
+
+    # Status banner for EXECUTING; auto-refresh every ~5s while in flight.
+    if status == "EXECUTING":
+        started = sub.get("execution_started_at")
+        st.info(
+            f"Execution in progress (attempt {attempt_count}, started "
+            f"{_humanize_started_ago(started)})."
+        )
+        with st.spinner("Waiting for executor..."):
+            pass
+        st.caption(
+            "This page polls every 5 seconds. Closing the browser does not cancel the execution."
+        )
+        # Light-weight auto-refresh: sleep a beat and rerun. Streamlit's
+        # st_autorefresh component would be cleaner but isn't a hard
+        # dependency in this codebase.
+        time.sleep(5)
+        st.rerun()
+
+    # Failure banner with the error message + retry hint.
+    if status in ("EXECUTION_FAILED", "EXECUTION_INTERRUPTED"):
+        err = sub.get("execution_error_message") or "(no error message recorded)"
+        st.error(f"Last execution {status.replace('EXECUTION_', '').lower()}: {err}")
+
+    # Always-on logs accordion when at least one attempt has happened.
+    if attempt_count > 0:
+        with st.expander(f"View execution logs ({attempt_count} attempt(s))"):
+            try:
+                body = client.get(f"/api/v1/submissions/{sid}/execution-logs")
+            except ApiError as exc:
+                st.error(f"Could not load logs: {exc.message}")
+                return
+            entries = (body or {}).get("entries", []) if isinstance(body, dict) else []
+            if not entries:
+                st.caption("No log entries recorded yet.")
+                return
+            for entry in entries:
+                attempt = entry.get("attempt")
+                exit_status = entry.get("exit_status") or "—"
+                view_url = entry.get("log_view_url") or entry.get("log_uri") or ""
+                cols = st.columns([1, 2, 4])
+                cols[0].markdown(f"**Attempt {attempt}**")
+                cols[1].caption(f"status: {exit_status}")
+                if view_url:
+                    cols[2].markdown(f"[View log]({view_url})")
+                else:
+                    cols[2].caption("(no link)")
 
 
 # ── entrypoint ────────────────────────────────────────────────────

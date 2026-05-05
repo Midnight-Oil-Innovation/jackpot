@@ -37,6 +37,7 @@ from pathlib import Path
 import click
 from jackpot_scenarios.scenarios import SCENARIO_REGISTRY
 
+from jackpot.init.backend_submission import prompt_for_backend_submission
 from jackpot.init.detector import prompt_for_scenario
 from jackpot.init.github_vars import (
     fetch_environment_variables,
@@ -205,6 +206,7 @@ def _gather_operator_overrides(
     instance_name: str,
     non_interactive: bool,
     use_gh_vars: bool,
+    scenario=None,
 ) -> dict[str, object]:
     """Prompt the operator for identity values; if `gh` is available
     and `use_gh_vars=True`, present GitHub repo/env vars as defaults
@@ -275,6 +277,12 @@ def _gather_operator_overrides(
             )
             if cors_raw:
                 overrides["cors_origins"] = [o.strip() for o in cors_raw.split(",") if o.strip()]
+
+    # I-3c: per-scenario backend-submission prompt. Returns disabled for
+    # Scenario A / F regardless; for B/C/D/E/T the operator chooses.
+    if scenario is not None:
+        backend_overrides = prompt_for_backend_submission(scenario, non_interactive=non_interactive)
+        overrides.update(backend_overrides)
 
     return overrides
 
@@ -380,6 +388,7 @@ def configure_cmd(
         instance_name=resolved_instance_name,
         non_interactive=non_interactive,
         use_gh_vars=not no_gh,
+        scenario=scenario,
     )
 
     written = write_instance(
