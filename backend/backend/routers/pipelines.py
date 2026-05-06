@@ -32,16 +32,22 @@ from backend.auth.guards import (
     require_lab_director,
     require_platform_admin,
 )
+from backend.config import get_settings
 from backend.database import execute_query, execute_write, get_db_dep
 from backend.pagination import paginate
 from backend.pipeline_config import (
+    NoProfileAvailableError,
+    ProfileNotFoundError,
     compute_pipeline_compatibility,
     generate_run_config,
     new_pipeline_token,
     new_run_id,
+    render_nextflow_config,
+    resolve_profile,
     result_uri_for,
     submit_to_batch,
     work_dir_for,
+    write_run_config,
 )
 from backend.pipeline_results_loader import load_pipeline_results
 from backend.pipeline_schemas import RESULT_SCHEMAS
@@ -173,6 +179,12 @@ class LaunchRequest(BaseModel):
     parameters: dict[str, Any] = Field(default_factory=dict)
     project_id: int
     override_soft_warnings: bool = False
+    # P0g G-4: optional execution-profile selectors. profile_id wins when
+    # both are provided. When neither is supplied, the resolver falls back
+    # to (a) the pipeline's lowest-priority default profile, then (b) the
+    # deployment-default profile, then (c) the legacy GCP-Batch generator.
+    profile_name: str | None = None
+    profile_id: str | None = None
 
 
 @router.post("/launch")
@@ -307,27 +319,93 @@ def launch_pipeline(
         lab_rows[0].get("project_prefix") or lab_rows[0].get("display_name") or f"lab-{lab_id}"
     )
 
+    # ── P0g G-4: profile resolution ─────────────────────────────────────
+    # The pipeline_default_profile association uses UUID pipeline_id;
+    # the catalog table is SERIAL-keyed, so we stringify the integer id
+    # for now (matches the FK-fallback documented in migration
+    # bac8dbb11c0b). Falls through cleanly to NoProfileAvailableError
+    # when nothing is associated.
+    profile = None
+    try:
+        profile = resolve_profile(
+            db_conn=db,
+            pipeline_id=str(catalog["id"]),
+            profile_name=payload.profile_name,
+            profile_id=payload.profile_id,
+        )
+    except ProfileNotFoundError as exc:
+        return error(
+            "PROFILE_NOT_FOUND",
+            str(exc),
+            detail={
+                "requested": exc.requested,
+                "available_profiles": exc.available_profile_names,
+            },
+            status_code=400,
+        )
+    except NoProfileAvailableError:
+        # Resolution chain exhausted — fall through to the legacy
+        # GCP-Batch path below. Coexistence is intentional per the G-4
+        # design; deletion of the legacy path is a follow-up PR.
+        profile = None
+
     run_id = new_run_id()
     pipeline_token = new_pipeline_token()
-    work_dir = work_dir_for(run_id)
-    result_uri = result_uri_for(run_id)
+    settings = get_settings()
+    api_url = settings.jackpot_api_url
+    weblog_url = f"{api_url.rstrip('/')}/api/v1/pipelines/events"
+    result_registration_url = f"{api_url.rstrip('/')}/api/v1/pipelines/{run_id}/results"
 
-    config_text = generate_run_config(
-        run_id=run_id,
-        pipeline_name=catalog["pipeline_name"],
-        pipeline_version=catalog.get("pipeline_version"),
-        lab_slug=lab_slug,
-        pipeline_token=pipeline_token,
-        work_dir=work_dir,
-        result_uri=result_uri,
-    )
-    config_path = f"/tmp/jackpot_{run_id}.config"  # noqa: S108 — Nextflow needs a filesystem path
-    try:
-        Path(config_path).write_text(config_text)
-    except OSError as exc:
-        logger.warning("Could not write run config to %s: %s", config_path, exc)
+    if profile is None:
+        # Legacy path — single hardcoded GCP-Batch generator.
+        work_dir = work_dir_for(run_id)
+        result_uri = result_uri_for(run_id)
+        config_text = generate_run_config(
+            run_id=run_id,
+            pipeline_name=catalog["pipeline_name"],
+            pipeline_version=catalog.get("pipeline_version"),
+            lab_slug=lab_slug,
+            pipeline_token=pipeline_token,
+            work_dir=work_dir,
+            result_uri=result_uri,
+        )
+        config_path = f"/tmp/jackpot_{run_id}.config"  # noqa: S108
+        try:
+            Path(config_path).write_text(config_text)
+        except OSError as exc:
+            logger.warning("Could not write run config to %s: %s", config_path, exc)
+        launch_metadata_extra: dict[str, Any] = {}
+    else:
+        # Profile-driven path — render via profile_renderer + write
+        # via fsspec into <work_dir>/runs/<run_id>/jackpot_run.config.
+        profile_work_dir_base = profile.work_dir or settings.work_dir
+        work_dir = f"{profile_work_dir_base.rstrip('/')}/runs/{run_id}/work"
+        result_uri = result_uri_for(run_id)
+        config_text = render_nextflow_config(
+            profile=profile,
+            pipeline=catalog,
+            run_id=run_id,
+            weblog_url=weblog_url,
+            result_registration_url=result_registration_url,
+            pipeline_token=pipeline_token,
+            work_dir=profile_work_dir_base,
+        )
+        try:
+            config_path = write_run_config(
+                rendered_config=config_text,
+                work_dir=profile_work_dir_base,
+                run_id=run_id,
+            )
+        except (OSError, ValueError) as exc:
+            logger.warning("Could not write profile run config: %s", exc)
+            config_path = f"/tmp/jackpot_{run_id}.config"  # noqa: S108
+        launch_metadata_extra = {
+            "profile_id": str(profile.profile_id),
+            "profile_name": profile.name,
+            "executor_type": profile.executor_type,
+            "container_engine": profile.container_engine,
+        }
 
-    # Translate sample_ids (string) → ingest DB id (int) for the run record
     int_ids = sample_pks
 
     insert_rows = execute_write(
@@ -372,7 +450,7 @@ def launch_pipeline(
         run_id=run_id,
         pipeline_uri=catalog.get("pipeline_uri") or catalog["pipeline_name"],
         pipeline_version=catalog.get("pipeline_version"),
-        pipeline_profile=catalog.get("default_profile"),
+        pipeline_profile=(profile.name if profile else catalog.get("default_profile")),
         config_path=config_path,
         work_dir=work_dir,
         result_uri=result_uri,
@@ -394,16 +472,48 @@ def launch_pipeline(
             "project_id": payload.project_id,
             "soft_warnings": report.soft_warnings,
             "overridden": payload.override_soft_warnings,
+            **launch_metadata_extra,
         },
         db_conn=db,
     )
+    if profile is not None:
+        # P0g G-4: supplemental audit row recording the profile path was
+        # taken. CREATE_PIPELINE_RUN above is the canonical "run created"
+        # event; LAUNCH_WITH_PROFILE makes profile-usage queries cheap
+        # without forcing analysts to crack open the metadata column.
+        log_audit(
+            action=AuditActions.LAUNCH_WITH_PROFILE,
+            actor_id=user["id"],
+            resource_type="pipeline_run",
+            resource_id=run_id,
+            before=None,
+            after={
+                "profile_id": str(profile.profile_id),
+                "profile_name": profile.name,
+                "executor_type": profile.executor_type,
+                "container_engine": profile.container_engine,
+            },
+            metadata={
+                "lab_id": lab_id,
+                "project_id": payload.project_id,
+            },
+            db_conn=db,
+        )
 
+    response_payload: dict[str, Any] = {
+        "run_id": run_id,
+        "status": "QUEUED",
+        "pipeline_run": _serialise(run),
+    }
+    if profile is not None:
+        response_payload["profile"] = {
+            "profile_id": str(profile.profile_id),
+            "name": profile.name,
+            "executor_type": profile.executor_type,
+            "container_engine": profile.container_engine,
+        }
     return success(
-        data={
-            "run_id": run_id,
-            "status": "QUEUED",
-            "pipeline_run": _serialise(run),
-        },
+        data=response_payload,
         status_code=201,
     )
 

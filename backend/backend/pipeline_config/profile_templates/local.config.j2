@@ -1,0 +1,7 @@
+{# Expected config_overrides keys: (none — local executor uses Nextflow defaults) #}
+{% extends "base.config.j2" %}
+{% block executor_block %}
+process {
+    executor = 'local'
+}
+{% endblock %}

@@ -1,0 +1,37 @@
+{# Expected config_overrides keys:
+     project             string  required (GCP project id)
+     region              string  default 'us-central1'
+     service_account     string  optional
+     network             string  optional
+     subnetwork          string  optional
+     boot_disk_size_gb   integer optional → '50.GB' format
+   Mirrors the legacy GCP-Batch generator in pipeline_config/legacy.py.
+#}
+{% extends "base.config.j2" %}
+{% block executor_block %}
+{%- set ov = profile.config_overrides %}
+{%- set region_val = ov.get('region', 'us-central1') %}
+process {
+    executor = 'google-batch'
+    errorStrategy = 'retry'
+    maxRetries = 2
+}
+
+google {
+    project = '{{ ov["project"] }}'
+    location = '{{ region_val }}'
+    batch.spot = true
+{%- if ov.get('boot_disk_size_gb') %}
+    batch.bootDiskSize = {{ ov['boot_disk_size_gb'] }}.GB
+{%- endif %}
+{%- if ov.get('service_account') %}
+    batch.serviceAccountEmail = '{{ ov['service_account'] }}'
+{%- endif %}
+{%- if ov.get('network') %}
+    batch.network = '{{ ov['network'] }}'
+{%- endif %}
+{%- if ov.get('subnetwork') %}
+    batch.subnetwork = '{{ ov['subnetwork'] }}'
+{%- endif %}
+}
+{% endblock %}

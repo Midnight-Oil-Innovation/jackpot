@@ -1,0 +1,25 @@
+{# Expected config_overrides keys:
+     queue            string  default 'normal'
+     account          string  optional → emitted via clusterOptions
+     qos              string  optional → emitted via clusterOptions
+     time             string  default '1h'
+     cluster_options  string  optional free-form, appended verbatim to clusterOptions
+#}
+{% extends "base.config.j2" %}
+{% block executor_block %}
+{%- set ov = profile.config_overrides %}
+{%- set queue_val = ov.get('queue', 'normal') %}
+{%- set time_val = ov.get('time', '1h') %}
+{%- set extra_parts = [] %}
+{%- if ov.get('account') %}{% set _ = extra_parts.append('--account=' ~ ov['account']) %}{% endif %}
+{%- if ov.get('qos') %}{% set _ = extra_parts.append('--qos=' ~ ov['qos']) %}{% endif %}
+{%- if ov.get('cluster_options') %}{% set _ = extra_parts.append(ov['cluster_options']) %}{% endif %}
+process {
+    executor = 'slurm'
+    queue = '{{ queue_val }}'
+    time = '{{ time_val }}'
+{%- if extra_parts %}
+    clusterOptions = '{{ extra_parts | join(" ") }}'
+{%- endif %}
+}
+{% endblock %}
