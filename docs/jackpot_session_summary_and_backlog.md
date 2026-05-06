@@ -4090,7 +4090,7 @@ The recovery saga — a severe case of cross-tree contamination during parallel-
 **Track progress at session end:**
 - I-track: 6 of 6 shipped (P1 closes the deferred item from Phase 22 review item 12).
 - P0g: 2 of 11 shipped (G-1 + G-2 foundation; G-3 through G-11 ready to spec).
-- Phase 24.5: design-doc draft prompted but not executed; awaiting NPAIHB outreach + Tribal-authority designee feedback before final lockdown.
+- Phase 24.5: design-doc draft prompted but not executed; lockdown will proceed solo per option β (external collaborator review deferred 2026-05-05 — timing).
 - Out-of-band housekeeping: ruff pin (PR #25) permanent; bundle refresh (PR #23) shipped; smaller follow-ups documented in todo.md "Post-Sessions-21+ housekeeping" subsection.
 
 ------
@@ -4293,7 +4293,7 @@ Session 21 closes Sessions 20-21's combined work cycle. The natural breakpoint f
 
 **Pending P1 follow-up work:** the deferred broader-auth-architecture review items (session-management UI, refresh-token-family tracking, cross-device session detection, configurable token lifetimes per-user/per-role, MFA, new auth providers, API-token rotation, B-FED-1 federation CA infrastructure). All non-blocking; could become P1.5 or fold into P0c.
 
-**Pending Phase 24.5 work:** design doc draft was prompted but not executed (the worktree contamination saga distracted from this track). The local `phase-24-5-sovereignty-design` branch was deleted in cleanup; the sovereignty doc commit may or may not still exist on origin. **Action item for next session start:** verify `git fetch && git branch -a | grep phase-24-5` and resurrect the doc commit if the remote still has it; if both local and remote are gone, restart the Phase 24.5 design draft. NPAIHB outreach (per todo.md B-CARE-6) should happen in parallel with the design doc rather than gating on it.
+**Pending Phase 24.5 work:** design doc draft was prompted but not executed (the worktree contamination saga distracted from this track). The local `phase-24-5-sovereignty-design` branch was deleted in cleanup; the sovereignty doc commit may or may not still exist on origin. **Action item for next session start:** verify `git fetch && git branch -a | grep phase-24-5` and resurrect the doc commit if the remote still has it; if both local and remote are gone, restart the Phase 24.5 design draft. Lockdown will proceed solo (option β) since external collaborator review was deferred 2026-05-05.
 
 **Pending out-of-band housekeeping** (in priority order):
 1. Fix `uv run pre-commit` prefix in `docs/CLAUDE.md` ruff section. One-line docs PR.
@@ -4308,10 +4308,10 @@ Session 21 closes Sessions 20-21's combined work cycle. The natural breakpoint f
 
 - **P0g** — execution profiles continuation (G-3 through G-11). Foundation is in place.
 - **P0h** — Slurm executor support (depends on P0g).
-- **Phase 24.5** — sovereignty + BYOP design lockdown (gates P0b). Awaiting collaborator review.
+- **Phase 24.5** — sovereignty + BYOP design lockdown (gates P0b). Lockdown proceeding solo (external review deferred 2026-05-05).
 - **P0b** — Schema v5.0 (gated on Phase 24.5 lockdown + BYOP/eukaryotic design).
 - **P0c** — multi-tenancy middleware + sovereignty deletion path (B-CARE-3a through B-CARE-3g implementation).
 - **B-FED-1** — central CA federation peer authentication.
 - **P1.5 / P1 broader auth-architecture review** — session-management UI, refresh-token-family tracking, etc.
 
-The next session can pivot to any of: P0g G-3+G-4 (most natural continuation), Phase 24.5 collaborator review push (people-time-bound, not developer-time-bound — runs in background), Phase 24.7 / P0f BYOP infrastructure (heavier lift), or smaller housekeeping pile cleanup. My non-prescriptive recommendation: the housekeeping pile first (~30-60 min) followed by P0g G-3+G-4 for momentum, with Phase 24.5 collaborator outreach running in parallel since it's people-time-bound rather than developer-time-bound.
+The next session can pivot to any of: P0g G-3+G-4 (most natural continuation), Phase 24.5 design lockdown (solo finalization per option β), Phase 24.7 / P0f BYOP infrastructure (heavier lift), or smaller housekeeping pile cleanup. My non-prescriptive recommendation: the housekeeping pile first (~30-60 min) followed by P0g G-3+G-4 for momentum.

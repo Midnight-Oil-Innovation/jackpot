@@ -3,7 +3,7 @@
 **Last updated:** 2026-05-05 (post-P1 + P0g G-1+G-2 + housekeeping)
 **Baseline:** ~1000+ tests passing post-merge of PRs #21 (P0g G-1+G-2: 32 new tests) and #22 (P1: 31 new tests). Coverage holding ≥84% workspace-wide (CI threshold 80%); fresh `uv run pytest --cov` recommended after pulling the latest development to confirm exact numbers. P0e + I-track baseline was 944 tests / 86.20% coverage as of 2026-05-02.
 **Sessions 21+ deliverables:** PR #21 (P0g G-1+G-2: `ExecutionProfile` + `PipelineDefaultProfile` schema + migration with `default-local` seed; merged 2026-05-04 at `a682788`). PR #22 (P1: `/api/v1/auth/refresh` endpoint with single-use rotation, `refresh_tokens` table, replay detection with bulk-revoke, rotation-aware login/logout, daily cleanup job, six error codes; merged 2026-05-05 at `ba03143` — closes the I-track entirely). PR #23 (docs: bundle refresh to v4.0 covering Session 20 I-track close). PR #25 (chore: pin ruff at 0.11.6 across pre-commit, backend, cli, uv.lock — permanent fix for the recurring CI ruff-version mismatch that bit PRs #21 and #22 on first runs). See Sessions 21+ entries in `jackpot_session_summary_and_backlog.md` and the recovery saga learnings in `learnings.md` ("Worktree contamination — Sessions 20-21" entry).
-**Active sprint:** Next phase is Glen's call. With I-track + P0g foundation done, the natural candidates are: (a) **Phase P0g G-3 + G-4** (profile templates + nextflow.config renderer, tightly coupled, one PR — short feedback loop, builds directly on what just shipped); (b) **Phase 24.5 collaborator review push** (NPAIHB outreach + Section 14 open-question resolution — unblocks P0b's schema migration); (c) **Phase 24.7 / P0f BYOP infrastructure**; (d) small housekeeping pile (`uv run pre-commit` correction in CLAUDE.md, GitHub branch-protection setup on main + development, audit of stale local branches, P0f file-references F-3+ continuation if F-2 was the last shipped). Architectural sequence remains: Phase 24.5 (sovereignty + BYOP design lockdown) → P0f (BYOP infrastructure) → P0b (Schema v5.0) → P0c (multi-tenancy middleware + sovereignty deletion) → P1 broader auth-architecture review (rest of P1 — session-management UI, refresh-token-family tracking, etc.) → P2+.
+**Active sprint:** Next phase is Glen's call. With I-track + P0g foundation done, the natural candidates are: (a) **Phase P0g G-3 + G-4** (profile templates + nextflow.config renderer, tightly coupled, one PR — short feedback loop, builds directly on what just shipped); (b) **Phase 24.7 / P0f BYOP infrastructure**; (c) small housekeeping pile (`uv run pre-commit` correction in CLAUDE.md, GitHub branch-protection setup on main + development, audit of stale local branches, P0f file-references F-3+ continuation if F-2 was the last shipped). Architectural sequence remains: Phase 24.5 (sovereignty + BYOP design lockdown) → P0f (BYOP infrastructure) → P0b (Schema v5.0) → P0c (multi-tenancy middleware + sovereignty deletion) → P1 broader auth-architecture review (rest of P1 — session-management UI, refresh-token-family tracking, etc.) → P2+.
 
 **Project context as of 2026-04-28:** JACKPOT pivoted to an independent project under `Midnight-Oil-Innovation/jackpot` (no longer ADHS/ASU-coupled, no longer the APGAP successor). License flipped from Apache 2.0 to **AGPL-3.0**. New multi-deployment-target architecture covers 7 install scenarios (A laptop, B single-org cloud, C multi-lab agency, D hosted SaaS, E federation member, F CI test, **T Tribal-sovereignty deployment**). Cleanup A through J COMPLETE → **P0d COMPLETE and VALIDATED (2026-04-30 → 2026-05-01)** → P0e (jackpot init CLI, next) → **P0f (BYOP infrastructure)** → P0b/c (multi-tenancy schema + middleware, **gated on Phase 24.5 sovereignty design** AND **must include BYOP + eukaryotic schema additions**) → P1–P5. See `jackpot_pathoplexus_loculus_overview.md`, `jackpot_cdc_dmi_stlt_overview.md`, and `jackpot_byop_and_eukaryotic_design.md` for the analyses driving Phases 26, 27, P0f, and 28.
 
@@ -909,8 +909,6 @@ This is a **design + schema-spec phase**. Implementation of the deletion logic l
 
 - [ ] **Implementation handoff to P0c**: docs/architecture/sovereignty-compliant-deletion.md is the spec for the implementation work in P0c. Tagged in P0c work as `B-CARE-3` (the actual implementation, after schema is in place).
 
-- [ ] Review with anyone consulted on Tribal-authority deployment scenarios (NPAIHB outreach per B-CARE-6 should happen in parallel — their input on the design before locking is high-value).
-
 ### Schema additions for BYOP + eukaryotic pathogen support (must land with P0b)
 
 These are not separate design work — the design exists in `jackpot_byop_and_eukaryotic_design.md`. They are **schema migration items** that must land in the same P0b migration cycle as the sovereignty additions and the existing v5.0 plan. Splitting them into a later migration creates double-migrate operator churn.
@@ -1806,7 +1804,6 @@ The items below are the ones that don't fit those interstitial buckets — imple
 - [ ] **B-CARE-3** (implementation) Implement true delete-on-request via tombstone-and-vacuum lifecycle per the design from Phase 24.5. Code: `samples.deletion_status` enum migration, tombstone-marking logic, vacuum background job, audit log integration, GCS/MinIO object deletion, JSONB content scrubbing. (2-3 sessions, **P0c — multi-tenancy middleware**)
 - [ ] **B-CARE-4** Federation-aware deletion propagation. Tombstone events pushed to peers; signed receipts; SLA tracking; non-compliance flagging. Depends on B-CARE-3 + Scenario E federation work. (1 week, Year 2)
 - [ ] **B-CARE-5** Pre-publish review checklist with CARE-Principle confirmation. Scenario T defaults to no-auto-publish; explicit per-sample approval required. "Previously published" tag persists past vacuum. (1-2 sessions, with B-CARE-3 implementation in P0c)
-- [ ] **B-CARE-6** Reach out to NPAIHB / Northwest TEC about Scenario T pilot. Highest-fit Tribal Epidemiology Center based on existing data-modernization work. **Do this in parallel with Phase 24.5 design** so their input lands before the design is locked. (1 email + 1 call, **now**)
 
 ### L. STLT-tier alignment (overview §6, §10 of `jackpot_cdc_dmi_stlt_overview.md`)
 
@@ -1822,12 +1819,17 @@ The items below are the ones that don't fit those interstitial buckets — imple
 
 ### Phase 27 quick-win priority order
 
-The highest-leverage items have *already moved* to Phase 21.5 (governance docs, layer-cake, deploy guides) and Phase 24.5 (sovereignty design). What's left in Phase 27 proper is a mix of larger implementation work and outreach. The two items worth doing soonest:
+The highest-leverage items have *already moved* to Phase 21.5 (governance docs, layer-cake, deploy guides) and Phase 24.5 (sovereignty design). What's left in Phase 27 proper is a mix of larger implementation work and outreach. The one item worth doing soonest:
 
-1. **B-CARE-6** (NPAIHB outreach) — must happen *before* Phase 24.5 design is locked, so their input shapes it. **This is technically in this list but should be acted on as soon as Phase 24.5 starts.**
-2. **B-DMI-5** (APHL AMD fact-finding) — opportunistic; sets up future positioning. Can happen anytime.
+1. **B-DMI-5** (APHL AMD fact-finding) — opportunistic; sets up future positioning. Can happen anytime.
 
 The rest is implementation work that gates on P0b/c/e or Year 2.
+
+---
+
+## Deferred — revisit later
+
+- **Phase 24.5 external collaborator review** — Deferred 2026-05-05 (timing). Phase 24.5 design lockdown will proceed solo (option β); external review of the locked design may resume later as a follow-up iteration if material feedback comes in. The CARE-Principles commitment in `governance/care-principles-and-tribal-data-sovereignty.md` is unchanged; only the active outreach effort is paused.
 
 ---
 
@@ -2029,17 +2031,19 @@ If anything diverges from the expected state, debug before starting feature work
 
 **Active sprint candidates (Glen's call):**
 
-1. **Phase P0g G-3 + G-4** (profile templates + nextflow.config renderer, tightly coupled, one PR) — concrete continuation of what just shipped, short feedback loop. Subsequent G-N items are mostly file-disjoint and can run in parallel after G-3+G-4 lands.
+1. **Phase P0g G-3 + G-4** (profile templates + nextflow.config renderer, tightly coupled, one PR) — concrete continuation of what just shipped, short feedback loop. Subsequent G-N items are mostly file-disjoint and can run in parallel after G-3+G-4 lands. **(SHIPPED in PR #28, 2026-05-05.)**
 
-2. **Phase 24.5 collaborator review push** — NPAIHB outreach + Tribal-authority designee feedback on the open questions in the design doc. Doesn't block anything in flight but unblocks P0b's schema migration when the time comes.
+2. **Phase 24.5 design lockdown (solo)** — Glen finalizes the sovereignty-deletion design without external review (per option β; external collaborator review was deferred 2026-05-05 — timing). Once locked, P0b unblocks. Mix of design and writing work. Probably 1-2 sessions.
 
-3. **Phase 24.7 / P0f BYOP infrastructure** — heavier lift; B-BYOP-1 through B-BYOP-10. Gates on `jackpot init` shape (P0e is done) but not blocked otherwise.
+3. **Phase P0g G-5** (profiles CRUD endpoints) — operators can use the profile machinery from PR #28 but can't manage profiles via API yet. CRUD closes that gap and unblocks the legacy GCP-Batch path deletion.
 
-4. **P0f file references continuation** — F-3+ if F-2 was the last shipped. Independent of P0g/P1 work; can run in parallel with the chosen primary track.
+4. **Phase 24.7 / P0f BYOP infrastructure** — heavier lift; B-BYOP-1 through B-BYOP-10. Gates on `jackpot init` shape (P0e is done) but not blocked otherwise.
 
-5. **Small housekeeping pile** — fold everything in "Post-Sessions-21+ housekeeping" into one or two dedicated cleanup PRs. ~30-60 min total. Useful before the next big piece.
+5. **P0f file references continuation** — F-3+ if F-2 was the last shipped. Independent of P0g/P1 work; can run in parallel with the chosen primary track.
 
-My suggestion (informational, not prescriptive): housekeeping pile first if any of those items would block parallel work; then **P0g G-3 + G-4** for momentum; with **Phase 24.5 collaborator outreach** running in the background since it's people-time-bound rather than developer-time-bound.
+6. **Small housekeeping pile** — fold everything in "Post-Sessions-21+ housekeeping" into one or two dedicated cleanup PRs. ~30-60 min total. Useful before the next big piece.
+
+My suggestion (informational, not prescriptive): Phase 24.5 design lockdown next if you want to unblock P0b on the strategic critical path, or P0g G-5 if you want to continue the P0g momentum. Housekeeping pile interleaves whenever convenient.
 
 **Worktree workflow lesson from Sessions 20-21:** if you start parallel-track sessions, use `git worktree add` per branch and never `git switch` inside a worktree. First message of every Claude Code session in a worktree should run the verification ritual:
 
