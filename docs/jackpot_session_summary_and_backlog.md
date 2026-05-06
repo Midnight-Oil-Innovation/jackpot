@@ -4315,3 +4315,47 @@ Session 21 closes Sessions 20-21's combined work cycle. The natural breakpoint f
 - **P1.5 / P1 broader auth-architecture review** — session-management UI, refresh-token-family tracking, etc.
 
 The next session can pivot to any of: P0g G-3+G-4 (most natural continuation), Phase 24.5 design lockdown (solo finalization per option β), Phase 24.7 / P0f BYOP infrastructure (heavier lift), or smaller housekeeping pile cleanup. My non-prescriptive recommendation: the housekeeping pile first (~30-60 min) followed by P0g G-3+G-4 for momentum.
+
+
+------
+
+# Session 22 — 2026-05-05 (continuation)
+
+Single-day continuation session shipping four PRs (#26 governance, #27 housekeeping, #28 P0g G-3+G-4, #29 Phase 24.5 deferral) and resolving the orphan-commit fallout from Sessions 20-21's worktree contamination saga.
+
+**PRs shipped:**
+
+- **PR #26** (`2dbb839`) — governance `README.md` + `coi-disclosures.md` stub on top of the 8 substantive governance docs that were already on origin from `f46f7ee` (P0d Phase 21.5). Came along with an accidentally-bundled Sessions 21+ doc refresh because the feature branch was created from local development (which had Glen's uncommitted "updated docs" commit `152546b`) instead of `origin/development`. Net effect was clean — no work lost — but the PR's actual scope was wider than the title suggested.
+- **PR #27** (`c7df002`) — post-Session-21 housekeeping: `uv run pre-commit` prefix correction in the ruff-pin section added by PR #25; **Critical Rule 61** added to `docs/CLAUDE.md` (worktree + branch verification ritual that prevents the Sessions 20-21 contamination failure mode); spec.md §4.1 fix #5 ⚠️ → ✅ resolution since PR #22 shipped the refresh endpoint. Prose count of Critical Rules updated from "all 56" to "all 61" to match reality.
+- **PR #28** (`544c98c`) — P0g G-3+G-4: profile templates + `nextflow.config` renderer + `pipeline_config/` package refactor (single 277-line file → package with backward-compat re-exports) + 8 Jinja2 templates (base + 7 executor types: local, slurm, pbs, lsf, gcp_batch, aws_batch, kubernetes) + profile renderer/resolver/types modules + launch endpoint integration with profile-driven path coexisting with legacy GCP-Batch fallback + `Settings.work_dir` field with `JACKPOT_WORK_DIR` env var + `LAUNCH_WITH_PROFILE` audit action constant + 35 new tests (17 renderer + 10 resolver + 8 launch integration). Tests landed at workspace-root `./tests/` rather than `backend/backend/tests/` since launch-endpoint integration is cross-cutting between workspace members. 1527 tests passing, 87.85% coverage post-merge.
+- **PR #29** — Phase 24.5 external collaborator review deferral. Scope (c) + option (β) per Glen: NPAIHB/Northwest TEC/B-CARE-6 references stripped from `todo.md` (6 edits), `docs/jackpot_session_summary_and_backlog.md` (4 edits), `docs/jackpot_cdc_dmi_stlt_overview.md` (8 edits including §2.3 TEC enumeration renumber 8-12 → 7-11, §4.1 sovereignty bullet strip, §8 "Three TECs" → "Two TECs" + table row strip + "best opening conversation" sentence strip, §11 recommendation item 5 strip + renumber 6,7 → 5,6, §12 backlog dump strip, §12 count math 14 → 13, §14 glossary strip). Reason: timing. Governance docs untouched — CARE Principles commitment in `governance/care-principles-and-tribal-data-sovereignty.md` and the Tribal seat in `governance/advisory-board.md` unchanged.
+
+**Decisions locked:**
+
+- Phase 24.5 external collaborator review deferred 2026-05-05 (timing). Lockdown will proceed solo per option β. External review of the locked design may resume later as a follow-up iteration if material feedback comes in.
+- Worktree-contamination prevention codified as Critical Rule 61 (verification ritual: assert `pwd -P` matches expected worktree, assert `git branch --show-current` matches expected branch, never `git switch` inside a worktree).
+- Cross-cutting integration tests (touching multiple workspace members) live at workspace-root `./tests/`. Workspace-internal tests stay in their member's `tests/`.
+- `pipeline_config/` package layout: `__init__.py` re-exports ALL pre-package public names plus the new ones. Existing import line in `routers/pipelines.py` unchanged. Legacy GCP-Batch path preserved as fallback when `NoProfileAvailableError` raises; deletion is a follow-up PR after G-5 (CRUD endpoints) lands.
+- Spec prompts for Claude Code agents need 4-backtick outer fence + 3-backtick inner fences so nested code blocks render correctly in Typora.
+
+**Recovery operations:**
+
+- Orphan commit `152546b "updated docs"` discovered during PR #26 cleanup — turned out to be Glen's local todo.md + session summary updates that were never pushed standalone but DID get bundled into PR #26 because the governance feature branch was created from local development (at `152546b`) rather than `origin/development`. Investigation traced via `git diff` direction asymmetry (showing files "missing" from the orphan branch that were actually present on development through PR #26's squash). No work lost; orphan branch discarded after confirming content was on origin via `2dbb839`.
+- Forward-going prevention: when running `git switch -c <branch>` from `development`, the verification trinity is `git pull --ff-only` + `git status --short` + `git log --oneline -3` against `origin/development` to confirm no local-only state silently scoops into the new feature branch. Five extra seconds of diagnostic each time.
+
+**State at session end:**
+
+- Local `development` matches origin (post-PR #29 merge, whichever commit ID lands).
+- Worktree `~/Projects/jackpot-p0g-g3-g4` removed via `git worktree remove --force` + `rm -rf` + `git worktree prune`.
+- Local stale branches likely linger; `git branch -D p0g/g3-g4-profile-templates-nf-config` to clean.
+- 1527+ tests passing, 87.85% coverage.
+- Six PRs shipped today (counting from the start of the chat: #26, #27, #28, #29 plus continued context from Sessions 20-21's #21, #22, #25). Sessions 20-21 + Session 22 together close the I-track entirely (#22), build the P0g foundation + runtime (#21 + #28), permanently fix the ruff-pin issue (#25), populate the governance directory (#26), codify the worktree verification ritual (#27), and defer Phase 24.5 external review (#29).
+
+**Next-up sprint candidates:**
+
+1. Phase 24.5 design lockdown (solo) — strategic critical path; unblocks P0b.
+2. P0g G-5 (profiles CRUD endpoints) — active feature momentum; unblocks legacy GCP-Batch path deletion follow-up.
+3. CARE doc implementation-status tagging — interleavable.
+4. Smaller housekeeping pile — gac zsh function update (`~/.zshrc`), GitHub branch protection on main + development, stale-stash cleanup.
+
+Glen's call which to pick up in the next chat.
