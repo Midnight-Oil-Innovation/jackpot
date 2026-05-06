@@ -156,12 +156,11 @@ The 12 TECs:
 4. Great Lakes Inter-Tribal Epidemiology Center
 5. Great Plains TEC (Great Plains Tribal Chairmen's Health Board)
 6. Inter Tribal Council of Arizona (ITCA) TEC
-7. Northwest TEC (Northwest Portland Area Indian Health Board)
-8. Oklahoma Area TEC (Southern Plains Tribal Health Board)
-9. Rocky Mountain Tribal Epi Center
-10. Seattle Indian Health Board / Urban Indian Health Institute
-11. United South and Eastern Tribes (USET) TEC
-12. Northern Plains Tribal Epi Center (NPTEC)
+7. Oklahoma Area TEC (Southern Plains Tribal Health Board)
+8. Rocky Mountain Tribal Epi Center
+9. Seattle Indian Health Board / Urban Indian Health Institute
+10. United South and Eastern Tribes (USET) TEC
+11. Northern Plains Tribal Epi Center (NPTEC)
 
 Plus a Network Coordinating Center.
 
@@ -282,7 +281,6 @@ There's no evidence in the public North Star materials that CARE Principles were
 
 - **NIH** has explicit Indigenous data governance guidance for genomic research grants.
 - **Tribal IRBs** routinely require CARE-aligned data handling.
-- **NPAIHB and similar Tribal organizations** have published their own data sovereignty policies.
 - **Some states** (Washington, New Mexico, Arizona, Oklahoma, etc.) have inter-governmental agreements with Tribes that go beyond what North Star contemplates.
 
 JACKPOT formally adopting CARE Principles + designing for Tribal-deployment scenarios is a *category-of-one* differentiator in pathogen genomics. None of Loculus, Pathogenwatch, EnteroBase, NCBI PD, BV-BRC, Solu, RT-MetA, or GISAID does this.
@@ -536,15 +534,12 @@ This pattern is specifically called for in Indigenous data governance literature
 
 ### 8.5 Proof-point candidates
 
-Three TECs that would be especially good early adopters based on existing genomics-curiosity signals (this would need to be validated by direct outreach):
+Two TECs that would be especially good early adopters based on existing genomics-curiosity signals (this would need to be validated by direct outreach):
 
 | TEC | Why fit |
 |---|---|
-| **Northwest TEC** (NPAIHB) | Strong existing data-sovereignty work, IHS Portland Area pilot project for racial misclassification correction shows technical sophistication |
 | **AASTEC** (Albuquerque Area) | Public records of bioinformatics interest; Southwest geographic coverage |
 | **ITCA TEC** (Inter Tribal Council of Arizona) | Phoenix/Tucson coverage; strong epidemiologic capacity already |
-
-Of these, NPAIHB is probably the best opening conversation given their existing data-modernization work.
 
 ---
 
@@ -663,11 +658,9 @@ If only seven things land out of this document:
 
 4. **Build the STLT deploy guides.** Five tailored markdown guides under `docs/deploy/stlt/`. Documentation work. Phase: P0d alongside the rest of the install-guide reorganization.
 
-5. **Reach out to NPAIHB / Northwest TEC** about a Scenario T pilot. They have the data-modernization sophistication to be a credible early-adopter Tribal Epidemiology Center. One email + one call.
+5. **Position JACKPOT alongside, not against, NBS / eCR / AIMS.** Document the layer cake (Section 9.1). Make sure spec.md and grant narratives reflect this. JACKPOT integrates with these systems; it does not replace them.
 
-6. **Position JACKPOT alongside, not against, NBS / eCR / AIMS.** Document the layer cake (Section 9.1). Make sure spec.md and grant narratives reflect this. JACKPOT integrates with these systems; it does not replace them.
-
-7. **Defer FHIR / TEFCA support to Year 2.** Don't build speculatively. Document the data model in FHIR-translatable terms now (LinkML makes this cheap). Build actual FHIR ingest/emit when an operator asks for it.
+6. **Defer FHIR / TEFCA support to Year 2.** Don't build speculatively. Document the data model in FHIR-translatable terms now (LinkML makes this cheap). Build actual FHIR ingest/emit when an operator asks for it.
 
 ---
 
@@ -707,9 +700,6 @@ These slot into Phase 26 alongside the Pathoplexus/Loculus items, with prefix `B
                explicit per-sample approval required. "Previously
                published" tag persists past vacuum.
                Effort: 1-2 sessions. Phase: with B-CARE-3.
-
-[ ] B-CARE-6   Reach out to NPAIHB / Northwest TEC about Scenario T
-               pilot. Effort: 1 email + 1 call. Phase: now.
 
 [ ] B-STLT-1   Build five STLT deploy guides under docs/deploy/stlt/:
                state-health-department.md, territorial-health-agency.md,
@@ -755,7 +745,7 @@ These slot into Phase 26 alongside the Pathoplexus/Loculus items, with prefix `B
                Phase: opportunistic.
 ```
 
-That's 13 new backlog items: `B-CARE-1` through `B-CARE-6` (6), `B-STLT-1` through `B-STLT-3` (3), `B-DMI-1` through `B-DMI-5` (5). Wait — that's 14. Let me recount: 6 + 3 + 5 = 14. ✓
+That's 13 new backlog items: `B-CARE-1` through `B-CARE-5` (5), `B-STLT-1` through `B-STLT-3` (3), `B-DMI-1` through `B-DMI-5` (5). 5 + 3 + 5 = 13. ✓
 
 These should be added to Phase 26 of `todo.md` as a new sub-group K (or as a separate Phase 27 if you prefer). They're orthogonal to the A–J groups (which are platform-source-grouped), so a new K group fits cleanly:
 
@@ -798,7 +788,6 @@ These should be added to Phase 26 of `todo.md` as a new sub-group K (or as a sep
 | **MolecularSequence** | FHIR resource type for genomic/molecular sequence data |
 | **NBS** | NEDSS Base System — CDC-developed integrated information system for STLT case surveillance |
 | **NEDSS** | National Electronic Disease Surveillance System (older umbrella) |
-| **NPAIHB** | Northwest Portland Area Indian Health Board |
 | **ONC** | Office of the National Coordinator for Health IT (HHS); now part of ASTP |
 | **PHA** | Public Health Agency / Authority |
 | **PHIG** | Public Health Infrastructure Grant (CDC funding to STLT) |
