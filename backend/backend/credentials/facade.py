@@ -45,9 +45,34 @@ class CredentialFacade:
 
     @property
     def backend(self) -> CredentialBackend:
+        """Return the underlying backend; useful for tests and diagnostics."""
         return self._backend
 
     def get(self, key: str) -> str:
+        """Read a credential by name through the configured backend.
+
+        Hits the facade's TTL'd cache first; on miss, delegates to
+        ``self._backend.get(key)`` and emits a ``CREDENTIAL_READ`` audit
+        event to the ``backend.credentials.audit`` stdlib logger.
+        Failures emit ``CREDENTIAL_READ_FAILED`` with the backend's
+        diagnostic reason. Per Critical Rule 62, all credential reads
+        must go through this method (or :meth:`get_optional`).
+
+        Args:
+            key: Lowercase credential name as registered in
+                :data:`backend.credentials.registry.REQUIRED_CREDENTIALS`.
+
+        Returns:
+            The credential value as a string.
+
+        Raises:
+            CredentialNotFoundError: The backend does not have a value
+                for ``key``. Use :meth:`get_optional` if a missing
+                credential is acceptable to the caller.
+            CredentialError: The backend errored while fetching (e.g.
+                a GCP Secret Manager API failure or a permission
+                error). Audited as ``CREDENTIAL_READ_FAILED``.
+        """
         backend_class_name = type(self._backend).__name__
 
         def _fetch() -> str:
@@ -79,18 +104,57 @@ class CredentialFacade:
         return value
 
     def get_optional(self, key: str) -> str | None:
+        """Read a credential, returning ``None`` if it is not configured.
+
+        Wraps :meth:`get` and converts ``CredentialNotFoundError`` into
+        a ``None`` return. Other backend errors (auth failure, network
+        failure) still propagate as ``CredentialError`` so the caller
+        can distinguish "not set" from "broken."
+
+        Args:
+            key: Lowercase credential name as registered in
+                :data:`backend.credentials.registry.REQUIRED_CREDENTIALS`.
+
+        Returns:
+            The credential value, or ``None`` if the backend has no
+            entry for ``key``.
+
+        Raises:
+            CredentialError: The backend errored while fetching.
+        """
         try:
             return self.get(key)
         except CredentialNotFoundError:
             return None
 
     def list_keys(self) -> list[str]:
+        """Return the keys the backend can currently produce.
+
+        For ``EnvBackend`` this is the set of registered credential keys
+        whose corresponding env var is set; for ``FileBackend`` it is
+        the YAML file's top-level keys; for
+        ``GCPSecretManagerBackend`` it is the secrets in the project
+        whose name starts with ``credential_gcp_secret_prefix``. The
+        return value never contains credential VALUES — only names —
+        so it is safe to log for diagnostics.
+        """
         return self._backend.list_keys()
 
     def invalidate(self, key: str) -> None:
+        """Drop the cached value for ``key`` so the next read re-fetches.
+
+        Use after a backend-side rotation that should not wait for the
+        TTL to expire (e.g. NCBI portal password change).
+        """
         self._cache.invalidate(key)
 
     def invalidate_all(self) -> None:
+        """Drop every cached credential so the next reads re-fetch.
+
+        Heavier hammer than :meth:`invalidate`; used after a
+        rotation that touched many credentials at once or for tests
+        that want a clean cache between cases.
+        """
         self._cache.invalidate_all()
 
     def validate_required(self) -> None:

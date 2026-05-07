@@ -289,6 +289,13 @@ def create_submission(
 
 
 def get_submission(submission_id: int, conn) -> dict:
+    """Return a single submission row plus its ``samples`` list.
+
+    Raises ``HTTPException(404)`` when the row is missing or marked
+    deleted. The ``samples`` field is populated via
+    :func:`list_submission_samples` so callers don't have to issue a
+    second query.
+    """
     sub = _require_submission(submission_id, conn)
     sub["samples"] = list_submission_samples(submission_id, conn)
     return _serialise(sub)
@@ -303,6 +310,14 @@ def list_submissions(
     per_page: int = 50,
     conn,
 ) -> tuple[list[dict], int]:
+    """Return one page of submissions plus the total count for pagination.
+
+    All filters are optional. ``status`` is validated against
+    :data:`VALID_STATUSES` (422 on unknown); ``target_repository`` is
+    validated against :data:`VALID_REPOSITORIES`. Results are ordered
+    ``created_at DESC`` so the most recent shows first. ``is_deleted``
+    rows are always excluded.
+    """
     where = ["is_deleted = FALSE"]
     params: dict[str, Any] = {}
     if lab_id is not None:
@@ -352,6 +367,17 @@ def update_submission(
     fields: dict[str, Any],
     conn,
 ) -> dict:
+    """Apply a partial update to a submission's editable fields.
+
+    Field whitelist is status-dependent: ``DRAFT`` allows
+    :data:`_PATCHABLE_FIELDS_DRAFT` (title, description, release_date,
+    bioproject_accession, target_repository); post-DRAFT submissions
+    only allow :data:`_PATCHABLE_FIELDS_POST_DRAFT` (description,
+    release_date) so already-shipped packages can't be retroactively
+    rewritten. Any field outside the allowed set raises 422.
+    Empty patches are no-ops. Per Critical Rule 39, the SQL UPDATE is
+    built from the supplied keys only.
+    """
     sub = _require_submission(submission_id, conn)
     allowed = _PATCHABLE_FIELDS_DRAFT if sub["status"] == "DRAFT" else _PATCHABLE_FIELDS_POST_DRAFT
     bad = sorted(k for k in fields if k not in allowed)
@@ -380,6 +406,12 @@ def update_submission(
 
 
 def soft_delete_submission(*, submission_id: int, actor_id: int | None, conn) -> dict:
+    """Mark a ``DRAFT`` submission ``is_deleted = TRUE``.
+
+    Refuses with 422 outside ``DRAFT`` — once a submission has moved
+    past DRAFT, the row is part of an audit trail and must be
+    withdrawn (:func:`withdraw_submission`) rather than deleted.
+    """
     sub = _require_submission(submission_id, conn)
     if sub["status"] != "DRAFT":
         raise HTTPException(
@@ -398,6 +430,15 @@ def soft_delete_submission(*, submission_id: int, actor_id: int | None, conn) ->
 
 
 def list_submission_samples(submission_id: int, conn) -> list[dict]:
+    """Return rows from ``submission_samples`` joined to ``samples``.
+
+    Each entry includes the per-submission columns (per_sample_status,
+    per-repository accessions, rejection reason) plus a few useful
+    sample-level columns (sample_id, organism_name, quality_status,
+    scrub_status, sharing_level) so the UI can render a sample list
+    without a second query. Sorted by ``submission_samples.id ASC``
+    so the order is stable.
+    """
     rows = execute_query(
         """
         SELECT ss.*, s.sample_id, s.organism_name, s.quality_status,
@@ -421,6 +462,15 @@ def add_samples_to_submission(
     conn,
     _audit_first_add: bool = True,
 ) -> list[dict]:
+    """Insert new ``submission_samples`` rows for the given sample ids.
+
+    Refuses with 422 outside ``DRAFT`` (samples list locks once the
+    package is generated). Idempotent: ``ON CONFLICT DO NOTHING``
+    silently skips sample ids that are already attached. Returns the
+    list of newly-inserted rows (excluding skipped duplicates) so the
+    caller can audit-log only what changed. Audits as
+    ``SUBMISSION_SAMPLES_ADDED`` when at least one row was inserted.
+    """
     sub = _require_submission(submission_id, conn)
     if sub["status"] != "DRAFT":
         raise HTTPException(
@@ -463,6 +513,13 @@ def remove_samples_from_submission(
     actor_id: int | None,
     conn,
 ) -> int:
+    """Delete ``submission_samples`` rows for the given sample ids.
+
+    Refuses with 422 outside ``DRAFT``. Returns the count of rows
+    actually deleted (sample ids not in the submission are silently
+    skipped). Audits as ``SUBMISSION_SAMPLES_REMOVED`` when at least
+    one row was removed.
+    """
     sub = _require_submission(submission_id, conn)
     if sub["status"] != "DRAFT":
         raise HTTPException(
@@ -646,6 +703,15 @@ def mark_package_generated(
 
 
 def mark_submitted(*, submission_id: int, actor_id: int | None, conn) -> dict:
+    """Transition ``READY_TO_SUBMIT`` → ``SUBMITTED``.
+
+    The operator calls this after handing the generated package to
+    Seqsender (or the equivalent uploader for the target repository)
+    and observing that the submission was accepted into the registry's
+    intake queue. Stamps ``submitted_at = NOW()``. Audits as
+    ``SUBMISSION_MARKED_SUBMITTED``. Refuses (422) outside
+    ``READY_TO_SUBMIT``.
+    """
     sub = _require_submission(submission_id, conn)
     _require_status(sub, frozenset({"READY_TO_SUBMIT"}))
     rows = execute_write(
@@ -878,6 +944,15 @@ def mark_rejected(
     actor_id: int | None,
     conn,
 ) -> dict:
+    """Transition ``SUBMITTED`` → ``REJECTED`` with a free-text reason.
+
+    Use when the registry returned a fully-rejected response (none of
+    the samples received accessions). When some accessions came back
+    and others didn't, prefer :func:`register_accessions` which
+    transitions to ``PARTIAL_SUCCESS`` with the per-sample detail.
+    ``reason`` must be non-empty (422 otherwise). Audits as
+    ``SUBMISSION_MARKED_REJECTED`` and notifies the creator.
+    """
     sub = _require_submission(submission_id, conn)
     _require_status(sub, frozenset({"SUBMITTED"}))
     if not reason or not reason.strip():
@@ -920,6 +995,18 @@ def withdraw_submission(
     actor_id: int | None,
     conn,
 ) -> dict:
+    """Transition any post-``SUBMITTED`` non-``EXECUTING`` state → ``WITHDRAWN``.
+
+    Allowed source states are :data:`_POST_SUBMITTED_STATUSES`
+    (``SUBMITTED``, ``PARTIAL_SUCCESS``, ``ACCEPTED``, ``EMBARGOED``,
+    ``RELEASED``, ``REJECTED``, plus the I-3a execution-failure
+    states). ``EXECUTING`` is intentionally refused with a 409 and a
+    pointed message because withdrawing while a Seqsender subprocess
+    is in flight would leave the executor mid-flight; the user must
+    wait for completion or failure first. ``reason`` must be non-empty
+    (422 otherwise). Audits as ``SUBMISSION_WITHDRAWN`` and notifies
+    the creator.
+    """
     sub = _require_submission(submission_id, conn)
     # I-3a: special-case EXECUTING with a clearer error message before the
     # generic _require_status check fires. Without this branch the user
