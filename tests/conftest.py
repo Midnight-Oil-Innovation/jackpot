@@ -68,6 +68,11 @@ def override_settings(test_db_url, monkeypatch):
     # but the credential read itself succeeds.
     monkeypatch.setenv("JACKPOT_CRED_GOOGLE_OAUTH_CLIENT_SECRET", "test-oauth-secret")
     monkeypatch.setenv("RATE_LIMIT_ENABLED", "false")
+    # R-1 #4: legacy GCP-Batch renderer requires gcp_project_id (Rule 55:
+    # operator-specific values must come from env / DB / operator config,
+    # not source code). Tests provide a fixture-shaped value so the legacy
+    # path tests still exercise it.
+    monkeypatch.setenv("GCP_PROJECT_ID", "jackpot-test")
     get_settings.cache_clear()
     _reset_backend()
     reset_engine()  # ← force engine rebuild with test URL

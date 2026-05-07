@@ -190,8 +190,15 @@ async def refresh(
             ),
         ) from None
 
+    # R-1 #6: row-lock the JTI for the duration of the rotation. Without
+    # the lock, two concurrent /refresh requests presenting the same
+    # token both pass the revoked_at IS NULL check and both perform
+    # rotation — issuing two valid refresh tokens for one original. The
+    # FOR UPDATE clause serialises rotations on the same JTI; the second
+    # request waits for the first to commit, then sees revoked_at set
+    # and falls into the replay-detection branch below.
     rows = execute_query(
-        "SELECT * FROM refresh_tokens WHERE jti = :jti LIMIT 1",
+        "SELECT * FROM refresh_tokens WHERE jti = :jti FOR UPDATE",
         {"jti": jti},
         conn=db,
     )

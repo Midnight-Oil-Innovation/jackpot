@@ -18,20 +18,20 @@ process {
 }
 
 google {
-    project = '{{ ov["project"] }}'
-    location = '{{ region_val }}'
+    project = '{{ ov["project"] | groovy_escape }}'
+    location = '{{ region_val | groovy_escape }}'
     batch.spot = true
 {%- if ov.get('boot_disk_size_gb') %}
     batch.bootDiskSize = {{ ov['boot_disk_size_gb'] }}.GB
 {%- endif %}
 {%- if ov.get('service_account') %}
-    batch.serviceAccountEmail = '{{ ov['service_account'] }}'
+    batch.serviceAccountEmail = '{{ ov['service_account'] | groovy_escape }}'
 {%- endif %}
 {%- if ov.get('network') %}
-    batch.network = '{{ ov['network'] }}'
+    batch.network = '{{ ov['network'] | groovy_escape }}'
 {%- endif %}
 {%- if ov.get('subnetwork') %}
-    batch.subnetwork = '{{ ov['subnetwork'] }}'
+    batch.subnetwork = '{{ ov['subnetwork'] | groovy_escape }}'
 {%- endif %}
 }
 {% endblock %}

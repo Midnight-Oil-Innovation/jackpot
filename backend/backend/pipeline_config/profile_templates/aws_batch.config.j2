@@ -9,16 +9,16 @@
 {%- set ov = profile.config_overrides %}
 process {
     executor = 'awsbatch'
-    queue = '{{ ov["queue"] }}'
+    queue = '{{ ov["queue"] | groovy_escape }}'
 }
 
 aws {
-    region = '{{ ov["region"] }}'
+    region = '{{ ov["region"] | groovy_escape }}'
 {%- if ov.get('cli_path') %}
-    batch.cliPath = '{{ ov['cli_path'] }}'
+    batch.cliPath = '{{ ov['cli_path'] | groovy_escape }}'
 {%- endif %}
 {%- if ov.get('volumes') %}
-    batch.volumes = '{{ ov['volumes'] }}'
+    batch.volumes = '{{ ov['volumes'] | groovy_escape }}'
 {%- endif %}
 }
 {% endblock %}

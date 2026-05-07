@@ -9,12 +9,12 @@
 {%- set ov = profile.config_overrides %}
 {%- set queue_val = ov.get('queue', 'normal') %}
 {%- set extra_parts = [] %}
-{%- if ov.get('project') %}{% set _ = extra_parts.append('-P ' ~ ov['project']) %}{% endif %}
-{%- if ov.get('time') %}{% set _ = extra_parts.append('-W ' ~ ov['time']) %}{% endif %}
-{%- if ov.get('cluster_options') %}{% set _ = extra_parts.append(ov['cluster_options']) %}{% endif %}
+{%- if ov.get('project') %}{% set _ = extra_parts.append('-P ' ~ (ov['project'] | groovy_escape)) %}{% endif %}
+{%- if ov.get('time') %}{% set _ = extra_parts.append('-W ' ~ (ov['time'] | groovy_escape)) %}{% endif %}
+{%- if ov.get('cluster_options') %}{% set _ = extra_parts.append(ov['cluster_options'] | groovy_escape) %}{% endif %}
 process {
     executor = 'lsf'
-    queue = '{{ queue_val }}'
+    queue = '{{ queue_val | groovy_escape }}'
 {%- if extra_parts %}
     clusterOptions = '{{ extra_parts | join(" ") }}'
 {%- endif %}

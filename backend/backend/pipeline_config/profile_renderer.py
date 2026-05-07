@@ -22,11 +22,22 @@ from typing import Any
 import fsspec
 from jinja2 import Environment, PackageLoader, StrictUndefined
 
+from backend.pipeline_config.groovy_safe import groovy_escape
 from backend.pipeline_config.types import ExecutionProfile
 
 logger = logging.getLogger(__name__)
 
 _TEMPLATE_ENV: Environment | None = None
+
+# R-1 #1: executor_type comes from a database row that an operator with
+# write access to ``execution_profiles`` controls. Without an allowlist,
+# a malicious value containing path-traversal sequences would resolve
+# through ``PackageLoader.get_template`` to an arbitrary readable file.
+# The allowlist is the security boundary; new executor types ship via a
+# code change, never via runtime extension.
+_ALLOWED_EXECUTOR_TYPES: frozenset[str] = frozenset(
+    {"local", "slurm", "lsf", "pbs", "kubernetes", "gcp_batch", "aws_batch"}
+)
 
 
 def _env() -> Environment:
@@ -38,12 +49,27 @@ def _env() -> Environment:
             autoescape=False,
             keep_trailing_newline=True,
         )
+        # R-1 #7: defense-in-depth Groovy injection escape. Templates
+        # apply this filter to every catalog/profile-field
+        # interpolation so a malicious value can't break out of its
+        # Groovy string context. Pairs with the write-time
+        # validate_groovy_safe check.
+        _TEMPLATE_ENV.filters["groovy_escape"] = groovy_escape
     return _TEMPLATE_ENV
 
 
 def _template_name_for(executor_type: str) -> str:
-    """Map ``ExecutorTypeEnum`` value to the per-executor template file."""
-    return f"{executor_type.lower()}.config.j2"
+    """Map ``ExecutorTypeEnum`` value to the per-executor template file.
+
+    Validates against ``_ALLOWED_EXECUTOR_TYPES`` before constructing
+    the filename. Rejected values raise ``ValueError`` with a generic
+    message — the user-supplied value is intentionally not echoed
+    back so an attacker cannot confirm what they tried.
+    """
+    normalized = executor_type.lower()
+    if normalized not in _ALLOWED_EXECUTOR_TYPES:
+        raise ValueError("Unknown executor_type")
+    return f"{normalized}.config.j2"
 
 
 def render_nextflow_config(

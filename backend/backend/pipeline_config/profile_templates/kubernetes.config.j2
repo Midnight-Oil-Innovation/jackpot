@@ -12,15 +12,15 @@ process {
 }
 
 k8s {
-    namespace = '{{ ov["namespace"] }}'
+    namespace = '{{ ov["namespace"] | groovy_escape }}'
 {%- if ov.get('service_account') %}
-    serviceAccount = '{{ ov['service_account'] }}'
+    serviceAccount = '{{ ov['service_account'] | groovy_escape }}'
 {%- endif %}
 {%- if ov.get('compute_resource_type') %}
-    computeResourceType = '{{ ov['compute_resource_type'] }}'
+    computeResourceType = '{{ ov['compute_resource_type'] | groovy_escape }}'
 {%- endif %}
 {%- if ov.get('pull_policy') %}
-    pullPolicy = '{{ ov['pull_policy'] }}'
+    pullPolicy = '{{ ov['pull_policy'] | groovy_escape }}'
 {%- endif %}
 }
 {% endblock %}

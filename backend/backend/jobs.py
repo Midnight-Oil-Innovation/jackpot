@@ -390,7 +390,12 @@ async def compute_full_content_hash() -> dict[str, int]:
             continue
 
         try:
-            digest = _stream_full_sha256(row["uri"])
+            # R-1 #3: _stream_full_sha256 is sync (it reads from local
+            # disk, object storage, or http via httpx.Client). Calling
+            # it directly from this async function would block the
+            # event loop for the full duration of each file's hash —
+            # multi-GB files can stall the entire scheduler tick.
+            digest = await asyncio.to_thread(_stream_full_sha256, row["uri"])
         except Exception as exc:  # noqa: BLE001 — leave row NULL, retry next tick
             logger.warning(
                 "compute_full_content_hash: failed to hash %s: %s",
@@ -624,7 +629,10 @@ async def verify_file_references() -> dict[str, int]:
     re_fp = settings.verification_re_fingerprint
 
     for row in rows:
-        kind = _verify_one(row, re_fingerprint=re_fp)
+        # R-1 #3: _verify_one calls _stat_uri which makes a sync httpx
+        # HEAD request for http(s) URIs. Offload to a worker thread so
+        # the verification job doesn't stall the event loop per file.
+        kind = await asyncio.to_thread(_verify_one, row, re_fingerprint=re_fp)
 
         with get_db() as db:
             if kind is None:
@@ -1283,13 +1291,18 @@ async def promote_file_storage(
     digest: str | None = None
     bytes_copied = 0
     try:
-        if _server_side_copy_if_supported(source_uri, dest_uri):
+        # R-1 #3: server-side copy and stream-copy are both fully
+        # synchronous — _stream_copy_with_hash performs a multi-GB
+        # byte loop, _server_side_copy_if_supported issues a blocking
+        # gs/s3 copy. Offloading to a worker thread keeps the event
+        # loop responsive for the duration of the copy.
+        if await asyncio.to_thread(_server_side_copy_if_supported, source_uri, dest_uri):
             if settings.promote_verify_hash:
-                digest = _destination_full_sha256(dest_uri, chunk_size)
+                digest = await asyncio.to_thread(_destination_full_sha256, dest_uri, chunk_size)
             bytes_copied = file_row.get("file_size_bytes") or 0
         else:
-            bytes_copied, digest = _stream_copy_with_hash(
-                source_uri, dest_uri, chunk_size=chunk_size
+            bytes_copied, digest = await asyncio.to_thread(
+                _stream_copy_with_hash, source_uri, dest_uri, chunk_size=chunk_size
             )
     except Exception as exc:  # noqa: BLE001 — copy failures are user-surfaceable
         counters["outcome"] = "FAILURE"
