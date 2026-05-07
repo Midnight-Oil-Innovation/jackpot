@@ -66,3 +66,4 @@ work/
 
 # Generated artefacts
 node_modules/
+.claude/
