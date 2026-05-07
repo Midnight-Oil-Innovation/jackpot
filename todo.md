@@ -202,6 +202,47 @@ The P1 + P0g G-1+G-2 + ruff-pin work surfaced these small follow-up items. None 
 
 ## Performance and cleanup follow-ups (from /ultrareview Batch D)
 
+These items are from the /ultrareview pass and are real but not blocker-level. They ship as smaller PRs incrementally, opportunistically, after R-1 + R-2 + R-3 land.
+
+### Architectural follow-ups (deserve their own work-item specs)
+
+- [ ] **Item #8** — pipeline_default_profile.pipeline_id UUID vs pipeline_catalog.id SERIAL mismatch (profile_resolver.py:35-38). Step 3 of the Rule-59 5-step resolution chain is dead code until a follow-up migration lands. Needs schema migration; deserves a small work-item spec. Track and ship before considering P0g complete.
+- [ ] **Item #12 (register_accessions N+1)** — submissions.py:739-810. 3N queries per accession entry. Looks small but could surface concurrency issues with the submission state machine. Worth a focused work-item spec, not a one-line PR.
+- [ ] **Item #13 (cache TTL/LRU strategy)** — credentials/cache.py:26 + harmonizer.py:34. Both have unbounded dicts with no TTL or LRU. Needs a small design decision (which strategy, what bounds) before implementation.
+
+### Performance: N+1 query patterns (small PRs each)
+
+- [ ] **Item #12 partial** — jobs.py:203-208 — per-row director lookup in _send_approve_warnings. Batch the lookup.
+- [ ] **Item #12 partial** — submissions.py:432-445 — per-sample INSERT … ON CONFLICT loop in add_samples_to_submission. Use bulk insert.
+- [ ] **Item #12 partial** — pipeline_results_loader.py:314-322 — per-sample SELECT id in manifest loop. Batch.
+- [ ] **Item #12 partial** — jobs.py:132-174, 284-311, 327-346 — unbounded per-row UPDATE loops in _auto_approve_due_requests, _expire_grants, _moot_public_sample_requests. Add LIMIT / batch updates.
+
+### Performance: unbounded loads / table scans (small PRs each)
+
+- [ ] **Item #13** — jobs.py:449 — _select_rows_to_hash has no LIMIT. Add bound.
+- [ ] **Item #13** — jobs.py:1048-1057 — full-file BytesIO accumulation for GS/S3 destinations. Multi-GB OOM risk. Stream instead.
+
+### Simplicity (small PRs)
+
+- [ ] **Item #16** — _ensure_lab_access triplicated across submissions/import_mappings/imports routers. Move to shared auth utility.
+- [ ] **Item #17** — Collapse near-identical state-machine transitions in submissions.py (mark_execution_queued/_retried, mark_package_generated/mark_submitted) behind a _transition_status(...) helper. ~150 lines saved.
+- [ ] **Item #18** — Delete pipeline_config/batch_submitter.py. No-op stub never shipped.
+- [ ] **Item #19** — Drop submission_executors/__init__.py re-export layer. No callers.
+- [ ] **Item #20** — Drop _Credentials proxy in credentials/__init__.py and pipeline_config/__init__.py re-export shim. Unused indirection.
+- [ ] **Item #21** — gcp_batch.config.j2:13 hardcodes us-central1 as fallback region. Rule 55 borderline; pick: parameterize or remove fallback.
+- [ ] **Item #24** — Inline two-line wrappers (_row_to_profile, _ensure_can_read, _promote_file_storage_wrapper).
+
+### Security (small PRs)
+
+- [ ] **Item #22** — f"…{vis_clause}" SQL splicing in routers/files.py::_load_file_row_for_user. Latent injection risk. Refactor to parameterized.
+- [ ] **Item #23** — facade.py:62-68 logs str(exc) from credential errors. GCP exceptions can embed secret resource names. Trim before logging.
+
+### Documentation note (informational, not action)
+
+- [ ] **Item #26** — credentials/ uses 3 coordinator modules (factory + facade + registry) vs storage/'s 1. Deliberate per session summary, not a violation, but flagged for future reviewers. Already documented in spec.md credentials section after R-3.
+
+# Performance and cleanup follow-ups (from /ultrareview Batch D)
+
 Batch D of the May 2026 /ultrareview pass — items that aren't blockers
 (R-1 PR #31 closed those) and aren't doc/tracking hygiene (R-3 closes
 findings #9, #10, #11, #25) and aren't the GISAID/ENA test/dedup pile
