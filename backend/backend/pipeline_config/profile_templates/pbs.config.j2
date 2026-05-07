@@ -8,13 +8,13 @@
 {% block executor_block %}
 {%- set ov = profile.config_overrides %}
 {%- set extra_parts = [] %}
-{%- if ov.get('account') %}{% set _ = extra_parts.append('-A ' ~ ov['account']) %}{% endif %}
-{%- if ov.get('time') %}{% set _ = extra_parts.append('-l walltime=' ~ ov['time']) %}{% endif %}
-{%- if ov.get('cluster_options') %}{% set _ = extra_parts.append(ov['cluster_options']) %}{% endif %}
+{%- if ov.get('account') %}{% set _ = extra_parts.append('-A ' ~ (ov['account'] | groovy_escape)) %}{% endif %}
+{%- if ov.get('time') %}{% set _ = extra_parts.append('-l walltime=' ~ (ov['time'] | groovy_escape)) %}{% endif %}
+{%- if ov.get('cluster_options') %}{% set _ = extra_parts.append(ov['cluster_options'] | groovy_escape) %}{% endif %}
 process {
     executor = 'pbs'
 {%- if ov.get('queue') %}
-    queue = '{{ ov['queue'] }}'
+    queue = '{{ ov['queue'] | groovy_escape }}'
 {%- endif %}
 {%- if extra_parts %}
     clusterOptions = '{{ extra_parts | join(" ") }}'

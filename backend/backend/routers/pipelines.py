@@ -23,7 +23,7 @@ from pathlib import Path
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
-from pydantic import BaseModel, Field, ValidationError
+from pydantic import BaseModel, Field, ValidationError, field_validator
 
 from backend.audit import AuditActions, log_audit
 from backend.auth.guards import (
@@ -49,6 +49,7 @@ from backend.pipeline_config import (
     work_dir_for,
     write_run_config,
 )
+from backend.pipeline_config.groovy_safe import validate_groovy_safe
 from backend.pipeline_results_loader import load_pipeline_results
 from backend.pipeline_schemas import RESULT_SCHEMAS
 from backend.responses import error, success, success_list
@@ -935,6 +936,16 @@ class CustomPipelineRequest(BaseModel):
     github_url: str = Field(..., min_length=1)
     revision: str = Field(..., min_length=1)
     parameter_schema: dict[str, Any] = Field(default_factory=dict)
+
+    # R-1 #7: pipeline_name lands in pipeline_catalog and is later
+    # interpolated into a Nextflow Groovy config. Reject characters
+    # dangerous in Groovy string contexts at write time so a malicious
+    # value can't reach the renderer in the first place. The
+    # render-time groovy_escape filter is the second line of defense.
+    @field_validator("pipeline_name")
+    @classmethod
+    def _validate_pipeline_name_groovy_safe(cls, v: str) -> str:
+        return validate_groovy_safe(v, field_name="pipeline_name") or v
 
 
 @router.post("/custom", status_code=202)

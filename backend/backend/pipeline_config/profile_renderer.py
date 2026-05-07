@@ -22,6 +22,7 @@ from typing import Any
 import fsspec
 from jinja2 import Environment, PackageLoader, StrictUndefined
 
+from backend.pipeline_config.groovy_safe import groovy_escape
 from backend.pipeline_config.types import ExecutionProfile
 
 logger = logging.getLogger(__name__)
@@ -48,6 +49,12 @@ def _env() -> Environment:
             autoescape=False,
             keep_trailing_newline=True,
         )
+        # R-1 #7: defense-in-depth Groovy injection escape. Templates
+        # apply this filter to every catalog/profile-field
+        # interpolation so a malicious value can't break out of its
+        # Groovy string context. Pairs with the write-time
+        # validate_groovy_safe check.
+        _TEMPLATE_ENV.filters["groovy_escape"] = groovy_escape
     return _TEMPLATE_ENV
 
 

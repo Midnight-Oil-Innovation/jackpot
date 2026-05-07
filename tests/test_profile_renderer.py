@@ -16,6 +16,7 @@ from pathlib import Path
 import pytest
 from jinja2 import UndefinedError
 
+from backend.pipeline_config.groovy_safe import groovy_escape
 from backend.pipeline_config.profile_renderer import (
     _ALLOWED_EXECUTOR_TYPES,
     _template_name_for,
@@ -23,6 +24,19 @@ from backend.pipeline_config.profile_renderer import (
     write_run_config,
 )
 from backend.pipeline_config.types import ExecutionProfile
+
+# Construct dangerous-character literals via chr() so the test source
+# itself does not embed payloads that would trip downstream tooling
+# (Markdown renderers, log scrubbers, code-search tools). chr() is
+# unambiguous and stable across encodings.
+_DQ = chr(34)  # double-quote
+_SQ = chr(39)  # single-quote
+_DOLLAR = chr(36)
+_SEMICOLON = chr(59)
+_BACKTICK = chr(96)
+_BACKSLASH = chr(92)
+_NEWLINE = chr(10)
+_CARRIAGE_RETURN = chr(13)
 
 
 def _profile(
@@ -293,6 +307,112 @@ def test_template_name_for_rejects_empty():
     """Empty string is not in the allowlist; rejected."""
     with pytest.raises(ValueError):
         _template_name_for("")
+
+
+# ─────────────── R-1 #7: groovy_escape filter ───────────────
+
+
+def test_groovy_escape_handles_double_quote():
+    out = groovy_escape(f"foo{_DQ}bar")
+    # The double-quote must be backslash-escaped.
+    assert out == f"foo{_BACKSLASH}{_DQ}bar"
+
+
+def test_groovy_escape_handles_dollar_sign():
+    """A dollar-sign in a Groovy GString triggers interpolation;
+    escaping prevents the renderer from emitting an interpolation
+    sequence that Nextflow would evaluate."""
+    out = groovy_escape(f"price{_DOLLAR}{{evil}}")
+    assert out.startswith(f"price{_BACKSLASH}{_DOLLAR}")
+    # The dollar is no longer a bare interpolation trigger.
+    assert f"{_BACKSLASH}{_DOLLAR}" in out
+
+
+def test_groovy_escape_handles_backslash():
+    out = groovy_escape(f"a{_BACKSLASH}b")
+    # Each input backslash becomes two backslashes (Groovy escape).
+    assert out == f"a{_BACKSLASH}{_BACKSLASH}b"
+
+
+def test_groovy_escape_handles_newline():
+    out = groovy_escape(f"a{_NEWLINE}b")
+    # Literal newline replaced with the two-character backslash-n
+    # sequence so the value cannot terminate a single-line string.
+    assert _NEWLINE not in out
+    assert f"{_BACKSLASH}n" in out
+
+
+def test_groovy_escape_handles_carriage_return():
+    out = groovy_escape(f"a{_CARRIAGE_RETURN}b")
+    assert _CARRIAGE_RETURN not in out
+    assert f"{_BACKSLASH}r" in out
+
+
+def test_groovy_escape_handles_single_quote():
+    out = groovy_escape(f"a{_SQ}b")
+    assert out == f"a{_BACKSLASH}{_SQ}b"
+
+
+def test_groovy_escape_handles_backtick():
+    out = groovy_escape(f"a{_BACKTICK}b")
+    assert out == f"a{_BACKSLASH}{_BACKTICK}b"
+
+
+def test_groovy_escape_handles_none():
+    assert groovy_escape(None) == ""
+
+
+def test_groovy_escape_replacement_order_does_not_double_escape_backslash():
+    """Backslash must be replaced first or the introduced backslashes
+    from later replacements would themselves be re-escaped, producing
+    output exponentially larger than the input."""
+    # Mix of backslash and other dangerous chars; the resulting
+    # length must be linear in the input.
+    src = f"{_BACKSLASH}{_DQ}{_SQ}{_DOLLAR}"
+    out = groovy_escape(src)
+    # Each of 4 chars expands to exactly 2 chars (escape + char).
+    assert len(out) == 8
+
+
+def test_render_template_with_malicious_pipeline_name_is_safe():
+    """Render a template with a pipeline_name containing the dangerous
+    character set; verify the output contains the escaped form rather
+    than Groovy-evaluatable code. No literal danger char appears in
+    a position where it could break out of its single-quoted string."""
+    malicious_name = f"sc2{_SQ}{_SEMICOLON} include({_SQ}/etc/passwd{_SQ}){_SEMICOLON}{_SQ}"
+    pipeline = dict(_PIPELINE)
+    pipeline["pipeline_name"] = malicious_name
+    rendered = render_nextflow_config(
+        profile=_profile("LOCAL"),
+        pipeline=pipeline,
+        run_id="jp-r1-7",
+        weblog_url="http://api.test/api/v1/pipelines/events",
+        result_registration_url="http://api.test/api/v1/pipelines/jp-r1-7/results",
+        pipeline_token="pt_test",
+        work_dir="/srv/jackpot/work",
+    )
+    # The escaped name must appear (escaped form); the unescaped
+    # malicious payload must not.
+    assert malicious_name not in rendered
+    # The single-quote inside the value is escaped to backslash-quote.
+    assert f"{_BACKSLASH}{_SQ}" in rendered
+
+
+def test_render_template_with_malicious_work_dir_is_safe():
+    """work_dir is interpolated into both manifest workDir and
+    GCP-Batch resourceLabels. Both sites must escape."""
+    malicious = f"/tmp{_SQ}{_SEMICOLON}rm -rf /{_SEMICOLON}{_SQ}"
+    rendered = render_nextflow_config(
+        profile=_profile("LOCAL"),
+        pipeline=_PIPELINE,
+        run_id="jp-r1-7-wd",
+        weblog_url="http://api.test/api/v1/pipelines/events",
+        result_registration_url="http://api.test/api/v1/pipelines/jp-r1-7-wd/results",
+        pipeline_token="pt_test",
+        work_dir=malicious,
+    )
+    assert malicious not in rendered
+    assert f"{_BACKSLASH}{_SQ}" in rendered
 
 
 def test_write_run_config_writes_local_path(tmp_path: Path):

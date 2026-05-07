@@ -11,13 +11,13 @@
 {%- set queue_val = ov.get('queue', 'normal') %}
 {%- set time_val = ov.get('time', '1h') %}
 {%- set extra_parts = [] %}
-{%- if ov.get('account') %}{% set _ = extra_parts.append('--account=' ~ ov['account']) %}{% endif %}
-{%- if ov.get('qos') %}{% set _ = extra_parts.append('--qos=' ~ ov['qos']) %}{% endif %}
-{%- if ov.get('cluster_options') %}{% set _ = extra_parts.append(ov['cluster_options']) %}{% endif %}
+{%- if ov.get('account') %}{% set _ = extra_parts.append('--account=' ~ (ov['account'] | groovy_escape)) %}{% endif %}
+{%- if ov.get('qos') %}{% set _ = extra_parts.append('--qos=' ~ (ov['qos'] | groovy_escape)) %}{% endif %}
+{%- if ov.get('cluster_options') %}{% set _ = extra_parts.append(ov['cluster_options'] | groovy_escape) %}{% endif %}
 process {
     executor = 'slurm'
-    queue = '{{ queue_val }}'
-    time = '{{ time_val }}'
+    queue = '{{ queue_val | groovy_escape }}'
+    time = '{{ time_val | groovy_escape }}'
 {%- if extra_parts %}
     clusterOptions = '{{ extra_parts | join(" ") }}'
 {%- endif %}
