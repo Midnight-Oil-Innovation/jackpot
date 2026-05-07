@@ -771,6 +771,384 @@ already have one.
 
 ---
 
+## Phase I-2 Specification — Submissions
+
+> **Status:** Shipped (Session 19, PR-merged into `development`).
+> First-class submissions tracking and Seqsender-compatible package
+> generation. v1 deliberately excludes credential management — JACKPOT
+> generates the package, the operator runs Seqsender (or DDBJ /
+> GISAID-equivalent tools) themselves with their own credentials. I-3
+> adds optional backend-driven execution on top of this foundation.
+> Implementation lives in `backend/backend/submissions.py` (state-machine
+> business logic) and `backend/backend/routers/submissions.py` (thin
+> HTTP shell). The CLI (`cli/jackpot/cli/submissions.py`) and SDK
+> (`cli/jackpot/sdk/submissions.py`) call the service module directly.
+
+### State machine
+
+The submission lifecycle is a 13-state machine encoded in
+`submissions.py`'s `VALID_STATUSES` constant:
+
+```
+DRAFT
+  ↓ (mark_package_generated — writes package_path + package_generated_at)
+READY_TO_SUBMIT
+  ↓ (mark_submitted — sets submitted_at)
+SUBMITTED
+  ↓ (register_accessions — TSV ingest, sets per-sample accessions)
+  ├→ ACCEPTED          (all samples accepted)
+  ├→ PARTIAL_SUCCESS   (some samples rejected)
+  └→ REJECTED          (all samples rejected, mark_rejected)
+ACCEPTED / PARTIAL_SUCCESS
+  ↓ (release_date set + EMBARGOED elected by operator)
+EMBARGOED
+  ↓ (release_embargoed_submissions daily job at midnight UTC)
+RELEASED
+```
+
+Plus side-paths:
+
+- **`WITHDRAWN`** — reachable from any post-`DRAFT` state via
+  `withdraw_submission`. The samples list is locked; the row is kept
+  for audit history.
+- **`FAILED`** — terminal failure surfaced when package generation or
+  validation reports an unrecoverable error. Operator must withdraw
+  and create a new submission.
+
+I-3a backend-execution states (used only when `allow_backend_submission`
+is set on the lab and `backend_submission_repos` includes the target):
+
+- **`EXECUTING`** — set by `mark_execution_queued` when the
+  Seqsender subprocess starts. Withdrawal is intentionally blocked from
+  this state to avoid mid-flight executor races.
+- **`EXECUTION_FAILED`** — Seqsender returned non-zero (I-3b);
+  reachable via `mark_execution_retried` for retry.
+- **`EXECUTION_INTERRUPTED`** — set by the lifespan recovery hook
+  (Critical Rule 60 cluster-bound runs pattern, applied here at the
+  process-supervision layer) when an API restart abandons an in-flight
+  subprocess.
+
+The set `_POST_SUBMITTED_STATUSES` defines the withdraw-allowed states
+(`SUBMITTED`, `PARTIAL_SUCCESS`, `ACCEPTED`, `EMBARGOED`, `RELEASED`,
+`REJECTED`, plus the two execution-failure states). The set
+`_SAMPLES_LOCKED_STATUSES` covers everything except `DRAFT` —
+`add_samples_to_submission` and `remove_samples_from_submission`
+refuse outside of `DRAFT`.
+
+### Schema
+
+`submissions` table:
+
+| Column | Type | Notes |
+|---|---|---|
+| `id` | BIGSERIAL | PK |
+| `created_by_user_id` | INTEGER | FK users(id) |
+| `lab_id` | INTEGER | FK labs(id) |
+| `target_repository` | VARCHAR(32) | One of `NCBI`, `GISAID_EPICOV`, `GISAID_EPIFLU`, `GISAID_EPIPOX`, `ENA`, `DDBJ` |
+| `title` | TEXT | Required |
+| `description` | TEXT | Optional |
+| `status` | VARCHAR(32) | Default `DRAFT`; CHECK against `VALID_STATUSES` |
+| `bioproject_accession` | TEXT | NCBI-only; supplied by operator before submission |
+| `release_date` | DATE | Optional embargo end-date |
+| `package_path` | TEXT | URI of generated package |
+| `package_generated_at` | TIMESTAMPTZ | Set by `mark_package_generated` |
+| `submitted_at` | TIMESTAMPTZ | Set by `mark_submitted` |
+| `accepted_at` | TIMESTAMPTZ | Set by `register_accessions` when status moves to `ACCEPTED` or `PARTIAL_SUCCESS` |
+| `rejection_reason` | TEXT | Free-text reason for `REJECTED` status |
+| `withdrawal_reason` | TEXT | Free-text reason for `WITHDRAWN` status |
+| `created_at` | TIMESTAMPTZ | Default `NOW()` |
+| `updated_at` | TIMESTAMPTZ | Default `NOW()`, bumped by writes |
+| `is_deleted` | BOOLEAN | Soft-delete flag; default FALSE |
+
+Indexes: `submissions_lab_status_idx` `(lab_id, status) WHERE is_deleted = FALSE`,
+`submissions_creator_idx` `(created_by_user_id) WHERE is_deleted = FALSE`.
+
+`submission_samples` table:
+
+| Column | Type | Notes |
+|---|---|---|
+| `id` | BIGSERIAL | PK |
+| `submission_id` | BIGINT | FK submissions(id) ON DELETE CASCADE |
+| `sample_id_fk` | INTEGER | FK samples(id) |
+| `per_sample_status` | VARCHAR(16) | One of `PENDING`, `ACCEPTED`, `REJECTED` |
+| `biosample_accession` | TEXT | Returned by NCBI BioSample registration |
+| `sra_accession` | TEXT | Returned by NCBI SRA registration |
+| `genbank_accession` | TEXT | Returned by NCBI GenBank registration |
+| `gisaid_accession` | TEXT | Returned by GISAID after acceptance |
+| `ena_accession` | TEXT | Returned by ENA after acceptance |
+| `ddbj_accession` | TEXT | Returned by DDBJ after acceptance |
+| `per_sample_rejection_reason` | TEXT | Per-sample rejection reason |
+| `created_at` / `updated_at` | TIMESTAMPTZ | Standard |
+
+UNIQUE constraint: `(submission_id, sample_id_fk)`.
+
+### Transition rules
+
+Each transition is gated, audited (Critical Rule 4), and may emit a
+notification (the `NotificationEvents` constants are documented in
+`docs/CLAUDE.md` Notification System section).
+
+| From | To | Function | Actor permission | Audit action |
+|---|---|---|---|---|
+| `DRAFT` | `READY_TO_SUBMIT` | `mark_package_generated` | Lab Collaborator+ | `SUBMISSION_PACKAGE_GENERATED` |
+| `READY_TO_SUBMIT` | `SUBMITTED` | `mark_submitted` | Lab Collaborator+ | `SUBMISSION_MARKED_SUBMITTED` |
+| `SUBMITTED` | `ACCEPTED` / `PARTIAL_SUCCESS` / `REJECTED` | `register_accessions` (or `mark_rejected`) | Lab Collaborator+ | `SUBMISSION_ACCESSIONS_REGISTERED` / `SUBMISSION_REJECTED` |
+| `ACCEPTED` / `PARTIAL_SUCCESS` | `EMBARGOED` | `update_submission` (operator sets `release_date`) | Lab Director | `SUBMISSION_UPDATED` |
+| `EMBARGOED` | `RELEASED` | `release_embargoed_submissions` daily job | system | `SUBMISSION_RELEASED` |
+| post-`SUBMITTED` (excl. `EXECUTING`) | `WITHDRAWN` | `withdraw_submission` | Lab Director | `SUBMISSION_WITHDRAWN` |
+| `READY_TO_SUBMIT` | `EXECUTING` | `mark_execution_queued` (I-3a) | Lab Director | `SUBMISSION_EXECUTION_QUEUED` |
+| `EXECUTION_FAILED` / `EXECUTION_INTERRUPTED` | `EXECUTING` | `mark_execution_retried` (I-3a) | Lab Director | `SUBMISSION_EXECUTION_RETRIED` |
+| `EXECUTING` | `ACCEPTED` / `PARTIAL_SUCCESS` / `REJECTED` | `mark_execution_completed` (I-3b) | system | `SUBMISSION_EXECUTION_COMPLETED` |
+| `EXECUTING` | `EXECUTION_FAILED` | `mark_execution_failed` (I-3b) | system | `SUBMISSION_EXECUTION_FAILED` |
+| `EXECUTING` | `EXECUTION_INTERRUPTED` | `recover_interrupted_executions` (lifespan hook, I-3b) | system | `SUBMISSION_EXECUTION_INTERRUPTED` |
+
+### Endpoints
+
+All routes are under `/api/v1/submissions/`. See
+`docs/api/submissions.md` for full request/response shapes.
+
+- `POST /` — create submission (DRAFT)
+- `GET /` — list submissions visible to the user (paginated)
+- `GET /{id}` — get a single submission
+- `PATCH /{id}` — partial update (Critical Rule 39 pattern)
+- `DELETE /{id}` — soft delete (only allowed in `DRAFT`)
+- `POST /{id}/samples` / `DELETE /{id}/samples/{sample_id}` — sample list management (locked outside `DRAFT`)
+- `POST /{id}/validate` — readiness check (per-sample issues + per-submission errors)
+- `POST /{id}/generate` — generate package on disk; transitions to `READY_TO_SUBMIT`
+- `POST /{id}/submitted` — mark as `SUBMITTED` after operator handed package to Seqsender
+- `POST /{id}/accessions` — TSV ingest of per-sample accessions
+- `POST /{id}/rejected` — mark fully rejected with reason
+- `POST /{id}/withdraw` — withdraw with reason
+- `POST /{id}/execute` (I-3a) — gated on `allow_backend_submission`; queues backend execution
+- `POST /{id}/retry` (I-3a) — retry from `EXECUTION_FAILED` / `EXECUTION_INTERRUPTED`
+- `GET /{id}/logs` (I-3b) — view execution log via signed URL
+
+### Package generation handoff
+
+JACKPOT v1 does NOT execute submissions on the backend by default
+(Session 18 decision). The package generator writes a Seqsender-
+compatible directory (or DDBJ / GISAID-equivalent for non-NCBI
+targets) under `<submission_packages_dir>/<submission_id>/`. The
+generated `seqsender_config.yaml` references the operator's own
+credentials by environment-variable name — JACKPOT never holds
+NCBI/GISAID/ENA secrets in v1, sidestepping the Scenario A
+laptop-connectivity-and-IP-rotation problem entirely. The operator
+runs `seqsender submit ./<submission_id>/` from a stable host.
+
+The opt-in path to backend execution (I-3) is gated by:
+
+1. `allow_backend_submission=true` on the lab (Lab Director consent), and
+2. `backend_submission_repos` listing the specific repos the operator
+   trusts JACKPOT to call (subset of `VALID_REPOSITORIES`), and
+3. The C-1 credential infrastructure (Phase C-1 below) configured for
+   each enabled repo's required credentials per
+   `backend/credentials/registry.py`'s `REQUIRED_CREDENTIALS`.
+
+If any of those preconditions are missing, `POST /{id}/execute`
+returns `400 NO_CREDENTIALS_CONFIGURED` (or `400 BACKEND_SUBMISSION_DISABLED`)
+and the operator falls back to manual Seqsender execution against
+the still-existing package.
+
+### Daily release-embargoed-submissions job
+
+`backend/jobs.py::release_embargoed_submissions` runs once per day at
+midnight UTC (cron `hour=0, minute=0`, registered alongside the
+existing `run_access_request_job`). It scans for `status=EMBARGOED`
+rows where `release_date <= CURRENT_DATE`, transitions each to
+`RELEASED`, writes the `SUBMISSION_RELEASED` audit event, and
+notifies the creator. Idempotent — re-running on the same day is a
+no-op for already-released submissions because the WHERE clause
+excludes them.
+
+### Audit actions added by I-2 + I-3
+
+- `SUBMISSION_CREATED`
+- `SUBMISSION_UPDATED`
+- `SUBMISSION_DELETED`
+- `SUBMISSION_PACKAGE_GENERATED`
+- `SUBMISSION_MARKED_SUBMITTED`
+- `SUBMISSION_ACCESSIONS_REGISTERED`
+- `SUBMISSION_REJECTED`
+- `SUBMISSION_WITHDRAWN`
+- `SUBMISSION_RELEASED`
+- `SUBMISSION_SAMPLES_ADDED` / `SUBMISSION_SAMPLES_REMOVED`
+- `SUBMISSION_EXECUTION_QUEUED` (I-3a)
+- `SUBMISSION_EXECUTION_RETRIED` (I-3a)
+- `SUBMISSION_EXECUTION_COMPLETED` (I-3b)
+- `SUBMISSION_EXECUTION_FAILED` (I-3b)
+- `SUBMISSION_EXECUTION_INTERRUPTED` (I-3b)
+
+### Tests
+
+Tests live at `tests/test_submissions_router.py`,
+`tests/test_submission_packages.py`, and the per-repo generator suites
+(`tests/test_submission_packages_ena.py` etc.). Coverage targets
+include every state-machine transition and every refusal path, the
+TSV accession-ingest parser including malformed input, the
+embargo-release job idempotency, and the I-3a backend-execution gates.
+
+---
+
+## Phase C-1 Specification — Pluggable credential infrastructure
+
+> **Status:** Shipped (Session 20, PR-merged into `development`).
+> Pluggable credential layer behind a single `CredentialFacade` so
+> consuming code (submissions, future LLM features, federation API
+> keys) reads credentials by name without knowing where they come
+> from. v1 ships three backends: env vars (default, works
+> everywhere), file-based YAML (config-management-friendly), GCP
+> Secret Manager (cloud deployments). AWS Secrets Manager, Azure
+> Key Vault, and OS keychain backends are future work, gated on
+> demand. See Critical Rule 62 in `docs/CLAUDE.md`.
+
+### Architecture
+
+```
+caller (router / job / submission service)
+    │
+    ▼
+backend.credentials.credentials       ← public proxy (lazy-init facade)
+    │
+    ▼
+CredentialFacade                       ← cache + audit + registry
+    │
+    ▼
+CredentialBackend (one of)             ← interface
+    ├─ EnvBackend          — os.environ lookup
+    ├─ FileBackend         — YAML at credential_file_path
+    └─ GCPSecretManagerBackend — google-cloud-secret-manager client
+```
+
+The facade is the single entry point. It wraps the chosen backend
+with a TTL'd cache (`credential_cache_ttl_seconds`, default 300),
+emits structured audit logs (`CREDENTIAL_READ` / `CREDENTIAL_READ_FAILED`)
+to the `backend.credentials.audit` stdlib logger (NOT the DB-bound
+`log_audit` — credential reads happen outside any DB transaction),
+and validates required credentials at startup against
+`REQUIRED_CREDENTIALS` from `backend/credentials/registry.py`.
+
+### Settings
+
+In `backend/config.py`:
+
+| Field | Type | Default | Description |
+|---|---|---|---|
+| `credential_backend` | `Literal["env", "file", "gcp_secret_manager"]` | `"env"` | Which backend `CredentialFactory` constructs |
+| `credential_file_path` | `str` | `"~/.config/jackpot/credentials.yaml"` | Path used by `FileBackend` |
+| `credential_gcp_secret_prefix` | `str` | `"jackpot-cred-"` | Secret-name prefix in GCP Secret Manager |
+| `credential_cache_ttl_seconds` | `int` | `300` | Cache TTL on the facade |
+
+### Backends
+
+**`EnvBackend`** — `os.environ.get(key)`. Default for Scenarios A, B,
+F. Zero new infrastructure; operator sets env vars in
+`.env.local` / `docker-compose.yml` / Helm values. Best for
+single-operator deployments and CI.
+
+**`FileBackend`** — reads a YAML file at `credential_file_path` whose
+top-level keys are credential names. File mode must be 0600 (the
+backend refuses to read otherwise). Best for config-management-
+friendly multi-host deployments without a cloud secret store.
+
+**`GCPSecretManagerBackend`** — fetches from GCP Secret Manager with
+secret name `{credential_gcp_secret_prefix}{key}`. Requires
+`google-cloud-secret-manager` (already in the dependency tree for
+Scenario D/E). Best for GCP-native deployments where IAM-gated
+secret access matters.
+
+### Public surface
+
+`backend.credentials.credentials` is a module-level proxy that
+lazily constructs the facade on first access (via `CredentialFactory`
+which inspects `Settings.credential_backend`). Three call shapes:
+
+```python
+from backend.credentials import credentials
+
+api_key = credentials.get("ncbi_api_key")              # raises if missing
+optional_token = credentials.get_optional("github_token")  # returns None if missing
+keys = credentials.list_keys()                          # for diagnostics
+```
+
+`get` and `get_optional` are documented in
+`backend/credentials/facade.py`. `list_keys` is implementation-
+defined per backend (`EnvBackend.list_keys` returns the union of env
+vars matching the registry's known keys; `FileBackend` returns the
+file's keys; `GCPSecretManagerBackend` lists secrets matching the
+prefix).
+
+### Migration path for existing credential reads
+
+C-1 migrated three call sites already in production:
+
+- **Globus** — `globus_client_id` / `globus_client_secret` /
+  `globus_endpoint_id` previously read from `Settings`; now read via
+  `credentials.get(...)`.
+- **Cloud storage** (GCS / MinIO / S3) — service-account credentials
+  previously bootstrapped via `google.auth.default()` paths; now the
+  facade routes through `GCPSecretManagerBackend` when
+  `credential_backend = "gcp_secret_manager"`. Local dev still uses
+  ADC by default since `EnvBackend` doesn't shadow auth.
+- **JWT signing key** — formerly `Settings.secret_key`; now
+  `credentials.get("jwt_secret_key")`. Production validation in
+  `Settings.validate_for_production()` was simplified accordingly
+  (the secret-key check moved to credential validation at startup).
+
+Future credential reads (NCBI / ENA / GISAID for I-3, federation
+peer keys for B-FED-1, LLM API keys for assistant) MUST go through
+`backend.credentials` — never via `Settings` or direct `os.environ`
+lookups. This is **Critical Rule 62**.
+
+### Credential registry
+
+`backend/credentials/registry.py` defines `REQUIRED_CREDENTIALS` as
+a list of `CredentialSpec(key, required_predicate, description,
+example)` records. `required_predicate` is a `Settings`-typed
+callable returning `True` only when that credential is required for
+the current configuration. Examples:
+
+- `globus_client_id` is required only when
+  `settings.globus_enabled` is `True`.
+- `ncbi_api_key` is required only when
+  `settings.allow_backend_submission` is `True` AND
+  `"NCBI" in settings.backend_submission_repos`.
+- `jwt_secret_key` is always required.
+
+`facade.validate_required()` walks the registry, calls each
+predicate against the live settings, and raises `RuntimeError`
+listing the missing keys if any required credential is unreachable.
+The lifespan handler in `main.py` calls this at startup so a
+mis-configured deployment fails fast at boot rather than at first
+request.
+
+### Future backends
+
+- **AWS Secrets Manager** — stub interface in place; activates when
+  `credential_backend = "aws_secrets_manager"`. Scenario E (AWS-hosted)
+  is the trigger.
+- **Azure Key Vault** — same pattern; gated on Azure-hosted
+  scenarios.
+- **OS keychain** — macOS Keychain / Windows Credential Manager /
+  freedesktop Secret Service for Scenario A operators who don't want
+  plaintext env vars or YAML files.
+
+Each new backend implements `CredentialBackend` and registers with
+`CredentialFactory`. No consumer code changes when a new backend is
+added.
+
+### Tests
+
+Tests at `backend/backend/credentials/test_helpers.py` provide an
+`InMemoryBackend` for unit tests and a fixture that constructs a
+facade against it. End-to-end tests cover the three v1 backends
+against fixture YAML / monkeypatched env / mocked GCP client. The
+factory's settings-driven dispatch is covered with a settings-builder
+parametrize. The startup-validation failure mode is covered by
+constructing a facade with deliberately-missing required credentials
+and asserting `validate_required()` raises with the expected key list.
+
+---
+
 ### Session B — labs + lab_membership
 
 **Endpoints:**
