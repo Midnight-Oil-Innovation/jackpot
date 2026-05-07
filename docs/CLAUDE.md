@@ -29,7 +29,7 @@ federated_peers + BYOP/eukaryotic schema) → P0c (multi-tenancy middleware
 
 1. Read `spec.md` — understand the goals and constraints for the current sprint
 2. Read `todo.md` — find the next unchecked task
-3. Re-read this file (`docs/CLAUDE.md`) — all 61 Critical Rules apply at all times
+3. Re-read this file (`docs/CLAUDE.md`) — all 62 Critical Rules apply at all times
 4. Confirm the baseline is stable: `uv run pytest tests/ schema/tests/ cli/tests/` from the workspace root — **≥970 tests passing, ≥80% coverage** (post-P0e baseline). The post-P0d 39% number we carried briefly was a pytest-cov misconfiguration (omit list wasn't reaching the report-time matcher); fixed by making `--cov-config=pyproject.toml` explicit in addopts — see `docs/learnings.md` "Coverage measurement bug" entry. P0e (`docs/architecture/jackpot-init-cli.md`) shipped `jackpot init` operator-bootstrap CLI plus 13 absorbed Phase 22 cleanup items; see `docs/review_log.md` "P0e closeout" section.
 
 ### Work Loop
@@ -1091,6 +1091,51 @@ or when `git switch` is run inside a worktree. The Sessions 20-21
 worktree-contamination saga consumed significant recovery time and prompted
 this rule. Never `git switch` inside a worktree — each worktree is pinned
 to its anchor branch by virtue of being created with `-b`.
+
+**62. Credential reads go through `CredentialFacade`, never directly via env var or `Settings`.**
+
+Sensitive string values (NCBI/ENA/GISAID API keys, Globus client secret,
+JWT signing key, future federation peer keys, future LLM API keys) are
+read via the C-1 credential infrastructure:
+
+```python
+from backend.credentials import credentials
+
+api_key = credentials.get("ncbi_api_key")               # raises CredentialNotFoundError if missing
+optional_token = credentials.get_optional("github_token")   # returns None if missing
+```
+
+Never read these from `os.environ` directly, never expose them as plain
+`Settings` fields. Routes through the facade are the only call shape
+that:
+
+- inherits the operator-selected backend (env / file YAML / GCP Secret
+  Manager / future AWS / Azure / OS keychain) without per-call branching;
+- emits the `CREDENTIAL_READ` / `CREDENTIAL_READ_FAILED` audit events
+  to the dedicated `backend.credentials.audit` stdlib logger;
+- is registered in `backend/credentials/registry.py`'s
+  `REQUIRED_CREDENTIALS` so `validate_required()` at startup catches a
+  mis-configured deployment before the first request.
+
+Adding a new credential is a three-step change: (1) add a
+`CredentialSpec(...)` to `REQUIRED_CREDENTIALS` with a
+`required_predicate` against `Settings`; (2) add the value to whichever
+backends the deployment uses (env var / YAML key / GCP secret); (3)
+read via `credentials.get(...)` from the consuming module.
+
+Selectors live in `Settings`:
+
+| Field | Default | Meaning |
+|---|---|---|
+| `credential_backend` | `"env"` | One of `"env"`, `"file"`, `"gcp_secret_manager"` |
+| `credential_file_path` | `~/.config/jackpot/credentials.yaml` | Used only when `credential_backend = "file"`; file mode must be 0600 |
+| `credential_gcp_secret_prefix` | `"jackpot-cred-"` | Used only when `credential_backend = "gcp_secret_manager"` |
+| `credential_cache_ttl_seconds` | `300` | Facade-level TTL'd cache |
+
+Existing migrated call sites: Globus client_id/client_secret/endpoint_id,
+cloud-storage service-account credentials, JWT signing key. New code
+follows the same pattern. See `spec.md` Phase C-1 Specification for the
+full design.
 
 ## Local Dev Role Switching
 
