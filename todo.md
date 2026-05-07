@@ -1,9 +1,9 @@
 # JACKPOT — To-Do List
 
-**Last updated:** 2026-05-05 (post-P1 + P0g G-1+G-4 + governance + Phase 24.5 deferral)
-**Baseline:** ~1000+ tests passing post-merge of PRs #21 (P0g G-1+G-2: 32 new tests) and #22 (P1: 31 new tests). Coverage holding ≥84% workspace-wide (CI threshold 80%); fresh `uv run pytest --cov` recommended after pulling the latest development to confirm exact numbers. P0e + I-track baseline was 944 tests / 86.20% coverage as of 2026-05-02.
+**Last updated:** 2026-05-06 (post-R3 doc/tracking hygiene)
+**Baseline:** **1591 tests passing, 2 skipped** (verified 2026-05-06 via `uv run pytest --no-cov -q` against `r3-doc-and-tracking-hygiene` based at `2609a1f`). Coverage 87.85% per PR #28 closeout (re-measure with `uv run pytest --cov` if needed; CI threshold 80%). PR #28 (P0g G-3+G-4) reported 1527 passing post-merge; subsequent R-1 security fixes (PR #31) brought the count to its current state.
 **Sessions 21+ deliverables:** PR #21 (P0g G-1+G-2: `ExecutionProfile` + `PipelineDefaultProfile` schema + migration with `default-local` seed; merged 2026-05-04 at `a682788`). PR #22 (P1: `/api/v1/auth/refresh` endpoint with single-use rotation, `refresh_tokens` table, replay detection with bulk-revoke, rotation-aware login/logout, daily cleanup job, six error codes; merged 2026-05-05 at `ba03143` — closes the I-track entirely). PR #23 (docs: bundle refresh to v4.0 covering Session 20 I-track close). PR #25 (chore: pin ruff at 0.11.6 across pre-commit, backend, cli, uv.lock — permanent fix for the recurring CI ruff-version mismatch that bit PRs #21 and #22 on first runs). PR #26 (docs: governance README + coi-disclosures stub on top of the 8 substantive governance docs already on origin from `f46f7ee`; merged 2026-05-05 at `2dbb839` along with an accidentally-bundled Sessions 21+ doc refresh that came along from local development state). PR #27 (docs: post-Session-21 housekeeping — `uv run pre-commit` prefix, **Critical Rule 61** worktree+branch verification, spec.md §4.1 fix #5 resolution; merged at `c7df002`). PR #28 (P0g G-3+G-4: profile templates + `nextflow.config` renderer + `pipeline_config/` package refactor + 35 new tests; merged at `544c98c` — 1527 tests, 87.85% coverage). PR #29 (docs: defer Phase 24.5 external collaborator review per option β / scope c — NPAIHB/Northwest TEC/B-CARE-6 references stripped from `todo.md` + session summary + `cdc_dmi_stlt` overview). See Sessions 21+ entries in `jackpot_session_summary_and_backlog.md` and the recovery saga learnings in `learnings.md` ("Worktree contamination — Sessions 20-21" entry).
-**Active sprint:** Next phase is Glen's call. With I-track + P0g foundation done, the natural candidates are: (a) **Phase P0g G-3 + G-4** (profile templates + nextflow.config renderer, tightly coupled, one PR — short feedback loop, builds directly on what just shipped); (b) **Phase 24.7 / P0f BYOP infrastructure**; (c) small housekeeping pile (`uv run pre-commit` correction in CLAUDE.md, GitHub branch-protection setup on main + development, audit of stale local branches, P0f file-references F-3+ continuation if F-2 was the last shipped). Architectural sequence remains: Phase 24.5 (sovereignty + BYOP design lockdown) → P0f (BYOP infrastructure) → P0b (Schema v5.0) → P0c (multi-tenancy middleware + sovereignty deletion) → P1 broader auth-architecture review (rest of P1 — session-management UI, refresh-token-family tracking, etc.) → P2+.
+**Active sprint:** Next phase is Glen's call. With I-track + P0g G-1 through G-4 + P1 + R-1/R-2/R-3 closeout done, the natural candidates are: (a) **Phase P0g G-5** (profiles CRUD endpoints — operators can use the renderer/resolver from PR #28 but can't manage profiles via API yet; closing this gap unblocks the legacy GCP-Batch path deletion); (b) **Phase 24.5 design lockdown (solo, option β)** — finalize sovereignty-deletion design without external review since collaborator review was deferred 2026-05-05; once locked, P0b unblocks; (c) **Performance and cleanup follow-ups from /ultrareview Batch D** — see the dedicated section below; (d) **Phase 24.7 / P0f BYOP infrastructure** for B-BYOP-1 through B-BYOP-10. Architectural sequence remains: Phase 24.5 (sovereignty + BYOP design lockdown) → P0f (BYOP infrastructure) → P0b (Schema v5.0) → P0c (multi-tenancy middleware + sovereignty deletion) → P1 broader auth-architecture review (rest of P1 — session-management UI, refresh-token-family tracking, etc.) → P2+.
 
 **Project context as of 2026-04-28:** JACKPOT pivoted to an independent project under `Midnight-Oil-Innovation/jackpot` (no longer ADHS/ASU-coupled, no longer the APGAP successor). License flipped from Apache 2.0 to **AGPL-3.0**. New multi-deployment-target architecture covers 7 install scenarios (A laptop, B single-org cloud, C multi-lab agency, D hosted SaaS, E federation member, F CI test, **T Tribal-sovereignty deployment**). Cleanup A through J COMPLETE → **P0d COMPLETE and VALIDATED (2026-04-30 → 2026-05-01)** → P0e (jackpot init CLI, next) → **P0f (BYOP infrastructure)** → P0b/c (multi-tenancy schema + middleware, **gated on Phase 24.5 sovereignty design** AND **must include BYOP + eukaryotic schema additions**) → P1–P5. See `jackpot_pathoplexus_loculus_overview.md`, `jackpot_cdc_dmi_stlt_overview.md`, and `jackpot_byop_and_eukaryotic_design.md` for the analyses driving Phases 26, 27, P0f, and 28.
 
@@ -192,7 +192,47 @@ The P1 + P0g G-1+G-2 + ruff-pin work surfaced these small follow-up items. None 
 
 - [ ] **Audit and delete obsolete local feature branches.** `p0f-f8-pre-launch-verification` and others may still be present locally. Quick `git branch --merged development | grep -v development | xargs git branch -d` after each merge would keep this hygienic.
 
-- [ ] **Recovery saga learnings — add verification ritual to all worktree-based Claude Code sessions.** First thing every parallel-track session should run is a guard that asserts `pwd` matches the expected worktree path AND `git branch --show-current` matches the expected branch; refuse to proceed if either fails. Prevents the cross-tree contamination that happened in Sessions 20-21. Logged in `learnings.md`; consider adding to `docs/CLAUDE.md` as a Critical Rule.
+- [x] **Recovery saga learnings — add verification ritual to all worktree-based Claude Code sessions.** First thing every parallel-track session should run is a guard that asserts `pwd` matches the expected worktree path AND `git branch --show-current` matches the expected branch; refuse to proceed if either fails. Prevents the cross-tree contamination that happened in Sessions 20-21. Logged in `learnings.md`; codified as **Critical Rule 61** in `docs/CLAUDE.md` (PR #27, commit `c7df002`).
+
+- [x] **Fix `uv run pre-commit` prefix in CLAUDE.md ruff section.** Closed in PR #27 (`c7df002`) along with Critical Rule 61.
+
+- [x] **Spec.md follow-up: drop the ⚠️ note from §13 fix #5.** Closed in PR #27 (`c7df002`).
+
+---
+
+## Performance and cleanup follow-ups (from /ultrareview Batch D)
+
+Batch D of the May 2026 /ultrareview pass — items that aren't blockers
+(R-1 PR #31 closed those) and aren't doc/tracking hygiene (R-3 closes
+findings #9, #10, #11, #25) and aren't the GISAID/ENA test/dedup pile
+(R-2 closes #5, #15). What's left: 14 items, mostly performance,
+small refactors, and minor cleanups, traceable to the original
+/ultrareview output by finding number.
+
+The descriptions below are stubs to be populated from the original
+/ultrareview output. Each item is left unchecked with its finding
+number for traceability. When a follow-up PR addresses an item, fill
+in a one-line description, mark the box, and reference the PR.
+
+- [ ] **Finding #8** — *(populate from /ultrareview output; left as a
+      tracking placeholder with the original line reference)*
+- [ ] **Finding #12** — *(populate from /ultrareview output)*
+- [ ] **Finding #13** — *(populate from /ultrareview output)*
+- [ ] **Finding #14** — *(populate from /ultrareview output)*
+- [ ] **Finding #16** — *(populate from /ultrareview output)*
+- [ ] **Finding #17** — *(populate from /ultrareview output)*
+- [ ] **Finding #18** — *(populate from /ultrareview output)*
+- [ ] **Finding #19** — *(populate from /ultrareview output)*
+- [ ] **Finding #20** — *(populate from /ultrareview output)*
+- [ ] **Finding #21** — *(populate from /ultrareview output)*
+- [ ] **Finding #22** — *(populate from /ultrareview output)*
+- [ ] **Finding #23** — *(populate from /ultrareview output)*
+- [ ] **Finding #24** — *(populate from /ultrareview output)*
+- [ ] **Finding #26** — *(populate from /ultrareview output)*
+
+These can be batched into one or more cleanup PRs after the next
+feature track ships, or interleaved as small ones whenever convenient.
+None of them blocks the development → main release.
 
 ---
 
@@ -1459,9 +1499,11 @@ Shipped as `bac8dbb11c0b_add_execution_profiles_and_.py` in PR #21
 - [x] Verify `alembic upgrade head` from empty + downgrade.
 - [x] 32 tests added (20 schema + 8 migration + 4 seed).
 
-### G-3: Profile templates
+### G-3: Profile templates (COMPLETE 2026-05-05)
 
-- [ ] New directory `backend/pipeline_config/profile_templates/` with
+Shipped in PR #28 (commit `544c98c`).
+
+- [x] New directory `backend/pipeline_config/profile_templates/` with
       Jinja2 templates for each executor type:
       - `local.config.j2`
       - `slurm.config.j2`
@@ -1470,28 +1512,38 @@ Shipped as `bac8dbb11c0b_add_execution_profiles_and_.py` in PR #21
       - `gcp_batch.config.j2`
       - `aws_batch.config.j2`
       - `kubernetes.config.j2`
-- [ ] Each template renders a complete `nextflow.config` snippet
+- [x] Each template renders a complete `nextflow.config` snippet
       using profile fields. Slurm template handles
       `account`/`partition`/`qos`/`time`/`memory` with sensible
       defaults that operator can override.
-- [ ] Container-engine-aware: when `container_engine=APPTAINER`, the
+- [x] Container-engine-aware: when `container_engine=APPTAINER`, the
       rendered config sets `apptainer.enabled=true` and disables
       Docker; vice versa for `DOCKER`.
-- [ ] Templates pull common settings from
-      `backend/pipeline_config/base.config.j2` so changes propagate.
+- [x] Templates pull common settings from
+      `backend/pipeline_config/profile_templates/base.config.j2` so
+      changes propagate.
 
-### G-4: `nextflow.config` generation at launch
+### G-4: `nextflow.config` generation at launch (COMPLETE 2026-05-05)
 
-- [ ] New module `backend/pipeline_config/profile_renderer.py` with
+Shipped in PR #28 (commit `544c98c`).
+
+- [x] New module `backend/pipeline_config/profile_renderer.py` with
       function `render_nextflow_config(profile, pipeline, run_id) -> str`.
-- [ ] Renderer picks the right template based on
+- [x] Renderer picks the right template based on
       `profile.executor_type`, fills in profile fields, layers
       pipeline-specific overrides, and writes the result to the run's
       work directory as `nextflow.config`.
-- [ ] Call site: `backend/pipelines/launch.py` calls the renderer
-      after profile selection and before `nextflow run` invocation.
-- [ ] Generated configs stored alongside run logs for audit and
-      reproducibility.
+- [x] Call site: launch endpoint in `routers/pipelines.py` calls the
+      renderer after profile selection (via `profile_resolver.py`) and
+      before the GCP-Batch / `nextflow run` invocation. Legacy
+      GCP-Batch path preserved as fallback when
+      `NoProfileAvailableError` raises; deletion is a follow-up after
+      G-5 lands.
+- [x] Generated configs stored alongside run logs for audit and
+      reproducibility (extends Critical Rule 26).
+- [x] 35 new tests added (17 renderer + 10 resolver + 8 launch
+      integration). Cross-cutting integration tests landed at
+      workspace-root `./tests/` since launch is multi-member.
 
 ### G-5: Per-pipeline default profile
 
@@ -1508,17 +1560,19 @@ Shipped as `bac8dbb11c0b_add_execution_profiles_and_.py` in PR #21
 
 ### G-6: `JACKPOT_WORK_DIR` abstraction
 
-- [ ] New `Settings.work_dir` field, peer to existing
-      `Settings.storage_backend`. Default per scenario:
+- [x] New `Settings.work_dir` field, peer to existing
+      `Settings.storage_backend`. **(Shipped in PR #28; reads from
+      `JACKPOT_WORK_DIR` env var.)** Default per scenario:
       - Scenario A: `~/.jackpot/work/`
       - Scenario B (Docker): `/srv/jackpot/work/`
       - Scenario B (Slurm): operator-provided shared filesystem
       - Scenario C: institutional shared filesystem path
       - Scenario D/E (cloud): `gs://<deployment>-jackpot-work/` or
         `s3://...`
-- [ ] All pipeline runs use `<work_dir>/runs/<run_id>/` as their work
+- [x] All pipeline runs use `<work_dir>/runs/<run_id>/` as their work
       directory. Profile renderer reads `Settings.work_dir` and
-      injects it into the generated `nextflow.config`.
+      injects it into the generated `nextflow.config`. **(Shipped in
+      PR #28.)**
 - [ ] Work directory layout documented in `docs/work_directory.md` so
       operators understand what lives there and how to back up or
       clean it.
@@ -1528,15 +1582,23 @@ Shipped as `bac8dbb11c0b_add_execution_profiles_and_.py` in PR #21
 
 ### G-7: Launch-time profile selection
 
-- [ ] Update `POST /api/v1/pipelines/{id}/launch` request body to
-      accept optional `profile_name` field.
-- [ ] If omitted, resolve via the rules in G-5.
-- [ ] If provided but the profile doesn't exist or isn't `active`,
-      return 400 with available profile names.
+- [x] Update `POST /api/v1/pipelines/{id}/launch` request body to
+      accept optional `profile_name` (and `profile_id`) fields.
+      **(Shipped in PR #28.)**
+- [x] If omitted, resolve via the rules in G-5: pipeline's first
+      matching default by priority, else deployment's default, else
+      `400 NO_PROFILE_AVAILABLE`. **(Shipped in PR #28; G-5 default-
+      profile association endpoint still pending.)**
+- [x] If provided but the profile doesn't exist or isn't `active`,
+      return `400 PROFILE_NOT_FOUND` with available profile names.
+      **(Shipped in PR #28.)**
+- [x] Audit action `LAUNCH_WITH_PROFILE` recorded on profile-driven
+      launches. **(Shipped in PR #28.)**
 - [ ] Update `frontend/pages/pipelines.py` launch UI to show a
       profile dropdown populated from `GET /api/v1/profiles/` —
       labeled with executor type and a friendly summary
-      (e.g., "Slurm — mylab — apptainer").
+      (e.g., "Slurm — mylab — apptainer"). **(Pending — depends on
+      G-5 list endpoint.)**
 
 ### G-8: Cost estimation hooks for cloud profiles
 
@@ -2031,19 +2093,19 @@ If anything diverges from the expected state, debug before starting feature work
 
 **Active sprint candidates (Glen's call):**
 
-1. **Phase P0g G-3 + G-4** (profile templates + nextflow.config renderer, tightly coupled, one PR) — concrete continuation of what just shipped, short feedback loop. Subsequent G-N items are mostly file-disjoint and can run in parallel after G-3+G-4 lands. **(SHIPPED in PR #28, 2026-05-05.)**
+1. **Phase P0g G-5** (profiles CRUD endpoints) — operators can use the renderer/resolver from PR #28 but can't manage profiles via API yet. CRUD closes that gap and unblocks the legacy GCP-Batch path deletion in `pipeline_config/legacy.py`. Concrete short-feedback-loop continuation of P0g.
 
-2. **Phase 24.5 design lockdown (solo)** — Glen finalizes the sovereignty-deletion design without external review (per option β; external collaborator review was deferred 2026-05-05 — timing). Once locked, P0b unblocks. Mix of design and writing work. Probably 1-2 sessions.
+2. **Phase 24.5 design lockdown (solo, option β)** — Glen finalizes the sovereignty-deletion design without external review (collaborator review deferred 2026-05-05 — timing). Once locked, P0b unblocks. Mix of design and writing work. Probably 1-2 sessions.
 
-3. **Phase P0g G-5** (profiles CRUD endpoints) — operators can use the profile machinery from PR #28 but can't manage profiles via API yet. CRUD closes that gap and unblocks the legacy GCP-Batch path deletion.
+3. **Performance and cleanup follow-ups from /ultrareview Batch D** (14 items above) — none block any feature work; can be one batched cleanup PR or interleaved as smaller ones.
 
 4. **Phase 24.7 / P0f BYOP infrastructure** — heavier lift; B-BYOP-1 through B-BYOP-10. Gates on `jackpot init` shape (P0e is done) but not blocked otherwise.
 
 5. **P0f file references continuation** — F-3+ if F-2 was the last shipped. Independent of P0g/P1 work; can run in parallel with the chosen primary track.
 
-6. **Small housekeeping pile** — fold everything in "Post-Sessions-21+ housekeeping" into one or two dedicated cleanup PRs. ~30-60 min total. Useful before the next big piece.
+6. **Small housekeeping pile** — most items in "Post-Sessions-21+ housekeeping" closed by PR #27; remaining items (gac zsh, branch protection, stale stashes, obsolete branches) can fold into one cleanup PR. ~30-60 min total.
 
-My suggestion (informational, not prescriptive): Phase 24.5 design lockdown next if you want to unblock P0b on the strategic critical path, or P0g G-5 if you want to continue the P0g momentum. Housekeeping pile interleaves whenever convenient.
+My suggestion (informational, not prescriptive): Phase 24.5 design lockdown next if you want to unblock P0b on the strategic critical path, or P0g G-5 if you want to continue the P0g momentum. Batch D and the housekeeping pile interleave whenever convenient.
 
 **Worktree workflow lesson from Sessions 20-21:** if you start parallel-track sessions, use `git worktree add` per branch and never `git switch` inside a worktree. First message of every Claude Code session in a worktree should run the verification ritual:
 

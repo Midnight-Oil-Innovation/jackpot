@@ -30,7 +30,7 @@ federated_peers + BYOP/eukaryotic schema) → P0c (multi-tenancy middleware
 1. Read `spec.md` — understand the goals and constraints for the current sprint
 2. Read `todo.md` — find the next unchecked task
 3. Re-read this file (`docs/CLAUDE.md`) — all 62 Critical Rules apply at all times
-4. Confirm the baseline is stable: `uv run pytest tests/ schema/tests/ cli/tests/` from the workspace root — **≥970 tests passing, ≥80% coverage** (post-P0e baseline). The post-P0d 39% number we carried briefly was a pytest-cov misconfiguration (omit list wasn't reaching the report-time matcher); fixed by making `--cov-config=pyproject.toml` explicit in addopts — see `docs/learnings.md` "Coverage measurement bug" entry. P0e (`docs/architecture/jackpot-init-cli.md`) shipped `jackpot init` operator-bootstrap CLI plus 13 absorbed Phase 22 cleanup items; see `docs/review_log.md` "P0e closeout" section.
+4. Confirm the baseline is stable: `uv run pytest tests/ schema/tests/ cli/tests/` from the workspace root — **≥1591 tests passing, ≥80% coverage** (post-R-1, R-2 work in progress, R-3 doc/tracking hygiene as of 2026-05-06). Earlier baselines: 970 passing post-P0e, 1527 post-PR #28 P0g G-3+G-4. The post-P0d 39% number we carried briefly was a pytest-cov misconfiguration (omit list wasn't reaching the report-time matcher); fixed by making `--cov-config=pyproject.toml` explicit in addopts — see `docs/learnings.md` "Coverage measurement bug" entry. P0e (`docs/architecture/jackpot-init-cli.md`) shipped `jackpot init` operator-bootstrap CLI plus 13 absorbed Phase 22 cleanup items; see `docs/review_log.md` "P0e closeout" section.
 
 ### Work Loop
 
@@ -247,9 +247,12 @@ Notification System sections for their exact interfaces.
 
 ## Current Baseline
 
-- **970 tests passing, 1 skipped, 0 failed** (post-P0e); up from 944
-  at P0e close + 26 from the ultrareview security follow-up.
-- **Coverage: 86%+** workspace-wide. The pre-P0d 86.99% baseline was
+- **1591 tests passing, 2 skipped, 0 failed** (post-R-1 PR #31; verified
+  2026-05-06 against `r3-doc-and-tracking-hygiene` based at `2609a1f`).
+  Earlier baselines: 970 post-P0e, 944 at P0e close, 1527 post-PR #28
+  P0g G-3+G-4.
+- **Coverage: 87.85%** post-PR #28; expected to hold at the same level
+  (R-3 is doc-only; R-1 added security-correctness tests). The pre-P0d 86.99% baseline was
   briefly under-reported as 39% due to a pytest-cov misconfiguration
   (omit list wasn't reaching the report-time matcher because
   `--cov-config=pyproject.toml` wasn't explicit in addopts). Fix landed
