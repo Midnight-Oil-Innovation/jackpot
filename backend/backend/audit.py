@@ -107,6 +107,10 @@ class AuditActions:
     AUTH_LOGOUT = "AUTH_LOGOUT"
     # Reserved for future admin-revoke functionality (admin UI; not used in P1).
     AUTH_TOKEN_REVOKED_BY_ADMIN = "AUTH_TOKEN_REVOKED_BY_ADMIN"
+    # E-1: dev-only role-switch endpoint (POST /api/v1/auth/dev-login).
+    # Emitted only when settings.env == "local"; the endpoint 404s in any
+    # other env so this action never appears in production audit trails.
+    AUTH_DEV_LOGIN = "AUTH_DEV_LOGIN"
 
     # Backend submission execution (I-3a; some emitted by I-3b)
     SUBMISSION_BACKEND_EXECUTION_QUEUED = "SUBMISSION_BACKEND_EXECUTION_QUEUED"

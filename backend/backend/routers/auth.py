@@ -367,3 +367,196 @@ def logout(
     response.delete_cookie("access")
     response.delete_cookie("refresh")
     return {"status": "logged out"}
+
+
+# =============================================================================
+# E-1: dev-only role-switch endpoint
+# =============================================================================
+#
+# POST /api/v1/auth/dev-login mutates the cached ``settings.mock_user_email``
+# so subsequent same-process requests resolve as the supplied identity. It
+# 404s outside ``settings.env == "local"`` and never sets cookies — local
+# mode bypasses JWT validation in ``backend.auth.guards.get_current_user``.
+#
+# The endpoint exists so the E-1 UAT can drive all six roles from a single
+# backend run without restarts. ``set_role.sh`` and ``dev_login.sh`` in
+# ``tests/e2e/scripts/`` are the supported callers; programmatic tests
+# may also call it directly.
+
+_DEV_LOGIN_LAB_ROLES = {
+    "Lab Director": ("Lab Director", True),
+    "Lab Collaborator": ("Lab Collaborator", False),
+    "Lab Reader": ("Lab Reader", False),
+    "Bioinformatics User": ("Bioinformatics User", False),
+}
+_DEV_LOGIN_GLOBAL_ROLES = frozenset({"Platform Admin", "Data Analyst"})
+_DEV_LOGIN_ALL_ROLES = _DEV_LOGIN_GLOBAL_ROLES | frozenset(_DEV_LOGIN_LAB_ROLES)
+
+
+class DevLoginBody(BaseModel):
+    """Request body for ``POST /api/v1/auth/dev-login``."""
+
+    email: str
+    role: str | None = None
+    lab_id: int | None = None
+    name: str | None = None
+
+
+@router.post("/dev-login")
+def dev_login(
+    payload: DevLoginBody,
+    db=Depends(get_db_dep),  # noqa: B008
+) -> dict:
+    """LOCAL-ONLY: switch the active mock user.
+
+    Returns ``404 Not Found`` when ``settings.env`` is anything other than
+    ``"local"``. The endpoint creates the user/lab-membership rows when
+    they do not already exist so a freshly-seeded database can be driven
+    through the full RBAC matrix from a script.
+    """
+    s = get_settings()
+    if s.env != "local":
+        raise HTTPException(status_code=404, detail="Not Found")
+
+    email = (payload.email or "").strip().lower()
+    if "@" not in email or email.startswith("@") or email.endswith("@"):
+        raise HTTPException(status_code=400, detail="email must be a valid email address.")
+
+    role = payload.role
+    if role is not None and role not in _DEV_LOGIN_ALL_ROLES:
+        raise HTTPException(
+            status_code=400,
+            detail=f"role must be one of: {sorted(_DEV_LOGIN_ALL_ROLES)}",
+        )
+
+    is_platform_admin = role == "Platform Admin"
+    is_data_analyst = role == "Data Analyst"
+
+    # Section 7: Platform Admin and Data Analyst do NOT take lab assignments.
+    if (is_platform_admin or is_data_analyst) and payload.lab_id is not None:
+        raise HTTPException(
+            status_code=400,
+            detail=f"{role} cannot be assigned to a lab.",
+        )
+
+    rows = execute_query(
+        "SELECT id, email, name, is_platform_admin, is_data_analyst, "
+        "is_active, organization_id "
+        "FROM users WHERE email = :e LIMIT 1",
+        {"e": email},
+        conn=db,
+    )
+    if rows:
+        user = rows[0]
+        if role is not None:
+            execute_write(
+                "UPDATE users SET is_platform_admin = :pa, is_data_analyst = :da WHERE id = :uid",
+                {"pa": is_platform_admin, "da": is_data_analyst, "uid": user["id"]},
+                conn=db,
+            )
+            user["is_platform_admin"] = is_platform_admin
+            user["is_data_analyst"] = is_data_analyst
+        created = False
+    else:
+        org_rows = execute_query("SELECT id FROM organizations ORDER BY id LIMIT 1", {}, conn=db)
+        if not org_rows:
+            raise HTTPException(
+                status_code=500,
+                detail="No organizations exist; cannot create dev-login user.",
+            )
+        org_id = org_rows[0]["id"]
+        new_rows = execute_write(
+            "INSERT INTO users (email, name, organization_id, "
+            "is_platform_admin, is_data_analyst) "
+            "VALUES (:e, :n, :org, :pa, :da) "
+            "RETURNING id, email, name, is_platform_admin, is_data_analyst, "
+            "is_active, organization_id",
+            {
+                "e": email,
+                "n": payload.name or email.split("@", 1)[0],
+                "org": org_id,
+                "pa": is_platform_admin,
+                "da": is_data_analyst,
+            },
+            conn=db,
+        )
+        user = new_rows[0]
+        created = True
+
+    membership_info: dict | None = None
+    if role in _DEV_LOGIN_LAB_ROLES:
+        lab_id = payload.lab_id
+        if lab_id is None:
+            lab_rows = execute_query("SELECT id FROM labs ORDER BY id LIMIT 1", {}, conn=db)
+            if not lab_rows:
+                raise HTTPException(
+                    status_code=400,
+                    detail="No labs exist; pass lab_id or create a lab first.",
+                )
+            lab_id = lab_rows[0]["id"]
+
+        pg_name, is_director = _DEV_LOGIN_LAB_ROLES[role]
+        pg_rows = execute_query(
+            "SELECT id FROM permission_groups WHERE name = :n LIMIT 1",
+            {"n": pg_name},
+            conn=db,
+        )
+        if not pg_rows:
+            raise HTTPException(
+                status_code=500,
+                detail=f"permission_groups row '{pg_name}' missing.",
+            )
+        pg_id = pg_rows[0]["id"]
+
+        execute_write(
+            """
+            INSERT INTO lab_membership
+                (user_id, lab_id, permission_group_id,
+                 is_lab_director, granted_by_id)
+            VALUES (:uid, :lid, :pg, :idir, :uid)
+            ON CONFLICT (user_id, lab_id) DO UPDATE
+            SET permission_group_id = EXCLUDED.permission_group_id,
+                is_lab_director = EXCLUDED.is_lab_director
+            """,
+            {"uid": user["id"], "lid": lab_id, "pg": pg_id, "idir": is_director},
+            conn=db,
+        )
+        membership_info = {
+            "lab_id": lab_id,
+            "permission_group": pg_name,
+            "is_lab_director": is_director,
+        }
+
+    log_audit(
+        action=AuditActions.AUTH_DEV_LOGIN,
+        actor_id=user["id"],
+        resource_type="user",
+        resource_id=str(user["id"]),
+        before=None,
+        after=None,
+        metadata={
+            "email": email,
+            "role": role,
+            "lab_id": membership_info["lab_id"] if membership_info else None,
+            "created": created,
+        },
+        db_conn=db,
+    )
+    db.commit()
+
+    # Mutate the cached Settings so subsequent same-process requests
+    # resolve as this identity. lru_cache returns the singleton, so
+    # this attribute write is visible to all later get_settings() calls.
+    s.mock_user_email = email
+
+    return {
+        "user": {
+            "id": user["id"],
+            "email": user["email"],
+            "name": user["name"],
+            "is_platform_admin": user["is_platform_admin"],
+            "is_data_analyst": user["is_data_analyst"],
+        },
+        "membership": membership_info,
+        "active_role": role,
+    }
