@@ -67,3 +67,14 @@ work/
 # Generated artefacts
 node_modules/
 .claude/
+
+# E-1: UAT FASTQ fixtures (large public-domain or operator-supplied
+# data sourced locally). README and synthetic CSVs in this directory
+# are committed; binary sequence data is not.
+tests/fixtures/e2e/uat/*.fastq
+tests/fixtures/e2e/uat/*.fastq.gz
+tests/fixtures/e2e/uat/*.fq
+tests/fixtures/e2e/uat/*.fq.gz
+tests/fixtures/e2e/uat/*.bam
+tests/fixtures/e2e/uat/*.cram
+tests/fixtures/e2e/uat/sars-cov-2/
