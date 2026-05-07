@@ -2529,3 +2529,88 @@ also generalises beyond Docker — any "one definition, multiple
 deployment shapes" tool (Helm charts via `--set`, Terraform via
 workspaces, etc.) benefits from the same matrix-as-contract
 documentation pattern.
+
+---
+
+## Session 18 — strategic positioning pivot + I-track planning — 2026-05-04
+
+**What was built:** Not code — a positioning reframe and a four-item adoption-driving feature roadmap (the I-track: I-1 spreadsheet importer, I-2 submission package generation, C-1 pluggable credentials, I-3 backend-driven submission). The session translated "JACKPOT cannot win against funded incumbents on institutional procurement" into a concrete plan targeting the underserved spreadsheet-refugee market.
+
+**Key decisions:**
+
+- *Adoption pitch is "replace your spreadsheets and folder archaeology", not "compete with Pathogenwatch."* Sanger/CGPS, NIAID/Argonne, CZI/SIB, NCBI/CDC will always have more credibility than a single-developer project. The structural gap is working researchers (academic labs, public-health labs in non-G7 countries, tribal research entities, agricultural/veterinary genomics, environmental microbiology) using Excel + folders + ad-hoc scripts because none of the funded platforms fit their workflow. That's a much larger user pool and a more achievable adoption goal than displacing an incumbent.
+- *JACKPOT is upstream of Seqsender/TOSTADAS, not parallel.* Seqsender solves the protocol mechanics (file uploads, API calls, format conversion). What's missing is pre-submission metadata curation, lifecycle tracking (accepted/rejected/embargoed/withdrawn/updated), and governance work (which samples to submit, IRB sign-off, internal data-sharing committee approvals). I-2 produces Seqsender-compatible packages and tracks lifecycle; it deliberately does NOT implement protocol mechanics in v1.
+- *I-2 v1 explicitly excludes credential management.* The "researcher's laptop closes and changes IPs" problem makes backend-driven submission Scenario-A-hostile. By generating packages instead of running submissions, JACKPOT never holds NCBI/GISAID/ENA credentials — sidestepping both the laptop-connectivity problem and the sovereignty-credentials problem in one move. Backend execution becomes I-3, gated on C-1 credential infrastructure, and explicitly Scenario-aware (laptop → warning + package generation only; server → backend execution available).
+- *Pluggable credential infrastructure (C-1) ships three backends, not GCP-only.* Env vars (default, works everywhere), file-based YAML (config-management-friendly), GCP Secret Manager (cloud deployments). AWS / Azure / OS keychain backends ship later as needed. The credential abstraction is invisible to consuming code (submission, future LLM features, federation API keys) — see Critical Rule 62.
+- *Sequencing: I-1 → (I-2 || C-1) → I-3.* I-1 is the largest piece and ships first. I-2 and C-1 touch entirely different files (different routers, different config layer); they can ship in parallel. I-3 ships after both. This sequencing held in execution: Session 19 shipped I-1 + I-2 in parallel cleanly; Session 20 shipped C-1 → I-3a → I-3b → I-3c in sequence.
+- *Indigenous genomic sovereignty is a longer-arc opportunity, not a 90-day strategy.* Trust takes years not months in Indigenous research contexts (Havasupai case is in everyone's institutional memory). The right approach is co-development with tribal partners (Native BioData Consortium, SING workshop network, CEIGR), not "platform vendor pitches finished product." Worth doing as a multi-year arc; not the right path for the near-term adoption push.
+
+**Watch out for:**
+
+- *Phase prefix taxonomy now has two axes.* P0f/P0g/P0h encode architectural area (file-references / executor-profiles / Slurm). I encodes adoption category (import/integration). C is one-off (credentials). Future tracks may add S (submission/sharing) if I gets crowded. Re-check this convention as the project grows; today it's clear enough.
+- *"Adoption-driving" is a separate axis from "architectural progress."* Both matter, but only one of them shows up in user-visible feature changelogs. When choosing what to ship next, factor in both — and avoid back-loading adoption work behind too many architectural phases.
+
+---
+
+## P0g — execution profiles (G-1 → G-4) — 2026-05-04 → 2026-05-05
+
+**What was built:** Per-run executor selection across the seven supported executor types (LOCAL, SLURM, PBS, LSF, GCP_BATCH, AWS_BATCH, KUBERNETES). G-1 + G-2 (PR #21) shipped LinkML schema + Alembic migration + seed for `execution_profiles` and `pipeline_default_profile`. G-3 + G-4 (PR #28) shipped 8 Jinja2 templates (base + 7 executor-specific overlays) plus the `pipeline_config/` package refactor (single 277-line file → package with backward-compat re-exports), profile renderer/resolver/types modules, launch-endpoint integration, `Settings.work_dir` field, `LAUNCH_WITH_PROFILE` audit action, and 35 new tests. Codified in **Critical Rule 59**.
+
+**Key decisions:**
+
+- *Executor selection is per-run, not per-deployment.* The same JACKPOT instance can submit one run to local Nextflow, the next to a Slurm cluster, the next to GCP Batch — using identical pipeline definitions in the zoo. This is the architectural unlock that makes scenarios A through G feasible from a single codebase. Selection priority at launch: explicit `profile_name` in request body > pipeline's first matching default profile by `pipeline_default_profile.priority` > deployment's `is_default=true` profile > `400 NO_PROFILE_AVAILABLE`. Missing-or-inactive named profile returns `400 PROFILE_NOT_FOUND` listing available names.
+- *Partial unique index `WHERE is_default = TRUE` enforces "at most one default."* Postgres-native enforcement instead of trigger or application-level guard. PL/pgSQL `INSERT ... ON CONFLICT (name) DO NOTHING` keeps the seed idempotent for re-runs.
+- *Migration chained against the actual current Alembic head, not a `tail -5` of files.* G-1+G-2 migration's `down_revision` was set after `alembic heads` showed I-3a's `3644749bf4c6` as current. P1's auth-refresh migration was later rebased onto G-1+G-2's `bac8dbb11c0b` once that landed first. Always verify head with `alembic heads`; never pick from a directory listing.
+- *`pipeline_config/` became a package with full backward-compat re-exports.* Pre-G-3 was a single 277-line module; G-3 split it into renderer/resolver/types/templates while keeping `pipeline_config/__init__.py` re-exporting every pre-package public name. The existing import line in `routers/pipelines.py` did not change.
+- *Legacy GCP-Batch path preserved as fallback during the transition.* When `NoProfileAvailableError` is raised by the resolver, the launch endpoint falls back to the pre-G-3 GCP Batch path. Removal is a follow-up PR after G-5 (profiles CRUD endpoints) ships and operators have a UI to configure profiles. This is an explicit transition window, not a permanent dual code path.
+- *Cross-cutting tests live at workspace-root `./tests/`, not member-internal.* The launch-endpoint integration tests touch multiple workspace members (backend + schema), so they ship at workspace root. Workspace-internal unit tests (renderer, resolver) stay in their member's `tests/`. The convention: scope dictates location.
+
+**Watch out for:**
+
+- *Quick-fast pipelines default to LOCAL during seeding.* file_detector smoke runs, DLP scans, validation always run on the API server. Heavy pipelines (PHoeNIx, MIRA-NF, MycoSNP-NF, aquascope) have no default seeded — operators pick at launch or set one. Don't seed defaults for heavy pipelines and risk a runaway local execution on an under-provisioned API host.
+- *`weblog_reachable=false` is mandatory for HPC profiles where compute nodes can't reach the API.* Many clusters block outbound HTTPS from compute nodes. The launch endpoint reads this flag from `execution_profiles.config_overrides` and either includes the `-weblog` directive (default) or omits it and starts the log poller (Critical Rule 60). The two paths can coexist for redundancy because the receiver dedups on `(run_id, task_id, status)`.
+- *4-backtick outer fences + 3-backtick inner fences for spec prompts containing nested code blocks.* Typora otherwise mis-renders and prompts paste-fail in Claude Code sessions. Codified after multiple paste failures during P0g spec drafting.
+
+---
+
+## P1 — auth refresh endpoint with single-use rotation — 2026-05-05
+
+**What was built:** `POST /api/v1/auth/refresh` accepting refresh tokens from the `refresh` cookie (priority) or JSON body (`refresh_token`), with cookie-wins-when-both-present logic for confused-deputy defense. Refresh tokens are JTI-tracked in a new `refresh_tokens` table; rotation is single-use; replay of a rotated token triggers `TOKEN_REPLAY_DETECTED` PLUS bulk-revocation of all the user's active refresh tokens PLUS an `AUTH_TOKEN_REPLAY_DETECTED` audit event. APScheduler job `cleanup_old_refresh_tokens` purges old revoked + expired rows past retention. Closes the deferred Phase 22 review item 12 / spec.md §13 fix #5 / P0e C.5 deferral. PR #22 (`ba03143`).
+
+**Key decisions:**
+
+- *Replay revocation must happen before raising the HTTPException.* The original implementation raised first, which short-circuited the audit-write side effect. Caught in the test phase: `fix(p1) — replay-detected revocation must happen before raising the HTTPException so the audit event fires`. Order matters when an exception is the primary control flow exit.
+- *Cookie wins when both cookie and JSON body are present.* This is confused-deputy defense — if a malicious page tricks a user's browser into POSTing a body-supplied refresh token, the legitimate cookie token is the one that gets rotated. The body path exists only for non-browser clients (CLI, SDK).
+- *Single-use rotation, not sliding TTL.* Each refresh issues a brand-new refresh token and marks the old one `revoked_reason=rotated`. Subsequent presentation of the rotated token IS the replay signal. JTI registration happens at issue time in `POST /google/login` and `POST /auth/refresh`; revocation happens at rotate time and at `POST /logout`.
+- *Bulk-revocation on replay is defense in depth.* If a refresh token has been replayed, the assumption is the family is compromised. All active refresh tokens for that user are revoked, forcing re-authentication. This is more aggressive than necessary in some attack models, but the surface area of getting it wrong is small (user re-logs in) versus the surface area of getting it right (bulk-revoke catches the case where the attacker has the entire family).
+- *Lifetimes: 15 min access / 7 d refresh / 30 d retention after revoke / daily cleanup.* `access_token_lifetime_seconds=900`, `refresh_token_lifetime_seconds=604800`, `refresh_token_retention_after_revoke_seconds=2592000`, `refresh_token_cleanup_interval_seconds=86400`. The 30-day retention preserves replay-detection ability for a month after revoke; older rows are purged for storage hygiene.
+- *Three audit-action constants reserved at this PR.* `AUTH_TOKEN_REFRESHED`, `AUTH_TOKEN_REPLAY_DETECTED`, `AUTH_LOGOUT`. Plus `AUTH_TOKEN_REVOKED_BY_ADMIN` reserved-but-not-used for future admin-revoke functionality. Reserve the constant when the design implies the audit event, even if not yet emitted — it avoids churn later.
+
+**Watch out for:**
+
+- *`POST /logout` must work with missing/malformed/expired cookies.* Best-effort revoke before clearing cookies. Never raise from logout — the user already wants out.
+- *Migration `down_revision` rebased once.* Original was `3644749bf4c6` (I-3a head, current at spec time); rebased to `bac8dbb11c0b` (G-1+G-2) once that landed first. The rebase was a single line edit, not a migration rewrite. Rebase migration `down_revision` rather than rewriting when the only change is parent reference.
+- *Concurrent-refresh race.* If the same browser tab fires two refresh requests in flight (e.g. from a multi-tab UI), the first wins and rotates; the second presents an already-rotated token and triggers `TOKEN_REPLAY_DETECTED` → bulk revoke. Mitigation lives in the client (single-flight refresh promise) rather than the server. Front-end clients must serialize refresh.
+- *Broader auth review intentionally deferred.* Session-management UI, refresh-token-family tracking, cross-device session detection, configurable token lifetimes per-user/per-role, token introspection endpoint, MFA, new auth providers (OIDC/SAML), API-token rotation, and B-FED-1 federation peer authentication are all logged in todo.md Phase P1 "What's deferred" subsection. Each is a separate design conversation, not a P1 increment.
+
+---
+
+## Worktree contamination — Sessions 20-21 saga + Critical Rule 61 — 2026-05-04 → 2026-05-05
+
+**What was built:** Not code — a verification ritual codified as **Critical Rule 61**, after a severe case of cross-tree contamination during parallel-track Claude Code execution that almost cost the P1 work and consumed roughly half a session in diagnosis and surgical extraction. The mitigation is mechanical: assert `pwd -P` matches the expected worktree path, assert `git branch --show-current` matches the expected branch, refuse to proceed if either fails. Session 22 PR #27 (`c7df002`) committed the rule.
+
+**Key decisions:**
+
+- *The rule has teeth at session start, not in code review.* The check is the FIRST action of every Claude Code session running in a worktree. By the time bad commits are visible in code review, recovery is already expensive — the cheapest insurance is a 5-line bash check that refuses to proceed. Codified as Critical Rule 61.
+- *Never `git switch` inside a worktree.* Each worktree is pinned to its anchor branch by virtue of being created with `-b`. Switching inside a worktree is what allows cross-tree contamination to happen in the first place.
+- *Five-second pre-feature-branch verification trinity.* When running `git switch -c <branch>` from `development`, run `git pull --ff-only` + `git status --short` + `git log --oneline -3` against `origin/development` to confirm no local-only state silently scoops into the new feature branch. This caught the orphan-commit fallout in Session 22 (`152546b "updated docs"` got accidentally bundled into PR #26 because the governance feature branch was created from local development with that uncommitted commit, not from `origin/development`).
+- *Surgical extraction beats wholesale recreation when work is at stake.* Recovery used `git checkout 'stash@{0}' -- <pathspec>` to extract only the truly-pure-P1 files, leaving contaminated `schema/schema/jackpot_schema.yaml`, `schema/schema/jackpot_schema.json`, and `backend/backend/models_generated.py` behind because they had cross-track P0g content mixed in. Don't blanket-restore from a contaminated stash; pathspec-restore only the files you've verified clean.
+- *When parallel sessions share a single working tree, stashes are also shared.* Cross-session `git stash push` and `git stash pop` operations can pop each other's stashes. The corollary: if multiple Claude Code sessions are running on the same repo, EACH must work in its own `git worktree add <path>` directory, not the main clone. Stashing across sessions in a shared cwd is unreliable.
+
+**Watch out for:**
+
+- *Stash labels lie when they're written under duress.* The stash label `"phase-24.5: WIP across branches before rebase"` captured the actual cross-track contamination, not just Phase 24.5 work. Read the diff, not the label, before extracting.
+- *Local branch refs can vanish silently.* The local `chore/pin-ruff-version` branch ref disappeared at some point during the saga. Rely on origin and on PR state, not on local refs, when reconstructing what shipped.
+- *macOS `.DS_Store` blocks `git worktree remove`.* First attempt at removing `~/Projects/jackpot-p1` failed with "Directory not empty" because of a leftover `.DS_Store` from Finder. `--force` cleaned it up. Environmental quirk, not workflow issue, but worth knowing.
+- *Test count and coverage are reliable signals of recovery completeness.* After P1 + P0g G-1+G-2 + P0g G-3+G-4 landed via the recovery path, baseline was 1527 tests passing, 87.85% coverage. If those numbers had regressed, something went uncaptured. Always re-baseline post-recovery.
+- *Branch from `origin/<base>`, not local `<base>`, when local has unpushed commits.* The PR diff stays clean against the published state, and the unpushed commits land via their own PRs without getting bundled into unrelated work.
