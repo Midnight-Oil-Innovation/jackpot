@@ -368,18 +368,21 @@ _GISAID_BASE_COLS = [
 ]
 
 
-def generate_gisaid_epicov_package(
+def _generate_gisaid_package(
     submission: dict,
     samples: list[dict],
     package_dir: Path,
     *,
+    variant: str,
+    tsv_filename: str,
+    repo_specific_notes: str,
     copy_files: bool = False,
 ) -> None:
     files_dir = package_dir / "files"
     _write_minimal_tsv(
-        package_dir / "gisaid_epicov.tsv",
+        package_dir / tsv_filename,
         _GISAID_BASE_COLS,
-        _gisaid_rows(samples, variant="hCoV-19"),
+        _gisaid_rows(samples, variant=variant),
     )
     for s in samples:
         for u in _sample_file_uris(s):
@@ -389,12 +392,30 @@ def generate_gisaid_epicov_package(
         package_dir,
         submission,
         samples,
+        repo_specific_notes=repo_specific_notes,
+    )
+
+
+def generate_gisaid_epicov_package(
+    submission: dict,
+    samples: list[dict],
+    package_dir: Path,
+    *,
+    copy_files: bool = False,
+) -> None:
+    _generate_gisaid_package(
+        submission,
+        samples,
+        package_dir,
+        variant="hCoV-19",
+        tsv_filename="gisaid_epicov.tsv",
         repo_specific_notes=(
             "## GISAID EpiCoV notes\n\n"
             "v1 emits a minimal TSV scaffold with the standard EpiCoV "
             "header. Full PHA4GE-compatible field coverage is tracked as "
             "I-2-followup-A."
         ),
+        copy_files=copy_files,
     )
 
 
@@ -405,23 +426,16 @@ def generate_gisaid_epiflu_package(
     *,
     copy_files: bool = False,
 ) -> None:
-    files_dir = package_dir / "files"
-    _write_minimal_tsv(
-        package_dir / "gisaid_epiflu.tsv",
-        _GISAID_BASE_COLS,
-        _gisaid_rows(samples, variant="A"),
-    )
-    for s in samples:
-        for u in _sample_file_uris(s):
-            _link_or_copy(u, files_dir, copy=copy_files)
-    _write_seqsender_config(package_dir, submission)
-    _write_readme(
-        package_dir,
+    _generate_gisaid_package(
         submission,
         samples,
+        package_dir,
+        variant="A",
+        tsv_filename="gisaid_epiflu.tsv",
         repo_specific_notes=(
             "## GISAID EpiFlu notes\n\nMinimal scaffold; full coverage in I-2-followup-A."
         ),
+        copy_files=copy_files,
     )
 
 
@@ -432,23 +446,16 @@ def generate_gisaid_epipox_package(
     *,
     copy_files: bool = False,
 ) -> None:
-    files_dir = package_dir / "files"
-    _write_minimal_tsv(
-        package_dir / "gisaid_epipox.tsv",
-        _GISAID_BASE_COLS,
-        _gisaid_rows(samples, variant="MPXV"),
-    )
-    for s in samples:
-        for u in _sample_file_uris(s):
-            _link_or_copy(u, files_dir, copy=copy_files)
-    _write_seqsender_config(package_dir, submission)
-    _write_readme(
-        package_dir,
+    _generate_gisaid_package(
         submission,
         samples,
+        package_dir,
+        variant="MPXV",
+        tsv_filename="gisaid_epipox.tsv",
         repo_specific_notes=(
             "## GISAID EpiPox notes\n\nMinimal scaffold; full coverage in I-2-followup-A."
         ),
+        copy_files=copy_files,
     )
 
 
