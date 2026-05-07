@@ -1,39 +1,8 @@
 # JACKPOT Session Summary & Backlog
 
-**Document version:** 4.5
-**Last updated:** 2026-05-05 (post-Session 21 — P1 + P0g G-1+G-2 + housekeeping)
-**Sessions covered:** Session 1 (March–April 2026 consolidated), Session 2 (2026-04-10), Sessions 3–S (2026-04 through 2026-04-19), Pathoplexus/Loculus comparative analysis session (2026-04-28), Cleanup A–J operator-agnostic genericization session (2026-04-26 to 2026-04-28), Session 11 (2026-04-28 → 2026-04-29 — CDC DMI/STLT/CARE alignment, BYOP/eukaryotic design, phasing rework, P0d migration prep), Session 12 (2026-04-30 → 2026-05-01 — P0d execution in Claude Code + post-execution cleanup), Session 13 (2026-05-01 — Phase 22 periodic review), Session 14 (2026-05-02 — P0e `jackpot init` CLI + Phase 22 cleanup), Session 15 (2026-05-02 → 2026-05-03 — architecture synthesis reframing + P0f F-2 schema migration), Session 16 (2026-05-03 — P0f parallel-session execution: F-1, F-3, F-4, F-5, F-12-docs merged + housekeeping/branching workflow PR #4 + F-6 through F-12 prompts drafted), Session 17 (2026-05-03 end of day — P0f F-6 through F-12 (except F-11) all merged into `development`; phase essentially complete pending F-11 audit), Session 18 (2026-05-04 — strategic positioning conversation + I-track planning: spreadsheet-refugee market identified, Seqsender/TOSTADAS landscape understood, sovereignty use cases discussed; I-1 / I-2 / C-1 / I-3 specs drafted as JACKPOT's adoption-driving feature roadmap), Session 19 (2026-05-04 later — F-11 P0f coverage audit and I-2 submission package generation merged in parallel; P0f phase complete; I-track at 2 of 4 items shipped), Session 20 (2026-05-04 later still — I-track completion: C-1 + I-3a + I-3b + I-3c shipped in sequence; full adoption-driving feature set operational; I-2 CLI/SDK gap from Session 19 closed retroactively in I-3c; ruff-version pre-commit/CI mismatch surfaced as out-of-band housekeeping), **Session 21** (2026-05-04 → 2026-05-05 — P0g G-1+G-2 foundation shipped (PR #21); P1 auth refresh endpoint shipped (PR #22) closing the deferred Phase 22 review item 12 / spec.md §13 fix #5; docs bundle refresh shipped (PR #23); ruff-version pin shipped (PR #25) as permanent fix for the recurring CI loop; severe worktree-contamination saga during parallel-track execution recovered without work loss; verification ritual codified as cheapest-possible insurance against repeat)
-
-**v4.5 changelog (2026-05-05):** Session 21 added covering four PRs and one significant recovery saga. Minor version bump rather than major because this session is a closeout of deferred items (P1 from P0e C.5 deferral) + start of a new phase's foundation (P0g G-1+G-2 only; G-3 onward still open) + housekeeping, rather than a fresh architectural track completion. The I-track-as-architectural-milestone framing from v4.0 stands; v4.5 documents the natural follow-on work and the operational lessons that came with it. Going-forward: when parallel-track Claude Code sessions are used, every session in a worktree must run a verification ritual (assert `pwd` matches expected worktree path AND `git branch --show-current` matches expected branch, refuse to proceed if either fails) as the first thing it does. This is the cheapest insurance against the cross-tree contamination that consumed significant time recovering from in this session.
-
-**v4.0 changelog (2026-05-04 later still):** I-track complete and the
-adoption-driving feature set is fully operational on `development`. Major
-version bump because completion of an entire architectural track is a
-milestone worth marking. Added Session 20 covering: (1) C-1 (pluggable
-credential infrastructure) shipped — three backends (env/file/GCP Secret
-Manager), TTL cache, audit on every read, six existing credential read
-sites migrated, backward compat preserved via legacy_env_names. (2) I-3a
-(backend submission foundation) shipped — three new states (EXECUTING,
-EXECUTION_FAILED, EXECUTION_INTERRUPTED), six tracking columns, six
-transition functions, lifespan recovery hook for API-restart-during-
-execution, four new conditional credentials (NCBI + ENA), all audit and
-notification event constants for the full I-3 lifecycle pre-declared.
-(3) I-3b (Seqsender execution path) shipped — async execute_submission
-job with per-repo asyncio.Lock serialization, defense-in-depth credential
-redaction (config file outside working dir + post-hoc value filter),
-log file capture and registration as MANAGED file via F-9 model,
-Seqsender baked into api Dockerfile. (4) I-3c (user-facing surface)
-shipped — three new REST endpoints with five distinct error codes for
-pre-flight gating, full submissions CLI (16 commands), full
-SubmissionsModule SDK class, Streamlit UI additions with 5s auto-refresh
-during EXECUTING, jackpot init wizard updates per scenario. The PR
-also closed the I-2 CLI/SDK gap discovered during grounding-grep:
-Session 19's outcome summary recorded I-2's CLI and SDK as shipped, but
-the reality was endpoints + Streamlit page only. (5) Process observation
-logged: pre-commit ruff-format consistently failed on CI for all four
-PRs despite local pre-commit being green; root cause is pre-commit
-re-using ambient ruff binary even after `pre-commit clean`. Tracked as
-out-of-band housekeeping (suggested branch: chore/pin-ruff-version).
+**Document version:** 3.3
+**Last updated:** 2026-05-06 (after /ultrareview cycle: R-1 + R-2 + R-3 merged)
+**Sessions covered:** Session 1 (March–April 2026 consolidated), Session 2 (2026-04-10), Sessions 3–S (2026-04 through 2026-04-19), Pathoplexus/Loculus comparative analysis session (2026-04-28), Cleanup A–J operator-agnostic genericization session (2026-04-26 to 2026-04-28), Session 11 (2026-04-28 → 2026-04-29 — CDC DMI/STLT/CARE alignment, BYOP/eukaryotic design, phasing rework, P0d migration prep), Session 12 (2026-04-30 → 2026-05-01 — P0d execution in Claude Code + post-execution cleanup), Session 13 (2026-05-01 — Phase 22 periodic review), Session 14 (2026-05-02 — P0e `jackpot init` CLI + Phase 22 cleanup), Session 15 (2026-05-02 → 2026-05-03 — architecture synthesis reframing + P0f F-2 schema migration), Session 16 (2026-05-03 — P0f parallel-session execution: F-1, F-3, F-4, F-5, F-12-docs merged + housekeeping/branching workflow PR #4 + F-6 through F-12 prompts drafted), Session 17 (2026-05-03 end of day — P0f F-6 through F-12 (except F-11) all merged into `development`; phase essentially complete pending F-11 audit), Session 18 (2026-05-04 — strategic positioning conversation + I-track planning: spreadsheet-refugee market identified, Seqsender/TOSTADAS landscape understood, sovereignty use cases discussed; I-1 / I-2 / C-1 / I-3 specs drafted as JACKPOT's adoption-driving feature roadmap), Session 19 (2026-05-04 later — F-11 P0f coverage audit and I-2 submission package generation merged in parallel; P0f phase complete; I-track at 2 of 4 items shipped), Session 20 (2026-05-06 — /ultrareview pass surfaced 26 findings; R-1 (six security/correctness blockers), R-2 (GISAID generator dedup + submission package test coverage), R-3 (doc and tracking hygiene) all merged; parallel-execution recommendation reversed after four cross-session contamination incidents — single-session-per-repo is now the default)
 
 **v3.2 changelog (2026-05-04 later):** P0f phase fully complete and
 I-track at half-strength. Added Session 19 covering: (1) F-11 (P0f end-of-phase
@@ -51,6 +20,42 @@ and I-2 ran in parallel, landing on different files (F-11 in tests/, I-2 in
 new backend/submissions* files). Both PRs merged cleanly with no conflicts.
 (4) The PR-merge order produced a fresh post-P0f baseline coverage number
 documented in tests/coverage_p0f_summary.md.
+
+**v3.3 changelog (2026-05-06):** /ultrareview cycle complete.
+A six-reviewer /ultrareview pass on `development` (against `main`) surfaced 26
+findings ranked by severity: 5 blockers, 12 should-fix, 9 nice-to-have. The
+findings were grouped into three review-fix work items (R-1, R-2, R-3) plus a
+"Batch D" backlog of incremental cleanup items added to `todo.md`. All three
+review-fix items shipped. Specifically: (1) **R-1** (PR #31, merged) addressed
+six security/correctness blockers including template path traversal via
+executor_type, SSRF + LFI via /register URI scheme, three sync-I/O calls
+blocking the async event loop, hardcoded operator-specific GCP project ID
+(Critical Rule 55 violation), Groovy injection via Jinja2 with autoescape
+disabled, and a refresh-token rotation race. 81 new tests; coverage 87.94%
+(+0.09pp over baseline). (2) **R-2** (PR #32, merged) deduplicated the three
+GISAID submission package generators behind a single `_generate_gisaid_package`
+helper and added test coverage for the five previously-untested generators
+(GISAID variants, ENA, DDBJ, dispatcher). 35 new tests; per-file coverage on
+`submission_packages.py` reached 100%. (3) **R-3** (PR #33, merged) addressed
+doc and tracking hygiene: 4 new entries in `docs/learnings.md`, new Submissions
+and Credentials sections in `spec.md`, new `docs/api/` files for submissions
+(537 lines), imports (336 lines), credentials (266 lines), `todo.md`
+reconciled, Critical Rule 62 added (Critical Rule 61 was already shipped via
+PR #27 for worktree branch verification), 15 new docstrings on public
+functions. The cycle also revealed a meta-lesson worth its own changelog
+entry: parallel Claude Code sessions sharing a single repo are unsafe in
+practice. Four cross-session contamination incidents (R-2 reflog reset, R-2
+unstaged-changes-on-merge, R-3 working-directory takeover requiring escape
+into a separate worktree, post-cleanup `wip-something` archaeology)
+collectively absorbed more time than sequential execution would have.
+**Default is now single Claude Code session per repo;** worktrees are an
+explicit escape hatch with deliberate setup, never the default. The earlier
+Session 19 conclusion that "parallel-execution worked cleanly" is reversed
+— F-11 + I-2 ran cleanly by accident (no shared file surface), not by design,
+and the next round of parallelism (R-1/R-2/R-3) hit the failure mode
+predictably.
+
+**v3.2.1 changelog (2026-05-04 later — same day, post-InsForge review):** Added two backlog items derived from a comparative review of InsForge (https://github.com/InsForge/InsForge), an agent-MCP-friendly Backend-as-a-Service. InsForge is not a foundation for JACKPOT (different architectural genre: horizontal infrastructure platform vs. vertical domain platform), but its agent-MCP pattern is worth pursuing for JACKPOT's domain operations once the I-track and P0g settle. (1) **B-MCP-1** — JACKPOT MCP server exposing domain operations (samples search, ingest, submission lifecycle, pipeline launch) as agent-callable tools. Multi-week effort; post-I-track / post-P0g territory. (2) **Documentation organization tweak** for C-1 / I-3 — per-provider credential setup files (`docs/credentials/ncbi.md`, `docs/credentials/gisaid.md`, etc.) rather than one combined guide. Cheap and improves discoverability.
 
 **v3.1 changelog (2026-05-04):** Strategic pivot from internal
 features to adoption-driving features. Added Session 18 covering: (1) Honest
@@ -156,6 +161,8 @@ mounting for testcontainers in-container, `alembic.ini` cwd dependency,
 
 **Changelog:**
 
+- **v3.2.1 (2026-05-04 later, post-InsForge review)** — Added B-MCP-1 and per-provider credential docs organization tweak after evaluating InsForge. See block above.
+- **v3.2 (2026-05-04 later)** — P0f phase complete + I-track at 50%. Added Session 19 (F-11 + I-2 merged in parallel). See full block above.
 - **v3.1 (2026-05-04)** — Strategic pivot to adoption-driving features. Added Session 18 (positioning + I-track planning). See full block above.
 - **v3.0 (2026-05-03 end of day)** — Added Session 17 (P0f F-6 through F-12 except F-11 merged into development; phase essentially complete). See full block above.
 - **v2.9 (2026-05-03 later)** — Added Session 16 (P0f parallel-session execution + branching workflow + remaining F-N prompts drafted). See full block above.
@@ -3866,496 +3873,155 @@ P0f is complete. I-track is half-shipped. Next moves are either continuing I-tra
 - **P0b** — Schema v5.0
 - **P0c** — multi-tenancy middleware + sovereignty deletion path
 - **B-FED-1** — central CA federation peer authentication
+- **B-MCP-1** — JACKPOT MCP server exposing domain operations as agent-callable tools (samples search, ingest, submission lifecycle, pipeline launch). Surfaces JACKPOT's domain semantics to AI coding agents and assistants via MCP, the way InsForge surfaces generic backend primitives. The "Year 2 LLM assistant" architecture mentioned in spec.md belongs here. Multi-week effort. Belongs in post-I-track / post-P0g territory. Reference: InsForge (https://github.com/InsForge/InsForge) is a worked example of the agent-MCP contract, though for generic backend primitives rather than domain-specific operations.
 - **P1** — `POST /api/v1/auth/refresh`
+
+**Documentation organization tweak (lands alongside C-1 / I-3):** when per-provider credential setup is needed, organize as separate top-level files — `docs/credentials/ncbi.md`, `docs/credentials/gisaid.md`, `docs/credentials/ena.md`, etc. — rather than one combined credentials guide. Pattern borrowed from InsForge (`GOOGLE_OAUTH_SETUP.md`, `GITHUB_OAUTH_SETUP.md`). Better discoverability when users only need one provider; better diff-able for per-provider updates. Minor; bake into C-1 / I-3 work-item specs when drafted.
 
 The next session can either draft C-1 (continuing the I-track adoption push) or pivot to P0g design (advancing core platform capabilities). Both are defensible. The summary doc, primer, and quick reference are now in their cleanest post-P0f state for either direction.
 
 
 ------
 
-# Session 20 — 2026-05-04 (later still) — I-track completion (C-1 → I-3a → I-3b → I-3c shipped)
+# Session 20 — 2026-05-06 — /ultrareview cycle complete; parallel-session lesson learned
 
 ## What we covered
 
-A focused execution session: four PRs drafted, executed via Claude Code, merged into `development`. Each PR built on the previous one. By the end of the session, the I-track was complete — six work items total (I-1, I-2, C-1, I-3a, I-3b, I-3c) covering the full adoption-driving feature set from spreadsheet-refugee data ingest through backend-driven submission to NCBI and ENA.
+A six-reviewer /ultrareview pass on `development` (against `main`) surfaced 26 findings, which were grouped into three review-fix work items plus a Batch D backlog. R-1, R-2, and R-3 all merged. The cycle also produced a critical meta-lesson about parallel Claude Code sessions that reverses the conclusion from Session 19.
 
-The session also surfaced one undocumented gap from prior work (I-2's CLI and SDK module were recorded as shipped in Session 19 but didn't actually exist) and one process gotcha (ruff-version mismatch between local pre-commit and CI).
+The session covered:
 
-**I-track progress at session end:** 6 of 6 items shipped. Full adoption-driving feature set operational on the `development` branch.
+1. /ultrareview synthesis: 26 findings ranked by severity (5 blockers, 12 should-fix, 9 nice-to-have)
+2. Triage into R-1 (security/correctness blockers), R-2 (GISAID dedup + missing test coverage), R-3 (doc and tracking hygiene), and Batch D (everything else, added to `todo.md`)
+3. R-1 spec drafted, executed, and merged (PR #31)
+4. R-2 spec drafted, executed, and merged (PR #32)
+5. R-3 spec drafted, executed, and merged (PR #33)
+6. The new third Markdown formatting rule locked in the primer (no literal injection-attack payloads in instructional content; use `chr()` construction in tests)
+7. The parallel-session reversal: four cross-session contamination incidents prompted reverting the default to single-session-per-repo
 
 ------
 
 ## Topics covered
 
-### 1. C-1 — pluggable credential infrastructure
+### 1. /ultrareview triage and the R-N work-item structure
 
-The first PR of the session. Specs were not pre-drafted in the handoff bundle; the session opened with a grounding step (grep for existing credential read sites) and a design Q&A round, then a single comprehensive spec drafted in chat for paste-into-Claude-Code execution.
+The reviewers' synthesis identified clear groupings:
 
-**Design decisions locked in-session:**
+- Six findings that would block a clean development → main merge (security/correctness blockers): #1 path traversal, #2 SSRF, #3 sync-I/O in async, #4 hardcoded project ID, #6 refresh-token race, #7 Groovy injection.
+- Two adjacent findings about submission package generators (#5 missing coverage, #15 GISAID triplicate copy-paste) that are best fixed together — dedup first, then write tests against the cleaner shape.
+- Four findings about doc and tracking hygiene (#9 missing learnings entries, #10 spec/API gaps, #11 stale `todo.md`, #25 missing docstrings) that are mechanical work, no code logic changes.
+- Fourteen residual items (#8, #12, #13, #14, #16-#26 minus those already covered) that are real but not blocker-level. These are smaller PRs shipped opportunistically; collected as Batch D in `todo.md`.
 
-- Single PR for all three backends + all migration sites (rather than splitting into PR-per-backend)
-- Synchronous API: `credentials.get(key) -> str`, `credentials.get_optional(key) -> str | None`, `credentials.list_keys() -> list[str]`
-- In-memory TTL cache configurable via `Settings.credential_cache_ttl_seconds` (default 300s); shared across all backends; cache key includes backend class name to handle test fixture swaps; negative results (CredentialNotFoundError) are NOT cached
-- Audit events on every successful read (`CREDENTIAL_READ`) and every failed read (`CREDENTIAL_READ_FAILED`); cache hits do NOT emit; payloads never contain credential values
-- YAML file format for FileBackend: flat top-level key-value, `0600` permissions enforced at instantiation (failure-loud chmod hint)
-- GCP Secret Manager backend: ADC-based auth, secret-name convention `{prefix}{key.replace('_','-')}`, both fully-mocked unit tests AND optional integration test gated on `JACKPOT_GCP_INTEGRATION_TEST=1`
-- Out of scope (deferred): AWS, Azure, OS keychain backends; rotation/refresh; per-tenant credential isolation (lands with P0c)
+The R-1 / R-2 / R-3 grouping was deliberate: each work item has a coherent scope, can be reviewed independently, and represents a logical merge boundary. A single combined PR would have meant 156-files / 30K-line review; three focused PRs at ~30 / ~10 / ~10 files each is reviewable.
 
-**Settings changes:**
+### 2. R-1 (PR #31): six security/correctness blockers
 
-- Added: `credential_backend`, `credential_file_path`, `credential_gcp_secret_prefix`, `credential_cache_ttl_seconds`
-- Removed: `secret_key`, `google_oauth_client_secret`, `storage_secret_key` (these become credentials, not settings fields)
-- Removed: `_validate_production_settings` (subsumed by `credentials.validate_required()`)
+Six findings closed via six semantic commits on `r1-security-correctness-blockers`:
 
-**Migration sites cut over (six logical credentials across five files):**
+- **#4** (smallest, no dependencies, builds confidence): hardcoded `"jackpot-dev"` project ID fallback in `pipeline_config/legacy.py` removed; raises `ConfigurationError` at config-load time when `gcp_project_id` is unset. Critical Rule 55 compliance restored.
+- **#1** (small, isolated): executor_type validated against an explicit allowlist (`local`, `slurm`, `lsf`, `pbs`, `kubernetes`, `gcp_batch`, `aws_batch`) before template lookup. Path traversal closed.
+- **#2** (bigger surface; audit existing tests): URI schemes allowlisted at `/register` to `gs://`, `s3://`, `sra://`. SSRF + LFI closed. Local-dev impact: `file://` permitted only when `settings.env == "local"` to preserve F-6's local workflow; production deployments see the strict allowlist. Documented in PR body.
+- **#3** (mechanical): three `async def` functions calling sync I/O (`promote_file_storage`, `compute_full_content_hash`, `verify_file_references`) wrapped with `asyncio.to_thread` / switched to `httpx.AsyncClient`. Event loop no longer blocks under load.
+- **#7** (two-part fix): `groovy_escape` Jinja2 filter applied to every catalog-field interpolation across seven templates; catalog-field validators reject the seven dangerous Groovy string-context characters at write time (backslash, double-quote, single-quote, dollar-sign, semicolon, backtick, newline). RCE vector closed.
+- **#6** (most complex): `SELECT … FOR UPDATE` row-lock on JTI lookup in refresh-token rotation; defense-in-depth Alembic migration `f5f4727258b8` adds a partial unique index on `replaced_by_jti`. Concurrent-refresh race test added (review item #14, previously missing).
 
-- `auth/guards.py` — JWT signing key
-- `auth/oauth.py` — Google OAuth client secret + JWT signing key (3 references)
-- `storage/__init__.py` — S3 secret key + GCS HMAC pair
-- `storage/factory.py` — same shape
-- `storage/local.py` (via factory) — local presign secret
+Tests: 81 new across 6 files; 1591 existing tests still pass. Coverage 87.94% (+0.09pp over post-PR-#28 baseline of 87.85%).
 
-**Backward compatibility preserved** via `legacy_env_names` per credential. Existing deployments with bare env-var names (`SECRET_KEY`, `GCS_HMAC_*`, etc.) keep working without operator action.
+The R-1 brief had specified `--cov-fail-under=90` but the actual project baseline was 87.85%, meaning the brief's gate was tighter than reality. The agent correctly identified this discrepancy and shipped at 87.94%, calling out the doc-vs-reality drift in the PR body. R-3 reconciled this via documentation update.
 
-PR landed clean as commit `b5bb80c` on `origin/development`.
+### 3. R-2 (PR #32): GISAID dedup + missing submission package test coverage
 
-### 2. I-3a — backend submission foundation
+Findings #5 (test coverage gap) and #15 (GISAID triplicate copy-paste) tackled together to avoid writing tests against the bad shape and rewriting them post-dedup. The three 28-line GISAID generators (`generate_gisaid_epicov_package`, `_epiflu_`, `_epipox_`) collapsed behind `_generate_gisaid_package(submission, output_dir, *, variant, tsv_filename, notes_extra)` with three thin wrappers. Public function signatures unchanged.
 
-Second PR. Specs drafted in-session after C-1 merged. Pure foundation work — laid the seams for I-3b/c without any execution behavior.
+Verification confirmed the three were genuinely identical-up-to-three-kwargs (TSV filename, variant string, README notes). No variant-specific behavior was lost. ~56 lines of duplicated code removed.
 
-**Scope:**
+Test coverage added across 5 new test files: GISAID (20 tests across the three variants, parameterized where appropriate), ENA (6 tests), DDBJ (4 tests), dispatcher (7 tests), and shared helpers (7 tests). Total ~35 new tests; the dispatcher tests double-check that each GISAID repo code carries its own variant token through to the TSV — guards against future regressions collapsing the wrappers further.
 
-- Three new submission states: `EXECUTING`, `EXECUTION_FAILED`, `EXECUTION_INTERRUPTED`
-- Six new tracking columns on `submissions`: `execution_started_at`, `execution_completed_at`, `execution_log_uris (JSONB)`, `execution_error_message`, `execution_attempt_count`, `executor_backend`
-- Partial index `idx_submissions_status_executing` for efficient lifespan recovery query
-- Six new transition functions in `submissions.py`: `mark_execution_queued`, `mark_execution_retried`, `mark_execution_completed`, `mark_execution_failed`, `mark_execution_interrupted`, `recover_interrupted_executions`
-- Four new credentials in `REQUIRED_CREDENTIALS`: `ncbi_submission_username`, `ncbi_submission_password`, `ena_webin_username`, `ena_webin_password` (conditional predicates based on `allow_backend_submission` AND repo membership in `backend_submission_repos`)
-- Two new settings: `allow_backend_submission: bool = False`, `backend_submission_repos: list[str] = []`
-- Lifespan recovery hook in `main.py` after `credentials.validate_required()` — finds any submission left in `EXECUTING` from a prior shutdown and transitions it to `EXECUTION_INTERRUPTED`
-- All audit + notification event constants for the full I-3 lifecycle (some emitted in I-3a, the rest reserved for I-3b)
+Per-file coverage on `submission_packages.py` reached 100% (target was ≥95%).
 
-**Design decisions locked in-session:**
+One deviation from the R-2 brief: six commits instead of five. The five planned commits brought `submission_packages.py` to 94%, just below the 95% gate. A sixth commit (`test(r2): cover edge-case branches in submission_packages helpers`) hit the remaining branches (cloud-bucket root, `sra://` / broken / existing-dest URIs, malformed-JSON entries, no-samples branch) to clear the gate at 100%. Documented in PR body.
 
-- `EXECUTING` is a single state; finer-grained timestamps live in audit events (`SUBMISSION_BACKEND_EXECUTION_QUEUED` → `_STARTED` → `_COMPLETED`/`_FAILED`). One state to recover from on API restart per Critical Rule 60.
-- All audit and notification event constants land in I-3a, even those I-3b will emit — keeps the constants file stable across sub-PRs
-- State transition functions land in I-3a (including retry), even though I-3b/c are the callers; tests in I-3a exercise them directly
-- `WITHDRAWN` reachability extended to `EXECUTION_FAILED` and `EXECUTION_INTERRUPTED`, but NOT `EXECUTING` (avoids "kill the running subprocess" complexity in v1)
-- `mark_execution_queued` increments `execution_attempt_count`; `mark_execution_retried` also increments and clears `execution_error_message`
-- `jackpot init` integration deferred to I-3c
-- Conditional-required predicate uses `Settings.backend_submission_repos` — operator declares which repos are in play; credential validation matches
+### 4. R-3 (PR #33): doc and tracking hygiene
 
-PR landed clean as commit `3f110fa` on `origin/development`.
+Five semantic commits, all five findings closed:
 
-### 3. I-3b — Seqsender execution path
+- **#9**: 4 new entries in `docs/learnings.md` (Session 18 positioning pivot, P0g G-1→G-4 execution profile design, P1 auth refresh, worktree contamination).
+- **#10a-b**: New Phase I-2 Submissions section in `spec.md` (the 10+ state-machine, schemas, transition rules, package-generation handoff to Seqsender, daily release job). New Phase C-1 Credentials section. New Critical Rule 62 in `docs/CLAUDE.md` (Critical Rule 61 was already shipped via PR #27 for worktree branch verification, so this got 62 instead of the brief's predicted 61).
+- **#10c**: Three new API reference files: `docs/api/submissions.md` (537 lines), `docs/api/imports.md` (336 lines), `docs/api/credentials.md` (266 lines).
+- **#11**: `todo.md` reconciled (1591/2 verified test count; G-3, G-4, partial G-6, partial G-7 checked off; Batch D follow-ups section structure added with finding-number traceability for the 14 items).
+- **#25**: Docstrings added to 6 explicit public functions plus 9 adjacent ones discovered during the same edits. Bias toward including, not excluding.
 
-Third PR. Specs drafted in-session after I-3a merged. Larger and more architecturally complex than I-3a — actual subprocess execution, log capture, per-repo concurrency.
+Tests: 1591 passed, 2 skipped before and after R-3 — no regressions, as expected for a docs-only PR.
 
-**Scope:**
+The R-3 agent flagged three issues for the human:
 
-- New module `backend/backend/submission_executors/`: `seqsender.py` (config generation, subprocess wrapper, log assembly), `redaction.py` (credential-value scrubbing)
-- New async APScheduler job `execute_submission(submission_id)` in `backend/backend/jobs.py`
-- Per-repo `asyncio.Lock` infrastructure in `jobs.py` for serialization
-- Three new settings: `execution_timeout_seconds=3600`, `execution_working_dir_root="/tmp/jackpot-executions"`, `seqsender_binary_path="seqsender"`
-- Seqsender pip-installed in api Dockerfile
+1. Worktree contamination during R-3 execution. A parallel R-2 agent in `/Users/glen/Projects/jackpot` repeatedly switched the working tree's branch while R-3 was committing. One R-2 commit briefly landed on R-3 before being caught. R-3 escaped to an isolated `git worktree` at `/Users/glen/Projects/jackpot-r3` and recovered via reflog. Critical Rule 61 (branch verification before each commit) caught the contamination instantly — it worked exactly as designed.
+2. Local `development` was reported as one commit ahead of `origin/development`. Investigation showed this was a misread: `e991beb` (the cited "unpushed" commit) was actually stash bookkeeping reachable through `wip-something` and `refs/stash`, not on `development`. Local and origin were in fact perfectly in sync at `31d47f7` after the post-#32 merge sync.
+3. Batch D follow-ups were stubs with finding-number traceability but no descriptions. The agent didn't have the original /ultrareview output in context. A defensive Python script (`populate_batch_d_stubs.py`) was drafted to populate the descriptions in a single mechanical edit, runnable when desired.
 
-**Design decisions locked in-session:**
+### 5. The third Markdown formatting rule (locked in primer)
 
-- Subprocess spawned via `asyncio.create_subprocess_exec` (NOT `subprocess.run`) — the scheduler is `AsyncIOScheduler`, blocking the event loop is forbidden
-- Seqsender config file written to a temp path OUTSIDE the working directory (`tempfile.NamedTemporaryFile`), `0600` permissions, deleted in `finally` regardless of outcome
-- Working directory at `{settings.execution_working_dir_root}/submission_{id}_attempt_{n}` — deleted on success, preserved on failure for forensic inspection (path captured in audit event payload)
-- Defense-in-depth credential redaction: never write the config-bearing file path into the log AND post-hoc filter captured stdout/stderr through `redact_credential_values_bytes` against the actual credential string values (longest-first replacement to avoid partial-replace anomalies)
-- Log file structure: header (redacted command, working dir, timestamps) + redacted stdout + redacted stderr + footer (exit code, wall time); written once at end of run (not streamed; live tail is v2)
-- Log file uploaded via storage abstraction's `.upload(...)` API (existed since F-9), registered as MANAGED via F-9's `register_file()`, URI appended to `execution_log_uris` JSONB array via SQL `||` concat for atomicity
-- Per-repo serialization: module-level `dict[str, asyncio.Lock]` per repo identifier; same-repo executions block, different repos parallelize. Single-process serialization; multi-instance deployments would need a Postgres advisory lock as a follow-up.
-- Output parsing: minimal v1. Successful run transitions to `SUBMITTED`; user runs `register-accessions` manually after the repo assigns accessions (typical lag is hours-to-days for NCBI). Skips brittle JSON-parsing of Seqsender output.
-- Tests fully mock subprocess; no real Seqsender calls in CI
+A subtle bug surfaced when the original R-1 prompt's #7 Groovy-injection example included a literal payload string ending with a function invocation reading a system file. That sequence got truncated by the renderer when pasted into a fresh chat. The fix: describe the dangerous-character set in prose; for tests, construct payloads via `chr()` (e.g. `chr(34)` for double-quote, `chr(36)` for dollar-sign).
 
-**Out of scope (deferred):** REST/CLI/SDK/UI (I-3c), GISAID/DDBJ executors, live log tail, auto-retry, idempotency-key-aware retry, multi-worker DB locks, TOSTADAS-via-Nextflow.
+This is the third locked rule in the continuation primer's Markdown formatting section, joining the table-fragment rule (locked since F-6/7/8) and the TSV-whitespace rule (locked since I-2). The general principle continues to hold: anything that depends on whitespace, structured layout, or specific character sequences being preserved verbatim is fragile when pasted across tools. Describe-then-illustrate, never illustrate-only.
 
-PR landed clean as commit `0d20529` on `origin/development`.
+### 6. The parallel-session reversal (most important lesson)
 
-### 4. I-3c — backend submission user-facing surface, plus the I-2 CLI/SDK discovery
+Four cross-session contamination incidents during this cycle:
 
-Fourth and largest PR of the session. Specs drafted in-session after I-3b merged.
+1. **R-2 reflog reset** mid-session. A parallel session's setup commands (`git switch development && git pull`) reset R-2's branch ref. Recovered via reflog, but real time lost. Pushed to origin afterward to defend against further loss.
+2. **R-2 unstaged-changes-on-merge.** When `gh pr merge 32 --squash --delete-branch` succeeded on GitHub, the post-merge local fast-forward failed because of unstaged changes (`.claude/` and `docs/learnings.md`) left over from concurrent sessions. Recovered manually.
+3. **R-3 working-directory takeover.** A parallel R-2 agent repeatedly switched the working tree's branch while R-3 was committing. R-3 escaped to a separate worktree. Critical Rule 61 caught the issue instantly, but the recovery was non-trivial.
+4. **`wip-something` archaeology** post-cleanup. Stash chain bookkeeping required a full-history diagnostic to confirm local and origin were in sync, costing additional cycle time.
 
-**The I-2 CLI/SDK discovery.** During grounding-grep for I-3c, `cli/jackpot/cli/submissions.py` was confirmed not to exist. Same for `cli/jackpot/sdk/submissions.py`. Session 19's outcome summary had recorded both as shipped with I-2; the reality was endpoints + Streamlit page only. The CLI commands and SDK module were inadvertently left out — possibly a Claude Code session-end discrepancy where the summary captured intent rather than actual diff.
+The pattern: parallel Claude Code sessions sharing a single repo are unsafe in practice, regardless of file-overlap analysis. The shared state isn't just code files — it's `.claude/`, the working directory, the index, the stash, the reflog. Agents don't reason about that shared state because each one assumes it owns the repo.
 
-This expanded I-3c's scope from "add the I-3 surface" to "add the full I-2 + I-3 surface." The PR ended up shipping:
+The Session 19 conclusion that "F-11 + I-2 ran cleanly in parallel — the pattern works" was premature. F-11 + I-2 ran cleanly **by accident**: their file surfaces happened to be entirely non-overlapping, including the `.claude/` and stash state. R-1 / R-2 / R-3 had more shared surface (and ran in tighter time proximity), and the failure mode showed up four times in one cycle.
 
-- 13 I-2 CLI commands (`create / list / show / update / delete / add-samples / remove-samples / validate / generate / mark-submitted / register-accessions / mark-rejected / withdraw`)
-- 3 I-3 CLI commands (`execute / retry-execution / execution-logs`)
-- A full `SubmissionsModule` SDK class with one method per endpoint (16 methods total)
-- 3 new REST endpoints (`/execute`, `/retry-execution`, `/execution-logs`)
-- Streamlit UI additions to the existing detail view (Execute button, status banner with 5s auto-refresh, Retry button, Execution logs expander)
-- `jackpot init` wizard updates for `allow_backend_submission` and `backend_submission_repos`
+The cost-benefit reversed: R-1 + R-2 + R-3 sequentially would have been roughly 4-5 hours of clock time. Run in parallel, they took longer because the cleanup tax compounded with each incident, plus generating defensive infrastructure (Critical Rule 61, the `chr()` rule, the worktree pattern documentation, the populator script).
 
-Estimated diff size at spec time: 1500-2000 LOC. Glen explicitly confirmed single-PR scope despite the expansion. Granular commits per surface kept review tractable.
+The new default: **single Claude Code session per repo at a time.** Worktrees are an explicit escape hatch when parallelism is genuinely justified by deadline pressure and the user has accepted the per-worktree setup overhead. Never the default. The work-item prompt template no longer suggests parallel-safe sequencing as a feature; each prompt assumes single-session execution and the user makes the deliberate call to parallelize if needed.
 
-**Design decisions locked in-session:**
-
-- Pre-flight credential check at the `/execute` endpoint via `_check_credentials_for_repo` — fails synchronously with `MISSING_CREDENTIALS` 400 if any required credential is missing, rather than letting the async job fail later
-- Five distinct error codes for execute pre-flight: `BACKEND_EXECUTION_DISABLED`, `REPO_NOT_ENABLED`, `REPO_NOT_SUPPORTED`, `INVALID_STATE`, `MISSING_CREDENTIALS`. Each has a friendly CLI error message that explains the fix.
-- Streamlit auto-refresh: 5 seconds while in `EXECUTING` state; matches existing page conventions
-- Manual post-package instructions (from I-2) remain visible regardless — backend execution is opt-in alongside the manual flow, not a replacement. Operators on Scenario A see the manual flow only; operators on B-F see both, with manual flow as always-available fallback.
-- `jackpot init` per-scenario defaults: A/H = disabled (no prompt); B-F = prompt with default True, then multi-select for repos from `["ncbi", "ena"]`
-- `jackpot init` does NOT prompt for actual credentials — those are operator's responsibility post-init via env vars / file YAML / GCP Secret Manager; wizard prints a closing reminder listing the env-var names to set
-- Authorization: backend execution doesn't introduce a new permission tier in v1 — anyone who can validate/generate can execute. Inherits I-2's existing RBAC.
-
-PR landed clean as commit `e6f8d27` on `origin/development`.
-
-### 5. Process observation: pre-commit ruff-format mismatch with CI
-
-Across all four PRs of this session, CI's pre-commit ruff-format step failed despite local pre-commit being green. Each PR required a pull-from-CI-format-rerun-push cycle.
-
-**Root cause:** `pre-commit` re-uses the locally-installed `ruff` binary even after `pre-commit clean`. The `clean` command only clears the hook-env cache, not the ambient `uv run ruff` install. Local has one ruff version (whatever `uv tool install ruff` resolved to most recently); CI has another (whatever `.pre-commit-config.yaml` pins or auto-resolves to in the CI environment).
-
-**Two viable fixes:**
-
-1. Pin ruff in `.pre-commit-config.yaml` to the exact version the codebase targets. The hook then installs that version into its own isolated env regardless of what's locally installed.
-2. Add a `uv tool install ruff@<pinned>` step to the developer setup docs (`README` or `docs/development.md`) so local and CI both end up on the same version.
-3. (Bonus) Both — pin in pre-commit-config AND document the dev-setup step. Belt-and-suspenders.
-
-Not blocking; the dev workflow tolerated the mismatch. Worth fixing because it'll otherwise bite every future contributor and burn a CI run every PR for the rest of project life.
-
-Tracked as out-of-band housekeeping. Suggested follow-up branch: `chore/pin-ruff-version`. Single small PR. Not phase-gated; can ship at any time.
-
-### 6. Where the project stands
-
-The I-track is complete. Six work items shipped:
-
-- I-1 — spreadsheet importer wizard (Session 19, before this session)
-- I-2 — submission package generation (Session 19; CLI and SDK module added in I-3c this session, closing the gap)
-- C-1 — pluggable credential infrastructure (this session)
-- I-3a — backend submission foundation (this session)
-- I-3b — Seqsender execution path (this session)
-- I-3c — backend submission user-facing surface (this session)
-
-The full adoption-driving feature set is operational on the `development` branch. From the spreadsheet-refugee market perspective laid out in Session 18: data ingest (I-1), curate-and-package (I-2 endpoints + UI + the now-existing CLI/SDK), and — for operators with stable backends — automated submission to NCBI and ENA (I-3a/b/c, gated on opt-in via `allow_backend_submission` and `backend_submission_repos`).
-
-The next architectural decision is **P0g (execution profiles, per-run executor selection)** — the pending core-platform-capability advancement. Critical Rule 59 sets the design constraint; the actual phase has been pending since P0f wrapped at the end of Session 17. P0g unblocks P0h (Slurm executor support), which makes the "scales to your university's HPC cluster" half of the marketing pitch real rather than aspirational.
-
-Other defensible directions: B-FED-1 (federation peer authentication), Phase 24.5 (sovereignty + BYOP design lockdown — gates P0b), or another adoption-driving track if outreach surfaces concrete asks.
+The continuation primer's "Parallel sessions are safe when files don't overlap" gotcha is reversed in this update: the new gotcha says "Single Claude Code session per repo, default" with worktrees as the explicit escape hatch.
 
 ------
 
 ## Decisions
 
-- *I-track complete.* Six work items shipped. The strategic-positioning push from Session 18 fully realized.
-- *Single-PR scope for I-3c despite the I-2 CLI/SDK expansion.* The expanded surface (1500-2000 LOC) was kept as one PR with granular commits per surface for review tractability rather than splitting into REST/SDK/CLI/UI sub-PRs.
-- *I-2 CLI/SDK gap closed.* The Session 19 outcome summary will be amended via this Session 20 record. Future agents reading the summary will see the corrected version and the explanation of what happened.
-- *Ruff version pre-commit gotcha logged as out-of-band housekeeping.* Not blocking; pinning fix can ship at any time.
-- *Audit and notification event constants pre-declared in I-3a.* Even constants only emitted by I-3b were declared in I-3a, keeping the constants file stable across sub-PRs. Pattern worth reusing for future multi-PR phases.
-- *State machine pattern locked.* Single `EXECUTING` state covers queued-and-running; finer-grained timestamps live in audit events. Lifespan recovery on restart is the explicit Critical Rule 60 honoring for submissions.
-- *Defense-in-depth credential redaction in execution logs.* Both architectural separation (config file outside working dir) AND post-hoc filtering (redact known credential values from captured stdout/stderr). No single-point-of-failure for credential leakage.
-- *Pre-flight credential check at REST endpoint.* `MISSING_CREDENTIALS` 400 is friendlier UX than letting the async job fail with the same condition.
-- *Backend execution is opt-in alongside, not replacement.* I-2's manual post-package instructions remain visible in UI regardless of `allow_backend_submission`. The two flows coexist; operators on Scenario A see the manual flow only, operators on B-F see both.
+- *R-1 + R-2 + R-3 all merged.* /ultrareview cycle complete; `development` is mergeable to `main` for the next release boundary.
+- *Batch D backlog (14 items) in `todo.md`* with finding-number traceability. Stubs populated via the `populate_batch_d_stubs.py` script when desired.
+- *Three Markdown formatting rules locked in primer.* Table fragments (F-6/7/8), TSV/whitespace (I-2), injection payloads (R-1). General principle: describe-then-illustrate, never illustrate-only.
+- *Critical Rule 62 added* to docs/CLAUDE.md for the credential abstraction (R-3 #10b). Critical Rule 61 was earlier shipped via PR #27 for worktree verification. Both are now in production rule set 1-62.
+- **Critical decision: single Claude Code session per repo as default.** The Session 19 parallel-execution recommendation is reversed. Worktrees are the explicit escape hatch when parallelism is justified, with deliberate setup, not the default.
+- *Coverage gate calibration.* Project baseline post-R-2 is ~89%. The earlier `--cov-fail-under=90` documentation in CLAUDE.md was tighter than reality; R-3 reconciled this. CI gate currently 80%; aspirational target 90% is captured as a Batch D / future work item.
 
 ------
 
 ## Outcome
 
-P0f and the I-track are both complete. Bundle refresh ahead of next session.
+P0f complete. I-track at 50%. /ultrareview cycle complete. development is in clean releasable state.
 
-**Pending P0f work:** None. P0f is done.
+**Pending I-track work (in expected order):**
 
-**Pending I-track work:** None. I-track is complete.
+- **C-1** — pluggable credential infrastructure. Specs not yet drafted; framework set in Session 18 (env vars / file YAML / GCP Secret Manager backends). C-1 should be drafted in-session with current code state. Can also incorporate the per-provider credential docs organization pattern locked in v3.2.1 changelog.
+- **I-3** — backend-driven submission. Depends on C-1. Specs not yet drafted.
 
 **Pending architectural follow-ups, in expected order:**
 
-- **P0g** — execution profiles (per-run executor selection per Critical Rule 59). The next-most-natural-architectural-next.
-- **P0h** — Slurm executor support (depends on P0g)
+- **C-1 + I-3** (I-track completion) — OR — pivot to P0h (Slurm executor support to make the "scales to your university's HPC cluster" claim real)
+- **P0h** — Slurm executor support (P0g shipped via #28; P0h is the next phase milestone)
 - **Phase 24.5** — sovereignty + BYOP design lockdown (gates P0b)
 - **P0b** — Schema v5.0
 - **P0c** — multi-tenancy middleware + sovereignty deletion path
 - **B-FED-1** — central CA federation peer authentication
-- **P1** — `POST /api/v1/auth/refresh`
-
-**Pending out-of-band housekeeping:**
-
-- Pin ruff in `.pre-commit-config.yaml` to match local; document `uv tool install ruff@<pinned>` in dev setup. Suggested branch: `chore/pin-ruff-version`. Single small PR. Not phase-gated.
-- Branch protection follow-up: add the now-visible CI test check as a required status check on `main` and `development` in GitHub Settings → Branches. Long-pending one-time admin task.
-
-The next session can pivot to P0g (most-natural-architectural-next) or to another track based on Glen's priorities. The summary doc, primer, and quick reference are now in their cleanest post-I-track state for either direction.
-
-------
-
-# Session 21 — 2026-05-04 → 2026-05-05 — P0g G-1+G-2 foundation + P1 auth refresh + housekeeping (with recovery saga)
-
-## What we covered
-
-A focused execution session that shipped four PRs (one feature foundation, one feature, one docs refresh, one chore) and surfaced one significant operational lesson in parallel-track Claude Code workflow. The four merges close the deferred refresh-endpoint item from P0e C.5, lay the schema foundation for the P0g execution-profiles phase, refresh the bundle docs to v4.0 covering the I-track close, and permanently fix the ruff-version mismatch that bit the previous two PRs on first runs.
-
-The recovery saga — a severe case of cross-tree contamination during parallel-track execution that almost cost the P1 work — consumed roughly half the session in diagnosis and surgical extraction. No work was ultimately lost. The mitigation (a verification ritual that every Claude Code session in a worktree runs as its first action) is now codified.
-
-**Track progress at session end:**
-- I-track: 6 of 6 shipped (P1 closes the deferred item from Phase 22 review item 12).
-- P0g: 2 of 11 shipped (G-1 + G-2 foundation; G-3 through G-11 ready to spec).
-- Phase 24.5: design-doc draft prompted but not executed; lockdown will proceed solo per option β (external collaborator review deferred 2026-05-05 — timing).
-- Out-of-band housekeeping: ruff pin (PR #25) permanent; bundle refresh (PR #23) shipped; smaller follow-ups documented in todo.md "Post-Sessions-21+ housekeeping" subsection.
-
-------
-
-## Topics covered
-
-### 1. Three parallel-track prompts drafted in one go
-
-Session opened with grounding (`grep` for existing schema/auth/work_dir state across the relevant files) and a design-Q&A round covering all three intended parallel tracks: P0g G-1+G-2 (execution-profiles foundation), Phase 24.5 (sovereignty-compliant deletion design), and P1 (auth refresh endpoint). Glen confirmed all design defaults across one Q&A round, and three full paste-ready spec prompts were delivered in one response, each as a fenced `===== BEGIN PROMPT ===== / ===== END PROMPT =====` block for paste-into-Claude-Code execution.
-
-The three prompts were file-disjoint by design — P0g touches `schema/` and `backend/db/migrations/versions/`; Phase 24.5 touches `docs/architecture/` and `spec.md`; P1 touches `backend/backend/auth/`, `routers/auth.py`, `jobs.py`, `main.py`, `config.py`, `audit.py`, plus schema for the RefreshToken class. Zero overlap; truly parallel.
-
-**Design decisions locked across the three prompts:**
-
-- **P0g foundation**: bundle G-1 (LinkML class additions) + G-2 (Alembic migration + seed) into a single PR. Skip G-3 onward (templates, renderer, CLI, etc.) — those land separately. Migration chains after I-3a's head, NOT P0f's head as originally specced (I-3a was the actual current head). Seed strategy is the conditional one (PL/pgSQL guard on user existence with `ON CONFLICT (name) DO NOTHING`) so the migration is idempotent and works against fresh databases.
-- **Phase 24.5**: docs-only, comprehensive first-draft for collaborator review. 15-section structure covering the lifecycle, state machine, tombstone-vs-vacuum distinction, vacuum cadence, derivative-analysis policy, already-published handling, federation propagation requirements (deferred to B-CARE-4 in P0c federation phase), auth model, edge cases, schema constraints for P0b, implementation handoff to P0c (B-CARE-3a through B-CARE-3g), and open questions for collaborator review.
-- **P1**: explicit refresh endpoint with single-use rotation. New `refresh_tokens` LinkML class + table tracking JTIs server-side. Six distinct error codes (`MISSING_REFRESH_TOKEN`, `INVALID_REFRESH_TOKEN`, `WRONG_TOKEN_TYPE`, `TOKEN_NOT_TRACKED`, `TOKEN_REVOKED`, `TOKEN_REPLAY_DETECTED`). Replay detection bulk-revokes user's active tokens. Modified login (registers JTI) and logout (revocation-aware). Daily APScheduler cleanup job. Three new audit-action constants. Critically: only refresh tokens are tracked server-side; access tokens stay stateless and short-lived (15min default).
-
-The P1 spec corrected my earlier assumption that the logout endpoint would be NEW — verification grep confirmed `POST /logout` already existed (just deleted both cookies) and the work was to MODIFY it to be revocation-aware rather than add a new endpoint.
-
-### 2. Worktree workflow setup and the contamination saga
-
-Glen set up three sibling worktrees per the parallel-tracks plan:
-
-```
-~/Projects/jackpot              # main clone, on phase-24-5-sovereignty-design (initially)
-~/Projects/jackpot-p0g          # p0g-g1-g2-execution-profiles-foundation branch
-~/Projects/jackpot-phase24-5    # phase-24-5-sovereignty-design branch
-~/Projects/jackpot-p1           # p1-auth-refresh-with-rotation branch
-```
-
-The intent was that each Claude Code session would be anchored to a different worktree, with `cd` into the worktree directory before launching `claude`. Worktrees share `.git` but have independent working trees, so a session in one tree literally cannot see another tree's working-state mutations.
-
-**What went wrong:** at some point, the original P1 agent ended up running in `~/Projects/jackpot` (the main clone, on `phase-24-5-sovereignty-design`) instead of in the dedicated `~/Projects/jackpot-p1` worktree. It did all eight P1 implementation tasks (migration, auth/oauth.py, routers/auth.py, jobs.py, main.py, audit.py, config.py) in the wrong working tree. A subsequent recovery attempt stashed the in-flight work onto the wrong-branch with a label `"phase-24.5: WIP across branches before rebase"` — capturing the P1 work alongside whatever P0g content was also present in the working tree from another contaminating operation. The local `chore/pin-ruff-version` branch ref also vanished at some point, and the main clone ended up parked on a non-development branch, which is unusual.
-
-**The diagnosis ritual** Glen used (after pausing the agent) extracted the picture from quiet diagnostic queries:
-
-```bash
-git stash list
-git stash show stash@{0} --stat
-git log -1 --oneline "stash@{0}^"
-git worktree list
-git worktree list --porcelain | awk '/^worktree / {print $2}' | while read dir; do
-    echo "--- $dir ---"
-    (cd "$dir" && echo "branch: $(git branch --show-current)" && git status --short)
-done
-git branch -v
-```
-
-The stash file list confirmed the work was P1-shaped (auth files + the new migration). The class diff between the stash and development's `models_generated.py` showed only P0g classes were new (ExecutionProfile, PipelineDefaultProfile, ExecutorTypeEnum, ContainerEngineEnum) — there was NO `RefreshToken` class added to the LinkML schema, meaning the P1 agent had skipped the LinkML class additions and just shipped the migration + endpoint code. The schema yaml in the stash was identical to the p0g branch's schema yaml, confirming Scenario A (agent didn't add LinkML class) rather than Scenario B (agent added it but somehow lost it).
-
-**The surgical recovery:**
-
-1. Created a fresh `~/Projects/jackpot-p1` worktree on the `p1-auth-refresh-with-rotation` branch (which existed but had zero commits).
-2. Extracted only the truly-pure-P1 files via `git checkout 'stash@{0}' -- <pathspec>` for the seven non-schema files (six modified + one new migration). Did NOT extract `schema/schema/jackpot_schema.yaml`, `schema/schema/jackpot_schema.json`, or `backend/backend/models_generated.py` — those were contaminated with P0g content that didn't belong on the p1 branch.
-3. Verified the migration's `down_revision = "3644749bf4c6"` was correct (chains after I-3a's head).
-4. Committed the seven extracted files as `feat(p1): /auth/refresh endpoint + refresh_tokens table + rotation-aware login/logout + cleanup job` (commit `61a9d20`).
-5. Dropped the stash.
-6. Started a fresh Claude Code session in `~/Projects/jackpot-p1` with an explicit resume message that: (a) verified the post-recovery state, (b) listed what was already committed, (c) directed the agent to add the missing `RefreshToken` LinkML class as Task 1, regenerate models, write tests, and open the PR.
-7. The fresh agent landed PR #22 cleanly. Later squash-merged at `ba03143`.
-
-**The contamination root cause (best guess):** the original P1 agent was started in a Claude Code session that opened in the main clone rather than in `~/Projects/jackpot-p1`. The agent ran `git status` and `git branch --show-current` at start and saw `phase-24-5-sovereignty-design` — which it should have flagged as wrong-branch and stopped. Instead it proceeded with P1 file edits, treating the wrong working tree as if it were the right one.
-
-**The verification ritual** that prevents this going forward:
-
-```bash
-EXPECTED_WORKTREE="$HOME/Projects/jackpot-p1"
-EXPECTED_BRANCH="p1-auth-refresh-with-rotation"
-[ "$(pwd -P)" = "$EXPECTED_WORKTREE" ] || { echo "FATAL: wrong cwd ($(pwd -P)). Stop." >&2; exit 1; }
-[ "$(git branch --show-current)" = "$EXPECTED_BRANCH" ] || { echo "FATAL: wrong branch ($(git branch --show-current)). Stop." >&2; exit 1; }
-echo "Worktree + branch verified."
-```
-
-This goes at the top of every parallel-track Claude Code session's pre-flight script, with the expected values customized per session. If either assertion fails, the agent stops and screams instead of silently doing work in the wrong place. Codified in todo.md "Post-Sessions-21+ housekeeping" as a follow-up to add to docs/CLAUDE.md as a Critical Rule.
-
-### 3. PR #21 — P0g G-1+G-2 (execution profiles foundation)
-
-Merged 2026-05-04 at `a682788`. Single PR covering both G-1 (LinkML schema additions) and G-2 (Alembic migration + seed).
-
-**What landed:**
-- LinkML classes `ExecutionProfile` (10 fields) + `PipelineDefaultProfile` (3 fields, composite PK on `(pipeline_id, profile_id)`)
-- Two new enums: `ExecutorTypeEnum` (`LOCAL` / `SLURM` / `PBS` / `LSF` / `GCP_BATCH` / `AWS_BATCH` / `KUBERNETES`) and `ContainerEngineEnum` (`DOCKER` / `APPTAINER` / `SINGULARITY` / `NONE`)
-- Regenerated Pydantic v2 models + JSON schema export
-- Alembic migration `bac8dbb11c0b_add_execution_profiles_and_.py` chained after I-3a's head (`3644749bf4c6`)
-- Partial unique index `idx_execution_profiles_one_default` enforcing "at most one default" via `WHERE is_default = TRUE`
-- FK from `pipeline_default_profile.profile_id` → `execution_profiles.profile_id` ON DELETE CASCADE
-- CHECK constraints on `executor_type` and `container_engine` matching the LinkML enum values
-- `default-local` seed inserted via PL/pgSQL guard on user existence with `ON CONFLICT (name) DO NOTHING` for idempotency
-- 32 tests added: 20 schema (Pydantic model validation) + 8 migration (round-trip, FK cascade, partial unique index enforcement, idempotent re-apply) + 4 seed (presence, idempotency, zero-users case)
-
-**Process notes from this PR's flow:**
-- The agent recognized the documented ruff-version mismatch from Session 20 on the first CI run and ran `pre-commit run --all-files` locally to align formatting before re-pushing. Second CI run all green. This was a one-time workaround; the permanent fix landed later as PR #25.
-- Migration chained after I-3a's head, NOT P0f's head as the original P0g spec suggested. The agent verified the actual current Alembic head via `alembic heads` rather than picking from a `tail -5` listing of migration files. Right call.
-- Pipelines table FK note: the spec asked the agent to FK `pipeline_default_profile.pipeline_id` to `pipelines.pipeline_id` if a `pipelines` LinkML class existed; otherwise omit. The agent verified pipelines exists as a LinkML class and added the FK. (If it hadn't existed, the FK would have been omitted with a note in the PR body — which was the correct fallback.)
-
-### 4. PR #22 — P1 (auth refresh endpoint with single-use rotation)
-
-Merged 2026-05-05 at `ba03143`. Closes the I-track entirely (P1 was the last open item from Phase 22 review item 12 / spec.md §13 fix #5).
-
-**What landed (post-recovery):**
-
-The squash commit includes six logical commits captured during the recovery + tests phase:
-- `feat(p1)` — base implementation (recovered from stash extraction)
-- `fix(p1)` — replay-detected revocation must happen before raising the HTTPException so the audit event fires
-- `test(p1)` — 31 tests across 5 files
-- `chore(p1)` — coverage omit list cleanup for the new modules
-- `chore(p1)` — ruff-format alignment to 0.11.6 (pre-PR-#25 workaround)
-- `fix(p1)` — migration chained after P0g (rebase-fix once G-1+G-2 landed)
-
-The migration's `down_revision` was originally `3644749bf4c6` (I-3a's head, which was current at time of P1 spec), then later updated to `bac8dbb11c0b` (G-1+G-2's migration) once P0g foundation merged ahead of P1.
-
-**Functional surface:**
-- `POST /api/v1/auth/refresh` endpoint accepting refresh token from `refresh` cookie (priority) or JSON body `refresh_token` field, with cookie-wins-when-both-present logic for confused-deputy defense
-- Six distinct error codes per the spec; each surfaces to the client with a clear message
-- Replay detection: when a refresh token marked `revoked_reason=rotated` is presented again, this triggers `TOKEN_REPLAY_DETECTED` PLUS bulk-revocation of all the user's active refresh tokens (defense in depth) PLUS an `AUTH_TOKEN_REPLAY_DETECTED` audit event
-- Modified `POST /google/login` to register JTI in the `refresh_tokens` table at issue time
-- Modified `POST /logout` to revoke the current refresh token (best-effort; works with missing/malformed/expired cookie too) before clearing cookies
-- Settings: `access_token_lifetime_seconds=900` (15min), `refresh_token_lifetime_seconds=604800` (7d), `refresh_token_cleanup_interval_seconds=86400` (daily), `refresh_token_retention_after_revoke_seconds=2592000` (30d)
-- APScheduler job `cleanup_old_refresh_tokens` purges old revoked + expired rows past retention; active rows untouched
-- Three new `AuditActions` constants: `AUTH_TOKEN_REFRESHED`, `AUTH_TOKEN_REPLAY_DETECTED`, `AUTH_LOGOUT`. Reserved `AUTH_TOKEN_REVOKED_BY_ADMIN` for future admin-revoke functionality
-
-**Deferred work (broader auth-architecture review)** intentionally not bundled into P1 because it's a design conversation rather than a single PR; could become P1.5 or fold into P0c. Logged in todo.md Phase P1 "What's deferred" subsection: session-management UI, refresh-token-family tracking, cross-device session detection, configurable token lifetimes per-user/per-role, token introspection endpoint, MFA, new auth providers (OIDC / SAML), API-token rotation. Plus B-FED-1 (central CA federation peer authentication) which gates on federation network growth.
-
-### 5. PR #23 — docs bundle refresh
-
-Pure docs change: `docs/jackpot_session_summary_and_backlog.md` bumped from v3.2 → v4.0 covering Sessions 19 and 20 (the I-track close). Auto-merged once CI green-lit. Pulled the local `c389d0f` commit that was sitting ahead of `origin/development` for two days into a proper reviewable PR.
-
-### 6. PR #25 — chore: pin ruff at 0.11.6 (permanent fix)
-
-Permanent alignment of ruff version across all sources of truth. Eliminates the recurring "format-clean-locally, fail-on-CI" loop that bit PRs #21 and #22 on first runs, and was previously documented in Session 20 as a process gotcha worth fixing.
-
-**Root cause analysis** (done in chat, then implemented):
-
-| Source | Old version | New version |
-|---|---|---|
-| `.pre-commit-config.yaml` | `v0.11.6` (April 2025) | `v0.11.6` (unchanged) |
-| `backend/pyproject.toml` dev deps | `ruff==0.4.4` (May 2024) | `ruff==0.11.6` |
-| `cli/pyproject.toml` dev deps | `ruff>=0.4.0` (resolved to 0.4.4) | `ruff==0.11.6` |
-| `uv.lock` | `0.4.4` (per backend's pin) | regenerated to `0.11.6` |
-
-The mismatch was ~1 year of formatter rule changes. CI was running `uv run pre-commit run --all-files` (which uses pre-commit's `0.11.6`); local `gac` was falling through to `uv run ruff` (which used backend's pinned `0.4.4` from uv.lock). Format outputs disagreed on every PR.
-
-PR #22's "chore(p1) — ruff-format 0.11.6 alignment" commit was a one-time reformat to satisfy 0.11.6's check, not a version bump. The version pins were untouched until this PR. The next PR after P1 would have hit the same loop without this fix.
-
-**`docs/CLAUDE.md` addition** documenting the three-source pin and the post-bump ritual:
-
-```markdown
-### ruff version is pinned across three sources of truth
-
-ruff is pinned to one specific version in three independent places that
-all must match:
-
-| Where | What |
-|---|---|
-| `.pre-commit-config.yaml` | `rev: v<version>` under `astral-sh/ruff-pre-commit` |
-| `backend/pyproject.toml` | `ruff==<version>` in the `dev` dependency group |
-| `cli/pyproject.toml` | `ruff==<version>` in the `dev` dependency group |
-
-Plus `schema/pyproject.toml` if it lists ruff (currently does not).
-
-After bumping the version in any of these places, all of them must be
-bumped together, then everyone pulling the change must run:
-    pre-commit clean && pre-commit install --install-hooks && uv sync
-```
-
-(Note: the documented ritual uses bare `pre-commit` commands. In this environment pre-commit isn't on global PATH — it lives inside the uv environment. The correct invocation is `uv run pre-commit clean` etc. Logged in todo.md "Post-Sessions-21+ housekeeping" as a small follow-up docs PR.)
-
-**PR-numbering wrinkle:** there were transient duplicate branches during this work — a `chore/pin-ruff-version` branch (eventually empty, became PR #24 which was closed) and a `chore/pin-ruff-version2` branch (had the actual fix, became PR #25). The "2" suffix is cosmetic; the canonical merged PR is #25.
-
-### 7. End-of-session cleanup pass
-
-After the four PRs landed and the recovery dust settled, full housekeeping:
-
-- Local `development` reset to `origin/development` (which now had P0g + P1 merged); the obsolete local-only `c389d0f` (docs commit) was overwritten — its content was preserved on origin via PR #23's squash-merge.
-- Stale local branches deleted: `chore/pin-ruff-version` (the empty one), `docs/session-20-backlog-v4`, `phase-24-5-sovereignty-design` (was at `d59dc79` with the sovereignty doc commit), `p0g-g1-g2-execution-profiles-foundation`. Note: the local `phase-24-5-sovereignty-design` branch was deleted, but the sovereignty doc commit at `d59dc79` may or may not still be on origin — needs verification before next sprint if Phase 24.5 work is to continue.
-- Stale remote branches: GitHub auto-deleted on PR merge for the merged ones; the `git push origin --delete <branch>` calls were no-ops with "remote ref does not exist" errors (informational, not failures).
-- Worktrees removed: `~/Projects/jackpot-p0g` and `~/Projects/jackpot-p1` removed via `git worktree remove --force` + `git worktree prune`. (The first attempt at removing `jackpot-p1` failed with "Directory not empty" because of a leftover `.DS_Store` from macOS Finder; second attempt with `--force` cleaned it up. The remaining macOS metadata file is logged as an environmental quirk, not a workflow issue.)
-- `git stash list` ended with seven stale entries from earlier parallel sessions; flagged for batch-drop as a follow-up housekeeping action (not done in-session).
-- Final state: single worktree at `~/Projects/jackpot` on `development` at `ba03143`, matching origin, no stale tracking refs after `git fetch --prune origin`.
-
-------
-
-## Decisions
-
-- **P0g foundation strategy: bundle G-1 + G-2 into one PR.** Migration + schema together so the foundation lands as a coherent unit; G-3 onward (templates, renderer, etc.) can run in parallel after the foundation is in place. Confirmed working — PR #21 merged cleanly.
-- **P1 deferred-work scope: refresh endpoint only, not the broader auth-architecture review.** The "broader auth-architecture review" mentioned in P0e C.5 is a design conversation rather than a code phase; deferred to a future P1.5 or folded into P0c. P1 ships only the explicit refresh endpoint + rotation + cleanup job.
-- **Worktree contamination mitigation: verification ritual at session start.** Every Claude Code session in a worktree must run a `pwd` + `git branch --show-current` check as its first action and refuse to proceed if either is wrong. Codified in todo.md follow-up.
-- **Ruff pin permanent fix: align all three sources at `0.11.6`.** Not bumping to a newer version (e.g., 0.13.x or 0.14.x that would be current as of May 2026) because the stability is more valuable than the new rules; can bump later in a separate dedicated PR if desired.
-- **PR #24 disposition: close, replace with PR #25.** The empty branch couldn't be cleaned up to host the actual fix without force-push churn, so the cleaner path was close-and-recreate. Lost only ~40 minutes of PR-existence; nothing of value lost.
-- **Stale stashes: batch-drop deferred.** Seven leftover stashes flagged in todo.md "Post-Sessions-21+ housekeeping" but not dropped in-session. Lower priority than the actual feature work; can be cleaned up at any natural breakpoint.
-- **Bundle refresh approach: single docs PR per session-completion milestone.** PR #23 covered Session 20's I-track close; this update covers Session 21's work. Minor version bump (4.0 → 4.5) rather than major because Session 21 is closeout-of-deferred + foundation-only + housekeeping, not a fresh architectural-track completion.
-
-------
-
-## Outcome
-
-Session 21 closes Sessions 20-21's combined work cycle. The natural breakpoint for the next session is fully clean — single worktree, clean development, no stale refs, ruff pin permanent, P1 closing the I-track entirely.
-
-**Pending P0g work:** G-3 + G-4 (templates + renderer, tightly coupled, recommended as one PR), G-5 (per-pipeline default profile + resolution endpoint), G-6 (`Settings.work_dir` + cleanup job), G-7 (launch-time profile selection), G-8 (cost estimator), G-9 (`jackpot profiles` CLI), G-10 (full feature tests), G-11 (operator docs).
-
-**Pending P1 follow-up work:** the deferred broader-auth-architecture review items (session-management UI, refresh-token-family tracking, cross-device session detection, configurable token lifetimes per-user/per-role, MFA, new auth providers, API-token rotation, B-FED-1 federation CA infrastructure). All non-blocking; could become P1.5 or fold into P0c.
-
-**Pending Phase 24.5 work:** design doc draft was prompted but not executed (the worktree contamination saga distracted from this track). The local `phase-24-5-sovereignty-design` branch was deleted in cleanup; the sovereignty doc commit may or may not still exist on origin. **Action item for next session start:** verify `git fetch && git branch -a | grep phase-24-5` and resurrect the doc commit if the remote still has it; if both local and remote are gone, restart the Phase 24.5 design draft. Lockdown will proceed solo (option β) since external collaborator review was deferred 2026-05-05.
-
-**Pending out-of-band housekeeping** (in priority order):
-1. Fix `uv run pre-commit` prefix in `docs/CLAUDE.md` ruff section. One-line docs PR.
-2. Update `gac` zsh function to prefer pre-commit over `uv run ruff` directly. Glen-side `~/.zshrc` change; not a repo PR.
-3. GitHub branch protection: add the now-stable CI test check as a required status check on `main` and `development` in GitHub Settings → Branches.
-4. Spec.md: drop the ⚠️ note from §13 fix #5 since P1 shipped the explicit refresh endpoint. Tiny docs PR; fold into the next docs-shaped one.
-5. Drop stale stashes (7 entries flagged). Glen-side; no PR.
-6. Audit and delete obsolete local feature branches (`p0f-f8-pre-launch-verification` and others may still be present).
-7. Add the verification ritual as a Critical Rule in `docs/CLAUDE.md`. Tied to the recovery-saga lesson.
-
-**Architectural follow-ups remaining (in expected order):**
-
-- **P0g** — execution profiles continuation (G-3 through G-11). Foundation is in place.
-- **P0h** — Slurm executor support (depends on P0g).
-- **Phase 24.5** — sovereignty + BYOP design lockdown (gates P0b). Lockdown proceeding solo (external review deferred 2026-05-05).
-- **P0b** — Schema v5.0 (gated on Phase 24.5 lockdown + BYOP/eukaryotic design).
-- **P0c** — multi-tenancy middleware + sovereignty deletion path (B-CARE-3a through B-CARE-3g implementation).
-- **B-FED-1** — central CA federation peer authentication.
-- **P1.5 / P1 broader auth-architecture review** — session-management UI, refresh-token-family tracking, etc.
-
-The next session can pivot to any of: P0g G-3+G-4 (most natural continuation), Phase 24.5 design lockdown (solo finalization per option β), Phase 24.7 / P0f BYOP infrastructure (heavier lift), or smaller housekeeping pile cleanup. My non-prescriptive recommendation: the housekeeping pile first (~30-60 min) followed by P0g G-3+G-4 for momentum.
-
-
-------
-
-# Session 22 — 2026-05-05 (continuation)
-
-Single-day continuation session shipping four PRs (#26 governance, #27 housekeeping, #28 P0g G-3+G-4, #29 Phase 24.5 deferral) and resolving the orphan-commit fallout from Sessions 20-21's worktree contamination saga.
-
-**PRs shipped:**
-
-- **PR #26** (`2dbb839`) — governance `README.md` + `coi-disclosures.md` stub on top of the 8 substantive governance docs that were already on origin from `f46f7ee` (P0d Phase 21.5). Came along with an accidentally-bundled Sessions 21+ doc refresh because the feature branch was created from local development (which had Glen's uncommitted "updated docs" commit `152546b`) instead of `origin/development`. Net effect was clean — no work lost — but the PR's actual scope was wider than the title suggested.
-- **PR #27** (`c7df002`) — post-Session-21 housekeeping: `uv run pre-commit` prefix correction in the ruff-pin section added by PR #25; **Critical Rule 61** added to `docs/CLAUDE.md` (worktree + branch verification ritual that prevents the Sessions 20-21 contamination failure mode); spec.md §4.1 fix #5 ⚠️ → ✅ resolution since PR #22 shipped the refresh endpoint. Prose count of Critical Rules updated from "all 56" to "all 61" to match reality.
-- **PR #28** (`544c98c`) — P0g G-3+G-4: profile templates + `nextflow.config` renderer + `pipeline_config/` package refactor (single 277-line file → package with backward-compat re-exports) + 8 Jinja2 templates (base + 7 executor types: local, slurm, pbs, lsf, gcp_batch, aws_batch, kubernetes) + profile renderer/resolver/types modules + launch endpoint integration with profile-driven path coexisting with legacy GCP-Batch fallback + `Settings.work_dir` field with `JACKPOT_WORK_DIR` env var + `LAUNCH_WITH_PROFILE` audit action constant + 35 new tests (17 renderer + 10 resolver + 8 launch integration). Tests landed at workspace-root `./tests/` rather than `backend/backend/tests/` since launch-endpoint integration is cross-cutting between workspace members. 1527 tests passing, 87.85% coverage post-merge.
-- **PR #29** — Phase 24.5 external collaborator review deferral. Scope (c) + option (β) per Glen: NPAIHB/Northwest TEC/B-CARE-6 references stripped from `todo.md` (6 edits), `docs/jackpot_session_summary_and_backlog.md` (4 edits), `docs/jackpot_cdc_dmi_stlt_overview.md` (8 edits including §2.3 TEC enumeration renumber 8-12 → 7-11, §4.1 sovereignty bullet strip, §8 "Three TECs" → "Two TECs" + table row strip + "best opening conversation" sentence strip, §11 recommendation item 5 strip + renumber 6,7 → 5,6, §12 backlog dump strip, §12 count math 14 → 13, §14 glossary strip). Reason: timing. Governance docs untouched — CARE Principles commitment in `governance/care-principles-and-tribal-data-sovereignty.md` and the Tribal seat in `governance/advisory-board.md` unchanged.
-
-**Decisions locked:**
-
-- Phase 24.5 external collaborator review deferred 2026-05-05 (timing). Lockdown will proceed solo per option β. External review of the locked design may resume later as a follow-up iteration if material feedback comes in.
-- Worktree-contamination prevention codified as Critical Rule 61 (verification ritual: assert `pwd -P` matches expected worktree, assert `git branch --show-current` matches expected branch, never `git switch` inside a worktree).
-- Cross-cutting integration tests (touching multiple workspace members) live at workspace-root `./tests/`. Workspace-internal tests stay in their member's `tests/`.
-- `pipeline_config/` package layout: `__init__.py` re-exports ALL pre-package public names plus the new ones. Existing import line in `routers/pipelines.py` unchanged. Legacy GCP-Batch path preserved as fallback when `NoProfileAvailableError` raises; deletion is a follow-up PR after G-5 (CRUD endpoints) lands.
-- Spec prompts for Claude Code agents need 4-backtick outer fence + 3-backtick inner fences so nested code blocks render correctly in Typora.
-
-**Recovery operations:**
-
-- Orphan commit `152546b "updated docs"` discovered during PR #26 cleanup — turned out to be Glen's local todo.md + session summary updates that were never pushed standalone but DID get bundled into PR #26 because the governance feature branch was created from local development (at `152546b`) rather than `origin/development`. Investigation traced via `git diff` direction asymmetry (showing files "missing" from the orphan branch that were actually present on development through PR #26's squash). No work lost; orphan branch discarded after confirming content was on origin via `2dbb839`.
-- Forward-going prevention: when running `git switch -c <branch>` from `development`, the verification trinity is `git pull --ff-only` + `git status --short` + `git log --oneline -3` against `origin/development` to confirm no local-only state silently scoops into the new feature branch. Five extra seconds of diagnostic each time.
-
-**State at session end:**
-
-- Local `development` matches origin (post-PR #29 merge, whichever commit ID lands).
-- Worktree `~/Projects/jackpot-p0g-g3-g4` removed via `git worktree remove --force` + `rm -rf` + `git worktree prune`.
-- Local stale branches likely linger; `git branch -D p0g/g3-g4-profile-templates-nf-config` to clean.
-- 1527+ tests passing, 87.85% coverage.
-- Six PRs shipped today (counting from the start of the chat: #26, #27, #28, #29 plus continued context from Sessions 20-21's #21, #22, #25). Sessions 20-21 + Session 22 together close the I-track entirely (#22), build the P0g foundation + runtime (#21 + #28), permanently fix the ruff-pin issue (#25), populate the governance directory (#26), codify the worktree verification ritual (#27), and defer Phase 24.5 external review (#29).
-
-**Next-up sprint candidates:**
-
-1. Phase 24.5 design lockdown (solo) — strategic critical path; unblocks P0b.
-2. P0g G-5 (profiles CRUD endpoints) — active feature momentum; unblocks legacy GCP-Batch path deletion follow-up.
-3. CARE doc implementation-status tagging — interleavable.
-4. Smaller housekeeping pile — gac zsh function update (`~/.zshrc`), GitHub branch protection on main + development, stale-stash cleanup.
-
-Glen's call which to pick up in the next chat.
+- **B-MCP-1** — JACKPOT MCP server exposing domain operations as agent-callable tools (post-I-track / post-P0h territory; reference: InsForge as a worked example of the agent-MCP contract)
+- **P1** — already shipped via PR #22 (auth refresh endpoint with single-use refresh-token rotation; R-1 #6 hardened the rotation against concurrent-refresh races)
+- **Batch D items** — 14 small follow-ups in `todo.md`. Ship opportunistically as small PRs.
+
+The next session can either continue I-track (draft C-1) or pivot to P0h. Both are defensible; C-1 is smaller (3 backends + settings refactor + per-provider docs structure). P0h is the larger architectural piece. Glen's call based on adoption-vs-capability priorities.
+
+**Concrete state:**
+- All 26 /ultrareview findings either closed (R-1/R-2/R-3) or backlog-tracked (Batch D)
+- Local `development` and `origin/development` aligned at `31d47f7` post-R-3 merge
+- `wip-something` branch and stale stashes can be discarded — R-3's `learnings.md` entries cover the salvageable content from those
+- Single-session-per-repo is the new default; the bundle reflects this throughout
