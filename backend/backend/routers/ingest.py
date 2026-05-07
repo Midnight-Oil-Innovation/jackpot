@@ -423,6 +423,48 @@ class _RegisterRequest(BaseModel):
     files: list[_RegisterFileSpec]
 
 
+# R-1 #2: SSRF + local-file-read defence at the /register entry point.
+# /register's URI flows into cheap_fingerprint(), which dereferences
+# http(s) via httpx and bare-paths/file:// via the local filesystem. An
+# authenticated user could otherwise (a) probe internal infrastructure
+# (cloud metadata service, internal admin endpoints), or (b) read
+# arbitrary local files. JACKPOT's storage model (Critical Rule 57:
+# EXTERNAL by default; file references only) needs gs://, s3://, sra://
+# but not http(s) or bare paths.
+#
+# file:// is allowed only in non-production deployments (settings.env ==
+# "local") so the F-6 local-dev workflow keeps working; production sees
+# a strict allowlist. This is the brief's option (b) — a non-production
+# gate, not a silent bypass.
+_REGISTER_ALLOWED_URI_SCHEMES: frozenset[str] = frozenset({"gs", "s3", "sra"})
+_REGISTER_LOCAL_DEV_URI_SCHEMES: frozenset[str] = frozenset({"file"})
+
+
+def _validate_register_uri_scheme(uri: str) -> None:
+    """Reject /register URIs whose scheme is not in the allowlist.
+
+    Logs the attempted scheme server-side for forensics; the 400 reply
+    lists only the supported schemes (no echo of what the user tried).
+    """
+    settings = get_settings()
+    parsed_scheme = uri.split("://", 1)[0].lower() if "://" in uri else ""
+    if parsed_scheme in _REGISTER_ALLOWED_URI_SCHEMES:
+        return
+    if settings.env == "local" and parsed_scheme in _REGISTER_LOCAL_DEV_URI_SCHEMES:
+        return
+    logger.warning(
+        "register_paths: rejected URI scheme=%r (env=%r)",
+        parsed_scheme or "<bare>",
+        settings.env,
+    )
+    raise HTTPException(
+        status_code=400,
+        detail=(
+            "Unsupported URI scheme. JACKPOT supports gs://, s3://, and sra:// for file references."
+        ),
+    )
+
+
 @router.post("/upload", status_code=201)
 @limiter.limit(_INGEST_LIMIT)
 async def upload(
@@ -704,6 +746,12 @@ async def register_paths(
 
     if not payload.files:
         raise HTTPException(status_code=422, detail="files must be a non-empty list.")
+
+    # R-1 #2: validate every URI scheme up-front before any DB row is
+    # written. Any rejected scheme aborts the entire request — partial
+    # registrations would leave the sample row half-created.
+    for spec in payload.files:
+        _validate_register_uri_scheme(spec.uri)
 
     # Up-front validation of every file's storage_intent so we don't
     # half-create a sample before discovering an invalid value mid-loop.
