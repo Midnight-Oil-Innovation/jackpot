@@ -17,6 +17,8 @@ import pytest
 from jinja2 import UndefinedError
 
 from backend.pipeline_config.profile_renderer import (
+    _ALLOWED_EXECUTOR_TYPES,
+    _template_name_for,
     render_nextflow_config,
     write_run_config,
 )
@@ -255,6 +257,42 @@ def test_gcp_batch_missing_project_raises_undefined_error():
 
 
 # ───────────────────────── write_run_config ────────────────────────────
+
+
+# ─────────────── R-1 #1: executor_type allowlist enforcement ───────────────
+
+
+def test_template_name_for_allowed_executors():
+    """Every allowed value resolves to its expected template filename
+    (case-insensitively, since ``ExecutorTypeEnum`` values arrive as
+    upper-case strings from the DB)."""
+    for et in _ALLOWED_EXECUTOR_TYPES:
+        assert _template_name_for(et) == f"{et}.config.j2"
+        assert _template_name_for(et.upper()) == f"{et}.config.j2"
+
+
+def test_template_name_for_rejects_path_traversal():
+    """Parent-directory references must not slip through to
+    PackageLoader.get_template. Attempting traversal raises ValueError."""
+    with pytest.raises(ValueError):
+        _template_name_for("../etc/passwd")
+    with pytest.raises(ValueError):
+        _template_name_for("../../secrets")
+
+
+def test_template_name_for_rejects_unknown():
+    """An unknown executor name raises ValueError. The error message
+    deliberately does not echo the rejected value verbatim so an
+    attacker cannot probe what was tried."""
+    with pytest.raises(ValueError) as exc_info:
+        _template_name_for("nimbus")
+    assert "nimbus" not in str(exc_info.value)
+
+
+def test_template_name_for_rejects_empty():
+    """Empty string is not in the allowlist; rejected."""
+    with pytest.raises(ValueError):
+        _template_name_for("")
 
 
 def test_write_run_config_writes_local_path(tmp_path: Path):
