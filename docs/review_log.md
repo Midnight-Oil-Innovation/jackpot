@@ -54,7 +54,6 @@ All flagged in `learnings.md` P0d.1 entry; verified still present.
    `mock_user_email = "gotero@linuxprophet.com"`; `adhs_organization_name = "ADHS"`.
 2. **`backend/setup/write_files_2.py`** — comprehensive (lines 21, 32, 148, 1639,
    1641, 1646, 1653, 1987, 2104, 2161, 2215). Arizona, Otero Lab, Mayo Clinic
-   Phoenix, ADHS-2026-001, AZ-001 fixtures, "Successor to APGAP", ADHS reportable
    diseases reference.
 3. **`backend/db/migrations/versions/5adf11b77c19_baseline_schema_from_init_sql.py`**
    (lines 59, 609, 614, 618, 622, 636) — seeds `Sonora Quest Laboratories`, `ASU`,

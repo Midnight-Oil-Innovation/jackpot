@@ -57,7 +57,6 @@ client ─► POST /api/v1/organizations/
 
 **Key decisions:**
 
-- `require_platform_admin` gates create/list-all/delete; `require_lab_director` gates PATCH + all member endpoints. GET {id} allows Platform Admin OR any lab member (via `get_user_lab_membership`). This mirrors APGAP's role boundaries exactly.
 - GET list branches on `is_platform_admin`: admins see every lab paginated; others see only labs where `lab_membership.user_id = me`, via an INNER JOIN in the base query before `paginate()` wraps it. Kept the search-by-display_name filter uniform across both branches.
 - POST /members validates three ways before insert: user must exist (404), permission_group must exist (404), and `(lab_id, user_id)` must not already be a member (409). The 409 pre-check beats catching the UNIQUE violation because it lets us return a structured envelope instead of a SQL error.
 - All five state-changing endpoints log the correct AuditAction from the CLAUDE.md constants: `CREATE_LAB`, `UPDATE_LAB` (with `metadata={"soft_delete": True}` for DELETE), `ADD_LAB_MEMBER`, `CHANGE_MEMBER_ROLE`, `REMOVE_LAB_MEMBER`. No new constants invented.

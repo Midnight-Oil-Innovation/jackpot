@@ -217,7 +217,6 @@ NEW_WILDLIFE_END = """\
 OLD_WWTP_NAME = """\
       wwtp_name:
         description: >
-          APGAP: 'Location (sample_location_specify)'. NWSS: sample_location.
           Wastewater facility name or upstream sewer location.
           Examples: 'South Tempe Water Reclamation Facility',
           'undisclosed sewer line upstream of 5th Ave'.
@@ -228,7 +227,6 @@ OLD_WWTP_NAME = """\
 NEW_WWTP_NAME = """\
       wwtp_name:
         description: >
-          APGAP: 'Location (sample_location_specify)'. NWSS: sample_location.
           Wastewater facility name or upstream sewer location.
           Examples: 'South Tempe Water Reclamation Facility',
           'undisclosed sewer line upstream of 5th Ave'.

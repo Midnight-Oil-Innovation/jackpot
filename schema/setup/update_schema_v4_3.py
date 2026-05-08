@@ -107,7 +107,6 @@ NEW_COUNTY = """\
 OLD_ZIPCODE = """\
       collection_location_zipcode:
         description: >
-          APGAP: 'Zip code'. US ZIP code of collection location.
           Validation: 5-digit numeric format.\
 """
 

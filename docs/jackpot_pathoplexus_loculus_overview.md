@@ -10,7 +10,6 @@
 
 Three things changed the strategic picture for JACKPOT in this session:
 
-1. **JACKPOT became independent.** No longer the APGAP successor, no longer ASU/ADHS-coupled. It's now Glen's project under `Midnight-Oil-Innovation/jackpot`, with a multi-deployment-target architecture (laptop → cloud → multi-tenant → federation). This puts JACKPOT structurally in the *software-package* row of the peer-platform matrix — same row as Loculus, not Pathoplexus.
 
 2. **The license flipped from Apache 2.0 to AGPL-3.0.** This unlocks direct code adoption from the entire ETH-led / Swiss-public-health Loculus + GenSpectrum + LAPIS + SILO stack, all of which is AGPL-3.0. The "ASU/ADHS legal review" blocker that previously gated any Loculus code lift has evaporated.
 
@@ -33,7 +32,6 @@ The rest of this document develops each of these in detail and integrates the su
 
 ### 1.1 Independence
 
-JACKPOT is no longer ADHS-contracted, ASU-affiliated, or the APGAP successor. It's Glen's personal/consultancy project. The new home is `Midnight-Oil-Innovation/jackpot` (single monorepo, six legacy `gotero/*` repos archived with redirect READMEs).
 
 ### 1.2 Multi-deployment-target by design
 

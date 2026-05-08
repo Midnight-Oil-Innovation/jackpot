@@ -33,7 +33,6 @@ The UAT executes parts of viralrecon end-to-end, which requires real
 paired-end FASTQs. Two acceptable sources:
 
 1. **Public Arizona SARS-CoV-2 batch from SRA / GenBank**. Glen has a
-   batch accessioned through APGAP that is now public-domain; copy
    the `.fastq.gz` files into `tests/fixtures/e2e/uat/sars-cov-2/`.
    Sample IDs in `realistic_metadata.csv` reference these by name.
 2. **`nf-core/test-datasets` viralrecon set**. Same FASTQs the smoke

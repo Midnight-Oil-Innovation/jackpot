@@ -1303,18 +1303,6 @@ meaningful error when WORKSPACE_ENABLED=false or equivalent:
 
 ---
 
-## APGAP Compatibility (historical)
-
-> **Note:** APGAP-compatibility is no longer a hard constraint. JACKPOT is now an independent project, not specifically the APGAP successor. The compatibility points below are preserved for any in-flight migration of an APGAP deployment to JACKPOT, and because the org/lab/project/user hierarchy and PermissionGroups enum values designed for APGAP-compat happen to be solid choices in their own right. New deployments don't need to satisfy any of these.
-
-- Organization → Lab → Project → User hierarchy is identical
-- PermissionGroups enum string values match APGAP exactly (also enforced by Critical Rule 1 for backwards compatibility on existing deployments)
-- `is_lab_director=TRUE` on `lab_membership` = Lab Director
-- Projects preserve all Seqera fields (`workspace_id`, `compute_env_id`, `credentials_id`)
-- Migration script: `scripts/migrate_from_apgap.py` (only relevant for APGAP→JACKPOT migration deployments)
-
----
-
 ## OrganismNameEnum (62 values in default reference set)
 
 The default 62-value enum was originally derived from a specific jurisdiction's mandatory reportable communicable diseases list and includes one-Health additions (`Coccidioides immitis`, `Coccidioides posadasii` for Valley fever, `metagenome` for metagenomic samples, `novel pathogen` for emerging/exotic disease). All values use NCBI Taxonomy names for BioSample/SRA/GenBank/GISAID compatibility.
@@ -2282,7 +2270,6 @@ where Redis is legitimately used.
 
 ### What replaces Celery/Redis
 
-| APGAP pattern | JACKPOT replacement | Why |
 |---|---|---|
 | Celery tasks for pipeline execution | GCP Batch + Nextflow | Nextflow manages its own worker VMs |
 | Celery tasks for scrubbing | GKE Jobs + scrubber queue in jobs.py | Container manages its own lifecycle |

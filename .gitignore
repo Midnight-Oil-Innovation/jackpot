@@ -78,3 +78,10 @@ tests/fixtures/e2e/uat/*.fq.gz
 tests/fixtures/e2e/uat/*.bam
 tests/fixtures/e2e/uat/*.cram
 tests/fixtures/e2e/uat/sars-cov-2/
+
+# Tooling artifacts (audit + cleanup outputs)
+audit_report*.txt
+audit_report*.json
+cleanup_plan*.txt
+cleanup_report*.txt
+cleanup_plan*.json
