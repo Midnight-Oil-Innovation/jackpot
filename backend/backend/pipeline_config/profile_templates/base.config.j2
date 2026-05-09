@@ -66,10 +66,12 @@ singularity {
     enabled = false
 }
 {%- elif profile.container_engine == 'APPTAINER' %}
+{%- set apptainer_cache = profile.config_overrides.get('apptainer_cache_dir') if profile.config_overrides else None %}
 
 apptainer {
     enabled = true
     autoMounts = true
+    cacheDir = '{{ (apptainer_cache or (work_dir.rstrip('/') + '/apptainer-cache')) | groovy_escape }}'
 }
 
 docker {
