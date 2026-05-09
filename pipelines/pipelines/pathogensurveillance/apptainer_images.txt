@@ -1,0 +1,12 @@
+# nf-core/pathogensurveillance — OCI images this pipeline pulls when
+# run with apptainer.enabled = true. Pinned at 1.1.0 in the JACKPOT
+# wrapper; other versions warn but proceed.
+
+@upstream nf-core/pathogensurveillance
+@upstream-version 1.1.0
+@upstream-config https://raw.githubusercontent.com/nf-core/pathogensurveillance/1.1.0/conf/modules.config
+@audit-status partial
+@audit-note Eight result surfaces across four tables (sendsketch, AMRFinderPlus, Tseemann mlst, graphtyper, BUSCO, SNP phylogeny, etc.) — each backed by its own BioContainer. Enumerate via `nf-core download pathogensurveillance -r 1.1.0 --container singularity` or `jackpot images audit nf-core/pathogensurveillance@1.1.0` (CLI deferred).
+
+# JACKPOT register process:
+docker.io/library/python:3.12-slim-bookworm

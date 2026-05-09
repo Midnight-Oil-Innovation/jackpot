@@ -1,0 +1,12 @@
+# nf-core/taxprofiler — OCI images this pipeline pulls when run with
+# apptainer.enabled = true. Multi-classifier metagenomic profiler
+# (Kraken2 / Centrifuge / DIAMOND / Bracken / etc.) — one BioContainer
+# per classifier process upstream.
+
+@upstream nf-core/taxprofiler
+@upstream-config https://raw.githubusercontent.com/nf-core/taxprofiler/master/conf/modules.config
+@audit-status partial
+@audit-note Pre-stage via `nf-core download taxprofiler --container singularity --outdir <cache>` or `jackpot images audit nf-core/taxprofiler` (CLI deferred).
+
+# JACKPOT register process:
+docker.io/library/python:3.12-slim-bookworm

@@ -1,0 +1,12 @@
+# nf-core/mag — OCI images this pipeline pulls when run with
+# apptainer.enabled = true. nf-core pipelines use BioContainers per
+# process; nf-core's own tooling (`nf-core download`) materialises the
+# full image set into a Singularity / Apptainer cache.
+
+@upstream nf-core/mag
+@upstream-config https://raw.githubusercontent.com/nf-core/mag/master/conf/modules.config
+@audit-status partial
+@audit-note nf-core best practice for pre-staging is `nf-core download mag --container singularity --outdir <cache>`; that produces a complete .sif set. `jackpot images audit nf-core/mag` would parse the upstream conf/modules.config directly.
+
+# JACKPOT register process:
+docker.io/library/python:3.12-slim-bookworm
