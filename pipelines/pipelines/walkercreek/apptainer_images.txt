@@ -1,0 +1,11 @@
+# UPHL-BioNGS/walkercreek — OCI images this pipeline pulls when run
+# with apptainer.enabled = true. See pipelines.apptainer_manifest for
+# the parser contract.
+
+@upstream UPHL-BioNGS/walkercreek
+@upstream-config https://raw.githubusercontent.com/UPHL-BioNGS/walkercreek/main/nextflow.config
+@audit-status partial
+@audit-note walkercreek runs IRMA + per-segment subtype calls; per-process containers live upstream. Enumerate via `jackpot images audit UPHL-BioNGS/walkercreek` (CLI deferred).
+
+# JACKPOT register process:
+docker.io/library/python:3.12-slim-bookworm
