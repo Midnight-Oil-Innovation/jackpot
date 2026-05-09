@@ -77,6 +77,12 @@ class AuditActions:
     # P0g G-4: launch resolved an execution_profiles row and rendered
     # nextflow.config from that profile (vs. the legacy GCP-Batch path).
     LAUNCH_WITH_PROFILE = "LAUNCH_WITH_PROFILE"
+    # P0h H-3: launch overrode the active Slurm profile's default
+    # account with a per-launch ``launch_account`` so a lab member
+    # could charge a specific grant. P0c multi-tenancy middleware is
+    # the validator once it lands; today the override is accepted
+    # verbatim with this audit row capturing actor + override value.
+    SLURM_LAUNCH_ACCOUNT_OVERRIDE = "SLURM_LAUNCH_ACCOUNT_OVERRIDE"
 
     # File references (Phase P0f)
     RECONCILE_SAMPLE_FILES_HASH_COLLISION = "RECONCILE_SAMPLE_FILES_HASH_COLLISION"
