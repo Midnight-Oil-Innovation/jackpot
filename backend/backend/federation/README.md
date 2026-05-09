@@ -52,6 +52,7 @@ Three levels, in order of `jackpot_architecture.md` §22:
 | `jackpot_immune_collaboration_scaffolding.md` §8.2 | redteam adversarial tests | Tests Track 1 federation under attack scenarios |
 | Federal-grade security doc | Capability 6 (threshold crypto) | (Track 2) `_ais_hooks.py` `threshold_approve` |
 | `Jackpot_AIS.md` §1.3, §1.6, §1.7, §1.8 | innate / signaling / attribution / tolerance | Mapped one-to-one onto the five hooks |
+| `jackpot_pathoplexus_loculus_overview.md` §12.3b | Loculus group-based ownership reference pattern | Future B-LOC-FED-1 refinement on top of FED-D schema migration |
 
 ## Relationship to `backend/immune/`
 

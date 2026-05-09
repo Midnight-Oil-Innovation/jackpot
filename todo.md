@@ -1179,6 +1179,8 @@ These are not separate design work — the design exists in `jackpot_byop_and_eu
 - [ ] **B-GOV-1** Create `governance/` directory with charter.md, coi-policy.md, jurisdiction-and-data-residency.md, benefits-sharing-framework.md, access-grievance-procedure.md, platform-shutdown-data-portability-plan.md, advisory-board.md. Modeled on Pathoplexus governance docs. (3-5 hours of writing, P0d alongside monorepo)
 - [ ] **B-PPX-1** Adopt per-sample OPEN/RESTRICTED radio button on Streamlit upload page. Schema already supports it; just wire UI. (half a session, any)
 
+- [ ] **B-LOC-FED-1** Adopt Loculus group-based ownership pattern as an intra-instance refinement to FED-A's org-level federation controls.  Groups own sequences, users belong to multiple groups, groups can have federation policies independent of the parent organization. Lands as part of FED-D schema migration (or follows it). Reference: overview §12.3b. (1-2 sessions, with FED-D or after)
+
 ### D. Pathogenwatch (overview §12.2a, §16.2)
 
 - [ ] **B-PWATCH-1** Pathogenwatch results-pull for bacterial samples (Salmonella, Klebsiella, Mtb, Neisseria). Push assembly via API, pull cgMLST/MLST/AMR/SNP-tree results back into pipeline_results. (3-4 sessions, Year 2)
