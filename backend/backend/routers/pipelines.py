@@ -391,6 +391,35 @@ def launch_pipeline(
         merged_overrides["account"] = payload.launch_account
         effective_profile = _dc_replace(profile, config_overrides=merged_overrides)
 
+    # ── P0h H-6: pre-launch Slurm reachability ──────────────────────────
+    # Refines F-8 (broken-inputs check). When the resolved profile
+    # targets SLURM, run ``sinfo`` on the API host before queueing the
+    # run so a downed cluster fails fast at submit time rather than
+    # after a 15-minute Slurm client timeout. The check is cached for
+    # ``slurm_reachability_cache_seconds`` to keep bulk launches cheap.
+    if effective_profile is not None and (effective_profile.executor_type or "").upper() == "SLURM":
+        from backend.pipeline_config.cluster_reachability import (
+            check_slurm_reachability,
+        )
+
+        overrides = effective_profile.config_overrides or {}
+        reach = check_slurm_reachability(
+            account=overrides.get("account"),
+            partition=overrides.get("queue") or overrides.get("partition"),
+        )
+        if not reach.reachable:
+            return error(
+                "SLURM_UNREACHABLE",
+                "Slurm cluster is not reachable from the API host; refusing "
+                "to queue the launch. Run `jackpot doctor slurm "
+                "--check-cluster` to diagnose.",
+                detail={
+                    "code": reach.code,
+                    "detail": reach.detail,
+                },
+                status_code=400,
+            )
+
     run_id = new_run_id()
     pipeline_token = new_pipeline_token()
     settings = get_settings()

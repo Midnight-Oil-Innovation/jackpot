@@ -135,6 +135,21 @@ class Settings(BaseSettings):
     # COMPLETED/FAILED state-shift inside the same business minute.
     log_poller_interval_seconds: int = 30
 
+    # P0h H-6: pre-launch Slurm reachability check.
+    # Refines F-8: when a launch's resolved profile is SLURM, fire
+    # ``sinfo -h`` on the API host before queueing the run so a downed
+    # cluster fails fast at submit time instead of after a 15-minute
+    # Slurm-client timeout. Result is cached per (account, partition)
+    # for ``slurm_reachability_cache_seconds`` so a 50-sample bulk
+    # launch doesn't spawn 50 subprocesses.
+    #
+    # Tests opt out via ``slurm_reachability_check_enabled = False`` so
+    # the existing SLURM-profile launch suite isn't tied to having
+    # Slurm client tools on the runner.
+    slurm_reachability_check_enabled: bool = True
+    slurm_reachability_cache_seconds: int = 60
+    slurm_reachability_timeout_seconds: int = 10
+
     # I-3b: Seqsender subprocess execution.
     # Hard wall-time cap on a single Seqsender invocation. Above this
     # the executor kills the subprocess and transitions the submission
