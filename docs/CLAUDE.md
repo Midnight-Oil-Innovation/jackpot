@@ -2191,7 +2191,7 @@ No pod-level autoscaling — each pod is personal to one researcher, sized
 by their chosen profile. Scaling unit is nodes: cluster autoscaler adds
 workspace-pool nodes as more pods are scheduled. Scale-to-zero when no
 workspaces active. Placeholder pod (low-priority pause container) keeps
-one node warm during business hours (8am–8pm AZ) via CronJob — prevents
+one node warm during business hours (8am–8pm UTC−8:00) via CronJob — prevents
 3–5 minute cold starts for the first researcher of the day.
 
 **Scrubber jobs (scrubber-pool)**
@@ -2219,7 +2219,7 @@ Scale-to-zero means the first workspace launch after inactivity waits for
 node provisioning (~3–5 minutes without mitigation). Two mitigations:
 
 1. **Placeholder pod (CronJob)**: low-priority pause container keeps one
-   workspace-pool node warm 8am–8pm AZ time. Evicted when a real workspace
+   workspace-pool node warm 8am–8pm UTC−8:00. Evicted when a real workspace
    pod is scheduled. Defined in jackpot-iac as a Kubernetes CronJob.
 
 2. **Pre-cached node image**: workspace-pool uses a custom node image with
@@ -2246,7 +2246,7 @@ node provisioning (~3–5 minutes without mitigation). Two mitigations:
 All autoscaling configuration lives in jackpot-iac Terraform:
 - Three node pool definitions with cluster autoscaler config
 - HPA manifest for API and frontend deployments
-- Workspace placeholder pod CronJob (8am–8pm AZ)
+- Workspace placeholder pod CronJob (8am–8pm UTC−8:00)
 - Scrubber GKE Job template
 - GCP Budget alert policies
 - jackpot-work bucket with lifecycle rule
@@ -2362,7 +2362,7 @@ or anything that touches the database or GCS buckets.
 
 Three layers of protection, all defined in jackpot-iac/terraform/cloudsql.tf:
 
-**Automated daily backups** — full backup once per day during 2–4am AZ
+**Automated daily backups** — full backup once per day during 2–4am UTC−8:00
 maintenance window. Stored in GCS. 30-day retention. Costs a few dollars
 per month at JACKPOT's scale.
 

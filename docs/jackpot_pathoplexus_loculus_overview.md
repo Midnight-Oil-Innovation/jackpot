@@ -11,7 +11,7 @@
 Three things changed the strategic picture for JACKPOT in this session:
 
 
-2. **The license flipped from Apache 2.0 to AGPL-3.0.** This unlocks direct code adoption from the entire ETH-led / Swiss-public-health Loculus + GenSpectrum + LAPIS + SILO stack, all of which is AGPL-3.0. The "ASU/ADHS legal review" blocker that previously gated any Loculus code lift has evaporated.
+2. **The license flipped from Apache 2.0 to AGPL-3.0.** This unlocks direct code adoption from the entire ETH-led / Swiss-public-health Loculus + GenSpectrum + LAPIS + SILO stack, all of which is AGPL-3.0. The "institutional legal review" blocker that previously gated any Loculus code lift has evaporated.
 
 3. **The Loculus stack is the most directly relevant peer.** Loculus is the only other open-source software package designed for multi-operator deployment in the pathogen-genomics space. Pathoplexus is just one Loculus deployment with governance docs. JACKPOT and Loculus solve the same architectural problem with different choices.
 
@@ -35,7 +35,7 @@ The rest of this document develops each of these in detail and integrates the su
 
 ### 1.2 Multi-deployment-target by design
 
-Where JACKPOT was previously GCP-only (staging + production for ADHS), it's now meant to be deployable across six install scenarios:
+Where JACKPOT was previously GCP-only (single-deployment-target architecture), it's now meant to be deployable across six install scenarios:
 
 | Scenario | Target | Status |
 |---|---|---|
@@ -48,7 +48,7 @@ Where JACKPOT was previously GCP-only (staging + production for ADHS), it's now 
 
 The architectural rule that drives all six:
 
-> Production code knows nothing about Glen, Midnight-Oil-Innovation, or any specific operator. Only the operator-bootstrap step does, and it learns those names at install time.
+> Production code knows nothing about Midnight-Oil-Innovation, or any specific operator. Only the operator-bootstrap step does, and it learns those names at install time.
 
 This is encoded as a smart-mode `jackpot init` CLI with three required prompts (`JACKPOT_ORG_NAME`, `JACKPOT_LAB_NAME`, `JACKPOT_ADMIN_EMAIL`) and sensible defaults for everything else.
 
@@ -267,7 +267,7 @@ Before getting into JACKPOT-vs-Loculus specifics, here's where the rest of the p
 | **Solu** | ❌ commercial | Company board | Internal | Seed + revenue | ❌ commercial |
 | **RT-MetA** | TBD | TBD | TBD | IPSN catalytic grant | ✅ |
 | **GISAID** | ❌ **opaque** | Closed | ❌ | Subscriptions | ❌ (controversies) |
-| **JACKPOT (current)** | Partial (spec.md only) | Single owner (Glen) | ✅ git + audit log | Self-funded / consultancy | ✅ |
+| **JACKPOT (current)** | Partial (spec.md only) | Single owner (the maintainer) | ✅ git + audit log | Self-funded / consultancy | ✅ |
 
 The Pathoplexus governance pattern (public Statutes + Values + Executive Board roster + COI policy) is the model for what JACKPOT's `governance/` directory should look like — see Section 12 for details.
 
@@ -1262,7 +1262,7 @@ governance/
 ├── access-grievance-procedure.md   How to raise concerns about access
 │                                   decisions or governance
 ├── platform-shutdown-data-portability-plan.md
-│                                   What happens if Glen / Midnight-Oil
+│                                   What happens if the maintainer / Midnight-Oil
 │                                   stops maintaining JACKPOT — guarantee
 │                                   that data and code stay accessible
 └── advisory-board.md               Forward-looking: how the project will
@@ -1281,7 +1281,7 @@ The platform-shutdown-data-portability plan is the one that actually distinguish
 | **DSI** | Digital Sequence Information. Pathogen genomic data as data, governed under PABS. |
 | **DUO** | Data Use Ontology (GA4GH). Standardized codes for data-access conditions. |
 | **HierCC** | Hierarchical Clustering of cgMLST. EnteroBase's bacterial outbreak detection method. |
-| **HRRT** | Human Read Removal Tool. Glen's shorthand for NCBI's SRA Human Scrubber. |
+| **HRRT** | Human Read Removal Tool. Shorthand for NCBI's SRA Human Scrubber. |
 | **IPSN** | International Pathogen Surveillance Network. WHO-coordinated, 350+ partners across 100+ countries. |
 | **LAPIS** | Lightweight API for Sequences. GenSpectrum's REST API for pathogen sequence queries. |
 | **LinkML** | Linked Data Modeling Language. JACKPOT's source-of-truth schema language. |

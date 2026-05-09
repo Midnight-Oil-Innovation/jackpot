@@ -13,7 +13,7 @@ end-to-end on a developer laptop. It has two tiers:
 
 The smoke test is the daily / per-PR sanity gate. The UAT runs after
 major feature batches (P0f, P0g, I-1, I-2, R-1+R-2+R-3) ship, and is
-what `E-1` produces the artifacts for. Glen runs the actual UAT after
+what `E-1` produces the artifacts for. The operator runs the actual UAT after
 this plan merges; this document is what they run against.
 
 This plan is read against, not memorised. Pages, role names, and

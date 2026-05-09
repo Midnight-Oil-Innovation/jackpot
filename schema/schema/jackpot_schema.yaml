@@ -210,7 +210,7 @@ classes:
           performed the sequencing. NOT a static enum — validated at
           ingest against the sequencing_labs database table, which is
           a Platform Admin-managed controlled vocabulary.
-          Seeded values: 'Sonora Quest Laboratories',
+          Seeded values: 'Example Reference Lab',
           'Laboratory Corporation of America'.
           Unknown values trigger validation error directing Lab Director
           to submit a sequencing lab addition request via the portal
@@ -1048,7 +1048,7 @@ classes:
       wwtp_name:
         description: >
           Wastewater facility name or upstream sewer location.
-          Examples: 'South Tempe Water Reclamation Facility',
+          Examples: 'Example Water Reclamation Facility',
           'undisclosed sewer line upstream of 5th Ave'.
 
       nwss_sewershed_id:

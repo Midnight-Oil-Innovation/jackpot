@@ -198,6 +198,6 @@ the project welcomes a conversation.
   full mapping from CARE Principles to JACKPOT defaults.
 - `docs/jackpot_cdc_dmi_stlt_overview.md §6` and §7 — the
   architectural reasoning behind the Scenario T defaults.
-- Carroll SR et al. (2020). "The CARE Principles for Indigenous Data
+- Carroll and others (2020). "The CARE Principles for Indigenous Data
   Governance." *Data Science Journal*, 19(1): 43.
 - Native BioData Consortium — https://nativebio.org/

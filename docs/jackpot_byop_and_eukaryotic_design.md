@@ -72,7 +72,7 @@ metadata:
   license: "AGPL-3.0"                        # required; SPDX identifier
   homepage: "https://github.com/example/my-tb-typer"  # optional
   citation: |                                # optional but recommended
-    Doe J et al. (2026). Title. J Open Source Software.
+    Doe and others (2026). Title. J Open Source Software.
     DOI: 10.21105/joss.NNNNN
 
 engine:
@@ -724,7 +724,7 @@ Eight pathogen groups. For each, the reference genomes, typing schemes, and surv
 - **Genome size:** ~23 Mb
 - **Chromosomes:** 14
 - **Surveillance focus:** drug resistance markers (`pfk13` for artemisinin, `pfdhfr`/`pfdhps` for SP, `pfcrt`/`pfmdr1` for chloroquine/lumefantrine), parasite genetic diversity (MOI — multiplicity of infection), HRP2/HRP3 deletions (RDT escape)
-- **Typing scheme:** SNP-barcode (e.g., the 24-SNP barcode from Daniels et al. 2008 for *P. falciparum*), microsatellite-based typing, whole-genome SNP analysis
+- **Typing scheme:** SNP-barcode (e.g., the 24-SNP barcode from Daniels and others 2008 for *P. falciparum*), microsatellite-based typing, whole-genome SNP analysis
 - **Workflow tools:** [MalariaGEN's `pf7` resource](https://www.malariagen.net/), `Pf-HRP2/3 deletion typer`, `artemisinin_resistance_caller`, the Sanger pipeline
 - **Sample types:** dried blood spots most common; whole blood, RDT cards
 - **Sequencing:** Illumina short-read most common; some ONT for long-read; MalariaGEN amplicon panels

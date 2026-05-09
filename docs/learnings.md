@@ -1953,7 +1953,7 @@ already deployed somewhere (local, staging, prod, fork):
   different ids if seeded via different rounds) and idempotent
   for free. The `display_name` UNIQUE constraint guarantees
   uniqueness.
-- **Domain mismatch caught at planning time.** Glen's email is
+- **Domain mismatch caught at planning time.** The maintainer's email is
   `admin@example.org` but the new domain whitelist is
   `example.org`. Mock auth bypasses the whitelist for local
   dev so this isn't a daily-flow blocker, but flagged for the
@@ -2026,7 +2026,7 @@ Want every line to read `ahead: 0, behind: 0, dirty: 0`. Anything else is a loos
 
 ## `.claude/settings.json` for autonomous mode — Option B (scoped allow + explicit deny) — 2026-04-29
 
-**What was built:** A refinement of `.claude/settings.json` for Claude Code autonomous mode that supports `/automode` without overly broad permissions. Replaces the "flat allowlist" approach with scoped patterns plus an explicit deny list. Verified Glen's pre-existing `CLAUDE_CODE_SUBAGENT_MODEL: "sonnet"` is the right cost/quality split (Opus orchestrator + Sonnet subagents).
+**What was built:** A refinement of `.claude/settings.json` for Claude Code autonomous mode that supports `/automode` without overly broad permissions. Replaces the "flat allowlist" approach with scoped patterns plus an explicit deny list. Verified the maintainer's pre-existing `CLAUDE_CODE_SUBAGENT_MODEL: "sonnet"` is the right cost/quality split (Opus orchestrator + Sonnet subagents).
 
 **Key decisions:**
 
@@ -2151,7 +2151,7 @@ documentation landed alongside.
   the specific keep-rules. The two-pass split is cleaner than trying
   to interleave them.
 - *jackpot-frontend NOT merged.* The repo was a vestigial stub; the
-  canonical Streamlit lives under `backend/frontend/`. Per Glen's
+  canonical Streamlit lives under `backend/frontend/`. Per the maintainer's
   decision: do not import the stub at all (rather than parking it
   somewhere). Archive in Phase H.
 - *backend's Apache LICENSE dropped during filter-repo.* Destination
@@ -2449,7 +2449,7 @@ The user surfaced the discrepancy by asking "Why is the test coverage so low?" �
 
 **Key decisions:**
 
-- *Pure-logic-in-schema, Click-wrappers-in-cli.* The detector and scenario registry live under `schema/jackpot_scenarios/` (workspace-co-located, importable from anywhere); the Click prompts wrapping the detector live under `cli/jackpot/init/`. Result: the inference policy is testable without subprocess gymnastics, and the CLI surface is replaceable (a future TUI / web installer could reuse the same pure functions). Same separation pattern Glen has been pushing for in routers (validator-policy vs router-orchestration).
+- *Pure-logic-in-schema, Click-wrappers-in-cli.* The detector and scenario registry live under `schema/jackpot_scenarios/` (workspace-co-located, importable from anywhere); the Click prompts wrapping the detector live under `cli/jackpot/init/`. Result: the inference policy is testable without subprocess gymnastics, and the CLI surface is replaceable (a future TUI / web installer could reuse the same pure functions). Same separation pattern the maintainer has been pushing for in routers (validator-policy vs router-orchestration).
 - *Operator-agnostic by force, not convention.* Critical Rule 55 enforcement got teeth in P0e via Critical Rule 56 (`instances/ci/` ships with synthetic-only values) AND via the `jackpot init configure --instance-name ci` runtime check that REFUSES to overwrite the committed CI dir. The pattern is: rules that need to be enforced get enforced at the CLI boundary, not just documented in CLAUDE.md.
 - *Compose profiles over per-scenario compose files.* Decision 2 collapsed what could've been 7 docker-compose-X.yml files into one canonical compose file with `profiles:` keys. The trade is "operator must set COMPOSE_PROFILES" (handled automatically by `jackpot init` writing it to `.env.local`) for "we maintain one compose file forever, not 7 in lockstep." The matrix-comment at the top of the compose file is the contract.
 - *Idempotent everything.* `jackpot init configure` and `jackpot init secrets` are safe to re-run. Non-secret files overwrite by default (operators can pass `--no-overwrite-non-secrets` to preserve hand-edits); secret files preserve by default (operators must pass `--regenerate-secrets` AND confirm per-secret to rotate). Same baseline as Alembic — the surface should be safe to call again.

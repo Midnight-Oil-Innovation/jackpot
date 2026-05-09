@@ -12,7 +12,7 @@
 >
 > - **A** Single academic lab on a laptop (first priority — designed in P0e)
 > - **B** Single org on cloud (GCP/AWS/Azure)
-> - **C** Multi-lab agency (e.g. state health dept — the original ADHS shape)
+> - **C** Multi-lab agency (e.g. state health dept)
 > - **D** Hosted multi-tenant SaaS
 > - **E** Federation member (peers with other JACKPOT instances)
 > - **F** CI / e2e test harness
@@ -1212,7 +1212,7 @@ and asserting `validate_required()` raises with the expected key list.
 **Purpose:** Validates `sequencing_lab` field at ingest; drives Globus arrival
 notifications.
 
-**Tests:** CRUD, assignment workflow, list returns seed data (Sonora Quest,
+**Tests:** CRUD, assignment workflow, list returns seed data (Example Reference Lab,
 LabCorp, Example Lab).
 
 ---
@@ -1874,7 +1874,7 @@ workaround until public Ingress lands (Phase 20 Q-14).
 
 **Access control:**
 `docs/staging_access.md` (in `jackpot-iac/docs/`) documents who has access
-(Glen + 2 operator staff members), how to reach staging URLs, how to redeploy, how to
+(the project owner + designated reviewers), how to reach staging URLs, how to redeploy, how to
 read Cloud Logging.
 
 **Key rules:**

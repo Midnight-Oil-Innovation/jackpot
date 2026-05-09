@@ -21,7 +21,7 @@ anyone with filesystem access to your laptop.
   miss the controlled vocabulary. Drives the I-1 spreadsheet importer
   auto-suggest test (UAT cross-cutting section D).
 - `realistic_metadata.csv` — synthetic but shape-realistic sheet that
-  mimics what a real Arizona SARS-CoV-2 ingest looks like. Column
+  mimics what a real-world SARS-CoV-2 ingest looks like. Column
   names already match the JACKPOT schema (no auto-suggest exercise).
   Drives the smoke-style happy-path tests for non-Platform-Admin roles.
 - `.gitkeep` — preserves this directory in the tree even when no
@@ -32,12 +32,12 @@ anyone with filesystem access to your laptop.
 The UAT executes parts of viralrecon end-to-end, which requires real
 paired-end FASTQs. Two acceptable sources:
 
-1. **Public Arizona SARS-CoV-2 batch from SRA / GenBank**. Glen has a
+1. **Public regional SARS-CoV-2 batch from SRA / GenBank**. The maintainer has a
    the `.fastq.gz` files into `tests/fixtures/e2e/uat/sars-cov-2/`.
    Sample IDs in `realistic_metadata.csv` reference these by name.
 2. **`nf-core/test-datasets` viralrecon set**. Same FASTQs the smoke
    test uses; copy them into `tests/fixtures/e2e/uat/sars-cov-2/`. The
-   UAT is happy with this as a fallback if no public Arizona batch is
+   UAT is happy with this as a fallback if no public regional batch is
    handy.
 
 The `.gitignore` excludes `*.fastq`, `*.fastq.gz`, `*.fq`, `*.fq.gz`,

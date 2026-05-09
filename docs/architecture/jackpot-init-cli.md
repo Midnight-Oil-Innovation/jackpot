@@ -1,7 +1,6 @@
 # `jackpot init` CLI — Architecture & Design Lockdown
 
 **Status:** Design lockdown complete (2026-05-01). Implementation = Phase B of P0e.
-**Authors:** Glen Otero (decisions), Claude (synthesis)
 **Source:** Chat working sessions 2026-05-01 plus Phase 22 review log items 9, 10, 11
 
 ---

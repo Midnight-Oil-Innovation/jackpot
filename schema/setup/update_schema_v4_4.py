@@ -218,7 +218,7 @@ OLD_WWTP_NAME = """\
       wwtp_name:
         description: >
           Wastewater facility name or upstream sewer location.
-          Examples: 'South Tempe Water Reclamation Facility',
+          Examples: 'Example Water Reclamation Facility',
           'undisclosed sewer line upstream of 5th Ave'.
 
       sample_location_zipcode:\
@@ -228,7 +228,7 @@ NEW_WWTP_NAME = """\
       wwtp_name:
         description: >
           Wastewater facility name or upstream sewer location.
-          Examples: 'South Tempe Water Reclamation Facility',
+          Examples: 'Example Water Reclamation Facility',
           'undisclosed sewer line upstream of 5th Ave'.
 
       nwss_sewershed_id:
