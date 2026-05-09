@@ -186,6 +186,19 @@ class LaunchRequest(BaseModel):
     # deployment-default profile, then (c) the legacy GCP-Batch generator.
     profile_name: str | None = None
     profile_id: str | None = None
+    # P0h H-3: per-launch Slurm account override. The active execution
+    # profile carries a default ``config_overrides.account`` (the lab
+    # or department's ledger); ``launch_account`` lets a lab member
+    # charge a specific grant for one run without mutating the profile.
+    # Only meaningful when the resolved profile's executor is SLURM —
+    # rejecting the field on other executors keeps the override surface
+    # narrow to the only place it has semantics.
+    #
+    # P0c multi-tenancy middleware will validate the override against
+    # the user's lab memberships before this PR ships in production;
+    # today the override is accepted verbatim with an audit row capturing
+    # the actor + value (see SLURM_LAUNCH_ACCOUNT_OVERRIDE).
+    launch_account: str | None = None
 
 
 @router.post("/launch")
@@ -350,6 +363,34 @@ def launch_pipeline(
         # design; deletion of the legacy path is a follow-up PR.
         profile = None
 
+    # ── P0h H-3: Slurm per-launch account override ──────────────────────
+    # ``launch_account`` only carries semantics when the active profile
+    # is SLURM. Reject the field on every other code path so an operator
+    # cannot pass a value that silently does nothing — the rejection is
+    # the single signal that the field was misused. The legacy
+    # GCP-Batch fallback (profile is None) is also a non-Slurm path and
+    # rejected here.
+    if payload.launch_account is not None and (
+        profile is None or (profile.executor_type or "").upper() != "SLURM"
+    ):
+        return error(
+            "LAUNCH_ACCOUNT_NOT_APPLICABLE",
+            "launch_account override is only valid when the resolved "
+            "execution profile uses the SLURM executor.",
+            status_code=400,
+        )
+    # P0c stub: per-launch override is accepted verbatim. P0c
+    # multi-tenancy middleware, when it lands, will validate the
+    # supplied account against the user's lab memberships and reject
+    # values the user is not authorised to charge against.
+    effective_profile = profile
+    if profile is not None and payload.launch_account is not None:
+        from dataclasses import replace as _dc_replace
+
+        merged_overrides = dict(profile.config_overrides or {})
+        merged_overrides["account"] = payload.launch_account
+        effective_profile = _dc_replace(profile, config_overrides=merged_overrides)
+
     run_id = new_run_id()
     pipeline_token = new_pipeline_token()
     settings = get_settings()
@@ -379,11 +420,15 @@ def launch_pipeline(
     else:
         # Profile-driven path — render via profile_renderer + write
         # via fsspec into <work_dir>/runs/<run_id>/jackpot_run.config.
-        profile_work_dir_base = profile.work_dir or settings.work_dir
+        # When H-3's launch_account override applied, ``effective_profile``
+        # is a copy of ``profile`` with ``config_overrides.account``
+        # replaced; otherwise the two are the same object.
+        assert effective_profile is not None  # narrowed by `profile is None` branch above
+        profile_work_dir_base = effective_profile.work_dir or settings.work_dir
         work_dir = f"{profile_work_dir_base.rstrip('/')}/runs/{run_id}/work"
         result_uri = result_uri_for(run_id)
         config_text = render_nextflow_config(
-            profile=profile,
+            profile=effective_profile,
             pipeline=catalog,
             run_id=run_id,
             weblog_url=weblog_url,
@@ -497,6 +542,28 @@ def launch_pipeline(
             metadata={
                 "lab_id": lab_id,
                 "project_id": payload.project_id,
+            },
+            db_conn=db,
+        )
+
+    # P0h H-3: separate audit row for launch_account overrides so a
+    # security review can grep for SLURM_LAUNCH_ACCOUNT_OVERRIDE rows
+    # without joining audit_log against pipeline_runs.metadata. The row
+    # captures actor + before (profile default) and after (override
+    # value); P0c will add validation context once it lands.
+    if payload.launch_account is not None and effective_profile is not None and profile is not None:
+        log_audit(
+            action=AuditActions.SLURM_LAUNCH_ACCOUNT_OVERRIDE,
+            actor_id=user["id"],
+            resource_type="pipeline_run",
+            resource_id=run_id,
+            before={"account": (profile.config_overrides or {}).get("account")},
+            after={"account": payload.launch_account},
+            metadata={
+                "lab_id": lab_id,
+                "project_id": payload.project_id,
+                "profile_id": str(profile.profile_id),
+                "profile_name": profile.name,
             },
             db_conn=db,
         )
