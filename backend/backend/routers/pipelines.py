@@ -585,6 +585,25 @@ def receive_pipeline_event(
     No user JWT — the per-run ``X-Pipeline-Token`` minted at launch
     authenticates the callback. The run_id must be present in the body
     and must match an existing pipeline_runs row with a matching token.
+
+    P0h H-4 redundancy contract
+    ---------------------------
+
+    The H-4 sidecar log poller (``backend.log_poller``) tails
+    ``<work_dir>/runs/<run_id>/.nextflow.log`` on a 30-second cadence
+    and emits the same workflow-state transitions for clusters whose
+    compute nodes can't reach this endpoint. Both paths can fire for
+    the same run; the receiver tolerates duplicate events because:
+
+    - ``pipeline_runs.status`` transitions are idempotent — re-applying
+      ``status = 'RUNNING'`` is a no-op, and ``_handle_workflow_complete``
+      re-sets the same terminal status when called twice.
+    - ``pipeline_tasks`` upserts on ``(run_id, task_id)`` so duplicate
+      ``process.*`` events update the same row.
+    - ``pipeline_events`` accepts duplicate inserts; the table is
+      diagnostic and a small replay overhead is acceptable. Consumers
+      that need uniqueness should derive over ``run_id + event_type
+      + trace.taskId`` themselves.
     """
     event = body.get("event", "")
     run_id = body.get("runId") or body.get("run_id", "")

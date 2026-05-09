@@ -21,6 +21,7 @@ from backend.jobs import (
     run_scrubber_queue_job,
     verify_file_references,
 )
+from backend.log_poller import poll_cluster_run_logs
 from backend.logging_config import configure_logging
 from backend.middleware import RequestIDMiddleware
 from backend.rate_limit import limiter
@@ -136,6 +137,17 @@ async def lifespan(app: FastAPI):
             "interval",
             seconds=get_settings().refresh_token_cleanup_interval_seconds,
             id="cleanup_old_refresh_tokens",
+            replace_existing=True,
+            max_instances=1,
+        )
+        # P0h H-4: weblog-fallback log poller. Tails .nextflow.log on
+        # the shared filesystem so cluster runs whose compute nodes have
+        # no outbound HTTP still reach a terminal state.
+        scheduler.add_job(
+            poll_cluster_run_logs,
+            "interval",
+            seconds=get_settings().log_poller_interval_seconds,
+            id="poll_cluster_run_logs",
             replace_existing=True,
             max_instances=1,
         )
