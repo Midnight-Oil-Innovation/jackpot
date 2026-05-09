@@ -658,6 +658,135 @@ days). Honors a per-profile retention override.
   contain the right executor-specific fields.
 
 ---
+## Federation Track 1 + Track 2-seam Scaffold (FED-A through FED-E)
+
+**Status:** FED-A merged 2026-05-08. FED-B through FED-E pending.
+**Lives at:** `backend/backend/federation/`
+**Ahead of:** B-FED-1 (central CA federation peer authentication) in the
+future-phases list — FED-A lands the package surface so B-FED-1 reduces
+to router + tests + migration + central CA integration on top.
+
+### Two-track architectural pattern
+
+Two parallel namespaces under `backend/backend/`:
+
+- `backend/backend/federation/` — Track 1, ships now using current JACKPOT
+  primitives (JWT, presigned URLs, the existing `can_access_sample()`
+  permission model)
+- `backend/backend/immune/` — Track 2, AIS-augmented overlays scheduled
+  per `jackpot_immune_collaboration_scaffolding.md`. Concrete implementations
+  of the Protocol seams in each Track 1 package's `_ais_hooks.py` module.
+
+The seam between tracks is dependency injection. Every Track 1 class accepts
+a `hooks=` argument defaulting to `Null<X>Hooks` (no-op). Track 2 swaps in
+concrete implementations via the same constructor argument. **No code
+changes required to Track 1 modules when Track 2 lands.**
+
+Direction of dependency is one-way: `backend/backend/federation/` never
+imports from `backend/backend/immune/`. The reverse is fine — Track 2's
+`backend/backend/immune/net/federation_hooks.py` will import the
+`AISFederationHooks` Protocol from `backend/backend/federation/_ais_hooks.py`
+and the AIS primitives from sibling immune-platform modules.
+
+This same pattern applies to `backend/backend/privacy/` (PRV-A, pending) and
+`backend/backend/crypto/` (CRY-A, pending).
+
+### Federation Levels (per `jackpot_architecture.md` §22)
+
+| Level | Description | Track 1 Status |
+|---|---|---|
+| L1 — Query federation | DISCOVERABLE-equivalent metadata search across registered partners. No clinical metadata, no file URLs, 30-min cache. | ✅ Concrete in `client.py` |
+| L2 — De-identified hub push | Spoke instances push surveillance data nightly. FASTA presigned URL + typing + AMR + lineage + organism + date + country/state. Raw FASTQ and PII never leave the spoke. | Logic concrete in `push.py` (3 qualification gates); IO stubbed via `NotImplementedError` |
+| L3 — Bidirectional sharing | Cross-instance access requests. Reuses the existing internal `sample_access` workflow for approval. Files copied via presigned URL on approval. | Integration shape concrete in `access.py`; IO stubbed |
+
+### `AISFederationHooks` Protocol surface
+
+Five hooks, each tied to a specific AIS doc section and a Track 2 impl
+location under `backend/backend/immune/`. Track 1 ships with
+`NullAISFederationHooks` providing no-op safe defaults for every hook.
+
+| Hook | AIS doc ref | Track 2 impl module |
+|---|---|---|
+| `secure_aggregate(results, partner_set)` | §1.6 inter-instance signaling | `backend/backend/immune/net/federation_hooks.py` ← `backend/backend/immune/sec/cs_cyber_federated.py` |
+| `attest_partner(instance)` | §1.7 attribution & deception | `backend/backend/immune/net/federation_hooks.py` ← `backend/backend/immune/sec/` (attestation primitives, new) |
+| `detect_anomalous_traffic(query, partner)` | §1.3 innate immunity | `backend/backend/immune/net/federation_hooks.py` ← `backend/backend/immune/algorithms/featurizers/`, `backend/backend/immune/redteam/attack_federation.py` |
+| `threshold_approve(action, partner_set)` | §1.8 tolerance / regulation | `backend/backend/immune/net/federation_hooks.py` ← `backend/backend/immune/sec/` (threshold-crypto primitives, new) |
+| `validate_push_payload(payload, target)` | §1.8 tolerance ("don't attack self") | `backend/backend/immune/net/federation_hooks.py` ← `backend/backend/immune/sec/refusal.py`, `backend/backend/immune/sec/parsers_safe.py` |
+
+### Operator-agnostic policy
+
+No proper names in code, docs, or commit messages. When generating from
+strategic vision docs (`Jackpot_AIS.md`,
+`jackpot_immune_collaboration_scaffolding.md`):
+
+- Replace `TODO(forrest-collab)` markers with `TODO(immune-algorithms-collab)` keyed on directory location and expertise area
+- Replace prose like "Forrest's lane" / "Trieu's bread and butter" / "Lee-specific hooks" with structural descriptions ("AIS-theoretic expertise", "applied cryptography", "adversarial security testing")
+- Keep technical-paper citations by their conventional name; protocol names like FROST/BLS/DKG are abbreviations and stay; eponymous protocol names like "Bonawitz protocol" should be genericized to "secure aggregation protocol" with the technical concept preserved
+
+The cleanup script `scripts_jackpot/audit_proper_names.py` (sibling to repo)
+verifies a directory tree is clean before committing.
+
+### FED-B — Federation router
+
+`backend/backend/routers/federation.py` exposing the package via
+`/api/v1/federation/*`:
+
+- `GET /api/v1/federation/instances` — list registered partners (Platform Admin only)
+- `POST /api/v1/federation/instances` — register a partner (Platform Admin only)
+- `POST /api/v1/federation/search` — broadcast L1 query to enabled partners
+- `POST /api/v1/federation/push` — receive an inbound L2 payload (peer instance only)
+- `POST /api/v1/federation/access-requests` — receive an inbound L3 access request (peer instance only)
+
+Auth: federation API keys via `X-JACKPOT-Federation-Key` header for
+peer-to-peer endpoints; standard JWT for the admin-facing list/register
+endpoints.
+
+### FED-C — Tests
+
+`tests/federation/`:
+
+- `test_models.py` — Pydantic v2 shape and serialization round-trip
+- `test_client_l1.py` — `FederationClient` async fanout, hook invocation order, partner attestation rejection, anomaly detection rejection. Use `respx` to mock partner HTTP.
+- `test_push_l2.py` — qualification logic (port the smoke test cases from FED-A delivery), payload composition, negative-list enforcement
+- `test_access_l3.py` — outbound + inbound shapes, `NotImplementedError` raises where appropriate
+- `test_ais_hooks.py` — `NullAISFederationHooks` satisfies `AISFederationHooks` Protocol, all five hooks return safe defaults
+
+Coverage target: 95%+ on every module in `backend/backend/federation/`.
+
+### FED-D — Schema migration
+
+LinkML schema YAML edits first (canonical source of truth), then
+`uv run python scripts/regen_schema.py`, then Alembic autogenerate plus
+manual cleanup.
+
+New table:
+- `federated_instances` (columns per `models.py` `FederatedInstance` shape:
+  id, name, base_url, role, federation_enabled, min_sharing_level_for_federation,
+  hub_instance_url, api_key_secret_name, last_seen_at, created_at, updated_at)
+
+New columns on `organizations`:
+- `min_sharing_level_for_federation` (default `'DISCOVERABLE'`)
+- `federation_enabled` (default `false`)
+- `hub_instance_url` (nullable)
+- `federation_role` (enum: `hub`, `spoke`, `peer`, nullable)
+
+### FED-E — Wiring
+
+Register the FED-B router in `backend/backend/main.py`. Update
+`backend/backend/auth/guards.py` if a federation-key guard is needed
+(otherwise the router can validate keys inline).
+
+### Pending expansion: PRV-A and CRY-A
+
+Same scaffold pattern at `backend/backend/privacy/` and `backend/backend/crypto/`:
+
+- **PRV-A** — `coarsening.py` (consolidates host_age_range and similar generalization), `scrubber.py` (HRRT integration interface), `dlp.py` (consolidates `dlp_scanner.py`), `budget.py` (placeholder for DP budget tracking — Track 2 anchor); `_ais_hooks.py` defines `AISPrivacyHooks` Protocol with hooks for FL aggregation, DP noise injection, DP budget tracking, HE compute, MPC protocols, synthetic-data substitution.
+
+- **CRY-A** — `keys.py` (key management abstraction over PKCS#11), `signing.py` (Sigstore/cosign artifact signing interface), `crypt4gh.py` (per-file encryption for ingest/egress); `_ais_hooks.py` defines `AISCryptoHooks` Protocol with hooks for HE backend selection, threshold signing (FROST/BLS/DKG), TEE attestation evidence verification.
+
+Each scaffold is roughly 1000 lines, 7 files, 1 PR. Each adds five Track 2
+hook seams with the same `Null<X>Hooks` no-op default pattern.
+
 
 ## Phase P0h Specification — Slurm executor support
 
@@ -729,7 +858,134 @@ cluster is unreachable. For multi-tenant launches, validate optional
 **Pipeline definitions in `pipelines/`** — Audit each for an
 `apptainer` profile; add where missing. Most are nf-core-standards and
 already have one.
+## Federation Track 1 + Track 2-seam Scaffold (FED-A through FED-E)
 
+**Status:** FED-A merged 2026-05-08. FED-B through FED-E pending.
+**Lives at:** `backend/backend/federation/`
+**Ahead of:** B-FED-1 (central CA federation peer authentication) in the
+future-phases list — FED-A lands the package surface so B-FED-1 reduces
+to router + tests + migration + central CA integration on top.
+
+### Two-track architectural pattern
+
+Two parallel namespaces under `backend/backend/`:
+
+- `backend/backend/federation/` — Track 1, ships now using current JACKPOT
+  primitives (JWT, presigned URLs, the existing `can_access_sample()`
+  permission model)
+- `backend/backend/immune/` — Track 2, AIS-augmented overlays scheduled
+  per `jackpot_immune_collaboration_scaffolding.md`. Concrete implementations
+  of the Protocol seams in each Track 1 package's `_ais_hooks.py` module.
+
+The seam between tracks is dependency injection. Every Track 1 class accepts
+a `hooks=` argument defaulting to `Null<X>Hooks` (no-op). Track 2 swaps in
+concrete implementations via the same constructor argument. **No code
+changes required to Track 1 modules when Track 2 lands.**
+
+Direction of dependency is one-way: `backend/backend/federation/` never
+imports from `backend/backend/immune/`. The reverse is fine — Track 2's
+`backend/backend/immune/net/federation_hooks.py` will import the
+`AISFederationHooks` Protocol from `backend/backend/federation/_ais_hooks.py`
+and the AIS primitives from sibling immune-platform modules.
+
+This same pattern applies to `backend/backend/privacy/` (PRV-A, pending) and
+`backend/backend/crypto/` (CRY-A, pending).
+
+### Federation Levels (per `jackpot_architecture.md` §22)
+
+| Level | Description | Track 1 Status |
+|---|---|---|
+| L1 — Query federation | DISCOVERABLE-equivalent metadata search across registered partners. No clinical metadata, no file URLs, 30-min cache. | ✅ Concrete in `client.py` |
+| L2 — De-identified hub push | Spoke instances push surveillance data nightly. FASTA presigned URL + typing + AMR + lineage + organism + date + country/state. Raw FASTQ and PII never leave the spoke. | Logic concrete in `push.py` (3 qualification gates); IO stubbed via `NotImplementedError` |
+| L3 — Bidirectional sharing | Cross-instance access requests. Reuses the existing internal `sample_access` workflow for approval. Files copied via presigned URL on approval. | Integration shape concrete in `access.py`; IO stubbed |
+
+### `AISFederationHooks` Protocol surface
+
+Five hooks, each tied to a specific AIS doc section and a Track 2 impl
+location under `backend/backend/immune/`. Track 1 ships with
+`NullAISFederationHooks` providing no-op safe defaults for every hook.
+
+| Hook | AIS doc ref | Track 2 impl module |
+|---|---|---|
+| `secure_aggregate(results, partner_set)` | §1.6 inter-instance signaling | `backend/backend/immune/net/federation_hooks.py` ← `backend/backend/immune/sec/cs_cyber_federated.py` |
+| `attest_partner(instance)` | §1.7 attribution & deception | `backend/backend/immune/net/federation_hooks.py` ← `backend/backend/immune/sec/` (attestation primitives, new) |
+| `detect_anomalous_traffic(query, partner)` | §1.3 innate immunity | `backend/backend/immune/net/federation_hooks.py` ← `backend/backend/immune/algorithms/featurizers/`, `backend/backend/immune/redteam/attack_federation.py` |
+| `threshold_approve(action, partner_set)` | §1.8 tolerance / regulation | `backend/backend/immune/net/federation_hooks.py` ← `backend/backend/immune/sec/` (threshold-crypto primitives, new) |
+| `validate_push_payload(payload, target)` | §1.8 tolerance ("don't attack self") | `backend/backend/immune/net/federation_hooks.py` ← `backend/backend/immune/sec/refusal.py`, `backend/backend/immune/sec/parsers_safe.py` |
+
+### Operator-agnostic policy
+
+No proper names in code, docs, or commit messages. When generating from
+strategic vision docs (`Jackpot_AIS.md`,
+`jackpot_immune_collaboration_scaffolding.md`):
+
+- Replace `TODO(forrest-collab)` markers with `TODO(immune-algorithms-collab)` keyed on directory location and expertise area
+- Replace prose like "Forrest's lane" / "Trieu's bread and butter" / "Lee-specific hooks" with structural descriptions ("AIS-theoretic expertise", "applied cryptography", "adversarial security testing")
+- Keep technical-paper citations by their conventional name; protocol names like FROST/BLS/DKG are abbreviations and stay; eponymous protocol names like "Bonawitz protocol" should be genericized to "secure aggregation protocol" with the technical concept preserved
+
+The cleanup script `scripts_jackpot/audit_proper_names.py` (sibling to repo)
+verifies a directory tree is clean before committing.
+
+### FED-B — Federation router
+
+`backend/backend/routers/federation.py` exposing the package via
+`/api/v1/federation/*`:
+
+- `GET /api/v1/federation/instances` — list registered partners (Platform Admin only)
+- `POST /api/v1/federation/instances` — register a partner (Platform Admin only)
+- `POST /api/v1/federation/search` — broadcast L1 query to enabled partners
+- `POST /api/v1/federation/push` — receive an inbound L2 payload (peer instance only)
+- `POST /api/v1/federation/access-requests` — receive an inbound L3 access request (peer instance only)
+
+Auth: federation API keys via `X-JACKPOT-Federation-Key` header for
+peer-to-peer endpoints; standard JWT for the admin-facing list/register
+endpoints.
+
+### FED-C — Tests
+
+`tests/federation/`:
+
+- `test_models.py` — Pydantic v2 shape and serialization round-trip
+- `test_client_l1.py` — `FederationClient` async fanout, hook invocation order, partner attestation rejection, anomaly detection rejection. Use `respx` to mock partner HTTP.
+- `test_push_l2.py` — qualification logic (port the smoke test cases from FED-A delivery), payload composition, negative-list enforcement
+- `test_access_l3.py` — outbound + inbound shapes, `NotImplementedError` raises where appropriate
+- `test_ais_hooks.py` — `NullAISFederationHooks` satisfies `AISFederationHooks` Protocol, all five hooks return safe defaults
+
+Coverage target: 95%+ on every module in `backend/backend/federation/`.
+
+### FED-D — Schema migration
+
+LinkML schema YAML edits first (canonical source of truth), then
+`uv run python scripts/regen_schema.py`, then Alembic autogenerate plus
+manual cleanup.
+
+New table:
+- `federated_instances` (columns per `models.py` `FederatedInstance` shape:
+  id, name, base_url, role, federation_enabled, min_sharing_level_for_federation,
+  hub_instance_url, api_key_secret_name, last_seen_at, created_at, updated_at)
+
+New columns on `organizations`:
+- `min_sharing_level_for_federation` (default `'DISCOVERABLE'`)
+- `federation_enabled` (default `false`)
+- `hub_instance_url` (nullable)
+- `federation_role` (enum: `hub`, `spoke`, `peer`, nullable)
+
+### FED-E — Wiring
+
+Register the FED-B router in `backend/backend/main.py`. Update
+`backend/backend/auth/guards.py` if a federation-key guard is needed
+(otherwise the router can validate keys inline).
+
+### Pending expansion: PRV-A and CRY-A
+
+Same scaffold pattern at `backend/backend/privacy/` and `backend/backend/crypto/`:
+
+- **PRV-A** — `coarsening.py` (consolidates host_age_range and similar generalization), `scrubber.py` (HRRT integration interface), `dlp.py` (consolidates `dlp_scanner.py`), `budget.py` (placeholder for DP budget tracking — Track 2 anchor); `_ais_hooks.py` defines `AISPrivacyHooks` Protocol with hooks for FL aggregation, DP noise injection, DP budget tracking, HE compute, MPC protocols, synthetic-data substitution.
+
+- **CRY-A** — `keys.py` (key management abstraction over PKCS#11), `signing.py` (Sigstore/cosign artifact signing interface), `crypt4gh.py` (per-file encryption for ingest/egress); `_ais_hooks.py` defines `AISCryptoHooks` Protocol with hooks for HE backend selection, threshold signing (FROST/BLS/DKG), TEE attestation evidence verification.
+
+Each scaffold is roughly 1000 lines, 7 files, 1 PR. Each adds five Track 2
+hook seams with the same `Null<X>Hooks` no-op default pattern.
 ### Key rules
 
 - Cluster-bound runs must work whether or not compute nodes can reach

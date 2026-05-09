@@ -1,9 +1,9 @@
 # JACKPOT — To-Do List
 
-**Last updated:** 2026-05-06 (post-R3 doc/tracking hygiene)
+**Last updated:** 2026-05-08 (federation Track 1 + Track 2-seam scaffold landed; regen_schema in-repo with whitespace normalization; gac pre-fix step)
 **Baseline:** **1591 tests passing, 2 skipped** (verified 2026-05-06 via `uv run pytest --no-cov -q` against `r3-doc-and-tracking-hygiene` based at `2609a1f`). Coverage 87.85% per PR #28 closeout (re-measure with `uv run pytest --cov` if needed; CI threshold 80%). PR #28 (P0g G-3+G-4) reported 1527 passing post-merge; subsequent R-1 security fixes (PR #31) brought the count to its current state.
-**Sessions 21+ deliverables:** PR #21 (P0g G-1+G-2: `ExecutionProfile` + `PipelineDefaultProfile` schema + migration with `default-local` seed; merged 2026-05-04 at `a682788`). PR #22 (P1: `/api/v1/auth/refresh` endpoint with single-use rotation, `refresh_tokens` table, replay detection with bulk-revoke, rotation-aware login/logout, daily cleanup job, six error codes; merged 2026-05-05 at `ba03143` — closes the I-track entirely). PR #23 (docs: bundle refresh to v4.0 covering Session 20 I-track close). PR #25 (chore: pin ruff at 0.11.6 across pre-commit, backend, cli, uv.lock — permanent fix for the recurring CI ruff-version mismatch that bit PRs #21 and #22 on first runs). PR #26 (docs: governance README + coi-disclosures stub on top of the 8 substantive governance docs already on origin from `f46f7ee`; merged 2026-05-05 at `2dbb839` along with an accidentally-bundled Sessions 21+ doc refresh that came along from local development state). PR #27 (docs: post-Session-21 housekeeping — `uv run pre-commit` prefix, **Critical Rule 61** worktree+branch verification, spec.md §4.1 fix #5 resolution; merged at `c7df002`). PR #28 (P0g G-3+G-4: profile templates + `nextflow.config` renderer + `pipeline_config/` package refactor + 35 new tests; merged at `544c98c` — 1527 tests, 87.85% coverage). PR #29 (docs: defer Phase 24.5 external collaborator review per option β / scope c — NPAIHB/Northwest TEC/B-CARE-6 references stripped from `todo.md` + session summary + `cdc_dmi_stlt` overview). See Sessions 21+ entries in `jackpot_session_summary_and_backlog.md` and the recovery saga learnings in `learnings.md` ("Worktree contamination — Sessions 20-21" entry).
-**Active sprint:** Next phase is the maintainer's call. With I-track + P0g G-1 through G-4 + P1 + R-1/R-2/R-3 closeout done, the natural candidates are: (a) **Phase P0g G-5** (profiles CRUD endpoints — operators can use the renderer/resolver from PR #28 but can't manage profiles via API yet; closing this gap unblocks the legacy GCP-Batch path deletion); (b) **Phase 24.5 design lockdown (solo, option β)** — finalize sovereignty-deletion design without external review since collaborator review was deferred 2026-05-05; once locked, P0b unblocks; (c) **Performance and cleanup follow-ups from /ultrareview Batch D** — see the dedicated section below; (d) **Phase 24.7 / P0f BYOP infrastructure** for B-BYOP-1 through B-BYOP-10. Architectural sequence remains: Phase 24.5 (sovereignty + BYOP design lockdown) → P0f (BYOP infrastructure) → P0b (Schema v5.0) → P0c (multi-tenancy middleware + sovereignty deletion) → P1 broader auth-architecture review (rest of P1 — session-management UI, refresh-token-family tracking, etc.) → P2+.
+**Sessions 21+ deliverables:** PR #21 (P0g G-1+G-2: `ExecutionProfile` + `PipelineDefaultProfile` schema + migration with `default-local` seed; merged 2026-05-04 at `a682788`). PR #22 (P1: `/api/v1/auth/refresh` endpoint with single-use rotation, `refresh_tokens` table, replay detection with bulk-revoke, rotation-aware login/logout, daily cleanup job, six error codes; merged 2026-05-05 at `ba03143` — closes the I-track entirely). PR #23 (docs: bundle refresh to v4.0 covering Session 20 I-track close). PR #25 (chore: pin ruff at 0.11.6 across pre-commit, backend, cli, uv.lock — permanent fix for the recurring CI ruff-version mismatch that bit PRs #21 and #22 on first runs). PR #26 (docs: governance README + coi-disclosures stub on top of the 8 substantive governance docs already on origin from `f46f7ee`; merged 2026-05-05 at `2dbb839` along with an accidentally-bundled Sessions 21+ doc refresh that came along from local development state). PR #27 (docs: post-Session-21 housekeeping — `uv run pre-commit` prefix, **Critical Rule 61** worktree+branch verification, spec.md §4.1 fix #5 resolution; merged at `c7df002`). PR #28 (P0g G-3+G-4: profile templates + `nextflow.config` renderer + `pipeline_config/` package refactor + 35 new tests; merged at `544c98c` — 1527 tests, 87.85% coverage). PR #29 (docs: defer Phase 24.5 external collaborator review per option β / scope c — NPAIHB/Northwest TEC/B-CARE-6 references stripped from `todo.md` + session summary + `cdc_dmi_stlt` overview). **This session (2026-05-08):** Federation Track 1 + Track 2-seam scaffold landed at `backend/backend/federation/` (FED-A — `models.py`, `client.py`, `push.py`, `access.py`, `_ais_hooks.py` Protocol seam, README; operator-agnostic). `scripts/regen_schema.py` moved into the repo with trailing-whitespace normalization for both Python and JSON outputs (T-1). `.pre-commit-config.yaml` `schema-regen-check` hook added, fires only on schema YAML changes (T-2). `gac()` zsh function pre-fix step added (T-3, personal config in `~/.zshrc`). Federation router + tests + migration (FED-B/C/D/E) plus privacy and crypto scaffold counterparts (PRV-A, CRY-A) tracked in the new "Federation / Privacy / Crypto Scaffolds" section below. See Sessions 21+ entries in `jackpot_session_summary_and_backlog.md` and the recovery saga learnings in `learnings.md` ("Worktree contamination — Sessions 20-21" entry).
+**Active sprint:** Next phase is the maintainer's call. With I-track + P0g G-1 through G-4 + P1 + R-1/R-2/R-3 closeout done, the natural candidates are: (a) **Phase P0g G-5** (profiles CRUD endpoints — operators can use the renderer/resolver from PR #28 but can't manage profiles via API yet; closing this gap unblocks the legacy GCP-Batch path deletion); (b) **Phase 24.5 design lockdown (solo, option β)** — finalize sovereignty-deletion design without external review since collaborator review was deferred 2026-05-05; once locked, P0b unblocks; (c) **Performance and cleanup follow-ups from /ultrareview Batch D** — see the dedicated section below; (d) **Phase 24.7 / P0f BYOP infrastructure** for B-BYOP-1 through B-BYOP-10; (e) **Federation wire-up (FED-B/C/D/E)** — schema migration, tests, router, and `main.py` wiring on top of the FED-A scaffold delivered 2026-05-08; (f) **Privacy scaffold (PRV-A)** at `backend/backend/privacy/` — same pattern as FED-A with FL/DP/HE/MPC AIS hook seams; (g) **Crypto scaffold (CRY-A)** at `backend/backend/crypto/` — same pattern with HE/threshold/attestation AIS hook seams. Architectural sequence remains: Phase 24.5 (sovereignty + BYOP design lockdown) → P0f (BYOP infrastructure) → P0b (Schema v5.0) → P0c (multi-tenancy middleware + sovereignty deletion) → P1 broader auth-architecture review (rest of P1 — session-management UI, refresh-token-family tracking, etc.) → P2+. The Federation/Privacy/Crypto scaffold work is ahead-of-schedule relative to B-FED-1 / B-PRV-1 / B-CRY-1 — see "Federation / Privacy / Crypto Scaffolds" section below.
 
 
 **Priority shift (2026-04-28):** With CARE Principles, STLT alignment, and DMI/North Star analysis in scope, several items that were "Year 2 stretch" deserve to land *during* P0d (governance docs, deploy guide reorganization, layer-cake framing) because P0d is already touching exactly those files. The architectural design for delete-on-request (B-CARE-3) is now **Phase 24.5** — must lock in *before* P0b schema work to avoid retrofit.
@@ -181,7 +181,11 @@ The P1 + P0g G-1+G-2 + ruff-pin work surfaced these small follow-up items. None 
 
 - [ ] **Fix `uv run pre-commit` prefix in CLAUDE.md ruff section.** The "ruff version is pinned across three sources of truth" section added in PR #25 documents the post-bump ritual as bare `pre-commit clean` etc. — but pre-commit isn't on global PATH in this environment (lives inside the uv environment, same shape as ruff). Should be `uv run pre-commit clean`, `uv run pre-commit install --install-hooks`, `uv sync`. Tiny one-liner docs PR.
 
-- [ ] **Update `gac` zsh function** to prefer pre-commit over `uv run ruff` directly. Current order: global `ruff` → `uv run ruff` → (no pre-commit fallback). Recommended order: pre-commit (global or `uv run`) first, since pre-commit is what CI runs. Aligns local formatting with CI exactly. Lives in `~/.zshrc`, not the repo — Glen-side change.
+- [x] **`scripts/regen_schema.py` in-repo with whitespace normalization (T-1).** Closed 2026-05-08. Script moved from sibling-only `/Users/glen/Projects/scripts_jackpot/regen_schema.py` to in-repo `scripts/regen_schema.py` for CI / pre-commit reachability. Added trailing-whitespace stripping per line on both the Pydantic output (`backend/backend/models_generated.py`) and the JSON Schema output (`schema/schema/jackpot_schema.json`) so `--check` mode no longer false-positives on whitespace-only drift between fresh regen and the pre-commit-normalized committed copy. Plus 8 ruff lint fixes (E501 ×6, N806, SIM103, UP015, F541 ×3) — script is now ruff-clean. Sibling copy retained as dev-time tooling for cross-repo work.
+
+- [x] **`.pre-commit-config.yaml` `schema-regen-check` hook (T-2).** Closed 2026-05-08. New `local` hook that runs `python3 scripts/regen_schema.py --check --quiet` whenever `schema/schema/jackpot_schema.yaml` is staged. Catches drift between the LinkML source and the committed `models_generated.py` / `jackpot_schema.json` artifacts before commit. Idempotent — safe to run on every pre-commit invocation since it short-circuits when the YAML wasn't touched.
+
+- [x] **Update `gac` zsh function (T-3).** Closed 2026-05-08; updated function in Glen's `~/.zshrc`. Adds a pre-fix step that runs `uv run ruff check --fix --exit-zero` + `uv run ruff format` BEFORE pre-commit, so the "files were modified by this hook" failure mode no longer fires on auto-fixable issues. Pre-commit then runs as a verification pass against already-fixed code. Fallback branch (direct `ruff` if pre-commit unavailable) retained from the original. Lives in `~/.zshrc`, not the repo — Glen-side change, but the canonical version is worth folding into `docs/dev_workflow.md` so other contributors can pick it up.
 
 - [ ] **GitHub branch protection setup.** Now that CI tests are stable across the I-track + P0g + P1, add the test-suite check as a required status check on `main` and `development` in GitHub Settings. Belt-and-suspenders against accidentally-merged broken builds.
 
@@ -1878,7 +1882,7 @@ The "broader auth-architecture review" mentioned in P0e C.5 is intentionally not
 - [ ] **Multi-factor authentication** — not auth-architecture work proper.
 - [ ] **New auth providers** (OIDC, SAML) — Google OAuth only in v1 still.
 - [ ] **API-token rotation** (`routers/tokens.py` API-key flow) — separate from auth tokens; not touched in P1.
-- [ ] **B-FED-1**: central CA infrastructure for federation peer authentication. Per P0e C.5 deferral, gates on federation network growth. Phase placement: P1 or later.
+- [ ] **B-FED-1**: central CA infrastructure for federation peer authentication. Per P0e C.5 deferral, gates on federation network growth. Phase placement: P1 or later. **Federation Track 1 + Track 2-seam scaffold (FED-A) landed ahead of schedule 2026-05-08** at `backend/backend/federation/`; B-FED-1 reduces to the central CA integration overlay on top of FED-B/C/D/E (router / tests / migration / wiring — see "Federation / Privacy / Crypto Scaffolds" section below).
 
 ### Phase P1 success criterion
 
@@ -1887,6 +1891,120 @@ The "broader auth-architecture review" mentioned in P0e C.5 is intentionally not
 - [x] No regressions in I-track behavior
 - [x] Audit log records refresh / replay / logout events
 - [x] Spec.md ⚠️ note on §13 fix #5 can be removed in a follow-up docs pass
+
+---
+
+## Federation / Privacy / Crypto Scaffolds (Track 1 + Track 2-seam) — NEW 2026-05-08
+
+**Source:** Strategic framing locked this session: build federation, privacy, and encryption Track 1 implementations while in parallel scaffolding the AIS-augmented Track 2 hook seams so future research-collaboration work can plug in via dependency injection rather than forking each module. Anchor docs: `Jackpot_AIS.md` and `jackpot_immune_collaboration_scaffolding.md`.
+
+**Architectural pattern:** two parallel namespaces under `backend/backend/`:
+
+- `backend/backend/federation/`, `backend/backend/privacy/`, `backend/backend/crypto/` — Track 1, ships now using current JACKPOT primitives (JWT, presigned URLs, existing `can_access_sample()` permission model, existing scrubber, existing DLP)
+- `backend/backend/immune/` — Track 2, AIS-augmented overlays scheduled per `jackpot_immune_collaboration_scaffolding.md`. Concrete implementations of the Protocol seams in each Track 1 package's `_ais_hooks.py` module
+
+The seam between tracks is dependency injection. Every Track 1 class accepts a `hooks=` argument defaulting to a `Null<X>Hooks` no-op. Track 2 swaps in concrete implementations via the same constructor argument — **no code changes required to Track 1 modules when Track 2 lands.** Direction of import is one-way: Track 1 packages never import from `backend/backend/immune/`.
+
+This work is **ahead-of-schedule** relative to B-FED-1 / B-PRV-1 / B-CRY-1 in the post-P0h future-phases pipeline. The scaffold lands the package surfaces now so the official phases reduce to wire-up + immune-overlay work when they schedule.
+
+**Operator-agnostic policy:** no proper names anywhere in scaffold code, docs, or commit messages. When generating from `Jackpot_AIS.md` or `jackpot_immune_collaboration_scaffolding.md`, replace collaborator-name references (`TODO(forrest-collab)`, "Forrest's lane", etc.) with structural descriptors (`TODO(immune-algorithms-collab)`, "AIS-theoretic expertise"). Eponymous protocol names like "Bonawitz protocol" → "secure aggregation protocol" with the technical concept preserved. Standard cryptographic abbreviations (FROST, BLS, DKG) stay. The cleanup script `scripts_jackpot/audit_proper_names.py` (sibling to repo) verifies a directory is clean before committing.
+
+### FED-A: Federation scaffold (COMPLETE 2026-05-08)
+
+- [x] **`backend/backend/federation/` package landed.** Seven files:
+    - `__init__.py` — public API exports
+    - `README.md` — Track 1/2 plan, hook→AIS-doc mapping, integration with `backend/backend/immune/`
+    - `models.py` — Pydantic v2 models: `FederatedInstance`, `FederationRole` enum (hub/spoke/peer), `FederationQuery`, `FederationQueryResult`, `FederationPushPayload`, `FederationAccessRequest`
+    - `client.py` — `FederationClient` for Level 1 query federation. Concrete async fanout via `httpx`, per-partner attestation hook, anomaly-detection hook, secure-aggregate wrap on results. Async context manager.
+    - `push.py` — `FederationPushJob` for Level 2 hub push. Qualification logic concrete (3 gates from `jackpot_architecture.md` §22: surveillance_relevant, sharing_level ≥ minimum, quality_status ≥ ANALYZABLE); IO stubbed via `NotImplementedError`. Payload schema enforces the negative list (no host_age, no FASTQ, no PII) by NEVER reading those fields.
+    - `access.py` — `FederationAccessGateway` for Level 3 bidirectional access. Outbound + inbound integration shapes concrete; reuses existing internal `sample_access` workflow for approval. IO stubbed.
+    - `_ais_hooks.py` — `AISFederationHooks` Protocol (`@runtime_checkable`) with five hooks plus `NullAISFederationHooks` no-op default. Each hook documented with AIS doc section reference, Track 2 impl module location, and expertise area needed.
+- [x] **Five `AISFederationHooks` Protocol entry points:**
+
+| Hook | AIS doc ref | Track 2 impl module |
+|---|---|---|
+| `secure_aggregate(results, partner_set)` | §1.6 inter-instance signaling | `backend/backend/immune/net/federation_hooks.py` ← `backend/backend/immune/sec/cs_cyber_federated.py` |
+| `attest_partner(instance)` | §1.7 attribution & deception | ← `backend/backend/immune/sec/` (attestation primitives, new module) |
+| `detect_anomalous_traffic(query, partner)` | §1.3 innate immunity | ← `backend/backend/immune/algorithms/featurizers/`, `backend/backend/immune/redteam/attack_federation.py` |
+| `threshold_approve(action, partner_set)` | §1.8 tolerance / regulation | ← `backend/backend/immune/sec/` (threshold-crypto primitives, new module) |
+| `validate_push_payload(payload, target)` | §1.8 tolerance ("don't attack self") | ← `backend/backend/immune/sec/refusal.py`, `backend/backend/immune/sec/parsers_safe.py` |
+
+- [x] **Operator-agnostic verified.** Zero proper names in package. All hook docstrings describe Track 2 impl by location + expertise area, never by collaborator name. Eponymous protocol names genericized.
+- [x] **Smoke tests pass.** `NullAISFederationHooks` satisfies `AISFederationHooks` Protocol via `runtime_checkable`. All three Track 1 classes (`FederationClient`, `FederationPushJob`, `FederationAccessGateway`) construct with default null hooks. `FederationPushJob.is_qualifying_sample()` correctly returns True/False across 5 boundary cases.
+
+### FED-D: Schema migration (PENDING)
+
+- [ ] **`federated_instances` table.** Columns per `models.py` `FederatedInstance` shape: `id` (UUID PK), `name`, `base_url`, `role` (enum: hub / spoke / peer), `federation_enabled` (default false), `min_sharing_level_for_federation` (default `'DISCOVERABLE'`), `hub_instance_url` (nullable), `api_key_secret_name`, `last_seen_at` (nullable), `created_at`, `updated_at`.
+- [ ] **New columns on `organizations`:** `min_sharing_level_for_federation`, `federation_enabled`, `hub_instance_url`, `federation_role`.
+- [ ] **Workflow:** LinkML schema YAML edits first → `uv run python scripts/regen_schema.py` → Alembic autogenerate → manual cleanup. Branch: `b1-federation-schema-migration`.
+
+### FED-C: Tests (PENDING)
+
+- [ ] **`tests/federation/` test files:**
+    - `test_models.py` — Pydantic v2 shape and serialization round-trip
+    - `test_client_l1.py` — `FederationClient` async fanout, hook invocation order, partner attestation rejection, anomaly detection rejection. Use `respx` to mock partner HTTP.
+    - `test_push_l2.py` — qualification logic (port the 5 smoke-test cases from FED-A delivery), payload composition, negative-list enforcement
+    - `test_access_l3.py` — outbound + inbound shapes, `NotImplementedError` raises where appropriate
+    - `test_ais_hooks.py` — `NullAISFederationHooks` satisfies Protocol, all five hooks return safe defaults
+- [ ] **Coverage target:** ≥95% on every module in `backend/backend/federation/`. Branch: `b2-federation-tests`.
+
+### FED-B: Federation router (PENDING)
+
+- [ ] **`backend/backend/routers/federation.py`** exposing the package via:
+    - `GET /api/v1/federation/instances` — list registered partners (Platform Admin only)
+    - `POST /api/v1/federation/instances` — register a partner (Platform Admin only)
+    - `POST /api/v1/federation/search` — broadcast L1 query to enabled partners
+    - `POST /api/v1/federation/push` — receive an inbound L2 payload (peer instance only)
+    - `POST /api/v1/federation/access-requests` — receive an inbound L3 access request (peer instance only)
+- [ ] **Auth:** federation API keys via `X-JACKPOT-Federation-Key` header for peer-to-peer endpoints (validated against `federated_instances.api_key_secret_name` via Secret Manager); standard JWT + `require_platform_admin` for the admin-facing list/register endpoints. Branch: `b3-federation-router`.
+
+### FED-E: Wire router into `main.py` (PENDING)
+
+- [ ] **Register the FED-B router in `backend/backend/main.py`.**
+- [ ] **Add federation-key guard to `backend/backend/auth/guards.py`** if not validated inline. Branch: `b4-federation-wiring`.
+
+### PRV-A: Privacy scaffold (PENDING — same pattern as FED-A)
+
+- [ ] **`backend/backend/privacy/` package** mirroring federation's shape:
+    - `__init__.py`, `README.md`, `_ais_hooks.py` (Track 2 seam: `AISPrivacyHooks` Protocol + `NullAISPrivacyHooks` no-op default)
+    - `coarsening.py` — Track 1: consolidates `host_age_range` and similar generalization-based privacy primitives that already ship
+    - `scrubber.py` — Track 1: HRRT (NCBI SRA Human Scrubber) integration interface, wraps the existing Nextflow scrub workflow
+    - `dlp.py` — Track 1: consolidates `dlp_scanner.py` GCP Cloud DLP integration
+    - `budget.py` — placeholder for DP budget tracking (Track 2 anchor)
+- [ ] **`AISPrivacyHooks` Protocol surface (refine in-session against AIS doc):**
+
+| Hook | AIS doc ref | Track 2 impl module |
+|---|---|---|
+| `dp_noise(query_result, sensitivity)` | §1.4 adaptive immunity | `backend/backend/immune/sec/cs_cyber_federated.py` |
+| `track_dp_budget(requester, epsilon)` | §1.8 tolerance / regulation | `backend/backend/immune/sec/` (DP budget accountant, new) |
+| `fl_aggregate(local_updates)` | §1.6 inter-instance signaling | `backend/backend/immune/sec/cs_cyber_federated.py` |
+| `he_compute(encrypted_inputs, op)` | §1.4 adaptive immunity | `backend/backend/immune/sec/he_backend.py` (new) |
+| `mpc_protocol(parties, computation)` | §1.6 inter-instance signaling | `backend/backend/immune/sec/mpc_backend.py` (new) |
+| `synthetic_substitute(real_dataset)` | §1.5 diversity layer | `backend/backend/immune/algorithms/featurizers/` |
+
+- [ ] **Estimated:** ~1000 lines, 7 files, 1 PR. Branch: `privacy-scaffold-track1-track2-seam`.
+
+### CRY-A: Crypto scaffold (PENDING — same pattern as FED-A)
+
+- [ ] **`backend/backend/crypto/` package** mirroring federation's shape:
+    - `__init__.py`, `README.md`, `_ais_hooks.py` (Track 2 seam: `AISCryptoHooks` Protocol + `NullAISCryptoHooks` no-op default)
+    - `keys.py` — Track 1: key management abstraction over PKCS#11 / Secret Manager / file-system keystores
+    - `signing.py` — Track 1: Sigstore/cosign artifact-signing interface
+    - `crypt4gh.py` — Track 1: per-file encryption for ingest/egress (Crypt4GH GA4GH standard)
+- [ ] **`AISCryptoHooks` Protocol entry points (refine in-session):** HE backend selection, threshold signing (FROST/BLS/DKG), TEE attestation evidence verification, key-rotation policy enforcement.
+- [ ] **Estimated:** ~1000 lines, 7 files, 1 PR. Branch: `crypto-scaffold-track1-track2-seam`.
+
+### Future B-FED-1 / B-PRV-1 / B-CRY-1 relationship
+
+- **B-FED-1** (in Phase P1 deferred items above) reduces to central CA integration overlay on top of FED-A scaffold + FED-B/C/D/E wire-up.
+- **B-PRV-1** (privacy hardening — DP enforcement, FL coordinator, DLP rule expansion) reduces to concrete impl of `AISPrivacyHooks` Protocol via `backend/backend/immune/sec/` once PRV-A scaffold lands.
+- **B-CRY-1** (encryption hardening — Crypt4GH ingest, threshold-signed governance actions, TEE attestation for federation peers) reduces to concrete impl of `AISCryptoHooks` Protocol via `backend/backend/immune/sec/` once CRY-A scaffold lands.
+
+### Phase Scaffolds success criterion
+
+- [x] FED-A scaffold landed with operator-agnostic verification
+- [ ] At least one of {FED-B/C/D/E wire-up, PRV-A, CRY-A} merged before the next /ultrareview pass
+- [ ] All five `AISFederationHooks` Protocol entry points still satisfied by `NullAISFederationHooks` after any future refactors (verifiable via `tests/federation/test_ais_hooks.py` once FED-C lands)
 
 ---
 
