@@ -73,6 +73,12 @@ def override_settings(test_db_url, monkeypatch):
     # not source code). Tests provide a fixture-shaped value so the legacy
     # path tests still exercise it.
     monkeypatch.setenv("GCP_PROJECT_ID", "jackpot-test")
+    # P0h H-6: disable the pre-launch Slurm reachability probe by
+    # default so the existing SLURM-profile launch suite isn't tied
+    # to having ``sinfo`` on the test runner. New H-6 tests opt back
+    # in explicitly via monkeypatch.setenv(
+    # "SLURM_REACHABILITY_CHECK_ENABLED", "true").
+    monkeypatch.setenv("SLURM_REACHABILITY_CHECK_ENABLED", "false")
     get_settings.cache_clear()
     _reset_backend()
     reset_engine()  # ← force engine rebuild with test URL
