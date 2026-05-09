@@ -1218,7 +1218,7 @@ These are not separate design work — the design exists in `jackpot_byop_and_eu
 
 - [ ] **B-RTMA-1** Reach out to the RT-MetA team about collaboration on offline-capable architecture. They're IPSN-funded and explicitly looking for collaborators. (1 email + one call, now)
 - [ ] **B-RTMA-2** Design offline-first mode for Scenario A — SQLite-only backend, optional sync-when-online to a parent instance, conflict-resolution policy. (2-3 weeks design + more for implementation, Year 2) `[architectural companion to Phase 25 / Year 2 #7 hub-and-spoke federation]`
-- [ ] **B-RTMA-3** Adopt RT-MetA's untargeted metagenomics framework as a JACKPOT pipeline-zoo entry, paired with nf-core/taxprofiler. (4-6 weeks, Year 2+)
+- [ ] **B-RTMA-3** Adopt RT-MetA's untargeted metagenomics framework as a JACKPOT pipeline-zoo entry, paired with nf-core/taxprofiler. When scoping clinical-mNGS scoring on top of taxprofiler outputs, also review HPD-Kit's NPA/NPAS scoring methodology (Que et al. 2025, `10.3389/fcimb.2025.1580165`) for the case-vs-control normalized-abundance approach — methodology only, do not vendor (Chinese database hosting + R-heavy post-processing make HPD-Kit unsuitable for JACKPOT integration). (4-6 weeks, Year 2+)
 
 ### J. GISAID-derived (overview §16.8)
 
