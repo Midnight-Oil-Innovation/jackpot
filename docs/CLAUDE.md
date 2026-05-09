@@ -414,7 +414,7 @@ Never write file parsing or pairing logic in a router.
 
 **20. `gen-pydantic` requires two steps after every run:**
 (1) Always use the `--pydantic-version 2` flag:
-    `uv run gen-pydantic --pydantic-version 2 schema/schema/jackpot_schema.yaml > backend/models_generated.py`
+    `uv run gen-pydantic --pydantic-version 2 schema/schema/jackpot_schema.yaml > backend/backend/models_generated.py`
 (2) Apply the boolean keyword patch AND trailing newline fix immediately after:
 
 ```python
