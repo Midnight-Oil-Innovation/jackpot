@@ -292,7 +292,7 @@ Drops volumes + clears scratch + brings the stack back to seed.
 ## UAT (~3–4 hours)
 
 The UAT walks every role through their capability matrix entry from
-`jackpot_architecture.md` Section 7, plus a battery of cross-cutting
+`docs/architecture/jackpot_architecture.md` Section 7, plus a battery of cross-cutting
 tests for state machines, security boundaries, and UI flows. It runs
 against a freshly reset environment plus the realistic SARS-CoV-2
 fixture set under `tests/fixtures/e2e/uat/`.
@@ -604,7 +604,7 @@ each script.
 
 ## Cross-references
 
-- `jackpot_architecture.md` Section 7 — canonical role capability
+- `docs/architecture/jackpot_architecture.md` Section 7 — canonical role capability
   matrix. Every role test case in this plan grounds in that section.
 - `spec.md` — Submissions, Credentials, P0f file references, P0g
   execution profiles, I-1 spreadsheet importer, I-2 submission

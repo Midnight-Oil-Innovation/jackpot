@@ -1430,7 +1430,7 @@ To keep scope tractable:
 | Topic | Where developed |
 |---|---|
 | BYOP pre-design (vague stretch goal) | `spec.md` Phase 25 |
-| Pipeline-zoo pattern | `jackpot_architecture.md` |
+| Pipeline-zoo pattern | `docs/architecture/jackpot_architecture.md` |
 | `pipeline_results_loader.py` (existing immutable append-only loader) | Memory + project knowledge |
 | Two PII gates | `jackpot_pathoplexus_loculus_overview.md` §9 |
 | Critical Rule 55 (operator-agnostic production code) | `CLAUDE.md` |
