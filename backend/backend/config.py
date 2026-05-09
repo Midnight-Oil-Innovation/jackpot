@@ -126,6 +126,15 @@ class Settings(BaseSettings):
     refresh_token_cleanup_interval_seconds: int = 86400
     refresh_token_retention_after_revoke_seconds: int = 2592000
 
+    # P0h H-4: sidecar Nextflow log poller.
+    # Cadence at which ``backend.log_poller.poll_cluster_run_logs``
+    # tails ``<work_dir>/runs/<run_id>/.nextflow.log`` for active
+    # cluster runs and synthesises workflow-state transitions when
+    # the weblog can't reach the API. 30 seconds matches the H-4 spec
+    # and is fast enough that a 5-minute pipeline lands its
+    # COMPLETED/FAILED state-shift inside the same business minute.
+    log_poller_interval_seconds: int = 30
+
     # I-3b: Seqsender subprocess execution.
     # Hard wall-time cap on a single Seqsender invocation. Above this
     # the executor kills the subprocess and transitions the submission
