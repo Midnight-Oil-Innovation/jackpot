@@ -1034,43 +1034,67 @@ launch or sets one.
 Many HPC clusters block outbound HTTPS from compute nodes. This
 breaks Nextflow's standard weblog mechanism, which expects to POST
 trace events to a URL during execution. JACKPOT handles this by
-treating the HTTP weblog receiver as **best-effort** and providing a
-log poller as the source of truth when reachability is uncertain.
+treating the HTTP weblog receiver as **best-effort** and running a
+log poller as the always-on fallback so cluster runs reach a
+terminal state regardless of compute-node egress policy.
 
-**Two paths, both supported:**
+**Two paths, both running concurrently:**
 
-- **HTTP weblog (default):** compute nodes POST to
-  `/api/v1/pipelines/events`. The receiver in `backend/routers/pipelines.py`
-  **never raises on errors** — Nextflow does not retry weblog
-  delivery. Receiver tolerates duplicate events idempotently on
-  `(run_id, task_id, status)`.
-- **Log poller (fallback):** when the launch profile has
-  `weblog_reachable=false`, the launch endpoint omits the weblog
-  directive from the generated `nextflow.config` and instead starts
-  an APScheduler job in `backend/pipelines/log_poller.py`. The poller
-  tails `<work_dir>/runs/<run_id>/.nextflow.log` over the shared
-  filesystem every 30 seconds, parses Nextflow's known event
-  patterns, and emits synthetic events to the same handler the HTTP
-  receiver uses.
+- **HTTP weblog (best-effort):** every rendered `nextflow.config`
+  carries a `weblog` directive pointing at
+  `/api/v1/pipelines/events`. The receiver in
+  `backend/backend/routers/pipelines.py` **never raises on errors**
+  — Nextflow does not retry weblog delivery. The receiver tolerates
+  duplicate events idempotently because `pipeline_runs.status`
+  writes are idempotent, `pipeline_tasks` upserts on `(run_id,
+  task_id)`, and the diagnostic `pipeline_events` table accepts
+  duplicate inserts. Per-task accounting (`process.submitted`,
+  `process.completed`, etc.) is weblog-only — the poller observes
+  workflow-level state but not individual task transitions.
+- **Log poller (always-on fallback):** an APScheduler job in
+  `backend/backend/log_poller.py` fires every
+  `settings.log_poller_interval_seconds` (default 30) for every run
+  in `('PENDING', 'QUEUED', 'RUNNING')` whose `work_dir` is set.
+  The poller tails `<work_dir>/runs/<run_id>/.nextflow.log` from a
+  per-run `pipeline_runs.poller_log_offset` byte position, parses
+  Nextflow's logger-prefixed start/completed/failed lines, and
+  dispatches terminal classifications through the same
+  `_handle_workflow_complete` codepath the receiver uses (so result
+  loading runs once whether the trigger came through HTTP or
+  polling). No flag gates the poller — it runs unconditionally;
+  idempotency keeps state consistent when both paths observe the
+  same event.
 
-The two paths can coexist for redundancy without duplicating writes,
-because the receiver dedups on the `(run_id, task_id, status)`
-tuple. Operators in scenario C (university research-computing
-hosted) typically run with `weblog_reachable=false` and rely solely
-on the poller; scenario B operators with their own server typically
-run with `weblog_reachable=true`.
+**Pre-launch reachability gate:** the launch endpoint runs
+`sinfo -h` on the API host before queueing a SLURM-targeted run
+(via `backend/backend/pipeline_config/cluster_reachability.py`).
+Failure surfaces as 400 `SLURM_UNREACHABLE` with a pointer to
+`jackpot doctor slurm --check-cluster`. Reachability is cached per
+`(account, partition)` for 60 seconds so bulk launches don't spawn
+50 subprocesses; tests opt out via
+`settings.slurm_reachability_check_enabled = False`.
 
 **For multi-tenant scenario C deployments**, per-launch
 `launch_account` overrides (which Slurm account to charge) must be
 validated against the user's lab memberships via the P0c
-multi-tenancy guard. Never trust `launch_account` from the request
-body alone.
+multi-tenancy guard. Today's launch_account flow is a P0c stub:
+the override is accepted verbatim and an
+`SLURM_LAUNCH_ACCOUNT_OVERRIDE` audit row captures actor + before
+(profile default) + after (override value) so a P0c-aware audit
+review can retroactively flag overrides that would have been
+rejected. Never trust `launch_account` from the request body alone
+once P0c lands.
 
-**Related schema:** `execution_profiles.config_overrides`
-(`weblog_reachable` boolean for Slurm/PBS/LSF profiles).
+**Related schema:** `pipeline_runs.poller_log_offset` (per-run
+poller byte position), `execution_profiles.config_overrides`
+(Slurm-specific knobs in JSONB).
 
 **Related backlog:** Phase P0h in `todo.md`,
-`backend/pipelines/log_poller.py`, `backend/pipelines/cluster_health.py`.
+`backend/backend/log_poller.py`,
+`backend/backend/pipeline_config/cluster_reachability.py`,
+`backend/backend/pipeline_config/profile_validation.py`,
+`cli/jackpot/cli/doctor.py`. See `docs/slurm_executor.md` for the
+operator-facing setup guide.
 
 ---
 
