@@ -1224,6 +1224,36 @@ These are not separate design work — the design exists in `jackpot_byop_and_eu
 
 - [ ] **B-GISAID-1** When exporting a dataset, auto-generate a structured Acknowledgments block citing each originating lab, sample IDs, and submission dates. Format aligned with Nature/PHA4GE recommended citation conventions. (1-2 sessions, any)
 
+### K. 2026-05-09 strategic assessment — wholesale & build candidates
+
+- [ ] **B-MPAS-1** Vendor MPAS / `CDCgov/tick_surveillance` pipeline as jackpot-nf submodule. Apache-2.0+CC0, Nextflow DSL2 nf-core layout. Adds wrapper.nf + parser.py + new `vector_amplicon_results` result type. Closes the vector-borne tick amplicon coverage gap (Borrelia/Babesia/Anaplasma/Ehrlichia from Ixodes ticks). Maintenance signal modest (23 commits, 3 stars/forks); confirm with 30-min spike before committing. (1 session, Phase 25 stretch / Month 3) `[2026-05-09 assessment Tier A]`
+- [ ] **B-VRK-1** Build JACKPOT-native ONT-only bacterial outbreak Nextflow pipeline based on Vereecke et al. JCM 2025 protocol (`10.1128/jcm.00664-25`). NO upstream repo exists — paper provides validated recipe (dorado sup@v5.0.0 + error correction + bacterial polish → Flye → pyMLST cgMLST). Validate against PRJNA1255637. New `cgmlst_outbreak_results` result type. **Hard-blocked on GPU infra decision** (dorado is GPU-required; JACKPOT GCP Batch is x86 CPU). (4-6 pipeline sessions + 1-2 GPU-infra sessions = 5-8 total, Phase 26 / Year 2) `[2026-05-09 assessment Tier B-build]`
+
+### L. 2026-05-09 strategic assessment — companion-tool integrations (BYO model)
+
+- [ ] **B-PAREX-1** PaREx companion-tool wrapper for P. aeruginosa resistome analysis. Source: `https://github.com/ARPBIGIDISBA/PaREx`. **License: CC-BY-NC-SA 4.0 — incompatible with AGPL-3.0 vendoring**, so BYO-only model. Operator installs PaREx separately under academic-use terms; JACKPOT contributes Nextflow wrapper + CSV parser + new `pseudomonas_resistome_results` result type. Covers 221 chromosomal genes + PDC analyzer + OprD integrity, fills mutation-driven AMR gap that hAMRonization-normalized pipelines miss. Opt-in via `PAREX_ENABLED=true`, organism-gated to P. aeruginosa. (1-1.5 sessions, Phase 26 opt-in) `[2026-05-09 assessment Tier C-companion]`
+
+### M. 2026-05-09 strategic assessment — pattern-only adoptions
+
+- [ ] **B-DUO-1** Weekly genomic-epi notebook scaffolding pattern. Source: CoVaRR-NET Duotang (RMarkdown/Quarto) → port to Python (Jupyter/Streamlit) per JACKPOT's Python+Bash stance. Parameterized organism/date-range/lab notebook template at `templates/weekly_genomic_epi.ipynb`, calls JACKPOT API for sample retrieval + lineage abundance pull, HTML output for stakeholder reports. APScheduler-driven render schedule. (1.5 sessions, any) `[2026-05-09 assessment Tier C-pattern]`
+- [ ] **B-MARTI-1** Real-time progressive analysis UX pattern for ONT pipelines. Source patterns: MARTi (MIT) + MMonitor. Add WebSocket endpoint at `/api/v1/pipelines/{run_id}/progressive`, "emit-while-running" Nextflow process annotation, Streamlit auto-refresh on sample detail page during RUNNING state, "live" indicator on samples table. Architecturally distinct from JACKPOT's current finalize-then-parse model — requires parallel progressive-results channel. (2 sessions infra + 1 session per progressive-aware pipeline retrofit, Phase 26+) `[2026-05-09 assessment Tier C-pattern]`
+- [ ] **B-WW-1** Wastewater lineage-abundance dashboard. Source patterns: NICD-Wastewater-Genomics + andersen-lab/sd_ww_processing (Freyja-based). JACKPOT already lands Freyja outputs in `wastewater_lineage_abundance` result type — this adds the operator-facing visualization layer. Streamlit page with stacked-area lineage trajectories per sampling site, project/lab-membership filters, PNG/PDF export. (1.5 sessions, any) `[2026-05-09 assessment Tier C-pattern]`
+- [ ] **B-NFTHEIA-1** Comparison spike: `theiagen/nf-theia` Nextflow plugin vs `nf-jackpot`. Both target file-tracking/reporting but with different scope (nf-theia adds multi-cloud storage abstraction + per-process JSON reports). Read source, write `docs/nf-theia-vs-nf-jackpot.md` feature comparison, selectively port useful features. (0.5 session, opportunistic) `[2026-05-09 assessment Tier C-pattern]`
+
+### Items intentionally NOT added (from 2026-05-09 assessment Tier D)
+
+The following projects from the 2026-05-09 assessment were considered and rejected. Recording here so future sessions don't re-litigate:
+
+- **Theiagen `mercury`** — overlaps with existing TOSTADAS NCBI/GISAID submission integration.
+- **Theiagen `tbp-parser`** — overlaps with existing tb-profiler parser in jackpot-nf.
+- **Theiagen full WDL workflows wholesale** — duplicates existing zoo coverage; blocks on Cromwell stack.
+- **TAXAPRO** — subsumed by nf-core/taxprofiler.
+- **HAVoC** — subsumed by viralrecon.
+- **VarFind** — JACKPOT already has fixture-based parser tests with real pipeline outputs.
+- **Cluster-Tracker / transmission-cluster pattern** — already covered by `B-EB-2` (JACKPOT-HC hierarchical clustering) + `B-SOLU-2` (continuous surveillance cluster computation) + `B-NCBI-3` (mint cluster accessions). No new item needed.
+- **eDNAFlow, metaGOflow, SIMON, News-EDS, VA COVID-19 NLP** — out of scope (environmental biodiversity, marine, generic ML, news NLP, VHA EHR-specific).
+- **Jovian wholesale Year 1** — deferred to Year 2 once Snakemake adapter lands. AGPLv3 license is a positive Year 2 signal; tracked as a Year 2 backlog item, not Phase 26.
+
 ### Phase 26 quick-win priority order (from overview §16.9)
 
 If grabbing low-effort high-ROI items between sprints:
@@ -1231,8 +1261,11 @@ If grabbing low-effort high-ROI items between sprints:
 1. **B-PW-1** Speciator (1 session) — bacterial species ID is foundational
 2. **B-PW-2** MLST/cgMLST (1-2 sessions) — closes a major bacterial gap
 3. **B-PW-3** AMR libraries vendored (1 session) — curated reference data
-4. **B-GS-2** URL-encoded query state (1-2 sessions) — shareable views
-5. **B-GISAID-1** Auto-Acknowledgments on export (1-2 sessions) — submission-incentive loop
+4. **B-MPAS-1** MPAS / tick_surveillance vendor (1 session) — closes vector-borne amplicon gap, well-scoped Tier A
+5. **B-GS-2** URL-encoded query state (1-2 sessions) — shareable views
+6. **B-GISAID-1** Auto-Acknowledgments on export (1-2 sessions) — submission-incentive loop
+7. **B-WW-1** Wastewater lineage-abundance dashboard (1.5 sessions) — leverages existing Freyja outputs in result schema
+8. **B-NFTHEIA-1** nf-theia comparison spike (0.5 session) — opportunistic plugin improvement
 
 ---
 
@@ -2041,6 +2074,13 @@ The items below are the ones that don't fit those interstitial buckets — imple
 
 The highest-leverage items have *already moved* to Phase 21.5 (governance docs, layer-cake, deploy guides) and Phase 24.5 (sovereignty design). What's left in Phase 27 proper is a mix of larger implementation work and outreach. The one item worth doing soonest:
 
+## Operational additions — 2026-05-09 open-source data-sharing platform survey
+
+These two items came out of a 13-platform survey on 2026-05-09 (DataSHIELD/VANTAGE6/Armadillo/CDST/Cumulus/LIT-FED-SEARCH/Sample Locator/COMBAT-TB-NeoDB/Overture/FAIR Data Pipeline/Mpox DataHarmonizer/Federated GMQL/bio-Alembic). The other 11 candidates either duplicate existing strategy (FL coordinator under `B-PRV-1`, federation transport in FED-A scaffold, Crypt4GH as `B-CRY-1`, full GA4GH adoption schedule in `JACKPOT_Architecture_Synthesis___May_2026.md`) or don't fit JACKPOT's architecture. These two are genuinely additive.
+
+- [ ] **B-DH-1** Add CIDGOH/PHA4GE Mpox (MPXV) template to DataHarmonizer router. Source: PHA4GE Mpox contextual data specification, published January 2026 by the Centre for Infectious Disease Genomics and One Health (CIDGOH). Drop the spec YAML into `backend/dataharmonizer/templates/` and register it in the dataharmonizer router's template registry. Verify roundtrip: download blank Mpox template → fill via DataHarmonizer UI → upload via `POST /api/v1/ingest/csv` → `harmonizer.py` maps MPXV-specific fields to schema columns → tier-aware validator passes. Dependencies: existing dataharmonizer router (already shipped), `harmonizer.py` mapping-config additions for any MPXV-specific fields not already in schema. License of source spec: CC-BY-4.0. (1 session, post-P0d, can land any time DataHarmonizer template work is touched)
+
+- [ ] **B-CDST-1** Evaluation spike: Coding-Sequence-Decentralized-Strain-Typing (CDST) as bacterial typing alternative for *Salmonella enterica*, *Listeria monocytogenes*, *Escherichia coli*. Source: 2025 publication; MD5-hash-of-coding-sequences typing approach, complementary to but distinct from cgMLST/HierCC (already in EnteroBase federation roadmap via `B-EBASE-1`/`B-EB-2`/`B-EB-3`). License: GPL-3.0 (callable as Nextflow subprocess — no AGPL contamination). **Privacy framing: privacy-by-friction (RefSeq dictionary attack is feasible), NOT cryptographic privacy — must not be marketed as such.** Spike scope: (1) wrap CDST as a `jackpot-nf` subworkflow or pipeline-zoo entry; (2) compare CDST allele calls against existing cgMLST results on a 50-isolate test panel covering all three pathogens; (3) measure runtime + memory vs cgMLST; (4) decision: adopt as zoo entry, hybrid (CDST as quick-look prefilter before cgMLST), or reject. Decision document at `docs/evaluations/cdst.md`. Dependencies: `jackpot-nf` subworkflow pattern (already established), test isolate panel from existing typing tests. (2-week spike, post-Phase 28 or operational backlog)
 
 The rest is implementation work that gates on P0b/c/e or Year 2.
 
