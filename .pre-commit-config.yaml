@@ -32,3 +32,12 @@ repos:
       - id: check-json
       - id: check-toml
       - id: check-merge-conflict
+  - repo: local
+    hooks:
+      - id: schema-regen-check
+        name: Check generated schema artifacts match YAML
+        entry: python3 scripts_jackpot/regen_schema.py --check --quiet
+        language: system
+        pass_filenames: false
+        files: ^schema/schema/jackpot_schema\.yaml$
+        stages: [pre-commit]
