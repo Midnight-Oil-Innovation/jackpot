@@ -2235,6 +2235,348 @@ Lower-priority for sequencing-based surveillance (most STH and filarial work is 
 
 ---
 
+## Phase IM-1 through IM-6 — Immune Platform Backlog (Tracked, Not Scheduled)
+
+**Source:** This section consolidates backlog content from three documents that previously carried duplicate item lists with three different ID schemes:
+
+- `jackpot_immune_platform_plan.md` §14 (the original "Phase 26-31" backlog with sequential numeric IDs `B-001` through `B-049`)
+- `jackpot_immune_collaboration_scaffolding_copy.md` §9.1, §9.2, §9.3 (Phase 26-collab scaffolding items, originally without IDs)
+- `jackpot_detection_landscape.md` §6 (24 component-tier adoption items in mnemonic-ID format)
+
+The consolidation rationale, full mapping of source IDs to canonical IDs, and overlap-merge decisions are documented in `backlog_consolidation_report.md`.
+
+**Phase numbering note:** The immune-plan called these phases 26-31. Every one of those numbers collides with an existing `todo.md` phase (Phase 26 = Pathoplexus comparative; Phase 27 = CDC DMI / STLT; Phase 28 = Eukaryotic pipelines). To disambiguate without renumbering existing work, the immune-platform phases are renamed `IM-1` through `IM-6`. Sub-phase `IM-N-collab` items interleave the collaboration-scaffolding work within the corresponding main phase per scaffolding §9.1.
+
+**Total effort estimate (Phase IM-1..IM-6):** ~31 weeks (~7 months full-time, ~14 months half-time alongside the active P0d–P5 sprint).
+
+---
+
+## Phase IM-1 — Immune Platform: Bio-AIS MVP + Academy Module 9 (Tracked, Not Scheduled)
+
+**Source:** `jackpot_immune_platform_plan.md` §14.2 (Phase 26 in immune-plan numbering, renamed `IM-1` to avoid collision with existing `todo.md` Phase 26 = Pathoplexus comparative). Details in immune-plan §4 (Pillar I), §10.1 (module specs). Estimated effort: ~6 weeks.
+
+**Goal:** First end-to-end NSA detector firing on real samples, plus the corresponding Academy module 9. By end of phase: a submitted sample runs through `jackpot-amand`, lands a row in `dca_priority_scores`, surfaces in the Triage UI, and is auditable end-to-end. A student completing module 9 has working starter code that compiles and runs.
+
+**Prerequisites (existing P0 bugs that must be fixed before IM-1 starts):**
+- Audit transaction-participation bug — `log_audit()` and `create_notification()` must forward `db_conn` to `execute_write()` (tracked in `jackpot_session_summary_and_backlog.md`)
+- `_handle_workflow_complete()` `conn=` TypeError — Nextflow `workflow.complete` events must not crash the pipelines router
+- Validator `BASE_REQUIRED` tier split — Glen-owned domain decision; defines what Tier-1 PRELIMINARY samples must contain
+
+### A. Schema, NSA substrate, immune-bio core (~3 weeks)
+
+- [ ] **B-IMMUNE-SCHEMA-1** Schema v6.0 stub — Alembic migration adding `detectors`, `detector_activations`, `dca_priority_scores`, `memory_cells` tables. Initial landing is empty migration with table definitions but no business logic, behind a feature flag (`IMMUNE_PILLAR_I_ENABLED=false`). Forces schema design conversation early. `[quick-win — land alongside current P0d sprint]`. (1-2 sessions, P0d or after)
+
+- [ ] **B-IMMUNE-NSA-1** Implement `backend/immune/algorithms/nsa.py` — shared Negative Selection Algorithm substrate. Used by both bio-AIS (Pillar I) and cyber-AIS (Pillar V); same code, different feature spaces. Reference: `jackpot_immune_platform_plan.md` §3.1, §9.4. (3-4 sessions)
+
+- [ ] **B-IMMUNE-FEAT-1** Implement `backend/immune/algorithms/features.py` — k-mer featurizer for Pillar I, API-call featurizer stub for Pillar V. Plus a featurizer registry pattern (`backend/immune/algorithms/featurizers/__init__.py` per `jackpot_immune_collaboration_scaffolding_copy.md` §3.2.1) so the AIS-theory collaborator can plug in alternative featurizers (k-mer, ESM-small, ESM-large, DNABERT-v2) without touching core code. (2-3 sessions; the registry is what makes this collaboration-friendly per the scaffolding doc)
+
+- [ ] **B-AMAND-1** Adopt AMAnD (Price & Russell, *Frontiers in Public Health* 2023) as the canonical metagenome anomaly detector. Implementation has two layers: `backend/immune/bio/amand.py` (the bio-NSA module wrapping AMAnD's DeepSVDD model into JACKPOT's substrate) AND `pipelines/immune/amand.nf` (the Nextflow process for reproducible scans). Document the baseline-curation workflow ("what is normal for this operator's deployment context") in the Pillar IV training materials (`B-ACADEMY-9`). Detection landscape §2.c.1; immune-plan §10.1 + §13. (3 sessions pipeline-zoo + 2 weeks for the baseline-curation tooling, pipeline-zoo work + Pillar I)
+
+- [ ] **B-IMMUNE-API-1** Implement `backend/routers/immune_bio.py` — FastAPI surface for Pillar I. Endpoints: `GET /api/v1/immune/triage` (DCA-priority queue), `GET /api/v1/immune/detectors/` (active detectors), `GET /api/v1/immune/dca/{sample_id}` (per-sample priority breakdown). Reference: immune-plan §10.1.1. (2-3 sessions)
+
+- [ ] **B-LICENSE-1** Create `scripts/verify_licenses.py` — license compliance script. Validates that every wrapped OSS tool's license is documented in `THIRD_PARTY_LICENSES.md` and is AGPL-3.0-compatible. Runs in CI. Required before any wrapped-tool integration. `[quick-win — needed regardless of immune work]`. (1 session)
+
+- [ ] **B-IMMUNE-UI-1** Streamlit page — "Anomaly Triage" — lists DCA-priority samples (DCA fusion stub returning genomic-only score is fine for MVP; full DCA lands in Phase IM-2). New `frontend/pages/anomaly_triage.py`. (1-2 sessions)
+
+- [ ] **B-IMMUNE-TESTS-1** Test coverage for new code in IM-1.A. Target: 86%+ overall coverage maintained, no regression. (across the items above)
+
+### B. Detection-landscape Pillar I pipeline-zoo entries (parallel with IM-1.A)
+
+- [ ] **B-TAXTRIAGE-1** Adopt `nf-core/taxtriage` (Merritt et al., *Bioinformatics* 2026) into JACKPOT pipeline zoo as the canonical untargeted pathogen-discovery workflow. Pipeline-zoo spec file + integration with `pipeline_results_loader.py` for the pathogen-candidate output schema. Detection landscape §2.a.2. (2-3 sessions, pipeline-zoo work)
+
+- [ ] **B-NFUNO-1** Adopt nf-UnO (Guzman-Cole & Huang, *Bioinformatics* 2025) as the cohort co-assembly pipeline for outbreak novel-pathogen investigations. Wire to the dataset/cohort selection UI; outputs feed `pipeline_results`. Detection landscape §2.a.3. (2 sessions, pipeline-zoo work, after `B-TAXTRIAGE-1`)
+
+- [ ] **B-DEEPAC-1** Add DeePaC (Bartoszewicz et al. 2020) pathogenicity scoring as a post-classification step in the TaxTriage pipeline-zoo entry. Output a per-sequence pathogenicity score field on `pipeline_results` JSONB. Detection landscape §2.b.1. (1-2 sessions, after `B-TAXTRIAGE-1`)
+
+- [ ] **B-MLM-1** Adopt MLM (Baugher et al., *JHU APL Technical Digest* 2025) as the unmapped-read threat-characterization stage. Wire into the TaxTriage pipeline output (post-DeePaC) for tiered threat-class assignment. Detection landscape §2.b.2. (2 sessions, after `B-TAXTRIAGE-1` + `B-DEEPAC-1`)
+
+- [ ] **B-CGMSI-1** Add cgMSI (Zhu et al., *BMC Bioinformatics* 2023) to pipeline zoo as the nanopore strain-level detection tool. Pairs with MARTi (`B-MARTI-1`) for the real-time analysis layer. Detection landscape §2.a.5. (1-2 sessions, pipeline-zoo work)
+
+- [ ] **B-INSAFLU-1** Evaluate INSaFLU-TELEVIR (Santos et al., *Genome Medicine* 2024) for adoption: viral mNGS pipeline (TELEVIR module) into pipeline zoo; INSaFLU REST API patterns as prior art for the LAPIS-compat work (`B-LAPIS-1`). Decide whether to adopt the TELEVIR pipeline directly or fork+adapt. AGPL-licensed — clean for JACKPOT. Detection landscape §2.a.4. (1 session study + 2 sessions adoption, Year 2)
+
+- [ ] **B-KOMB-1** Study KOMB/KombOver (Balaji et al. 2022; Sapoval et al. 2024) for the community-shift detection layer of Pillar I. Pairs with `B-AMAND-1` (per-sample anomaly) for two complementary signals. Detection landscape §2.c.3. (1-2 weeks study, with `B-AMAND-1`)
+
+### C. Phase IM-1-collab — Foundational scaffolding (interleaved with IM-1.A)
+
+- [ ] **B-COLLAB-DIVERSITY-1** Implement `cli/jackpot_init/diversity_profile.py` — randomized init with depth guard. Each operator's `jackpot init` produces a different detector configuration drawn from a diversity-aware distribution; prevents the federation-wide monoculture problem. With depth guard so that diversity doesn't override sensible parameter ranges. Reference: `jackpot_immune_collaboration_scaffolding_copy.md` §3.2.2. (1 day, IM-1-collab)
+
+- [ ] **B-COLLAB-SBOM-1** Create `scripts/generate_sbom.py` (CycloneDX SBOM generator) + `.github/workflows/supply_chain.yml` (CI supply-chain gate). Generates SBOM for every release; CI fails if any wrapped dependency has CVEs above policy threshold. Required before any wrapped-tool integration. Reference: scaffolding §4.2.1, §4.2.2. (3 days, IM-1-collab)
+
+- [ ] **B-COLLAB-PARSERS-1** Implement `backend/immune/sec/parsers_safe.py` — safe deserialization helpers (re-exports `pickle.load`, `yaml.unsafe_load`, `eval` as functions that raise so accidental imports become loud errors). Add Critical Rule N to `CLAUDE.md` documenting the policy: never use unsafe deserialization on external data. Required before any wrapped-tool parsing. `[quick-win — land alongside current sprint]`. Reference: scaffolding §4.2.3, §9.3. (1 day, IM-1-collab)
+
+- [ ] **B-COLLAB-SIGSTORE-1** Set up `infra/sigstore/` — Cosign-signed container images + key management. One-time keypair generation; private key + password in GitHub Actions secrets; public key in repo for transparency. Cosign verification policy gates production deployment. Reference: scaffolding §4.2.4. (2 days, IM-1-collab)
+
+- [ ] **B-COLLAB-FRAMING-1** Land `course/modules/_meta/ais_framing.md` — Module 0 explaining why JACKPOT exists, AIS framing as the organizing principle, what makes the platform different. Module 0 sits before Module 1 in the curriculum sequence. `[quick-win — independent of any other work]`. Reference: scaffolding §9.3 QW-9. (0.5 day, IM-1-collab)
+
+### D. Academy Module 9 (parallel with IM-1.A and IM-1.B)
+
+- [ ] **B-ACADEMY-STUB-1** Land `course/modules/09-negative-selection-in-practice/` as a stub with starter code, even if production `jackpot-amand` doesn't exist yet. Students learn NSA against a stub initially; promoted to full content in `B-ACADEMY-9`. `[quick-win — land in current sprint]`. Reference: immune-plan §14.4 QW-2. (1 session, IM-1)
+
+- [ ] **B-ACADEMY-9** Full content for `course/modules/09-negative-selection-in-practice/`: README, notebook, starter code, auto-grader, upstream pointer. Covers NSA theory, AMAnD walkthrough, baseline curation workflow. Replaces `B-ACADEMY-STUB-1` once `B-AMAND-1` lands. Reference: immune-plan §10.1, §7. (3-4 sessions)
+
+### E. Synthetic data corpus
+
+- [ ] **B-SYNTH-DATA-1** Create `course/data/synthetic/` — synthetic-data corpus generated from public references via reproducible recipes. Useful for tests, Outbreak cases, module exercises. Generate at least 3 starter datasets (viral, bacterial, eukaryotic). `[quick-win — independent]`. Reference: immune-plan §14.4 QW-5. (2-3 sessions)
+
+### Phase IM-1 success criterion
+
+A submitted sample runs through `jackpot-amand`, produces a row in `dca_priority_scores`, surfaces in the Anomaly Triage UI, is auditable end-to-end via the audit log, and a contributor can complete `course/modules/09-...` with starter code that compiles and runs.
+
+---
+
+## Phase IM-2 — Immune Platform: Multi-Modal Danger Fusion + DCA in Practice (Tracked, Not Scheduled)
+
+**Source:** `jackpot_immune_platform_plan.md` §14.2 Phase 27, renamed `IM-2`. Details in immune-plan §4.3 (multi-modal danger signals — the differentiator), §10.2 (BioDendriticCell). Estimated effort: ~5 weeks.
+
+**Goal:** Multi-modal context fusion lights up. A high-priority sample with confirmed wastewater + clinical concordance shows top of triage queue with explainable contributions. This is the differentiator that distinguishes JACKPOT's Pillar I from a pure-genomics anomaly detector.
+
+### A. DCA implementation and danger signals (~3 weeks)
+
+- [ ] **B-IMMUNE-DCA-1** Implement `backend/immune/bio/dca_bio.py` — full BioDendriticCell engine. Fuses genomic anomaly score (from `B-AMAND-1`) with multi-modal danger signals (wastewater, clinical, environmental, animal). Produces `dca_priority_scores` rows with explainable contributions per Patel 2021. Reference: immune-plan §10.2. (4-5 sessions)
+
+- [ ] **B-IMMUNE-SCHEMA-2** Pydantic models in `backend/schemas/immune_bio.py` — DangerSignal, DcaPriorityScore, MultiModalContext. Wire to API surface from `B-IMMUNE-API-1`. (1-2 sessions)
+
+- [ ] **B-IMMUNE-WW-1** Wastewater signal ingestion adapter — at least one feed (NWSS or local STAB). Polls feed periodically; produces `DangerSignal` rows tagged `wastewater_concordance`. Reference: immune-plan §4.3. (3-4 sessions)
+
+- [ ] **B-IMMUNE-CLIN-1** Clinical signal ingestion ELR adapter stub. Real ELR integration is bigger (`B-CDC-1` in landscape governance work); stub for now. Stub accepts hand-curated ELR-like JSON for testing. (2-3 sessions)
+
+- [ ] **B-IMMUNE-OH-1** One-Health adapter — animal/environmental sample classes wired into DCA. Existing schema already supports the sectors (wildlife, livestock, soil, surface, food, produce, vectors); this item wires them as DangerSignal feeds for the bio-DCA. (2-3 sessions)
+
+- [ ] **B-IMMUNE-UI-2** Streamlit page — DCA breakdown view. Per-sample priority score with explainable contributions visualized (Patel 2021 explainability framework). Shows the genomic-anomaly score, each multi-modal danger signal's contribution, and the fused DCA priority. New `frontend/pages/dca_breakdown.py`. (2-3 sessions, after `B-IMMUNE-DCA-1`)
+
+### B. Danger-signal pipeline-zoo entries (parallel)
+
+- [ ] **B-EIOS-1** Document the EIOS signal-feed integration pattern for JACKPOT operators. Define the JSON-schema for incoming EIOS events and how they appear in the audit log and bio-anomaly correlation. No code yet — this is documentation work; full implementation is folded into `B-IMMUNE-DCA-1`. Detection landscape §2.f.1. (1 session documentation)
+
+- [ ] **B-MARTI-1** [REAFFIRM — already in todo.md Phase 26] Add MARTi to pipeline zoo with real-time WebSocket updates. Pillar I real-time arm; pairs with `B-CGMSI-1`. Detection landscape §2.a.6.
+
+- [ ] **B-REALTIME-1** Document and implement the JACKPOT real-time-analysis story: MARTi (`B-MARTI-1`) for nanopore metagenomics, NanoCore (`B-NANOC-1`) for nanopore outbreak typing, PathoLive (study) for Illumina real-time pathogen ID. Wire to WebSocket-driven UI updates so operators see results as the sequencer runs. Detection landscape §2.m. (3-4 sessions for the umbrella integration, after `B-MARTI-1` + `B-NANOC-1`)
+
+- [ ] **B-GRUMB-1** Study GRUMB (Aminu et al., *Bioinformatics* 2025) for the environmental metagenomics + risk-scoring layer of Pillar I. Decide: adopt directly, fork+adapt, or build alternative. Detection landscape §2.b.3. (2-3 weeks study, when Pillar I env extension begins, Year 2+)
+
+- [ ] **B-CRISPR-EBX-1** Study CRISPR-eBx (Durán-Vinet et al., *Trends in Biotechnology* 2025) as the canonical CRISPR-Dx environmental biosurveillance integration pattern for Pillar I extension to eDNA. Detection landscape §2.l.1. (1-2 weeks study, Pillar I env extension, Year 2+)
+
+### C. Phase IM-2-collab — Defensive scaffolding
+
+- [ ] **B-COLLAB-ROTATE-1** Implement `backend/immune/sec/rotation.py` — JWT key rotation, schema-version negotiation, RBAC-policy versioning. Ships dynamic-defense posture: keys/RBAC/schema rotate over time, not fixed forever. Depends on JWT infrastructure being stable (`P1` complete). Reference: scaffolding §5. (3 days, IM-2-collab)
+
+- [ ] **B-COLLAB-MUTATE-1** Implement `backend/middleware/api_surface_mutation.py` — randomized API URL prefixes per deployment instance. Different operators see different URL spaces; reduces blanket-attack effectiveness. Reference: scaffolding §5. (2 days, IM-2-collab)
+
+- [ ] **B-COLLAB-REFUSAL-1** Implement `backend/immune/sec/refusal.py` + middleware. Refusal-to-serve middleware that gates ingest based on declared deployment context. Initially with explicit allow-list (whitelist of OK-to-serve contexts); deny-list is more dangerous and waits for governance maturity. Reference: scaffolding §6 (Misuse and governance). (3 days, IM-2-collab)
+
+- [ ] **B-COLLAB-DUR-1** Land `docs/dual_use_review.md` + `dual_use_review_queue` table. Dual-Use Research of Concern (DURC) review queue for samples flagged by `B-SOC-1`. Lists guidance, escalation paths, governance-board contact. Reference: scaffolding §6. (1 day, IM-2-collab; depends on `B-SOC-1` from IM-5)
+
+- [ ] **B-COLLAB-REDTEAM-1** Implement `backend/immune/redteam/` skeleton + `cli.py` + first concrete attack (`amand_baseline_drift_attack.py`). The "redteam track" lets operators run adversarial test suites against their own deployment. Reference: scaffolding §8. (3 days, IM-2-collab; depends on `B-AMAND-1` existing from IM-1)
+
+- [ ] **B-COLLAB-REDTEAM-2** Implement `backend/immune/redteam/data_representativeness.py` — checks for representativeness in baseline data (e.g., the AMAnD baseline is representative across the operator's actual sample distribution). Reference: scaffolding §8. (1 day, IM-2-collab; independent)
+
+- [ ] **B-COLLAB-CI-1** Add `.github/workflows/redteam.yml` and `.github/workflows/diversity_check.yml` to CI. Redteam runs nightly; diversity check runs on every PR touching detectors. Reference: scaffolding §8, §3.2.6. (1 day, IM-2-collab; depends on `B-COLLAB-REDTEAM-1` skeleton)
+
+### D. Outbreak: Field Edition — first three cases
+
+- [ ] **B-OUTBREAK-1** Outbreak: Field Edition cases 1-3. Single-player narrative-puzzle progression introducing the platform. Cases use `jackpot-amand` baseline scans. Cases 1-3 covered: a foodborne outbreak with classic pathogen, a respiratory outbreak with novel agent, a wastewater early-signal scenario. Reference: immune-plan §8.2. (3-4 sessions per case = ~10 sessions total; IM-2)
+
+### E. Academy Module 10
+
+- [ ] **B-ACADEMY-10** Full content for `course/modules/10-dca-in-practice/`: README, notebook, starter code, auto-grader, upstream pointer. Covers DCA theory, multi-modal fusion walkthrough, danger-signal interpretation. Reference: immune-plan §7. (3-4 sessions, after `B-IMMUNE-DCA-1`)
+
+### F. Tests + integration
+
+- [ ] **B-IMMUNE-TESTS-2** Tests + integration tests with realistic synthetic multi-modal data. End-to-end test: synthetic wastewater spike + concurrent clinical signal → top-of-triage placement with explainable contributions. (across IM-2 items)
+
+### Phase IM-2 success criterion
+
+A high-priority sample with confirmed wastewater+clinical concordance shows top of the Anomaly Triage queue with the per-signal contributions visualized in the DCA breakdown view. A new contributor can complete Module 10 against the live `jackpot-immune-bio` API.
+
+---
+
+## Phase IM-3 — Immune Platform: Memory + Clonal Selection (Tracked, Not Scheduled)
+
+**Source:** `jackpot_immune_platform_plan.md` §14.2 Phase 28, renamed `IM-3`. Details in immune-plan §3.2 (Clonal Selection theory), §10.3 (ClonalSelectionEngine spec). Estimated effort: ~5 weeks.
+
+**Goal:** The platform learns from confirmed anomalies. Analyst-confirmed anomaly creates a new high-affinity detector; subsequent matching sample short-circuits via the memory cell with sub-second recall.
+
+### A. Clonal selection + memory cells (~3 weeks)
+
+- [ ] **B-IMMUNE-CS-1** Implement `backend/immune/bio/cs_bio.py` — full ClonalSelectionEngine. Takes confirmed anomalies (analyst-labeled), clones the corresponding detector, mutates with hypermutation rate proportional to confidence, retains high-affinity offspring. Reference: immune-plan §10.3. (4-5 sessions)
+
+- [ ] **B-IMMUNE-MEM-1** Memory-cell promotion logic — high-affinity confirmed detectors are promoted to the `memory_cells` table. Memory cells short-circuit downstream samples that match (sub-second recall). Reference: immune-plan §3.6 (innate immune memory / trained immunity). (2-3 sessions)
+
+- [ ] **B-IMMUNE-UI-3** Streamlit page — Analyst Review Queue. Surfaces uncertain detections (DCA-priority below confirmed-threshold but above noise-threshold) for human analyst review. Analyst marks confirmed/false-positive; confirmed feeds clonal selection (`B-IMMUNE-CS-1`). Reference: immune-plan §10.3 (Liu 2023 human-in-the-loop). (2 sessions)
+
+### B. AMR memory and recombination
+
+- [ ] **B-AMR-MEMORY-1** Implement `jackpot-amrmemory` — wraps amr.watch (API), AMRFinderPlus (CLI), abricate (CLI). Confirmed AMR signatures populate AMR-specific memory cells. Reference: immune-plan §13 OSS table; pairs with `B-NCBI-2` (hAMRonization) for canonical output format. (3-4 sessions)
+
+- [ ] **B-RECOMB-1** Adopt OpenRecombinHunt (Alfonsi et al., *J. Mol. Biol.* 2026) as `jackpot-recombhunt` — viral-recombination-detection pipeline-zoo entry. Wired to a periodic-scan workflow that runs on JACKPOT's public viral datasets; results feed clonal-selection signal in `B-IMMUNE-CS-1`. Detection landscape §2.e.5; immune-plan §10.4. (2 sessions, IM-3)
+
+### C. Outbreak Case 4
+
+- [ ] **B-OUTBREAK-2** Outbreak: Field Edition case 4 — AMR puzzle. Uses `jackpot-amrmemory` to track an AMR-gene transmission cluster across multiple sample submissions. Player must identify the introducing event from the clonal-selection-derived memory-cell history. Reference: immune-plan §8.2. (3-4 sessions, IM-3)
+
+### Phase IM-3 success criterion
+
+Analyst confirms an anomaly → new high-affinity detector enters memory pool → subsequent matching sample triggers sub-second memory-cell recall (visible in audit log + Triage UI). AMR signatures populate AMR-specific memory; recombinant detection feeds back into clonal selection.
+
+---
+
+## Phase IM-4 — Immune Platform: Federation as Immune Network (Tracked, Not Scheduled)
+
+**Source:** `jackpot_immune_platform_plan.md` §14.2 Phase 29, renamed `IM-4`. Details in immune-plan §6 (Pillar III), §10.5 (TrustEngine spec). Estimated effort: ~6 weeks.
+
+**Goal:** Cross-tenant immune-network with trust scoring and encrypted queries. Two JACKPOT instances on one network share a confirmed memory cell after cross-instance confirmation, and run a homomorphic-encrypted query without raw data leaving either side.
+
+### A. Federation infrastructure (~4 weeks)
+
+- [ ] **B-IMMUNE-FED-SCHEMA-1** `backend/models/immune.py` — federation tables: `federation_members`, `trust_scores`, `cyber_assessments`. Includes the federation-trust schema sketch (immune-plan §14.4 QW-6) as the initial schema landing. (2-3 sessions; subsumes the `[quick-win]` from §14.4)
+
+- [ ] **B-IMMUNE-TRUST-1** Implement `backend/immune/net/trust.py` — TrustEngine. Computes trust scores per federation member based on submission quality, false-positive rate, behavioral consistency. Trust scores gate which federation operations a member can participate in. Reference: immune-plan §6.2.1, §10.5. (4-5 sessions)
+
+- [ ] **B-IMMUNE-REP-1** Implement `backend/immune/net/repertoire.py` — AntibodyRepertoire publish/subscribe. Federation members publish their detector repertoire (anonymized); other members subscribe to synthesize a global repertoire view. Reference: immune-plan §6.3. (3-4 sessions)
+
+- [ ] **B-IMMUNE-MEMSYNC-1** Implement `backend/immune/net/memory_sync.py` — federation memory cell synchronization with cross-member confirmation thresholds. A memory cell only promotes to the global pool after N independent member confirmations. Reference: immune-plan §6.2. (3-4 sessions)
+
+- [ ] **B-IMMUNE-HE-1** Implement `backend/immune/net/query_he.py` — homomorphic-encryption query layer (Kim 2021). Start with one well-defined query type (e.g., "do you have a memory cell matching this signature?"); expand later. Lands inside the existing `B-CRY-1` crypto-scaffold pattern. Reference: immune-plan §6.2.2, §10.5. (1-2 weeks; significant work)
+
+- [ ] **B-IMMUNE-DP-1** Implement differential-privacy aggregator for shared signals. Lands inside the existing `B-PRV-1` privacy-scaffold pattern. Federation-wide aggregations (member counts, signal frequencies) computed with formal DP guarantees. Reference: immune-plan §6.2.3. (1 week)
+
+- [ ] **B-FED-PILLARIII-1** Decide FL framework for Pillar III. Use FedTADBench (Liu et al. 2022) to benchmark DataSHIELD-class vs FedAdapt-CAD vs FedMI on representative anomaly-detection workloads. Pick based on benchmark + mature-tooling tradeoff. Detection landscape §2.i.1. (2 weeks benchmarking + 1 week documentation)
+
+### B. Federation outbreak case + WILDFIRE skeleton
+
+- [ ] **B-OUTBREAK-3** Outbreak: Field Edition case 8 — federation-required capstone. Player must coordinate with another JACKPOT instance to identify a transmission cluster spanning two operators. Demonstrates the federation primitives end-to-end. (4-5 sessions, IM-4)
+
+- [ ] **B-WILDFIRE-1** WILDFIRE skeleton — multiplayer engine, cell management, mole/adversarial-cell mechanics. The platform-on-platform game where players coordinate as JACKPOT instances. First skeleton; full missions land in IM-6. Reference: immune-plan §8.3. (1-2 weeks for skeleton)
+
+### C. Phase IM-4-collab — Federation defensive scaffolding
+
+- [ ] **B-COLLAB-DIVERSITY-2** Implement `backend/immune/net/diversity.py` + `diversity_cli.py` — federation diversity index. Computes a quantitative diversity score across federation member detectors; CI gate (`B-COLLAB-CI-1`) fails if diversity drops below threshold. Reference: scaffolding §3.2.3, §3.2.4. (2 days, IM-4-collab)
+
+- [ ] **B-COLLAB-ATRUST-1** Implement `backend/immune/net/asymmetric_trust.py` — asymmetric trust between federation members. Member A may trust member B at level 3 while member B trusts member A at level 1. With input validation. Reference: scaffolding §6 (asymmetric-power awareness). (2 days, IM-4-collab; depends on `B-IMMUNE-TRUST-1`)
+
+- [ ] **B-COLLAB-REDTEAM-3** Implement `backend/immune/redteam/attack_federation.py` — adversarial test suite for federation. Simulates malicious member submitting poisoned signals; tests detection. Reference: scaffolding §8. (3 days, IM-4-collab; depends on federation existing)
+
+### Phase IM-4 success criterion
+
+Two JACKPOT instances on one network can: (1) share a confirmed memory cell after cross-instance confirmation; (2) run a homomorphic-encrypted query without raw data leaving either side; (3) compute federation-wide diversity and refuse operations when diversity drops; (4) complete Outbreak case 8 in 2-player coordination mode.
+
+---
+
+## Phase IM-5 — Immune Platform: Cyber-AIS for Platform Self-Defense (Tracked, Not Scheduled)
+
+**Source:** `jackpot_immune_platform_plan.md` §14.2 Phase 30, renamed `IM-5`. Details in immune-plan §5 (Pillar II), §10.4 (CyberNSA spec). Estimated effort: ~5 weeks.
+
+**Goal:** Pillar II live. Same NSA substrate, different threat surface. A simulated insider-threat scenario (a researcher account suddenly enumerating all samples) raises a high-priority `cyber_assessments` row within 60 seconds. Sample submission with adversarial perturbation gets flagged by `poisondetect`.
+
+### A. Cyber-AIS implementation (~3 weeks)
+
+- [ ] **B-IMMUNE-CYBER-1** Implement `backend/immune/sec/nsa_cyber.py` — CyberNSA. Uses the same `B-IMMUNE-NSA-1` substrate, but trained on API-call featurizers from `B-IMMUNE-FEAT-1`. Reference: immune-plan §10.4. (4-5 sessions)
+
+- [ ] **B-IMMUNE-TELEM-1** Implement `backend/middleware/api_telemetry.py` — captures `ApiCallEvent` rows. Every API call produces a telemetry event with featurizable attributes (endpoint, user, time-of-day, request size, response code, latency). Feeds the cyber-NSA. (2-3 sessions)
+
+- [ ] **B-IMMUNE-CYBER-DCA-1** Implement `backend/immune/sec/dca_cyber.py` — context-aware threat fusion. Like the bio-side DCA but for security threats. Multi-modal danger signals: failed-auth attempts, unusual query patterns, off-hours access, geographic anomalies. (3-4 sessions)
+
+- [ ] **B-IMMUNE-POISON-1** Implement `backend/immune/sec/poisondetect.py` — sample-poisoning detection. Scans submitted samples for adversarial perturbation patterns (Tavella 2022 inspired). Flags suspect samples for analyst review before they enter the bio-AIS training data. Reference: immune-plan §5.3.1. (3-4 sessions)
+
+- [ ] **B-IMMUNE-OPSEC-1** Implement `backend/immune/sec/opsec.py` — query OPSEC monitoring. Detects when an operator's federation-mode query patterns leak information about their data (e.g., narrowing query specificity over time). Reference: immune-plan §5.3.2. (2-3 sessions)
+
+- [ ] **B-SOC-1** Adopt SeqScreen + BLiSS as a combined sequence-of-concern (SoC) screening layer at ingest. Lands as `backend/immune/sec/screening.py`. Initially run-and-flag (no blocking); annotate samples with SoC-screen-flag and append to audit log. Evaluate gating policy after 6 months of false-positive/negative data. Detection landscape §2.h; immune-plan §5.3.4. (3-4 sessions for initial run-and-flag pipeline; 6 months data collection; 1-2 sessions for gating policy)
+
+### B. UI + audit chain
+
+- [ ] **B-IMMUNE-UI-4** Insider-threat dashboard — Streamlit page for platform admin. Shows recent `cyber_assessments` rows, threat tier, suspected user/account, recommended action. (2 sessions)
+
+- [ ] **B-AUDIT-CHAIN-1** Audit hash chain — close the existing P0 audit-bug fix AND extend with crypto chain. Each audit-log row chains via SHA-256 hash to its predecessor; tampering becomes immediately detectable. Reference: immune-plan §5.4. (3-4 sessions; partially blocked by P0 audit-bug fix)
+
+### C. Academy Module 13
+
+- [ ] **B-ACADEMY-13** Full content for `course/modules/13-cyberbiosecurity/`. Covers cyber-AIS theory, the dual-AIS architecture (bio + cyber), poisoning attack/defense, OPSEC. Reference: immune-plan §7. (3-4 sessions)
+
+### D. Phase IM-5-collab — Federated cyber-AIS
+
+- [ ] **B-COLLAB-CYBER-FED-1** Implement `backend/immune/sec/cs_cyber_federated.py` — federated clonal selection for cyber-AIS. Threat detectors learned at one instance can propagate (under trust constraints) to others. Reference: scaffolding §5. (4 days, IM-5-collab; depends on Phase IM-4 federation landing)
+
+### Phase IM-5 success criterion
+
+A simulated insider-threat scenario (researcher account enumerating all samples) triggers a high-priority `cyber_assessments` row within 60 seconds. Sample submission with adversarial perturbation gets flagged by `poisondetect` before entering the bio-AIS training data. Audit log tampering is detectable via the hash chain. SoC screening produces flags on synthetic-DNA-screen-positive submissions.
+
+---
+
+## Phase IM-6 — Immune Platform: Game/Academy Full Integration (Tracked, Not Scheduled)
+
+**Source:** `jackpot_immune_platform_plan.md` §14.2 Phase 31, renamed `IM-6`. Details in immune-plan §7 (Academy), §8 (Outbreak + WILDFIRE). Estimated effort: ~4 weeks.
+
+**Goal:** All five pillars operational; training/gaming feedback loop closed. A new contributor can clone the repo, run `jackpot init --profile academy`, complete module 9, ship a PR to `jackpot-amand`, get it merged, and see their detector activate on a real sample.
+
+### A. Outbreak: Field Edition full progression
+
+- [ ] **B-OUTBREAK-4** Outbreak: Field Edition cases 5-8 (full progression). Cases 5-7 cover increasingly complex scenarios (zoonotic spillover, AMR cluster, environmental persistence). Case 8 is already covered by `B-OUTBREAK-3` (federation capstone). Reference: immune-plan §8.2. (3-4 sessions per case)
+
+### B. WILDFIRE missions
+
+- [ ] **B-WILDFIRE-2** WILDFIRE missions 1-6 fully implemented (the original "Stop the Plague" arc). Multi-player mode building on the `B-WILDFIRE-1` skeleton. Reference: immune-plan §8.3. (2-3 weeks)
+
+### C. Game-to-platform feedback loop
+
+- [ ] **B-GAME-LABEL-1** Game submissions feed clonal-selection labeling pipeline. Player decisions in Outbreak cases that match real anomaly-detection scenarios become training data for `B-IMMUNE-CS-1`. Reference: immune-plan §8.4. (1 week)
+
+### D. Academy completion
+
+- [ ] **B-ACADEMY-OTHER-1** Academy modules 11, 12, 14, 15, 16 — full content. Modules cover federation theory, clonal selection deep-dive, cyberbiosecurity case studies, dual-AIS architecture, future research directions. Reference: immune-plan §7. (4-5 weeks total across all modules)
+
+### E. Init profiles + public release
+
+- [ ] **B-INIT-PROFILES-1** `jackpot init --profile academy` and `jackpot init --profile game` profiles. Each profile bootstraps a JACKPOT instance pre-configured for the role (academy = read-only, game = WILDFIRE host). Reference: immune-plan §8.5. (1 week)
+
+- [ ] **B-ACADEMY-TENANT-1** Public read-only academy tenant — deploy alongside production. Anyone can register, complete modules, see live (sanitized) detector activation. Reference: immune-plan §7.4. (1-2 weeks)
+
+- [ ] **B-RELEASE-1** First public release announcement / paper draft kickoff. Press release, blog post, manuscript skeleton for a *Bioinformatics* or similar venue. Reference: immune-plan §15.4. (1 week)
+
+### Phase IM-6 success criterion
+
+A new contributor: (1) clones repo, (2) runs `jackpot init --profile academy`, (3) completes module 9, (4) ships a PR to `jackpot-amand`, (5) sees the PR merged, (6) sees their contributed detector activate on a real sample. Public Academy tenant is live and registering external students.
+
+---
+
+## Wet-Side Advisory Track (Tracked, Independent of Phase IM-* Sequencing)
+
+**Source:** `jackpot_immune_collaboration_scaffolding_copy.md` §9.2. The wet-side advisor's critique ("you don't understand the wet-side enough") doesn't have a software handle; the substitute action is to formalize the wet-side advisory role.
+
+- [ ] **B-WW-ADV-1** Add `docs/wetside_advisory.md` documenting current assumptions about wastewater sampling cadence, sample preservation, sequencing-prep failure modes, and known limitations of the input pipeline. Reference: scaffolding §9.2. (1 day; can land any time; ID disambiguates from existing `B-WW-1` wastewater pipeline-zoo work)
+
+- [ ] **B-WW-ADV-2** Pre-register questions for the wet-side advisor's group (sampling cadence, preservation, false-positive failure modes specific to NWSS feeds) and resolve them in `docs/decisions/`. Reference: scaffolding §9.2. (2-3 sessions; depends on advisor identification)
+
+(The wet-side-advisor *role* — adding a named individual or panel from the wet-lab community to `GOVERNANCE.md` — is folded into `B-GOV-1` per the consolidation report §5.1.)
+
+---
+
+## Pipeline Zoo Additions from Detection Landscape (Tracked, Not Scheduled)
+
+**Source:** `jackpot_detection_landscape.md` §6. Eight items that are pipeline-zoo additions strengthening JACKPOT's outbreak-genomics and surveillance capabilities, but not specific to any Immune Platform pillar. They land independently of Phase IM-* sequencing whenever pipeline-zoo work happens.
+
+### A. Bacterial-aware variant callers (4 items)
+
+- [ ] **B-CNPRO-1** Adopt CNproScan (Jugas et al., *Genomics* 2021) as a bacterial CNV pipeline-zoo entry. GC-bias-aware, circular-genome-aware. Wire to `pipeline_results` loader. Useful especially for AMR-gene copy-number variation, which generic CNV callers miss. Detection landscape §2.d.1. (1-2 sessions)
+
+- [ ] **B-PROSV-1** Adopt ProcaryaSV (Jugas & Vitkova, *BMC Bioinformatics* 2024) as the bacterial SV pipeline-zoo entry. Pairs with `B-CNPRO-1` for full bacterial CNV+SV coverage. Detection landscape §2.d.2. (1-2 sessions, with `B-CNPRO-1`)
+
+- [ ] **B-SNIPG-1** Add SNiPgenie (Farrell et al., *Access Microbiology* 2025) as an alternative SNP-calling pipeline-zoo entry to bactopia for cases where bactopia is overkill (single-organism outbreak; not the full bactopia workflow). Detection landscape §2.d.3. (1 session)
+
+- [ ] **B-SKA2-1** Add SKA2 (Derelle et al., *Genome Research* 2024) as the rapid-triage variant-calling pipeline-zoo entry. Recommended workflow: SKA2 for first-pass cluster identification across all samples, then SNiPgenie + bactopia for the focal cluster. Detection landscape §2.d.4. (1 session, with `B-SNIPG-1`)
+
+### B. Specialty surveillance pipelines (4 items)
+
+- [ ] **B-NANOC-1** Adopt NanoCore (Fuchs et al., *mSystems* 2024) as the canonical Nanopore-aware core-genome outbreak-tracking pipeline. Pairs with bactopia (already shipped) for Illumina-only workflows; NanoCore handles the mixed-sequencer federation case. Detection landscape §2.e.1. (2 sessions)
+
+- [ ] **B-PFHAP-1** Adopt Pf-HaploAtlas (Lee et al., *Bioinformatics* 2024) as the malaria-specific pipeline-zoo entry. Self-hostable; outputs feed `pipeline_results` JSONB. Document the schema mapping for haplotype data. Detection landscape §2.e.2. (2-3 sessions)
+
+- [ ] **B-PYMLST-1** Adopt pyMLST as the custom-cgMLST-scheme pipeline-zoo entry. Default schema source is pubMLST; operators can build custom schemes for non-standard organisms. Detection landscape §2.e.3. (1-2 sessions)
+
+- [ ] **B-AMRO-1** Adopt AMRomics (Le et al., *BMC Genomics* 2024) as the population-scale AMR-surveillance pipeline-zoo entry. Pairs with `B-NCBI-2` (hAMRonization output mandate) for clean cross-pipeline comparability. Detection landscape §2.e.4. (2-3 sessions, with `B-NCBI-2`)
+
+---
+
+
 ## Done in Session 5 (2026-04-17 evening — 2026-04-19 early AM)
 
 **First staging deploy to GKE** — 10 root causes diagnosed and fixed:
