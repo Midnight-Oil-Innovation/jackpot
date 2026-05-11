@@ -1,6 +1,6 @@
 # JACKPOT — To-Do List
 
-**Last updated:** 2026-05-08 (federation Track 1 + Track 2-seam scaffold landed; regen_schema in-repo with whitespace normalization; gac pre-fix step)
+**Last updated:** 2026-05-11 (round 3: defect-fix pass on round-2 wastewater additions — WW-1 gains `owning_lab_id` for RBAC, new WW-2a consumer-code-refactor item, audit fields added to WW-3/WW-4, WW-11 migration fixes for dedupe + county_names + lineage_abundance + lossy down-mig warning, WW-9 enum migration made concrete, new **DEC-11** (typed-table vs pipeline_results JSONB), **DEC-12** (v5.0 mega-release scope decision), **DEC-13** (B-XXX adoption-item verification process), **DEC-14** (existing `wastewater_lineage_abundance` handling), DOC-1/2/3 updated to reference wastewater capability. Round 2: wastewater module additions — WW-1..WW-12 schema, 9 B-XXX WBE adoption items, Phase 34 pipelines/parsers/UI, DEC-10 resolved. Round 1: Phase 29-33, ML/OBS schema, DEC-1..9, FIX-1/2/3. Previous: federation Track 1 + Track 2-seam scaffold landed 2026-05-08)
 **Baseline:** **1591 tests passing, 2 skipped** (verified 2026-05-06 via `uv run pytest --no-cov -q` against `r3-doc-and-tracking-hygiene` based at `2609a1f`). Coverage 87.85% per PR #28 closeout (re-measure with `uv run pytest --cov` if needed; CI threshold 80%). PR #28 (P0g G-3+G-4) reported 1527 passing post-merge; subsequent R-1 security fixes (PR #31) brought the count to its current state.
 **Sessions 21+ deliverables:** PR #21 (P0g G-1+G-2: `ExecutionProfile` + `PipelineDefaultProfile` schema + migration with `default-local` seed; merged 2026-05-04 at `a682788`). PR #22 (P1: `/api/v1/auth/refresh` endpoint with single-use rotation, `refresh_tokens` table, replay detection with bulk-revoke, rotation-aware login/logout, daily cleanup job, six error codes; merged 2026-05-05 at `ba03143` — closes the I-track entirely). PR #23 (docs: bundle refresh to v4.0 covering Session 20 I-track close). PR #25 (chore: pin ruff at 0.11.6 across pre-commit, backend, cli, uv.lock — permanent fix for the recurring CI ruff-version mismatch that bit PRs #21 and #22 on first runs). PR #26 (docs: governance README + coi-disclosures stub on top of the 8 substantive governance docs already on origin from `f46f7ee`; merged 2026-05-05 at `2dbb839` along with an accidentally-bundled Sessions 21+ doc refresh that came along from local development state). PR #27 (docs: post-Session-21 housekeeping — `uv run pre-commit` prefix, **Critical Rule 61** worktree+branch verification, spec.md §4.1 fix #5 resolution; merged at `c7df002`). PR #28 (P0g G-3+G-4: profile templates + `nextflow.config` renderer + `pipeline_config/` package refactor + 35 new tests; merged at `544c98c` — 1527 tests, 87.85% coverage). PR #29 (docs: defer Phase 24.5 external collaborator review per option β / scope c — NPAIHB/Northwest TEC/B-CARE-6 references stripped from `todo.md` + session summary + `cdc_dmi_stlt` overview). **This session (2026-05-08):** Federation Track 1 + Track 2-seam scaffold landed at `backend/backend/federation/` (FED-A — `models.py`, `client.py`, `push.py`, `access.py`, `_ais_hooks.py` Protocol seam, README; operator-agnostic). `scripts/regen_schema.py` moved into the repo with trailing-whitespace normalization for both Python and JSON outputs (T-1). `.pre-commit-config.yaml` `schema-regen-check` hook added, fires only on schema YAML changes (T-2). `gac()` zsh function pre-fix step added (T-3, personal config in `~/.zshrc`). Federation router + tests + migration (FED-B/C/D/E) plus privacy and crypto scaffold counterparts (PRV-A, CRY-A) tracked in the new "Federation / Privacy / Crypto Scaffolds" section below. See Sessions 21+ entries in `jackpot_session_summary_and_backlog.md` and the recovery saga learnings in `learnings.md` ("Worktree contamination — Sessions 20-21" entry).
 **Active sprint:** Next phase is the maintainer's call. With I-track + P0g G-1 through G-4 + P1 + R-1/R-2/R-3 closeout done, the natural candidates are: (a) **Phase P0g G-5** (profiles CRUD endpoints — operators can use the renderer/resolver from PR #28 but can't manage profiles via API yet; closing this gap unblocks the legacy GCP-Batch path deletion); (b) **Phase 24.5 design lockdown (solo, option β)** — finalize sovereignty-deletion design without external review since collaborator review was deferred 2026-05-05; once locked, P0b unblocks; (c) **Performance and cleanup follow-ups from /ultrareview Batch D** — see the dedicated section below; (d) **Phase 24.7 / P0f BYOP infrastructure** for B-BYOP-1 through B-BYOP-10; (e) **Federation wire-up (FED-B/C/D/E)** — schema migration, tests, router, and `main.py` wiring on top of the FED-A scaffold delivered 2026-05-08; (f) **Privacy scaffold (PRV-A)** at `backend/backend/privacy/` — same pattern as FED-A with FL/DP/HE/MPC AIS hook seams; (g) **Crypto scaffold (CRY-A)** at `backend/backend/crypto/` — same pattern with HE/threshold/attestation AIS hook seams. Architectural sequence remains: Phase 24.5 (sovereignty + BYOP design lockdown) → P0f (BYOP infrastructure) → P0b (Schema v5.0) → P0c (multi-tenancy middleware + sovereignty deletion) → P1 broader auth-architecture review (rest of P1 — session-management UI, refresh-token-family tracking, etc.) → P2+. The Federation/Privacy/Crypto scaffold work is ahead-of-schedule relative to B-FED-1 / B-PRV-1 / B-CRY-1 — see "Federation / Privacy / Crypto Scaffolds" section below.
@@ -9,6 +9,12 @@
 **Priority shift (2026-04-28):** With CARE Principles, STLT alignment, and DMI/North Star analysis in scope, several items that were "Year 2 stretch" deserve to land *during* P0d (governance docs, deploy guide reorganization, layer-cake framing) because P0d is already touching exactly those files. The architectural design for delete-on-request (B-CARE-3) is now **Phase 24.5** — must lock in *before* P0b schema work to avoid retrofit.
 
 **Phasing decision for BYOP and eukaryotic pipelines (2026-04-29):** The 25 backlog items from `jackpot_byop_and_eukaryotic_design.md` are NOT homogeneously deferrable to a single late phase. They split three ways: (1) **schema items move to P0b** alongside the existing Schema v5.0 work — otherwise we migrate twice. The 4 schema items (B-BYOP-9, B-EUK-1, B-EUK-2, B-EUK-3) are now bundled into Phase 24.5's design-lockdown deliverables. (2) **BYOP infrastructure (10 items) gets a new P0f phase** between P0e and P0b/c, because eukaryotic pipelines need BYOP to land first, and BYOP can't wait for P1. (3) **Default eukaryotic pipelines + parsers + dashboards (11 items) stay in Phase 28** but are internally tier-prioritized: Tier 1 (Plasmodium, Crypto/Giardia) ships first.
+
+**Priority shift (2026-05-11):** Strategy session added five new tracked-backlog phases (29 ML/Modeling, 30 Federated ML Analytics, 31 Demo + Benchmark Infrastructure, 32 Testing for ML/Federation, 33 Outreach Documents) plus ML and OBS schema additions into Phase 24.5's P0b lockdown. Eight architectural decisions (DEC-1..8) surfaced for Glen to resolve before related schema items can ship. Year 2 federation extensions (Flower-based FL, DP, TEE) reframed as Track 2 concrete implementations of existing PRV-A and CRY-A hooks rather than new infrastructure. Two P0 bugs (audit/notification `db_conn` forwarding, `_handle_workflow_complete` `conn=` TypeError) elevated to FIX-1/FIX-2 — these were over-claimed as resolved in Phase 0 but the fixes did not land (same pattern as the JWT refresh endpoint over-claim resolved 2026-05-05). No change to active sprint candidates above.
+
+**Priority shift (2026-05-11, second pass — wastewater module):** Comparative analysis of an external WBE schema draft (uploaded 2026-05-11) against existing JACKPOT v4.4 wastewater coverage surfaced real structural gaps: site metadata is denormalized into each `WastewaterSample` (no persistent site entity), the current schema models only one PCR target per sample (no multi-pathogen-panel support), no first-class metagenomic resistome profile entity, no population normalization biomarkers (PMMoV, CrAssphage), no hydraulic/environmental covariates (rainfall, BOD, TSS, ammonia). DEC-10 resolved: refactor the existing `WastewaterSample` (not additive) to introduce `WastewaterCollectionSite` (persistent site entity, 1:N with samples), `WastewaterTargetResult` (per-target qPCR/ddPCR rows), and `WastewaterMetagenomicProfile` (typed AMR resistome + MGE inventory + MAG QC). Schema items land in Phase 24.5 (WW-1..WW-12) for the P0b migration cycle. WBE-specific tool adoption items (PiGx-SARS-CoV-2, Aquascope, WEPP, watermonitor, WastPan, Encyclopaedia Cloacae, ResPipe, multiplex dPCR workflows, probe-capture enrichment) added to Phase 26. Pipeline + parser + UI work lives in new Phase 34. Existing B-WW-1 (Phase 26) Freyja dashboard remains valid — WW-13 in Phase 34 extends its scope to include site map + qPCR target time series + resistome dashboard panels.
+
+**Priority shift (2026-05-11, third pass — round-2 defect fixes):** Self-critique loop on the round-2 wastewater additions surfaced six categories of real defects: (a) WW-1 was missing org/lab ownership (RBAC break for P0c multi-tenancy); (b) the refactor in WW-2 broke every consumer of dropped fields with no tracking item for the consumer-side cleanup; (c) WW-3/WW-4 missing audit fields inconsistent with rest of JACKPOT; (d) WW-11 migration had real correctness bugs (no site dedupe, county_names→county_fips info loss, false reversibility claim, no plan for existing `wastewater_lineage_abundance` Freyja rows); (e) WW-4's typed-table-vs-pipeline_results-JSONB architectural choice was not surfaced as a tracked decision; (f) hand-wavy language ("FK to SectorEnum" terminology error; fictional "enum alias for back-compat"; non-existent "Critical Rule pattern" reference; "coordinate with B-WW-1 maintainer" wrong for solo-developer context). Plus four new architectural decisions surfaced: DEC-11 (typed-table-vs-JSONB pattern for `WastewaterMetagenomicProfile`), DEC-12 (v5.0 vs v5.0+v5.1 split given Phase 24.5 now bundles BYOP+EUK+sovereignty+ML+OBS+WW), DEC-13 (process for verifying B-XXX adoption-item URLs/licenses/maintenance status), DEC-14 (existing `wastewater_lineage_abundance` Freyja rows: migrate to WastewaterTargetResult, keep parallel, or deprecate). All factual loopholes fixed in this pass. Preference-not-fact items (exact RBAC role binding, DOC body content) deferred to JACKPOT's existing patterns rather than dictated here.
 
 Phase 21 UI triage stays where it is — Session 5 debt, ship-blocker, not displaceable.
 
@@ -200,6 +206,18 @@ The P1 + P0g G-1+G-2 + ruff-pin work surfaced these small follow-up items. None 
 - [x] **Fix `uv run pre-commit` prefix in CLAUDE.md ruff section.** Closed in PR #27 (`c7df002`) along with Critical Rule 61.
 
 - [x] **Spec.md follow-up: drop the ⚠️ note from §13 fix #5.** Closed in PR #27 (`c7df002`).
+
+---
+
+## Active P0 bugs (over-claimed in Phase 0, must be fixed)
+
+These two bugs are listed under Phase 0's "P0-1 through P0-16 all completed" line as `audit/notification transaction cohesion` and `execute_query conn param` — but inspection of the current code shows the fixes did not actually land. Same over-claim pattern as the JWT refresh endpoint (over-claimed in Phase 0, resolved 2026-05-05 in P1 PR #22). Block Phase IM-1 (called out as prerequisites in the Phase IM-1 prerequisites list) and degrade transactional correctness everywhere else.
+
+- [ ] **FIX-1** `log_audit()` and `create_notification()` accept `db_conn` but do not forward it to `execute_write()`. Audit and notification writes auto-commit in separate transactions from the operations they audit. Silent audit gap possible on write failure — if the parent operation rolls back, the audit row stays committed. Fix: thread `db_conn` through `execute_write(..., conn=db_conn)` in both helpers; add transaction-rollback test verifying that an audit row does NOT exist if the parent operation rolls back. Update the Phase 0 entry to drop the misleading completion claim. (1 session)
+
+- [ ] **FIX-2** `_handle_workflow_complete()` in the pipelines router calls `execute_query(..., conn=conn)` but `execute_query()` signature does not accept a `conn=` keyword argument. Will raise `TypeError` when Nextflow posts `workflow.complete` — pipeline completion events will crash the router. Either add `conn=` to `execute_query()` signature (mirror `execute_write()`) or remove the `conn=conn` at the call site. Add a regression test simulating the `workflow.complete` POST. Update the Phase 0 entry. (0.5 session)
+
+- [ ] **FIX-3** Verify the `jackpot-api-config` ConfigMap in the staging GKE cluster contains the JSON-array form of `CORS_ORIGINS` (not a bare comma-separated string). Q-10 closed the validator-side fix and Session 5 applied a tactical ConfigMap fix; this is a 15-minute spot-check to confirm the deployed ConfigMap is still in the expected shape after subsequent Helm upgrades. Fix path if drift detected: `kubectl -n jackpot delete configmap jackpot-api-config && gh workflow run deploy-staging.yml`. (15 min)
 
 ---
 
@@ -1007,14 +1025,107 @@ These are not separate design work — the design exists in `jackpot_byop_and_eu
 
 - [ ] **B-EUK-3** Update `validator.py` for eukaryotic-aware tier rules: new tier-2 fields (developmental stage, preservation method), new tier-3 fields (parasitemia, MOI, coinfection). Update `compute_surveillance_relevant()` to include eukaryotic pathogens by default. (1 session, P0b — bundle with B-EUK-1.)
 
+### Architectural decisions required for ML/Observatory schema additions (2026-05-11)
+
+Schema design depends on resolving these decisions first. Each is a Glen-owned design call, not an implementation task. ML-1..4 and OBS-1..4 are blocked until the relevant DEC items below are resolved.
+
+- [ ] **DEC-1** Choose foundation model for the eventual embedding pipeline (Nucleotide Transformer 2.5B, Evo / Evo 2 7B+, HyenaDNA, DNABERT-2, or ESM-2). Affects whether `embeddings.embedding` column supports multiple dimensionalities or just one. Recommendation: Nucleotide Transformer first; if multiple foundation models will be in flight, `embeddings` needs an FK to `model_artifacts` for dimensionality lookup.
+
+- [ ] **DEC-2** Choose model serialization format for `model_artifacts.artifact_uri` contents — ONNX (portable, may break on some architectures), TorchScript (PyTorch-only), or pickle (fragile). Recommendation: ONNX with TorchScript fallback per model. Documented as operator policy; no direct schema impact.
+
+- [ ] **DEC-3** Choose federation aggregator hosting model for FML work: designated cell, rotating role across cells, or neutral third party. Affects whether `federated_instances.role` enum needs an `aggregator` value distinct from `hub`.
+
+- [ ] **DEC-4** Confirm pgvector extension availability on the Cloud SQL Postgres 16 instance and decide whether `embeddings.embedding` is a pgvector column or a JSONB float array. Alternative: separate vector store (Chroma, pgvector-as-separate-Postgres). Recommendation: pgvector on Cloud SQL if available; fall back to JSONB array with functional index for cosine similarity if not.
+
+- [ ] **DEC-5** Decide whether bulk milk H5N1 samples extend the existing `Food` source type or get a new `DairySample` subclass under `EnvironmentalSample`. Affects scope of OBS-1 schema item.
+
+- [ ] **DEC-6** Decide whether `external_data_sources` is per-operator (RBAC-scoped, `operator_id` FK) or shared globally. Per-operator is more flexible (Arizona NOAA stations differ from Mozambique stations); shared is simpler. Recommendation: per-operator.
+
+- [ ] **DEC-7** Decide whether ASU-specific demo code (Tempe Open Data fetcher, Valley fever LSTM result type, Maricopa-specific examples) lives in (a) a new `jackpot-demos` repo, (b) a new `jackpot-asu` repo, or (c) the core monorepo behind feature flags. Recommendation: (a) `jackpot-demos` repo to keep core operator-agnostic per Critical Rule 55.
+
+- [ ] **DEC-8** Decide whether federation summary statistics from FML work are stored as typed tables (`federation_lineage_frequencies`, `federation_amr_distributions`, `federation_embedding_centroids`) or as a single JSONB-blob table. Typed is more queryable; JSONB is more flexible for future stat types. Recommendation: typed tables for the three named summary types, JSONB column on each for future extensions.
+
+### Schema additions for ML/modeling infrastructure (must land with P0b)
+
+These tables enable the ML pipeline work in Phase 29 and the Federated ML Analytics work in Phase 30. Splitting them into a later migration creates the same double-migrate operator churn that B-BYOP-9 / B-EUK-1 avoid. All ML schema items depend on the relevant DEC items above being resolved.
+
+- [ ] **ML-1** Add `model_artifacts` table: `id` (UUID PK), `model_family_id` (UUID, groups versions of the same conceptual model), `version` (semver string), `training_data_hash` (SHA-256 of training corpus + featurization config), `training_pipeline_run_id` (FK to `pipeline_runs`), `validation_metrics` (JSONB), `artifact_uri` (GCS/MinIO path), `status` enum (`active` / `deprecated` / `retired`), `replacement_model_id` (nullable FK to self), `created_at`. Immutable append-only — new rows for retraining; old rows never updated. (1 session, P0b — depends on DEC-1, DEC-2)
+
+- [ ] **ML-2** Add `model_evaluations` table: `id`, `model_id` (FK to `model_artifacts`), `evaluation_dataset_id` (FK to `datasets` or content-hashed external dataset ID), `metrics` (JSONB), `evaluated_at`. Append-only. Each row records one evaluation against one held-out dataset; multiple rows per model expected over time. (0.5 session, P0b — bundle with ML-1)
+
+- [ ] **ML-3** Add `inference_runs` table: `id`, `model_id` (FK to `model_artifacts`), `input_data_query` (JSONB description of the sample-set scored), `output_pipeline_results_ids` (UUID array of `pipeline_results` rows produced), `run_at`, `run_by_user_id`. Append-only. (0.5 session, P0b — bundle with ML-1)
+
+- [ ] **ML-4** Add `embeddings` table: `id`, `sample_id` (FK to `samples`), `model_id` (FK to `model_artifacts`), `embedding` (pgvector or JSONB float array per DEC-4), `created_at`. Plus enable the `pgvector` PostgreSQL extension via Alembic migration if DEC-4 chooses pgvector. Index on `(sample_id, model_id)` for lookup; vector similarity index per pgvector docs. (1 session, P0b — depends on DEC-1, DEC-4)
+
+### Schema additions for Health Observatory use cases (must land with P0b)
+
+These items extend the existing schema to support the four ASU Health Observatory project areas surfaced by Engelthaler / Sunenshine / Lant (H5N1 statewide surveillance consortium, Valley fever genomic + environmental integration, measles outbreak tracking, multi-pathogen Tempe wastewater) plus the external-context-data integration pattern needed for any of these to work alongside non-genomic public health data sources. All four bundle into a single migration cycle.
+
+- [ ] **OBS-1** Add dairy bulk milk sample support per DEC-5 outcome. If new `DairySample` subclass: under `EnvironmentalSample` with fields `herd_size_head` (integer), `processing_status` enum (`raw` / `pasteurized` / `commingled`), `storage_temperature_c` (float), `collection_point` enum (`bulk_tank` / `pipeline` / `silo`). If extending `Food` source type: same fields but on a `FoodSample` subclass for dairy products. Update `validator.py` for new required-field rules. Needed for H5N1 statewide surveillance consortium dairy sampling. (1-2 sessions, P0b — depends on DEC-5)
+
+- [ ] **OBS-2** Add air filter sampling protocol fields on `AirSample`: `filter_type` enum (`polycarbonate` / `polysulfone` / `glass_fiber` / `cellulose_ester` / `other`), `sampling_duration_hours` (float, required), `flow_volume_m3` (float, derived from `airflow_rate_m3_s × sampling_duration_hours × 3600` or independently measured), `post_collection_processing` enum (`fungal_culture` / `direct_dna_extraction` / `pcr_only` / `other`). Critical fix: make `pm25_ug_m3` and `pm10_ug_m3` conditionally required — required when `post_collection_processing` is not `fungal_culture`; optional when it is `fungal_culture` (Coccidioides air filter surveillance often does not measure PM concentrations). Update `validator.py` for the conditional rule. Needed for the Valley fever Coccidioides air sampling integration. (1 session, P0b)
+
+- [ ] **OBS-3** Add `external_data_sources` table per DEC-6: `id` (UUID PK), `source_name` (text), `base_url` (text), `identifier_pattern` (regex or template — e.g. `https://www.ncei.noaa.gov/access/services/data/v1?stations={station_id}`), `license` (text), `allowed_use` enum (`public` / `controlled` / `internal`), `operator_id` (FK if per-operator per DEC-6, otherwise NULL), `contact_email`, `last_validated_at`, `created_at`. Plus a `sample_external_context` join table: `id`, `sample_id` (FK), `external_data_source_id` (FK), `external_identifier` (text — NOAA station ID, ASIIS lot number, etc.), `valid_from`, `valid_to`. Designed so sample-anchored analyses can join to external context (weather, land use, vaccination registry) at query time without ingesting bulk external data. (1-2 sessions, P0b — depends on DEC-6)
+
+- [ ] **OBS-4** ICTV-aligned virus taxonomy refactor. Confirm scope from Varsani collaboration framing before committing. Adds new fields to `OrganismName` records: `ictv_taxonomy_id` (text), `ictv_realm`, `ictv_kingdom`, `ictv_phylum`, `ictv_class`, `ictv_order`, `ictv_family`, `ictv_genus`, `ictv_species`. Source: ICTV Master Species List (latest release). Validate at ingest against the controlled vocabulary. Varsani is on the ICTV Executive Committee — this schema item is intentionally aligned with his domain authority. (1-2 sessions, P0b — confirm scope before commit)
+
+### Architectural decision: wastewater module refactor (RESOLVED 2026-05-11)
+
+- [x] **DEC-10** **RESOLVED 2026-05-11 — refactor approach selected.** The existing v4.4 single-class `WastewaterSample` will be refactored (not extended additively) to add a `site_id` FK to a new persistent `WastewaterCollectionSite` entity, with site-level fields (`wwtp_name`, `nwss_sewershed_id`, `sample_location_zipcode`, `county_names`, `population_served`) migrating to the site entity. Per-target qPCR fields (`pcr_target`, `pcr_gene_target`, `pcr_gene_target_ref`, `pcr_type`, `quant_stan_type`, `stan_ref`, `lod_ref`, `inhibition_method`, `num_no_target_control`) move from `WastewaterSample` to a new `WastewaterTargetResult` per-target table. Migration WW-11 backfills site rows from denormalized fields and creates one initial `WastewaterTargetResult` per existing `WastewaterSample` from current `pcr_target_*` values. Rationale: the denormalization is a genuine architectural bug — Tempe's multi-pathogen panel and any multi-target ddPCR workflow can't fit the current model. API consumers of v4.4 `WastewaterSample` will need an upgrade path; documented in v5.0 release notes (DOC-12).
+
+- [ ] **DEC-11** Typed table vs `pipeline_results` JSONB result-type pattern for wastewater metagenomic results. JACKPOT's general pattern is `pipeline_results` JSONB with parser-defined typed schemas. Precedent for typed tables exists (clinical `amr_results`, `tb_typing_results`, `typing_results`). WW-4 currently proposes a typed `WastewaterMetagenomicProfile` table. Decision: keep as typed table (justified by query patterns — wastewater dashboards filter by integron type, plasmid replicon family, ARG class, MAG count, which would be slow against JSONB) vs migrate to a typed result_type within `pipeline_results`. Recommendation: typed table (WW-4 as currently specified). Document the rationale in v5.0 release notes (DOC-12) so future contributors don't second-guess.
+
+- [ ] **DEC-12** v5.0 scope decision. Phase 24.5 now bundles: sovereignty deletion (B-CARE-3 schema), BYOP (B-BYOP-9/9b), eukaryotic pathogens (B-EUK-1/2/3), ML/modeling (ML-1..4), Health Observatory (OBS-1..4), wastewater module (WW-1..12). That's ~25 schema changes spanning multiple domains. Options: (a) ship all as v5.0 (mega-release, one P0b migration cycle, maximum operator churn at one time); (b) split into v5.0 (original BYOP/EUK/sovereignty scope, ~8 schema changes) and v5.1 (ML/OBS/WW, ~17 schema changes, ships ~1 quarter later); (c) split by domain into v5.0 (BYOP/EUK/sovereignty), v5.1 (ML/OBS), v5.2 (WW). Recommendation: (b) two-release split is the sweet spot — one big breaking change for operators rather than one mega-change. WW work has high consumer-code refactor cost (WW-2a) which is cleaner to land as its own release window.
+
+- [ ] **DEC-13** B-XXX adoption-item verification process. The 9 new wastewater adoption items in Phase 26 (B-PIGX-1, B-AQUASCOPE-1, B-WEPP-1, B-WMON-1, B-WASTPAN-1, B-ENCYC-1, B-RESPIPE-1, B-DPCR-1, B-PROBE-1) cite specific projects/papers from the 2026-05-10 LeapSpace literature review. They have NOT been individually verified for: current GitHub URL, active maintenance status, license compatibility with AGPL-3.0, and whether the comparator JACKPOT pipeline still exists in the form claimed. Decision: define a single per-item verification template (`docs/adoption_verification_template.md`) that captures URL, license, last-commit date, maintainer responsiveness, and license-compatibility outcome BEFORE any of these items moves out of "Tracked, Not Scheduled" status. Applies retroactively to all 34 existing Phase 26 B-XXX items as well.
+
+- [ ] **DEC-14** Existing `wastewater_lineage_abundance` Freyja result rows. The current JACKPOT schema lands Freyja outputs into a typed result_type called `wastewater_lineage_abundance` (referenced by existing B-WW-1 Phase 26 item). After WW-3 adds `WastewaterTargetResult` with variant deconvolution fields, existing Freyja data could be: (a) migrated into `WastewaterTargetResult` rows (one TargetResult per detected lineage), (b) kept as parallel `wastewater_lineage_abundance` typed result alongside the new model, (c) deprecated with a sunset window. Affects WW-11 migration step plan. Recommendation: (a) migrate during WW-11 — each existing `wastewater_lineage_abundance` row becomes one `WastewaterTargetResult` row per detected lineage with `variant_detection_method = freyja`. Atomically replaces the result_type with the new typed table representation.
+
+### Schema additions for wastewater surveillance module (must land with P0b)
+
+These items execute the DEC-10 refactor plus add the population normalization biomarkers, hydraulic covariates, process-control tracking, and metagenomic profile typing that the v4.4 wastewater model lacks. All bundle into a single P0b migration cycle. Source comparative analysis: external WBE schema draft uploaded 2026-05-11 against JACKPOT v4.4 wastewater coverage; literature review in `wastewater_analaysis.md` (LeapSpace 2026-05-10). Reference standards: NWSS data dictionary, PHA4GE contextual data spec, WHO Tricycle protocol, ENVO ontology, MIxS environmental packages.
+
+- [ ] **WW-1** Add `wastewater_collection_sites` table — persistent sampling-location entity, 1:N with `samples` (when `source_type = 'Wastewater'`). Columns: `site_id` (UUID PK), `owning_lab_id` (FK to `labs`, required — site participates in JACKPOT's existing 6-role RBAC via the owning lab; organization derives from `labs.organization_id`), `site_name` (text, required), `site_type` enum value from `WastewaterSiteTypeEnum` (per WW-9), `latitude` / `longitude` (float, WGS84, required), `geo_precision` enum (`exact` / `centroid_of_catchment` / `jittered_500m`), `served_county_fips` (multivalued text, FIPS 5-digit — preserves the multi-county info that v4.4 `WastewaterSample.county_names` could hold), `state` (text — follow JACKPOT's existing convention for state codes, US-states controlled vocab per SCH-1 when country = 'US'), `country` (text — follow JACKPOT's existing convention for country codes; confirm at implementation time whether alpha-2 or alpha-3 matches current schema; document choice in WW-9 enum reconciliation), `population_served` (integer), `catchment_area_km2` (float), `catchment_description` (text), `sewershed_id` (text — utility-defined or NWSS sewershed polygon identifier), `sewer_system_type` enum (`separate_sanitary` / `combined` / `open_drain` / `decentralized`), `treatment_plant_name`, `treatment_plant_capacity_mgd`, `industrial_input_fraction` (float, 0-1), `one_health_sector` (text, controlled vocabulary value matching existing `SectorEnum` permissible values — not an FK, since enums are referenced by value), `known_upstream_sources` (multivalued text), `nwss_site_id`, `operating_authority`, `date_established`, `is_active` (boolean), `notes`, `created_at` (timestamp), `created_by_user_id` (FK to `users`), `updated_at` (timestamp). (1-2 sessions, P0b — depends on DEC-10)
+
+- [ ] **WW-2** Refactor existing `WastewaterSample` per DEC-10: add `site_id` FK to `WastewaterCollectionSite` (required), remove denormalized site fields (`wwtp_name`, `nwss_sewershed_id`, `sample_location_zipcode`, `county_names`, `population_served`), remove per-target qPCR fields (`pcr_target`, `pcr_gene_target`, `pcr_gene_target_ref`, `pcr_type`, `quant_stan_type`, `stan_ref`, `lod_ref`, `inhibition_method`, `num_no_target_control`) — these move to WW-3's `WastewaterTargetResult`. Retain on `WastewaterSample`: `sample_type`, `sample_matrix`, `pretreatment`, `concentration_method`, `flow_rate_mgd`, `sample_collect_time`, `pasteurized`, `env_broad_scale`, `env_local_scale`, `env_medium`. Plus all v5.0-new additions from WW-5/6/7/8 below. (1 session, P0b — depends on WW-1, WW-3, WW-11 migration)
+
+- [ ] **WW-2a** Consumer code refactor for the WW-2 schema change. The dropped `WastewaterSample` fields (`wwtp_name`, `nwss_sewershed_id`, `sample_location_zipcode`, `county_names`, `population_served`, `pcr_target`, `pcr_gene_target`, `pcr_gene_target_ref`, `pcr_type`, `quant_stan_type`, `stan_ref`, `lod_ref`, `inhibition_method`, `num_no_target_control`) are read by multiple production modules. This item tracks the consumer-side refactor that must land in the same PR as WW-2 (otherwise the API breaks for wastewater consumers). Affected modules to audit and refactor: (a) `backend/backend/validator.py` — drop required-field checks for moved fields, add new checks per WW-12; (b) `backend/backend/pipeline_results_loader.py` — update any code reading `samples.pcr_target_*` to read from `wastewater_target_results` instead; (c) `backend/backend/routers/samples.py` and `backend/backend/routers/ingest.py` — update response shapes and request validation; (d) jackpot-nf parsers that emit `wastewater_lineage_abundance` rows — coordinate with DEC-14 migration plan; (e) Streamlit pages under `frontend/pages/` that display wastewater sample metadata (currently denormalized) — refactor to JOIN against `wastewater_collection_sites`; (f) jackpot-cli `jackpot samples` commands when source_type=Wastewater — update display fields; (g) test fixtures with hardcoded `wwtp_name`/`pcr_target` values in `tests/` — rewrite against new model. Add an end-to-end test that exercises the full ingest → result → display flow with multi-target panels. Coverage gate: ≥95% on the wastewater-touching modules after refactor. (2-3 sessions, P0b — bundle with WW-2 and WW-11)
+
+- [ ] **WW-3** Add `wastewater_target_results` table — per-target qPCR/ddPCR result rows, 1:N with `samples` (when `source_type = 'Wastewater'`). Columns: `result_id` (UUID PK), `sample_id` (FK to `samples.sample_id`, required), `target_name` (text, required), `target_gene`, `target_organism`, `target_category` enum (required — `respiratory_virus` / `enteric_virus` / `enteric_bacteria` / `amr_gene` / `amr_mutation` / `fecal_indicator` / `population_biomarker` / `process_control`), `assay_method` enum (required — `qPCR` / `ddPCR` / `RT-qPCR` / `RT-ddPCR`), `concentration_gc_l` (float), `concentration_gc_g` (float), `log10_concentration`, `normalized_concentration`, `ct_value`, `lod_gc_l`, `loq_gc_l`, `below_lod` (boolean), `detected` (boolean, required), `variant_lineage`, `variant_detection_method` enum (`mutation_specific_qpcr` / `amplicon_sequencing` / `metagenomic_deconvolution` / `freyja` / `pigx_sars_cov_2` / `wepp_phylogenetic_placement` / `aquascope`), `variant_proportion` (float 0-1), `replicate_count` (integer), `replicate_agreement` enum (`all_positive` / `all_negative` / `mixed`), `inhibition_controlled` (boolean), `analysis_date` (date), `notes`, `created_at` (timestamp, append-only), `created_by_user_id` (FK to `users`). Append-only — re-running an assay creates a new row, never UPDATEs an existing one (matches pattern of `pipeline_results`). (1-2 sessions, P0b — depends on WW-1, DEC-10)
+
+- [ ] **WW-4** Add `wastewater_metagenomic_profiles` table — typed entity for untargeted shotgun metagenomic results, 1:N with `samples` (when `source_type = 'Wastewater'`). Design rationale (per DEC-11): typed table chosen over a `pipeline_results` JSONB result_type because dashboards filter by integron type, plasmid replicon family, ARG class, and MAG count — all of which would be slow against JSONB. Precedent for typed tables exists in JACKPOT for clinical AMR (`amr_results`) and TB typing (`tb_typing_results`). Columns: `profile_id` (UUID PK), `sample_id` (FK to `samples.sample_id`, required), `pipeline_run_id` (FK to `pipeline_runs.run_id` — the metagenomic Nextflow run that produced this profile; matches existing JACKPOT pipeline-results provenance pattern), `sequencing_platform` enum, `read_type` enum (`short_read` / `long_read` / `hybrid`), `total_reads` (integer), `total_bases_gb` (float), `host_reads_removed_pct` (float), `taxonomic_profiler` (text — Kraken2/MetaPhlAn4/mOTUs3/Centrifuge), `taxonomic_profile_path` (text — GCS/MinIO URI), `species_richness` (integer), `shannon_diversity` (float), `amr_profiler` (text — AMRFinderPlus/CARD-RGI/ResFinder/ABRicate), `amr_database`, `amr_database_version`, `amr_profile_path` (text — hAMRonization-compatible output URI), `total_arg_types_detected` (integer), `total_arg_classes_detected` (integer), `arg_reads_per_million` (float), `mge_profiler` (text — PlasmidFinder/mobileOG-db), `integron_types_detected` (multivalued text — class 1/2/3), `plasmid_replicon_types` (multivalued text — IncF/IncHI2/IncX3 etc.), `num_mags_recovered` (integer), `num_high_quality_mags` (integer — MIMAG: >90% complete, <5% contamination), `assembler` (text — metaSPAdes/MEGAHIT/metaFlye), `binner` (text — MetaBAT2/CONCOCT/SemiBin/vRhyme), `pipeline_name`, `pipeline_version`, `analysis_date` (date), `notes`, `created_at` (timestamp, append-only), `created_by_user_id` (FK to `users`). Append-only — re-running metagenomic analysis creates a new row. (1-2 sessions, P0b — depends on WW-1, DEC-11)
+
+- [ ] **WW-5** Add hydraulic + environmental covariate fields to refactored `WastewaterSample`: `water_temperature_c` (float), `ph` (float, 0-14), `conductivity_us_cm` (float), `turbidity_ntu` (float), `tss_mg_l` (total suspended solids, float), `bod_mg_l` (biochemical oxygen demand, float), `ammonia_mg_l` (float — secondary population biomarker), `rainfall_48h_mm` (float — 48-hour antecedent rainfall in catchment; critical confounder for combined sewer systems; sourced via `external_data_sources` OBS-3 / NOAA station linkage). (0.5 session, P0b — bundle with WW-2)
+
+- [ ] **WW-6** Add population normalization biomarker fields to refactored `WastewaterSample`: `pmmov_gc_l` (Pepper mild mottle virus, NWSS-adopted human fecal strength biomarker), `crassphage_gc_l` (alternative human fecal biomarker). Both float, gene copies per liter. Used as denominators in `WastewaterTargetResult.normalized_concentration`. (0.25 session, P0b — bundle with WW-2)
+
+- [ ] **WW-7** Add process control + recovery efficiency fields to refactored `WastewaterSample`: `process_control_organism` (text — BCoV/MHV/Phi6/CrAssphage/PMMoV), `recovery_efficiency_pct` (float, 0-100), `inhibition_detected` (boolean — supplements existing `inhibition_method`). Critical for distinguishing "pathogen not present" from "method failed to recover." (0.5 session, P0b — bundle with WW-2)
+
+- [ ] **WW-8** Add chain-of-custody fields to refactored `WastewaterSample`: `collected_by` (text — operator/individual), `shipped_date`, `received_date`, `processing_lab` (text — distinct from `originating_lab` which is the sequencing lab), `storage_conditions` enum (`4C_within_24h` / `frozen_minus_80C` / `frozen_minus_20C` / `ambient` / `other`). (0.5 session, P0b — bundle with WW-2)
+
+- [ ] **WW-9** Add new wastewater-specific enums and reconcile with existing JACKPOT enums. (1) **`WastewaterSiteTypeEnum`** (NEW enum) — `wastewater_treatment_plant`, `pump_station`, `manhole`, `building_level`, `combined_sewer_overflow`, `stormwater_outfall`, `surface_water`, `agricultural_runoff`, `aquaculture_effluent`, `slaughterhouse_effluent`, `septage`, `open_drain`, `other`. ENVO meanings annotated where they exist. Used by `wastewater_collection_sites.site_type`. (2) **Existing `WastewaterSampleTypeEnum`** (EXTEND in place) — keep existing `grab` / `composite_24hr_flow_weighted` / `composite_24hr_time_weighted` / `other` values; add new values `composite_other`, `passive_moore_swab`, `passive_trap`, `settled_solids`, `biofilm_swab`. No renaming of existing values. No new enum class — extend the existing one. (3) **`WastewaterTreatmentStageEnum`** (NEW enum) — `influent_raw`, `post_primary`, `post_secondary`, `post_tertiary`, `effluent_final`, `biosolids`, `reclaimed_water`, `not_applicable`. Distinct from existing `sample_matrix` (`SampleMatrixEnum`) which describes physical state. Both can be set independently on a sample. (4) **Existing `ConcentrationMethodEnum`** (EXTEND in place, NO renames) — existing has `ceres_nanotrap`, `membrane_filtration_MgCl2`, `ultrafiltration`, `polyethylene_glycol_precipitation`, `ultracentrifugation`, `other`. Add new values `electronegative_filtration`, `skimmed_milk_flocculation`, `adsorption_extraction`, `magnetic_bead_capture`, `no_concentration`. **Do NOT rename `polyethylene_glycol_precipitation` to `peg_precipitation`** — Postgres enum renames break existing rows and there's no SQL-level alias mechanism. Any code/UI shortening to `PEG` is a display-layer concern, not a schema change. If a future v5.x release wants the shorter name, do it as an explicit value migration (ALTER TYPE...RENAME VALUE in Postgres ≥10) with a same-PR audit of all readers. (0.5 session, P0b — bundle with WW-1/WW-2)
+
+- [ ] **WW-10** Update `SourceTypeEnum` and `SectorEnum` for wastewater-One-Health bridging cases. Existing `SourceTypeEnum` has `Wastewater` and `Water` — keep both. Add `AgriculturalRunoff` and `AquacultureEffluent` as new values (or model these via `WastewaterCollectionSite.site_type` only — RESOLVED 2026-05-11: model via site_type only, don't add new source-type values; site_type carries the One Health bridging granularity). For existing `SectorEnum`: no changes needed (current values `clinical` / `veterinary` / `agricultural` / `environmental` / `wastewater` / `wildlife` / `research` cover all proposed `OneHealthSectorEnum` cases). `WastewaterCollectionSite.one_health_sector` references `SectorEnum`, not a new enum. (0.25 session, P0b — bundle with WW-9)
+
+- [ ] **WW-11** Hand-write Alembic migration (per Critical Rule 2 — no `--autogenerate`) executing the WW refactor. Steps: (a) create `wastewater_collection_sites` table with all WW-1 columns; (b) **site deduplication step** — for each existing `samples` row where `source_type = 'Wastewater'`, compute a site identity key = (`wwtp_name`, `nwss_sewershed_id`, `coalesce(sample_location_zipcode, '')`). GROUP BY this key. For each group, INSERT one `wastewater_collection_sites` row from the group's denormalized fields. Resolve owning_lab_id from the modal `samples.lab` value in the group; if multiple labs share a site, pick the earliest-created sample's lab and log a WARN in migration output for manual reconciliation; (c) **county_names handling** — populate `wastewater_collection_sites.served_county_fips` (multivalued) from the FULL `samples.county_names` array (passing through a name-to-FIPS lookup table for any non-FIPS entries), NOT just the first value. Preserves the multi-county info v4.4 carried; (d) add `site_id` FK column to `samples`, populate by matching the site-identity key per row; (e) create `wastewater_target_results` table per WW-3; (f) for each existing wastewater sample, INSERT a `wastewater_target_results` row copying current `pcr_target`, `pcr_gene_target`, `pcr_type`, `quant_stan_type`, `stan_ref`, `lod_ref`, `inhibition_method`, `num_no_target_control` values. Most other fields will be NULL — that's expected (the existing schema didn't capture them); (g) **`wastewater_lineage_abundance` migration per DEC-14** — for each existing typed result row of result_type `wastewater_lineage_abundance`, INSERT one `wastewater_target_results` row per detected lineage with `variant_detection_method = freyja`, `variant_lineage` and `variant_proportion` populated from the Freyja output, `target_organism = 'SARS-CoV-2'` (or whatever the original Freyja run targeted), `target_category = 'respiratory_virus'`. Mark old `wastewater_lineage_abundance` rows as migrated (add a `migrated_to_target_result_id` column or drop after verification); (h) create `wastewater_metagenomic_profiles` table per WW-4 (empty — populated by Phase 34 parsers WW-13..17); (i) add WW-5/6/7/8 covariate/normalization/process-control/chain-of-custody columns to `samples`; (j) drop the denormalized site fields and per-target qPCR fields from `samples`. **Reversibility caveat:** down-migration restores site denormalization and the single `pcr_target` field — but the new WW-5/6/7/8 covariate/biomarker/process-control/chain-of-custody fields, the multivalued `served_county_fips`, the metagenomic profile rows, and any post-migration multi-target panels CANNOT be reconstructed in the v4.4 schema. Down-migration is therefore lossy by design and must emit a clear WARN listing the data being dropped. Document the lossy down-mig in `docs/migrations/ww-refactor-rollback.md`. Add end-to-end migration test against a 100-sample fixture including: multi-sample-per-site cases, multi-county samples, samples with existing `wastewater_lineage_abundance` Freyja results, and samples without any PCR data. Round-trip test (up-migrate → down-migrate → up-migrate again) must pass for all data that survives the lossy down-mig. (3-4 sessions, P0b — depends on DEC-14)
+
+- [ ] **WW-12** Update `validator.py` for new conditional-required logic on the refactored model. (a) `recovery_efficiency_pct` required when `process_control_organism` is non-null. This is a same-row check, fits existing validator pattern. (b) `flow_volume_l` derivable from `flow_rate_mgd × sample_collect_duration` for composite samples — emit a tier-2 completeness check rather than a hard requirement. Same-row check. (c) **Cross-table validation for PMMoV recommendation** — `pmmov_gc_l` on `samples` is recommended (not required) when any associated `wastewater_target_results` row has `target_category` ∈ {`respiratory_virus`, `enteric_virus`}. This requires reading from a SECOND table at validation time. Current `validator.py` operates on a single sample dict; this cross-table check needs to land as a post-ingest async validator step (APScheduler job) that runs after target results are written, OR as an explicit application-layer call after both sample and target results land in the same transaction. Recommendation: same-transaction app-layer call from the ingest router after target_results insert, with the warning surfaced via the existing `notifications` table. (d) `rainfall_48h_mm` auto-population from `external_data_sources` (OBS-3) — lives in a new service module `backend/backend/wastewater/context_autopop.py`, called from the ingest router AFTER `wastewater_collection_sites` row is identified for the sample. NOAA station lookup is synchronous-with-timeout (default 2s) at ingest; on timeout or API failure, sample lands with `rainfall_48h_mm = NULL` and a notification queues a retry job. Update existing `BASE_REQUIRED` / tier-1 / tier-2 / tier-3 validator logic. (1-2 sessions, P0b — bundle with WW-2; cross-table validator step adds ~0.5 session)
+
 ### Phase 24.5 success criterion
 
 - [ ] `docs/architecture/sovereignty-compliant-deletion.md` exists, is reviewable
 - [ ] P0b schema design has accommodated the sovereignty columns + enum extensions (sovereignty block above)
 - [ ] P0b schema design has accommodated `byop_pipelines` table, `pipeline_results` FK, eukaryotic OrganismNameEnum additions, eukaryotic samples columns, 8 eukaryotic pipeline-result tables, and supporting enums (BYOP/eukaryotic block above)
-- [ ] Implementation tasks are queued: `B-CARE-3` for P0c (sovereignty deletion), `B-BYOP-1` through `B-BYOP-10` for P0f (BYOP infrastructure), `B-EUK-PLAS-*` through `B-EUK-TOXO-*` for Phase 28 (default eukaryotic pipelines)
+- [ ] DEC-1 through DEC-8 architectural decisions resolved (ML/Observatory block above)
+- [ ] P0b schema design has accommodated `model_artifacts`, `model_evaluations`, `inference_runs`, `embeddings` tables + `pgvector` extension if applicable (ML schema block above)
+- [ ] P0b schema design has accommodated dairy bulk milk support, AirSample protocol fields with conditional PM-required logic, `external_data_sources` + `sample_external_context` join table, ICTV taxonomy fields on OrganismName (OBS schema block above)
+- [x] DEC-10 resolved 2026-05-11 — refactor approach selected for wastewater module (wastewater block above)
+- [ ] DEC-11 through DEC-14 architectural decisions resolved (wastewater block above — typed-table-vs-JSONB, v5.0 mega-release scope, B-XXX verification process, existing `wastewater_lineage_abundance` handling)
+- [ ] P0b schema design has accommodated `wastewater_collection_sites` table (with owning_lab_id RBAC integration), refactored `samples` for wastewater (site_id FK + new covariate/biomarker/process-control/chain-of-custody fields + dropped denormalized fields), `wastewater_target_results` per-target table (with audit fields), `wastewater_metagenomic_profiles` typed table (with audit fields), enum extensions in place (additive only — `WastewaterSampleTypeEnum`, `ConcentrationMethodEnum`, plus new `WastewaterSiteTypeEnum` and `WastewaterTreatmentStageEnum`), and the WW-11 lossy-down-mig migration with site dedupe + county_names preservation + Freyja `wastewater_lineage_abundance` data migration (wastewater block above)
+- [ ] WW-2a consumer-code refactor scoped — `validator.py`, `pipeline_results_loader.py`, sample/ingest routers, jackpot-nf parsers, Streamlit pages, jackpot-cli, and test fixtures all updated and tests passing (≥95% coverage on wastewater-touching modules)
+- [ ] Implementation tasks are queued: `B-CARE-3` for P0c (sovereignty deletion), `B-BYOP-1` through `B-BYOP-10` for P0f (BYOP infrastructure), `B-EUK-PLAS-*` through `B-EUK-TOXO-*` for Phase 28 (default eukaryotic pipelines), `ML-5` through `ML-19` for Phase 29 (ML/Modeling Infrastructure), `FML-1` through `FML-7` for Phase 30 (Federated ML Analytics), `WW-13` through `WW-26` for Phase 34 (Wastewater Module pipelines/parsers/UI)
 
-**Effort:** 1 session for the sovereignty design doc + 1-2 sessions for the BYOP + eukaryotic schema migration work + half a session of P0b integration discussion. Total: 3-4 sessions for Phase 24.5.
+**Effort:** 1 session for the sovereignty design doc + 1-2 sessions for the BYOP + eukaryotic schema migration work + 1-2 sessions for the ML schema additions + 1-2 sessions for the Observatory schema additions + 6-8 sessions for the wastewater module refactor (now includes WW-2a consumer-code refactor + WW-11 migration with dedupe and Freyja-result-migration + cross-table validator step in WW-12) + half a session of P0b integration discussion. Plus DEC-1..9 resolution sessions (Glen-owned decisions, mostly research/reading time not implementation). DEC-10 resolved 2026-05-11. DEC-11..DEC-14 unresolved as of round-3 — Glen-owned decisions. Total: 12-16 sessions for Phase 24.5 if shipped as v5.0 mega-release per DEC-12 option (a); 7-10 + 5-8 sessions if split into v5.0 + v5.1 per DEC-12 option (b).
 
 **Phase placement justification:** All these schema decisions must be locked before P0b touches the schema. Doing them now means P0b is one migration, not three. Implementation work for the deletion logic, BYOP infrastructure, and default eukaryotic pipelines all happens in later phases (P0c, P0f, Phase 28 respectively) — but the *schema* lands in P0b alongside the existing v5.0 work.
 
@@ -1239,6 +1350,28 @@ These are not separate design work — the design exists in `jackpot_byop_and_eu
 - [ ] **B-MARTI-1** Real-time progressive analysis UX pattern for ONT pipelines. Source patterns: MARTi (MIT) + MMonitor. Add WebSocket endpoint at `/api/v1/pipelines/{run_id}/progressive`, "emit-while-running" Nextflow process annotation, Streamlit auto-refresh on sample detail page during RUNNING state, "live" indicator on samples table. Architecturally distinct from JACKPOT's current finalize-then-parse model — requires parallel progressive-results channel. (2 sessions infra + 1 session per progressive-aware pipeline retrofit, Phase 26+) `[2026-05-09 assessment Tier C-pattern]`
 - [ ] **B-WW-1** Wastewater lineage-abundance dashboard. Source patterns: NICD-Wastewater-Genomics + andersen-lab/sd_ww_processing (Freyja-based). JACKPOT already lands Freyja outputs in `wastewater_lineage_abundance` result type — this adds the operator-facing visualization layer. Streamlit page with stacked-area lineage trajectories per sampling site, project/lab-membership filters, PNG/PDF export. (1.5 sessions, any) `[2026-05-09 assessment Tier C-pattern]`
 - [ ] **B-NFTHEIA-1** Comparison spike: `theiagen/nf-theia` Nextflow plugin vs `nf-jackpot`. Both target file-tracking/reporting but with different scope (nf-theia adds multi-cloud storage abstraction + per-process JSON reports). Read source, write `docs/nf-theia-vs-nf-jackpot.md` feature comparison, selectively port useful features. (0.5 session, opportunistic) `[2026-05-09 assessment Tier C-pattern]`
+
+### N. 2026-05-11 strategic assessment — WBE-specific tool adoption items
+
+Source: literature review `wastewater_analaysis.md` (LeapSpace 2026-05-10) cross-referenced against Phase 26's existing 34 B-XXX items. None of these were previously tracked. All depend on Phase 24.5 WW-1..WW-12 schema refactor landing first so they have typed tables to write into.
+
+- [ ] **B-PIGX-1** PiGx SARS-CoV-2 pipeline adoption (Schumann et al. 2022, *Sci Total Environ*). Wastewater-specific lineage deconvolution + variant calling pipeline; complements Freyja with a different deconvolution approach. Source: `https://github.com/BIMSBbioinfo/pigx_sars-cov-2`. License check before vendor decision. Compare output schema with existing `wastewater_lineage_abundance` result type — likely lands as alternate deconvolution method recorded in `WastewaterTargetResult.variant_detection_method = pigx_sars_cov_2`. (1.5-2 sessions, Phase 26; depends on Phase 24.5 WW schema) `[2026-05-11 assessment Tier C-pattern]`
+
+- [ ] **B-AQUASCOPE-1** Aquascope wastewater lineage/variant tracking. Source: vetting needed — confirm GitHub URL and license before vendor decision. Comparator alongside Freyja and PiGx; Phase 26 item is the comparison spike, not full vendor. Write `docs/wastewater-deconvolution-comparison.md` covering Freyja vs PiGx vs Aquascope vs WEPP across accuracy, lineage resolution, runtime, dependency cleanliness. (1 session for comparison spike, Phase 26) `[2026-05-11 assessment Tier C-pattern]`
+
+- [ ] **B-WEPP-1** WEPP phylogenetic placement adoption (Gangwar et al. 2026, *PLoS Comp Bio*). Achieves near-haplotype resolution in wastewater — meaningful differentiator vs. abundance-only methods. Vendor as a Nextflow process under jackpot-nf; output lands in `WastewaterTargetResult.variant_detection_method = wepp_phylogenetic_placement` + companion typed result table for placement uncertainty. License check before vendor. (2-3 sessions, Phase 26; depends on Phase 24.5 WW schema) `[2026-05-11 assessment Tier C-pattern]`
+
+- [ ] **B-WMON-1** watermonitor metatranscriptomic workflow (https://github.com/waterpt/watermonitor). AI-enhanced metatranscriptomic analysis for rapid pathogenic virus + bacteria detection. Per literature review: high accuracy/speed, reproducible, widely cited. License check; compare with nf-core/taxprofiler and existing JACKPOT zoo coverage. Adoption decision contingent on whether watermonitor adds beyond nf-core/taxprofiler + nf-core/mag combination already in zoo. (1 session for comparison spike, Phase 26) `[2026-05-11 assessment Tier C-pattern]`
+
+- [ ] **B-WASTPAN-1** WastPan (Finland) national WBE system — reference architecture analysis, NOT a tool to vendor. Per Sarekoski et al. 2024 and the literature review: WastPan covers 40% of Finland with validated protocols for viruses + bacteria + fungi + parasites + AMR genes. Write `docs/wastpan-reference-architecture.md` covering operational patterns transferable to JACKPOT operators (sampling cadence, multi-pathogen panel composition, integration with national health authorities). Companion to existing B-WW-ADV-1 wet-side advisory documentation. (1-1.5 sessions, Phase 26 reference docs) `[2026-05-11 assessment Tier C-reference]`
+
+- [ ] **B-ENCYC-1** Encyclopaedia Cloacae (EU4S) platform analysis — reference platform comparison, NOT direct adoption. Per literature review: EU Wastewater Observatory digital platform with global pathogen catalogue + geospatial analytics. Write `docs/encyc-cloacae-comparison.md` covering geospatial analytics features potentially worth adopting in JACKPOT's wastewater dashboard (Phase 34 WW-19+). Cross-reference with Phase 26 B-PW-X Pathogenwatch geospatial features. (1 session, Phase 26 reference docs) `[2026-05-11 assessment Tier C-reference]`
+
+- [ ] **B-RESPIPE-1** ResPipe vs nf-core/funcscan comparison spike for wastewater AMR profiling (Pereira et al. 2020, *Microbiome*). ResPipe is specifically designed for shotgun metagenomic AMR profiling; nf-core/funcscan is already in the zoo. Per literature review and Djordjevic et al. 2024, wastewater resistome profiling has specific requirements (hAMRonization compatibility, integron typing, plasmid replicon detection) that nf-core/funcscan may not optimally cover. Write `docs/respipe-vs-funcscan.md`; if ResPipe wins, vendor as a wastewater-specific AMR profiler that writes to `WastewaterMetagenomicProfile`. (1 session comparison + optional 2-3 sessions vendor, Phase 26; depends on Phase 24.5 WW schema if vendored) `[2026-05-11 assessment Tier C-comparison]`
+
+- [ ] **B-DPCR-1** Multiplex digital PCR (dPCR) workflow adoption pattern (Malla et al. 2024, *Sci Total Environ*: 5-plex; Tiwari et al. 2022 review). Digital PCR offers improved accuracy and inhibitor resistance vs. qPCR for wastewater matrices. Pattern adoption: ensure `WastewaterTargetResult.assay_method = RT-ddPCR` / `ddPCR` is well-supported, parser handles multiplex-panel instrument outputs (Bio-Rad QX600, Stilla Naica, etc.). Add a `wastewater_dpcr_multiplex` typed result type if instrument-export parsing needs structured intermediate. (1-2 sessions, Phase 26; depends on Phase 24.5 WW schema) `[2026-05-11 assessment Tier C-pattern]`
+
+- [ ] **B-PROBE-1** Probe-capture enrichment workflow pattern for low-abundance / emerging wastewater viruses (Kantor & Jiang 2024, *Environ Sci Technol*; Li et al. 2022, *Microbiol Spectr*). Hybrid-capture sequencing improves sensitivity for emerging viruses where untargeted metagenomics misses signal. Adoption: document the enrichment-aware pipeline pattern in `docs/wastewater-probe-capture.md`; mark `WastewaterMetagenomicProfile.notes` with capture method (Twist Comprehensive Viral Research Panel, Agilent SureSelect, etc.); ensure pipeline parsers handle enriched-library QC distinct from untargeted shotgun. (1-1.5 sessions, Phase 26 reference + pattern) `[2026-05-11 assessment Tier C-pattern]`
 
 ### Items intentionally NOT added (from 2026-05-09 assessment Tier D)
 
@@ -2232,6 +2365,340 @@ Lower-priority for sequencing-based surveillance (most STH and filarial work is 
 **Total effort:** ~10-15 weeks if sequential, ~4-6 weeks if parallelized across 3 contributors. Each pipeline is genuinely independent work.
 
 **Phase placement justification:** Cannot start until P0f (BYOP infrastructure) is real, since these pipelines register *via* BYOP. Schema is ready in P0b. Internal tier-priority orders the actual implementation order based on global health impact and tooling availability.
+
+---
+
+## Phase 29 — ML/Modeling Infrastructure (Tracked, Not Scheduled)
+
+**Source:** Strategy session 2026-05-11. Phased rollout designed to deploy classical anomaly detection without GPU dependency (Phase A in plan), then foundation-model-based detection (Phase B), then domain-adaptive fine-tuning (Phase C). All items here are Phase A and Phase B engineering items; Phase C–D items live in Year 2 Federation extensions below.
+
+**Dependencies:** P0b ships ML-1 through ML-4 schema. DEC-1 through DEC-4 resolved. `pgvector` extension enabled on Cloud SQL if DEC-4 chooses pgvector.
+
+**Architectural framing:** ML pipelines are a new pipeline category alongside bioinformatics. Same Nextflow infrastructure, same `pipeline_results` pattern. Embedding pipeline is offline batch (NOT on ingest hot path) so embedding-on-ingest does not block Scenario A (laptop) or Scenario F (CI test) deployments lacking GPU. Drift monitoring is deliberately premature for first-deployment phase; gates on having models in production long enough to actually drift.
+
+### Nextflow pipelines
+
+- [ ] **ML-5** Embedding pipeline (offline batch). Pulls recently-ingested samples lacking embeddings, runs the chosen foundation model from DEC-1, writes results to `embeddings` table via parser ML-12. Scheduled via APScheduler at configurable cadence (default daily). CPU-feasible for small scale via ONNX runtime if DEC-2 = ONNX; GPU-required for production scale. (3-4 sessions)
+
+- [ ] **ML-6** Batch anomaly scan pipeline using foundation-model embeddings. Scheduled APScheduler job or Nextflow workflow. Queries samples scored in the last window, scores them via active Isolation Forest model (from `model_artifacts`), writes anomaly scores to `pipeline_results` and high-confidence anomalies to `notifications`. (2-3 sessions)
+
+- [ ] **ML-7** Lineage growth anomaly pipeline. Daily multinomial logistic regression (MLR) or hierarchical Bayesian fit on lineage frequencies over the last 28 days. Flags lineages with growth coefficient exceeding configurable threshold. Uses numpyro for hierarchical Bayesian variant (FML-4 below extends this to federated form). Writes to `notifications`. (2 sessions)
+
+- [ ] **ML-8** AMR fingerprint anomaly pipeline. Isolation Forest on hAMRonization output vectors. Flags samples in unusual regions of the AMR fingerprint feature space. (2 sessions)
+
+- [ ] **ML-9** UShER placement outlier scoring pipeline. Runs on every sample at ingest (UShER is fast — 0.5-2 seconds per sample). Writes parsimony scores and placement uncertainty to `pipeline_results`. Downstream scheduled job flags high-parsimony samples as potential novel lineages. (2 sessions)
+
+- [ ] **ML-10** Generic ML training pipeline. Nextflow workflow that takes a training-dataset reference, runs training, validates against held-out data, writes a new row to `model_artifacts` with training_data_hash, validation_metrics, artifact_uri. Used by ML-6, ML-7, ML-8 for periodic retraining. (3-4 sessions)
+
+- [ ] **ML-11** Drift monitoring pipeline. Scheduled `alibi-detect`-based job comparing current embedding/lineage/AMR distributions to training-time distributions. Triggers retraining workflow when drift exceeds threshold. **Premature until models have been in production for several months**; track but do not schedule until ML-6/7/8 have been live for ≥3 months. (2 sessions, deferred-until-prerequisite)
+
+### Pipeline parsers
+
+- [ ] **ML-12** Parser for embedding pipeline output → `embeddings` table writes. Validates embedding dimensionality matches `model_artifacts` metadata. (1 session)
+
+- [ ] **ML-13** Parser for anomaly detection pipelines (ML-6, ML-7, ML-8) → `pipeline_results` rows plus `notifications` rows for high-confidence anomalies. (1-2 sessions)
+
+- [ ] **ML-14** Parser for ML training pipeline output (ML-10) → `model_artifacts` row registration plus initial `model_evaluations` row from held-out validation. (1 session)
+
+### API + UI + CLI surfaces
+
+- [ ] **ML-15** API router `backend/backend/routers/models.py` for `/api/v1/models/` — CRUD on `model_artifacts`, GET evaluations, model lifecycle transitions (active → deprecated → retired). Platform Admin only for register/retire; read-only for analysts. (2 sessions)
+
+- [ ] **ML-16** API router extension for `/api/v1/anomalies/` — list current anomalies aggregated across all detectors, drill-down by detector, drill-down by sample. (1-2 sessions)
+
+- [ ] **ML-17** Streamlit page: Model Registry (`frontend/pages/model_registry.py`) — browse `model_artifacts`, view evaluations, see deployment status, trigger retraining (Platform Admin only). (2 sessions)
+
+- [ ] **ML-18** Streamlit page: Anomaly Dashboard (`frontend/pages/anomaly_dashboard.py`) — aggregated alerts from all detectors (ML-6/7/8/9), filtering by detector, sample, lineage, AMR pattern; drill-down to sample detail. Overlaps with Phase IM-1's "Anomaly Triage" page; one page may serve both. (2-3 sessions; coordinate with `B-IMMUNE-UI-1`)
+
+- [ ] **ML-19** jackpot-cli commands: `jackpot models list`, `jackpot models register`, `jackpot models retire <id>`, `jackpot anomalies recent`, `jackpot anomalies sample <id>`. (1 session)
+
+### Phase 29 effort summary
+
+Total estimated: ~22-28 sessions across pipelines, parsers, API, UI, and CLI. Ships in stages — ML-5/ML-12 first (embedding offline infrastructure), then anomaly detectors ML-6/7/8/9 + parser ML-13 + UI ML-18, then training + registry ML-10/ML-14/ML-15/ML-17, finally drift monitoring ML-11 once enough live production data exists.
+
+---
+
+## Phase 30 — Federated ML Analytics (Tracked, Not Scheduled)
+
+**Source:** Strategy session 2026-05-11 federation collaborative learning plan, Layer 1 (federated summary statistics). Built on top of the existing Federation/Privacy/Crypto scaffolds (FED-A landed 2026-05-08; FED-B/C/D/E + PRV-A + CRY-A pending) — does NOT replace them. **FML-X codes** are used (Federated Machine Learning) to distinguish from FED-A..E (federation substrate) and B-FED-1 (Pathoplexus adoption in Phase 26).
+
+**Dependencies:** FED-B/C/D/E wire-up complete (federation router + tests + migration + main.py wiring). PRV-A privacy scaffold landed. Phase 29 ML pipelines operational. DEC-3, DEC-8 resolved.
+
+**Architectural framing — three layers:**
+
+- **Layer 1 (this phase):** Federated summary statistics — centroids, lineage frequencies, AMR fingerprint distributions, hierarchical Bayesian MLR. No FL framework needed. Rides on the existing FED-A `secure_aggregate` hook for confidentiality.
+- **Layer 2 (Year 2 stretch):** True federated learning via Flower with LoRA adapters. Implemented as Track 2 concrete impl of PRV-A's `fl_aggregate` hook in `backend/backend/immune/sec/`. See Year 2 Federation extensions section below.
+- **Layer 3 (Year 2 stretch):** Differential privacy via Opacus, secure aggregation (Bonawitz), TEEs. Implemented as Track 2 concrete impl of PRV-A's `dp_noise`, `track_dp_budget`, `he_compute`, `mpc_protocol` hooks. See Year 2 Federation extensions section below.
+
+The PSI track (Trieu / `osu-crypto` adoption from collaboration discussions) is complementary, not replaced by FML-X work.
+
+### Layer 1 schema (extends Phase 24.5 / P0b)
+
+- [ ] **FML-1** Add three federation summary statistics tables per DEC-8 outcome: `federation_lineage_frequencies` (federation_id, lineage, period_start, period_end, count, frequency, contributing_cell_count, extension_data JSONB), `federation_amr_distributions` (federation_id, amr_gene, resistance_phenotype, period_start, period_end, count, distribution_stats JSONB, extension_data JSONB), `federation_embedding_centroids` (federation_id, model_id, period_start, period_end, centroid_vector, covariance_matrix, sample_count, extension_data JSONB). All append-only — each federation round generates new rows. (1-2 sessions, P0b — bundle with ML-1..4 if FED-D ships first; otherwise post-P0b mini-migration)
+
+### Layer 1 services
+
+- [ ] **FML-2** Summary stats publisher service (APScheduler job per cell). Computes lineage frequencies, AMR distributions, embedding centroids over a configurable window (default 7 days). Pushes to federation coordinator via `FederationPushJob` (extends existing push.py pattern from FED-A). (3-4 sessions)
+
+- [ ] **FML-3** Federation coordinator service. Receives summary stats from member cells via the existing FED-B router endpoints, aggregates into federation-level statistics, writes to FML-1 tables, pushes federation-level results back to members. Aggregator hosting per DEC-3 (designated cell, rotating role, or third party). (4-5 sessions)
+
+- [ ] **FML-4** Federation hierarchical Bayesian modeling code for lineage growth coefficients. Uses numpyro or PyMC meta-analysis pattern: per-cell coefficients aggregated into global posterior with cell-specific deviations. Extends ML-7's lineage growth model into federated form. (3-4 sessions)
+
+- [ ] **FML-5** Federation audit trail extension to existing `audit_log`. Every summary stat exchange logged with cryptographic verification of the partner's signature. Reuses FED-A `attest_partner` hook. (1-2 sessions)
+
+### Layer 1 API + UI
+
+- [ ] **FML-6** API router extension for `/api/v1/federation/analytics/` — endpoints for publishing summary stats, retrieving federation-level aggregates, requesting federated lineage growth analysis. Federation API key auth for peer-to-peer endpoints; JWT for analyst-facing retrieve endpoints. (2-3 sessions)
+
+- [ ] **FML-7** Streamlit page: Federation Analytics Dashboard (`frontend/pages/federation_analytics.py`) — member cells, exchange history, current federation-level lineage frequencies and AMR distributions, federation-vs-local divergence indicators. (2-3 sessions)
+
+### Phase 30 effort summary
+
+Total estimated: ~16-22 sessions. Ships incrementally: schema FML-1 → publisher FML-2 → coordinator FML-3 → API/UI FML-6/7 → hierarchical Bayes FML-4 → audit FML-5.
+
+---
+
+## Phase 31 — Demo + Benchmark Infrastructure (Tracked, Not Scheduled)
+
+**Source:** Strategy session 2026-05-11 COVID-19 public demo plan and Sol cluster federation simulation feasibility analysis. Demo dataset is Arizona-scoped SARS-CoV-2 surveillance window 2021-01 through 2023-12, partitioned into simulated cells for federation testing.
+
+**Dependencies:** Phase 29 ML pipelines operational for the ML-based components of the demo. Phase 30 federation analytics for the federation simulation. Sol allocation confirmed (DEC-9 below).
+
+**ASU/operator-agnostic split:** Per DEC-7, ASU-specific demo code (Tempe fetcher, Maricopa-specific examples) lives in a separate `jackpot-demos` repo by default. CDC/NWSS/NCBI/NHSN fetchers stay in core because they are operator-agnostic public-data sources.
+
+### Architectural decision
+
+- [ ] **DEC-9** Confirm Sol cluster allocation: ~18K CPU-hours + 5-10K GPU-hours for 4-cell federation simulation over 2-3 days, ~400GB storage. Verify CHE availability and GPU queue wait times. Alternative: GCP-only simulation using preemptible nodes.
+
+### Data ingest scripts
+
+- [ ] **DEMO-1** `fetch_demo_data.py` — pulls NWSS metric data, NWSS concentration data, HHS legacy hospital data (frozen May 2024), NHSN HRD current hospital data, NCBI Virus SARS-CoV-2 metadata, all scoped to Arizona, via sodapy Socrata client. **Delivered in chat 2026-05-11; needs integration into `jackpot-demos` repo with tests and documentation.** (1 session)
+
+- [ ] **DEMO-2** NCBI Datasets CLI wrapper for FASTA sequence retrieval. Pulls actual SARS-CoV-2 sequences from NCBI Virus matching the metadata fetched in DEMO-1, scoped to Arizona for the demo window. (1-2 sessions)
+
+- [ ] **DEMO-3** Tempe Open Data fetcher (ArcGIS REST API). Pulls Tempe's publicly-published wastewater feeds (SARS-CoV-2, influenza, RSV, mpox, norovirus, opioids). ASU-specific; lives in `jackpot-demos/asu/` per DEC-7. (1-2 sessions)
+
+- [ ] **DEMO-4** COVID-19 Forecast Hub data fetcher (reichlab/covid19-forecast-hub or successor repo). Pulls historical forecast submissions for benchmarking JACKPOT forecasts against the community. (1 session)
+
+- [ ] **DEMO-5** CoV-Spectrum LAPIS API fetcher. Pulls lineage frequency time series for cross-validation against JACKPOT-internal lineage assignments. (1 session)
+
+### Demo dataset construction
+
+- [ ] **DEMO-6** Arizona-scoped SARS-CoV-2 sequence corpus (2021-01 through 2023-06). Pango-lineage-tagged via Pangolin or Nextclade. Pre-staged in `test-fixtures` GCS bucket. (2 sessions)
+
+- [ ] **DEMO-7** Stitched hospitalization time series across HHS legacy + NHSN HRD methodology change (the May 2024 transition). Documented reconciliation approach. (1 session)
+
+- [ ] **DEMO-8** Held-out evaluation period dataset (2023-07 through 2023-12). Used for forecast evaluation; not exposed to training. (0.5 session)
+
+- [ ] **DEMO-9** Partitioned datasets for federation simulation. Two partition schemes: geographic (Census region) and lab-effect (synthetic sampling profile differences). Each scheme produces 4 cell-scoped subsets. (1-2 sessions)
+
+### Sol federation simulation infrastructure
+
+- [ ] **DEMO-10** JACKPOT Apptainer (.sif) container builds for FastAPI, PostgreSQL 16, MinIO. Built for Sol's container environment. CI workflow target to keep them current. (2-3 sessions)
+
+- [ ] **DEMO-11** SLURM submission script for federation simulation. Single allocation, multi-node cell instantiation, hostname-based cell IDs, scratch-directory data isolation per cell. **Delivered in chat 2026-05-11; needs polish, error handling, and a teardown script.** (1-2 sessions)
+
+- [ ] **DEMO-12** Linux `tc` (netem) WAN simulation wrapper script for cell containers. Configures 80ms ± 10ms latency, 0.01% loss, 1 Gbps cap per cell interface to simulate realistic federation conditions. (1 session)
+
+- [ ] **DEMO-13** Globus DTN integration for inter-cell data movement on Sol — uses Sol's Globus endpoint as the transport layer. More realistic than direct TCP and matches production federation transport. (2 sessions)
+
+- [ ] **DEMO-14** Compute budget request to ASU Research Computing for the federation simulation. Per DEC-9 outcome. (operator decision, half-session)
+
+### Phase 31 effort summary
+
+Total estimated: ~15-20 sessions across fetchers, dataset construction, and Sol infrastructure. Demo dataset construction (DEMO-6/7/8/9) is the longest pole; Sol infrastructure (DEMO-10..13) requires Sol allocation confirmation first.
+
+---
+
+## Phase 32 — Testing Infrastructure for ML/Federation/Statistical Models (Tracked, Not Scheduled)
+
+**Source:** Strategy session 2026-05-11 testing discussion. Statistical and ML models need different testing strategies than the existing JACKPOT test suite (which is mostly unit + integration). Property-based tests for invariants, backtest/replay for time-aware models, sensitivity analysis for calibration, content-hashed benchmark datasets for reproducibility.
+
+**Dependencies:** Phase 29 ML pipelines exist (to test). Existing pytest infrastructure unchanged — these add on top.
+
+### Test data generators
+
+- [ ] **TEST-1** Custom SIR generator with known parameters. Takes (N, R0, gamma, T_max, seed), produces daily case count time series. Used for R(t) backtest in TEST-8. (1 session)
+
+- [ ] **TEST-2** FAVITES wrapper. Nextflow-wrapped Moshiri FAVITES, takes (transmission_rate, recovery_rate, mutation_rate, sample_fraction, seed), produces transmission trees + simulated sequences + sample metadata. Tests joint epi-phylo models. (3-4 sessions — FAVITES has nontrivial dependencies)
+
+- [ ] **TEST-3** Dawg wrapper (Cartwright). Sequence-evolution-only simulator for synthetic FASTA data with biologically accurate indel models. Lighter-weight than FAVITES for tests that only need sequences. (2 sessions)
+
+- [ ] **TEST-4** Schema-constrained metadata generator. Generates valid sample metadata using JACKPOT controlled vocabularies (Faker for identifier-like fields; constrained sampling from enums for the rest). Drop-in fixture for tests that need arbitrary valid sample metadata. (1-2 sessions)
+
+- [ ] **TEST-5** Hypothesis property-test data infrastructure. Strategies (in Hypothesis sense) for each JACKPOT data type. Foundation for the property-based test suite TEST-6. (2 sessions)
+
+### Test types
+
+- [ ] **TEST-6** Property-based test suite using Hypothesis for invariants: probability sums to 1, SIR conservation laws, non-negativity of counts, deterministic reproducibility with seeds, monotonicity properties of lineage growth coefficients. (2-3 sessions)
+
+- [ ] **TEST-7** Backtest / replay tests for time-aware anomaly detection. Historical data replayed in chronological order; no time leakage enforced via `WHERE created_at <= replay_timestamp` predicate. Tests that the detector flags known historical events (Omicron emergence, Delta wave, etc.) at the right time. (3-4 sessions)
+
+- [ ] **TEST-8** Sensitivity analysis + calibration recovery tests for epi models. Forward-simulate from known parameters, verify fitted model recovers them within acceptable error bounds. Boundary tests (R0 = 0 → no outbreak; R0 = ∞ → full attack rate). (2-3 sessions)
+
+- [ ] **TEST-9** Model evaluation gate tests for ML training pipeline (ML-10). Load model + versioned test dataset, assert metrics exceed documented thresholds. Becomes release gate for any model promotion in Phase 29's model lifecycle. (1-2 sessions)
+
+### Benchmark fixtures
+
+- [ ] **TEST-10** `test-fixtures` GCS bucket setup with versioned datasets and strict access controls. Each dataset content-hashed. Read-only for CI; write requires Platform Admin. (1 session)
+
+- [ ] **TEST-11** Content-hashed benchmark dataset registration via `model_evaluations.evaluation_dataset_id` — the dataset hash IS the reference. Reproducibility guarantee: evaluating the same model against the same hash yields the same metrics. (1 session)
+
+- [ ] **TEST-12** CI subset configuration. Stripped-down (small N, short T) version of the test suite runs per commit; full evaluation suite runs nightly. CI runner config in `.github/workflows/nightly-ml-tests.yml`. (1 session)
+
+### Phase 32 effort summary
+
+Total estimated: ~20-26 sessions. TEST-1/4/5/6 are the foundation; TEST-7/8/9 are the substantive new test types; TEST-10/11/12 are the infrastructure. Generators TEST-2/3 are heavier-lift but enable joint epi-phylo testing.
+
+---
+
+## Phase 33 — Outreach Documents — ASU Coalition Drafts (Tracked, Action-Pending)
+
+**Source:** ASU coalition strategy sessions 2026-04-23 through 2026-05-11. After researcher mapping across School of Technology for Public Health, Health Observatory, Decision Theater, Center for Evolution and Medicine, College of Health Solutions, SBHSE, and Shufeldt School of Medicine, a sequenced outreach plan emerged with Health Observatory promoted to earliest contact (Engelthaler will recognize JACKPOT immediately — TGen North director, 30 years pathogen genomics, 175+ papers).
+
+**Outreach sequence (revised 2026-05-11):**
+
+1. Engelthaler / Sunenshine / Lant at Health Observatory (earliest contact)
+2. Marc Adams at School of Technology for Public Health (lower-stakes operational contact)
+3. Paaijmans Mozambique vector AMR deployment (highest-value first deployment)
+4. Pathak at STPH (with Adams + Health Observatory references)
+5. Scotch, Grando, LaBaer (CHS/Biodesign coalition members)
+6. Decision Theater operational contacts (Jin/Wei) for Valley fever LSTM extension
+7. Senior figures (Laubichler, Buetow, Yudell, Gabriel) after operational momentum is visible
+
+### Health Observatory introductions (write first)
+
+- [ ] **DOC-1** David Engelthaler intro document — TGen North director, Health Observatory Executive Director, 30 years pathogen genomics, 175+ papers. Lead-in: JACKPOT's NWSS compliance + dual PII gating + One Health schema + first-class wastewater module (Phase 24.5 WW-1..WW-12 + Phase 34 WW-13..WW-26 — multi-pathogen panels, persistent site entity, hAMRonization-anchored resistome with integron sentinel tracking) align with his stated mission. Show schema sufficiency analysis for H5N1 statewide consortium, Valley fever integration, and Tempe multi-pathogen wastewater panel. Reference Southwest One Health Symposium as natural venue.
+
+- [ ] **DOC-2** Rebecca Sunenshine intro document — Health Observatory Medical Director, former Maricopa County DPH CMO, CDC EIS 2006, published on coccidioidomycosis. Lead-in: JACKPOT supports measles outbreak tracking, H5N1 case linkage (including dairy bulk milk via OBS-1), Coccidioides surveillance (including air-filter sampling protocol via OBS-2), and community-level wastewater surveillance (Phase 24.5 wastewater module) — all areas in her published portfolio. Coccidioides angle most resonant for direct work; wastewater opens broader community-health framing.
+
+- [ ] **DOC-3** Tim Lant intro document — Health Observatory Director of Data Analytics, former BARDA Director of Division of Analytic Decision Support, led H7N9/Ebola/Zika forecasting. Lead-in: Phase 29/30 ML and federation work directly relevant to his portfolio. Forecasting/anomaly detection is his core domain. Wastewater module (Phase 24.5 + Phase 34) is the natural data substrate for time-series anomaly detection at community level — McLeod et al. 2026 outlier-detection-in-dPCR work is the exact pattern Phase 29 ML-7/ML-8 will implement against wastewater target data.
+
+### STPH introductions
+
+- [ ] **DOC-4** Marc Adams intro document — STPH interim MPH program director / assistant dean of education. Lead-in: JACKPOT maps to seven STPH courses (TPH551 Public Health Technologies, TPH552 Systems Design, TPH550 Data Science, TPH554 AI/ML, TPH557 Ethics/Policy/Law, TPH556 Entrepreneurship, TPH593/TPH580 Applied Project/Practicum). Lower-stakes operational first contact at STPH.
+
+- [ ] **DOC-5** Jyotishman Pathak intro document — STPH founding Dean, from Weill Cornell biomedical informatics, ACMI Fellow, founded Iris OB Health, published book on genomic and clinical data sharing. Lead-in: JACKPOT's FAIR compliance + ontology anchoring + multi-tenancy architecture matches his data-sharing thought leadership. Send AFTER Adams meeting and Health Observatory contact.
+
+### Decision Theater introductions
+
+- [ ] **DOC-6** Xing Jin or Fang Wei intro document — operational contacts on the Jin/Wei/Kandala/Umesh/Steele/Galgiani/Laubichler 2025 *Lancet Regional Health–Americas* Valley fever LSTM paper. Lead-in: JACKPOT can extend the LSTM model from case-count-only to strain-resolved forecasting (Coccidioides genomic data IS in JACKPOT's schema by ASU/ADHS request). Send before approaching Laubichler.
+
+- [ ] **DOC-7** Manfred Laubichler intro document — Decision Theater Director, Global Futures Professor, School of Complex Adaptive Systems. Lead-in: federation simulation on Sol + JACKPOT's One Health framing aligns with the Global Biosocial Complexity Initiative. Send AFTER Jin/Wei operational contact establishes precedent.
+
+### Coalition technical allies (revisions to prior drafts)
+
+- [ ] **DOC-8** Revised Stephanie Forrest intro with explicit GenProg OSS reference (squareslab/genprog-code). Update from prior draft to recognize her as a Tier 1 OSS author with her own algorithms. Mention Driver et al. 2024 encrypted wastewater paper. Bio-immunity/cybersecurity framing maps to Phase IM-* immune platform work.
+
+- [ ] **DOC-9** Revised Ni Trieu intro with explicit osu-crypto references (MultipartyPSI, BaRK-OPRF, SpOT-PSI). Update from prior draft to recognize Tier 1 OSS author status. Mention Amazon Research Award March 2026. PSI track is complementary to FML-X federation work.
+
+- [ ] **DOC-10** Revised Arvind Varsani intro reframed as Cenote-Taker 3 contributor (not lead author) — Mtisza is the lead. Position: ICTV Executive Committee member, microbiomics, ASU-Halden-Scotch flu collaboration. Schema OBS-4 (ICTV taxonomy refactor) speaks to his ICTV role.
+
+- [ ] **DOC-11** Matthew Scotch intro document — EHE Asst Director / CHS Biomedical Informatics. Highest-leverage technical ally. Author of ZooPhy, NIH R01AI164481, NSF PIPP Phase II ESCAPE Center 2024-2031. Phase 29 ML + Phase 30 federation work + ESCAPE Center mission align tightly.
+
+### Platform documentation (write after schema/code lands)
+
+- [ ] **DOC-12** Schema v5.0 release notes covering all new tables (ML-1..4, OBS-1..4, FML-1, FED-D additions) and additions (sovereignty deletion columns, BYOP, eukaryotic). Single document for the v5.0 release.
+
+- [ ] **DOC-13** ML pipeline operator guide (training, registration, evaluation, deployment, retirement). Covers Phase 29 ML pipelines + ML-10 training workflow + ML-15 model registry.
+
+- [ ] **DOC-14** Federation Layer 1 deployment guide (FML-2/3 publisher and coordinator deployment, federation key management, summary stats configuration). Builds on existing federation deployment docs from FED-A/B/C/D/E.
+
+- [ ] **DOC-15** Sol federation simulation reproducibility guide (DEMO-10..14 Apptainer builds, SLURM scripts, tc commands, Globus integration, dataset hashes). Companion to Phase 31 demo materials.
+
+### Phase 33 effort summary
+
+Total estimated: ~11-15 sessions for the 11 outreach drafts (~1 session each, some half-session for the revisions) plus ~4 sessions for the platform documentation. Outreach drafts are bursty work; group them in 2-3 batched sessions per cluster (Health Observatory, STPH, Decision Theater, Coalition).
+
+---
+
+## Phase 34 — Wastewater Surveillance Module: Pipelines, Parsers, UI (Tracked, Not Scheduled)
+
+**Source:** Strategy session 2026-05-11 round 2 — comparative analysis of external WBE schema draft (uploaded 2026-05-11) and literature review `wastewater_analaysis.md` (LeapSpace 2026-05-10) against JACKPOT v4.4 wastewater coverage. The Phase 24.5 WW-1..WW-12 schema refactor lands the entities; this phase lands the pipelines, parsers, API endpoints, and UI surfaces that exercise them.
+
+**Dependencies:** Phase 24.5 WW-1..WW-12 schema items shipped via P0b. Existing `wastewater_lineage_abundance` Freyja result type unchanged — Phase 34 work is additive on top of it. Existing B-WW-1 in Phase 26 (Streamlit Freyja dashboard) remains valid as a separate Tier C-pattern adoption; WW-19 below extends and supersedes its scope.
+
+**Architectural framing:** Wastewater is now a first-class One Health data stream with its own three-entity hierarchy (`wastewater_collection_sites` → `samples` (when source_type=Wastewater) → {`wastewater_target_results`, `wastewater_metagenomic_profiles`}). All new pipeline parsers (WW-13..17) write via `pipeline_results_loader.py` — matching the existing parser→loader pattern in jackpot-nf and the architecture pattern documented in `jackpot_architecture.md` (parsers never talk to the database directly). Wastewater-specific UI lives under `frontend/pages/wastewater/` as a sub-namespace.
+
+### Pipelines and parsers (Nextflow + jackpot-nf)
+
+- [ ] **WW-13** Multi-target qPCR/ddPCR result parser. Takes instrument exports (Bio-Rad QX600 CSV, Applied Biosystems QuantStudio, Stilla Naica, generic CSV with documented column mapping). Validates against `WastewaterTargetResult` Pydantic shape, writes via existing `pipeline_results_loader` pattern. Supports both single-target and multiplex-panel exports. Variant-deconvolution-aware: detects mutation-specific qPCR exports and populates `variant_detection_method = mutation_specific_qpcr`. (2-3 sessions, Phase 34 — depends on WW-3)
+
+- [ ] **WW-14** Wastewater AMR resistome Nextflow pipeline. Wraps either nf-core/funcscan (default) OR ResPipe (if B-RESPIPE-1 comparison spike concludes ResPipe is superior for wastewater). The funcscan-vs-ResPipe vendor choice is itself a follow-on decision after B-RESPIPE-1 lands — track explicitly as a DEC at that time rather than implicitly in this WW item. Wastewater-specific configuration regardless of vendor: hAMRonization-mandatory output (matches Phase 26 B-NCBI-2 mandate), integron typing via IntegronFinder, plasmid replicon typing via PlasmidFinder. Writes to `wastewater_metagenomic_profiles.amr_profile_path`, `integron_types_detected`, `plasmid_replicon_types` via parser WW-15. (3-4 sessions if funcscan, 5-6 if ResPipe vendor needed first, Phase 34 — depends on WW-4, B-RESPIPE-1 comparison outcome)
+
+- [ ] **WW-15** hAMRonization-normalized wastewater AMR parser. Takes hAMRonization-compatible output from WW-14, writes structured ARG-type / class-detected / RPM rows to `WastewaterMetagenomicProfile`. Mirror of existing clinical-AMR parser pattern but writes to wastewater profile table, not the existing clinical `amr_results` table. (1-2 sessions, Phase 34 — depends on WW-4, WW-14)
+
+- [ ] **WW-16** MGE inventory parser. Takes IntegronFinder + PlasmidFinder + (optional) mobileOG-db outputs, writes integron and plasmid replicon multivalued fields on `WastewaterMetagenomicProfile`. Class 1 integron prevalence is the Djordjevic-flagged sentinel for anthropogenic AMR pollution. (1 session, Phase 34 — depends on WW-4)
+
+- [ ] **WW-17** MAG quality summary parser. Takes CheckM2 / GTDB-Tk / MIMAG-compliant output from metagenomic assembly + binning step (metaSPAdes/MEGAHIT/metaFlye + MetaBAT2/CONCOCT/SemiBin), writes num_mags_recovered + num_high_quality_mags + assembler + binner fields to `WastewaterMetagenomicProfile`. (1 session, Phase 34 — depends on WW-4)
+
+- [ ] **WW-18** Wastewater variant deconvolution chain — orchestrates Freyja + (per B-WEPP-1 outcome) WEPP + (per B-PIGX-1 outcome) PiGx SARS-CoV-2 + (per B-AQUASCOPE-1 outcome) Aquascope across the same input samples; writes per-method variant proportion rows to `WastewaterTargetResult` with distinct `variant_detection_method` values so method-vs-method comparison is queryable. (2-3 sessions, Phase 34 — depends on WW-3 + Phase 26 B-WEPP-1 / B-PIGX-1 / B-AQUASCOPE-1 outcomes)
+
+### API endpoints
+
+- [ ] **WW-19** API router `backend/backend/routers/wastewater.py` for `/api/v1/wastewater/sites/` — CRUD on `wastewater_collection_sites`. RBAC follows JACKPOT's existing 6-role pattern via `owning_lab_id` (WW-1): Lab Director and Researcher roles within the owning lab can create/edit sites in that lab's scope; Lab Analyst can read; Platform Admin can manage cross-lab. Implementation pattern matches existing `samples` router authorization. Plus `GET /api/v1/wastewater/sites/{site_id}/samples` for site-scoped sample listing, gated by the same RBAC. (1-2 sessions, Phase 34)
+
+- [ ] **WW-20** API router extension for `/api/v1/wastewater/targets/` — list `wastewater_target_results` rows with filters on `sample_id`, `target_organism`, `target_category`, `variant_lineage`, `variant_detection_method`. RBAC: same as sample-detail visibility (lab membership + sharing_level). Time-series endpoint `GET /api/v1/wastewater/sites/{site_id}/targets/timeseries` returns concentration trajectories per target with the same lab/site-scoped authorization. (1-2 sessions, Phase 34)
+
+- [ ] **WW-21** API router extension for `/api/v1/wastewater/metagenomic/` — list and retrieve `wastewater_metagenomic_profiles` rows; per-profile drill-down into AMR profile path, integrons, plasmid replicons, MAG quality. RBAC: same as sample-detail visibility (lab membership + sharing_level on the parent sample). (1 session, Phase 34)
+
+### Streamlit UI surfaces
+
+- [ ] **WW-22** Streamlit page: WastewaterCollectionSite registry + map view (`frontend/pages/wastewater/sites.py`). Folium or Plotly map of sites colored by `site_type` or `one_health_sector`, with site-level summary panels (population served, last sample date, target panel breadth). Replaces the per-site filter that B-WW-1 currently bolts onto the existing lineage dashboard. (2-3 sessions, Phase 34 — supersedes part of B-WW-1's site-filter logic)
+
+- [ ] **WW-23** Streamlit page: qPCR target time series (`frontend/pages/wastewater/targets.py`). Per-site, per-target concentration trajectories (gc/L and PMMoV-normalized) with multi-target overlays, log-scale toggle, lod/loq markers, rainfall overlay from `external_data_sources` (OBS-3) when available. (2-3 sessions, Phase 34)
+
+- [ ] **WW-24** Streamlit page: lineage abundance dashboard (`frontend/pages/wastewater/lineages.py`). Extends and replaces B-WW-1's scope: stacked-area lineage trajectories per site (existing Freyja-based) plus method-comparison view (Freyja vs WEPP vs PiGx vs Aquascope per WW-18). PNG/PDF export. When this page ships, the same PR closes B-WW-1 in Phase 26 as superseded. (2-3 sessions, Phase 34 — supersedes B-WW-1)
+
+- [ ] **WW-25** Streamlit page: resistome dashboard (`frontend/pages/wastewater/resistome.py`). Per-site / per-time-window views of total ARG types detected, ARG-class breakdown, class-1-integron prevalence (Djordjevic sentinel), plasmid replicon family tracking (IncF / IncHI2 / IncX3 emergence). (2-3 sessions, Phase 34 — depends on WW-15, WW-16)
+
+### CLI surfaces
+
+- [ ] **WW-26** jackpot-cli commands: `jackpot ww sites list`, `jackpot ww sites register`, `jackpot ww samples for-site <site_id>`, `jackpot ww targets recent --target-organism <name>`, `jackpot ww resistome site <site_id>`, `jackpot ww ingest-qpcr <csv_file> --site-id <site_id>`. (1-2 sessions, Phase 34)
+
+### Phase 34 effort summary
+
+Total estimated: ~20-30 sessions across parsers (WW-13..17), Nextflow pipelines (WW-14, WW-18), API endpoints (WW-19..21), Streamlit UI (WW-22..25), and CLI (WW-26). Phase ships incrementally: WW-13 multi-target qPCR parser is the highest-immediate-value standalone item (works on day 1 of post-P0b schema). WW-22 site registry page is the operator-onboarding gate. WW-24 lineage dashboard supersedes existing B-WW-1 and should be coordinated as a single PR with B-WW-1's owner.
+
+---
+
+## Year 2 Federation extensions (Track 2 implementations of existing PRV-A / CRY-A hooks)
+
+**Source:** Strategy session 2026-05-11 federation/FL plan, Layers 2 and 3.
+
+These are **not new infrastructure** — they are concrete Track 2 implementations of hooks already defined in the existing PRV-A (Privacy scaffold) and CRY-A (Crypto scaffold) work landed/planned 2026-05-08. They live in `backend/backend/immune/sec/` per the existing Track 1 / Track 2 framing. The Track 1 / Track 2 architectural separation means the substrate (FED-A/PRV-A/CRY-A) ships first as null-hook scaffolds; these Y2 items swap in concrete AIS-aware implementations via dependency injection without changing any Track 1 code.
+
+### Federated learning (Layer 2)
+
+- [ ] **FML-Y2-1** Concrete Track 2 implementation of PRV-A's `fl_aggregate(local_updates)` hook in `backend/backend/immune/sec/fl_aggregate.py`. Uses Flower (`flwr`) as the FL framework. Per-cell client + coordinator-side server. Reuses existing FED-A `secure_aggregate` hook for confidentiality. (8-10 sessions — large effort)
+
+- [ ] **FML-Y2-2** LoRA adapter management via `peft` library. Versioning, storage, lifecycle for low-rank adapters trained per cell and federation-wide. Adapters stored in `model_artifacts` with new `model_family` enum value (`lora_adapter`). (3-4 sessions)
+
+- [ ] **FML-Y2-3** Flower training round orchestration via Nextflow — wraps Flower rounds in existing Nextflow pattern so they appear in `pipeline_runs` with full audit trail. (3-4 sessions)
+
+- [ ] **FML-Y2-4** Byzantine-robust aggregation method selection — Krum, Trimmed Mean, Median, Bulyan, FLTrust. Pluggable behind `fl_aggregate` hook. (2-3 sessions)
+
+### Differential privacy (Layer 3 — DP)
+
+- [ ] **FML-Y2-5** Concrete Track 2 implementation of PRV-A's `dp_noise(query_result, sensitivity)` hook using Opacus for DP-SGD. Privacy budget accounting via `track_dp_budget` hook. (4-5 sessions)
+
+### Secure aggregation and TEE (Layer 3 — cryptographic)
+
+- [ ] **FML-Y2-6** Concrete Track 2 implementation of secure aggregation protocol (Bonawitz et al. 2017). Supported natively by Flower; this item wires it through PRV-A's hook surface. (3-4 sessions)
+
+- [ ] **FML-Y2-7** TEE-hosted aggregator using GCP Confidential Computing. Implements CRY-A's TEE attestation evidence verification hook. Operator-optional. (4-5 sessions)
+
+### Foundation model fine-tuning (Phase C-D of the ML plan)
+
+- [ ] **FML-Y2-8** Domain-adaptive pretraining of foundation model on accumulated JACKPOT corpus (Phase C). Federated form uses FML-Y2-1 + FML-Y2-2. Centralized form runs as a single ML-10 training pipeline run. (large effort, research-engineering boundary)
+
+- [ ] **FML-Y2-9** Task-specific fine-tuning (Phase C) for lineage classification or AMR-from-sequence prediction. Builds on FML-Y2-8 pretrained model. (large effort)
+
+- [ ] **FML-Y2-10** Joint epi-phylo anomaly detection (Phase D). Research-stage, not engineering. Track as research item.
+
+### Deferred decisions related to Year 2
+
+- [ ] **DEF-2** Presidio DLP scanner backend for Scenario A laptop deployments. Same pattern as PRV-A's `dlp.py` (GCP Cloud DLP) but operator-side, for laptop/single-org deployments without GCP. Deferred per userMemories. (Y2 stretch)
 
 ---
 
