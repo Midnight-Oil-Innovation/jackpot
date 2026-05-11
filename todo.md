@@ -2258,8 +2258,8 @@ The consolidation rationale, full mapping of source IDs to canonical IDs, and ov
 **Goal:** First end-to-end NSA detector firing on real samples, plus the corresponding Academy module 9. By end of phase: a submitted sample runs through `jackpot-amand`, lands a row in `dca_priority_scores`, surfaces in the Triage UI, and is auditable end-to-end. A student completing module 9 has working starter code that compiles and runs.
 
 **Prerequisites (existing P0 bugs that must be fixed before IM-1 starts):**
-- Audit transaction-participation bug — `log_audit()` and `create_notification()` must forward `db_conn` to `execute_write()` (tracked in `jackpot_session_summary_and_backlog.md`)
-- `_handle_workflow_complete()` `conn=` TypeError — Nextflow `workflow.complete` events must not crash the pipelines router
+- ✅ Audit transaction-participation bug — RESOLVED. `log_audit` at `backend/backend/audit.py:160` and `create_notification` at `backend/backend/notifications.py:93` both forward `conn=db_conn` into `execute_write`. Regression test in `tests/test_audit_notification_rollback.py` covers both helpers' rollback + commit contract (4 tests). Fix landed during P0f / R-1+R-2+R-3 work; verified 2026-05-11.
+- ✅ `_handle_workflow_complete()` `conn=` TypeError — RESOLVED. `execute_query` accepts `conn=None` as a kwarg at `backend/backend/database.py:50` (mirrors `execute_write`); call site at `backend/backend/routers/pipelines.py:627-634` resolves cleanly. Exercised by `tests/test_p0h_h4_log_poller.py` (the H-4 log poller invokes the handler synthetically). Verified 2026-05-11.
 - Validator `BASE_REQUIRED` tier split — Glen-owned domain decision; defines what Tier-1 PRELIMINARY samples must contain
 
 ### A. Schema, NSA substrate, immune-bio core (~3 weeks)
