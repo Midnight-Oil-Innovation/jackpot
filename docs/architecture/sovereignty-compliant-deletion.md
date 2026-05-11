@@ -1,10 +1,15 @@
 # Sovereignty-compliant deletion — Architecture & Design Lockdown
 
-**Status:** First draft, open for collaborator review · 2026-05-04
+**Status:** Locked solo per option β · drafted 2026-05-04 · locked 2026-05-11
 **Phase:** 24.5 — Architectural Design Lockdown Before P0b Schema Work
 **Authors:** Glen Otero (decisions), Claude (synthesis)
 **Implementation phases:** Schema in P0b · Behavior in P0c (`B-CARE-3*`) · Federation propagation in P0c federation phase (`B-CARE-4`)
 **Sister document:** `docs/jackpot_byop_and_eukaryotic_design.md`
+
+External collaborator review was deferred 2026-05-05 (PR #29 — timing, not
+substance). This lockdown proceeds solo so P0b can unblock; §14 open
+questions are operator-policy knobs the locked design exposes, not gates
+on external review.
 
 ---
 
@@ -23,6 +28,8 @@ JACKPOT's two-stage approach (TOMBSTONE then VACUUM) reconciles these. Tombstone
 This design is **informed by but not the same as** GDPR Article 17 (right to erasure), HIPAA de-identification rules, and Indigenous Data Sovereignty frameworks (CARE Principles for Indigenous Data Governance — Carroll et al. 2020 — and the broader Indigenous Data Sovereignty Movement). The doc cites those frameworks where they map cleanly, but it does not try to be GDPR-compliance documentation, HIPAA paperwork, or a substitute for the Tribal-authority data-governance agreements that Scenario T deployments will negotiate per pilot. Those are different artifacts for different audiences. The design here is the **technical contract** the platform offers; the legal and ethical contract is layered on top of it by operator policy.
 
 The CARE Principle most directly served is **Authority to Control**: Indigenous communities (and, by analogous extension in JACKPOT's design, all data submitters) retain the right to govern data derived from their members or jurisdictions, including the right to withdraw it. JACKPOT's job is to make that right operationally meaningful — not just procedural language in a consent form, but a button in the system that, when pressed by an authorized actor, leads to data actually leaving.
+
+This design is about **content removal** — making sample data physically leave the system. It is **not** about privacy-preserving redaction (DLP scrubbing for PHI in JSONB result blobs, k-anonymity coarsening of dates and locations, differential-privacy noise on aggregate queries). Those operations preserve the sample's analytical utility while removing identifying details; the deletion design here ends the sample's existence. See `backend/backend/privacy/` (the PRV-A scaffold) for the privacy-preserving redaction surface and its Track 1 / Track 2 AIS hook seam.
 
 ---
 
@@ -176,7 +183,7 @@ ORDER BY tombstoned_at;
 
 For each row, it executes the vacuum sequence in a single transaction (storage deletes are not transactional with the database, so the implementation must order them carefully — see §13). The job is idempotent: a sample already in `VACUUMED` state is silently skipped, so re-running the job after a partial failure is safe.
 
-The 24-hour Scenario T default is a **placeholder for collaborator review**; see §14. NPAIHB outreach and Tribal-authority pilot collaborators may push it shorter (e.g. 4 hours) or set it to zero (vacuum-on-approval) per their data-governance norms.
+The 24-hour Scenario T default is conservative. Future Tribal-authority pilot deployments may revise it shorter (e.g. 4 hours) or to zero (vacuum-on-approval) per their data-governance norms; the value is operator policy, not a source constant. See §14 for the open-question framing.
 
 ---
 
@@ -403,11 +410,11 @@ Deferred until B-FED-1 (federation peer-authentication design) lands and P0c fed
 
 ---
 
-## 14. Open questions for collaborator review
+## 14. Open questions — operator-policy knobs
 
-The decisions below are placeholders in the first draft. They should be reviewed with NPAIHB outreach contacts and other Tribal-authority pilot collaborators (per `todo.md` B-CARE-6) before the design is locked. Glen iterates with collaborators in chat, GitHub issues, or follow-up PRs; once these are answered, the doc is locked and P0b can land the schema with confidence.
+The decisions below are intentionally left open in this lockdown. They are **operator-policy knobs** the locked design exposes — defaults are shipped, but each parameter can be tuned per scenario at install time (`operator.yaml`) or revised in a follow-up design iteration without schema churn. Phase 24.5 chose option β: lock the design solo and let real-world deployment surface refinements, rather than block P0b on external review.
 
-1. **Is 24-hour vacuum cadence right for Scenario T, or should it be shorter (e.g., 4 hours, or vacuum-on-approval with no window)?** Trade-off: shorter windows honor sovereignty principles more directly but eliminate the operator's ability to catch accidental-deletion mistakes. Some Tribal-authority partners may prefer zero-window vacuum-on-approval, treating the deletion request itself as the deliberation window. NPAIHB outreach feedback is the primary input here.
+1. **Is 24-hour vacuum cadence right for Scenario T, or should it be shorter (e.g., 4 hours, or vacuum-on-approval with no window)?** Trade-off: shorter windows honor sovereignty principles more directly but eliminate the operator's ability to catch accidental-deletion mistakes. Some Tribal-authority partners may prefer zero-window vacuum-on-approval, treating the deletion request itself as the deliberation window. The 24-hour default is a starting point; per-deployment tuning is the expected path.
 2. **Is "cluster-with-asterisk" acceptable for Scenarios D, E, F, or should those also default to cluster-recompute?** Trade-off: cost (compute and operational complexity) versus honesty (not letting deleted data continue to influence outputs). The current default reflects a pragmatic stance; a more sovereignty-aligned default would be cluster-recompute everywhere.
 3. **Is the lab-director-approval-for-own-lab pattern compatible with smaller community labs where the submitter and the lab director are often the same person?** May need a single-person-lab override that allows self-approval with extra audit-trail friction, or explicit Platform Admin involvement for those deployments.
 4. **For bulk deletion, is per-sample approval the right friction, or is bulk approval (one approval covering N samples) acceptable for known cases like "consent withdrawn for entire study cohort"?** Per-sample is safer; bulk approval is more operationally realistic at scale. Likely answer is "configurable per scenario," but the default needs collaborator input.
@@ -416,7 +423,7 @@ The decisions below are placeholders in the first draft. They should be reviewed
 7. **"Previously published" is currently honest-but-passive — JACKPOT records what was published but does not actively retract.** Should v1 of the design include a notification step to the original submitter when a deletion happens for a previously-published sample? This is a small UX addition that may matter to Tribal-authority pilots where the data submitter is also the consent authority.
 8. **Tombstone reversibility window vs vacuum SLA — should there be a second configurable knob "minimum tombstone duration before vacuum is allowed" separate from the retention window?** A vacuum-now endpoint that bypasses retention entirely may be too permissive in some scenarios; a "vacuum-now allowed only after tombstone has been in place ≥ X minutes" check could be added.
 
-These are explicitly marked as **open** and not as decisions made in this draft. The agent's job here is to surface the questions; the answers come from collaborator review before P0b lands the schema.
+These are explicitly marked as **open**: they are operator-policy knobs the locked design exposes, not decisions deferred for blocking external review. P0b can land the schema with the defaults shipped here; future iteration (Scenario T pilot feedback, federation partner agreements, follow-up design PRs) can revise the defaults without schema churn.
 
 ---
 
@@ -434,6 +441,7 @@ These are explicitly marked as **open** and not as decisions made in this draft.
 - `docs/CLAUDE.md` Critical Rule 22 — Background jobs use APScheduler. The vacuum job in §13 follows this pattern.
 - `docs/CLAUDE.md` Critical Rule 55 — Production code is operator-agnostic. The retention windows, SLAs, and policy defaults in this design are operator-config, not source constants.
 - `docs/CLAUDE.md` Critical Rule 58 — `file_references.content_hash` is the dedup primitive. The vacuum logic in §5 must respect this: a `file_reference` shared across multiple still-active samples is not deleted from storage, only the link from the vacuumed sample's `sample_files` rows.
+- `backend/backend/privacy/` (PRV-A scaffold, PR #39) — the distinct privacy-preserving redaction surface. Coarsening, scrubbing, and AIS hook seams for future DP / HE / MPC primitives. The deletion design here and the privacy module share auth roles but are otherwise orthogonal: deletion ends the sample's existence, privacy preserves it.
 - **External:** Carroll et al. 2020 — *The CARE Principles for Indigenous Data Governance*. Data Science Journal 19:43. The "Authority to Control" principle is the primary normative input to this design.
 - **External:** GDPR Article 17 (Right to Erasure). Cited for comparison only; this design is not GDPR-compliance documentation.
 - **External:** HIPAA de-identification rules (45 CFR 164.514). Cited for comparison only; PII in JACKPOT is handled by the DLP scanner per Critical Rule 43, separately from this deletion design.
