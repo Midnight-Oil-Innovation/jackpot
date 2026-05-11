@@ -1,8 +1,8 @@
 # JACKPOT Session Summary & Backlog
 
-**Document version:** 3.3
-**Last updated:** 2026-05-06 (after /ultrareview cycle: R-1 + R-2 + R-3 merged)
-**Sessions covered:** Session 1 (March–April 2026 consolidated), Session 2 (2026-04-10), Sessions 3–S (2026-04 through 2026-04-19), Pathoplexus/Loculus comparative analysis session (2026-04-28), Cleanup A–J operator-agnostic genericization session (2026-04-26 to 2026-04-28), Session 11 (2026-04-28 → 2026-04-29 — CDC DMI/STLT/CARE alignment, BYOP/eukaryotic design, phasing rework, P0d migration prep), Session 12 (2026-04-30 → 2026-05-01 — P0d execution in Claude Code + post-execution cleanup), Session 13 (2026-05-01 — Phase 22 periodic review), Session 14 (2026-05-02 — P0e `jackpot init` CLI + Phase 22 cleanup), Session 15 (2026-05-02 → 2026-05-03 — architecture synthesis reframing + P0f F-2 schema migration), Session 16 (2026-05-03 — P0f parallel-session execution: F-1, F-3, F-4, F-5, F-12-docs merged + housekeeping/branching workflow PR #4 + F-6 through F-12 prompts drafted), Session 17 (2026-05-03 end of day — P0f F-6 through F-12 (except F-11) all merged into `development`; phase essentially complete pending F-11 audit), Session 18 (2026-05-04 — strategic positioning conversation + I-track planning: spreadsheet-refugee market identified, Seqsender/TOSTADAS landscape understood, sovereignty use cases discussed; I-1 / I-2 / C-1 / I-3 specs drafted as JACKPOT's adoption-driving feature roadmap), Session 19 (2026-05-04 later — F-11 P0f coverage audit and I-2 submission package generation merged in parallel; P0f phase complete; I-track at 2 of 4 items shipped), Session 20 (2026-05-06 — /ultrareview pass surfaced 26 findings; R-1 (six security/correctness blockers), R-2 (GISAID generator dedup + submission package test coverage), R-3 (doc and tracking hygiene) all merged; parallel-execution recommendation reversed after four cross-session contamination incidents — single-session-per-repo is now the default)
+**Document version:** 3.4
+**Last updated:** 2026-05-11 (after E-1 + P0h Slurm campaign + FIX-1/FIX-2 cleanup + Phase 24.5 sovereignty-deletion lockdown)
+**Sessions covered:** Session 1 (March–April 2026 consolidated), Session 2 (2026-04-10), Sessions 3–S (2026-04 through 2026-04-19), Pathoplexus/Loculus comparative analysis session (2026-04-28), Cleanup A–J operator-agnostic genericization session (2026-04-26 to 2026-04-28), Session 11 (2026-04-28 → 2026-04-29 — CDC DMI/STLT/CARE alignment, BYOP/eukaryotic design, phasing rework, P0d migration prep), Session 12 (2026-04-30 → 2026-05-01 — P0d execution in Claude Code + post-execution cleanup), Session 13 (2026-05-01 — Phase 22 periodic review), Session 14 (2026-05-02 — P0e `jackpot init` CLI + Phase 22 cleanup), Session 15 (2026-05-02 → 2026-05-03 — architecture synthesis reframing + P0f F-2 schema migration), Session 16 (2026-05-03 — P0f parallel-session execution: F-1, F-3, F-4, F-5, F-12-docs merged + housekeeping/branching workflow PR #4 + F-6 through F-12 prompts drafted), Session 17 (2026-05-03 end of day — P0f F-6 through F-12 (except F-11) all merged into `development`; phase essentially complete pending F-11 audit), Session 18 (2026-05-04 — strategic positioning conversation + I-track planning: spreadsheet-refugee market identified, Seqsender/TOSTADAS landscape understood, sovereignty use cases discussed; I-1 / I-2 / C-1 / I-3 specs drafted as JACKPOT's adoption-driving feature roadmap), Session 19 (2026-05-04 later — F-11 P0f coverage audit and I-2 submission package generation merged in parallel; P0f phase complete; I-track at 2 of 4 items shipped), Session 20 (2026-05-06 — /ultrareview pass surfaced 26 findings; R-1 (six security/correctness blockers), R-2 (GISAID generator dedup + submission package test coverage), R-3 (doc and tracking hygiene) all merged; parallel-execution recommendation reversed after four cross-session contamination incidents — single-session-per-repo is now the default), Session 21 (2026-05-07 → 2026-05-11 — E-1 UAT artifacts + dev-login endpoint, full P0h Slurm campaign (H-1 H-2 H-3 H-4 H-5 H-6 H-10 — six of ten blocks landed; H-7 and H-8 deferred to Phase 25), FIX-1/FIX-2 doc cleanup + audit-rollback regression test, Phase 24.5 sovereignty-deletion design lockdown rebased + reviewed + merged; worktree-per-PR pattern adopted as the operational escape hatch from silent branch-switch contamination)
 
 **v3.2 changelog (2026-05-04 later):** P0f phase fully complete and
 I-track at half-strength. Added Session 19 covering: (1) F-11 (P0f end-of-phase
@@ -20,6 +20,59 @@ and I-2 ran in parallel, landing on different files (F-11 in tests/, I-2 in
 new backend/submissions* files). Both PRs merged cleanly with no conflicts.
 (4) The PR-merge order produced a fresh post-P0f baseline coverage number
 documented in tests/coverage_p0f_summary.md.
+
+**v3.4 changelog (2026-05-11):** Session 21 — E-1 ships,
+P0h Slurm campaign closes (six of ten blocks landed; two deferred to
+Phase 25), FIX-1/FIX-2 finally closed out with the audit-rollback
+regression test FIX-1 originally asked for, and Phase 24.5
+sovereignty-deletion design lockdown lands. Added Session 21 covering:
+(1) **E-1** (PR #34, merged) — end-to-end laptop UAT artifacts: a
+~620-line `docs/e2e_uat_plan.md` (smoke 12-step + UAT per-role 1-6
+plus cross-cutting A-H), 8 helper scripts under `tests/e2e/scripts/`,
+synthetic CSV/XLSX fixtures, and a small `POST /api/v1/auth/dev-login`
+endpoint (404s outside `env=local`) so the UAT can switch all six
+roles in a single backend run without restarts. 8 endpoint tests
+shipped. (2) **P0h Slurm executor support** — seven PRs landed: PR #35
+H-1 (template extensions — memory/cpus/queueSize/params block,
+apptainer cacheDir), PR #36 H-2 (apptainer image manifest format +
+per-pipeline manifests + audit doc; reframing — the wrappers in this
+repo don't ship `nextflow.config` so the actionable H-2 deliverable
+is the pre-staging manifest), PR #37 H-3 (`launch_account` override
+with `SLURM_LAUNCH_ACCOUNT_OVERRIDE` audit row + explicit P0c stub),
+PR #38 H-4 (sidecar Nextflow log poller via APScheduler for cluster
+runs without outbound HTTP), PR #40 H-5 (work_dir validation
+predicate + `jackpot doctor slurm` CLI), PR #41 H-6 (pre-launch
+`sinfo` reachability check with 60s TTL cache), PR #42 H-10
+(`docs/slurm_executor.md` operator guide + Critical Rule 60
+alignment to shipped reality). H-7 (GCP Batch profile) and H-8
+(real-cluster smoke test) deferred to Phase 25 per spec; H-9 (tests)
+interleaved per-PR throughout. (3) **PRV-A** (PR #39, Glen-authored,
+merged mid-campaign) — `backend/backend/privacy/` scaffold with Track
+1 + Track 2 AIS hook seam. (4) **FIX-1 + FIX-2 closeout** (PR #43)
+— the two P0 bugs from todo.md's old "audit/notification transaction
+cohesion + execute_query conn param" pair were resolved at some
+point during P0f / R-1+R-2+R-3 work without the IM-1 prerequisites
+list being updated. Verified `log_audit` / `create_notification`
+both forward `conn=db_conn`, verified `execute_query` accepts
+`conn=None`, shipped the audit-rollback regression test FIX-1
+originally specified (4 tests covering rollback + commit × log_audit
++ create_notification), marked both entries `✅ RESOLVED` in
+todo.md. (5) **Phase 24.5 sovereignty-deletion lockdown** (PR #20,
+finally merged) — the 2026-05-04 design doc needed rebase (6 days
+stale), review (substantive design solid but metadata still framed
+as "open for collaborator review" despite PR #29 deferring external
+review per option β), and four touch-up edits to align with
+post-option-β reality. Privacy-module cross-reference added so
+future readers searching for "redact PHI in a JSONB blob" land at
+PRV-A rather than this deletion doc. (6) **Worktree-per-PR pattern
+operationalized** — after two silent-branch-switch contamination
+incidents (PR #36 mid-task, PR #38 between `git status` and `git
+commit`), every subsequent PR (#40, #41, #42, #43, #20) was
+authored from `../jackpot_<branch>` worktrees. Zero further
+contamination. The Session 20 default ("single Claude Code session
+per repo") is intact; worktrees are the formalized escape hatch
+when a session reuses the user's primary checkout for active work.
+Full suite at session end: **1714 passed, 2 skipped.**
 
 **v3.3 changelog (2026-05-06):** /ultrareview cycle complete.
 A six-reviewer /ultrareview pass on `development` (against `main`) surfaced 26
@@ -4025,3 +4078,160 @@ The next session can either continue I-track (draft C-1) or pivot to P0h. Both a
 - Local `development` and `origin/development` aligned at `31d47f7` post-R-3 merge
 - `wip-something` branch and stale stashes can be discarded — R-3's `learnings.md` entries cover the salvageable content from those
 - Single-session-per-repo is the new default; the bundle reflects this throughout
+
+------
+
+# Session 21 — 2026-05-07 → 2026-05-11 — E-1 + full P0h Slurm campaign + FIX-1/FIX-2 closeout + Phase 24.5 lockdown
+
+## What we covered
+
+A long session — five distinct work items shipped across nine PRs (eight by the agent, one by the maintainer in parallel). The session opened with E-1 (the end-to-end laptop UAT artifacts that had been deferred since P0f), pivoted to the full P0h Slurm campaign when the maintainer chose action over UAT-first validation, closed out two stale P0 bugs whose fixes had landed earlier without the trackers being updated, and finally rebased and merged the Phase 24.5 sovereignty-deletion design lockdown that had been sitting open since 2026-05-05.
+
+The most operationally significant outcome wasn't any single PR — it was the **worktree-per-PR pattern** becoming the operational default after two silent-branch-switch incidents demonstrated that even Critical Rule 61's verification couldn't fully protect a single-checkout workflow when the maintainer reused the primary working tree for active work.
+
+PRs merged this session, in order:
+
+- **PR #34** — E-1 UAT plan + smoke test + helper scripts (5 commits, squashed at merge)
+- **PR #35** — P0h H-1 Slurm template extensions
+- **PR #36** — P0h H-2 apptainer image manifests
+- **PR #37** — P0h H-3 launch_account override + audit row
+- **PR #38** — P0h H-4 sidecar Nextflow log poller
+- **PR #39** — PRV-A privacy scaffold (maintainer-authored, merged mid-campaign)
+- **PR #40** — P0h H-5 work_dir validation + jackpot doctor slurm
+- **PR #41** — P0h H-6 Slurm reachability check with 60s cache
+- **PR #42** — P0h H-10 operator-facing Slurm executor guide + Critical Rule 60 alignment
+- **PR #43** — FIX-1/FIX-2 doc cleanup + audit-rollback regression test
+- **PR #20** — Phase 24.5 sovereignty-deletion design lockdown (rebased + reviewed + merged)
+
+------
+
+## Topics covered
+
+### 1. E-1 — end-to-end laptop UAT (PR #34)
+
+E-1 was the testing-artifact work deferred since P0f shipped. Nobody had verified end-to-end that a fresh JACKPOT install actually worked across the multi-role permission system with real metadata and real FASTQs; the unit suite and integration tests pass, but the platform's six-role RBAC matrix had never been walked through against a real install.
+
+The work produced four artifacts:
+
+- **`docs/e2e_uat_plan.md`** — ~620-line canonical test plan. Two tiers: a 30-minute Platform-Admin-only smoke test against viralrecon's `test` profile (12 concrete steps with copy-paste curl invocations), and a 3-4 hour UAT covering all six roles (Platform Admin, Lab Director, Lab Collaborator, Lab Reader, Bioinformatics User, Data Analyst) plus eight cross-cutting sections (authentication flows, R-1 security boundary negative tests, DataHarmonizer + I-1 wizard ingest paths, P0f file-state machine, I-2 submission-state machine, Streamlit UI smoke, reset procedures, troubleshooting).
+- **`tests/e2e/scripts/`** — eight helper scripts (`setup_local_env.sh`, `dev_login.sh` / `set_role.sh`, `register_user_lab_project.py`, `register_files.py`, `trigger_jobs.py`, `verify_smoke_outputs.py`, `reset_environment.sh`). API-side semi-automation; UI portions remain manual checklists in the doc.
+- **`tests/fixtures/e2e/`** — synthetic CSV/XLSX fixtures for the smoke test (committed) and an Arizona-shaped realistic SARS-CoV-2 sheet plus a deliberately-tricky non-canonical-headers sheet for the UAT (committed); FASTQ data gitignored under `tests/fixtures/e2e/uat/*.fastq*`.
+- **`POST /api/v1/auth/dev-login` endpoint** — investigation-driven addition. Local-mode `get_current_user` reads `settings.mock_user_email` (lru-cached); switching identities via env var change requires backend restart. Six restarts × ~30s during a UAT is workable but breaks the single-backend-run assumption helper scripts depend on. The endpoint 404s when `settings.env != "local"`, accepts `{email, role?, lab_id?, name?}`, creates user / lab-membership rows as needed, mutates the cached `mock_user_email` so subsequent same-process requests resolve as the new identity. 8 endpoint tests; emits an `AUTH_DEV_LOGIN` audit row.
+
+The E-1 spec wanted Glen to run the actual UAT after merge; the agent didn't run it. Glen's "Keep going" pivot to P0h came before UAT validation could happen, which is a real risk: the Slurm campaign added eight more PRs on top of an unvalidated baseline. Worth keeping in mind for whatever follows.
+
+### 2. P0h Slurm campaign — six of ten blocks landed (#35, #36, #37, #38, #40, #41, #42)
+
+A multi-PR campaign making Slurm a peer of the local and GCP-Batch executors. The spec laid out ten H-blocks (H-1 through H-10) plus an interleaved H-9 test requirement; six landed, two deferred to Phase 25, H-9 covered per-PR, and H-10 wrapped the campaign with docs.
+
+**H-1 (PR #35) — Slurm template extensions.** G-3 (PR #28) had already shipped `slurm.config.j2` with queue / account / qos / time / cluster_options via the `config_overrides` JSONB bag. H-1's prompt asked for 8 new typed columns on `execution_profiles` (slurm_account, slurm_partition, etc.); the agent flagged this as architectural drift (would push the table toward a tagged-union-as-wide-table shape where every non-Slurm row carries NULL Slurm columns, and GCP-Batch / AWS-Batch / K8s would each want their own column set behind the same precedent), asked the maintainer to confirm the JSONB-extension approach, and got the recommended-option answer. Shipped: memory / cpus / queue_size / params block in `slurm.config.j2`, apptainer cacheDir in `base.config.j2`, 12 new tests. No schema migration.
+
+**H-2 (PR #36) — Apptainer image manifests.** H-2's spec asked for a per-pipeline Apptainer audit. Investigation found the wrappers under `pipelines/pipelines/` are JACKPOT integration shims (`jackpot_wrapper.nf` includes the upstream pipeline + a Python REGISTER_RESULTS process), they don't ship a `nextflow.config`, and the runtime container engine is selected by the rendered config from `base.config.j2`. So the actionable H-2 deliverable wasn't "add an apptainer profile per pipeline" (engine selection is centralized) but "what OCI images need pulling into the cluster's Apptainer cache before launch." Shipped: a manifest format (`apptainer_images.txt`, one OCI URI per line, `#` comments, `@directive value` metadata), a canonical reader (`pipelines/pipelines/apptainer_manifest.py`), per-pipeline manifests for all 10 pipelines, 16 tests, and an audit doc.
+
+The H-2 work landed despite a **silent branch switch** mid-task — the agent's working tree was switched to `privacy-scaffold-track1-track2-seam` between the file-creation and the staging step. Caught via Critical Rule 61 verification at commit time, recovered by switching back to `p0h-h2-apptainer-support` (the untracked files came along automatically). First instance in the session of an incident that would prompt the worktree pattern.
+
+**H-3 (PR #37) — launch_account override + audit row.** Multi-tenant scenario-C clusters charge compute against grants; a lab member needs to specify which grant to bill, distinct from the lab's default ledger. `LaunchRequest.launch_account: str | None = None` on `POST /api/v1/pipelines/launch`. When set: rejected with 400 `LAUNCH_ACCOUNT_NOT_APPLICABLE` if the resolved profile's executor isn't SLURM (or the legacy GCP-Batch fallback is taken); for SLURM, the renderer is given an effective profile copy via `dataclasses.replace` with `config_overrides.account` replaced. The profile row is unchanged; override applies for one run only. P0c multi-tenancy middleware will validate the override against the user's lab memberships once it lands — today the override is accepted verbatim with a `# P0c stub` comment at the hook point and a separate `SLURM_LAUNCH_ACCOUNT_OVERRIDE` audit row (actor + before + after) so security review can grep for overrides without joining `audit_log` against `pipeline_runs.metadata`.
+
+**H-4 (PR #38) — sidecar Nextflow log poller.** Scenario-C clusters lock down outbound HTTP from compute nodes, so the weblog hook injected into every rendered config can't deliver. New `backend/backend/log_poller.py` is an APScheduler job firing every `settings.log_poller_interval_seconds` (default 30). Discovery: SELECTs `pipeline_runs` rows in active states (PENDING / QUEUED / RUNNING) with `work_dir` set. Per-run: derives `<work_dir>/runs/<run_id>/.nextflow.log`, reads via fsspec from a persisted `poller_log_offset` byte position, classifies the chunk against three conservative regexes that require Nextflow's `nextflow.Session` logger prefix (so pipelines that print "Workflow" in stdout don't false-positive), and dispatches `started` → `RUNNING` status or `completed`/`failed` → the existing `_handle_workflow_complete` handler (the result loader runs once whether the trigger came through HTTP or polling). Migration: `pipeline_runs.poller_log_offset BIGINT NOT NULL DEFAULT 0`. 18 new tests.
+
+H-4 produced the **second silent branch switch**: the agent ran `git status --short` and saw `p0h-h4-weblog-poller`, then immediately ran `git commit`, and the commit landed on `privacy-scaffold-track1-track2-seam` (the maintainer's branch had switched between the two operations). Recovered by cherry-picking the commit onto `p0h-h4-weblog-poller`, pushing, opening the PR — but a duplicate commit was left orphaned on the privacy branch. The agent surfaced this to the maintainer with explicit recovery instructions rather than running `git reset --hard` destructively without authorization.
+
+**H-5 (PR #40) — work_dir validation + jackpot doctor slurm.** Two surfaces. (a) `backend/backend/pipeline_config/profile_validation.py` — `validate_work_dir_locally(work_dir)` predicate returning structured findings (codes: MISSING, NOT_A_DIRECTORY, NOT_WRITABLE via mkstemp probe, EMPTY, REMOTE_SCHEME for `gs://`/`s3://`/`az://`/`abfs://` short-circuit). (b) New `jackpot doctor slurm --work-dir <path> [--account] [--partition] [--check-cluster]` CLI command. Without `--check-cluster`, runs the predicate locally; with it, shells out to `sinfo` and `srun --time=1 stat -c '%n' <work_dir>` for cluster reachability. Exit codes 0/1/2. 23 new tests across backend + CLI.
+
+H-5 was the **first worktree-pattern PR**. After the H-4 incident, the maintainer instructed `git worktree add ../jackpot_p0h-h5 -b p0h-h5 development`. Zero contamination; the agent never touched the primary working tree throughout the PR. The pattern stuck for every subsequent PR in the session.
+
+**H-6 (PR #41) — Slurm reachability check with 60s cache.** New `backend/backend/pipeline_config/cluster_reachability.py` with `check_slurm_reachability(account, partition)` returning a `SlurmReachabilityResult` (codes: OK / SINFO_FAILED / SINFO_TIMEOUT / SINFO_NOT_INSTALLED / DISABLED). Cache keyed by `(account, partition)` in module state with 60s TTL; `reset_cache()` exposed for tests. Launch handler fires the probe right after H-3's `effective_profile` derivation and before `run_id = new_run_id()` — failure path returns 400 `SLURM_UNREACHABLE` with a pointer to `jackpot doctor slurm --check-cluster`. No `pipeline_runs` row is created when the guard fires. Three new settings: master switch + cache seconds + timeout seconds. Test conftest disables the check by default so existing SLURM-profile launch tests don't grow a `sinfo` dependency; new H-6 tests opt back in via a `reachability_enabled` fixture. 10 new tests.
+
+**H-7 (deferred) — GCP Batch profile.** Investigation showed the GCP Batch template already exists from G-3 with project / region / service_account / network / subnetwork / boot_disk_size_gb. The H-7 spec required `gcs_bucket` (for staging) and `machine_type` as new fields, plus F-7 STAGED-staging logic and a G-8 cost-estimation hook. F-7 STAGED is in the schema but no staging logic uses it; G-8 doesn't exist. Per the spec's own "Stretch — defer if other H items run long; track in Phase 25" framing, the agent deferred wholesale rather than ship a config-template touch-up that didn't address the spec's actual requirements.
+
+**H-8 (deferred) — real-cluster smoke test.** Requires either an institutional Slurm cluster, a stood-up scratch cluster on GCP/AWS, or `giovtorres/slurm-docker-cluster` in CI for hermetic testing. Real work in its own right; deferred to Phase 25.
+
+**H-10 (PR #42) — operator-facing Slurm executor guide + Critical Rule 60 alignment.** Three changes. (a) New `docs/slurm_executor.md` (~215 lines) covering when to use the Slurm executor, profile setup with per-knob reference, validating with `jackpot doctor`, network requirements (API → cluster and compute → API), Apptainer pre-staging from H-2 manifests, the H-3 launch_account override, common cluster-policy gotchas (NFS mount path mismatches, Apptainer cache permissions, `--exclusive` masking `queue_size`, `--time=1` budgets, `sinfo` rows ≠ valid account/partition), reset/recovery. (b) Critical Rule 60 in `docs/CLAUDE.md` was drafted ahead of the H-4 PR landing and described a flag-gated poller (`weblog_reachable=false`) under `backend/pipelines/log_poller.py`; reality shipped an always-on poller at `backend/backend/log_poller.py`. The patch updates Rule 60 to match shipped behavior and pulls in the H-3 SLURM_LAUNCH_ACCOUNT_OVERRIDE policy + H-6 reachability cache so future readers find the implementation files without grepping. (c) README scenario table got a "Compute environment" subsection clarifying that scenario codes (A/B/C/D/E/F/T) govern API-server placement while the compute environment is an orthogonal execution_profiles choice.
+
+### 3. PRV-A — privacy scaffold (PR #39, maintainer-authored)
+
+Glen authored and merged PR #39 mid-campaign — `backend/backend/privacy/` package with Track 1 + Track 2 AIS hook seam, mirroring the FED-A pattern from 2026-05-08. Not the agent's work, but relevant context: the privacy scaffold lives on `development` and the H-4 silent-branch-switch incident landed an orphan H-4 commit on the `privacy-scaffold-track1-track2-seam` branch that needed cleanup. The PRV-A merge happened after that incident; the agent surfaced the orphan-commit issue to the maintainer with explicit recovery instructions.
+
+The deletion design (Phase 24.5, PR #20 — see below) was patched in this session to cross-reference `backend/backend/privacy/` so future readers searching for "redact PHI in a JSONB blob" land at the privacy module rather than the deletion doc. Two distinct paths sharing auth roles but otherwise orthogonal: privacy preserves the sample's analytical utility, deletion ends its existence.
+
+### 4. FIX-1 / FIX-2 closeout (PR #43)
+
+Both P0 bugs from todo.md's old "audit/notification transaction cohesion + execute_query conn param" pair were resolved at some point during P0f / R-1+R-2+R-3 work without the IM-1 prerequisites list being updated. Verification:
+
+- `log_audit` at `backend/backend/audit.py:160` forwards `conn=db_conn` into `execute_write` ✓
+- `create_notification` at `backend/backend/notifications.py:93` forwards `conn=db_conn` ✓
+- `execute_query` at `backend/backend/database.py:50` accepts `conn=None` as a kwarg (mirrors `execute_write`) ✓
+- `_handle_workflow_complete` at `backend/backend/routers/pipelines.py:627-634` calls `execute_query(..., conn=conn)` cleanly ✓
+
+PR #43 shipped the audit-rollback regression test FIX-1 originally specified — 4 tests in `tests/test_audit_notification_rollback.py` covering the rollback / commit contract for both helpers (audit + notification × rollback + commit). The tests use orphaned `ROLLBACK_REGRESSION_*` action / event_type constants so assertions can't false-positive on real audit writes happening elsewhere in the suite.
+
+todo.md's IM-1 prerequisites list (lines 2261-2263 at the time, now updated) was changed from `[ ]` to `✅ RESOLVED` with file:line references to the fixes and the new regression test. Historical session-summary entries documenting what reviewers flagged at the time were left untouched — they're true history, not active to-do state.
+
+### 5. Phase 24.5 sovereignty-deletion design lockdown (PR #20)
+
+The Phase 24.5 design doc had been sitting open since 2026-05-04. After the P0h campaign closed and the maintainer asked "how do I merge all the PRs?", investigation found one open PR — #20 — in CONFLICTING / DIRTY state because six P0h merges + PRV-A + fix12 had landed since #20's last update.
+
+The rebase + review flow was:
+
+1. **Worktree-isolated rebase.** Branched a worktree at `../jackpot_pr20_rebase`, ran `git rebase origin/development`. The first commit (`c389d0f` — "bump session backlog to v4.0 covering Session 20") had already landed on development via separate path; skipped via `git rebase --skip`. Second commit (`123df9d` — the actual design doc) applied cleanly as `ef85d1a`.
+2. **Force-push with lease.** `git push --force-with-lease` updated the PR; status flipped to `MERGEABLE / CLEAN`.
+3. **Review against post-2026-05-05 reality.** Substance solid (four-state lifecycle, schema constraints exhaustively enumerated, implementation handoff to P0c broken into `B-CARE-3a..g`, federation deferred to `B-CARE-4`). But metadata stale in four places: (a) top-of-doc status line "First draft, open for collaborator review" contradicted PR #29's option-β deferral, (b) §6 retention-cadence footnote framed the 24h Scenario T default as a "placeholder for collaborator review" with NPAIHB-specific reviewer pointers (PR #29 stripped NPAIHB references from todo.md / session summary / cdc_dmi_stlt overview), (c) §14 "Open questions for collaborator review" header + B-CARE-6 reference (B-CARE-6 no longer exists in todo.md) + "NPAIHB outreach feedback is the primary input here" inline, (d) no cross-reference to `backend/backend/privacy/` from PRV-A.
+4. **Path-C patches (`38a2cd6`).** Status line moved to "Locked solo per option β" with PR #29 as the deferral source. §6 footnote reframed as "conservative + operator-tunable" without the NPAIHB-as-reviewer framing. §14 retitled "Open questions — operator-policy knobs"; eight questions kept verbatim (substantive design parameters); closing paragraph rewritten as "operator-policy knobs … future iteration can revise without schema churn" instead of "agent's job here is to surface the questions; the answers come from collaborator review." §1 + §15 cross-references added to PRV-A.
+5. **Squash-merge.** `cca556a` on `origin/development`.
+
+The design doc is now the locked spec for P0b's schema migration. The sister BYOP/eukaryotic lockdown (`docs/jackpot_byop_and_eukaryotic_design.md`) is the remaining 24.5 artifact and already exists; together they gate P0b.
+
+### 6. The worktree-per-PR pattern
+
+After the H-2 (between file-creation and staging) and H-4 (between `git status` and `git commit`) silent branch-switch incidents, every subsequent PR (#40 H-5, #41 H-6, #42 H-10, #43 FIX, #20 Phase 24.5 rebase) was authored from a dedicated worktree:
+
+```bash
+git worktree add ../jackpot_<pr-slug> -b <branch-name> origin/development
+cd ../jackpot_<pr-slug>
+# … work happens here, no contention with the maintainer's primary checkout …
+git commit / git push / gh pr create / gh pr merge --squash --delete-branch
+cd -
+git worktree remove ../jackpot_<pr-slug>
+git branch -D <branch-name>
+```
+
+Zero contamination after the pattern was adopted. The maintainer continued working in the primary checkout (switching branches, committing privacy work, etc.) without touching any of the agent's worktrees. The Session 20 default ("single Claude Code session per repo") is intact — worktrees aren't parallel sessions, they're isolated working trees for a single session whose primary checkout is shared with the maintainer's active work.
+
+One operational detail learned: `gh pr merge --delete-branch` cannot delete a local branch checked out in a worktree. The cleanup sequence is `git worktree remove <path> && git branch -D <branch>` after the merge succeeds.
+
+------
+
+## Decisions
+
+- *E-1 artifacts shipped; UAT itself NOT run by the agent.* The maintainer's "Keep going" pivot to P0h moved past UAT validation. The artifacts are in place for whenever validation happens.
+- *P0h Slurm campaign closed (six of ten blocks landed).* `development` supports Slurm execution end-to-end. H-7 (GCP Batch staging + cost hook) and H-8 (real-cluster smoke test) deferred to Phase 25 with their dependencies (F-7 staging logic, G-8 cost hook, real cluster access) explicitly named.
+- *Worktree-per-PR is the operational pattern.* Single Claude Code session per repo (Session 20 default) + isolated worktree per work item (Session 21 addition) = no contamination. Codify in continuation primer.
+- *Critical Rule 60 was drafted ahead of implementation and is now aligned to shipped reality.* Future Critical Rules drafted ahead of code: don't merge until the code lands or the rule's claims will drift.
+- *Phase 24.5 sovereignty-deletion design locked per option β.* No external collaborator review pending. P0b can land the schema with the defaults shipped; future iteration (Scenario T pilot feedback, federation partner agreements) can revise the defaults without schema churn.
+- *FIX-1 and FIX-2 closeout pattern.* Old `[ ]` to-do entries whose code fixes have quietly landed deserve a regression test + a `✅ RESOLVED` mark with file:line references. The agent shouldn't rewrite history (session summary entries describing what reviewers flagged at the time stay verbatim) but should keep the active-to-do view honest.
+- *Schema lockdown is what's next up.* The sister BYOP/eukaryotic lockdown plus this session's sovereignty-deletion lockdown together gate P0b. WW (wastewater) / EPY-S / ML / FML schema items the maintainer mentioned in chat aren't tracked in todo.md yet — translation work needed before any of them can be scoped.
+
+------
+
+## Outcome
+
+E-1 artifacts in place, P0h Slurm campaign closed at six-of-ten, two P0 bugs finally retired from the to-do view with a regression test, and the Phase 24.5 sovereignty-deletion lockdown is the canonical P0b build spec. `development` is in clean state with no open PRs.
+
+**Pending architectural follow-ups, in expected order:**
+
+- **BYOP/eukaryotic design lockdown** is the remaining Phase 24.5 artifact (`docs/jackpot_byop_and_eukaryotic_design.md` exists; cross-referenced in the sovereignty doc and the spec; ready for P0b consumption).
+- **P0b** — Schema v5.0 migration consuming both 24.5 lockdowns. The sovereignty doc's §12 + the BYOP doc's §§7 + 12 are the build spec; P0b's planner should treat both lists as exhaustive for the lockdown scope.
+- **P0c** — multi-tenancy middleware + sovereignty deletion implementation (`B-CARE-3a..g` from the sovereignty doc + the launch_account validation hook stubbed in H-3 + the lab-tenancy invariants).
+- **G-5** — profile CRUD HTTP endpoints. H-5's validation predicate has an explicit integration point; today operators manage profiles via DB seed only.
+- **P0h H-7 + H-8** — GCP Batch staging path + real-cluster smoke test. Deferred to Phase 25 with named dependencies.
+- **Federation wire-up (FED-B/C/D/E)** — on top of the FED-A scaffold from 2026-05-08.
+- **Schema items mentioned in chat (WW / EPY-S / ML / FML) but not yet in todo.md** — translation work needed.
+
+**Concrete state:**
+
+- All P0h Slurm campaign deliverables either merged (H-1, H-2, H-3, H-4, H-5, H-6, H-10) or deferred-with-named-dependencies (H-7, H-8)
+- Phase 24.5 sovereignty-deletion lockdown locked per option β; schema constraints in §12 are the P0b build spec
+- FIX-1 / FIX-2 closed with regression test for the audit-rollback contract; doc-vs-reality alignment restored in todo.md
+- `origin/development` is clean — no open PRs at session end
+- Worktree pattern formalized and reliable; zero further branch-switch contamination after PR #40
+- Full suite at session end: **1714 passed, 2 skipped**
