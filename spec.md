@@ -241,6 +241,18 @@ a peer system at a different layer (not a competitor).
   20 Q-11) is to move the schemas into the backend package. Until then,
   every image that runs the API must `COPY nf/ ./nf/`. See Critical Rule 44.
 
+### Architectural design lockdowns gating P0b
+
+Two design documents must be locked in before P0b touches the schema:
+`docs/architecture/sovereignty-compliant-deletion.md` (sovereignty-
+compliant deletion design — Phase 24.5) and
+`docs/jackpot_byop_and_eukaryotic_design.md` (multi-engine BYOP
+infrastructure plus full-parity eukaryotic pathogen support — Phase
+24.5 schema scope and Phase 24.7 / P0f-BYOP behavior scope). P0b's
+migration plan must accommodate every column, enum, table, and
+constraint enumerated in §12 of the sovereignty design and §§7 + 12 of
+the BYOP/eukaryotic design.
+
 ---
 
 ## 4. What's Built — Month 1 + Month 2 Status
