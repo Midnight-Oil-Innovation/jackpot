@@ -1,7 +1,7 @@
 # JACKPOT Session Summary & Backlog
 
-**Document version:** 3.4.1
-**Last updated:** 2026-05-11 (post-Session-21 addendum: two-apptainer-doc discoverability + worktree-cleanup policy codified)
+**Document version:** 3.4.2
+**Last updated:** 2026-05-12 (post-Session-21 addendum #2: orphan-branch cleanup + canonical merge sequence codified)
 **Sessions covered:** Session 1 (March–April 2026 consolidated), Session 2 (2026-04-10), Sessions 3–S (2026-04 through 2026-04-19), Pathoplexus/Loculus comparative analysis session (2026-04-28), Cleanup A–J operator-agnostic genericization session (2026-04-26 to 2026-04-28), Session 11 (2026-04-28 → 2026-04-29 — CDC DMI/STLT/CARE alignment, BYOP/eukaryotic design, phasing rework, P0d migration prep), Session 12 (2026-04-30 → 2026-05-01 — P0d execution in Claude Code + post-execution cleanup), Session 13 (2026-05-01 — Phase 22 periodic review), Session 14 (2026-05-02 — P0e `jackpot init` CLI + Phase 22 cleanup), Session 15 (2026-05-02 → 2026-05-03 — architecture synthesis reframing + P0f F-2 schema migration), Session 16 (2026-05-03 — P0f parallel-session execution: F-1, F-3, F-4, F-5, F-12-docs merged + housekeeping/branching workflow PR #4 + F-6 through F-12 prompts drafted), Session 17 (2026-05-03 end of day — P0f F-6 through F-12 (except F-11) all merged into `development`; phase essentially complete pending F-11 audit), Session 18 (2026-05-04 — strategic positioning conversation + I-track planning: spreadsheet-refugee market identified, Seqsender/TOSTADAS landscape understood, sovereignty use cases discussed; I-1 / I-2 / C-1 / I-3 specs drafted as JACKPOT's adoption-driving feature roadmap), Session 19 (2026-05-04 later — F-11 P0f coverage audit and I-2 submission package generation merged in parallel; P0f phase complete; I-track at 2 of 4 items shipped), Session 20 (2026-05-06 — /ultrareview pass surfaced 26 findings; R-1 (six security/correctness blockers), R-2 (GISAID generator dedup + submission package test coverage), R-3 (doc and tracking hygiene) all merged; parallel-execution recommendation reversed after four cross-session contamination incidents — single-session-per-repo is now the default), Session 21 (2026-05-07 → 2026-05-11 — E-1 UAT artifacts + dev-login endpoint, full P0h Slurm campaign (H-1 H-2 H-3 H-4 H-5 H-6 H-10 — six of ten blocks landed; H-7 and H-8 deferred to Phase 25), FIX-1/FIX-2 doc cleanup + audit-rollback regression test, Phase 24.5 sovereignty-deletion design lockdown rebased + reviewed + merged; worktree-per-PR pattern adopted as the operational escape hatch from silent branch-switch contamination)
 
 **v3.2 changelog (2026-05-04 later):** P0f phase fully complete and
@@ -20,6 +20,42 @@ and I-2 ran in parallel, landing on different files (F-11 in tests/, I-2 in
 new backend/submissions* files). Both PRs merged cleanly with no conflicts.
 (4) The PR-merge order produced a fresh post-P0f baseline coverage number
 documented in tests/coverage_p0f_summary.md.
+
+**v3.4.2 changelog (2026-05-12 — next-day post-v3.4.1):** Operational
+cleanup follow-on capturing two related findings: (1) **The H-4 sibling
+branch deleted on origin.** `origin/p0h-h4-pipeline-runs-log-poller`
+(distinct from this session's `p0h-h4-weblog-poller` PR #38) carried
+two orphan commits — `a98214b` (my H-4 work briefly landed there
+during the H-4 silent-branch-switch incident, recovered via
+cherry-pick onto the right branch but never cleaned up) and `ec3bce2`
+(maintainer's spec/todo updates whose content was already on
+origin/development via other PRs). Both safe to drop; deleted via
+`git push origin --delete`. (2) **Seven session orphan branches
+discovered + deleted.** Survey of `git ls-remote --heads origin`
+surfaced seven remote branches from this session's merged PRs that
+should have been cleaned up by `gh pr merge --delete-branch` but
+weren't: `fix12-doc-cleanup` (#43), `p0h-h5` (#40), `p0h-h6` (#41),
+`p0h-h10` (#42), `phase-24-5-sovereignty-design` (#20),
+`session-summary-update` (#44), `session-summary-addendum` (#45).
+Each carried a single squash-merged commit; content already on
+origin/development. All seven deleted via `git push origin --delete`.
+(3) **Root-cause analysis recorded.** `gh pr merge --delete-branch`
+attempts both a remote-side branch delete and a local-side branch
+delete. When the local branch is checked out in a worktree, the
+local-delete fails with "cannot delete branch ... used by worktree
+at ...", and gh aborts the whole sequence — including the remote
+delete that would otherwise have succeeded. Pattern: every PR
+authored from a worktree this session left a remote orphan because
+the worktree was still active when `gh pr merge` fired. (4)
+**Canonical merge sequence codified.** Going forward, the order is
+`cd /Users/glen/Projects/jackpot` (leave the worktree) → `gh pr
+merge <N> --squash --delete-branch` (both deletes succeed) → `git
+worktree remove ../jackpot_<branch>` (cleans the dir; the
+already-deleted local branch is no-op). This is the operational
+fix to the worktree-vs-merge-cleanup friction; codifies in v3.4.2
+the procedure that supplements v3.4.1's worktree-cleanup policy.
+The session-summary-v342 PR itself was the first verification that
+the new sequence works end-to-end.
 
 **v3.4.1 changelog (2026-05-11 — same day as v3.4):** Small post-merge
 addendum to Session 21, captured after the maintainer ran `ls docs/`
@@ -4287,3 +4323,50 @@ Operational detail learned earlier in the session and worth repeating here: `gh 
 ### Why this addendum exists as v3.4.1 rather than rolling into v3.4
 
 Both surfacings happened *after* PR #44 (v3.4) merged. Capturing them as a follow-up changelog entry (v3.4.1) rather than rewriting the v3.4 entry preserves the audit trail of "v3.4 was the campaign close-out; v3.4.1 was the discoverability + operational-cleanup follow-on." Same-day patch bumps are an accepted pattern in this doc's version history (v3.2 → v3.2.1 had the same shape: a post-merge addendum added the next-relevant context without rewriting the prior summary).
+
+------
+
+## Session 21 addendum #2 (v3.4.2) — orphan-branch cleanup + canonical merge sequence
+
+### What got surfaced
+
+`git ls-remote --heads origin` after the v3.4.1 PR merged showed **eight orphan remote branches still on origin**:
+
+- One H-4 sibling — `p0h-h4-pipeline-runs-log-poller`. Distinct from this session's `p0h-h4-weblog-poller` (PR #38). Carried two orphan commits: `a98214b` (the H-4 work that briefly landed there during the silent-branch-switch incident in PR #38, recovered via cherry-pick onto the right branch but never cleaned up) and `ec3bce2` (the maintainer's "updates to spec and todo" commit whose content — `docs/jackpot_pathoplexus_loculus_overview.md` deletion, `backend/backend/federation/README.md` +1 line, `todo.md` +2 lines for `B-LOC-FED-1` — was already on `origin/development` via other PRs).
+- Seven from this session's merged PRs that `gh pr merge --delete-branch` should have cleaned up but didn't: `fix12-doc-cleanup` (#43), `p0h-h5` (#40), `p0h-h6` (#41), `p0h-h10` (#42), `phase-24-5-sovereignty-design` (#20), `session-summary-update` (#44), `session-summary-addendum` (#45). Each carried a single squash-merged commit already on `origin/development`; deletion is information-preserving.
+
+All eight deleted via `git push origin --delete <branch>`. Remote then carries four branches total: `development`, `main`, and two pre-this-session orphans (`p0g/g3-g4-profile-templates-nf-config`, `r3-doc-and-tracking-hygiene`) left untouched as not-mine-to-clean-up.
+
+### Why the orphans accumulated
+
+`gh pr merge --delete-branch` does two deletes in sequence: a remote-side branch-delete (succeeds for any merged branch with no protection rule), and a local-side branch-delete (succeeds when the branch is *not* checked out anywhere). If the local-delete fails, gh aborts the whole sequence — *including* the remote-delete that would have succeeded on its own.
+
+The worktree-per-PR pattern has the worktree checking out the PR branch. When `gh pr merge` fires *from inside the worktree* (or even just while the worktree is active), the local-delete trips on "cannot delete branch ... used by worktree at ...". Every PR authored from a worktree this session hit this and left an orphan on origin.
+
+I missed it during the session because each merge produced output like:
+
+```
+failed to delete local branch p0h-h5: failed to run git: error: cannot delete branch 'p0h-h5' used by worktree at '/Users/glen/Projects/jackpot_p0h-h5'
+
+MERGED 2026-05-09T06:10:20Z
+```
+
+The `MERGED` line was visible; the prior `failed to delete local branch` line was scanned as a known-good "I'll clean up the worktree later" message. It wasn't — it was gh telling me the remote delete had been skipped too.
+
+### Canonical merge sequence going forward
+
+```bash
+cd /Users/glen/Projects/jackpot              # leave the worktree first
+gh pr merge <N> --squash --delete-branch     # both deletes succeed
+git worktree remove ../jackpot_<branch>      # cleans the dir; the
+                                              # already-deleted local
+                                              # branch is no-op
+```
+
+The change is one command earlier than v3.4.1's version (the `cd` step before `gh pr merge`). It's the operational fix to the worktree-vs-merge-cleanup friction.
+
+This PR (`session-summary-v342`) is the first verification that the new sequence works end-to-end — authored from `../jackpot_v342_addendum`, committed inside the worktree, pushed, PR opened, then `cd /Users/glen/Projects/jackpot` followed by `gh pr merge 46 --squash --delete-branch` followed by `git worktree remove ../jackpot_v342_addendum`. No further orphan-branch survey needed if it works.
+
+### Why this is a v3.4.2 patch rather than rolling into v3.4.1
+
+Same pattern as v3.4.1 → v3.4: a follow-on capture-of-what-happened rather than a rewrite. v3.4.1 codified the worktree-cleanup *order* (`git worktree remove` then `git branch -D`); v3.4.2 codifies the *full* merge sequence with the new `cd` step that fixes the orphan-creation problem. The two together form the complete operational pattern.
