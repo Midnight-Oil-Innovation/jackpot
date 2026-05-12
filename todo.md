@@ -2130,15 +2130,22 @@ This work is **ahead-of-schedule** relative to B-FED-1 / B-PRV-1 / B-CRY-1 in th
 
 - [ ] **Estimated:** ~1000 lines, 7 files, 1 PR. Branch: `privacy-scaffold-track1-track2-seam`.
 
-### CRY-A: Crypto scaffold (PENDING — same pattern as FED-A)
+### CRY-A: Crypto scaffold (COMPLETE 2026-05-12)
 
-- [ ] **`backend/backend/crypto/` package** mirroring federation's shape:
-    - `__init__.py`, `README.md`, `_ais_hooks.py` (Track 2 seam: `AISCryptoHooks` Protocol + `NullAISCryptoHooks` no-op default)
-    - `keys.py` — Track 1: key management abstraction over PKCS#11 / Secret Manager / file-system keystores
-    - `signing.py` — Track 1: Sigstore/cosign artifact-signing interface
-    - `crypt4gh.py` — Track 1: per-file encryption for ingest/egress (Crypt4GH GA4GH standard)
-- [ ] **`AISCryptoHooks` Protocol entry points (refine in-session):** HE backend selection, threshold signing (FROST/BLS/DKG), TEE attestation evidence verification, key-rotation policy enforcement.
-- [ ] **Estimated:** ~1000 lines, 7 files, 1 PR. Branch: `crypto-scaffold-track1-track2-seam`.
+- [x] **`backend/backend/crypto/` package** mirroring federation/privacy shape:
+    - `__init__.py`, `README.md`, `_ais_hooks.py` (Track 2 seam: `AISCryptoHooks` Protocol + `NullAISCryptoHooks` default — sensible-default / refuse / ALLOW behaviours)
+    - `keys.py` — Track 1 `FilesystemKeystore` (0600 perms, metadata sidecar, rotation-hook integration on load) + stubbed `SecretManagerKeystore` / `Pkcs11Keystore` + `load_keystore` factory
+    - `signing.py` — Track 1 `Ed25519Signer` (sign/verify over `cryptography` hazmat) + `threshold_sign` top-level delegating to `AISCryptoHooks.threshold_sign`
+    - `crypt4gh.py` — `Crypt4ghEncryptor` interface-only stub raising `NotImplementedError` with `B-CRY-CRYPT4GH-1` reference
+- [x] **`AISCryptoHooks` Protocol surface (final, 4 hooks):**
+    - `select_he_backend(operation, parties)` → AIS §1.4; PRV-A `he_compute` Track 2; Null default = TenSEAL CKKS single-key
+    - `threshold_sign(message, signers, threshold)` → AIS §1.8; FED-A `threshold_approve` Track 2; Null default = `NotImplementedError`
+    - `verify_tee_attestation(instance, evidence, expected_measurements)` → AIS §1.7; FED-A `attest_partner` Track 2; Null default = `AttestationResult(verified=False, …)`
+    - `enforce_key_rotation_policy(key_ref, key_age, operation)` → AIS §1.8; `backend.crypto.keys.FilesystemKeystore.load_key` callsite; Null default = `RotationAction.ALLOW`
+- [x] **Tests:** `tests/crypto/{conftest.py,test_ais_hooks.py,test_keys.py,test_signing.py,test_crypt4gh.py}` — 40 tests, 100% module coverage on every crypto module.
+- [x] **Deps:** `cryptography>=47.0.0` added to `backend/pyproject.toml` (was already a transitive dep via python-jose; now pinned as a direct dep for Ed25519).
+- [x] **Out-of-scope follow-up tracked:** `B-CRY-CRYPT4GH-1` (GA4GH Crypt4GH integration, sequence-archive sprint) — see "cryptWWDB Integration Track" section below.
+- [x] **Branch:** `cry-a` (deviation from earlier-planned `crypto-scaffold-track1-track2-seam` to match Session 21 worktree-per-PR naming pattern).
 
 ### Future B-FED-1 / B-PRV-1 / B-CRY-1 relationship
 
@@ -2149,7 +2156,7 @@ This work is **ahead-of-schedule** relative to B-FED-1 / B-PRV-1 / B-CRY-1 in th
 ### Phase Scaffolds success criterion
 
 - [x] FED-A scaffold landed with operator-agnostic verification
-- [ ] At least one of {FED-B/C/D/E wire-up, PRV-A, CRY-A} merged before the next /ultrareview pass
+- [x] At least one of {FED-B/C/D/E wire-up, PRV-A, CRY-A} merged before the next /ultrareview pass (PRV-A + CRY-A both merged; FED-B/C/D/E still pending)
 - [ ] All five `AISFederationHooks` Protocol entry points still satisfied by `NullAISFederationHooks` after any future refactors (verifiable via `tests/federation/test_ais_hooks.py` once FED-C lands)
 
 ---
@@ -2176,6 +2183,10 @@ This work is **ahead-of-schedule** relative to B-FED-1 / B-PRV-1 / B-CRY-1 in th
 
 - [ ] **B-CWB-MB-2** Extend `backend/backend/wastewater/mass_balance.py` with quality-control and trigger-point computations per Driver et al. 2024 Table 2 — non-detect handling with MDL substitution, negative-mass-balance handling (negative → MDL or non-detect per Bowes et al. 2023b / Tempe 2023a conventions), error-bar propagation across instrument + population + excretion error sources, weekly/rolling averages, percent-change calculations week-to-week and month-to-month, population-threshold trigger points that aggregate adjacent catchments when minimums aren't met. Depends on `B-CWB-MB-1`. (1 week)
 
+### Per-file encryption follow-up (B-CRY-CRYPT4GH-1, NEW 2026-05-12)
+
+- [ ] **B-CRY-CRYPT4GH-1** Replace `backend/backend/crypto/crypt4gh.py` interface-only stub (`Crypt4ghEncryptor.encrypt_file` / `decrypt_file` raising `NotImplementedError`) with a real implementation against the GA4GH Crypt4GH standard (https://samtools.github.io/hts-specs/crypt4gh.html), backed by the `crypt4gh` Python library or an equivalent codec. Wire into the ingest / egress paths for `data_source_lab`-tagged samples. Lands in the sequence-archive sprint (Track 2). Depends on FED-D `data_source_lab` role (`B-CWB-FED-1`) so encryption targets are scoped correctly. (1 week)
+
 ### cryptWWDB-readiness success criterion ("ready to collaborate")
 
 State in which JACKPOT can credibly host the cryptWWDB framework as a Track 2 overlay. Achieved when ALL of:
@@ -2183,7 +2194,7 @@ State in which JACKPOT can credibly host the cryptWWDB framework as a Track 2 ov
 - [ ] **Phase 24.5 locked** with `B-CWB-SCHEMA-1` and `B-CWB-SCHEMA-2` at minimum. Schemas 3-5 are nice-to-have for production maturity but not blockers for architectural demonstration.
 - [ ] **P0b shipped** with the cryptWWDB-readiness schema items migrated.
 - [ ] **FED-B/C/D/E shipped** with `B-CWB-FED-1` `data_source_lab` role bundled into FED-D.
-- [ ] **CRY-A scaffold shipped** with `AISCryptoHooks` Protocol seam landed.
+- [x] **CRY-A scaffold shipped** with `AISCryptoHooks` Protocol seam landed (2026-05-12).
 - [ ] **`B-WW-1` shipped** so there is a visible wastewater story end-to-end.
 - [ ] **`B-CWB-MB-1` shipped** demonstrating mass-balance computation in-instance.
 - [ ] **`B-CWB-DOC-1` shipped** documenting the three-party non-collusion assumption.
