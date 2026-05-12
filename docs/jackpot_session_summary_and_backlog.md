@@ -1,7 +1,7 @@
 # JACKPOT Session Summary & Backlog
 
-**Document version:** 3.4
-**Last updated:** 2026-05-11 (after E-1 + P0h Slurm campaign + FIX-1/FIX-2 cleanup + Phase 24.5 sovereignty-deletion lockdown)
+**Document version:** 3.4.1
+**Last updated:** 2026-05-11 (post-Session-21 addendum: two-apptainer-doc discoverability + worktree-cleanup policy codified)
 **Sessions covered:** Session 1 (March–April 2026 consolidated), Session 2 (2026-04-10), Sessions 3–S (2026-04 through 2026-04-19), Pathoplexus/Loculus comparative analysis session (2026-04-28), Cleanup A–J operator-agnostic genericization session (2026-04-26 to 2026-04-28), Session 11 (2026-04-28 → 2026-04-29 — CDC DMI/STLT/CARE alignment, BYOP/eukaryotic design, phasing rework, P0d migration prep), Session 12 (2026-04-30 → 2026-05-01 — P0d execution in Claude Code + post-execution cleanup), Session 13 (2026-05-01 — Phase 22 periodic review), Session 14 (2026-05-02 — P0e `jackpot init` CLI + Phase 22 cleanup), Session 15 (2026-05-02 → 2026-05-03 — architecture synthesis reframing + P0f F-2 schema migration), Session 16 (2026-05-03 — P0f parallel-session execution: F-1, F-3, F-4, F-5, F-12-docs merged + housekeeping/branching workflow PR #4 + F-6 through F-12 prompts drafted), Session 17 (2026-05-03 end of day — P0f F-6 through F-12 (except F-11) all merged into `development`; phase essentially complete pending F-11 audit), Session 18 (2026-05-04 — strategic positioning conversation + I-track planning: spreadsheet-refugee market identified, Seqsender/TOSTADAS landscape understood, sovereignty use cases discussed; I-1 / I-2 / C-1 / I-3 specs drafted as JACKPOT's adoption-driving feature roadmap), Session 19 (2026-05-04 later — F-11 P0f coverage audit and I-2 submission package generation merged in parallel; P0f phase complete; I-track at 2 of 4 items shipped), Session 20 (2026-05-06 — /ultrareview pass surfaced 26 findings; R-1 (six security/correctness blockers), R-2 (GISAID generator dedup + submission package test coverage), R-3 (doc and tracking hygiene) all merged; parallel-execution recommendation reversed after four cross-session contamination incidents — single-session-per-repo is now the default), Session 21 (2026-05-07 → 2026-05-11 — E-1 UAT artifacts + dev-login endpoint, full P0h Slurm campaign (H-1 H-2 H-3 H-4 H-5 H-6 H-10 — six of ten blocks landed; H-7 and H-8 deferred to Phase 25), FIX-1/FIX-2 doc cleanup + audit-rollback regression test, Phase 24.5 sovereignty-deletion design lockdown rebased + reviewed + merged; worktree-per-PR pattern adopted as the operational escape hatch from silent branch-switch contamination)
 
 **v3.2 changelog (2026-05-04 later):** P0f phase fully complete and
@@ -20,6 +20,28 @@ and I-2 ran in parallel, landing on different files (F-11 in tests/, I-2 in
 new backend/submissions* files). Both PRs merged cleanly with no conflicts.
 (4) The PR-merge order produced a fresh post-P0f baseline coverage number
 documented in tests/coverage_p0f_summary.md.
+
+**v3.4.1 changelog (2026-05-11 — same day as v3.4):** Small post-merge
+addendum to Session 21, captured after the maintainer ran `ls docs/`
+and the worktree-cleanup question came up. Two clarifications recorded:
+(1) **Two similarly-named apptainer audit docs coexist** at
+`docs/apptainer_compatibility_audit.md` (PR #4, 2026-05-03 — audits the
+Dockerfile.api / Dockerfile.ui images for whether the platform's own
+containers can run under Apptainer on Docker-forbidden clusters) and
+`docs/pipeline_apptainer_audit.md` (PR #36, 2026-05-08 — audits the
+pipeline zoo for upstream OCI-image pre-staging). Scope genuinely
+distinct; naming is just close enough to cause discoverability
+confusion. Fix (a one-line cross-reference at the top of each)
+acknowledged but deferred — not blocker-level. (2) **Worktree-cleanup
+policy codified:** every worktree this session was created at
+`../jackpot_<branch>/` (sibling to the repo, NOT inside it), used for
+the lifetime of one PR, and removed after merge via
+`git worktree remove <path> && git branch -D <branch>`. None stay in
+place — the maintainer's `Projects/` directory does not accumulate
+stale worktrees. This is the canonical pattern going forward; ad-hoc
+"leave it around for inspection" is opt-in and explicit, never the
+default. See Session 21 §6 for the broader worktree-per-PR pattern;
+this addendum codifies the cleanup half.
 
 **v3.4 changelog (2026-05-11):** Session 21 — E-1 ships,
 P0h Slurm campaign closes (six of ten blocks landed; two deferred to
@@ -4235,3 +4257,33 @@ E-1 artifacts in place, P0h Slurm campaign closed at six-of-ten, two P0 bugs fin
 - `origin/development` is clean — no open PRs at session end
 - Worktree pattern formalized and reliable; zero further branch-switch contamination after PR #40
 - Full suite at session end: **1714 passed, 2 skipped**
+
+------
+
+## Session 21 addendum (v3.4.1) — post-merge surfacings
+
+### Two apptainer audit docs coexist
+
+`ls docs/` after the campaign closed surfaced that `docs/apptainer_compatibility_audit.md` (PR #4, 2026-05-03) and `docs/pipeline_apptainer_audit.md` (PR #36, this session) are both apptainer-themed audit docs but cover non-overlapping scope:
+
+- `apptainer_compatibility_audit.md` audits `Dockerfile.api` and `Dockerfile.ui` — i.e., whether JACKPOT's *own container images* can run under Apptainer on scenario-C clusters that forbid Docker.
+- `pipeline_apptainer_audit.md` audits the pipeline zoo (`pipelines/pipelines/`) for upstream OCI-image pre-staging — i.e., what containers each *pipeline* pulls at run time.
+
+Not a duplication issue (different concerns), but a discoverability issue (a future reader hitting either filename may not realize the other exists). Trivial fix is a one-line "see also" cross-reference at the top of each. Deferred — not blocker-level; flagged for whoever next touches either file.
+
+### Worktree-cleanup policy codified
+
+Every worktree this session was created at `../jackpot_<branch>/` (sibling to the repo, never inside it), used for the lifetime of one PR, and removed after merge via:
+
+```bash
+git worktree remove /Users/glen/Projects/jackpot_<branch>
+git branch -D <branch>
+```
+
+None stay in place. The maintainer's `Projects/` directory does not accumulate stale worktrees. Ad-hoc "leave it around for inspection" is opt-in and explicit, never the default. This is the canonical pattern going forward, complementing Session 21 §6's worktree-per-PR creation pattern.
+
+Operational detail learned earlier in the session and worth repeating here: `gh pr merge --delete-branch` cannot delete a local branch that's checked out in a worktree, so the `git worktree remove` step must precede the `git branch -D` step (or the local branch survives even though the remote one is gone). The sequence above is the right order.
+
+### Why this addendum exists as v3.4.1 rather than rolling into v3.4
+
+Both surfacings happened *after* PR #44 (v3.4) merged. Capturing them as a follow-up changelog entry (v3.4.1) rather than rewriting the v3.4 entry preserves the audit trail of "v3.4 was the campaign close-out; v3.4.1 was the discoverability + operational-cleanup follow-on." Same-day patch bumps are an accepted pattern in this doc's version history (v3.2 → v3.2.1 had the same shape: a post-merge addendum added the next-relevant context without rewriting the prior summary).
