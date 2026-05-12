@@ -284,27 +284,20 @@ This discipline is what makes the safe defaults safe: the federation code path i
 
 The documents below ground the policies in this file. Operators reviewing or extending federation behavior should read them alongside this document.
 
-### 7.1 In-repo references (verified present on disk)
+### 7.1 In-repo references
+
+All references in this section are verified present on disk in the `b-cwb-doc-1` branch.
 
 | Document | Path | Why an operator reads it |
 |---|---|---|
+| AIS theoretical anchor | `docs/Jackpot_AIS.md` | The §1.3 / §1.4 / §1.6 / §1.7 / §1.8 hook positions that the federation and privacy READMEs map their `AISFederationHooks` and `AISPrivacyHooks` Protocol entries onto. Read this for the AIS framing that grounds every hook in Section 6. |
+| Immune-platform vision and roadmap | `docs/jackpot_immune_platform_plan.md` | §6.2.2 (Pillar III federation plan) and §10.5 (`TrustEngine` spec) are the canonical references for Phase IM-4 federation work and for the multi-key HE future direction tracked here as `B-IMMUNE-HE-2`. |
 | Immune-platform collaboration scaffolding | `docs/jackpot_immune_collaboration_scaffolding.md` | Canonical description of the Track 1 / Track 2 seam pattern; the ratio between shipped engineering and deliberately-open research questions; the eleven critiques the federation scaffold is responding to. |
 | Architecture & developer reference | `docs/architecture/jackpot_architecture.md` | §23 ("Federation Architecture") is the three-level federation reference and the source of the qualifying-sample gates (`surveillance_relevant=TRUE`, `sharing_level ≥ min_sharing_level_for_federation`, `quality_status ≥ ANALYZABLE`) for Level 2 hub push. |
 | Federation package README | `backend/backend/federation/README.md` | The FED-A scaffold: package layout, `AISFederationHooks` Protocol, hook → AIS doc cross-reference table, Track 2 impl module map. |
 | Privacy package README | `backend/backend/privacy/README.md` | The PRV-A scaffold: package layout, `AISPrivacyHooks` Protocol, the six hook positions and their AIS doc cross-references, the explicit note that TEE attestation is a crypto-layer (not privacy-layer) hook. |
 
-### 7.2 Referenced but not present on disk (flagged for verification)
-
-The session task brief instructed pointing to four additional documents. These are referenced widely in `spec.md`, `todo.md`, and the in-tree documents in Section 7.1, but the files themselves are not present in this working tree (`b-cwb-doc-1` worktree at commit `1cc8b27`):
-
-| Document | Cited section | Disk status |
-|---|---|---|
-| `Jackpot_AIS.md` | AIS theoretical anchor; the §1.3 / §1.4 / §1.6 / §1.7 / §1.8 hook positions mapped in the federation and privacy READMEs | **NOT FOUND** in this worktree. The federation and privacy READMEs cite it by section number; operators needing the canonical AIS framing should request the doc from the project maintainer or consult the in-tree references in Section 7.1 that quote its content. |
-| `jackpot_immune_platform_plan.md` (§6.2.2 and §10.5) | Phase IM-4 federation plan; `TrustEngine` spec; multi-key HE future direction | **NOT FOUND** in this worktree. Referenced from `docs/jackpot_immune_collaboration_scaffolding.md` and from the Phase IM-4 backlog items in `todo.md`. Same handling as `Jackpot_AIS.md`. |
-
-These references should be re-resolved once those source documents are merged into the repository. The policy content in Sections 1–6 of this document does not depend on either file being available on disk; it is grounded in the cited published literature (Driver et al. 2024, López-Alt et al. 2012) and in the in-tree code and READMEs in Section 7.1.
-
-### 7.3 Backlog cross-references
+### 7.2 Backlog cross-references
 
 For navigation back into `todo.md`:
 
