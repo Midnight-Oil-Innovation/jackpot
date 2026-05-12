@@ -2083,15 +2083,16 @@ This work is **ahead-of-schedule** relative to B-FED-1 / B-PRV-1 / B-CRY-1 in th
 - [ ] **B-CWB-FED-1** Extend `FederationRole` enum with `data_source_lab` value. cryptWWDB's three-party model (Muni A, Muni B, Lab per Driver et al. 2024) has the Lab as distinct from data-holding peers — it produces `pipeline_results` (concentration data) via `X-Pipeline-Token` auth but holds no `samples` of its own. Schema migration adds the enum value; `FederationClient` queryable predicates filter by role. (0.5 session, bundles with FED-D)
 - [ ] **Workflow:** LinkML schema YAML edits first → `uv run python scripts/regen_schema.py` → Alembic autogenerate → manual cleanup. Branch: `b1-federation-schema-migration`.
 
-### FED-C: Tests (PENDING)
+### FED-C: Tests (COMPLETE 2026-05-12)
 
-- [ ] **`tests/federation/` test files:**
-    - `test_models.py` — Pydantic v2 shape and serialization round-trip
-    - `test_client_l1.py` — `FederationClient` async fanout, hook invocation order, partner attestation rejection, anomaly detection rejection. Use `respx` to mock partner HTTP.
-    - `test_push_l2.py` — qualification logic (port the 5 smoke-test cases from FED-A delivery), payload composition, negative-list enforcement
-    - `test_access_l3.py` — outbound + inbound shapes, `NotImplementedError` raises where appropriate
-    - `test_ais_hooks.py` — `NullAISFederationHooks` satisfies Protocol, all five hooks return safe defaults
-- [ ] **Coverage target:** ≥95% on every module in `backend/backend/federation/`. Branch: `b2-federation-tests`.
+- [x] **`tests/federation/` test files** landed at `tests/federation/` (78 tests, all passing):
+    - `tests/federation/test_models.py` — Pydantic v2 shape and serialization round-trip, plus a negative-list parametrize that pins `extra="ignore"` against host_age / FASTQ refs / known PII fields
+    - `tests/federation/test_client.py` — `FederationClient` async fanout via respx, hook invocation order, `X-JACKPOT-Federation-Key` header, partner timeout / 4xx / 5xx isolation, attestation + anomaly skips, disabled-partner skip, empty-eligible short-circuit, injected-http-client branch, async-context-required guard
+    - `tests/federation/test_push.py` — qualification logic with parametrized sharing-level and quality-status orderings, payload composition, `validate_push_payload` and `threshold_approve` gates in order, NotImplementedError-pin on the L2 IO stub
+    - `tests/federation/test_access.py` — `build_outbound_request`, lifecycle states (PENDING / APPROVED / DENIED), `submit_outbound` and `receive_inbound` hook gates + NotImplementedError-pin on the L3 IO stubs
+    - `tests/federation/test_ais_hooks.py` — `NullAISFederationHooks` no-op contract for all five methods, runtime-checkable Protocol shape, structural-typing acceptance + rejection
+    - `tests/federation/conftest.py` — no-ops the parent Postgres autouse, mirroring `tests/wastewater/conftest.py`
+- [x] **Coverage target:** 100% on every module in `backend/backend/federation/` (`pytest tests/federation/ --cov=backend.federation` reports 219/219 stmts). Branch: `fed-c`.
 
 ### FED-B: Federation router (PENDING)
 
