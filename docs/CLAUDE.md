@@ -1217,6 +1217,21 @@ full design.
 
 **67 — Operating-protocol rules are read-first.** Rules N through N+3 are session-level operational rules. Every Claude session involving file edits, schema work, git operations, or backlog work must reference these rules explicitly before taking action. The rules don't enforce themselves — they require maintainer call-out when violated until the pattern is internalized. If Claude proposes commands without verifying state per Rule N, or proposes a merge script below the Rule N+1 threshold without justification, the maintainer should pause the session and reference the rule number.
 
+**68 — Session prompt closing-steps mandatory.** Every JACKPOT session prompt that produces a code commit MUST include a Closing Steps section executing the following sequence after the commit lands:
+
+1. `git push -u origin <branch>`
+2. `gh pr create --base development --title "..." --body "..."` with the full PR body following the template at `docs/session_prompt_template.md`
+3. `gh pr merge --squash --delete-branch`
+4. `git -C ~/Projects/jackpot fetch --prune`
+5. `git -C ~/Projects/jackpot pull --ff-only origin development`
+6. Session summary reports PR URL, merge SHA, main checkout HEAD SHA after sync, and an explicit "maintainer next step: run `jackpot-finish <branch>` from outside the session to remove the worktree and delete the local branch"
+
+The session MUST NOT include `git worktree remove` of the current worktree — git refuses to remove the in-use worktree, and the maintainer's `jackpot-finish` helper handles this from outside. Out of Scope sections must include this exclusion explicitly.
+
+Every code-commit session prompt structure must follow `docs/session_prompt_template.md`: required sections (Operating Rules, Role, Session Task, Acceptance Criteria, Out of Scope, Closing Steps, Source-of-truth docs to verify before coding), required acceptance criteria for the push/PR/merge/sync sequence, and the PR body template.
+
+Sessions that do NOT produce a code commit (pure-research, pure-design, pure-documentation-without-commit) are exempt from Closing Steps but must explicitly state this exemption in Operating Rules.
+
 ## Local Dev Role Switching
 
 In local dev (`ENV=local`), the mock user is determined by `MOCK_USER_EMAIL`
