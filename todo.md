@@ -1009,14 +1009,29 @@ These are not separate design work — the design exists in `jackpot_byop_and_eu
 
 - [ ] **B-EUK-3** Update `validator.py` for eukaryotic-aware tier rules: new tier-2 fields (developmental stage, preservation method), new tier-3 fields (parasitemia, MOI, coinfection). Update `compute_surveillance_relevant()` to include eukaryotic pathogens by default. (1 session, P0b — bundle with B-EUK-1.)
 
+### Schema additions for cryptWWDB-readiness (must land with P0b)
+
+Driven by integration-readiness analysis vs Driver et al. 2024 *Sci Total Environ* 940:173315 (NSF 2115075 — Driver, Ahsan, Piske, Lee, Forrest, Halden, Trieu). Full architectural mapping in `docs/cryptwwdb_integration.md`. These additions are required to host the cryptWWDB encrypted mass-balance framework as a Track 2 overlay without retrofit. Same gate condition as the sovereignty + BYOP/EUK additions above — splitting them into a later migration creates double-migrate operator churn.
+
+- [ ] **B-CWB-SCHEMA-1** Add `wastewater_upstream_of` and reciprocal `wastewater_downstream_of` values to `sample_associations.association_type` enum. Enables directed sewershed topology for mass-balance computation across upstream/downstream wastewater samples spanning two municipalities. cryptWWDB Use Case 1 requires this typed relationship to identify which sample's flow + concentration is subtracted from which. (0.5 session, P0b)
+
+- [ ] **B-CWB-SCHEMA-2** Add `wastewater_target_concentration` result type for non-SARS-CoV-2 quantitative targets. The existing `wastewater_lineage_abundance` is Freyja-shaped (SARS-CoV-2 lineage fractions). cryptWWDB's C1, C2 inputs are concentrations of arbitrary target chemicals — heroin and 6-acetylmorphine in Driver et al. 2024, but the framework is target-agnostic. Fields: `target_pathogen_id` FK, `assay_type` enum, `concentration_value`, `concentration_unit` enum, `concentration_lower_ci`, `concentration_upper_ci`, `normalization_target` enum (PMMoV / crAssphage / flow / none), `lod`, `loq`. Follows the existing typed-result-type-per-analysis pattern. (1-2 sessions, P0b)
+
+- [ ] **B-CWB-SCHEMA-3** Add time-varying population fields per Driver et al. 2024 Table 2. Current `WastewaterSample.population_served` is constant (US census-derived). Add: `population_served_weekday`, `population_served_weekend` (quasi-constant from employment data); plus a new `sample_population_estimate` typed table for unique daily values from wastewater population biomarkers per Choi et al. 2018. (1 session, P0b)
+
+- [ ] **B-CWB-SCHEMA-4** Add `fecal_normalization_results` typed table. One row per sample per fecal-indicator-target. Fields: `sample_id` FK, `indicator_type` enum (`PMMoV` / `Bacteroides_HF183` / `coprostanol` / `other`), `indicator_concentration`, `indicator_unit`, `assay_type`. Enables PMMoV normalization for SARS-CoV-2 plus flexible per-indicator handling per Feng et al. 2021. (1 session, P0b)
+
+- [ ] **B-CWB-SCHEMA-5** Add per-target excretion and degradation factor lookup tables. `excretion_factors` table: `target_pathogen_id` FK, `urinary_excretion_fraction`, `fecal_excretion_fraction`, `molecular_weight`, `reference_citation`. `in_sewer_degradation_factors` table: `target_pathogen_id` FK, `degradation_coefficient_per_hour`, `temperature_dependence`, `reference_citation`. Static reference data seeded from literature per Zuccato et al. 2008 and Hart & Halden 2020. (1 session, P0b)
+
 ### Phase 24.5 success criterion
 
 - [x] `docs/architecture/sovereignty-compliant-deletion.md` exists, is reviewable (PR #20)
 - [x] P0b schema design has accommodated the sovereignty columns + enum extensions (see §12 of the sovereignty design doc)
 - [ ] P0b schema design has accommodated `byop_pipelines` table, `pipeline_results` FK, eukaryotic OrganismNameEnum additions, eukaryotic samples columns, 8 eukaryotic pipeline-result tables, and supporting enums (BYOP/eukaryotic block above) — sister doc `docs/jackpot_byop_and_eukaryotic_design.md` is the build spec; remaining 24.5 deliverable
+- [ ] P0b schema design has accommodated `B-CWB-SCHEMA-1` through `B-CWB-SCHEMA-5` (cryptWWDB-readiness block above)
 - [x] Implementation tasks queued: `B-CARE-3a..g` for P0c (sovereignty deletion implementation, per §13 of the sovereignty design doc), `B-CARE-4` for P0c federation phase (federation propagation, per §9), `B-BYOP-1` through `B-BYOP-10` for P0f (BYOP infrastructure), `B-EUK-PLAS-*` through `B-EUK-TOXO-*` for Phase 28 (default eukaryotic pipelines)
 
-**Effort:** 1 session for the sovereignty design doc + 1-2 sessions for the BYOP + eukaryotic schema migration work + half a session of P0b integration discussion. Total: 3-4 sessions for Phase 24.5.
+**Effort:** 1 session for the sovereignty design doc + 1-2 sessions for the BYOP + eukaryotic schema migration work + 1-2 sessions for the cryptWWDB-readiness schema design + half a session of P0b integration discussion. Total: 4-6 sessions for Phase 24.5 design lockdown. P0b implementation effort grows correspondingly — ~4-5 additional sessions for the cryptWWDB-readiness migration work on top of the existing sovereignty + BYOP/EUK migration scope.
 
 **Phase placement justification:** All these schema decisions must be locked before P0b touches the schema. Doing them now means P0b is one migration, not three. Implementation work for the deletion logic, BYOP infrastructure, and default eukaryotic pipelines all happens in later phases (P0c, P0f, Phase 28 respectively) — but the *schema* lands in P0b alongside the existing v5.0 work.
 
@@ -2065,6 +2080,7 @@ This work is **ahead-of-schedule** relative to B-FED-1 / B-PRV-1 / B-CRY-1 in th
 
 - [ ] **`federated_instances` table.** Columns per `models.py` `FederatedInstance` shape: `id` (UUID PK), `name`, `base_url`, `role` (enum: hub / spoke / peer), `federation_enabled` (default false), `min_sharing_level_for_federation` (default `'DISCOVERABLE'`), `hub_instance_url` (nullable), `api_key_secret_name`, `last_seen_at` (nullable), `created_at`, `updated_at`.
 - [ ] **New columns on `organizations`:** `min_sharing_level_for_federation`, `federation_enabled`, `hub_instance_url`, `federation_role`.
+- [ ] **B-CWB-FED-1** Extend `FederationRole` enum with `data_source_lab` value. cryptWWDB's three-party model (Muni A, Muni B, Lab per Driver et al. 2024) has the Lab as distinct from data-holding peers — it produces `pipeline_results` (concentration data) via `X-Pipeline-Token` auth but holds no `samples` of its own. Schema migration adds the enum value; `FederationClient` queryable predicates filter by role. (0.5 session, bundles with FED-D)
 - [ ] **Workflow:** LinkML schema YAML edits first → `uv run python scripts/regen_schema.py` → Alembic autogenerate → manual cleanup. Branch: `b1-federation-schema-migration`.
 
 ### FED-C: Tests (PENDING)
@@ -2086,6 +2102,7 @@ This work is **ahead-of-schedule** relative to B-FED-1 / B-PRV-1 / B-CRY-1 in th
     - `POST /api/v1/federation/push` — receive an inbound L2 payload (peer instance only)
     - `POST /api/v1/federation/access-requests` — receive an inbound L3 access request (peer instance only)
 - [ ] **Auth:** federation API keys via `X-JACKPOT-Federation-Key` header for peer-to-peer endpoints (validated against `federated_instances.api_key_secret_name` via Secret Manager); standard JWT + `require_platform_admin` for the admin-facing list/register endpoints. Branch: `b3-federation-router`.
+- [ ] **B-CWB-DOC-1** Create `docs/federation_operations.md` documenting the three-party non-collusion assumption required by cryptWWDB (Driver et al. 2024 §4), the multi-key HE pathway as future mitigation (Lopez-Alt et al. 2012, tracked as `B-IMMUNE-HE-2`), federation-key rotation policy, partner attestation flow, and the AIS-hook policy points where operators configure per-deployment policy. (1 day, bundles with FED-B)
 
 ### FED-E: Wire router into `main.py` (PENDING)
 
@@ -2134,6 +2151,45 @@ This work is **ahead-of-schedule** relative to B-FED-1 / B-PRV-1 / B-CRY-1 in th
 - [x] FED-A scaffold landed with operator-agnostic verification
 - [ ] At least one of {FED-B/C/D/E wire-up, PRV-A, CRY-A} merged before the next /ultrareview pass
 - [ ] All five `AISFederationHooks` Protocol entry points still satisfied by `NullAISFederationHooks` after any future refactors (verifiable via `tests/federation/test_ais_hooks.py` once FED-C lands)
+
+---
+
+## cryptWWDB Integration Track — NEW 2026-05-12
+
+**Source:** Integration-readiness analysis vs Driver et al. 2024 *Sci Total Environ* 940:173315 — "Encrypted data-sharing for preserving privacy in wastewater-based epidemiology" (Driver, Ahsan, Piske, Lee, Forrest, Halden, Trieu; NSF 2115075). Full architectural mapping documented in `docs/cryptwwdb_integration.md`.
+
+**Strategic framing:** JACKPOT is positioned to be the production substrate for the cryptWWDB framework as a Track 2 extension landing under `backend/backend/immune/sec/`. Architectural fit is unusually clean — the AIS-hook design under `Jackpot_AIS.md` and the Track 1 / Track 2 seam pattern in `jackpot_immune_collaboration_scaffolding.md` already define `AISPrivacyHooks.he_compute(encrypted_inputs, op)` as a Protocol entry point with the Track 2 implementation site pre-allocated at `backend/backend/immune/sec/he_backend.py`. This section tracks the cryptWWDB-specific work that doesn't fit naturally inside an existing phase.
+
+**Items in other phases related to this track** (cross-references for navigation):
+
+- Schema additions: `B-CWB-SCHEMA-1` through `B-CWB-SCHEMA-5` in **Phase 24.5** (must lock with P0b)
+- Federation role extension: `B-CWB-FED-1` in **FED-D** (`data_source_lab` role)
+- Operations doc: `B-CWB-DOC-1` in **FED-B** (`federation_operations.md` including the non-collusion assumption)
+- HE backend concrete impl: `B-IMMUNE-HE-1` (wastewater mass balance as first concrete query) in **Phase IM-4** — Tracked, Not Scheduled
+- Multi-key HE follow-on: `B-IMMUNE-HE-2` in **Phase IM-4** — Tracked, Not Scheduled
+- Existing wastewater dashboard: `B-WW-1` in **Phase 26** (1.5 sessions, unblocked) — useful demo independent of cryptWWDB work
+
+### Mass-balance computation module
+
+- [ ] **B-CWB-MB-1** Implement Tier 1 plaintext mass-balance module at `backend/backend/wastewater/mass_balance.py`. Computes `MassLoad = (Q1·C1) − (Q2·C2)` (cryptWWDB Use Case 1) and the time-aware variant (Use Case 2) over plaintext `WastewaterSample.flow_rate_mgd` and `wastewater_target_concentration` rows (from `B-CWB-SCHEMA-2`) joined via the `sample_associations` upstream/downstream relationship (from `B-CWB-SCHEMA-1`). Single-instance computation; no federation, no encryption. Includes unit conversions, missing-data stubs, and a clean function-level interface that the `B-IMMUNE-HE-1` Track 2 work delegates to for the encrypted variant. Depends on P0b ship. (1-2 sessions)
+
+- [ ] **B-CWB-MB-2** Extend `backend/backend/wastewater/mass_balance.py` with quality-control and trigger-point computations per Driver et al. 2024 Table 2 — non-detect handling with MDL substitution, negative-mass-balance handling (negative → MDL or non-detect per Bowes et al. 2023b / Tempe 2023a conventions), error-bar propagation across instrument + population + excretion error sources, weekly/rolling averages, percent-change calculations week-to-week and month-to-month, population-threshold trigger points that aggregate adjacent catchments when minimums aren't met. Depends on `B-CWB-MB-1`. (1 week)
+
+### cryptWWDB-readiness success criterion ("ready to collaborate")
+
+State in which JACKPOT can credibly host the cryptWWDB framework as a Track 2 overlay. Achieved when ALL of:
+
+- [ ] **Phase 24.5 locked** with `B-CWB-SCHEMA-1` and `B-CWB-SCHEMA-2` at minimum. Schemas 3-5 are nice-to-have for production maturity but not blockers for architectural demonstration.
+- [ ] **P0b shipped** with the cryptWWDB-readiness schema items migrated.
+- [ ] **FED-B/C/D/E shipped** with `B-CWB-FED-1` `data_source_lab` role bundled into FED-D.
+- [ ] **CRY-A scaffold shipped** with `AISCryptoHooks` Protocol seam landed.
+- [ ] **`B-WW-1` shipped** so there is a visible wastewater story end-to-end.
+- [ ] **`B-CWB-MB-1` shipped** demonstrating mass-balance computation in-instance.
+- [ ] **`B-CWB-DOC-1` shipped** documenting the three-party non-collusion assumption.
+
+Total effort to reach this state from current `development`: roughly 4-6 weeks of focused work if it is the only sprint thread.
+
+The actual `B-IMMUNE-HE-1` Track 2 implementation (the cryptWWDB HE backend) is the collaborative work product with the paper authors — not maintainer-solo work in advance.
 
 ---
 
@@ -2530,7 +2586,9 @@ Analyst confirms an anomaly → new high-affinity detector enters memory pool �
 
 - [ ] **B-IMMUNE-MEMSYNC-1** Implement `backend/immune/net/memory_sync.py` — federation memory cell synchronization with cross-member confirmation thresholds. A memory cell only promotes to the global pool after N independent member confirmations. Reference: immune-plan §6.2. (3-4 sessions)
 
-- [ ] **B-IMMUNE-HE-1** Implement `backend/immune/net/query_he.py` — homomorphic-encryption query layer (Kim 2021). Start with one well-defined query type (e.g., "do you have a memory cell matching this signature?"); expand later. Lands inside the existing `B-CRY-1` crypto-scaffold pattern. Reference: immune-plan §6.2.2, §10.5. (1-2 weeks; significant work)
+- [ ] **B-IMMUNE-HE-1** Implement `backend/immune/net/query_he.py` — homomorphic-encryption query layer (Kim 2021). **First concrete query type: wastewater mass balance per Driver et al. 2024 *Sci Total Environ* 940:173315 — `(Q1·C1) − (Q2·C2)` over RLWE-encrypted operands using TenSEAL (NSF 2115075), including the Use Case 2 temporal-equality variant.** Second concrete query type: "do you have a memory cell matching this signature?" Concrete HE backend lands at `backend/backend/immune/sec/he_backend.py` per the PRV-A `AISPrivacyHooks.he_compute(encrypted_inputs, op)` Protocol seam. Lands inside the existing `B-CRY-1` crypto-scaffold pattern. Reference: immune-plan §6.2.2, §10.5; Driver et al. 2024. (1-2 weeks for memory-cell baseline; +1-2 weeks for wastewater mass-balance concrete implementation)
+
+- [ ] **B-IMMUNE-HE-2** Multi-key HE extension per Lopez-Alt et al. 2012 (already cited in immune-plan §6.2.2 as future direction). Each federation entity holds its own secret key; decryption of a result requires participation from all key-holding parties via joint computation. Mitigates the Muni-A-and-Lab collusion risk explicitly identified in Driver et al. 2024 §4 — eliminates the single-secret-key decryption attack against single-key HE. Same `backend/backend/immune/sec/he_backend.py` interface as `B-IMMUNE-HE-1`, different crypto backend. Triggered when single-key HE deployment proves the operational model and the stronger threat model becomes required (likely with first non-trivial production deployment of the cryptWWDB-track). Reference: Lopez-Alt et al. 2012; Driver et al. 2024 §4. (2-3 weeks; significant crypto work)
 
 - [ ] **B-IMMUNE-DP-1** Implement differential-privacy aggregator for shared signals. Lands inside the existing `B-PRV-1` privacy-scaffold pattern. Federation-wide aggregations (member counts, signal frequencies) computed with formal DP guarantees. Reference: immune-plan §6.2.3. (1 week)
 
