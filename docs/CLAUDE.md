@@ -29,8 +29,51 @@ federated_peers + BYOP/eukaryotic schema) → P0c (multi-tenancy middleware
 
 1. Read `spec.md` — understand the goals and constraints for the current sprint
 2. Read `todo.md` — find the next unchecked task
-3. Re-read this file (`docs/CLAUDE.md`) — all 62 Critical Rules apply at all times
+3. Re-read this file (`docs/CLAUDE.md`) — all 67 Critical Rules apply at all times
 4. Confirm the baseline is stable: `uv run pytest tests/ schema/tests/ cli/tests/` from the workspace root — **≥1591 tests passing, ≥80% coverage** (post-R-1, R-2 work in progress, R-3 doc/tracking hygiene as of 2026-05-06). Earlier baselines: 970 passing post-P0e, 1527 post-PR #28 P0g G-3+G-4. The post-P0d 39% number we carried briefly was a pytest-cov misconfiguration (omit list wasn't reaching the report-time matcher); fixed by making `--cov-config=pyproject.toml` explicit in addopts — see `docs/learnings.md` "Coverage measurement bug" entry. P0e (`docs/architecture/jackpot-init-cli.md`) shipped `jackpot init` operator-bootstrap CLI plus 13 absorbed Phase 22 cleanup items; see `docs/review_log.md` "P0e closeout" section.
+
+## Session-start checklist
+
+**Run this as the FIRST action of any session involving file edits, git ops, schema work, or backlog edits.** Paste the output to the chat verbatim so Claude has verified state before proposing any commands. Applies in Claude Code, Claude in chat, and any other Claude surface. Skipping it is a Critical Rule N violation (pre-action state verification), regardless of how trivial the requested action appears.
+
+```bash
+# 1. Working tree + index state
+pwd
+git status
+
+# 2. Origin divergence — has anything moved since last sync?
+git fetch origin
+BRANCH=$(git branch --show-current)
+echo "=== local ahead of origin/$BRANCH ===" && git log --oneline "origin/$BRANCH..HEAD"
+echo "=== origin ahead of local  ($BRANCH) ===" && git log --oneline "HEAD..origin/$BRANCH"
+
+# 3. Recent history for context
+git log --oneline -5
+
+# 4. Worktree check (Critical Rule 61 — confirm you're in the worktree you think you are)
+git worktree list
+```
+
+### What Claude does with this output
+
+- **`git status` shows unexpected modified/staged files** (files Claude didn't author this session, files unrelated to the current task) → ask before proceeding. Don't assume the maintainer wants them included.
+- **`origin/$BRANCH..HEAD` is non-empty** → local commits exist that aren't pushed. Warn before any `reset --hard` or destructive operation.
+- **`HEAD..origin/$BRANCH` is non-empty** → origin has moved since last sync. Treat any uploaded files as STALE per Critical Rule N+3 (stale upload detection). Warn before any merge script run or backlog edit that depends on anchor strings — they may have shifted in the new commits.
+- **`git worktree list` shows multiple worktrees** and the current `pwd` doesn't match the intended branch → stop, switch worktrees per Critical Rule 61 before continuing.
+
+### When to re-run mid-session
+
+- After the maintainer runs any terminal command Claude didn't propose (especially git operations).
+- After any `git fetch` / `git pull` / `git push` / `git rebase` / `git reset`.
+- Before any merge script run, even if the script ran successfully earlier in the session — anchors may have shifted.
+- Before any `gac` invocation, to confirm only the intended files are staged.
+
+### When the maintainer can skip it
+
+- Pure-conversation sessions with no file or git operations (asking questions, reviewing designs, drafting docs into chat).
+- Read-only inspection sessions (`view`, `cat`, `grep` only).
+
+If the session crosses from conversation into action — even a single edit — run the checklist first.
 
 ### Work Loop
 
@@ -1163,6 +1206,16 @@ Existing migrated call sites: Globus client_id/client_secret/endpoint_id,
 cloud-storage service-account credentials, JWT signing key. New code
 follows the same pattern. See `spec.md` Phase C-1 Specification for the
 full design.
+
+**63 — Pre-action state verification.** Before any operation that modifies the repo (file edits, git operations, applying patches, merge-script runs), Claude must verify and report three things: (a) `git status` output for the current working tree state; (b) `git fetch && git log --oneline HEAD..origin/<current-branch>` output showing whether origin has moved since Claude's last verified context; (c) the actual current state of any file Claude is about to modify (via `view` or `cat`, not relying on prior uploads). If any check returns unexpected state — divergence, stale uploads, files modified by something other than the current Claude session — Claude pauses and asks before continuing. Operating on stale context is the most common failure mode and is preventable. Anchor session: 2026-05-12 cryptWWDB merge — ~45 minutes of git recovery from skipping this check.
+
+**64 — Manual edits below 20-edit threshold.** For one-off backlog edits, doc additions, or other structural changes affecting fewer than ~20 edits, Claude provides exact text + unambiguous placement markers (line numbers, surrounding context, section headers) and the maintainer edits the file directly in their editor. Merge scripts (`merge_*.py` pattern) are only warranted for: (a) repeated structural changes across many files; (b) edits with mechanical regularity that benefit from programmatic application; (c) >20 edits to a single file; (d) edits the maintainer explicitly requests as scripted. The cost of debugging a brittle merge script exceeds the cost of manual edits below this threshold.
+
+**65 — Merge scripts must be drift-resistant.** When merge scripts are warranted (per Rule N+1), they must: (a) be idempotent — detect already-applied state and exit cleanly without re-applying; (b) use structural anchors (section headers + subsection navigation) rather than long exact-string matches that break on any nearby edit; (c) print a pre-flight diff showing what WOULD change before any write occurs, and require explicit confirmation to apply; (d) verify anchor uniqueness against the live file at run time, not against the file Claude assumed when authoring the script; (e) state in their docstring the exact baseline commit SHA they were authored against; (f) write to `.new` files first, never modify in place. Scripts that work once and break on the next commit are violations.
+
+**66 — Stale upload detection.** When the maintainer uploads a file, that upload reflects a single point in time. If the maintainer has taken any terminal actions between the upload and Claude's next operation (running scripts, git operations, edits), Claude treats the uploaded file as STALE and re-verifies state before acting. When Claude is about to give commands that depend on file content (anchor strings, line numbers, item IDs), Claude first asks "have you run anything that might have changed this file since the upload?" If yes or uncertain, request fresh state via `cat` / `git show HEAD -- <file>` / equivalent before proceeding.
+
+**67 — Operating-protocol rules are read-first.** Rules N through N+3 are session-level operational rules. Every Claude session involving file edits, schema work, git operations, or backlog work must reference these rules explicitly before taking action. The rules don't enforce themselves — they require maintainer call-out when violated until the pattern is internalized. If Claude proposes commands without verifying state per Rule N, or proposes a merge script below the Rule N+1 threshold without justification, the maintainer should pause the session and reference the rule number.
 
 ## Local Dev Role Switching
 
