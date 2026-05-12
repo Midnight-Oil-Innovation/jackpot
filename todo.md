@@ -2076,12 +2076,12 @@ This work is **ahead-of-schedule** relative to B-FED-1 / B-PRV-1 / B-CRY-1 in th
 - [x] **Operator-agnostic verified.** Zero proper names in package. All hook docstrings describe Track 2 impl by location + expertise area, never by collaborator name. Eponymous protocol names genericized.
 - [x] **Smoke tests pass.** `NullAISFederationHooks` satisfies `AISFederationHooks` Protocol via `runtime_checkable`. All three Track 1 classes (`FederationClient`, `FederationPushJob`, `FederationAccessGateway`) construct with default null hooks. `FederationPushJob.is_qualifying_sample()` correctly returns True/False across 5 boundary cases.
 
-### FED-D: Schema migration (PENDING)
+### FED-D: Schema migration (SHIPPED)
 
-- [ ] **`federated_instances` table.** Columns per `models.py` `FederatedInstance` shape: `id` (UUID PK), `name`, `base_url`, `role` (enum: hub / spoke / peer), `federation_enabled` (default false), `min_sharing_level_for_federation` (default `'DISCOVERABLE'`), `hub_instance_url` (nullable), `api_key_secret_name`, `last_seen_at` (nullable), `created_at`, `updated_at`.
-- [ ] **New columns on `organizations`:** `min_sharing_level_for_federation`, `federation_enabled`, `hub_instance_url`, `federation_role`.
-- [ ] **B-CWB-FED-1** Extend `FederationRole` enum with `data_source_lab` value. cryptWWDB's three-party model (Muni A, Muni B, Lab per Driver et al. 2024) has the Lab as distinct from data-holding peers — it produces `pipeline_results` (concentration data) via `X-Pipeline-Token` auth but holds no `samples` of its own. Schema migration adds the enum value; `FederationClient` queryable predicates filter by role. (0.5 session, bundles with FED-D)
-- [ ] **Workflow:** LinkML schema YAML edits first → `uv run python scripts/regen_schema.py` → Alembic autogenerate → manual cleanup. Branch: `b1-federation-schema-migration`.
+- [x] **`federated_instances` table.** Columns per `models.py` `FederatedInstance` shape: `id` (UUID PK), `name`, `base_url`, `role` (enum: hub / spoke / peer / data_source_lab), `federation_enabled` (default false), `min_sharing_level_for_federation` (default `'DISCOVERABLE'`), `hub_instance_url` (nullable), `api_key_secret_name`, `last_seen_at` (nullable), `created_at`, `updated_at`. Landed in `backend/db/migrations/versions/85d92864ed38_fed_d_federated_instances_and_b_cwb_fed_1_data_source_lab.py`.
+- [x] **New columns on `organizations`:** `min_sharing_level_for_federation` (TEXT + CHECK, default `'PRIVATE'`), `federation_enabled` (default false), `hub_instance_url` (nullable), `federation_role` (nullable — NULL = no federation role assigned, chosen over a sentinel `'none'` enum value).
+- [x] **B-CWB-FED-1** Extended `FederationRole` enum with `data_source_lab` value (Pydantic in `backend/backend/federation/models.py` + PostgreSQL `federation_role` ENUM in the migration above). cryptWWDB's three-party model (Muni A, Muni B, Lab per Driver et al. 2024) has the Lab as distinct from data-holding peers — it produces `pipeline_results` (concentration data) via `X-Pipeline-Token` auth but holds no `samples` of its own. `FederationClient` queryable predicates can now filter by role.
+- [x] **Workflow:** This codebase has no SQLAlchemy ORM (raw SQL via `text()` in `backend/backend/database.py`; `target_metadata=None` in `alembic/env.py`), so the "LinkML edits → regen_schema.py → autogen" workflow does not apply for this table — the migration was hand-written following the existing convention (e.g. `34382b7b82c6_add_file_references.py`). Branch: `fed-d`.
 
 ### FED-C: Tests (PENDING)
 

@@ -28,11 +28,17 @@ class FederationRole(str, Enum):
            deployments are spokes.
     PEER: Bidirectional Level 1/3 only — no hub-and-spoke relationship.
           Peer-of-peer federations between equally-sized agencies.
+    DATA_SOURCE_LAB: cryptWWDB three-party model (Driver et al. 2024 §4) —
+           the Lab produces pipeline_results (concentration data) via
+           X-Pipeline-Token auth but holds no samples of its own. Distinct
+           from PEER because FederationClient queryable predicates filter
+           data-holding peers from pipeline-producing labs. (B-CWB-FED-1)
     """
 
     HUB = "hub"
     SPOKE = "spoke"
     PEER = "peer"
+    DATA_SOURCE_LAB = "data_source_lab"
 
 
 class FederatedInstance(BaseModel):
