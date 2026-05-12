@@ -3,6 +3,8 @@
 **Last updated:** 2026-05-08 (federation Track 1 + Track 2-seam scaffold landed; regen_schema in-repo with whitespace normalization; gac pre-fix step)
 **Baseline:** **1591 tests passing, 2 skipped** (verified 2026-05-06 via `uv run pytest --no-cov -q` against `r3-doc-and-tracking-hygiene` based at `2609a1f`). Coverage 87.85% per PR #28 closeout (re-measure with `uv run pytest --cov` if needed; CI threshold 80%). PR #28 (P0g G-3+G-4) reported 1527 passing post-merge; subsequent R-1 security fixes (PR #31) brought the count to its current state.
 **Sessions 21+ deliverables:** PR #21 (P0g G-1+G-2: `ExecutionProfile` + `PipelineDefaultProfile` schema + migration with `default-local` seed; merged 2026-05-04 at `a682788`). PR #22 (P1: `/api/v1/auth/refresh` endpoint with single-use rotation, `refresh_tokens` table, replay detection with bulk-revoke, rotation-aware login/logout, daily cleanup job, six error codes; merged 2026-05-05 at `ba03143` — closes the I-track entirely). PR #23 (docs: bundle refresh to v4.0 covering Session 20 I-track close). PR #25 (chore: pin ruff at 0.11.6 across pre-commit, backend, cli, uv.lock — permanent fix for the recurring CI ruff-version mismatch that bit PRs #21 and #22 on first runs). PR #26 (docs: governance README + coi-disclosures stub on top of the 8 substantive governance docs already on origin from `f46f7ee`; merged 2026-05-05 at `2dbb839` along with an accidentally-bundled Sessions 21+ doc refresh that came along from local development state). PR #27 (docs: post-Session-21 housekeeping — `uv run pre-commit` prefix, **Critical Rule 61** worktree+branch verification, spec.md §4.1 fix #5 resolution; merged at `c7df002`). PR #28 (P0g G-3+G-4: profile templates + `nextflow.config` renderer + `pipeline_config/` package refactor + 35 new tests; merged at `544c98c` — 1527 tests, 87.85% coverage). PR #29 (docs: defer Phase 24.5 external collaborator review per option β / scope c — NPAIHB/Northwest TEC/B-CARE-6 references stripped from `todo.md` + session summary + `cdc_dmi_stlt` overview). **This session (2026-05-08):** Federation Track 1 + Track 2-seam scaffold landed at `backend/backend/federation/` (FED-A — `models.py`, `client.py`, `push.py`, `access.py`, `_ais_hooks.py` Protocol seam, README; operator-agnostic). `scripts/regen_schema.py` moved into the repo with trailing-whitespace normalization for both Python and JSON outputs (T-1). `.pre-commit-config.yaml` `schema-regen-check` hook added, fires only on schema YAML changes (T-2). `gac()` zsh function pre-fix step added (T-3, personal config in `~/.zshrc`). Federation router + tests + migration (FED-B/C/D/E) plus privacy and crypto scaffold counterparts (PRV-A, CRY-A) tracked in the new "Federation / Privacy / Crypto Scaffolds" section below. See Sessions 21+ entries in `jackpot_session_summary_and_backlog.md` and the recovery saga learnings in `learnings.md` ("Worktree contamination — Sessions 20-21" entry).
+**Session 21 deliverables (2026-05-07 → 2026-05-12):** E-1 + full P0h Slurm campaign + FIX-1/FIX-2 closeout + Phase 24.5 sovereignty-deletion design lockdown shipped. Nine PRs merged: PR #34 (E-1 end-to-end laptop UAT artifacts: ~620-line `docs/e2e_uat_plan.md`, 8 helper scripts under `tests/e2e/scripts/`, synthetic fixtures, `POST /api/v1/auth/dev-login` endpoint with 8 tests); PR #35 H-1 (Slurm template extensions); PR #36 H-2 (apptainer image manifests + per-pipeline manifests + audit doc); PR #37 H-3 (`launch_account` override + `SLURM_LAUNCH_ACCOUNT_OVERRIDE` audit row + P0c stub); PR #38 H-4 (sidecar Nextflow log poller); PR #39 PRV-A (maintainer-authored privacy scaffold, mid-campaign); PR #40 H-5 (`work_dir` validation predicate + `jackpot doctor slurm` CLI); PR #41 H-6 (pre-launch `sinfo` reachability check with 60s TTL cache); PR #42 H-10 (`docs/slurm_executor.md` operator guide + Critical Rule 60 alignment); PR #43 (FIX-1/FIX-2 doc closeout + audit-rollback regression test); PR #20 (Phase 24.5 sovereignty-deletion design lockdown, rebased + reviewed + merged); PRs #44/#45/#46/#47 (session-summary v3.4 / v3.4.1 / v3.4.2 / v3.4.3 — version-bump cadence captures the worktree-pattern post-mortems and the empirically-verified canonical merge sequence). **P0h status:** six of ten H-blocks landed (H-1, H-2, H-3, H-4, H-5, H-6, H-10); H-7 (GCP Batch staging) and H-8 (real-cluster smoke test) deferred to Phase 25 with named dependencies (F-7 STAGED staging logic, G-8 cost hook, real cluster access); H-9 (tests) interleaved per-PR throughout — 84 net new tests across the campaign. **Phase 24.5 status:** sovereignty-deletion lockdown locked solo per option β; sister BYOP/eukaryotic lockdown (`docs/jackpot_byop_and_eukaryotic_design.md`) already exists and is the remaining 24.5 artifact before P0b unblocks. **Operational pattern codified:** worktree-per-PR (Session 21 §6 in session summary) plus the empirically-verified canonical merge sequence (worktree-remove FIRST, then `gh pr merge --delete-branch` — see session summary v3.4.3). Full suite at session end: **1714 passed, 2 skipped.**
+
 **Active sprint:** Next phase is the maintainer's call. With I-track + P0g G-1 through G-4 + P1 + R-1/R-2/R-3 closeout done, the natural candidates are: (a) **Phase P0g G-5** (profiles CRUD endpoints — operators can use the renderer/resolver from PR #28 but can't manage profiles via API yet; closing this gap unblocks the legacy GCP-Batch path deletion); (b) **Phase 24.5 design lockdown (solo, option β)** — finalize sovereignty-deletion design without external review since collaborator review was deferred 2026-05-05; once locked, P0b unblocks; (c) **Performance and cleanup follow-ups from /ultrareview Batch D** — see the dedicated section below; (d) **Phase 24.7 / P0f BYOP infrastructure** for B-BYOP-1 through B-BYOP-10; (e) **Federation wire-up (FED-B/C/D/E)** — schema migration, tests, router, and `main.py` wiring on top of the FED-A scaffold delivered 2026-05-08; (f) **Privacy scaffold (PRV-A)** at `backend/backend/privacy/` — same pattern as FED-A with FL/DP/HE/MPC AIS hook seams; (g) **Crypto scaffold (CRY-A)** at `backend/backend/crypto/` — same pattern with HE/threshold/attestation AIS hook seams. Architectural sequence remains: Phase 24.5 (sovereignty + BYOP design lockdown) → P0f (BYOP infrastructure) → P0b (Schema v5.0) → P0c (multi-tenancy middleware + sovereignty deletion) → P1 broader auth-architecture review (rest of P1 — session-management UI, refresh-token-family tracking, etc.) → P2+. The Federation/Privacy/Crypto scaffold work is ahead-of-schedule relative to B-FED-1 / B-PRV-1 / B-CRY-1 — see "Federation / Privacy / Crypto Scaffolds" section below.
 
 
@@ -970,18 +972,18 @@ This is a **design + schema-spec phase**. Implementation of the deletion logic l
 
 ### Design tasks
 
-- [ ] **B-CARE-3-DESIGN**: Write `docs/architecture/sovereignty-compliant-deletion.md` covering:
-  - [ ] `samples.deletion_status` enum: `ACTIVE | DELETION_REQUESTED | TOMBSTONED | VACUUMED`
-  - [ ] State machine — who can request, who can approve, what triggers vacuum
-  - [ ] Tombstone vs vacuum distinction — tombstone seals derivative rows, vacuum physically removes content
-  - [ ] What gets vacuumed: file URIs in samples, GCS/MinIO objects, `pipeline_results.result_data` JSONB, cached intermediate artifacts, dataset memberships
-  - [ ] What survives vacuum: audit log records of *what happened* (sample existed, was tombstoned at T1, vacuumed at T2 by user U), but NOT the deleted content itself
-  - [ ] Vacuum cadence: configurable per operator policy; Scenario T defaults to 24 hours; other scenarios may default to 30 days
-  - [ ] Derivative-analysis policy: cluster recompute (Scenario T default) vs cluster-with-asterisk (other scenarios) vs mark-stale-and-recompute-on-schedule
-  - [ ] Already-published handling: pre-publish CARE confirmation checklist; "previously published" tag persists past vacuum; cannot retract from external party but system is honest about what's still in the wild
-  - [ ] Federation propagation requirements (deferred to B-CARE-4 implementation): tombstone events pushed to peers, signed receipts, SLA, non-compliance flagging
-  - [ ] Auth model: who can request deletion (sample submitter? lab director? platform admin?), who must approve (defaults: lab director for own-lab samples; platform admin for cross-lab; Tribal authority designee for Scenario T)
-  - [ ] Edge cases: deletion during pipeline run (cancel pipeline?), deletion during pending submission to NCBI (block submission), deletion of sample that's part of an active outbreak investigation (require override)
+- [x] **B-CARE-3-DESIGN** ✅ PR #20 (merged 2026-05-11 at `cca556a`). `docs/architecture/sovereignty-compliant-deletion.md` shipped covering all the design points below. Locked solo per option β; external collaborator review deferred per PR #29 framing. Patched in PR #20's review pass (v3.4.3 era) for option-β framing alignment and a privacy-module cross-reference. Schema constraints in §12 are the build spec for P0b's deletion-related migration items; implementation handoff in §13 enumerates `B-CARE-3a..g` for P0c.
+  - [x] `samples.deletion_status` enum: `ACTIVE | DELETION_REQUESTED | TOMBSTONED | VACUUMED` (§2)
+  - [x] State machine — who can request, who can approve, what triggers vacuum (§3, §10)
+  - [x] Tombstone vs vacuum distinction — tombstone seals derivative rows, vacuum physically removes content (§4)
+  - [x] What gets vacuumed: file URIs in samples, GCS/MinIO objects, `pipeline_results.result_data` JSONB, cached intermediate artifacts, dataset memberships (§5)
+  - [x] What survives vacuum: audit log records of *what happened* but NOT the deleted content itself (§5)
+  - [x] Vacuum cadence: configurable per operator policy; Scenario T defaults to 24 hours; other scenarios default to 30 days; F defaults to 0 (§6)
+  - [x] Derivative-analysis policy: cluster recompute (Scenario T default) vs cluster-with-asterisk (D, E, F default) vs mark-stale-and-recompute-on-schedule (A, B default) (§7)
+  - [x] Already-published handling: pre-publish CARE confirmation checklist; "previously published" tag persists past vacuum; external-retraction request workflow deferred to v2 (§8)
+  - [x] Federation propagation requirements (deferred to B-CARE-4 implementation): tombstone events pushed to peers within configurable SLA, signed receipts, non-compliance flagging (§9)
+  - [x] Auth model (§10)
+  - [x] Edge cases: deletion during pipeline run, deletion during pending submission to NCBI/GISAID, deletion of sample in active outbreak investigation, deletion of sample referenced in published report, bulk deletion, federation peer offline (§11)
 
 - [ ] **Schema constraints from this design** that P0b must honor:
   - [ ] `samples.deletion_status` column with the 4-value enum
@@ -1009,10 +1011,10 @@ These are not separate design work — the design exists in `jackpot_byop_and_eu
 
 ### Phase 24.5 success criterion
 
-- [ ] `docs/architecture/sovereignty-compliant-deletion.md` exists, is reviewable
-- [ ] P0b schema design has accommodated the sovereignty columns + enum extensions (sovereignty block above)
-- [ ] P0b schema design has accommodated `byop_pipelines` table, `pipeline_results` FK, eukaryotic OrganismNameEnum additions, eukaryotic samples columns, 8 eukaryotic pipeline-result tables, and supporting enums (BYOP/eukaryotic block above)
-- [ ] Implementation tasks are queued: `B-CARE-3` for P0c (sovereignty deletion), `B-BYOP-1` through `B-BYOP-10` for P0f (BYOP infrastructure), `B-EUK-PLAS-*` through `B-EUK-TOXO-*` for Phase 28 (default eukaryotic pipelines)
+- [x] `docs/architecture/sovereignty-compliant-deletion.md` exists, is reviewable (PR #20)
+- [x] P0b schema design has accommodated the sovereignty columns + enum extensions (see §12 of the sovereignty design doc)
+- [ ] P0b schema design has accommodated `byop_pipelines` table, `pipeline_results` FK, eukaryotic OrganismNameEnum additions, eukaryotic samples columns, 8 eukaryotic pipeline-result tables, and supporting enums (BYOP/eukaryotic block above) — sister doc `docs/jackpot_byop_and_eukaryotic_design.md` is the build spec; remaining 24.5 deliverable
+- [x] Implementation tasks queued: `B-CARE-3a..g` for P0c (sovereignty deletion implementation, per §13 of the sovereignty design doc), `B-CARE-4` for P0c federation phase (federation propagation, per §9), `B-BYOP-1` through `B-BYOP-10` for P0f (BYOP infrastructure), `B-EUK-PLAS-*` through `B-EUK-TOXO-*` for Phase 28 (default eukaryotic pipelines)
 
 **Effort:** 1 session for the sovereignty design doc + 1-2 sessions for the BYOP + eukaryotic schema migration work + half a session of P0b integration discussion. Total: 3-4 sessions for Phase 24.5.
 
@@ -1729,7 +1731,7 @@ Shipped in PR #28 (commit `544c98c`).
 
 ---
 
-## Phase P0h — Slurm executor support for scenario B (and C)
+## Phase P0h — Slurm executor support for scenario B (and C) — MOSTLY COMPLETE (Session 21)
 
 Single-lab on-prem deployments often have access to a Slurm queue —
 either local on the same box, or on a department/university cluster.
@@ -1741,149 +1743,241 @@ Builds on P0f (file_references — pipelines read inputs in place from
 the shared filesystem) and P0g (execution profiles — Slurm is one
 profile among several).
 
+**Status (2026-05-12):** Seven of ten blocks merged in Session 21
+(PRs #35 H-1, #36 H-2, #37 H-3, #38 H-4, #40 H-5, #41 H-6, #42 H-10).
+H-7 (GCP Batch staging + cost hook) and H-8 (real-cluster smoke test)
+deferred to Phase 25 with named dependencies (F-7 STAGED staging
+logic, G-8 cost hook, real cluster access). H-9 (tests) interleaved
+per-PR throughout — 71 net new tests across the campaign.
+Operator-facing surface lives in `docs/slurm_executor.md`.
+
 **Prerequisite for end-to-end test:** access to a real Slurm cluster.
 A small institutional one or a stood-up scratch cluster on GCP/AWS
 both work; CI can use a containerized SLURM (e.g., `giovtorres/slurm-
 docker-cluster`) for unit-level testing.
 
-### H-1: Slurm Nextflow config template (refines G-3)
+### H-1: Slurm Nextflow config template (refines G-3) ✅ PR #35
 
-- [ ] In `backend/pipeline_config/profile_templates/slurm.config.j2`,
-      handle the full Slurm field set: `account`, `partition`, `qos`,
-      `clusterOptions` (free-form sbatch flags), `time`, `memory`,
-      `cpus`, and `queueSize` (max concurrent submissions).
-- [ ] Default `process.executor='slurm'` and per-process `cpus` /
-      `memory` / `time` from `pipeline_config/base.config.j2`,
-      overridable per profile.
-- [ ] Apptainer is the default container engine for Slurm profiles
+- [x] In `backend/backend/pipeline_config/profile_templates/slurm.config.j2`,
+      handle the full Slurm field set: `account`, `partition`/`queue`,
+      `qos`, `clusterOptions` (free-form sbatch flags), `time`,
+      `memory`, `cpus`, and `queueSize` (max concurrent submissions).
+      Shipped via the existing `config_overrides` JSONB extension
+      point rather than 8 new typed columns — keeps the schema clean.
+- [x] Default `process.executor='slurm'` and per-process `cpus` /
+      `memory` / `time` defaults render from the template,
+      overridable per profile via `config_overrides`.
+- [x] Apptainer is the default container engine for Slurm profiles
       (university policy norm). Docker remains an option for lab-Slurm
-      cases where the cluster allows it.
+      cases where the cluster allows it. `base.config.j2` ships
+      `apptainer.cacheDir` defaulting to `<work_dir>/apptainer-cache`
+      with `config_overrides.apptainer_cache_dir` override.
 
-### H-2: Apptainer container engine support in pipeline zoo
+### H-2: Apptainer container engine support in pipeline zoo ✅ PR #36
 
-- [ ] Audit each pipeline in `pipelines/` for Apptainer profile
-      compatibility — most are already nf-core-standards and have it.
-- [ ] For pipelines that don't, add an `apptainer` profile to their
-      `nextflow.config` mirroring the existing `docker` profile but
-      with `apptainer.enabled=true`, `apptainer.autoMounts=true`, and
-      Apptainer-friendly cache directory.
-- [ ] Document the per-pipeline container-image inventory: which OCI
-      images each pipeline pulls, so operators can pre-stage SIF files
-      for air-gapped clusters.
-- [ ] Add a manifest file `pipelines/<name>/apptainer_images.txt` per
-      pipeline listing the required OCI image references — fed to
-      `jackpot images export` for pre-staging.
+- [x] Audit each pipeline in `pipelines/pipelines/` for Apptainer
+      compatibility. Finding: wrappers don't ship a `nextflow.config`
+      (engine selection is centralized in JACKPOT's rendered config
+      from `base.config.j2`), so the actionable deliverable was the
+      pre-staging manifest format rather than per-pipeline profile
+      additions.
+- [x] Add a manifest file
+      `pipelines/pipelines/<name>/apptainer_images.txt` per pipeline
+      listing the required OCI image references. Format: UTF-8,
+      line-oriented, one URI per line, `#` comments, `@directive
+      value` metadata. All 10 pipelines covered.
+- [x] Canonical reader: `pipelines/pipelines/apptainer_manifest.py`
+      with `parse_manifest_text`, `load_manifest`,
+      `list_pipelines_with_manifests`, and an `ApptainerManifest`
+      dataclass. 16 tests in `pipelines/tests/test_apptainer_manifest.py`.
+- [x] Document the per-pipeline container-image inventory in
+      `docs/pipeline_apptainer_audit.md`. Per-process upstream
+      BioContainer enumeration deferred to a future `jackpot images
+      audit` CLI; every manifest declares `@audit-status partial`
+      with a recommended pre-staging path (`nf-core download`,
+      `bactopia build`, etc.).
+- [ ] `jackpot images export` / `jackpot images audit` CLI commands —
+      forward-looking; manifest format is the integration point.
 
-### H-3: Account / partition / QOS handling
+### H-3: Account / partition / QOS handling ✅ PR #37
 
-- [ ] Profile fields for Slurm carry `account`, `partition`, `qos`,
-      and `clusterOptions` — all optional, all rendered as `sbatch`
-      flags in the generated config when present.
-- [ ] For multi-tenant scenario C: the profile holds the *default*
-      account, but a per-launch override field `launch_account` lets a
-      lab member charge a specific grant. P0c multi-tenancy middleware
-      validates the override against the user's lab memberships.
-- [ ] CLAUDE.md note: profile account defaults are written by the
-      operator; per-launch overrides are validated against user's lab
-      memberships, never trusted blindly.
+- [x] Profile fields for Slurm carry `account`, `partition` (rendered
+      as `queue`), `qos`, and `clusterOptions` — all optional, all
+      rendered as `sbatch` flags in the generated config when present.
+      Lives in `config_overrides` JSONB.
+- [x] For multi-tenant scenario C: the profile holds the *default*
+      account, but a per-launch override field `launch_account` on
+      `LaunchRequest` lets a lab member charge a specific grant.
+      Implementation uses `dataclasses.replace` to produce an
+      effective profile copy for one launch only; the profile row is
+      unchanged. Rejected with 400 `LAUNCH_ACCOUNT_NOT_APPLICABLE`
+      on non-SLURM executors or legacy GCP-Batch fallback.
+- [x] **P0c stub** at the validation hook point in
+      `backend/backend/routers/pipelines.py`. P0c multi-tenancy
+      middleware will validate the override against the user's lab
+      memberships before this ships in production. Today the override
+      is accepted verbatim with a separate
+      `SLURM_LAUNCH_ACCOUNT_OVERRIDE` audit row capturing actor +
+      before (profile default) + after (override value) so security
+      review can grep for overrides without joining `audit_log`
+      against `pipeline_runs.metadata`.
+- [x] CLAUDE.md framing: deferred to H-10's `docs/slurm_executor.md`
+      operator guide. Critical Rule 60 in `docs/CLAUDE.md` ("Cluster-
+      bound runs must work whether or not compute nodes can reach the
+      API") was drafted ahead and aligned to shipped reality in H-10
+      (PR #42).
 
-### H-4: Weblog reachability for cluster-submitted runs
+### H-4: Weblog reachability for cluster-submitted runs ✅ PR #38
 
-- [ ] Document in `docs/slurm_executor.md` the network requirement:
-      compute nodes need outbound HTTP access to the JACKPOT API's
-      `/api/v1/pipelines/events` endpoint.
-- [ ] If outbound is blocked (common for scenario C), provide the
-      polling fallback: a sidecar process on the API server polls
-      `<work_dir>/runs/<run_id>/.nextflow.log` over the shared
-      filesystem and emits synthetic weblog events.
-- [ ] Sidecar implementation: `backend/pipelines/log_poller.py` as an
-      APScheduler job, runs every 30 seconds for active cluster runs,
-      tails the log and matches Nextflow's known event patterns.
-- [ ] Receiver tolerates duplicate events (idempotent on
-      `(run_id, task_id, status)` tuple) so weblog and poller can
-      coexist for redundancy.
+- [x] Sidecar implementation: `backend/backend/log_poller.py` as an
+      APScheduler job, fires every
+      `settings.log_poller_interval_seconds` (default 30) for every
+      run in `('PENDING', 'QUEUED', 'RUNNING')` with `work_dir` set.
+      Tails `<work_dir>/runs/<run_id>/.nextflow.log` from a persisted
+      `pipeline_runs.poller_log_offset` byte position (new column,
+      migration `591318fd3049`), parses Nextflow's logger-prefixed
+      start/completed/failed lines via conservative regexes
+      (`nextflow.Session` prefix required to avoid false-positives),
+      and dispatches terminal classifications through the same
+      `_handle_workflow_complete` codepath the weblog receiver uses
+      (the result loader runs once whether the trigger came through
+      HTTP or polling).
+- [x] Receiver tolerates duplicate events. Idempotency contract
+      documented on the receiver's docstring:
+      `pipeline_runs.status` writes are idempotent;
+      `pipeline_tasks` upserts on `(run_id, task_id)`;
+      `pipeline_events` accepts duplicate inserts (diagnostic table).
+- [x] Always-on, no flag. The receiver and poller coexist for
+      redundancy without duplicating writes — see Critical Rule 60.
+- [ ] Per-task accounting via the poller. Currently weblog-only;
+      clusters needing full task-level visibility must relax
+      outbound HTTP. Deferred — not blocker-level.
+- [ ] `docs/slurm_executor.md` network-requirement and operator-flow
+      detail — delivered via H-10 below.
 
-### H-5: Shared-filesystem JACKPOT_WORK_DIR for cluster execution
+### H-5: Shared-filesystem JACKPOT_WORK_DIR for cluster execution ✅ PR #40
 
-- [ ] In Slurm profiles, `work_dir` must be a path visible to both
-      the API server and the compute nodes. Profile validation at
-      `jackpot profiles add/edit` time stats the path locally and
-      warns if it doesn't exist or isn't writable.
-- [ ] `jackpot doctor` for Slurm profiles: submits a tiny `srun
-      --pty hostname` against the configured account/partition,
-      verifies the work directory is reachable from the compute node.
-- [ ] Document scenarios where the API server's view of the
-      filesystem differs from the cluster's (NFS mount paths, etc.)
-      and how to align them via Nextflow's `process.scratch` and
-      `process.stageInMode`.
+- [x] Validation predicate:
+      `backend/backend/pipeline_config/profile_validation.py` with
+      `validate_work_dir_locally(work_dir)` returning structured
+      `ValidationFinding` records (codes: `MISSING`,
+      `NOT_A_DIRECTORY`, `NOT_WRITABLE` via `mkstemp` probe,
+      `EMPTY`, `REMOTE_SCHEME` for `gs://`/`s3://`/`az://`/`abfs://`
+      short-circuit). `has_blocking_findings` for `error`-level
+      flagging.
+- [x] `jackpot doctor slurm --work-dir <path> [--account] [--partition]
+      [--check-cluster]` CLI command at `cli/jackpot/cli/doctor.py`.
+      Without `--check-cluster`, runs the local predicate; with it,
+      shells out to `sinfo` (cluster up?) and
+      `srun --time=1 stat -c '%n' <work_dir>` (work_dir visible from
+      a compute node?). Exit codes 0/1/2. 23 new tests across backend
+      + CLI.
+- [x] G-5 integration TODO marker in the predicate module's docstring
+      so when profile-CRUD HTTP endpoints land, they hook the
+      predicate into POST/PATCH `/api/v1/profiles`.
+- [ ] `--profile <name>` form of `jackpot doctor slurm` that reads
+      the profile from the API — depends on G-5.
 
-### H-6: Pre-pipeline-launch Slurm reachability check
+### H-6: Pre-pipeline-launch Slurm reachability check ✅ PR #41
 
-- [ ] Refines F-8: when launch profile is Slurm, additionally verify
-      the cluster is reachable — `sinfo` returns 0 within 10 seconds.
-- [ ] If unreachable, fail the launch with a clear error and a
-      pointer to `jackpot doctor`.
-- [ ] Cache reachability for 60 seconds to avoid hammering `sinfo` on
-      bulk launches.
+- [x] Refines F-8. New module
+      `backend/backend/pipeline_config/cluster_reachability.py` with
+      `check_slurm_reachability(account, partition)` returning a
+      `SlurmReachabilityResult` (codes: `OK` / `SINFO_FAILED` /
+      `SINFO_TIMEOUT` / `SINFO_NOT_INSTALLED` / `DISABLED`). Launch
+      handler fires the probe right after H-3's `effective_profile`
+      derivation and before `run_id = new_run_id()`. Failure path
+      returns 400 `SLURM_UNREACHABLE` with a pointer to `jackpot
+      doctor slurm --check-cluster`. **No `pipeline_runs` row is
+      created when the guard fires.**
+- [x] 60-second TTL cache keyed by `(account, partition)` in module
+      state. Caps bulk-launch `sinfo` subprocess count. Three new
+      settings: `slurm_reachability_check_enabled` (default `True`),
+      `slurm_reachability_cache_seconds` (default 60),
+      `slurm_reachability_timeout_seconds` (default 10).
+- [x] Test conftest opt-out so existing SLURM-profile launch tests
+      don't grow a `sinfo` runtime dependency. H-6's own tests opt
+      back in via a `reachability_enabled` fixture.
 
-### H-7: GCP Batch executor profile (stretch goal)
+### H-7: GCP Batch executor profile (stretch goal) ⏳ DEFERRED to Phase 25
 
 - [ ] Implement `GCP_BATCH` profile template under G-3 if not yet
-      done.
+      done. **Status:** GCP Batch template already exists from G-3
+      with project/region/service_account/network/subnetwork/
+      boot_disk_size_gb. Missing fields per spec are `gcs_bucket`
+      and `machine_type`.
 - [ ] Required profile fields: `gcp_project`, `gcp_region`,
       `gcp_service_account`, `gcs_bucket` (for staging), `machine_type`.
-- [ ] Cloud-burst-from-scenario-B story: when a Slurm queue is
-      backed up, operator can switch a launch to the `gcp-batch`
-      profile manually. Auto-burst (queue-depth-triggered) is
-      explicitly out of scope for this phase.
+- [ ] Cloud-burst-from-scenario-B story.
 - [ ] Input staging: F-7 STAGED file_references with `gs://`
-      `primary_uri`, materialized at launch by copying from local
-      paths to GCS, cleaned up after run completion.
-- [ ] Cost estimation hook from G-8 wired up for this profile.
-- [ ] Stretch — defer if other H items run long; track in Phase 25.
+      `primary_uri`. **Dependency:** F-7 STAGED storage_state is in
+      the schema but no staging logic uses it. Real prerequisite.
+- [ ] Cost estimation hook from G-8. **Dependency:** G-8 doesn't
+      exist in the codebase yet.
+- [x] Deferred per spec's own "Stretch — defer if other H items run
+      long" framing. The dependency chain (F-7 staging + G-8 cost
+      hook + actual GCS roundtrips) is its own scope.
 
-### H-8: End-to-end smoke test on a real Slurm cluster
+### H-8: End-to-end smoke test on a real Slurm cluster ⏳ DEFERRED to Phase 25
 
-- [ ] Stand up a test cluster (options: small institutional partner,
-      `giovtorres/slurm-docker-cluster` in CI for hermetic testing,
-      or a one-day GCP cluster via Slurm-on-GCP for full end-to-end).
-- [ ] Test scenarios:
-      1. Single-sample MIRA-NF run, Apptainer engine, weblog over
-         HTTP — verify run completes, weblog events arrive, results
-         loaded.
-      2. Same with weblog blocked, poller path active — verify
-         results still loaded via log polling.
-      3. 10-sample batch via PHoeNIx, verifying queueSize throttling.
-      4. Failure case: input file_reference becomes BROKEN
-         mid-run — verify graceful failure and clear error to user.
-- [ ] Document the test cluster setup in `docs/test_cluster.md` so
-      anyone can reproduce.
+- [ ] Stand up a test cluster. **Dependency:** requires an
+      institutional cluster, a stood-up scratch cluster on GCP/AWS,
+      or `giovtorres/slurm-docker-cluster` in CI.
+- [ ] Test scenarios (single-sample MIRA-NF, weblog-blocked-poller-
+      path, 10-sample PHoeNIx with queueSize, BROKEN-input mid-run).
+- [ ] Document the test cluster setup in `docs/test_cluster.md`.
+- [x] Deferred — real work in its own right; benefits from a real
+      cluster being available to the operator.
 
-### H-9: Tests
+### H-9: Tests ✅ interleaved per-PR
 
-- [ ] Unit tests for the Slurm profile rendering covering all field
-      combinations.
-- [ ] Mocked-Slurm integration tests that capture the rendered
-      `sbatch` command line and verify expected flags.
-- [ ] CI matrix entry for the containerized Slurm cluster — run a
-      hermetic end-to-end pipeline test on every PR that touches
-      `backend/pipeline_config/` or `pipelines/`.
-- [ ] Coverage target: keep above 86.99%.
+- [x] Unit tests for the Slurm profile rendering covering all field
+      combinations — H-1's 12 new template tests.
+- [x] Per-PR test additions throughout: H-2 (16 manifest), H-3 (5
+      override + audit), H-4 (18 poller), H-5 (23 doctor +
+      validation), H-6 (10 reachability). 84 net new tests in the
+      campaign.
+- [ ] Mocked-Slurm integration test capturing the rendered `sbatch`
+      command line — partial; the template renderer tests cover the
+      rendered config but no end-to-end `sbatch` capture lives yet.
+      Deferred with H-8.
+- [ ] CI matrix entry for the containerized Slurm cluster. Deferred
+      with H-8.
+- [x] Coverage target maintained above 86.99% baseline.
 
-### H-10: Docs
+### H-10: Docs ✅ PR #42
 
-- [ ] Add `docs/slurm_executor.md` covering profile setup, network
-      requirements, Apptainer pre-staging, weblog vs poller, and
-      common cluster-policy gotchas.
-- [ ] Add `docs/cloud_burst.md` for the GCP Batch path (if H-7
-      lands).
-- [ ] Update README scenario B section to show "Lab with Slurm
-      cluster" as the second example after laptop, before any cloud
-      example.
-- [ ] Add CLAUDE.md Critical Rule: "Cluster-bound runs must work
-      whether or not compute nodes can reach the API. The weblog
-      receiver is best-effort; the log poller is the source of truth
-      when reachability is in doubt."
+- [x] `docs/slurm_executor.md` (~215 lines) covering when to use the
+      Slurm executor, profile setup with per-knob reference,
+      validating with `jackpot doctor`, network requirements (API →
+      cluster and compute → API), Apptainer pre-staging from H-2
+      manifests, the H-3 launch_account override + P0c stub, common
+      cluster-policy gotchas (NFS mount path mismatches, Apptainer
+      cache permissions, `--exclusive` masking `queue_size`,
+      `--time=1` budgets, `sinfo` rows ≠ valid account/partition),
+      reset/recovery procedures.
+- [ ] `docs/cloud_burst.md` for the GCP Batch path. Deferred with
+      H-7.
+- [x] README scenario table got a "Compute environment" subsection
+      clarifying that scenario codes (A/B/C/D/E/F/T) govern API-
+      server placement while compute environment is an orthogonal
+      `execution_profiles` choice; links to `docs/slurm_executor.md`.
+- [x] Critical Rule 60 in `docs/CLAUDE.md` updated to align with
+      shipped H-4 reality. Glen drafted Rule 60 ahead of the H-4 PR
+      landing and described a flag-gated poller (`weblog_reachable=
+      false`) under `backend/pipelines/log_poller.py`; reality
+      shipped an always-on poller at `backend/backend/log_poller.py`.
+      Rule 60 now matches.
+
+### P0h follow-ups (not blocker-level)
+
+- [ ] **B-APPTAINER-DOC-XREF** Add a one-line "see also" cross-
+      reference between `docs/apptainer_compatibility_audit.md`
+      (PR #4 — JACKPOT's own container images under Apptainer) and
+      `docs/pipeline_apptainer_audit.md` (PR #36 — pipeline-zoo
+      upstream OCI pre-staging). Non-overlapping scope but close
+      names cause discoverability confusion. Trivial fix; deferred
+      from v3.4.1 addendum. (5 minutes)
 
 ---
 

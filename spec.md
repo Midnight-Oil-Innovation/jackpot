@@ -802,9 +802,23 @@ hook seams with the same `Null<X>Hooks` no-op default pattern.
 
 ## Phase P0h Specification — Slurm executor support
 
-> **Status:** Specification — implementation tracked in `todo.md` Phase P0h.
+> **Status (2026-05-12):** Six of ten H-blocks merged in Session 21
+> (PRs #35 H-1, #36 H-2, #37 H-3, #38 H-4, #40 H-5, #41 H-6, #42
+> H-10); H-9 tests interleaved per-PR throughout. H-7 (GCP Batch
+> staging) and H-8 (real-cluster smoke test) deferred to Phase 25
+> with named dependencies. See `todo.md` Phase P0h for the merged-vs-
+> deferred breakdown.
 > Builds on P0g profile model; makes Slurm a peer of the local executor
 > for scenarios B and C without code duplication.
+>
+> **Operator-facing surface:** `docs/slurm_executor.md` is the
+> canonical guide (profile setup, network requirements, Apptainer
+> pre-staging, weblog vs. log poller redundancy, `jackpot doctor`,
+> common cluster-policy gotchas).
+> **Pipeline-zoo Apptainer pre-staging:** `docs/pipeline_apptainer_audit.md`
+> documents the per-pipeline OCI-image manifest format
+> (`pipelines/pipelines/<name>/apptainer_images.txt`) consumed by the
+> future `jackpot images audit` / `jackpot images export` CLI.
 
 ### Schema additions
 
