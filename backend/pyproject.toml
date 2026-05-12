@@ -10,6 +10,7 @@ dependencies = [
     "alembic==1.13.1",
     "apscheduler>=3.11.2",
     "boto3==1.34.100",
+    "cryptography>=47.0.0",
     "epiweeks==2.1.4",
     "google-cloud-dlp>=3.18,<4",
     "google-cloud-secret-manager>=2.20,<3",
