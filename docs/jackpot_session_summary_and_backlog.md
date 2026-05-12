@@ -1,7 +1,7 @@
 # JACKPOT Session Summary & Backlog
 
-**Document version:** 3.4.2
-**Last updated:** 2026-05-12 (post-Session-21 addendum #2: orphan-branch cleanup + canonical merge sequence codified)
+**Document version:** 3.4.3
+**Last updated:** 2026-05-12 (post-Session-21 addendum #3: v3.4.2's merge sequence was empirically wrong — corrected here)
 **Sessions covered:** Session 1 (March–April 2026 consolidated), Session 2 (2026-04-10), Sessions 3–S (2026-04 through 2026-04-19), Pathoplexus/Loculus comparative analysis session (2026-04-28), Cleanup A–J operator-agnostic genericization session (2026-04-26 to 2026-04-28), Session 11 (2026-04-28 → 2026-04-29 — CDC DMI/STLT/CARE alignment, BYOP/eukaryotic design, phasing rework, P0d migration prep), Session 12 (2026-04-30 → 2026-05-01 — P0d execution in Claude Code + post-execution cleanup), Session 13 (2026-05-01 — Phase 22 periodic review), Session 14 (2026-05-02 — P0e `jackpot init` CLI + Phase 22 cleanup), Session 15 (2026-05-02 → 2026-05-03 — architecture synthesis reframing + P0f F-2 schema migration), Session 16 (2026-05-03 — P0f parallel-session execution: F-1, F-3, F-4, F-5, F-12-docs merged + housekeeping/branching workflow PR #4 + F-6 through F-12 prompts drafted), Session 17 (2026-05-03 end of day — P0f F-6 through F-12 (except F-11) all merged into `development`; phase essentially complete pending F-11 audit), Session 18 (2026-05-04 — strategic positioning conversation + I-track planning: spreadsheet-refugee market identified, Seqsender/TOSTADAS landscape understood, sovereignty use cases discussed; I-1 / I-2 / C-1 / I-3 specs drafted as JACKPOT's adoption-driving feature roadmap), Session 19 (2026-05-04 later — F-11 P0f coverage audit and I-2 submission package generation merged in parallel; P0f phase complete; I-track at 2 of 4 items shipped), Session 20 (2026-05-06 — /ultrareview pass surfaced 26 findings; R-1 (six security/correctness blockers), R-2 (GISAID generator dedup + submission package test coverage), R-3 (doc and tracking hygiene) all merged; parallel-execution recommendation reversed after four cross-session contamination incidents — single-session-per-repo is now the default), Session 21 (2026-05-07 → 2026-05-11 — E-1 UAT artifacts + dev-login endpoint, full P0h Slurm campaign (H-1 H-2 H-3 H-4 H-5 H-6 H-10 — six of ten blocks landed; H-7 and H-8 deferred to Phase 25), FIX-1/FIX-2 doc cleanup + audit-rollback regression test, Phase 24.5 sovereignty-deletion design lockdown rebased + reviewed + merged; worktree-per-PR pattern adopted as the operational escape hatch from silent branch-switch contamination)
 
 **v3.2 changelog (2026-05-04 later):** P0f phase fully complete and
@@ -20,6 +20,26 @@ and I-2 ran in parallel, landing on different files (F-11 in tests/, I-2 in
 new backend/submissions* files). Both PRs merged cleanly with no conflicts.
 (4) The PR-merge order produced a fresh post-P0f baseline coverage number
 documented in tests/coverage_p0f_summary.md.
+
+**v3.4.3 changelog (2026-05-12 — correction to v3.4.2):** v3.4.2
+codified a "canonical merge sequence" that turned out to be
+empirically wrong. The PR that published v3.4.2 (PR #46) was supposed
+to be the first verification of the new sequence; on merge, the
+sequence failed exactly the same way the v3.4.2 doc claimed it would
+succeed, leaving `session-summary-v342` as a remote orphan (manually
+cleaned up via `git push origin --delete`). Root cause: `gh pr merge
+--delete-branch` calls `git branch -d`, which fails when the branch
+is checked out in **any worktree** — not just when the user's `cwd`
+is inside the worktree. The `cd /Users/glen/Projects/jackpot`
+prefix that v3.4.2 prescribed is therefore irrelevant; what matters
+is whether the worktree exists at all. Corrected canonical sequence:
+remove the worktree FIRST (which un-pins the branch), then run `gh
+pr merge --delete-branch` (both deletes succeed because the local
+branch is no longer worktree-pinned). v3.4.3 PR #47 is the empirical
+verification that the corrected sequence works end-to-end. Same-day
+correction pattern matches the v3.4 → v3.4.1 → v3.4.2 cadence; each
+version preserved a record of what was claimed, what was tried, and
+what actually worked.
 
 **v3.4.2 changelog (2026-05-12 — next-day post-v3.4.1):** Operational
 cleanup follow-on capturing two related findings: (1) **The H-4 sibling
@@ -4370,3 +4390,64 @@ This PR (`session-summary-v342`) is the first verification that the new sequence
 ### Why this is a v3.4.2 patch rather than rolling into v3.4.1
 
 Same pattern as v3.4.1 → v3.4: a follow-on capture-of-what-happened rather than a rewrite. v3.4.1 codified the worktree-cleanup *order* (`git worktree remove` then `git branch -D`); v3.4.2 codifies the *full* merge sequence with the new `cd` step that fixes the orphan-creation problem. The two together form the complete operational pattern.
+
+> **Note from v3.4.3 (see below):** the `cd` step prescribed above turned out to be irrelevant. The v3.4.2 PR (#46) was meant to verify the sequence end-to-end and instead demonstrated that it doesn't work as claimed. The corrected sequence is in §"Session 21 addendum #3 (v3.4.3)".
+
+------
+
+## Session 21 addendum #3 (v3.4.3) — correcting v3.4.2's empirically-wrong merge sequence
+
+### What v3.4.2 claimed and what actually happened
+
+v3.4.2 (PR #46, merged 2026-05-12) prescribed this "canonical merge sequence":
+
+```bash
+cd /Users/glen/Projects/jackpot              # leave the worktree
+gh pr merge <N> --squash --delete-branch     # both deletes succeed
+git worktree remove ../jackpot_<branch>      # cleans the dir; no-op
+```
+
+PR #46 itself was supposed to be the first end-to-end verification. On execution, the second step produced:
+
+```
+failed to delete local branch session-summary-v342: failed to run git: error: cannot delete branch 'session-summary-v342' used by worktree at '/Users/glen/Projects/jackpot_v342_addendum'
+```
+
+— exactly the same failure mode v3.4.2 was supposed to fix. The PR merged on origin, but the source branch `session-summary-v342` survived as a new orphan and had to be cleaned up manually via `git push origin --delete session-summary-v342` and `git branch -D session-summary-v342`.
+
+The v3.4.2 doc, having been authored from inside the worktree and committed before the merge was attempted, recorded a claim that turned out to be false on the very next operation.
+
+### Why the `cd` step doesn't matter
+
+`gh pr merge --delete-branch` shells out to `git branch -d <branch>` for the local-side cleanup. The git documentation for `branch -d` is explicit: the command fails when `<branch>` is **checked out in any worktree**, regardless of where the invoking process's current working directory sits. Leaving the worktree's directory does not un-pin the branch; only `git worktree remove <path>` does.
+
+The v3.4.2 hypothesis treated the failure as a "you're inside the worktree" problem when it was actually a "the worktree exists at all" problem.
+
+### Corrected canonical sequence
+
+```bash
+git worktree remove ../jackpot_<branch>      # remove worktree FIRST
+                                              # — frees the branch
+                                              # from worktree-pinning
+gh pr merge <N> --squash --delete-branch     # NOW both deletes succeed
+```
+
+Two commands instead of three. The cwd doesn't matter — what matters is that no worktree references the branch by the time `gh pr merge` runs.
+
+The trade-off is small: between the worktree-remove and the merge, the local checkout's working tree for that branch is gone. If something goes wrong (network flake, CI race, merge conflict that wasn't visible pre-attempt), the branch is still recoverable from `origin/<branch>` plus the local reflog. In practice nothing's lost.
+
+### Verification path for v3.4.3
+
+This PR (`session-summary-v343`, PR #47) is the empirical test:
+
+1. Author content inside `../jackpot_v343` worktree, commit, push, open PR
+2. Confirm CI green
+3. Run `git worktree remove /Users/glen/Projects/jackpot_v343` from the primary checkout
+4. Run `gh pr merge 47 --squash --delete-branch`
+5. Verify the source branch is GONE on origin (no orphan)
+
+If step 5 shows the branch is gone, v3.4.3's claim holds and we have an empirically-verified canonical sequence. If it shows the branch survives, v3.4.4 will be needed and we will learn something new about how gh / git handle this.
+
+### Why this is a v3.4.3 patch rather than rewriting v3.4.2
+
+Same pattern preservation as before. v3.4.2 captured "we tried this and thought it would work"; v3.4.3 captures "we tried it, it didn't, here's what actually does." The audit trail is more useful than a clean-revisionist single entry — future readers (including the agent) hitting similar gh-worktree friction can read the progression and learn the lesson without re-running the experiment.
