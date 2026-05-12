@@ -53,6 +53,7 @@ from backend.routers import (
     templates,
     tokens,
     users,
+    wastewater,
 )
 from backend.routers import (
     settings as settings_router,
@@ -197,6 +198,7 @@ app.include_router(submissions.router)
 app.include_router(tokens.router)
 app.include_router(users.router)
 app.include_router(templates.router)
+app.include_router(wastewater.router)
 
 app.add_middleware(RequestIDMiddleware)
 app.add_middleware(SlowAPIMiddleware)
