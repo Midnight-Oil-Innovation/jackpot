@@ -2102,7 +2102,7 @@ This work is **ahead-of-schedule** relative to B-FED-1 / B-PRV-1 / B-CRY-1 in th
     - `POST /api/v1/federation/push` — receive an inbound L2 payload (peer instance only)
     - `POST /api/v1/federation/access-requests` — receive an inbound L3 access request (peer instance only)
 - [ ] **Auth:** federation API keys via `X-JACKPOT-Federation-Key` header for peer-to-peer endpoints (validated against `federated_instances.api_key_secret_name` via Secret Manager); standard JWT + `require_platform_admin` for the admin-facing list/register endpoints. Branch: `b3-federation-router`.
-- [ ] **B-CWB-DOC-1** Create `docs/federation_operations.md` documenting the three-party non-collusion assumption required by cryptWWDB (Driver et al. 2024 §4), the multi-key HE pathway as future mitigation (Lopez-Alt et al. 2012, tracked as `B-IMMUNE-HE-2`), federation-key rotation policy, partner attestation flow, and the AIS-hook policy points where operators configure per-deployment policy. (1 day, bundles with FED-B)
+- [x] **B-CWB-DOC-1** Create `docs/federation_operations.md` documenting the three-party non-collusion assumption required by cryptWWDB (Driver et al. 2024 §4), the multi-key HE pathway as future mitigation (Lopez-Alt et al. 2012, tracked as `B-IMMUNE-HE-2`), federation-key rotation policy, partner attestation flow, and the AIS-hook policy points where operators configure per-deployment policy. (1 day, bundles with FED-B) → `docs/federation_operations.md`
 
 ### FED-E: Wire router into `main.py` (PENDING)
 
