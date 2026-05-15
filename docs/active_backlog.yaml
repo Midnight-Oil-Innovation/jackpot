@@ -1,0 +1,1143 @@
+# JACKPOT active backlog — source of truth for currently-actionable sessions.
+#
+# Lives at: ~/Projects/jackpot/docs/active_backlog.yaml (version-controlled)
+#
+# Consumed by:
+#   - jackpot_next.py        — prints unblocked/blocked candidates
+#   - jackpot_gen_prompt.py  — emits session prompt skeletons
+#   - jackpot_finish_helper.py — auto-flips status to shipped post-merge
+#   - jackpot_backlog_check.py — validates schema + dependency graph
+#
+# Maintenance: most updates are automated by jackpot-finish. Manual edits
+# needed when scoping new entries or adjusting effort/scope mid-flight.
+# Keep ordering by phase for readability.
+#
+# Status values:
+#   shipped               PR merged on development, no further work this round
+#   open                  Ready to work on (deps met or empty)
+#   blocked               Blocked on an internal dep also in this file
+#   blocked_external      Blocked on a phase / coalition outside this file
+#   tracked_not_scheduled Backlog item, not yet prioritized
+#
+# Optional fields populated when status: shipped:
+#   merged_at: "YYYY-MM-DD"
+#   merge_sha: "abc1234"
+#
+# Last updated: 2026-05-12
+
+meta:
+  version: 1
+  last_updated: "2026-05-13"
+  source_documents:
+    - todo.md
+    - docs/jackpot_session_summary_and_backlog.md
+    - docs/federation_operations.md
+    - docs/session_prompt_template.md
+
+sessions:
+
+  # ────────────────────────────────────────────────────────────────────────
+  # Federation Stage 1 — three-scaffold trio + completion
+  # ────────────────────────────────────────────────────────────────────────
+
+  - id: FED-A
+    title: Federation scaffold (Pydantic models + client + push + access + AISFederationHooks)
+    short_description: |
+      Three federation levels (L1 query, L2 hub push, L3 access) with five
+      AISFederationHooks Protocol seams. Reference scaffold for FED-C and
+      FED-B test/router work.
+    phase: federation_stage_1
+    status: shipped
+    depends_on: []
+    blocked_by_external:
+    parallel_safe:
+    effort_sessions:
+    primary_files:
+      - backend/backend/federation/__init__.py
+      - backend/backend/federation/_ais_hooks.py
+      - backend/backend/federation/client.py
+      - backend/backend/federation/push.py
+      - backend/backend/federation/access.py
+      - backend/backend/federation/models.py
+      - backend/backend/federation/README.md
+    test_files: []
+    source_of_truth_views: []
+    pr_title_template:
+    branch_name_template:
+    role_framing:
+    notes: "Shipped pre-2026-05; reference pattern for PRV-A, CRY-A."
+
+  - id: PRV-A
+    title: Privacy scaffold (HRRT + DLP + AISPrivacyHooks)
+    short_description: |
+      Six AISPrivacyHooks Protocol seams (DP noise, FL gradient, HE compute,
+      MPC compute, synthetic substitute, DP budget tracking). Track 1: HRRT
+      scrubber + GCP DLP scanner consolidated under the scaffold.
+    phase: privacy_stage_1
+    status: shipped
+    depends_on: []
+    blocked_by_external:
+    parallel_safe:
+    effort_sessions:
+    primary_files:
+      - backend/backend/privacy/__init__.py
+      - backend/backend/privacy/_ais_hooks.py
+      - backend/backend/privacy/coarsening.py
+      - backend/backend/privacy/scrubber.py
+      - backend/backend/privacy/dlp.py
+      - backend/backend/privacy/budget.py
+      - backend/backend/privacy/README.md
+    test_files: []
+    source_of_truth_views: []
+    pr_title_template:
+    branch_name_template:
+    role_framing:
+    notes: "Session 21 PR #39."
+
+  - id: CRY-A
+    title: Crypto scaffold (filesystem keystore + Ed25519 + AISCryptoHooks)
+    short_description: |
+      Four AISCryptoHooks (select_he_backend, threshold_sign,
+      verify_tee_attestation, enforce_key_rotation_policy). Track 1:
+      FilesystemKeystore + Ed25519Signer. Stubbed: SecretManagerKeystore,
+      Pkcs11Keystore, Crypt4ghEncryptor.
+    phase: crypto_stage_1
+    status: shipped
+    merged_at: "2026-05-12"
+    merge_sha: "03faf3a"
+    depends_on: []
+    blocked_by_external:
+    parallel_safe:
+    effort_sessions:
+    primary_files:
+      - backend/backend/crypto/__init__.py
+      - backend/backend/crypto/_ais_hooks.py
+      - backend/backend/crypto/keys.py
+      - backend/backend/crypto/signing.py
+      - backend/backend/crypto/crypt4gh.py
+      - backend/backend/crypto/README.md
+    test_files:
+      - tests/crypto/test_ais_hooks.py
+      - tests/crypto/test_keys.py
+      - tests/crypto/test_signing.py
+      - tests/crypto/test_crypt4gh.py
+    source_of_truth_views: []
+    pr_title_template:
+    branch_name_template:
+    role_framing:
+    notes: "Third scaffold in the FED-A + PRV-A + CRY-A trio."
+
+  - id: FED-C
+    title: Federation test suite (≥95% coverage on FED-A package)
+    short_description: |
+      tests/federation/ with respx-mocked partner HTTP. Covers models,
+      client, push, access, AISFederationHooks. Postgres autouse no-op
+      pattern from tests/wastewater/conftest.py.
+    phase: federation_stage_1
+    status: open
+    depends_on: []
+    blocked_by_external:
+    parallel_safe: true
+    parallel_safe_reason: "Net-new test directory; no overlap with FED-D, B-CWB-DOC-2, or B-IMMUNE-DP-1."
+    effort_sessions: 1
+    primary_files:
+      - tests/federation/__init__.py
+      - tests/federation/conftest.py
+      - tests/federation/test_models.py
+      - tests/federation/test_client.py
+      - tests/federation/test_push.py
+      - tests/federation/test_access.py
+      - tests/federation/test_ais_hooks.py
+    test_files: []
+    source_of_truth_views:
+      - backend/backend/federation/client.py
+      - backend/backend/federation/push.py
+      - backend/backend/federation/access.py
+      - backend/backend/federation/_ais_hooks.py
+      - backend/backend/federation/models.py
+      - tests/wastewater/conftest.py
+    pr_title_template: "test(federation): FED-C — federation test suite (≥95% coverage on FED-A package)"
+    branch_name_template: "fed-c"
+    role_framing: |
+      Senior engineering collaborator backfilling test coverage on the
+      FED-A scaffold that landed without dedicated tests. Net-new test
+      directory, zero conflict with parallel sessions.
+    notes: "Adds respx to dev deps if not already pinned."
+
+  - id: FED-D
+    title: Schema migration — federated_instances + organizations columns + B-CWB-FED-1
+    short_description: |
+      Single Alembic migration creating federated_instances table, adding
+      four federation policy columns to organizations, and adding
+      data_source_lab to the FederationRole enum (B-CWB-FED-1 bundled in).
+      Plus SQLAlchemy ORM updates.
+    phase: federation_stage_1
+    status: open
+    depends_on: []
+    blocked_by_external:
+    parallel_safe: true
+    parallel_safe_reason: "Single Alembic migration file + ORM model touches; no overlap with router work."
+    effort_sessions: 1
+    primary_files:
+      - alembic/versions/<timestamp>_fed_d_federated_instances.py
+      - backend/backend/db/models.py
+    test_files: []
+    source_of_truth_views:
+      - backend/backend/federation/models.py
+      - alembic/versions/
+      - jackpot_schema.yaml
+    pr_title_template: "feat(db): FED-D — federated_instances table + organizations federation columns + B-CWB-FED-1 data_source_lab
+      role"
+    branch_name_template: "fed-d"
+    role_framing: |
+      Senior engineering collaborator landing the FED-D schema migration
+      plus the B-CWB-FED-1 data_source_lab FederationRole value. Pure
+      Alembic + SQLAlchemy work, no router or auth changes.
+    notes: "Pre-merge verification: alembic upgrade head against fresh DB + alembic check for drift."
+
+  - id: FED-B
+    title: Federation router endpoints
+    short_description: |
+      backend/backend/routers/federation.py exposing
+      /api/v1/federation/{instances,search,push,access-requests}.
+      Federation API keys via X-JACKPOT-Federation-Key header validated
+      against federated_instances.api_key_secret_name.
+    phase: federation_stage_1
+    status: open
+    depends_on:
+      - FED-D
+    blocked_by_external:
+    parallel_safe: false
+    parallel_safe_reason: "Eventually touches main.py for router registration; tightly coupled with FED-E."
+    effort_sessions: 1.5
+    primary_files:
+      - backend/backend/routers/federation.py
+    test_files:
+      - tests/federation/test_router.py
+    source_of_truth_views:
+      - backend/backend/federation/client.py
+      - backend/backend/federation/push.py
+      - backend/backend/federation/access.py
+      - backend/backend/federation/models.py
+      - backend/backend/routers/
+      - backend/backend/auth/guards.py
+    pr_title_template: "feat(api): FED-B — federation router endpoints"
+    branch_name_template: "fed-b"
+    role_framing: |
+      Senior engineering collaborator building the FastAPI router that
+      exposes FED-A's federation surface to network peers. Recommended:
+      bundle FED-B + FED-E in a single session since router and
+      auth-guard wiring are tightly coupled.
+    notes: "Often paired with FED-E to close federation Stage 1 in one move."
+
+  - id: FED-E
+    title: Federation router wiring + X-JACKPOT-Federation-Key auth guard
+    short_description: |
+      Register FED-B router in main.py. Add federation-key guard to
+      backend/backend/auth/guards.py validating X-JACKPOT-Federation-Key
+      against federated_instances via Secret Manager.
+    phase: federation_stage_1
+    status: open
+    depends_on:
+      - FED-B
+    blocked_by_external:
+    parallel_safe: false
+    parallel_safe_reason: "Touches main.py + auth/guards.py."
+    effort_sessions: 0.5
+    primary_files:
+      - main.py
+      - backend/backend/auth/guards.py
+    test_files:
+      - tests/auth/test_federation_guard.py
+    source_of_truth_views:
+      - main.py
+      - backend/backend/auth/guards.py
+      - backend/backend/routers/federation.py
+    pr_title_template: "feat(api): FED-E — federation router wiring + X-JACKPOT-Federation-Key guard"
+    branch_name_template: "fed-e"
+    role_framing: |
+      Senior engineering collaborator wiring FED-B into the app and
+      adding the federation-key auth guard. Bundle with FED-B in a
+      single session for efficiency.
+    notes: "Closes federation Stage 1 when paired with FED-B."
+
+  # ────────────────────────────────────────────────────────────────────────
+  # cryptWWDB Integration Track
+  # ────────────────────────────────────────────────────────────────────────
+
+  - id: B-CWB-DOC-1
+    title: docs/federation_operations.md
+    short_description: |
+      Operator-facing federation operations doc covering three-party
+      non-collusion, multi-key HE pathway, key rotation, partner
+      attestation, AIS-hook policy points table.
+    phase: cryptwwdb_track
+    status: shipped
+    merged_at: "2026-04-28"
+    depends_on: []
+    blocked_by_external:
+    parallel_safe:
+    effort_sessions:
+    primary_files:
+      - docs/federation_operations.md
+    test_files: []
+    source_of_truth_views: []
+    pr_title_template:
+    branch_name_template:
+    role_framing:
+    notes: "PR #49. Anchor docs Jackpot_AIS.md + jackpot_immune_platform_plan.md restored in same PR."
+
+  - id: B-CWB-FED-1
+    title: data_source_lab FederationRole enum value
+    short_description: |
+      Adds data_source_lab to the FederationRole enum for cryptWWDB
+      three-party model (Lab as compute party with pipeline_results but
+      no samples of its own). Bundled with FED-D's Alembic migration.
+    phase: cryptwwdb_track
+    status: open
+    depends_on: []
+    blocked_by_external:
+    parallel_safe:
+    effort_sessions:
+    primary_files: []
+    test_files: []
+    source_of_truth_views: []
+    pr_title_template:
+    branch_name_template:
+    role_framing:
+    notes: "Bundled into FED-D session — do not session-prompt separately."
+
+  - id: B-CWB-DOC-2
+    title: docs/cryptwwdb_integration.md (architectural mapping)
+    short_description: |
+      Architectural mapping doc tying the Driver et al. 2024 cryptWWDB
+      framework (NSF 2115075) to JACKPOT's integration surface as of
+      development HEAD. Resolves dangling reference in todo.md.
+    phase: cryptwwdb_track
+    status: open
+    depends_on: []
+    blocked_by_external:
+    parallel_safe: true
+    parallel_safe_reason: "Pure docs, zero code-conflict surface."
+    effort_sessions: 1
+    primary_files:
+      - docs/cryptwwdb_integration.md
+    test_files: []
+    source_of_truth_views:
+      - docs/federation_operations.md
+      - docs/Jackpot_AIS.md
+      - docs/jackpot_immune_platform_plan.md
+      - docs/jackpot_immune_collaboration_scaffolding.md
+      - backend/backend/wastewater/mass_balance.py
+      - backend/backend/crypto/_ais_hooks.py
+      - backend/backend/federation/models.py
+    pr_title_template: "docs: cryptwwdb_integration.md — architectural mapping per Driver et al. 2024 (NSF 2115075)"
+    branch_name_template: "cryptwwdb-doc"
+    role_framing: |
+      Senior engineering collaborator drafting the architectural mapping
+      doc that todo.md cross-references but doesn't yet exist on disk.
+    notes: "Six required additions + three recommended, six-row backlog mapping table."
+
+  - id: B-CWB-MB-1
+    title: Plaintext mass-balance module (interface-only, shipped)
+    short_description: |
+      backend/backend/wastewater/mass_balance.py with MassBalanceInputs
+      interface, FlowRate/Concentration dataclasses, compute_mass_load
+      (Use Case 1) + compute_time_aware_mass_load (Use Case 2).
+      load_inputs_from_db is NotImplementedError stub.
+    phase: cryptwwdb_track
+    status: shipped
+    merge_sha: "1b2db71"
+    depends_on: []
+    blocked_by_external:
+    parallel_safe:
+    effort_sessions:
+    primary_files:
+      - backend/backend/wastewater/mass_balance.py
+      - backend/backend/wastewater/__init__.py
+    test_files:
+      - tests/wastewater/test_mass_balance.py
+      - tests/wastewater/conftest.py
+    source_of_truth_views: []
+    pr_title_template:
+    branch_name_template:
+    role_framing:
+    notes: "PR #50. Interface-only; full DB wiring tracked as B-CWB-MB-1-DB."
+
+  - id: B-CWB-MB-1-DB
+    title: Mass-balance full DB wiring (post-B-CWB-SCHEMA-2)
+    short_description: |
+      Wire mass_balance.py's load_inputs_from_db stub to actual queries
+      against wastewater_target_concentration (B-CWB-SCHEMA-2) joined to
+      WastewaterSample via sample_associations (B-CWB-SCHEMA-1).
+    phase: cryptwwdb_track
+    status: blocked
+    depends_on:
+      - B-CWB-SCHEMA-1
+      - B-CWB-SCHEMA-2
+    blocked_by_external:
+    parallel_safe: false
+    effort_sessions: 1
+    primary_files:
+      - backend/backend/wastewater/mass_balance.py
+    test_files:
+      - tests/wastewater/test_mass_balance_db.py
+    source_of_truth_views:
+      - backend/backend/wastewater/mass_balance.py
+      - jackpot_schema.yaml
+    pr_title_template: "feat(wastewater): B-CWB-MB-1-DB — full DB wiring for plaintext mass-balance"
+    branch_name_template: "b-cwb-mb-1-db"
+    role_framing: |
+      Senior engineering collaborator landing the DB-side glue for the
+      mass-balance module. Replaces the NotImplementedError stub from
+      B-CWB-MB-1 interface-only with real SQLAlchemy queries.
+    notes: "Transitively blocked on P0b via SCHEMA deps."
+
+  - id: B-CWB-MB-2
+    title: Mass-balance QC + trigger points
+    short_description: |
+      Extend mass_balance.py with QC + trigger-point computations per
+      Driver et al. 2024 Table 2: non-detect handling, negative-MB
+      handling, error-bar propagation, weekly/rolling averages,
+      population-threshold trigger points.
+    phase: cryptwwdb_track
+    status: blocked
+    depends_on:
+      - B-CWB-MB-1-DB
+    blocked_by_external:
+    parallel_safe: false
+    effort_sessions: 1
+    primary_files:
+      - backend/backend/wastewater/mass_balance.py
+    test_files:
+      - tests/wastewater/test_mass_balance_qc.py
+    source_of_truth_views: []
+    pr_title_template: "feat(wastewater): B-CWB-MB-2 — QC + trigger points for mass-balance"
+    branch_name_template: "b-cwb-mb-2"
+    role_framing: |
+      Senior engineering collaborator extending mass-balance with the
+      QC pass and trigger-point logic from Driver et al. 2024 Table 2.
+    notes: ""
+
+  - id: B-CWB-POLICY-1
+    title: Encrypted-query policy checker module
+    short_description: "Discrete policy-checker module sitting between federation router and HE\ncompute backend. Per Driver
+      et al. 2024 cryptWWDB design, the computation\ncoordinator must enforce access controls and detect repeated queries
+      (a\nside-channel attack vector against HE schemes). Currently this responsibility\nis implicit in the federation router;
+      making it a discrete module makes the\npolicy enforcement auditable and testable.\n"
+    phase: cryptwwdb_track
+    status: blocked
+    depends_on:
+      - FED-B
+    blocked_by_external:
+    parallel_safe: false
+    effort_sessions: 1.5
+    primary_files:
+      - backend/backend/federation/policy_checker.py
+    test_files:
+      - tests/federation/test_policy_checker.py
+    source_of_truth_views:
+      - backend/backend/federation/
+      - backend/backend/crypto/_ais_hooks.py
+    pr_title_template: 'feat(federation): B-CWB-POLICY-1 — encrypted-query policy checker'
+    branch_name_template: b-cwb-policy-1
+    role_framing: "Senior engineering collaborator landing the policy-checker module that\nenforces access controls and repeated-query
+      detection on the encrypted\nquery path. Per Driver et al. 2024 §3.1, this is a discrete coordinator\ncomponent between
+      the federation router and the HE compute backend.\n"
+    notes: Per Driver et al. 2024 (Sci Total Environ). Discrete coordinator pattern. Repeated-query detection is a known
+      side-channel mitigation for HE schemes.
+  - id: B-CWB-SCHEMA-1
+    title: wastewater_upstream_of association_type
+    short_description: |
+      Add wastewater_upstream_of and reciprocal wastewater_downstream_of
+      to sample_associations.association_type enum. Directed sewershed
+      topology required for cryptWWDB Use Case 1.
+    phase: phase_24_5
+    status: blocked_external
+    depends_on: []
+    blocked_by_external: "P0b (schema v5.0 migration window)"
+    parallel_safe: false
+    effort_sessions: 0.5
+    primary_files: []
+    test_files: []
+    source_of_truth_views: []
+    pr_title_template:
+    branch_name_template:
+    role_framing:
+    notes: "Bundles into P0b migration."
+
+  - id: B-CWB-SCHEMA-2
+    title: wastewater_target_concentration result type
+    short_description: |
+      New wastewater_target_concentration result type for non-SARS-CoV-2
+      quantitative targets. Fields: target_pathogen_id FK, assay_type,
+      concentration_value/unit/CIs, normalization_target, LOD, LOQ.
+    phase: phase_24_5
+    status: blocked_external
+    depends_on: []
+    blocked_by_external: "P0b (schema v5.0 migration window)"
+    parallel_safe: false
+    effort_sessions: 1.5
+    primary_files: []
+    test_files: []
+    source_of_truth_views: []
+    pr_title_template:
+    branch_name_template:
+    role_framing:
+    notes: "Critical path for cryptWWDB mass-balance integration."
+
+  - id: B-CWB-SCHEMA-3
+    title: Time-varying population fields
+    short_description: |
+      population_served_weekday, population_served_weekend, and
+      sample_population_estimate typed table per Driver et al. 2024
+      Table 2 + Choi et al. 2018.
+    phase: phase_24_5
+    status: blocked_external
+    depends_on: []
+    blocked_by_external: "P0b (schema v5.0 migration window)"
+    parallel_safe: false
+    effort_sessions: 1
+    primary_files: []
+    test_files: []
+    source_of_truth_views: []
+    pr_title_template:
+    branch_name_template:
+    role_framing:
+    notes: ""
+
+  - id: B-CWB-SCHEMA-4
+    title: fecal_normalization_results typed table
+    short_description: |
+      One row per (sample, fecal-indicator-target). indicator_type enum
+      (PMMoV / Bacteroides_HF183 / coprostanol / other). Enables PMMoV
+      normalization for SARS-CoV-2 per Feng et al. 2021.
+    phase: phase_24_5
+    status: blocked_external
+    depends_on: []
+    blocked_by_external: "P0b (schema v5.0 migration window)"
+    parallel_safe: false
+    effort_sessions: 1
+    primary_files: []
+    test_files: []
+    source_of_truth_views: []
+    pr_title_template:
+    branch_name_template:
+    role_framing:
+    notes: ""
+
+  - id: B-CWB-SCHEMA-5
+    title: Excretion + degradation factor lookup tables
+    short_description: |
+      excretion_factors + in_sewer_degradation_factors lookup tables.
+      Static reference data per Zuccato et al. 2008 and Hart & Halden 2020.
+    phase: phase_24_5
+    status: blocked_external
+    depends_on: []
+    blocked_by_external: "P0b (schema v5.0 migration window)"
+    parallel_safe: false
+    effort_sessions: 1
+    primary_files: []
+    test_files: []
+    source_of_truth_views: []
+    pr_title_template:
+    branch_name_template:
+    role_framing:
+    notes: ""
+
+  # ────────────────────────────────────────────────────────────────────────
+  # Wastewater Track
+  # ────────────────────────────────────────────────────────────────────────
+
+  - id: B-WW-1
+    title: Streamlit wastewater lineage-abundance dashboard
+    short_description: |
+      frontend/pages/wastewater.py + read-only /api/v1/wastewater/{sites,
+      lineage-abundance} endpoints. Seed script with JN.1→KP.3 takeover
+      trajectory.
+    phase: wastewater
+    status: shipped
+    merge_sha: "25d8999"
+    depends_on: []
+    blocked_by_external:
+    parallel_safe:
+    effort_sessions:
+    primary_files:
+      - frontend/pages/wastewater.py
+      - backend/backend/routers/wastewater.py
+      - backend/scripts/seed_wastewater_demo.py
+    test_files:
+      - tests/test_streamlit_pages.py
+    source_of_truth_views: []
+    pr_title_template:
+    branch_name_template:
+    role_framing:
+    notes: "PR #51."
+
+  - id: B-WW-ADV-1
+    title: Multi-target wastewater panel
+    short_description: |
+      Streamlit page showing multi-target concentration data side-by-side
+      (SARS-CoV-2 + RSV + Influenza A). Reads from
+      wastewater_target_concentration table.
+    phase: wastewater
+    status: blocked
+    depends_on:
+      - B-CWB-SCHEMA-2
+    blocked_by_external:
+    parallel_safe: false
+    effort_sessions: 1.5
+    primary_files:
+      - frontend/pages/wastewater_multi_target.py
+    test_files: []
+    source_of_truth_views: []
+    pr_title_template: "feat(frontend): B-WW-ADV-1 — multi-target wastewater panel"
+    branch_name_template: "b-ww-adv-1"
+    role_framing: |
+      Senior engineering collaborator landing the multi-target wastewater
+      visualization. Transitively blocked on P0b via SCHEMA-2.
+    notes: ""
+
+  - id: B-WW-ADV-2
+    title: PHES-ODM alignment
+    short_description: |
+      Align JACKPOT's wastewater schema fields with PHES-ODM standard
+      for cross-jurisdiction reporting. May involve schema additions or
+      field remapping.
+    phase: wastewater
+    status: tracked_not_scheduled
+    depends_on: []
+    blocked_by_external: "Coalition discussion (Halden/Driver)"
+    parallel_safe: false
+    effort_sessions: 2
+    primary_files: []
+    test_files: []
+    source_of_truth_views: []
+    pr_title_template:
+    branch_name_template:
+    role_framing:
+    notes: "Coalition-facing — scope after Halden/Driver discussion."
+
+  # ────────────────────────────────────────────────────────────────────────
+  # Phase IM-4 — Immune Platform Track 2
+  # ────────────────────────────────────────────────────────────────────────
+
+  - id: B-IMMUNE-DP-1
+    title: Differential-privacy aggregator
+    short_description: |
+      DP aggregator for federation-wide shared signals (member counts,
+      lineage frequencies, AMR fingerprint distributions). Lands at
+      backend/backend/immune/sec/dp_aggregator.py. Default ε via
+      backend/backend/settings.py.
+    phase: phase_im_4
+    status: open
+    depends_on: []
+    blocked_by_external:
+    parallel_safe: true
+    parallel_safe_reason: "Net-new immune/sec/ package; no overlap with federation/cryptwwdb work."
+    effort_sessions: 1
+    primary_files:
+      - backend/backend/immune/__init__.py
+      - backend/backend/immune/sec/__init__.py
+      - backend/backend/immune/sec/dp_aggregator.py
+    test_files:
+      - tests/immune/__init__.py
+      - tests/immune/sec/__init__.py
+      - tests/immune/sec/test_dp_aggregator.py
+    source_of_truth_views:
+      - backend/backend/privacy/_ais_hooks.py
+      - docs/federation_operations.md
+      - docs/jackpot_immune_platform_plan.md
+    pr_title_template: "feat(immune): B-IMMUNE-DP-1 — DP aggregator for federation signals"
+    branch_name_template: "b-immune-dp-1"
+    role_framing: |
+      Senior engineering collaborator landing the first Phase IM-4 item
+      pulled forward. Net-new immune/sec/ package establishes the Track 2
+      directory structure that later IM-4 items will share.
+    notes: "First IM-4 item to land — pulls IM-4 forward modestly. AISPrivacyHooks.dp_noise + track_dp_budget are the consumer
+      surface."
+
+  - id: B-IMMUNE-HE-1
+    title: Single-key HE query layer
+    short_description: |
+      backend/backend/immune/sec/he_backend.py implementing single-key HE
+      per Kim 2021. First concrete query: cryptWWDB mass balance per
+      Driver et al. 2024 over RLWE-encrypted operands via TenSEAL.
+      Second: memory cell signature match.
+    phase: phase_im_4
+    status: tracked_not_scheduled
+    depends_on:
+      - B-CWB-MB-1-DB
+      - CRY-A
+    blocked_by_external: "Coalition IM-4 kickoff (Driver/Halden/Trieu)"
+    parallel_safe: false
+    effort_sessions: 4
+    primary_files:
+      - backend/backend/immune/sec/he_backend.py
+    test_files: []
+    source_of_truth_views: []
+    pr_title_template:
+    branch_name_template:
+    role_framing:
+    notes: "Collaborative deliverable with paper authors — not solo work."
+
+  - id: B-IMMUNE-HE-2
+    title: Multi-key HE extension (Lopez-Alt 2012)
+    short_description: |
+      Multi-key HE per Lopez-Alt et al. 2012. Each federation entity
+      holds its own secret key; joint computation for decryption.
+      Eliminates Muni-Lab collusion risk identified in Driver et al.
+      2024 §4.
+    phase: phase_im_4
+    status: tracked_not_scheduled
+    depends_on:
+      - B-IMMUNE-HE-1
+    blocked_by_external: "Coalition IM-4 kickoff"
+    parallel_safe: false
+    effort_sessions: 3
+    primary_files: []
+    test_files: []
+    source_of_truth_views: []
+    pr_title_template:
+    branch_name_template:
+    role_framing:
+    notes: "Triggered when first non-trivial production deployment needs collusion mitigation."
+
+  - id: B-IMMUNE-FED-SCHEMA-1
+    title: Phase IM-4 federation schema additions
+    short_description: |
+      federation_members, trust_scores, cyber_assessments tables.
+      Supports TRUST-1, REP-1, MEMSYNC-1 downstream.
+    phase: phase_im_4
+    status: tracked_not_scheduled
+    depends_on: []
+    blocked_by_external: "Coalition IM-4 kickoff"
+    parallel_safe: false
+    effort_sessions: 2.5
+    primary_files: []
+    test_files: []
+    source_of_truth_views: []
+    pr_title_template:
+    branch_name_template:
+    role_framing:
+    notes: ""
+
+  - id: B-IMMUNE-TRUST-1
+    title: TrustEngine for federation members
+    short_description: |
+      Per-member trust scores from submission quality, false-positive
+      rate, behavioral consistency.
+    phase: phase_im_4
+    status: tracked_not_scheduled
+    depends_on:
+      - B-IMMUNE-FED-SCHEMA-1
+    blocked_by_external: "Coalition IM-4 kickoff"
+    parallel_safe: false
+    effort_sessions: 5
+    primary_files: []
+    test_files: []
+    source_of_truth_views: []
+    pr_title_template:
+    branch_name_template:
+    role_framing:
+    notes: ""
+
+  - id: B-IMMUNE-REP-1
+    title: AntibodyRepertoire publish/subscribe
+    short_description: |
+      Anonymized detector repertoire shared across federation members.
+      Pub/sub interface, anonymization at publish boundary.
+    phase: phase_im_4
+    status: tracked_not_scheduled
+    depends_on:
+      - B-IMMUNE-FED-SCHEMA-1
+    blocked_by_external: "Coalition IM-4 kickoff"
+    parallel_safe: false
+    effort_sessions: 3.5
+    primary_files: []
+    test_files: []
+    source_of_truth_views: []
+    pr_title_template:
+    branch_name_template:
+    role_framing:
+    notes: ""
+
+  - id: B-IMMUNE-MEMSYNC-1
+    title: Federation memory cell sync
+    short_description: |
+      Cross-member confirmation thresholds before global promotion of
+      memory cells. Configurable via federation policy table.
+    phase: phase_im_4
+    status: tracked_not_scheduled
+    depends_on:
+      - B-IMMUNE-REP-1
+    blocked_by_external: "Coalition IM-4 kickoff"
+    parallel_safe: false
+    effort_sessions: 3.5
+    primary_files: []
+    test_files: []
+    source_of_truth_views: []
+    pr_title_template:
+    branch_name_template:
+    role_framing:
+    notes: ""
+
+  - id: B-FED-PILLARIII-1
+    title: FL framework decision via Riedel 2024 + FedTADBench (two-stage)
+    short_description: |
+      Two-stage evaluation:
+      Stage 1: pick general-purpose FL substrate from Riedel et al. 2024
+      top-3 (Flower 84.75%, FLARE 80.5%, FederatedScope 78.75%) using
+      JACKPOT-specific criteria.
+      Stage 2: pick healthcare-specific overlay (DataSHIELD vs FedAdapt-CAD)
+      for the privacy/aggregation layer.
+      Output: framework choice + ADR.
+    phase: phase_im_4
+    status: tracked_not_scheduled
+    depends_on: []
+    blocked_by_external: "Coalition IM-4 kickoff"
+    parallel_safe: false
+    effort_sessions: 3
+    primary_files: []
+    test_files: []
+    source_of_truth_views: []
+    pr_title_template:
+    branch_name_template:
+    role_framing:
+    notes: "Rescoped 2026-05-13 per Riedel et al. 2024 (Int J Machine Learning & Cybernetics). General-purpose FL substrate
+      decision is well-evidenced; healthcare-specific overlay (DataSHIELD/FedAdapt-CAD) still requires domain-specific benchmark."
+
+  - id: B-COLLAB-DIVERSITY-2
+    title: Federation diversity index with CI gate
+    short_description: |
+      Compute federation-wide diversity index, refuse operations when
+      diversity drops below threshold.
+    phase: phase_im_4
+    status: tracked_not_scheduled
+    depends_on: []
+    blocked_by_external: "Coalition IM-4 kickoff"
+    parallel_safe: false
+    effort_sessions: 0.5
+    primary_files: []
+    test_files: []
+    source_of_truth_views: []
+    pr_title_template:
+    branch_name_template:
+    role_framing:
+    notes: ""
+
+  - id: B-COLLAB-ATRUST-1
+    title: Asymmetric trust between federation members
+    short_description: |
+      Trust is directional — A trusts B doesn't imply B trusts A.
+      Natural collaboration with Trieu (osu-crypto PSI work).
+    phase: phase_im_4
+    status: tracked_not_scheduled
+    depends_on:
+      - B-IMMUNE-TRUST-1
+    blocked_by_external: "Coalition IM-4 kickoff"
+    parallel_safe: false
+    effort_sessions: 0.5
+    primary_files: []
+    test_files: []
+    source_of_truth_views: []
+    pr_title_template:
+    branch_name_template:
+    role_framing:
+    notes: ""
+
+  - id: B-COLLAB-REDTEAM-3
+    title: Adversarial test suite for federation
+    short_description: |
+      Red-team scenarios: poisoning, model inversion, membership
+      inference, sybil attacks. Lives at backend/backend/immune/sec/
+      redteam/attack_federation.py.
+    phase: phase_im_4
+    status: tracked_not_scheduled
+    depends_on: []
+    blocked_by_external: "Coalition IM-4 kickoff"
+    parallel_safe: false
+    effort_sessions: 0.75
+    primary_files: []
+    test_files: []
+    source_of_truth_views: []
+    pr_title_template:
+    branch_name_template:
+    role_framing:
+    notes: ""
+
+  - id: B-FED-GOV-1
+    title: GA4GH Passports + DUO machine-readable authorization
+    short_description: "Integrate GA4GH Passports (federated identity claims as digitally signed assertions: institutional
+      affiliation, ethics approval, prior authorization) and Data Use Ontology (DUO, machine-readable consent terms) into
+      FED-A's threshold_approve Track 2 implementation. Per Tangaro et al. 2026, this is the emerging standard substrate for
+      cross-jurisdictional federated genomics governance.\n"
+    phase: phase_im_4
+    status: tracked_not_scheduled
+    depends_on:
+      - FED-B
+    blocked_by_external: Coalition discussion + GA4GH community engagement
+    parallel_safe: false
+    effort_sessions: 3
+    primary_files:
+      - backend/backend/federation/passports.py
+      - backend/backend/federation/duo.py
+    test_files: []
+    source_of_truth_views: []
+    pr_title_template:
+    branch_name_template:
+    role_framing:
+    notes: Per Tangaro et al. 2026 (Frontiers in Genetics). Unblocks AISFederationHooks.threshold_approve Track 2. DUO
+      and Passports are GA4GH standards — coalition coordination needed before scoping in detail.
+  - id: B-IMMUNE-NSA-1
+    title: Non-self anomaly detector
+    short_description: |
+      Innate immunity component — flags samples that don't match known
+      self-patterns. AMAnD-adjacent.
+    phase: phase_im_4
+    status: tracked_not_scheduled
+    depends_on:
+      - B-IMMUNE-FEAT-1
+    blocked_by_external: "Coalition IM-4 kickoff"
+    parallel_safe: false
+    effort_sessions: 2
+    primary_files: []
+    test_files: []
+    source_of_truth_views: []
+    pr_title_template:
+    branch_name_template:
+    role_framing:
+    notes: ""
+
+  - id: B-IMMUNE-FEAT-1
+    title: Featurizer registry
+    short_description: |
+      Pluggable featurizer registry at backend/backend/immune/algorithms/
+      featurizers/. Track 2 site for Lee's TCR-Gen / catELMo work.
+    phase: phase_im_4
+    status: tracked_not_scheduled
+    depends_on: []
+    blocked_by_external: "Coalition IM-4 kickoff"
+    parallel_safe: false
+    effort_sessions: 2.5
+    primary_files: []
+    test_files: []
+    source_of_truth_views: []
+    pr_title_template:
+    branch_name_template:
+    role_framing:
+    notes: "Pluggable featurizer registry at backend/backend/immune/algorithms/featurizers/. Track 2 site for Lee's TCR-Gen
+      / catELMo work. Candidate featurizers: AutoXAI4Omics + SHAP per Bansal et al. 2025 (Trends in Food Science & Technology)
+      for explainable anomaly detection; FunGeneTyper adapters per Zhang et al. 2024 (Briefings in Bioinformatics) for privacy-preserving
+      AMR/VFG classification (see B-IMMUNE-FUNGENE-1)."
+
+  - id: B-AMAND-1
+    title: AMAnD canonical anomaly detector
+    short_description: |
+      Implements AMAnD (Price & Russell 2023, DeepSVDD) as the canonical
+      anomaly detector for Pillar I. Track 2 site for academic-AI
+      collaborators.
+    phase: phase_im_4
+    status: tracked_not_scheduled
+    depends_on:
+      - B-IMMUNE-FEAT-1
+    blocked_by_external: "Coalition IM-4 kickoff"
+    parallel_safe: false
+    effort_sessions: 3
+    primary_files: []
+    test_files: []
+    source_of_truth_views: []
+    pr_title_template:
+    branch_name_template:
+    role_framing:
+    notes: ""
+
+  # ────────────────────────────────────────────────────────────────────────
+  # Phase 24.5 — Eukaryotic schema + sovereignty + BYOP (blocked on P0b/P0c)
+  # ────────────────────────────────────────────────────────────────────────
+
+  - id: B-IMMUNE-FUNGENE-1
+    title: FunGeneTyper adapter integration (PLM-based AMR/VFG classification)
+    short_description: "Integrate FunGeneTyper's plug-and-play adapter modules into the featurizer\nregistry. Privacy-preserving
+      by design: 650M-param base model is public,\nmembers fine-tune ~21M-param adapters (3% of params) on private data, adapters\n\
+      can be shared across federation without exposing raw sequences. Federated\ntransfer learning for AMR/VFG with state-of-the-art
+      performance on remote\nhomologs (F1: human gut 0.6948, WWTP 0.6072, soil 0.5445).\n"
+    phase: phase_im_4
+    status: tracked_not_scheduled
+    depends_on:
+      - B-IMMUNE-FEAT-1
+    blocked_by_external: Coalition IM-4 kickoff
+    parallel_safe: false
+    effort_sessions: 2.5
+    primary_files:
+      - backend/backend/immune/algorithms/featurizers/fungene_adapter.py
+    test_files: []
+    source_of_truth_views: []
+    pr_title_template:
+    branch_name_template:
+    role_framing:
+    notes: "Per Zhang et al. 2024 (Briefings in Bioinformatics). GitHub: https://github.com/emblab-westlake/FunGeneTyper.
+      Natural collaboration with Lee's TCR-Gen/catELMo work (adjacent PLM-based functional prediction)."
+  - id: B-EUK-1
+    title: Eukaryotic schema additions (organism enum + samples columns)
+    short_description: |
+      Add eukaryotic organisms to OrganismNameEnum + eukaryotic-specific
+      samples columns (developmental stage, parasitemia, MOI, coinfection).
+    phase: phase_24_5
+    status: blocked_external
+    depends_on: []
+    blocked_by_external: "P0b (schema v5.0 migration window)"
+    parallel_safe: false
+    effort_sessions: 1
+    primary_files: []
+    test_files: []
+    source_of_truth_views: []
+    pr_title_template:
+    branch_name_template:
+    role_framing:
+    notes: "Bundles into P0b migration."
+
+  - id: B-EUK-2
+    title: Eukaryotic pipeline-result schemas
+    short_description: |
+      Eight eukaryotic pipeline-result tables + supporting enums.
+    phase: phase_24_5
+    status: blocked_external
+    depends_on: []
+    blocked_by_external: "P0b (schema v5.0 migration window)"
+    parallel_safe: false
+    effort_sessions: 1.5
+    primary_files: []
+    test_files: []
+    source_of_truth_views: []
+    pr_title_template:
+    branch_name_template:
+    role_framing:
+    notes: ""
+
+  - id: B-EUK-3
+    title: Eukaryotic validator updates
+    short_description: |
+      Update validator.py for eukaryotic-aware tier rules.
+      compute_surveillance_relevant() includes eukaryotic pathogens.
+    phase: phase_24_5
+    status: blocked_external
+    depends_on:
+      - B-EUK-1
+    blocked_by_external: "P0b (schema v5.0 migration window)"
+    parallel_safe: false
+    effort_sessions: 0.75
+    primary_files: []
+    test_files: []
+    source_of_truth_views: []
+    pr_title_template:
+    branch_name_template:
+    role_framing:
+    notes: ""
+
+  - id: B-CARE-3
+    title: Sovereignty deletion — implementation (sub-items 3a..3g)
+    short_description: |
+      Implement sovereignty-deletion design per §13 of sovereignty design
+      doc. Seven sub-items covering tombstone, propagation, audit, RTBF.
+    phase: phase_24_5
+    status: blocked_external
+    depends_on: []
+    blocked_by_external: "P0c (multi-tenancy middleware)"
+    parallel_safe: false
+    effort_sessions:
+    primary_files: []
+    test_files: []
+    source_of_truth_views: []
+    pr_title_template:
+    branch_name_template:
+    role_framing:
+    notes: "Aggregate entry covering B-CARE-3a..3g."
+
+  - id: B-CARE-4
+    title: Sovereignty deletion — federation propagation
+    short_description: |
+      Federation propagation of deletion requests per §9 of the
+      sovereignty design doc.
+    phase: phase_24_5
+    status: blocked_external
+    depends_on: []
+    blocked_by_external: "P0c (multi-tenancy middleware)"
+    parallel_safe: false
+    effort_sessions:
+    primary_files: []
+    test_files: []
+    source_of_truth_views: []
+    pr_title_template:
+    branch_name_template:
+    role_framing:
+    notes: ""
+
+  # ────────────────────────────────────────────────────────────────────────
+  # P0 series — major phases (informational)
+  # ────────────────────────────────────────────────────────────────────────
+
+  - id: P0g
+    title: G-5 profiles CRUD
+    short_description: |
+      User profile CRUD endpoints. Open per session summary.
+    phase: p0_series
+    status: open
+    depends_on: []
+    blocked_by_external:
+    parallel_safe: false
+    parallel_safe_reason: "Touches routers and main.py."
+    effort_sessions: 1.5
+    primary_files:
+      - backend/backend/routers/profiles.py
+    test_files:
+      - tests/routers/test_profiles.py
+    source_of_truth_views:
+      - backend/backend/routers/
+      - backend/backend/db/models.py
+    pr_title_template: "feat(api): P0g G-5 — user profiles CRUD"
+    branch_name_template: "p0g-g5-profiles"
+    role_framing: |
+      Senior engineering collaborator landing the user profile CRUD
+      endpoints that finish out the P0g G-5 sub-phase.
+    notes: ""
+
+  - id: P0b
+    title: Schema v5.0 + multi-tenancy (major phase)
+    short_description: |
+      Major schema migration consolidating Phase 24.5 schema lockdown.
+      Bundles B-CWB-SCHEMA-1..5, B-EUK-1/2/3, BYOP additions, sovereignty
+      columns. Sets up multi-tenancy middleware in P0c.
+    phase: p0_series
+    status: tracked_not_scheduled
+    depends_on: []
+    blocked_by_external:
+    parallel_safe: false
+    effort_sessions: 6
+    primary_files: []
+    test_files: []
+    source_of_truth_views: []
+    pr_title_template:
+    branch_name_template:
+    role_framing:
+    notes: "Next major phase after federation Stage 1 closes."
+
+  - id: P0c
+    title: Multi-tenancy middleware (major phase)
+    short_description: |
+      Tenant-aware middleware applying organization context to every
+      request. Follows P0b schema work. Unblocks B-CARE-3 + B-CARE-4.
+    phase: p0_series
+    status: blocked
+    depends_on:
+      - P0b
+    blocked_by_external:
+    parallel_safe: false
+    effort_sessions: 4
+    primary_files: []
+    test_files: []
+    source_of_truth_views: []
+    pr_title_template:
+    branch_name_template:
+    role_framing:
+    notes: ""

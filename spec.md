@@ -68,6 +68,30 @@ policy, one audit surface, and one schema to keep current. Grant
 narratives that reference North Star alignment can point at this
 section.
 
+### 1.2 Alignment with WHO Global Genomic Surveillance Strategy 2022-2032
+
+The WHO strategy defines five objectives that JACKPOT's deployment scenarios
+serve. Each scenario advances a subset of objectives:
+
+| Scenario | Description | Obj. 1 (tools) | Obj. 2 (workforce) | Obj. 3 (data utility) | Obj. 4 (connectivity) | Obj. 5 (readiness) |
+|---|---|---|---|---|---|---|
+| A | Laptop / single user | • | ✓ | | | |
+| B | Single-org cloud | ✓ | ✓ | ✓ | | |
+| C | Multi-lab agency | ✓ | ✓ | ✓ | ✓ | ✓ |
+| D | Hosted SaaS | ✓ | ✓ | ✓ | • | ✓ |
+| E | Federation member | • | ✓ | ✓ | ✓ | ✓ |
+| F | CI test | | | | | |
+
+✓ = primary mode; • = partial / context-dependent
+
+**Non-functional requirement: 7-day turnaround.** The WHO strategy defines
+"timely" as triggering genomic sequencing within seven days of event or
+pathogen detection. JACKPOT's pipeline orchestration (ingest → scrub → DLP →
+analysis → result publication) must support end-to-end latency under this
+target when deployed for surge-event use. The 6-state lifecycle of
+`ingest_scrubber.nf` and the `SCRUBBER_MAX_CONCURRENT=10` concurrency setting
+are dimensioned for this target.
+
 ---
 
 ## 2. Current Baseline (post-P0e — May 2026)

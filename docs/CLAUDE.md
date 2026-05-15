@@ -1232,6 +1232,16 @@ Every code-commit session prompt structure must follow `docs/session_prompt_temp
 
 Sessions that do NOT produce a code commit (pure-research, pure-design, pure-documentation-without-commit) are exempt from Closing Steps but must explicitly state this exemption in Operating Rules.
 
+**69 — Context-aware SNP thresholds for One Health surveillance.** When JACKPOT eventually supports cross-source genomic clustering queries (future-phase work, anchor: `B-IMMUNE-NSA-1`), the default SNP threshold MUST be context-aware, not a single fixed value. Per Watt et al. 2025 (Nature Communications, 5,471 E. coli genomes across 36 years), assessing genomic relationships at ≤100 SNP threshold enables detection of cross-source linkage otherwise obscured when applying typical outbreak-oriented relatedness thresholds (≤20 SNPs).
+
+Three context tiers MUST be supported:
+
+- **Outbreak investigation:** ≤20 SNPs (standard, default)
+- **One Health / cross-source surveillance:** ≤100 SNPs
+- **Extended clonality detection:** 100–200 SNPs
+
+This rule applies forward to anomaly-detector and clustering-query work; no current module enforces it because no current module performs SNP-distance queries. When that work begins, the threshold parameter MUST be configurable per surveillance context, with the three tiers as named presets.
+
 ## Local Dev Role Switching
 
 In local dev (`ENV=local`), the mock user is determined by `MOCK_USER_EMAIL`
