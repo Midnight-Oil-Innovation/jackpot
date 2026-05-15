@@ -119,3 +119,8 @@ select = ["E", "F", "I", "N", "W", "UP", "B", "SIM"]
 "cli/jackpot/cli/upload.py"               = ["F841"]
 "cli/jackpot/cli/samples.py"              = ["F841"]
 "cli/jackpot/cli/pipelines.py"            = ["F841"]
+
+[dependency-groups]
+dev = [
+    "bandit[toml]>=1.9.4",
+]
