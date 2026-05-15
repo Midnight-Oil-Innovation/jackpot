@@ -1,4 +1,5 @@
 # Federation roadmap
+# Superseded 2026-05-14 by `docs/federation.md`. This file kept for history.
 
 JACKPOT's federation architecture is built in three sibling layers: **federation primitives** (query federation, hub push, bidirectional access), **privacy primitives** (DP, FL aggregation, HE, MPC, synthetic substitution), and **crypto primitives** (key management, signing, threshold crypto, TEE attestation). Each layer is a Python package under `backend/backend/` that ships a Track 1 implementation using current JACKPOT primitives, plus a Track 2 AIS-augmented hook seam where collaborator overlays plug in via dependency injection without forking the package. This is the same pattern across all three layers — `_ais_hooks.py` defines a runtime-checkable Protocol, `Null<X>Hooks` provides the no-op default, and the package's Track 1 classes accept `hooks=` constructor arguments.
 

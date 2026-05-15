@@ -1,4 +1,5 @@
 # Federation design
+# Superseded 2026-05-14 by `docs/federation.md`. This file kept for history.
 
 The chat's federation design is reconciled against the actual `backend/backend/federation/` Track 1 scaffold (FED-A, merged 2026-05-08) and the future Phase IM-4 (Federation as Immune Network, Tracked Not Scheduled).
 
