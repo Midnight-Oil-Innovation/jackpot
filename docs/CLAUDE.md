@@ -276,7 +276,7 @@ six-repo + git-submodule arrangement is gone; what used to be submodules
 │   ├── fhir-mapping.md            FHIR R5 translation map
 │   ├── domain_reference.md        Cross-doc glossary + source-of-truth map (Tier-1 reference)
 │   ├── cryptwwdb_integration.md, epistorm_integration.md, demo_data_sources.md, schema_sufficiency_observatory.md, sample_status_vs_access.md, fasta_upload_discussion.md, dockerfile_strategy.md, slurm_executor.md, file_references.md, staging_access.md, local_test_checklist.md, apptainer_compatibility_audit.md, pipeline_apptainer_audit.md   Individual Tier-3 reference docs (Cluster-H)
-│   ├── jackpot_byop_and_eukaryotic_design.md   BYOP + 8 eukaryotic pathogen groups design doc (not yet absorbed into a canonical reference)
+│   ├── byop_and_eukaryotic_design.md   BYOP + 8 eukaryotic pathogen groups design doc (not yet absorbed into a canonical reference)
 │   └── archived/                  Superseded source docs preserved as audit trail (apgap_migration_context, jackpot_ais_legacy, ml_infrastructure_inventory, backlog_consolidation_report, backlog_reconciliation)
 ├── governance/                    8 charter + policy markdown files (P0d Phase 21.5)
 ├── instances/                     P0e: per-instance jackpot init output (gitignored except instances/ci/)

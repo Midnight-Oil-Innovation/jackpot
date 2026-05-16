@@ -25,9 +25,9 @@ JACKPOT separates the working federation that ships now ("Track 1") from the AIS
 
 Cross-references:
 
-- `docs/jackpot_immune_collaboration_scaffolding.md` — the canonical description of the Track 1 / Track 2 seam pattern, including the rule that Track 1 packages never import from `backend/backend/immune/`.
+- `docs/immune_platform.md` Part 2 §§22-29 (post-Cluster-B merge; was `docs/jackpot_immune_collaboration_scaffolding.md`) — the canonical description of the Track 1 / Track 2 seam pattern, including the rule that Track 1 packages never import from `backend/backend/immune/`.
 - `backend/backend/federation/README.md` and `backend/backend/privacy/README.md` — package-level documentation of the hook surfaces and their AIS-doc cross-references.
-- `docs/architecture/jackpot_architecture.md` §23 — the three-level federation architecture (query / hub-push / bidirectional) and the qualifying-sample gates for Level 2 push.
+- `docs/architecture.md` v6.0 §20 (post-Cluster-A merge; was `docs/architecture/jackpot_architecture.md` §23) — the three-level federation architecture (query / hub-push / bidirectional) and the qualifying-sample gates for Level 2 push.
 
 ### 1.2 cryptWWDB-readiness framing
 
@@ -205,7 +205,7 @@ The recommended rotation cadence has three triggers; the operator chooses the ma
 
 | Trigger | Recommendation |
 |---|---|
-| **Calendar** | Rotate at least annually. Tribal-sovereignty (Scenario T) and hosted-SaaS (Scenario D) deployments should rotate semi-annually. |
+| **Calendar** | Rotate at least annually. Deployments with higher exposure (sovereignty-runtime-policy enabled, multi-tenant, or cloud-hosted) should rotate semi-annually. |
 | **Personnel change** | Rotate on departure or role change of any individual with credential access at either peer. |
 | **Incident** | Rotate immediately on any credible suspicion of credential exposure (lost laptop, leaked log, compromised CI runner, compromised secrets backend). Treat suspicion as exposure; do not wait for proof. |
 
@@ -341,10 +341,10 @@ All references in this section are verified present on disk in the `b-cwb-doc-1`
 
 | Document | Path | Why an operator reads it |
 |---|---|---|
-| AIS theoretical anchor | `docs/Jackpot_AIS.md` | The §1.3 / §1.4 / §1.6 / §1.7 / §1.8 hook positions that the federation and privacy READMEs map their `AISFederationHooks` and `AISPrivacyHooks` Protocol entries onto. Read this for the AIS framing that grounds every hook in Section 7. |
-| Immune-platform vision and roadmap | `docs/jackpot_immune_platform_plan.md` | §6.2.2 (Pillar III federation plan) and §10.5 (`TrustEngine` spec) are the canonical references for Phase IM-4 federation work and for the multi-key HE future direction tracked here as `B-IMMUNE-HE-2`. |
-| Immune-platform collaboration scaffolding | `docs/jackpot_immune_collaboration_scaffolding.md` | Canonical description of the Track 1 / Track 2 seam pattern; the ratio between shipped engineering and deliberately-open research questions; the eleven critiques the federation scaffold is responding to. |
-| Architecture & developer reference | `docs/architecture/jackpot_architecture.md` | §23 ("Federation Architecture") is the three-level federation reference and the source of the qualifying-sample gates (`surveillance_relevant=TRUE`, `sharing_level ≥ min_sharing_level_for_federation`, `quality_status ≥ ANALYZABLE`) for Level 2 hub push. |
+| AIS theoretical anchor | `docs/immune_platform.md` Part 1 §§1.3-1.8 (post-Cluster-B merge; was `docs/Jackpot_AIS.md`) | The §1.3 / §1.4 / §1.6 / §1.7 / §1.8 hook positions that the federation and privacy READMEs map their `AISFederationHooks` and `AISPrivacyHooks` Protocol entries onto. Read this for the AIS framing that grounds every hook in Section 7. |
+| Immune-platform vision and roadmap | `docs/immune_platform.md` (post-Cluster-B merge; was `docs/jackpot_immune_platform_plan.md`) | §6.2.2 (Pillar III federation plan) and §10.5 (`TrustEngine` spec) are the canonical references for Phase IM-4 federation work and for the multi-key HE future direction tracked here as `B-IMMUNE-HE-2`. |
+| Immune-platform collaboration scaffolding | `docs/immune_platform.md` Part 2 §§22-29 (post-Cluster-B merge; was `docs/jackpot_immune_collaboration_scaffolding.md`) | Canonical description of the Track 1 / Track 2 seam pattern; the ratio between shipped engineering and deliberately-open research questions; the eleven critiques the federation scaffold is responding to. |
+| Architecture & developer reference | `docs/architecture.md` v6.0 (post-Cluster-A merge; was `docs/architecture/jackpot_architecture.md`) | §20 ("Federation Architecture") is the three-level federation reference and the source of the qualifying-sample gates (`surveillance_relevant=TRUE`, `sharing_level ≥ min_sharing_level_for_federation`, `quality_status ≥ ANALYZABLE`) for Level 2 hub push. (Was §23 pre-merge.) |
 | Federation package README | `backend/backend/federation/README.md` | The FED-A scaffold: package layout, `AISFederationHooks` Protocol, hook → AIS doc cross-reference table, Track 2 impl module map. |
 | Privacy package README | `backend/backend/privacy/README.md` | The PRV-A scaffold: package layout, `AISPrivacyHooks` Protocol, the six hook positions and their AIS doc cross-references, the explicit note that TEE attestation is a crypto-layer (not privacy-layer) hook. |
 

@@ -1,7 +1,18 @@
 # JACKPOT Session Summary & Backlog
 
-**Document version:** 3.4.3
-**Last updated:** 2026-05-12 (post-Session-21 addendum #3: v3.4.2's merge sequence was empirically wrong — corrected here)
+> **Forward-looking note (May 2026 cluster-doc-merge refresh — 2026-05-16):** This document is a session-by-session historical log. The architectural framings used in each session reflect what was decided at that point in time — they do NOT reflect current canonical architecture. Two notable evolutions show up across sessions:
+>
+> 1. **The install-scenario count** grew from 4 → 6 → 7 → 8 across Sessions 1-15 as the project's deployment story matured. The May 2026 Cluster A doc-merge work then **consolidated to 4 install scenarios** (A self-hosted commodity / B HPC / C single-org cloud / D CI test), with federation, multi-tenancy, and Indigenous data sovereignty as runtime configurations layered on top of any scenario rather than as separate install scenarios. See `docs/architecture.md` v6.0 §3 for the current model.
+>
+> 2. **Scenario T (Tribal-sovereignty deployment)**, added in Session 11 as a sovereignty-aware variant of A or E, was reframed as **sovereignty-as-runtime-policy** in the Cluster A merge. The four sovereignty-aware defaults (deletion-on-request, no auto-publish, federation off-by-default, CARE Principles compliance) are now runtime configurations enable-able on any scenario via `jackpot policy enable sovereignty`, not the defining characteristics of a separate deployment scenario. See `docs/architecture.md` §22 for the current framing.
+>
+> The session bodies below preserve the architectural framings as they stood at the time. They document *when* decisions were made and *what changed*, which is the historical record this log exists to preserve. Rewriting them to match current canonical architecture would destroy that record. Companion canonical reference docs from the May 2026 cluster-merge work: `docs/architecture.md`, `docs/immune_platform.md`, `docs/detection_landscape.md`, `docs/platform_landscape.md`, `docs/strategic_vision.md`, `docs/governance_alignment.md`, `docs/federation.md` + `docs/federation_operations.md`, `docs/learning_strategic_vision.md` + `docs/learning_curriculum_design.md`, `docs/wastewater.md` + `docs/wastewater_software_landscape.md`, `docs/deploy/gcp.md`. See `CLAUDE.md`'s "Forward-looking note" and `docs/domain_reference.md` for the full source-of-truth map.
+>
+> **Institutional-name removal applied in this refresh:** The Cleanup A-J operator-agnostic genericization (April 2026, Session 11 era) removed institutional references from production code so it would know nothing about any specific operator. This refresh extends the same standard to the historical log itself: remaining mentions of the prior operator name and prior university-affiliate name in session bodies have been replaced with generic descriptors ("the operator" / "the prior institutional sponsor" / "[prior operator]"). The Cleanup A-J section at line ~2668 still documents WHAT was renamed during the cleanup, with the institutional names themselves replaced by generic descriptors, so the audit trail of the cleanup is preserved without re-introducing the names.
+
+
+**Document version:** 3.4.1
+**Last updated:** 2026-05-11 (post-Session-21 addendum: two-apptainer-doc discoverability + worktree-cleanup policy codified)
 **Sessions covered:** Session 1 (March–April 2026 consolidated), Session 2 (2026-04-10), Sessions 3–S (2026-04 through 2026-04-19), Pathoplexus/Loculus comparative analysis session (2026-04-28), Cleanup A–J operator-agnostic genericization session (2026-04-26 to 2026-04-28), Session 11 (2026-04-28 → 2026-04-29 — CDC DMI/STLT/CARE alignment, BYOP/eukaryotic design, phasing rework, P0d migration prep), Session 12 (2026-04-30 → 2026-05-01 — P0d execution in Claude Code + post-execution cleanup), Session 13 (2026-05-01 — Phase 22 periodic review), Session 14 (2026-05-02 — P0e `jackpot init` CLI + Phase 22 cleanup), Session 15 (2026-05-02 → 2026-05-03 — architecture synthesis reframing + P0f F-2 schema migration), Session 16 (2026-05-03 — P0f parallel-session execution: F-1, F-3, F-4, F-5, F-12-docs merged + housekeeping/branching workflow PR #4 + F-6 through F-12 prompts drafted), Session 17 (2026-05-03 end of day — P0f F-6 through F-12 (except F-11) all merged into `development`; phase essentially complete pending F-11 audit), Session 18 (2026-05-04 — strategic positioning conversation + I-track planning: spreadsheet-refugee market identified, Seqsender/TOSTADAS landscape understood, sovereignty use cases discussed; I-1 / I-2 / C-1 / I-3 specs drafted as JACKPOT's adoption-driving feature roadmap), Session 19 (2026-05-04 later — F-11 P0f coverage audit and I-2 submission package generation merged in parallel; P0f phase complete; I-track at 2 of 4 items shipped), Session 20 (2026-05-06 — /ultrareview pass surfaced 26 findings; R-1 (six security/correctness blockers), R-2 (GISAID generator dedup + submission package test coverage), R-3 (doc and tracking hygiene) all merged; parallel-execution recommendation reversed after four cross-session contamination incidents — single-session-per-repo is now the default), Session 21 (2026-05-07 → 2026-05-11 — E-1 UAT artifacts + dev-login endpoint, full P0h Slurm campaign (H-1 H-2 H-3 H-4 H-5 H-6 H-10 — six of ten blocks landed; H-7 and H-8 deferred to Phase 25), FIX-1/FIX-2 doc cleanup + audit-rollback regression test, Phase 24.5 sovereignty-deletion design lockdown rebased + reviewed + merged; worktree-per-PR pattern adopted as the operational escape hatch from silent branch-switch contamination)
 
 **v3.2 changelog (2026-05-04 later):** P0f phase fully complete and
@@ -20,62 +31,6 @@ and I-2 ran in parallel, landing on different files (F-11 in tests/, I-2 in
 new backend/submissions* files). Both PRs merged cleanly with no conflicts.
 (4) The PR-merge order produced a fresh post-P0f baseline coverage number
 documented in tests/coverage_p0f_summary.md.
-
-**v3.4.3 changelog (2026-05-12 — correction to v3.4.2):** v3.4.2
-codified a "canonical merge sequence" that turned out to be
-empirically wrong. The PR that published v3.4.2 (PR #46) was supposed
-to be the first verification of the new sequence; on merge, the
-sequence failed exactly the same way the v3.4.2 doc claimed it would
-succeed, leaving `session-summary-v342` as a remote orphan (manually
-cleaned up via `git push origin --delete`). Root cause: `gh pr merge
---delete-branch` calls `git branch -d`, which fails when the branch
-is checked out in **any worktree** — not just when the user's `cwd`
-is inside the worktree. The `cd /Users/glen/Projects/jackpot`
-prefix that v3.4.2 prescribed is therefore irrelevant; what matters
-is whether the worktree exists at all. Corrected canonical sequence:
-remove the worktree FIRST (which un-pins the branch), then run `gh
-pr merge --delete-branch` (both deletes succeed because the local
-branch is no longer worktree-pinned). v3.4.3 PR #47 is the empirical
-verification that the corrected sequence works end-to-end. Same-day
-correction pattern matches the v3.4 → v3.4.1 → v3.4.2 cadence; each
-version preserved a record of what was claimed, what was tried, and
-what actually worked.
-
-**v3.4.2 changelog (2026-05-12 — next-day post-v3.4.1):** Operational
-cleanup follow-on capturing two related findings: (1) **The H-4 sibling
-branch deleted on origin.** `origin/p0h-h4-pipeline-runs-log-poller`
-(distinct from this session's `p0h-h4-weblog-poller` PR #38) carried
-two orphan commits — `a98214b` (my H-4 work briefly landed there
-during the H-4 silent-branch-switch incident, recovered via
-cherry-pick onto the right branch but never cleaned up) and `ec3bce2`
-(maintainer's spec/todo updates whose content was already on
-origin/development via other PRs). Both safe to drop; deleted via
-`git push origin --delete`. (2) **Seven session orphan branches
-discovered + deleted.** Survey of `git ls-remote --heads origin`
-surfaced seven remote branches from this session's merged PRs that
-should have been cleaned up by `gh pr merge --delete-branch` but
-weren't: `fix12-doc-cleanup` (#43), `p0h-h5` (#40), `p0h-h6` (#41),
-`p0h-h10` (#42), `phase-24-5-sovereignty-design` (#20),
-`session-summary-update` (#44), `session-summary-addendum` (#45).
-Each carried a single squash-merged commit; content already on
-origin/development. All seven deleted via `git push origin --delete`.
-(3) **Root-cause analysis recorded.** `gh pr merge --delete-branch`
-attempts both a remote-side branch delete and a local-side branch
-delete. When the local branch is checked out in a worktree, the
-local-delete fails with "cannot delete branch ... used by worktree
-at ...", and gh aborts the whole sequence — including the remote
-delete that would otherwise have succeeded. Pattern: every PR
-authored from a worktree this session left a remote orphan because
-the worktree was still active when `gh pr merge` fired. (4)
-**Canonical merge sequence codified.** Going forward, the order is
-`cd /Users/glen/Projects/jackpot` (leave the worktree) → `gh pr
-merge <N> --squash --delete-branch` (both deletes succeed) → `git
-worktree remove ../jackpot_<branch>` (cleans the dir; the
-already-deleted local branch is no-op). This is the operational
-fix to the worktree-vs-merge-cleanup friction; codifies in v3.4.2
-the procedure that supplements v3.4.1's worktree-cleanup policy.
-The session-summary-v342 PR itself was the first verification that
-the new sequence works end-to-end.
 
 **v3.4.1 changelog (2026-05-11 — same day as v3.4):** Small post-merge
 addendum to Session 21, captured after the maintainer ran `ls docs/`
@@ -288,7 +243,7 @@ mounting for testcontainers in-container, `alembic.ini` cwd dependency,
 
 **v2.7 changelog (2026-05-01):** Added Session 12 covering: (1) P0d execution in Claude Code on 2026-04-30 — 6 source repos consolidated into Midnight-Oil-Innovation/jackpot via two-pass git filter-repo, history preserved, p0d-complete tag at d32f40a. (2) Post-execution cleanup of four structural issues that prevented `docker compose up` from working: docker-compose.yml + Dockerfiles stayed in backend/, Dockerfiles needed workspace-aware path rewrites, the `backend/frontend/` canonical streamlit code was incorrectly deleted as a "shadow" then partially recovered via filter-repo of the archived gotero/jackpot-frontend (which turned out to be a uv-init stub), and finally restored from the parent of the bad-deletion commit. (3) Frontend now lives at `frontend/` at monorepo root (more aligned with P0d's "each component at top level" intent than P0d's actual `backend/frontend/` placement). (4) Local dev stack validated end-to-end: API healthy with all 17 alembic migrations, Streamlit on 8501 with 9 researcher pages, /health 200, p0d-validated tag added.
 
-**v2.6 changelog (2026-04-29):** Added Session 11 covering: (1) CDC Data Modernization Initiative / North Star Architecture / STLT alignment with formal CARE Principles adoption and addition of Scenario T (Tribal-sovereignty deployment) — produced `jackpot_cdc_dmi_stlt_overview.md`, 14-item Phase 27 backlog. (2) Multi-engine BYOP infrastructure design (Nextflow + Snakemake + WDL + manifest-wrapped scripts) plus full-parity eukaryotic pathogen support across 8 pathogen groups — produced `jackpot_byop_and_eukaryotic_design.md`, 25-item set split across Phase 24.5 / P0f / Phase 28. (3) Phasing rework: schema items moved to Phase 24.5 (lockdown before P0b), BYOP infrastructure becomes new P0f phase between P0e and P0b/c, eukaryotic pipelines stay in Phase 28 with internal tier-prioritization. (4) Claude Code parallel-agents playbook with `/automode` and `/ultrareview` skill designs — produced `jackpot_claude_code_playbook.md`. (5) P0d migration pre-flight: verified all 6 source repos clean and pushed to canonical GitHub state, replaced Apache 2.0 with AGPL-3.0 on destination repo, ready for Claude Code kickoff.
+**v2.6 changelog (2026-04-29):** Added Session 11 covering: (1) CDC Data Modernization Initiative / North Star Architecture / STLT alignment with formal CARE Principles adoption and addition of Scenario T (Tribal-sovereignty deployment) — produced `jackpot_cdc_dmi_stlt_overview.md`, 14-item Phase 27 backlog. (2) Multi-engine BYOP infrastructure design (Nextflow + Snakemake + WDL + manifest-wrapped scripts) plus full-parity eukaryotic pathogen support across 8 pathogen groups — produced `byop_and_eukaryotic_design.md`, 25-item set split across Phase 24.5 / P0f / Phase 28. (3) Phasing rework: schema items moved to Phase 24.5 (lockdown before P0b), BYOP infrastructure becomes new P0f phase between P0e and P0b/c, eukaryotic pipelines stay in Phase 28 with internal tier-prioritization. (4) Claude Code parallel-agents playbook with `/automode` and `/ultrareview` skill designs — produced `jackpot_claude_code_playbook.md`. (5) P0d migration pre-flight: verified all 6 source repos clean and pushed to canonical GitHub state, replaced Apache 2.0 with AGPL-3.0 on destination repo, ready for Claude Code kickoff.
 
 **Changelog:**
 
@@ -300,8 +255,8 @@ mounting for testcontainers in-container, `alembic.ini` cwd dependency,
 - **v2.8 (2026-05-03)** — Added Session 15 (architecture synthesis reframing + P0f F-2 schema migration). See full block above.
 - **v2.7 (2026-05-01)** — Added Session 12 (P0d execution + post-execution cleanup). See full block above.
 - **v2.6 (2026-04-29)** — Added Session 11 (CDC DMI/STLT, BYOP/eukaryotic, phasing rework, P0d migration prep). See full block above.
-- **v2.5 (2026-04-28)** — Added new section `# Cleanup A–J — Operator-agnostic genericization (2026-04-26 to 2026-04-28)`. Records the completion of 10 cleanup phases (lettered A through J) that removed institutional references (ADHS, ASU, Linux Prophet, Otero Outpost, Sonora Quest, Maricopa, Phoenix, etc.) from the codebase to align with the operator-agnostic principle. Two phases (G — submodule schema-update scripts, J — Streamlit frontend) were no-ops. Net result: production code knows nothing about any specific operator; only the eventual `jackpot init` bootstrap step learns operator names at install time. Codebase is now ready for P0d (monorepo migration to `Midnight-Oil-Innovation/jackpot`).
-- **v2.4 (2026-04-28)** — Added new subsection `### Pathoplexus / Loculus comparative analysis backlog (April 2026)` with 34 B-XXX items grouped A–J by source platform. Generated from `jackpot_pathoplexus_loculus_overview.md`. Reflects the project pivot: AGPL-3.0 (was Apache 2.0), independence from ADHS/ASU, multi-deployment-target architecture (6 install scenarios A–F), monorepo migration to `Midnight-Oil-Innovation/jackpot`. Two-PII-gate architecture documented (NCBI SRA Human Scrubber for genomic PII, GCP Cloud DLP for metadata PII).
+- **v2.5 (2026-04-28)** — Added new section `# Cleanup A–J — Operator-agnostic genericization (2026-04-26 to 2026-04-28)`. Records the completion of 10 cleanup phases (lettered A through J) that removed institutional references (the prior operator name, the prior university-affiliate name, several partner-lab and location names) from the codebase to align with the operator-agnostic principle. Two phases (G — submodule schema-update scripts, J — Streamlit frontend) were no-ops. Net result: production code knows nothing about any specific operator; only the eventual `jackpot init` bootstrap step learns operator names at install time. Codebase is now ready for P0d (monorepo migration to `Midnight-Oil-Innovation/jackpot`).
+- **v2.4 (2026-04-28)** — Added new subsection `### Pathoplexus / Loculus comparative analysis backlog (April 2026)` with 34 B-XXX items grouped A–J by source platform. Generated from `jackpot_pathoplexus_loculus_overview.md`. Reflects the project pivot: AGPL-3.0 (was Apache 2.0), independence from its prior institutional sponsors, multi-deployment-target architecture (6 install scenarios A–F), monorepo migration to `Midnight-Oil-Innovation/jackpot`. Two-PII-gate architecture documented (NCBI SRA Human Scrubber for genomic PII, GCP Cloud DLP for metadata PII).
 - **v2.3** — Sessions 3–S content (April 2026 — pre-Claude-Code through Session 5 staging deploy).
 - **v2.2 (2026-04-16)** — Session 1 + 2 baseline.
 
@@ -362,17 +317,17 @@ Produced update_schema_v4_2.py. All changes applied and validated. 1923 → 2326
 
 ### 10. Data governance — access control model
 
-Sharing levels: PRIVATE (owner + Lab Director), LAB (all lab members), DISCOVERABLE (visible, data requires request), PUBLIC (open to all authenticated users). PRIVATE useful for: work in progress, research on organisms ADHS doesn't track.
+Sharing levels: PRIVATE (owner + Lab Director), LAB (all lab members), DISCOVERABLE (visible, data requires request), PUBLIC (open to all authenticated users). PRIVATE useful for: work in progress, research on organisms not on the operator's reportable list.
 
 Org-level policy fields: has_oversight_access, default_sharing_level, access_request_grace_days (default 90), access_requests_enabled, access_policy_note.
 
 Three org profiles:
 
-- ADHS: default_sharing_level=LAB, has_oversight_access=TRUE
+- Public health operator: default_sharing_level=LAB, has_oversight_access=TRUE
 - Academic: default_sharing_level=PRIVATE, has_oversight_access=FALSE
 - Partner PH: default_sharing_level=LAB, has_oversight_access=FALSE
 
-ADHS oversight scoped to surveillance_relevant=TRUE samples only. Academic private research on non-reportable organisms is excluded from oversight.
+Public-health-agency oversight scoped to surveillance_relevant=TRUE samples only. Academic private research on non-reportable organisms is excluded from oversight.
 
 Surveillance relevance: organism-driven default from reportable_organisms DB table. Metagenomics uses target_organisms list; untargeted defaults TRUE conservatively; post-pipeline recompute promotes never demotes. Override model: TRUE→FALSE requires governance board; FALSE→TRUE is self-declared. SurveillanceOverrideCategoryEnum captures context.
 
@@ -416,7 +371,7 @@ Three spawner profiles:
 
 **jackpot-sdk** Python package pre-installed in all pods. Session class with samples, pipelines, datasets, sra, references, workspace modules. register_from_notebook() closes the loop back to JACKPOT. R equivalent package. Compute-target agnostic.
 
-Sol HPC integration via batchspawner — Bioinformatician profile can spawn notebook kernel as Slurm job on Sol. Lower priority, ASU-specific.
+Sol HPC integration via batchspawner — Bioinformatician profile can spawn notebook kernel as Slurm job on Sol. Lower priority, specific to one institutional HPC cluster.
 
 ### 13. Scrubber skip governance
 
@@ -907,7 +862,7 @@ Level 2 (Year 2, later) — Tool-augmented RAG. LLM given access to curated read
 2. **Update submodule pointer in jackpot-backend** — git submodule update --remote schema, commit.
 3. **Regenerate models** — gen-pydantic and gen-json-schema from updated schema.
 4. **Write Alembic migration for v4.2 columns + new tables** — ALTER TABLE for all new BaseSample columns. New tables: reportable_organisms, sample_access_requests, sample_scrub_override_requests, deletion_requests, deleted_samples (tombstone), tb_typing_results, sequencing_lab_assignments (sequencing_lab_id FK, lab_id FK — join table linking physical sequencing facilities to JACKPOT labs for Globus deposit-first notification routing). New columns on organizations: has_oversight_access, default_sharing_level, access_request_grace_days, access_requests_enabled, access_policy_note, max_token_lifetime_days, gisaid_credentials (encrypted). New columns on samples: is_deleted, deleted_at, deletion_stage, basespace_run_id. New columns on users: globus_identity_id, globus_identity_linked_at. New columns on sequencing_labs: globus_identity_id, globus_staging_path, filename_pattern JSONB.
-5. **Seed reportable_organisms table** — ADHS mandatory reportable communicable diseases list.
+5. **Seed reportable_organisms table** — the operator's mandatory reportable communicable diseases list.
 6. **Rewrite validator.py** — tier-aware ValidationResult, compute_surveillance_relevant(), validate_surveillance_relevant(), date_collected_precision handling, FASTA-only auto-skip detection.
 7. **Update tests/test_validator.py** — tier computation, year-only dates, case_id on non-human samples, surveillance_relevant defaults, metagenomics target_organisms logic.
 8. **Update docs/CLAUDE.md** — tier-aware validation, new BaseSample fields, surveillance_relevant logic, scrub skip workflow, file-to-sample association principle.
@@ -1247,11 +1202,11 @@ Last updated: April 2026 (session 2 — final pre-coding revision) Status: Livin
 | Feature                               | Area   | Schema changes                                               | Backend                                                      | Frontend                                              | Notes                                                        |
 | ------------------------------------- | ------ | ------------------------------------------------------------ | ------------------------------------------------------------ | ----------------------------------------------------- | ------------------------------------------------------------ |
 | Apply schema v4.2                     | Schema | Run update_schema_v4_2.py — 22 changes including case_id to BaseSample, sector, surveillance_relevant, quality_status, date_collected_precision, read_type, assembly_type, MAG QC, provenance, turnaround timestamps | Alembic migration: all new columns on samples                | none                                                  | Prerequisite for all Month 1 work. Script validated.         |
-| Reportable organisms table            | Schema | New table: reportable_organisms (organism_name PK, reporting_jurisdiction, effective_date, notes) | Seed ADHS list. GET/POST/DELETE /api/v1/admin/reportable-organisms/ | platform_admin.py                                     | DB-managed. Drives surveillance_relevant default.            |
+| Reportable organisms table            | Schema | New table: reportable_organisms (organism_name PK, reporting_jurisdiction, effective_date, notes) | Seed operator's reportable list. GET/POST/DELETE /api/v1/admin/reportable-organisms/ | platform_admin.py                                     | DB-managed. Drives surveillance_relevant default.            |
 | Sample access requests table          | Schema | New table: sample_access_requests (full lifecycle cols, auto_approve_after, access_expires_at) | Background job: 90-day auto-approve, 75-day warning, expire grants, mark moot | access_requests.py                                    | 90-day passive approval.                                     |
 | Sample scrub override requests table  | Schema | New table: sample_scrub_override_requests (sample_id, requested_by_id, request_reason, status, auto_deny_after) | Background job: 48-hour auto-deny                            | upload.py — skip scrub request flow                   | Lab Director approval required. FASTA-only = SYSTEM auto-approve. |
 | Deletion workflow tables              | Schema | samples: is_deleted, deleted_at, deletion_stage. New: deletion_requests, deleted_samples (tombstone — immutable) | Staged lifecycle backend, GCS lifecycle job                  | platform_admin.py — deletion queue                    | Tombstone permanent. Audit records preserved.                |
-| Organization policy fields            | Schema | organizations: has_oversight_access, default_sharing_level, access_request_grace_days, access_requests_enabled, access_policy_note, max_token_lifetime_days, gisaid_credentials (encrypted) | PATCH /api/v1/organizations/{id}                             | platform_admin.py                                     | Three profiles: ADHS, academic, partner PH.                  |
+| Organization policy fields            | Schema | organizations: has_oversight_access, default_sharing_level, access_request_grace_days, access_requests_enabled, access_policy_note, max_token_lifetime_days, gisaid_credentials (encrypted) | PATCH /api/v1/organizations/{id}                             | platform_admin.py                                     | Three profiles: public-health-agency, academic, partner PH.                  |
 | Reference genomes table               | Schema | New table: reference_genomes (organism_name, accession, fasta_uri, genome_version, added_by_id) | GET/POST/DELETE /api/v1/admin/reference-genomes/. Lab-shared GCS bucket /ref/{org}/{lab}/ | platform_admin.py                                     | Fed into pipeline parameter dropdowns.                       |
 | Project and lab pipeline tables       | Schema | New tables: project_pipelines, lab_pipelines (both: source_pipeline_id, name, parameter_overrides JSONB, version, created_by_id) | GET/POST/PATCH/DELETE for both. POST /api/v1/pipelines/{id}/promote | pipelines.py, lab_director.py                         | Three-level hierarchy: project → lab → zoo.                  |
 | TB typing table                       | Schema | New table: tb_typing_results (lineage, lineage_coll, spoligotype_octal, spoligotype_binary, spoligotype_sit, miru_vntr_pattern, miru_vntr_mit_id, who_catalogue_version, drug_susceptibility JSONB, tool, tool_version, analysis_date) | Alembic migration                                            | none                                                  | TB-specific. TB AMR also populates generic amr_results for platform-wide search. |
@@ -1298,7 +1253,7 @@ Last updated: April 2026 (session 2 — final pre-coding revision) Status: Livin
 | Feature                                 | Area       | Schema changes                                               | Backend                                                      | Frontend                                                     | Notes                                                        |
 | --------------------------------------- | ---------- | ------------------------------------------------------------ | ------------------------------------------------------------ | ------------------------------------------------------------ | ------------------------------------------------------------ |
 | can_access_sample() / can_see_sample()  | Auth       | none                                                         | backend/auth/guards.py — single source of truth              | none                                                         | Platform Admin → lab member → PUBLIC → oversight (surveillance_relevant=TRUE) → approved request. |
-| Oversight authority access              | Auth       | organizations.has_oversight_access                           | is_oversight_authority resolved from org + role in get_current_user() | none                                                         | ADHS Lab Directors and Bioinformatics Users. Scoped to surveillance_relevant=TRUE only. |
+| Oversight authority access              | Auth       | organizations.has_oversight_access                           | is_oversight_authority resolved from org + role in get_current_user() | none                                                         | Public-health-agency Lab Directors and Bioinformatics Users. Scoped to surveillance_relevant=TRUE only. |
 | Surveillance relevance logic            | Governance | reportable_organisms table                                   | compute_surveillance_relevant(), validate_surveillance_relevant(), post-pipeline recompute for metagenomics, governance board workflow | platform_admin.py — governance override queue                | Organism-driven default.                                     |
 | Sample access request workflow          | Access     | sample_access_requests table                                 | POST/GET/PATCH/DELETE /api/v1/sample-access/. Background job. Four notification events. | access_requests.py — incoming queue, outgoing status, 90-day countdown | Configurable per org.                                        |
 | Deletion lifecycle                      | Governance | deletion_requests, deleted_samples, samples.is_deleted/deleted_at/deletion_stage | Staged archive→soft-delete→hard-delete. Three-party hard-delete. Lab departure DEPARTING status. Background GCS lifecycle job. 72h fast-path. | platform_admin.py — deletion queue, approval chain UI        | Tombstone immutable. Audit records preserved.                |
@@ -1360,7 +1315,7 @@ Last updated: April 2026 (session 2 — final pre-coding revision) Status: Livin
 | jackpot-sdk                          | Workspace | none           | New jackpot-sdk repo (or jackpot-cli repo). Session class with samples, pipelines, datasets, sra, references, workspace modules. register_from_notebook(), register_from_workspace(), add_package(), references.download(). R equivalent. | Pre-installed in all pods                                    | Compute-target agnostic.                                     |
 | jackpot-cli                          | Workspace | none           | New jackpot-cli repo. Commands: config set, auth login (1-year token), upload, upload-dir (file_detector pairing, --metadata-csv, filename stem inference), upload-globus, samples list, pipelines list/launch | pip install jackpot-cli                                      | Thin REST API wrapper. Enables bash script bulk uploads.     |
 | Workspace session management         | Workspace | none           | GET /api/v1/workspaces/, DELETE /api/v1/workspaces/{id}      | Global nav — active session link, session manager dropdown   |                                                              |
-| Sol HPC integration                  | Workspace | none           | batchspawner config for Slurm job spawning                   | Spawner profile option                                       | ASU-specific. Lower priority.                                |
+| Sol HPC integration                  | Workspace | none           | batchspawner config for Slurm job spawning                   | Spawner profile option                                       | Specific to one institutional HPC cluster. Lower priority.   |
 | Globus endpoint infrastructure       | Workspace | none           | jackpot-iac: GCS v5 deployment under university subscription, mapped staging collection (/incoming/ per lab), guest results collection (read-only). Globus Groups per lab mirroring JACKPOT lab membership. Globus Flows definition registered. Credential rotation job for external sequencing lab client credentials. | none (infra)                                                 | Coordinate with university Research Computing team early — they control GCS v5 install and subscription. |
 | Local minikube workspace environment | Workspace | none           | jackpot-iac: minikube setup guide and manifests for local JupyterHub testing. minikube start --driver=docker --cpus=4 --memory=4096. Enable ingress and gcp-auth addons. JupyterHub Helm chart deployed to minikube. minikube tunnel connects JupyterHub to FastAPI running in Docker Compose. | none (infra)                                                 | Added in Month 2 when workspace work begins. Docker Compose remains primary dev environment for all Month 1 work. minikube is for JupyterHub only — do not migrate the full stack. Apple Silicon note: nf-core and bioinformatics tool containers are often x86-only — use --platform linux/amd64 in local Nextflow config or use GCP Batch for pipeline test runs even in dev. kind cluster added to jackpot-iac for CI testing of Kubernetes manifests. |
 
@@ -1500,7 +1455,7 @@ Last updated: April 2026 (session 2 — final pre-coding revision) Status: Livin
 | EnteroBase federation — Salmonella/E. coli   | Typing      | none                                                         | EnteroBase API client (Warwick endpoint)                     | "Look up in EnteroBase" link                                 | 1.7M public strains for context.                             |
 | EnteroBase federation — TB                   | Typing      | none                                                         | EnteroBase TB API client (DSMZ endpoint, enterobase.dsmz.de) | "Look up in EnteroBase" link on TB samples                   | Separate API config from Warwick.                            |
 | Hub-and-spoke federation                     | Platform    | none                                                         | Multi-instance de-identified data sharing                    | none                                                         | IPSN-aligned. Rockefeller hub model.                         |
-| Sol HPC batchspawner                         | Workspace   | none                                                         | batchspawner config                                          | Spawner profile option                                       | ASU-specific.                                                |
+| Sol HPC batchspawner                         | Workspace   | none                                                         | batchspawner config                                          | Spawner profile option                                       | Specific to one institutional HPC cluster.                   |
 | GISAID EpiFlu and EpiPox                     | Submissions | none                                                         | Extend GISAID router and export for influenza and mpox schemas | gisaid_export.py — pathogen selector                         | Currently EpiCoV only.                                       |
 | LLM assistant — Level 1 (documentation RAG)  | AI/UX       | assistant_queries log table, pgvector extension on Cloud SQL | POST /api/v1/assistant/chat — embed query, retrieve top-k chunks, call LLM API with system context + retrieved chunks, return response + citations. Doc embedding pipeline (chunker + embedder + upsert). ASSISTANT_ENABLED, ASSISTANT_BACKEND, ASSISTANT_MODEL, ASSISTANT_VECTOR_DB, ASSISTANT_MAX_CHUNKS, ASSISTANT_CACHE_TTL env vars. | Slide-out help panel in nav, chat widget with message history and source citation display. | Covers orientation and how-to questions. No live data access. PRIDE/EBI chatbot is direct precedent. Write user docs first — assistant quality depends on doc quality. |
 | LLM assistant — Level 2 (tool-augmented RAG) | AI/UX       | none beyond Level 1                                          | Extend chat endpoint with tool definitions for read-only API endpoints. LLM decides when to call tools vs. retrieve docs. Tool calls use user session token — never service account. Covers data-specific questions. | none beyond Level 1                                          | Never give assistant write access. Level 2 only after Level 1 is stable and user-tested. |
@@ -1622,7 +1577,7 @@ Project storage: does not exist as a GCS path. Projects are a DB concept (named 
 
 Personal workspace: JupyterHub PVC (per-user Kubernetes persistent disk, 10GB default). Not for long-term sequence storage — working scratch only. Files promoted back to JACKPOT via session.samples.register_from_workspace().
 
-Future consideration: if ADHS requires per-lab IAM isolation (files provably inaccessible across lab boundaries at the GCS level), per-lab buckets would be needed. Current path-based model supports clean migration to that structure if a compliance requirement arises.
+Future consideration: if the operator requires per-lab IAM isolation (files provably inaccessible across lab boundaries at the GCS level), per-lab buckets would be needed. Current path-based model supports clean migration to that structure if a compliance requirement arises.
 
 ### 38. Session summary versioning workflow established
 
@@ -1632,7 +1587,7 @@ Workflow:
 
 - End of each session: Glen asks "Save and version the session summary"
 - Claude reads existing document from uploads/, appends current session summary from context window, increments version, saves to outputs/
-- Glen downloads → saves to ~/ASU/jackpot/docs/ on Mac
+- Glen downloads → saves to ~/jackpot/docs/ on Mac
 - Start of next session: Glen uploads saved document as attachment
 
 Companion script: scripts/new_session_stub.py — generates a blank session section stub for manual notes between Claude sessions.
@@ -2429,7 +2384,7 @@ This works on Glen's Mac. It fails on any machine that doesn't have
 Two compounding problems:
 
 1. `.gitmodules` in `jackpot-backend` declared the `nf` submodule with
-   `url = /Users/glen/ASU/jackpot/jackpot-nf` — a local filesystem path.
+   `url = /Users/glen/jackpot/jackpot-nf` — a local filesystem path.
    CI runners can't clone that. `jackpot-nf` hadn't been pushed to GitHub
    at all.
 2. `Dockerfile.api` did not `COPY nf/` into the image. Even if the
@@ -2723,7 +2678,7 @@ Submodule auth handled via explicit `insteadOf` injection step.
 
 # Cleanup A–J — Operator-agnostic genericization (2026-04-26 to 2026-04-28)
 
-Following the April 2026 pivot (JACKPOT becomes an independent project under `Midnight-Oil-Innovation/jackpot`, AGPL-3.0, no longer ADHS/ASU-coupled), the codebase needed every institutional reference removed so production code knows nothing about any specific operator. Operator names get learned at install time via the eventual `jackpot init` CLI, not embedded in source. The cleanup spanned 10 phases lettered A through J:
+Following the April 2026 pivot (JACKPOT becomes an independent project under `Midnight-Oil-Innovation/jackpot`, AGPL-3.0, no longer coupled to its prior institutional sponsors), the codebase needed every institutional reference removed so production code knows nothing about any specific operator. Operator names get learned at install time via the eventual `jackpot init` CLI, not embedded in source. The cleanup spanned 10 phases lettered A through J:
 
 | Letter | Scope                                              | Commit (parent) | Notes |
 |--------|----------------------------------------------------|-----------------|-------|
@@ -2744,7 +2699,7 @@ Following the April 2026 pivot (JACKPOT becomes an independent project under `Mi
 
 | Domain                    | Before                                             | After                       |
 |---------------------------|----------------------------------------------------|-----------------------------|
-| Organizations             | Linux Prophet, ADHS                                | Example Org                 |
+| Organizations             | the prior operator and partner-lab name strings    | Example Org                 |
 | Sequencing labs (org)     | Linux Prophet, Sonora Quest, LabCorp               | Example Org / Example Sequencing Lab / Example Reference Lab |
 | Sequencing labs (name)    | Otero Outpost, Sonora Quest Laboratories, Laboratory Corporation of America | Example Lab / Example Sequencing Lab / Example Reference Lab |
 | Labs (display_name)       | Otero Outpost                                      | Example Lab                 |
@@ -2820,7 +2775,7 @@ Schema additions: **~25 OrganismNameEnum entries**, new `ParasiteDevelopmentalSt
 
 10 default zoo pipelines under `Midnight-Oil-Innovation/jackpot-pipelines-eukaryotic` (single repo, one subdirectory per pipeline), AGPL-3.0, registered as Level-1 zoo entries via P0f BYOP infrastructure. 8 dashboard pages, one per pathogen group.
 
-Output: `jackpot_byop_and_eukaryotic_design.md` (1,456 lines, 25 backlog items split across Phase 24.5 / P0f / Phase 28).
+Output: `byop_and_eukaryotic_design.md` (1,456 lines, 25 backlog items split across Phase 24.5 / P0f / Phase 28).
 
 ## 3. Phasing rework
 
@@ -2883,7 +2838,7 @@ Three reference documents drive everything from here:
 
 - `jackpot_pathoplexus_loculus_overview.md` (1,873 lines) — peer-platform comparative analysis driving Phase 26
 - `jackpot_cdc_dmi_stlt_overview.md` (816 lines) — US public-health-data ecosystem alignment driving Phase 27 and Scenario T
-- `jackpot_byop_and_eukaryotic_design.md` (1,456 lines) — multi-engine BYOP infrastructure driving P0f, plus eukaryotic pipeline coverage driving Phase 28
+- `byop_and_eukaryotic_design.md` (1,456 lines) — multi-engine BYOP infrastructure driving P0f, plus eukaryotic pipeline coverage driving Phase 28
 - `jackpot_claude_code_playbook.md` (693 lines) — operational guide for Claude Code with parallel agents
 
 `spec.md` is at v2.2; `todo.md` reflects the 7-scenario model and full phase chain; `CLAUDE.md` enforces Critical Rule 55 (operator-agnostic production code); memory edits capture the pivot, AGPL flip, multi-deployment architecture, two-PII-gate architecture, and reference document map.
@@ -2985,7 +2940,7 @@ Phase 22 — the post-P0d periodic review checkpoint that surfaces drift, regres
 
 Four subagents ran read-only audits in parallel against the post-P0d working tree:
 
-- **Agent 1 — Critical Rules compliance.** Audited all 55 rules from `docs/CLAUDE.md`. Verified 44 clean. Confirmed 5 inherited Rule 55 violations (`backend/setup/write_files*.py`, baseline migration `5adf11b77c19`, `Chart.yaml`, `bootstrap_project.sh`) plus 2 NEW HIGH violations introduced in P0d's CLI work (`cli/jackpot/cli/upload.py:442` operator paths, `cli/jackpot/cli/main.py:25,47` ADHS URL example, plus dead `ADHS_ORGANIZATION_NAME` env var in Helm values). 3 medium + 2 low Rule 18/24/54 findings. Production `backend/backend/` core verified clean.
+- **Agent 1 — Critical Rules compliance.** Audited all 55 rules from `docs/CLAUDE.md`. Verified 44 clean. Confirmed 5 inherited Rule 55 violations (`backend/setup/write_files*.py`, baseline migration `5adf11b77c19`, `Chart.yaml`, `bootstrap_project.sh`) plus 2 NEW HIGH violations introduced in P0d's CLI work (`cli/jackpot/cli/upload.py:442` operator paths, `cli/jackpot/cli/main.py:25,47` prior-operator URL example, plus dead `<PRIOR_OPERATOR>_ORGANIZATION_NAME` env var in Helm values). 3 medium + 2 low Rule 18/24/54 findings. Production `backend/backend/` core verified clean.
 
 - **Agent 2 — Spec→implementation drift.** Audited spec.md §1, §3, §4, §5 (router endpoint lists), §10, §11, §12, §13. 8 spec-says-code-doesn't items (notable: `POST /api/v1/auth/refresh` declared complete but missing; `STORAGE_BACKEND` env var documented but not in `config.py` — factory infers from `storage_endpoint`; spec §10 frontend path is pre-P0d). 7 code-not-in-spec items (`permissions.py`, `middleware.py`, `logging_config.py`, `version.py`, `pipeline_schemas/` package, `harmonizer.py`, undocumented `GET /api/v1/pipelines/`). 3 decisions-log conflicts — most concerning: `backend/backend/storage/*.py` SPDX headers say `Apache-2.0` while project flipped to AGPL-3.0.
 
@@ -3042,7 +2997,7 @@ P0e shipped the `jackpot init` operator-bootstrap CLI plus 13 cleanup items the 
 - A.4: `Chart.yaml` maintainer → Midnight-Oil-Innovation; icon URL dropped.
 - A.5: `bootstrap_project.sh` takes `<github-org>` as 4th positional arg; runtime WIF restriction parameterized; gotero3 example replaced with placeholder.
 - A.6: `cli/jackpot/cli/upload.py` operator strings (`/scratch/otero/sequences/`, `asu-sol`) genericized.
-- A.7: `cli/jackpot/cli/main.py` ADHS URL → `your-jackpot-instance.org`; dead `ADHS_ORGANIZATION_NAME` env var deleted from 3 deploy files; `AZ-2026` sample IDs in CLI/SDK examples → `EX-2026`.
+- A.7: `cli/jackpot/cli/main.py` prior-operator URL → `your-jackpot-instance.org`; dead `<PRIOR_OPERATOR>_ORGANIZATION_NAME` env var deleted from 3 deploy files; `AZ-2026` sample IDs in CLI/SDK examples → `EX-2026`.
 - A.8: `values-staging.yaml` parameterized; deploy workflow plumbs `--set env.X=...` from `vars.GCP_PROJECT_ID` etc; staging_access.md and .env.staging.example genericized.
 
 **Stream B — `jackpot init` design + implementation (10 commits)**
@@ -3097,18 +3052,18 @@ P0e leaves JACKPOT in a substantially-better-deploy-able state. Any non-Glen ope
 4. Run `docker compose --env-file instances/local/.env.local up -d`
 5. Run `uv run jackpot init bootstrap --instance local`
 
-— and end up with a running instance configured for their operator type, with zero hardcoded `gotero@linuxprophet.com` / `ADHS` / `gotero3-acdp-488517` strings in production code paths. The 5 inherited CRITICAL Rule 55 violations are resolved; the 6 inherited values-staging.yaml violations are parameterized; the 2 NEW HIGH violations from P0d are gone.
+— and end up with a running instance configured for their operator type, with zero hardcoded operator-identity strings (operator email, prior-operator institutional name, GCP project ID, etc.) in production code paths. The 5 inherited CRITICAL Rule 55 violations are resolved; the 6 inherited values-staging.yaml violations are parameterized; the 2 NEW HIGH violations from P0d are gone.
 
 Pending architectural follow-ups, in expected order:
 
 - **Phase 24.5** — sovereignty + BYOP design lockdown (gates P0b)
-- **P0f** — BYOP infrastructure (10 backlog items from `jackpot_byop_and_eukaryotic_design.md`)
+- **P0f** — BYOP infrastructure (10 backlog items from `byop_and_eukaryotic_design.md`)
 - **P0b** — Schema v5.0 (instances + tenants + federated_peers + BYOP/eukaryotic schema)
 - **P0c** — multi-tenancy middleware + sovereignty deletion path
 - **B-FED-1** — central CA federation peer authentication (triggered when network exceeds 5 instances or a revocation event happens)
 - **P1** — `POST /api/v1/auth/refresh` (real token-rotation work)
 
-The next session work depends on Glen's call. If P0f-as-next, the design alignment is already there in `jackpot_byop_and_eukaryotic_design.md`. If something else, P0e leaves the codebase in a state that supports any of the planned phases without prerequisite cleanup.
+The next session work depends on Glen's call. If P0f-as-next, the design alignment is already there in `byop_and_eukaryotic_design.md`. If something else, P0e leaves the codebase in a state that supports any of the planned phases without prerequisite cleanup.
 
 
 ------
@@ -4257,7 +4212,7 @@ The rebase + review flow was:
 4. **Path-C patches (`38a2cd6`).** Status line moved to "Locked solo per option β" with PR #29 as the deferral source. §6 footnote reframed as "conservative + operator-tunable" without the NPAIHB-as-reviewer framing. §14 retitled "Open questions — operator-policy knobs"; eight questions kept verbatim (substantive design parameters); closing paragraph rewritten as "operator-policy knobs … future iteration can revise without schema churn" instead of "agent's job here is to surface the questions; the answers come from collaborator review." §1 + §15 cross-references added to PRV-A.
 5. **Squash-merge.** `cca556a` on `origin/development`.
 
-The design doc is now the locked spec for P0b's schema migration. The sister BYOP/eukaryotic lockdown (`docs/jackpot_byop_and_eukaryotic_design.md`) is the remaining 24.5 artifact and already exists; together they gate P0b.
+The design doc is now the locked spec for P0b's schema migration. The sister BYOP/eukaryotic lockdown (`docs/byop_and_eukaryotic_design.md`) is the remaining 24.5 artifact and already exists; together they gate P0b.
 
 ### 6. The worktree-per-PR pattern
 
@@ -4297,7 +4252,7 @@ E-1 artifacts in place, P0h Slurm campaign closed at six-of-ten, two P0 bugs fin
 
 **Pending architectural follow-ups, in expected order:**
 
-- **BYOP/eukaryotic design lockdown** is the remaining Phase 24.5 artifact (`docs/jackpot_byop_and_eukaryotic_design.md` exists; cross-referenced in the sovereignty doc and the spec; ready for P0b consumption).
+- **BYOP/eukaryotic design lockdown** is the remaining Phase 24.5 artifact (`docs/byop_and_eukaryotic_design.md` exists; cross-referenced in the sovereignty doc and the spec; ready for P0b consumption).
 - **P0b** — Schema v5.0 migration consuming both 24.5 lockdowns. The sovereignty doc's §12 + the BYOP doc's §§7 + 12 are the build spec; P0b's planner should treat both lists as exhaustive for the lockdown scope.
 - **P0c** — multi-tenancy middleware + sovereignty deletion implementation (`B-CARE-3a..g` from the sovereignty doc + the launch_account validation hook stubbed in H-3 + the lab-tenancy invariants).
 - **G-5** — profile CRUD HTTP endpoints. H-5's validation predicate has an explicit integration point; today operators manage profiles via DB seed only.
@@ -4343,111 +4298,3 @@ Operational detail learned earlier in the session and worth repeating here: `gh 
 ### Why this addendum exists as v3.4.1 rather than rolling into v3.4
 
 Both surfacings happened *after* PR #44 (v3.4) merged. Capturing them as a follow-up changelog entry (v3.4.1) rather than rewriting the v3.4 entry preserves the audit trail of "v3.4 was the campaign close-out; v3.4.1 was the discoverability + operational-cleanup follow-on." Same-day patch bumps are an accepted pattern in this doc's version history (v3.2 → v3.2.1 had the same shape: a post-merge addendum added the next-relevant context without rewriting the prior summary).
-
-------
-
-## Session 21 addendum #2 (v3.4.2) — orphan-branch cleanup + canonical merge sequence
-
-### What got surfaced
-
-`git ls-remote --heads origin` after the v3.4.1 PR merged showed **eight orphan remote branches still on origin**:
-
-- One H-4 sibling — `p0h-h4-pipeline-runs-log-poller`. Distinct from this session's `p0h-h4-weblog-poller` (PR #38). Carried two orphan commits: `a98214b` (the H-4 work that briefly landed there during the silent-branch-switch incident in PR #38, recovered via cherry-pick onto the right branch but never cleaned up) and `ec3bce2` (the maintainer's "updates to spec and todo" commit whose content — `docs/jackpot_pathoplexus_loculus_overview.md` deletion, `backend/backend/federation/README.md` +1 line, `todo.md` +2 lines for `B-LOC-FED-1` — was already on `origin/development` via other PRs).
-- Seven from this session's merged PRs that `gh pr merge --delete-branch` should have cleaned up but didn't: `fix12-doc-cleanup` (#43), `p0h-h5` (#40), `p0h-h6` (#41), `p0h-h10` (#42), `phase-24-5-sovereignty-design` (#20), `session-summary-update` (#44), `session-summary-addendum` (#45). Each carried a single squash-merged commit already on `origin/development`; deletion is information-preserving.
-
-All eight deleted via `git push origin --delete <branch>`. Remote then carries four branches total: `development`, `main`, and two pre-this-session orphans (`p0g/g3-g4-profile-templates-nf-config`, `r3-doc-and-tracking-hygiene`) left untouched as not-mine-to-clean-up.
-
-### Why the orphans accumulated
-
-`gh pr merge --delete-branch` does two deletes in sequence: a remote-side branch-delete (succeeds for any merged branch with no protection rule), and a local-side branch-delete (succeeds when the branch is *not* checked out anywhere). If the local-delete fails, gh aborts the whole sequence — *including* the remote-delete that would have succeeded on its own.
-
-The worktree-per-PR pattern has the worktree checking out the PR branch. When `gh pr merge` fires *from inside the worktree* (or even just while the worktree is active), the local-delete trips on "cannot delete branch ... used by worktree at ...". Every PR authored from a worktree this session hit this and left an orphan on origin.
-
-I missed it during the session because each merge produced output like:
-
-```
-failed to delete local branch p0h-h5: failed to run git: error: cannot delete branch 'p0h-h5' used by worktree at '/Users/glen/Projects/jackpot_p0h-h5'
-
-MERGED 2026-05-09T06:10:20Z
-```
-
-The `MERGED` line was visible; the prior `failed to delete local branch` line was scanned as a known-good "I'll clean up the worktree later" message. It wasn't — it was gh telling me the remote delete had been skipped too.
-
-### Canonical merge sequence going forward
-
-```bash
-cd /Users/glen/Projects/jackpot              # leave the worktree first
-gh pr merge <N> --squash --delete-branch     # both deletes succeed
-git worktree remove ../jackpot_<branch>      # cleans the dir; the
-                                              # already-deleted local
-                                              # branch is no-op
-```
-
-The change is one command earlier than v3.4.1's version (the `cd` step before `gh pr merge`). It's the operational fix to the worktree-vs-merge-cleanup friction.
-
-This PR (`session-summary-v342`) is the first verification that the new sequence works end-to-end — authored from `../jackpot_v342_addendum`, committed inside the worktree, pushed, PR opened, then `cd /Users/glen/Projects/jackpot` followed by `gh pr merge 46 --squash --delete-branch` followed by `git worktree remove ../jackpot_v342_addendum`. No further orphan-branch survey needed if it works.
-
-### Why this is a v3.4.2 patch rather than rolling into v3.4.1
-
-Same pattern as v3.4.1 → v3.4: a follow-on capture-of-what-happened rather than a rewrite. v3.4.1 codified the worktree-cleanup *order* (`git worktree remove` then `git branch -D`); v3.4.2 codifies the *full* merge sequence with the new `cd` step that fixes the orphan-creation problem. The two together form the complete operational pattern.
-
-> **Note from v3.4.3 (see below):** the `cd` step prescribed above turned out to be irrelevant. The v3.4.2 PR (#46) was meant to verify the sequence end-to-end and instead demonstrated that it doesn't work as claimed. The corrected sequence is in §"Session 21 addendum #3 (v3.4.3)".
-
-------
-
-## Session 21 addendum #3 (v3.4.3) — correcting v3.4.2's empirically-wrong merge sequence
-
-### What v3.4.2 claimed and what actually happened
-
-v3.4.2 (PR #46, merged 2026-05-12) prescribed this "canonical merge sequence":
-
-```bash
-cd /Users/glen/Projects/jackpot              # leave the worktree
-gh pr merge <N> --squash --delete-branch     # both deletes succeed
-git worktree remove ../jackpot_<branch>      # cleans the dir; no-op
-```
-
-PR #46 itself was supposed to be the first end-to-end verification. On execution, the second step produced:
-
-```
-failed to delete local branch session-summary-v342: failed to run git: error: cannot delete branch 'session-summary-v342' used by worktree at '/Users/glen/Projects/jackpot_v342_addendum'
-```
-
-— exactly the same failure mode v3.4.2 was supposed to fix. The PR merged on origin, but the source branch `session-summary-v342` survived as a new orphan and had to be cleaned up manually via `git push origin --delete session-summary-v342` and `git branch -D session-summary-v342`.
-
-The v3.4.2 doc, having been authored from inside the worktree and committed before the merge was attempted, recorded a claim that turned out to be false on the very next operation.
-
-### Why the `cd` step doesn't matter
-
-`gh pr merge --delete-branch` shells out to `git branch -d <branch>` for the local-side cleanup. The git documentation for `branch -d` is explicit: the command fails when `<branch>` is **checked out in any worktree**, regardless of where the invoking process's current working directory sits. Leaving the worktree's directory does not un-pin the branch; only `git worktree remove <path>` does.
-
-The v3.4.2 hypothesis treated the failure as a "you're inside the worktree" problem when it was actually a "the worktree exists at all" problem.
-
-### Corrected canonical sequence
-
-```bash
-git worktree remove ../jackpot_<branch>      # remove worktree FIRST
-                                              # — frees the branch
-                                              # from worktree-pinning
-gh pr merge <N> --squash --delete-branch     # NOW both deletes succeed
-```
-
-Two commands instead of three. The cwd doesn't matter — what matters is that no worktree references the branch by the time `gh pr merge` runs.
-
-The trade-off is small: between the worktree-remove and the merge, the local checkout's working tree for that branch is gone. If something goes wrong (network flake, CI race, merge conflict that wasn't visible pre-attempt), the branch is still recoverable from `origin/<branch>` plus the local reflog. In practice nothing's lost.
-
-### Verification path for v3.4.3
-
-This PR (`session-summary-v343`, PR #47) is the empirical test:
-
-1. Author content inside `../jackpot_v343` worktree, commit, push, open PR
-2. Confirm CI green
-3. Run `git worktree remove /Users/glen/Projects/jackpot_v343` from the primary checkout
-4. Run `gh pr merge 47 --squash --delete-branch`
-5. Verify the source branch is GONE on origin (no orphan)
-
-If step 5 shows the branch is gone, v3.4.3's claim holds and we have an empirically-verified canonical sequence. If it shows the branch survives, v3.4.4 will be needed and we will learn something new about how gh / git handle this.
-
-### Why this is a v3.4.3 patch rather than rewriting v3.4.2
-
-Same pattern preservation as before. v3.4.2 captured "we tried this and thought it would work"; v3.4.3 captures "we tried it, it didn't, here's what actually does." The audit trail is more useful than a clean-revisionist single entry — future readers (including the agent) hitting similar gh-worktree friction can read the progression and learn the lesson without re-running the experiment.

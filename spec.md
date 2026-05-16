@@ -2,7 +2,7 @@
 
 **Version:** 2.2
 **Last updated:** 2026-04-29 (post-BYOP and eukaryotic pipelines design session)
-**Status:** Month 1 + most of Month 2 complete — Phase 21 UI page triage closing out, P0d monorepo migration starting now. Pivot to independence + AGPL-3.0 + multi-deployment-target architecture decided April 2026; cleanup phases (6.1–11) complete. Three architectural design documents now drive the post-P0d roadmap: `jackpot_pathoplexus_loculus_overview.md` (peer-platform adoption — Phase 26), `jackpot_cdc_dmi_stlt_overview.md` (US public-health-data ecosystem alignment — Phase 27), `jackpot_byop_and_eukaryotic_design.md` (BYOP infrastructure for P0f, eukaryotic pathogen pipelines for Phase 28).
+**Status:** Month 1 + most of Month 2 complete — Phase 21 UI page triage closing out, P0d monorepo migration starting now. Pivot to independence + AGPL-3.0 + multi-deployment-target architecture decided April 2026; cleanup phases (6.1–11) complete. Three architectural design documents now drive the post-P0d roadmap: `jackpot_pathoplexus_loculus_overview.md` (peer-platform adoption — Phase 26), `jackpot_cdc_dmi_stlt_overview.md` (US public-health-data ecosystem alignment — Phase 27), `byop_and_eukaryotic_design.md` (BYOP infrastructure for P0f, eukaryotic pathogen pipelines for Phase 28).
 **Audience:** Claude Code autonomous agent + the maintainer
 
 ---
@@ -24,7 +24,7 @@
 >
 > - `jackpot_pathoplexus_loculus_overview.md` — comparative analysis between JACKPOT and the open-source pathogen-genomics ecosystem (Pathoplexus/Loculus + 8 peer platforms). Drives Phase 26.
 > - `jackpot_cdc_dmi_stlt_overview.md` — alignment with US public-health-data ecosystem (CDC DMI / North Star Architecture, STLT operators, CARE Principles for Indigenous data sovereignty). Drives Phase 27 and the sovereignty-aligned runtime policy capabilities described in `docs/architecture.md` §22.
-> - `jackpot_byop_and_eukaryotic_design.md` — multi-engine BYOP architecture (Nextflow + Snakemake + WDL + manifest-wrapped scripts) with two-stage validation gating, plus full-parity eukaryotic pathogen support across 8 pathogen groups. Drives P0f and Phase 28.
+> - `byop_and_eukaryotic_design.md` — multi-engine BYOP architecture (Nextflow + Snakemake + WDL + manifest-wrapped scripts) with two-stage validation gating, plus full-parity eukaryotic pathogen support across 8 pathogen groups. Drives P0f and Phase 28.
 
 Build **JACKPOT** — a pathogen genomics platform for genomic epidemiology, bioinformatics analysis, and public-health research.
 
@@ -267,7 +267,7 @@ a peer system at a different layer (not a competitor).
 Two design documents must be locked in before P0b touches the schema:
 `docs/architecture/sovereignty-compliant-deletion.md` (sovereignty-
 compliant deletion design — Phase 24.5) and
-`docs/jackpot_byop_and_eukaryotic_design.md` (multi-engine BYOP
+`docs/byop_and_eukaryotic_design.md` (multi-engine BYOP
 infrastructure plus full-parity eukaryotic pathogen support — Phase
 24.5 schema scope and Phase 24.7 / P0f-BYOP behavior scope). P0b's
 migration plan must accommodate every column, enum, table, and
@@ -2562,7 +2562,7 @@ These three documents are the source of truth for the post-P0d roadmap. Cross-re
 
 - **`jackpot_cdc_dmi_stlt_overview.md`** (816 lines, 2026-04-28) — Alignment with US public-health-data ecosystem. Source of truth for: CDC DMI history and North Star Architecture goals (§1), STLT public health landscape with extra weight on Indigenous data sovereignty (§2), CARE Principles formal adoption (§2.3c), four install scenarios with sovereignty-aligned runtime policy capabilities (§6 — per the Cluster A merge, sovereignty is a runtime policy applicable to any scenario rather than a separate Scenario T), tombstone-and-vacuum architectural pattern for sovereignty-compliant deletion (§7), Tribal Epidemiology Center federation pattern (§8), JACKPOT vs NBS/eCR/AIMS layer-cake (§9), funding-source map for STLT operators (§10), Phase 27 backlog of 14 items grouped K-M.
 
-- **`jackpot_byop_and_eukaryotic_design.md`** (1,456 lines, 2026-04-29) — Multi-engine BYOP infrastructure plus full-parity eukaryotic pathogen support. Source of truth for: four-engine BYOP architecture — Nextflow, Snakemake, WDL, manifest-wrapped scripts (§1-3), `jackpot-pipeline.yaml` manifest schema (§2), four source types — public/private Git, tarball upload, Docker image (§4), two-stage validation gating with sandbox dry-run isolation (§5), pipeline lifecycle state machine (§6), schema additions for `byop_pipelines` table and 8 eukaryotic pipeline-result tables (§7, §12), 8 default eukaryotic pathogen pipelines (§13), 25 backlog items split across Phase 24.5 schema lockdown (4 items), Phase 24.7 / P0f BYOP infrastructure (10 items), Phase 28 default eukaryotic pipelines + parsers + dashboards (11 items, internally tier-prioritized).
+- **`byop_and_eukaryotic_design.md`** (1,456 lines, 2026-04-29) — Multi-engine BYOP infrastructure plus full-parity eukaryotic pathogen support. Source of truth for: four-engine BYOP architecture — Nextflow, Snakemake, WDL, manifest-wrapped scripts (§1-3), `jackpot-pipeline.yaml` manifest schema (§2), four source types — public/private Git, tarball upload, Docker image (§4), two-stage validation gating with sandbox dry-run isolation (§5), pipeline lifecycle state machine (§6), schema additions for `byop_pipelines` table and 8 eukaryotic pipeline-result tables (§7, §12), 8 default eukaryotic pathogen pipelines (§13), 25 backlog items split across Phase 24.5 schema lockdown (4 items), Phase 24.7 / P0f BYOP infrastructure (10 items), Phase 28 default eukaryotic pipelines + parsers + dashboards (11 items, internally tier-prioritized).
 
 ### Operational runbooks
 

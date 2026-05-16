@@ -21,7 +21,7 @@ The actual anchor documents in the repo (referenced throughout the other 8 docs 
 | `docs/federation.md` + `docs/federation_operations.md` | Federation architecture (3 levels) and operator-facing federation reference |
 | `docs/wastewater.md` + `docs/wastewater_software_landscape.md` | Wastewater surveillance schema and OSS-software comparative landscape |
 | `docs/deploy/gcp.md` | GCP deployment guide (post-Cluster-F merge; absorbed three predecessor docs) |
-| `jackpot_byop_and_eukaryotic_design.md` | Multi-engine BYOP + 8 eukaryotic pathogen groups (design doc, not yet absorbed into a canonical reference) |
+| `byop_and_eukaryotic_design.md` | Multi-engine BYOP + 8 eukaryotic pathogen groups (design doc, not yet absorbed into a canonical reference) |
 | `docs/architecture/sovereignty-compliant-deletion.md` | Phase 24.5 design lockdown (PR #20, merged Session 21) |
 | `docs/e2e_uat_plan.md` | E-1 laptop UAT plan, 6-role RBAC walkthrough (Session 21) |
 
@@ -181,7 +181,7 @@ The chat's Sol cluster federation simulation isn't relevant for Glen's laptop-Sc
 | Sovereignty / CARE / STLT context | `docs/strategic_vision.md` §§3-4 + `docs/architecture.md` v6.0 §22 (sovereignty-as-runtime-policy) + `docs/architecture/sovereignty-compliant-deletion.md` |
 | Federation architecture (Track 1 + Track 2 seam) | `backend/backend/federation/README.md` + `docs/immune_platform.md` Part 1 (post-Cluster-B merge; was `Jackpot_AIS.md`) |
 | Open-source pathogen-genomics ecosystem | `docs/platform_landscape.md` (post-Cluster-E consistency pass; was `jackpot_pathoplexus_loculus_overview.md`) |
-| BYOP and eukaryotic pathogen support | `jackpot_byop_and_eukaryotic_design.md` |
+| BYOP and eukaryotic pathogen support | `byop_and_eukaryotic_design.md` |
 | E-1 laptop UAT execution | `docs/e2e_uat_plan.md` + `tests/e2e/scripts/` |
 
 These are the actual entry points. The chat's 9 summary docs (this set) are background context informed by these, not substitutes for them.
