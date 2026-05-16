@@ -210,19 +210,19 @@ The no-copy default behaves the same on every deployment, but the
 practical shape changes a little depending on where you have JACKPOT
 installed.
 
-**Laptop (Scenario A).** Your data lives in your project directories,
+**Laptop (Scenario A laptop case).** Your data lives in your project directories,
 or anywhere else you keep files locally. JACKPOT registers them as
 EXTERNAL and reads from your filesystem at pipeline time. MinIO is
 optional — if you skip it, any MANAGED files (pipeline outputs,
 promoted files) land under `~/.jackpot/data/` on your local disk.
 
-**Single lab server (Scenario B).** Your data lives on a lab NAS or a
+**Single lab server (Scenario A multi-server case).** Your data lives on a lab NAS or a
 shared drive that the JACKPOT host can mount. Registered files are
 EXTERNAL. Pipelines running on a local Slurm cluster see the same
 paths through the same mounts and read the same bytes — zero copies,
 zero staging.
 
-**University research computing (Scenario C).** Your data lives on
+**University research computing (Scenario B HPC).** Your data lives on
 Lustre, GPFS, or whatever shared parallel filesystem your cluster
 provides. Registered files are EXTERNAL. Pipelines running on the
 cluster mount the same filesystem and read in place. JACKPOT does not

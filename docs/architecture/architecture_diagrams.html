@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>JACKPOT Architecture Diagrams</title>
+<style>
+:root {
+  --bg:#f8f7f4;--surface:#ffffff;--border:#e2ddd5;
+  --text:#1a1714;--muted:#6b6560;--light:#9b9490;
+  --schema:#1e6b4a;--schema-bg:#e8f5ee;--schema-b:#a8d5bc;
+  --gen:#1a4a7a;--gen-bg:#e8f0f9;--gen-b:#a8c4e0;
+  --art:#7a3a1a;--art-bg:#f9f0e8;--art-b:#e0c4a8;
+  --con:#4a1a7a;--con-bg:#f0e8f9;--con-b:#c4a8e0;
+  --alb:#7a1a2a;--alb-bg:#f9e8ec;--alb-b:#e0a8b4;
+  --accent:#d4500a;--arrow:#4a4540;
+  --font-sans: 'IBM Plex Sans', system-ui, sans-serif;
+  --font-mono: 'IBM Plex Mono', 'Courier New', monospace;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  background: var(--bg);
+  padding: 40px;
+  max-width: 1100px;
+  margin: 0 auto;
+}
+</style>
+</head>
+<body>
+<div style="display:flex;flex-direction:column;gap:36px;padding:8px 0;background:#f8f7f4">
+
+<!-- ════ SVG 1: PLATFORM ARCHITECTURE ════ -->
+<svg width="100%" viewBox="0 0 960 752" style="display:block">
+<title>JACKPOT platform architecture</title>
+<defs>
+<marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+<path d="M1 2L8 5L1 8" fill="none" stroke="#6b6560" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path>
+</marker>
+</defs>
+
+<text x="480" y="26" text-anchor="middle" font-family="var(--font-sans)" font-size="19" font-weight="600" fill="#1a1714">JACKPOT — platform architecture</text>
+
+<!-- ── LAYER 1: USER INTERFACES (y=40, h=104) ── -->
+<rect x="20" y="40" width="920" height="104" rx="10" fill="#e8f5ee" stroke="#a8d5bc" stroke-width="1.5"></rect>
+<rect x="20" y="40" width="6" height="104" rx="3" fill="#1e6b4a"></rect>
+<text x="38" y="58" font-family="var(--font-sans)" font-size="10" font-weight="700" fill="#1e6b4a" letter-spacing="1.8">USER INTERFACES</text>
+
+<rect x="34" y="66" width="226" height="66" rx="8" fill="white" stroke="#a8d5bc" stroke-width="1.5"></rect>
+<text x="147" y="92" text-anchor="middle" font-family="var(--font-sans)" font-size="14" font-weight="600" fill="#1e6b4a">Streamlit UI</text>
+<text x="147" y="114" text-anchor="middle" font-family="var(--font-sans)" font-size="11" fill="#6b6560">analyst portal · Python</text>
+
+<rect x="278" y="66" width="226" height="66" rx="8" fill="white" stroke="#a8d5bc" stroke-width="1.5"></rect>
+<text x="391" y="92" text-anchor="middle" font-family="var(--font-sans)" font-size="14" font-weight="600" fill="#1e6b4a">jackpot-cli SDK</text>
+<text x="391" y="114" text-anchor="middle" font-family="var(--font-sans)" font-size="11" fill="#6b6560">lab upload · rclone · rsync · HTTP</text>
+
+<text x="660" y="92" text-anchor="middle" font-family="var(--font-sans)" font-size="12" fill="#9b9490">browser / workstation</text>
+<text x="660" y="112" text-anchor="middle" font-family="var(--font-sans)" font-size="11" fill="#9b9490">Google OAuth cookie flow</text>
+
+<circle cx="260" cy="66" r="10" fill="#d4500a" stroke="white" stroke-width="2.5"></circle>
+<text x="260" y="70" text-anchor="middle" font-family="var(--font-sans)" font-size="11" font-weight="700" fill="white">4</text>
+
+<line x1="480" y1="147" x2="480" y2="171" stroke="#6b6560" stroke-width="1.5" marker-end="url(#ar)"></line>
+
+<!-- ── LAYER 2: FASTAPI BACKEND (y=174, h=128) ── -->
+<rect x="20" y="174" width="920" height="128" rx="10" fill="#e8f0f9" stroke="#a8c4e0" stroke-width="1.5"></rect>
+<rect x="20" y="174" width="6" height="128" rx="3" fill="#1a4a7a"></rect>
+<text x="38" y="192" font-family="var(--font-sans)" font-size="10" font-weight="700" fill="#1a4a7a" letter-spacing="1.8">FASTAPI BACKEND</text>
+
+<rect x="34" y="198" width="187" height="88" rx="8" fill="white" stroke="#a8c4e0" stroke-width="1.5"></rect>
+<text x="127" y="226" text-anchor="middle" font-family="var(--font-sans)" font-size="14" font-weight="600" fill="#1a4a7a">Middleware</text>
+<text x="127" y="250" text-anchor="middle" font-family="var(--font-sans)" font-size="11" fill="#6b6560">RequestID</text>
+<text x="127" y="272" text-anchor="middle" font-family="var(--font-sans)" font-size="11" fill="#6b6560">CORS</text>
+
+<rect x="239" y="198" width="289" height="88" rx="8" fill="white" stroke="#a8c4e0" stroke-width="1.5"></rect>
+<text x="383" y="226" text-anchor="middle" font-family="var(--font-sans)" font-size="14" font-weight="600" fill="#1a4a7a">Auth</text>
+<text x="383" y="250" text-anchor="middle" font-family="var(--font-sans)" font-size="11" fill="#6b6560">Google OAuth · JWT cookies</text>
+<text x="383" y="272" text-anchor="middle" font-family="var(--font-sans)" font-size="11" fill="#6b6560">6-role RBAC · guards.py</text>
+
+<rect x="546" y="198" width="356" height="88" rx="8" fill="white" stroke="#a8c4e0" stroke-width="1.5"></rect>
+<text x="724" y="226" text-anchor="middle" font-family="var(--font-sans)" font-size="14" font-weight="600" fill="#1a4a7a">21 routers</text>
+<text x="724" y="250" text-anchor="middle" font-family="var(--font-sans)" font-size="11" fill="#6b6560">orgs · labs · users · domains · tokens</text>
+<text x="724" y="272" text-anchor="middle" font-family="var(--font-sans)" font-size="11" fill="#6b6560">ingest · samples · pipelines · …</text>
+
+<circle cx="902" cy="198" r="10" fill="#1e6b4a" stroke="white" stroke-width="2.5"></circle>
+<text x="902" y="202" text-anchor="middle" font-family="var(--font-sans)" font-size="11" font-weight="700" fill="white">3</text>
+
+<circle cx="528" cy="198" r="10" fill="#d4500a" stroke="white" stroke-width="2.5"></circle>
+<text x="528" y="202" text-anchor="middle" font-family="var(--font-sans)" font-size="11" font-weight="700" fill="white">5</text>
+
+<line x1="480" y1="305" x2="480" y2="329" stroke="#6b6560" stroke-width="1.5" marker-end="url(#ar)"></line>
+
+<!-- ── LAYER 3: BUSINESS LOGIC (y=332, h=104) ── -->
+<rect x="20" y="332" width="920" height="104" rx="10" fill="#f9f0e8" stroke="#e0c4a8" stroke-width="1.5"></rect>
+<rect x="20" y="332" width="6" height="104" rx="3" fill="#7a3a1a"></rect>
+<text x="38" y="350" font-family="var(--font-sans)" font-size="10" font-weight="700" fill="#7a3a1a" letter-spacing="1.8">BUSINESS LOGIC</text>
+
+<rect x="34" y="356" width="152" height="68" rx="8" fill="white" stroke="#e0c4a8" stroke-width="1.5"></rect>
+<text x="110" y="382" text-anchor="middle" font-family="var(--font-mono)" font-size="13" font-weight="600" fill="#7a3a1a">validator</text>
+<text x="110" y="404" text-anchor="middle" font-family="var(--font-sans)" font-size="11" fill="#6b6560">3 tiers · enums · sector</text>
+
+<rect x="204" y="356" width="172" height="68" rx="8" fill="white" stroke="#e0c4a8" stroke-width="1.5"></rect>
+<text x="290" y="382" text-anchor="middle" font-family="var(--font-mono)" font-size="13" font-weight="600" fill="#7a3a1a">file_detector</text>
+<text x="290" y="404" text-anchor="middle" font-family="var(--font-sans)" font-size="11" fill="#6b6560">pair · lane · chunk · type</text>
+
+<rect x="394" y="356" width="132" height="68" rx="8" fill="white" stroke="#e0c4a8" stroke-width="1.5"></rect>
+<text x="460" y="382" text-anchor="middle" font-family="var(--font-mono)" font-size="13" font-weight="600" fill="#7a3a1a">epiweek</text>
+<text x="460" y="404" text-anchor="middle" font-family="var(--font-sans)" font-size="11" fill="#6b6560">MMWR · ISO</text>
+
+<rect x="544" y="356" width="162" height="68" rx="8" fill="white" stroke="#e0c4a8" stroke-width="1.5"></rect>
+<text x="625" y="382" text-anchor="middle" font-family="var(--font-mono)" font-size="13" font-weight="600" fill="#7a3a1a">harmonizer</text>
+<text x="625" y="404" text-anchor="middle" font-family="var(--font-sans)" font-size="11" fill="#6b6560">CSV mapping configs</text>
+
+<rect x="724" y="356" width="162" height="68" rx="8" fill="white" stroke="#e0c4a8" stroke-width="1.5"></rect>
+<text x="805" y="382" text-anchor="middle" font-family="var(--font-mono)" font-size="13" font-weight="600" fill="#7a3a1a">audit</text>
+<text x="805" y="404" text-anchor="middle" font-family="var(--font-sans)" font-size="11" fill="#6b6560">before / after state</text>
+
+<circle cx="34" cy="356" r="10" fill="#1e6b4a" stroke="white" stroke-width="2.5"></circle>
+<text x="34" y="360" text-anchor="middle" font-family="var(--font-sans)" font-size="11" font-weight="700" fill="white">1</text>
+
+<circle cx="886" cy="356" r="10" fill="#1e6b4a" stroke="white" stroke-width="2.5"></circle>
+<text x="886" y="360" text-anchor="middle" font-family="var(--font-sans)" font-size="11" font-weight="700" fill="white">2</text>
+
+<line x1="480" y1="439" x2="480" y2="463" stroke="#6b6560" stroke-width="1.5" marker-end="url(#ar)"></line>
+
+<!-- ── LAYER 4: STORAGE (y=466, h=104) ── -->
+<rect x="20" y="466" width="920" height="104" rx="10" fill="#f0e8f9" stroke="#c4a8e0" stroke-width="1.5"></rect>
+<rect x="20" y="466" width="6" height="104" rx="3" fill="#4a1a7a"></rect>
+<text x="38" y="484" font-family="var(--font-sans)" font-size="10" font-weight="700" fill="#4a1a7a" letter-spacing="1.8">STORAGE</text>
+
+<rect x="34" y="488" width="203" height="68" rx="8" fill="white" stroke="#c4a8e0" stroke-width="1.5"></rect>
+<text x="135" y="514" text-anchor="middle" font-family="var(--font-sans)" font-size="14" font-weight="600" fill="#4a1a7a">PostgreSQL 16</text>
+<text x="135" y="538" text-anchor="middle" font-family="var(--font-sans)" font-size="11" fill="#6b6560">Cloud SQL · Alembic</text>
+
+<rect x="255" y="488" width="203" height="68" rx="8" fill="white" stroke="#c4a8e0" stroke-width="1.5"></rect>
+<text x="356" y="514" text-anchor="middle" font-family="var(--font-sans)" font-size="14" font-weight="600" fill="#4a1a7a">MinIO → GCS</text>
+<text x="356" y="538" text-anchor="middle" font-family="var(--font-sans)" font-size="11" fill="#6b6560">staging → sequences</text>
+
+<rect x="476" y="488" width="203" height="68" rx="8" fill="white" stroke="#c4a8e0" stroke-width="1.5"></rect>
+<text x="577" y="514" text-anchor="middle" font-family="var(--font-sans)" font-size="14" font-weight="600" fill="#4a1a7a">APScheduler</text>
+<text x="577" y="538" text-anchor="middle" font-family="var(--font-sans)" font-size="11" fill="#6b6560">in-process · lifespan</text>
+
+<rect x="697" y="488" width="203" height="68" rx="8" fill="white" stroke="#c4a8e0" stroke-width="1.5"></rect>
+<text x="798" y="514" text-anchor="middle" font-family="var(--font-sans)" font-size="14" font-weight="600" fill="#4a1a7a">Seed data</text>
+<text x="798" y="538" text-anchor="middle" font-family="var(--font-sans)" font-size="11" fill="#6b6560">75 pathogens · 3 labs</text>
+
+<circle cx="679" cy="488" r="10" fill="#d4500a" stroke="white" stroke-width="2.5"></circle>
+<text x="679" y="492" text-anchor="middle" font-family="var(--font-sans)" font-size="11" font-weight="700" fill="white">6</text>
+
+<line x1="480" y1="573" x2="480" y2="597" stroke="#6b6560" stroke-width="1.5" marker-end="url(#ar)"></line>
+
+<!-- ── LAYER 5: EXTERNAL INTEGRATIONS (y=600, h=78) ── -->
+<rect x="20" y="600" width="920" height="78" rx="10" fill="#f9e8ec" stroke="#e0a8b4" stroke-width="1.5"></rect>
+<rect x="20" y="600" width="6" height="78" rx="3" fill="#7a1a2a"></rect>
+<text x="38" y="618" font-family="var(--font-sans)" font-size="10" font-weight="700" fill="#7a1a2a" letter-spacing="1.8">EXTERNAL INTEGRATIONS</text>
+
+<rect x="34" y="622" width="264" height="46" rx="8" fill="white" stroke="#e0a8b4" stroke-width="1.5"></rect>
+<text x="166" y="642" text-anchor="middle" font-family="var(--font-sans)" font-size="13" font-weight="600" fill="#7a1a2a">GCP Batch + Nextflow</text>
+<text x="166" y="658" text-anchor="middle" font-family="var(--font-sans)" font-size="10" fill="#6b6560">pipeline execution</text>
+
+<rect x="316" y="622" width="254" height="46" rx="8" fill="white" stroke="#e0a8b4" stroke-width="1.5"></rect>
+<text x="443" y="642" text-anchor="middle" font-family="var(--font-sans)" font-size="13" font-weight="600" fill="#7a1a2a">NCBI · GISAID · NWSS</text>
+<text x="443" y="658" text-anchor="middle" font-family="var(--font-sans)" font-size="10" fill="#6b6560">submission targets</text>
+
+<rect x="588" y="622" width="298" height="46" rx="8" fill="white" stroke="#e0a8b4" stroke-width="1.5"></rect>
+<text x="737" y="642" text-anchor="middle" font-family="var(--font-sans)" font-size="13" font-weight="600" fill="#7a1a2a">Google OAuth · Seqera</text>
+<text x="737" y="658" text-anchor="middle" font-family="var(--font-sans)" font-size="10" fill="#6b6560">auth + pipeline management</text>
+
+<!-- ── LEGEND ── -->
+<rect x="20" y="696" width="920" height="52" rx="8" fill="white" stroke="#e2ddd5" stroke-width="1.5"></rect>
+
+<circle cx="38" cy="714" r="9" fill="#1e6b4a"></circle>
+<text x="38" y="718" text-anchor="middle" font-family="var(--font-sans)" font-size="10" font-weight="700" fill="white">1</text>
+<text x="54" y="718" font-family="var(--font-sans)" font-size="11" fill="#1a1714">schema-first pipeline</text>
+
+<circle cx="238" cy="714" r="9" fill="#1e6b4a"></circle>
+<text x="238" y="718" text-anchor="middle" font-family="var(--font-sans)" font-size="10" font-weight="700" fill="white">2</text>
+<text x="254" y="718" font-family="var(--font-sans)" font-size="11" fill="#1a1714">transaction isolation</text>
+
+<circle cx="440" cy="714" r="9" fill="#1e6b4a"></circle>
+<text x="440" y="718" text-anchor="middle" font-family="var(--font-sans)" font-size="10" font-weight="700" fill="white">3</text>
+<text x="456" y="718" font-family="var(--font-sans)" font-size="11" fill="#1a1714">CLI response envelope aligned</text>
+
+<circle cx="38" cy="736" r="9" fill="#d4500a"></circle>
+<text x="38" y="740" text-anchor="middle" font-family="var(--font-sans)" font-size="10" font-weight="700" fill="white">4</text>
+<text x="54" y="740" font-family="var(--font-sans)" font-size="11" fill="#6b6560">Streamlit: keep logic in API</text>
+
+<circle cx="238" cy="736" r="9" fill="#d4500a"></circle>
+<text x="238" y="740" text-anchor="middle" font-family="var(--font-sans)" font-size="10" font-weight="700" fill="white">5</text>
+<text x="254" y="740" font-family="var(--font-sans)" font-size="11" fill="#6b6560">JWT refresh endpoint missing</text>
+
+<circle cx="440" cy="736" r="9" fill="#d4500a"></circle>
+<text x="440" y="740" text-anchor="middle" font-family="var(--font-sans)" font-size="10" font-weight="700" fill="white">6</text>
+<text x="456" y="740" font-family="var(--font-sans)" font-size="11" fill="#6b6560">APScheduler: disable with &gt;1 GKE pod</text>
+
+</svg>
+
+
+<!-- ════ SVG 2: INGEST PIPELINE ════ -->
+<svg width="100%" viewBox="0 0 960 652" style="display:block">
+<title>JACKPOT ingest pipeline data flow</title>
+<defs>
+<marker id="ar2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+<path d="M1 2L8 5L1 8" fill="none" stroke="#6b6560" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path>
+</marker>
+</defs>
+
+<text x="480" y="26" text-anchor="middle" font-family="var(--font-sans)" font-size="19" font-weight="600" fill="#1a1714">JACKPOT — sample ingest pipeline</text>
+<text x="480" y="48" text-anchor="middle" font-family="var(--font-sans)" font-size="13" fill="#6b6560">POST /api/v1/ingest/upload</text>
+
+<!-- ── STEP 1: UPLOAD ── -->
+<rect x="130" y="60" width="700" height="70" rx="10" fill="#e8f5ee" stroke="#a8d5bc" stroke-width="1.5"></rect>
+<rect x="130" y="60" width="6" height="70" rx="3" fill="#1e6b4a"></rect>
+<text x="480" y="88" text-anchor="middle" font-family="var(--font-sans)" font-size="15" font-weight="600" fill="#1e6b4a">Lab upload</text>
+<text x="480" y="112" text-anchor="middle" font-family="var(--font-sans)" font-size="12" fill="#6b6560">GUI drag-and-drop  ·  CSV batch + rsync/rclone  ·  presigned URL</text>
+
+<line x1="480" y1="133" x2="480" y2="153" stroke="#6b6560" stroke-width="1.5" marker-end="url(#ar2)"></line>
+
+<!-- ── STEP 2: FILE DETECTOR ── -->
+<rect x="130" y="156" width="700" height="70" rx="10" fill="#f9f0e8" stroke="#e0c4a8" stroke-width="1.5"></rect>
+<rect x="130" y="156" width="6" height="70" rx="3" fill="#7a3a1a"></rect>
+<text x="480" y="184" text-anchor="middle" font-family="var(--font-mono)" font-size="15" font-weight="600" fill="#7a3a1a">file_detector.py</text>
+<text x="480" y="208" text-anchor="middle" font-family="var(--font-sans)" font-size="12" fill="#6b6560">paired-end detection  ·  multi-lane merging  ·  nanopore chunks  ·  file type</text>
+
+<circle cx="830" cy="156" r="10" fill="#d4500a" stroke="white" stroke-width="2.5"></circle>
+<text x="830" y="160" text-anchor="middle" font-family="var(--font-sans)" font-size="11" font-weight="700" fill="white">4</text>
+
+<line x1="480" y1="229" x2="480" y2="249" stroke="#6b6560" stroke-width="1.5" marker-end="url(#ar2)"></line>
+
+<!-- ── STEP 3: VALIDATE SAMPLE ── -->
+<rect x="130" y="252" width="700" height="88" rx="10" fill="#e8f5ee" stroke="#a8d5bc" stroke-width="1.5"></rect>
+<rect x="130" y="252" width="6" height="88" rx="3" fill="#1e6b4a"></rect>
+<text x="480" y="280" text-anchor="middle" font-family="var(--font-mono)" font-size="15" font-weight="600" fill="#1e6b4a">validate_sample()</text>
+<text x="480" y="304" text-anchor="middle" font-family="var(--font-sans)" font-size="12" fill="#6b6560">required fields · enum checks · date bounds · sector · sharing level</text>
+<text x="480" y="326" text-anchor="middle" font-family="var(--font-sans)" font-size="12" fill="#1e6b4a">→  quality_status:  PRELIMINARY  /  ANALYZABLE  /  SUBMITTABLE</text>
+
+<circle cx="830" cy="252" r="10" fill="#1e6b4a" stroke="white" stroke-width="2.5"></circle>
+<text x="830" y="256" text-anchor="middle" font-family="var(--font-sans)" font-size="11" font-weight="700" fill="white">1</text>
+
+<line x1="480" y1="343" x2="480" y2="363" stroke="#6b6560" stroke-width="1.5" marker-end="url(#ar2)"></line>
+
+<!-- ── STEP 4: COMPUTE (two boxes) ── -->
+<rect x="130" y="366" width="335" height="70" rx="10" fill="#e8f0f9" stroke="#a8c4e0" stroke-width="1.5"></rect>
+<rect x="130" y="366" width="6" height="70" rx="3" fill="#1a4a7a"></rect>
+<text x="297" y="394" text-anchor="middle" font-family="var(--font-mono)" font-size="13" font-weight="600" fill="#1a4a7a">compute_epiweeks()</text>
+<text x="297" y="416" text-anchor="middle" font-family="var(--font-sans)" font-size="11" fill="#6b6560">MMWR year/week · ISO · precision</text>
+
+<rect x="495" y="366" width="335" height="70" rx="10" fill="#e8f0f9" stroke="#a8c4e0" stroke-width="1.5"></rect>
+<rect x="495" y="366" width="6" height="70" rx="3" fill="#1a4a7a"></rect>
+<text x="662" y="394" text-anchor="middle" font-family="var(--font-mono)" font-size="13" font-weight="600" fill="#1a4a7a">compute_surveillance_relevant()</text>
+<text x="662" y="416" text-anchor="middle" font-family="var(--font-sans)" font-size="11" fill="#6b6560">checks reportable_organisms table</text>
+
+<circle cx="830" cy="366" r="10" fill="#d4500a" stroke="white" stroke-width="2.5"></circle>
+<text x="830" y="370" text-anchor="middle" font-family="var(--font-sans)" font-size="11" font-weight="700" fill="white">5</text>
+
+<line x1="480" y1="439" x2="480" y2="459" stroke="#6b6560" stroke-width="1.5" marker-end="url(#ar2)"></line>
+
+<!-- ── STEP 5: DB TRANSACTION ── -->
+<rect x="130" y="462" width="700" height="128" rx="10" fill="#e8f5ee" stroke="#1e6b4a" stroke-width="2"></rect>
+<rect x="130" y="462" width="6" height="128" rx="3" fill="#1e6b4a"></rect>
+
+<text x="480" y="484" text-anchor="middle" font-family="var(--font-sans)" font-size="10" font-weight="700" fill="#1e6b4a" letter-spacing="2">SAME DATABASE TRANSACTION — conn=db shared across all three writes</text>
+<line x1="144" y1="492" x2="824" y2="492" stroke="#a8d5bc" stroke-width="1"></line>
+
+<text x="152" y="514" font-family="var(--font-mono)" font-size="12" fill="#1a1714">execute_write(INSERT INTO samples … RETURNING *,  conn=db)</text>
+<text x="152" y="538" font-family="var(--font-mono)" font-size="12" fill="#1a1714">log_audit(action=CREATE_SAMPLE, before=None, after=row,  db_conn=db)</text>
+<text x="152" y="562" font-family="var(--font-mono)" font-size="12" fill="#6b6560">stage_file(fileobj, key)  →  GCS jackpot-staging/  (runs after commit)</text>
+
+<line x1="144" y1="572" x2="824" y2="572" stroke="#a8d5bc" stroke-width="1" stroke-dasharray="4,4"></line>
+<text x="480" y="586" text-anchor="middle" font-family="var(--font-sans)" font-size="11" fill="#1e6b4a">if audit write fails, the sample INSERT rolls back too — no silent audit gaps</text>
+
+<circle cx="130" cy="462" r="10" fill="#1e6b4a" stroke="white" stroke-width="2.5"></circle>
+<text x="130" y="466" text-anchor="middle" font-family="var(--font-sans)" font-size="11" font-weight="700" fill="white">2</text>
+
+<line x1="480" y1="593" x2="480" y2="609" stroke="#6b6560" stroke-width="1.5" marker-end="url(#ar2)"></line>
+
+<!-- ── STEP 6: RESPONSE ── -->
+<rect x="130" y="612" width="700" height="28" rx="6" fill="white" stroke="#e2ddd5" stroke-width="1.5"></rect>
+<text x="480" y="630" text-anchor="middle" font-family="var(--font-sans)" font-size="12" fill="#1a1714">201 Created  ·  {sample_id,  quality_status,  surveillance_relevant,  jackpot_uri}</text>
+
+</svg>
+
+</div>
+</body>
+</html>

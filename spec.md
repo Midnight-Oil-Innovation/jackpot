@@ -10,13 +10,12 @@
 ## 1. Project Goal
 
 >
-> - **A** Single academic lab on a laptop (first priority — designed in P0e)
-> - **B** Single org on cloud (GCP/AWS/Azure)
-> - **C** Multi-lab agency (e.g. state health dept)
-> - **D** Hosted multi-tenant SaaS
-> - **E** Federation member (peers with other JACKPOT instances)
-> - **F** CI / e2e test harness
-> - **T** Tribal-sovereignty deployment (variant of A or E with sovereignty-aware defaults: deletion-on-request, no auto-publish, federation off-by-default, CARE Principles compliance)
+> - **A** Self-hosted commodity infrastructure (laptop through agency datacenter; ephemeral or persistent; single-lab, multi-lab, or multi-org)
+> - **B** HPC (Apptainer + Slurm + institutional storage + LDAP/SAML)
+> - **C** Single-org cloud (GKE/EKS/AKS, cloud-native)
+> - **D** CI / e2e test harness
+>
+> Federation membership, hosted-SaaS multi-org tenancy, and Indigenous data sovereignty (CARE-aligned governance) are runtime configurations applied to scenarios A/B/C — not separate install scenarios. See `docs/architecture.md` §3 for scenario detail and `docs/architecture.md` §22 for sovereignty-as-runtime-policy.
 >
 >
 > **Phase chain:** Phase 21 (UI close-out) → P0d (monorepo migration, in progress) → P0e (jackpot init CLI) → Phase 24.5 (architectural design lockdown — sovereignty deletion + BYOP/eukaryotic schema decisions before P0b) → P0f (BYOP infrastructure — Phase 24.7 in todo.md) → P0b (Schema v5.0 with all 24.5 lockdowns + instances/tenants/federated_peers) → P0c (multi-tenancy middleware + sovereignty deletion implementation) → P1–P5 (operator-type configurability, federation, governance, reference deployments, new-needs integration). Tracked-but-not-scheduled: Phase 25 (Month 3 stretch — admin UI, JupyterHub, GCP prod), Phase 26 (Pathoplexus/Loculus 34-item adoption backlog), Phase 27 (CDC DMI / STLT / CARE 14-item alignment backlog), Phase 28 (10 default eukaryotic pipelines + parsers + dashboards, internally tier-prioritized).
@@ -24,12 +23,10 @@
 > **Source-of-truth design documents:**
 >
 > - `jackpot_pathoplexus_loculus_overview.md` — comparative analysis between JACKPOT and the open-source pathogen-genomics ecosystem (Pathoplexus/Loculus + 8 peer platforms). Drives Phase 26.
-> - `jackpot_cdc_dmi_stlt_overview.md` — alignment with US public-health-data ecosystem (CDC DMI / North Star Architecture, STLT operators, CARE Principles for Tribal data sovereignty). Drives Phase 27 and Scenario T defaults.
+> - `jackpot_cdc_dmi_stlt_overview.md` — alignment with US public-health-data ecosystem (CDC DMI / North Star Architecture, STLT operators, CARE Principles for Indigenous data sovereignty). Drives Phase 27 and the sovereignty-aligned runtime policy capabilities described in `docs/architecture.md` §22.
 > - `jackpot_byop_and_eukaryotic_design.md` — multi-engine BYOP architecture (Nextflow + Snakemake + WDL + manifest-wrapped scripts) with two-stage validation gating, plus full-parity eukaryotic pathogen support across 8 pathogen groups. Drives P0f and Phase 28.
 
-Build **JACKPOT** — a pathogen genomics platform for genomic epidemiology,
-(legacy single-institution platform). It must be APGAP-compatible: same org/lab/project/user
-hierarchy, same PermissionGroups enum string values, same role semantics.
+Build **JACKPOT** — a pathogen genomics platform for genomic epidemiology, bioinformatics analysis, and public-health research.
 
 The platform enables public health labs to:
 
@@ -75,14 +72,14 @@ serve. Each scenario advances a subset of objectives:
 
 | Scenario | Description | Obj. 1 (tools) | Obj. 2 (workforce) | Obj. 3 (data utility) | Obj. 4 (connectivity) | Obj. 5 (readiness) |
 |---|---|---|---|---|---|---|
-| A | Laptop / single user | • | ✓ | | | |
-| B | Single-org cloud | ✓ | ✓ | ✓ | | |
-| C | Multi-lab agency | ✓ | ✓ | ✓ | ✓ | ✓ |
-| D | Hosted SaaS | ✓ | ✓ | ✓ | • | ✓ |
-| E | Federation member | • | ✓ | ✓ | ✓ | ✓ |
-| F | CI test | | | | | |
+| A | Self-hosted commodity (laptop through agency, ephemeral or persistent, single-lab to multi-org) | ✓ | ✓ | ✓ | ✓ | ✓ |
+| B | HPC (Apptainer + Slurm + institutional storage) | ✓ | ✓ | ✓ | • | ✓ |
+| C | Single-org cloud (GKE/EKS/AKS) | ✓ | ✓ | ✓ | • | ✓ |
+| D | CI test | | | | | |
 
 ✓ = primary mode; • = partial / context-dependent
+
+Scenario A's range from a single-user laptop through a multi-lab agency datacenter means it collectively serves all five WHO objectives — different configurations within A advance different objectives. Federation participation (Obj. 4 connectivity) is a runtime configuration available to A, B, and C; it is the primary operating mode for some A deployments and a context-dependent capability for B and C.
 
 **Non-functional requirement: 7-day turnaround.** The WHO strategy defines
 "timely" as triggering genomic sequencing within seven days of event or
@@ -101,8 +98,8 @@ are dimensioned for this target.
 - CI threshold: 80% — must never fall below this. (The post-P0d 39%
   number we briefly carried was a pytest-cov misconfiguration; see
   `docs/learnings.md` "Coverage measurement bug" entry.)
-- The `jackpot init` CLI (P0e) bootstraps any of the 7 install
-  scenarios from `git clone` to running stack in under 10 minutes —
+- The `jackpot init` CLI (P0e) bootstraps any of the 4 install
+  scenarios (A/B/C/D) from `git clone` to running stack in under 10 minutes —
   see `docs/install/quickstart.md`.
 - Health check local: `curl http://localhost:8000/health` →
   `{"status":"ok","version":"5.0.0","project":"JACKPOT","database":"connected"}`
@@ -664,10 +661,10 @@ days). Honors a per-profile retention override.
 
 - `Settings.work_dir` is the default `JACKPOT_WORK_DIR` for runs that
   don't override via profile. Default per scenario:
-  - Scenario A: `~/.jackpot/work/`
-  - Scenario B (Docker): `/srv/jackpot/work/`
-  - Scenario B/C (Slurm): operator-provided shared filesystem path
-  - Scenario D/E: `gs://<deployment>-jackpot-work/` or `s3://...`
+  - Scenario A (laptop / single-server): `~/.jackpot/work/`
+  - Scenario A (multi-server / agency, Docker): `/srv/jackpot/work/`
+  - Scenario B (HPC, Slurm): operator-provided shared filesystem path (Lustre/GPFS)
+  - Scenario C (cloud-native): `gs://<deployment>-jackpot-work/` or `s3://...`
 - Quick-fast pipelines (file_detector smoke runs, DLP scans, validation)
   default to the deployment's `LOCAL` profile during seeding — they
   always run on the API server.
@@ -833,7 +830,8 @@ hook seams with the same `Null<X>Hooks` no-op default pattern.
 > with named dependencies. See `todo.md` Phase P0h for the merged-vs-
 > deferred breakdown.
 > Builds on P0g profile model; makes Slurm a peer of the local executor
-> for scenarios B and C without code duplication.
+> for scenarios A (multi-server with Slurm profile) and B (HPC) without
+> code duplication.
 >
 > **Operator-facing surface:** `docs/slurm_executor.md` is the
 > canonical guide (profile setup, network requirements, Apptainer
@@ -1043,8 +1041,8 @@ hook seams with the same `Null<X>Hooks` no-op default pattern.
   raises on errors. The log poller is the source of truth when
   `weblog_reachable=false` in the profile.
 - Per-launch `launch_account` override (for grant accounting in
-  scenario C) is validated against the user's lab memberships, never
-  trusted from the request body alone.
+  scenario B HPC deployments) is validated against the user's lab
+  memberships, never trusted from the request body alone.
 - Apptainer is the default container engine for Slurm profiles. Docker
   remains an option for lab-Slurm cases where the cluster allows it.
 - Compute-side scratch and stage directories use Nextflow's
@@ -1232,7 +1230,7 @@ targets) under `<submission_packages_dir>/<submission_id>/`. The
 generated `seqsender_config.yaml` references the operator's own
 credentials by environment-variable name — JACKPOT never holds
 NCBI/GISAID/ENA secrets in v1, sidestepping the Scenario A
-laptop-connectivity-and-IP-rotation problem entirely. The operator
+laptop-case connectivity-and-IP-rotation problem entirely. The operator
 runs `seqsender submit ./<submission_id>/` from a stable host.
 
 The opt-in path to backend execution (I-3) is gated by:
@@ -1340,10 +1338,10 @@ In `backend/config.py`:
 
 ### Backends
 
-**`EnvBackend`** — `os.environ.get(key)`. Default for Scenarios A, B,
-F. Zero new infrastructure; operator sets env vars in
-`.env.local` / `docker-compose.yml` / Helm values. Best for
-single-operator deployments and CI.
+**`EnvBackend`** — `os.environ.get(key)`. Default for Scenarios A
+(commodity self-hosted) and D (CI). Zero new infrastructure; operator
+sets env vars in `.env.local` / `docker-compose.yml` / Helm values.
+Best for single-operator deployments and CI.
 
 **`FileBackend`** — reads a YAML file at `credential_file_path` whose
 top-level keys are credential names. File mode must be 0600 (the
@@ -1353,7 +1351,7 @@ friendly multi-host deployments without a cloud secret store.
 **`GCPSecretManagerBackend`** — fetches from GCP Secret Manager with
 secret name `{credential_gcp_secret_prefix}{key}`. Requires
 `google-cloud-secret-manager` (already in the dependency tree for
-Scenario D/E). Best for GCP-native deployments where IAM-gated
+Scenario C cloud). Best for GCP-native deployments where IAM-gated
 secret access matters.
 
 ### Public surface
@@ -1424,13 +1422,13 @@ request.
 ### Future backends
 
 - **AWS Secrets Manager** — stub interface in place; activates when
-  `credential_backend = "aws_secrets_manager"`. Scenario E (AWS-hosted)
-  is the trigger.
+  `credential_backend = "aws_secrets_manager"`. Scenario C on AWS
+  (EKS-hosted) is the trigger.
 - **Azure Key Vault** — same pattern; gated on Azure-hosted
   scenarios.
 - **OS keychain** — macOS Keychain / Windows Credential Manager /
-  freedesktop Secret Service for Scenario A operators who don't want
-  plaintext env vars or YAML files.
+  freedesktop Secret Service for Scenario A laptop-case operators who
+  don't want plaintext env vars or YAML files.
 
 Each new backend implements `CredentialBackend` and registers with
 `CredentialFactory`. No consumer code changes when a new backend is
@@ -2550,8 +2548,8 @@ result registration → UI-visible MultiQC report. Once green, tag
 All in `~/jackpot/docs/` unless noted:
 
 - `jackpot_gcp_staging_deployment.html` — Infrastructure reference
-  (APGAP-style) + mental model (layered with Session 5 callouts)
-- `jackpot_architecture_v5.md` — 1,860-line architecture doc
+  + mental model (layered with Session 5 callouts)
+- `architecture.md` (v6.0) — consolidated architecture doc (replaces `jackpot_architecture_v5.md`, `JACKPOT_Architecture_Synthesis_May_2026.md`, and `Core_Technical_Pillars_copy.md` per the May 2026 Cluster A merge)
 - `jackpot_session_summary_and_backlog.md` — design decisions + backlog,
   the running engineering log (v2.4 includes Phase 26 backlog)
 - `jackpot_schema.yaml` — LinkML schema source of truth
@@ -2562,7 +2560,7 @@ These three documents are the source of truth for the post-P0d roadmap. Cross-re
 
 - **`jackpot_pathoplexus_loculus_overview.md`** (1,873 lines, 2026-04-28) — Comparative analysis between JACKPOT and the Pathoplexus/Loculus stack plus 8 peer platforms (GenSpectrum/LAPIS, Pathogenwatch, EnteroBase, NCBI Pathogen Detection on GCP, BV-BRC, Solu, RT-MetA, GISAID). Source of truth for: AGPL-3.0 license decision rationale (§3), peer-platform landscape (§4), JACKPOT vs Loculus architectural divergence (§6-10), two-PII-gate architecture documentation (§9), code adoption recommendations A1-A6 (§11), federation tiers (§12), Phase 26 backlog of 34 items grouped A-J by source platform (§16.10).
 
-- **`jackpot_cdc_dmi_stlt_overview.md`** (816 lines, 2026-04-28) — Alignment with US public-health-data ecosystem. Source of truth for: CDC DMI history and North Star Architecture goals (§1), STLT public health landscape with extra weight on Tribal sovereignty (§2), CARE Principles formal adoption (§2.3c), seven install scenarios with Scenario T addition (§6), tombstone-and-vacuum architectural pattern for sovereignty-compliant deletion (§7), Tribal Epidemiology Center federation pattern (§8), JACKPOT vs NBS/eCR/AIMS layer-cake (§9), funding-source map for STLT operators (§10), Phase 27 backlog of 14 items grouped K-M.
+- **`jackpot_cdc_dmi_stlt_overview.md`** (816 lines, 2026-04-28) — Alignment with US public-health-data ecosystem. Source of truth for: CDC DMI history and North Star Architecture goals (§1), STLT public health landscape with extra weight on Indigenous data sovereignty (§2), CARE Principles formal adoption (§2.3c), four install scenarios with sovereignty-aligned runtime policy capabilities (§6 — per the Cluster A merge, sovereignty is a runtime policy applicable to any scenario rather than a separate Scenario T), tombstone-and-vacuum architectural pattern for sovereignty-compliant deletion (§7), Tribal Epidemiology Center federation pattern (§8), JACKPOT vs NBS/eCR/AIMS layer-cake (§9), funding-source map for STLT operators (§10), Phase 27 backlog of 14 items grouped K-M.
 
 - **`jackpot_byop_and_eukaryotic_design.md`** (1,456 lines, 2026-04-29) — Multi-engine BYOP infrastructure plus full-parity eukaryotic pathogen support. Source of truth for: four-engine BYOP architecture — Nextflow, Snakemake, WDL, manifest-wrapped scripts (§1-3), `jackpot-pipeline.yaml` manifest schema (§2), four source types — public/private Git, tarball upload, Docker image (§4), two-stage validation gating with sandbox dry-run isolation (§5), pipeline lifecycle state machine (§6), schema additions for `byop_pipelines` table and 8 eukaryotic pipeline-result tables (§7, §12), 8 default eukaryotic pathogen pipelines (§13), 25 backlog items split across Phase 24.5 schema lockdown (4 items), Phase 24.7 / P0f BYOP infrastructure (10 items), Phase 28 default eukaryotic pipelines + parsers + dashboards (11 items, internally tier-prioritized).
 
@@ -2589,11 +2587,11 @@ These three documents are the source of truth for the post-P0d roadmap. Cross-re
 ### April 2026 — pivot decisions
 
 - **License flipped Apache 2.0 → AGPL-3.0.** Strategic, not legal. Closes the SaaS loophole via §13. Joins the European public-health pathogen-genomics cluster (Loculus, GenSpectrum/LAPIS, SILO, dashboard-components — all AGPL-3.0). Anti-GISAID-capture stance. Unblocks direct code adoption from the entire Loculus stack. See `jackpot_pathoplexus_loculus_overview.md` Section 3 for the full rationale.
-- **Multi-deployment-target architecture.** 7 install scenarios (A–F + T). Production code is operator-agnostic; `jackpot init` (P0e) handles per-operator bootstrap.
+- **Multi-deployment-target architecture.** 4 install scenarios (A–D), reduced from 7 in the May 2026 Cluster A merge. Federation, multi-org tenancy, and Indigenous data sovereignty are runtime configurations applied to A/B/C rather than separate install scenarios. Production code is operator-agnostic; `jackpot init` (P0e) handles per-operator bootstrap.
 - **Phasing post-Phase-11.** Phases 6.1–11 cosmetic genericization → P0d (monorepo migration) → P0e (install/CLI architecture) → Phase 24.5 (architectural design lockdown) → P0f (BYOP infrastructure) → P0b (Schema v5.0 — instances/tenants/federated_peers + BYOP/eukaryotic schema) → P0c (multi-tenancy middleware + sovereignty deletion) → P1–P5 (operator-type configurability, federation, governance, reference deployments, new-needs integration).
 - **Don't replace existing ingest gates.** `file_detector.py`, `validator.py`, `dlp_scanner.py`, and the `sra-human-scrubber` Nextflow integration collectively constitute a more thorough ingest pipeline than anything in Loculus's preprocessing for JACKPOT's surveillance-focused operating model. The recommendation is to expose the Loculus pluggable preprocessing HTTP contract (`/extract-unprocessed-data`, `/submit-processed-data`) as an *opt-in* for sophisticated operators while keeping in-process validation as the default.
-- **Scenario T (Tribal-sovereignty deployment) added** as a variant of A or E with sovereignty-aware defaults: deletion-on-request that actually removes the data (tombstone-and-vacuum lifecycle, not soft-delete), no auto-publish to NCBI/INSDC, federation off-by-default, CARE Principles compliance documented in `governance/care-principles-and-tribal-data-sovereignty.md`. See `jackpot_cdc_dmi_stlt_overview.md` Section 6 for the full design.
-- **CARE Principles formally adopted** alongside FAIR. Indigenous Data Sovereignty (Collective Benefit, Authority to Control, Responsibility, Ethics) becomes a first-class design constraint for Scenario T deployments.
+- **Sovereignty as runtime policy (May 2026, supersedes original Scenario T design).** Indigenous data sovereignty was originally framed as a separate deployment scenario (Scenario T as a variant of A or E). The May 2026 Cluster A merge reframed this: sovereignty-aware capabilities — deletion-on-request via tombstone-and-vacuum lifecycle, no auto-publish to NCBI/INSDC, federation policy restrictions, audit visibility, residency enforcement, revocable consent — are runtime policies that any deployment can configure post-install, rather than a dedicated scenario. A Tribal college running JACKPOT for genomics coursework picks Scenario A and does not configure sovereignty policies. A Tribal Nation health department running JACKPOT under CARE Principles also picks Scenario A and configures sovereignty policies via `jackpot policy enable ...`. CARE Principles compliance documented in `governance/care-principles-and-indigenous-data-sovereignty.md`. See `docs/architecture.md` §22 for the full design and `jackpot_cdc_dmi_stlt_overview.md` Section 6 for the original Scenario T design notes.
+- **CARE Principles formally adopted** alongside FAIR. Indigenous Data Sovereignty (Collective Benefit, Authority to Control, Responsibility, Ethics) becomes a first-class design constraint for any deployment configured with sovereignty-aligned runtime policies. The platform's enforcement primitives (residency, revocable consent, no-auto-publish defaults, federation policy restrictions, audit portal) are available to all scenarios; per-org policy enablement determines which apply.
 - **Layer-cake positioning.** JACKPOT is the genomics layer between LIMS and downstream analysis platforms (NCBI Pathogen Detection, Pathoplexus, Pathogenwatch, Nextstrain). It integrates with NBS/eCR/AIMS — does not replace them. See `jackpot_cdc_dmi_stlt_overview.md` Section 9.
 
 ### April 2026 — BYOP and eukaryotic pipelines decisions

@@ -21,6 +21,8 @@ P0f (BYOP infrastructure) → P0b (Schema v5.0 with instances/tenants/
 federated_peers + BYOP/eukaryotic schema) → P0c (multi-tenancy middleware
 + sovereignty deletion) → P1–P5.
 
+**Forward-looking note (May 2026 cluster-doc-merge):** The "7 install scenarios" + Scenario T framing in the paragraph above reflects current *code* state — the `jackpot init` CLI accepts `--scenario A` through `F` plus `T`, the `schema/jackpot_scenarios/` defaults registry has 7 entries, and Critical Rule 56's `instances/ci/` is the committed Scenario F (CI test) artifact set. The canonical architecture in `docs/architecture.md` v6.0 §3 (post-Cluster-A merge, May 2026) consolidates these to **4 install scenarios** — A self-hosted commodity (laptop through agency multi-server), B HPC (Apptainer + Slurm + institutional storage), C single-org cloud (GKE/EKS/AKS cloud-native), D CI test — with **federation, multi-tenancy, and Indigenous data sovereignty as runtime configurations** layered on top of any scenario, not as separate install scenarios. **Sovereignty-as-runtime-policy** per `docs/architecture.md` §22 supersedes the Scenario T framing above: the four sovereignty-aware defaults (deletion-on-request, no auto-publish, federation off-by-default, CARE-Principles compliance) are now sovereignty-runtime-policy defaults that can be enabled on any scenario via `jackpot policy enable sovereignty`, not the defining characteristics of a separate deployment scenario. The code consolidation will land post-P0e as the CLI and scenarios registry catch up to the canonical architecture; until then, this file describes operational reality (what the CLI accepts today), and `docs/architecture.md` describes the architectural direction (what the CLI will accept after the post-P0e consolidation). Companion canonical reference docs from the May 2026 cluster-merge work: `docs/immune_platform.md` (post-Cluster-B; absorbed `Jackpot_AIS.md` + `jackpot_immune_platform_plan.md` + `jackpot_immune_collaboration_scaffolding.md`), `docs/platform_landscape.md` (post-Cluster-E; supersedes `jackpot_pathoplexus_loculus_overview.md`), `docs/strategic_vision.md` + `docs/governance_alignment.md` (post-Cluster-F; absorbed `jackpot_cdc_dmi_stlt_overview.md` content), `docs/detection_landscape.md`, `docs/learning_strategic_vision.md` + `docs/learning_curriculum_design.md`, `docs/federation.md` + `docs/federation_operations.md`, `docs/wastewater.md` + `docs/wastewater_software_landscape.md`, `docs/deploy/gcp.md` (post-Cluster-F; supersedes 3 predecessor GCP deploy guides). See `docs/domain_reference.md` for the full glossary + source-of-truth map.
+
 ---
 
 ## Autonomous Operating Mode
@@ -253,13 +255,29 @@ six-repo + git-submodule arrangement is gone; what used to be submodules
 │   ├── helm/jackpot-api/          Chart + values-staging.yaml
 │   ├── scripts/                   bootstrap_project.sh, staging_smoke_test.sh
 │   └── docs/                      Deploy-specific docs (production_runbook, env examples)
-├── docs/                          Product + design docs (CLAUDE.md, learnings, design overviews)
+├── docs/                          Product + design docs (CLAUDE.md, canonical reference docs, archived sources)
 │   ├── CLAUDE.md                  ← this file
-│   ├── architecture/              P0e: jackpot-init-cli.md design lockdown
+│   ├── architecture.md            Canonical system architecture v6.0 (post-Cluster-A merge; absorbed jackpot_architecture.md, JACKPOT_Architecture_Synthesis_May_2026.md, Core_Technical_Pillars.md)
+│   ├── architecture/              P0e: jackpot-init-cli.md design lockdown (subdirectory, distinct from canonical architecture.md above)
+│   ├── immune_platform.md         Immune Platform reference (post-Cluster-B; absorbed Jackpot_AIS.md, jackpot_immune_platform_plan.md, jackpot_immune_collaboration_scaffolding.md)
+│   ├── detection_landscape.md     Component-tier OSS detection tool landscape (~85 tools)
+│   ├── platform_landscape.md      Platform-tier comparative landscape (post-Cluster-E; supersedes jackpot_pathoplexus_loculus_overview.md)
+│   ├── strategic_vision.md        Strategic synthesis covering CDC DMI / North Star / STLT (post-Cluster-F; absorbed jackpot_cdc_dmi_stlt_overview.md)
+│   ├── governance_alignment.md    WHO/IPSN / GA4GH / North Star / FAIR+CARE alignment matrices (post-Cluster-F)
+│   ├── federation.md              Federation architecture (3 levels) — Track 1 baseline
+│   ├── federation_operations.md   Federation operator-facing reference (B-CWB-DOC-1)
+│   ├── learning_strategic_vision.md + learning_curriculum_design.md   JACKPOT Learn (Academy + Field Edition + SENTINEL + WILDFIRE)
+│   ├── wastewater.md + wastewater_software_landscape.md   Wastewater surveillance schema + comparative OSS landscape
 │   ├── install/                   P0e: quickstart.md (10-minute fresh-clone walk)
 │   ├── deploy/stlt/               Five STLT-tier deploy guides (Phase 21.5)
+│   ├── deploy/gcp.md              GCP deployment guide (post-Cluster-F; supersedes 3 predecessor docs)
+│   ├── todo.md                    Backlog (active sprint + tracked-not-scheduled phases; Cluster-G refreshed)
+│   ├── spec.md                    Build spec + scenario definitions (Cluster-A refreshed)
 │   ├── fhir-mapping.md            FHIR R5 translation map
-│   └── jackpot_*_overview.md      Pathoplexus, CDC DMI, BYOP design documents
+│   ├── domain_reference.md        Cross-doc glossary + source-of-truth map (Tier-1 reference)
+│   ├── cryptwwdb_integration.md, epistorm_integration.md, demo_data_sources.md, schema_sufficiency_observatory.md, sample_status_vs_access.md, fasta_upload_discussion.md, dockerfile_strategy.md, slurm_executor.md, file_references.md, staging_access.md, local_test_checklist.md, apptainer_compatibility_audit.md, pipeline_apptainer_audit.md   Individual Tier-3 reference docs (Cluster-H)
+│   ├── jackpot_byop_and_eukaryotic_design.md   BYOP + 8 eukaryotic pathogen groups design doc (not yet absorbed into a canonical reference)
+│   └── archived/                  Superseded source docs preserved as audit trail (apgap_migration_context, jackpot_ais_legacy, ml_infrastructure_inventory, backlog_consolidation_report, backlog_reconciliation)
 ├── governance/                    8 charter + policy markdown files (P0d Phase 21.5)
 ├── instances/                     P0e: per-instance jackpot init output (gitignored except instances/ci/)
 │   ├── .gitignore                 Whitelist: only ci/ + .gitignore are committed
@@ -1231,16 +1249,6 @@ The session MUST NOT include `git worktree remove` of the current worktree — g
 Every code-commit session prompt structure must follow `docs/session_prompt_template.md`: required sections (Operating Rules, Role, Session Task, Acceptance Criteria, Out of Scope, Closing Steps, Source-of-truth docs to verify before coding), required acceptance criteria for the push/PR/merge/sync sequence, and the PR body template.
 
 Sessions that do NOT produce a code commit (pure-research, pure-design, pure-documentation-without-commit) are exempt from Closing Steps but must explicitly state this exemption in Operating Rules.
-
-**69 — Context-aware SNP thresholds for One Health surveillance.** When JACKPOT eventually supports cross-source genomic clustering queries (future-phase work, anchor: `B-IMMUNE-NSA-1`), the default SNP threshold MUST be context-aware, not a single fixed value. Per Watt et al. 2025 (Nature Communications, 5,471 E. coli genomes across 36 years), assessing genomic relationships at ≤100 SNP threshold enables detection of cross-source linkage otherwise obscured when applying typical outbreak-oriented relatedness thresholds (≤20 SNPs).
-
-Three context tiers MUST be supported:
-
-- **Outbreak investigation:** ≤20 SNPs (standard, default)
-- **One Health / cross-source surveillance:** ≤100 SNPs
-- **Extended clonality detection:** 100–200 SNPs
-
-This rule applies forward to anomaly-detector and clustering-query work; no current module enforces it because no current module performs SNP-distance queries. When that work begins, the threshold parameter MUST be configurable per surveillance context, with the three tiers as named presets.
 
 ## Local Dev Role Switching
 

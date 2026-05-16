@@ -10,7 +10,7 @@ each other, how to pre-stage Apptainer images for an air-gapped
 cluster, the weblog vs. log-poller redundancy story, and the cluster-
 policy gotchas that bite scenario-C deployments hardest.
 
-This document does NOT cover scenario A (laptop, no cluster) or any
+This document does NOT cover Scenario A in its laptop-case configuration (laptop, no cluster) or any
 cloud-burst-to-GCP-Batch story (deferred — see Phase 25 in
 `todo.md`). For the per-PR detail of the campaign that built this
 surface, see PRs #35 (H-1, template), #36 (H-2, Apptainer
@@ -21,11 +21,11 @@ manifests), #37 (H-3, account override), #38 (H-4, log poller), #40
 
 The Slurm executor fits two install scenarios:
 
-- **Scenario B** — a single lab with its own Slurm queue (a head
+- **Scenario B (HPC)** — a single lab with its own Slurm queue (a head
   node + a few compute nodes). The API server runs on the same
   network and can usually reach compute nodes over HTTP; the lab's
   IT controls both sides.
-- **Scenario C** — a multi-lab agency or university research-
+- **Scenario B (HPC) at university RC** — a multi-lab agency or university research-
   computing deployment where the cluster is shared infrastructure.
   Compute nodes typically have no outbound HTTP; the API server
   reaches the cluster via a head-node SSH tunnel or a shared
@@ -33,9 +33,9 @@ The Slurm executor fits two install scenarios:
   institutional policy.
 
 The two scenarios share the executor template but differ in the
-network and identity story. Scenario B sets `weblog_reachable=true`
+network and identity story. Scenario B (HPC) with a lab-internal cluster sets `weblog_reachable=true`
 implicitly by virtue of the API host's network seeing the compute
-nodes; scenario C runs primarily on the log poller (H-4) because the
+nodes; the university RC variant runs primarily on the log poller (H-4) because the
 weblog cannot deliver from inside the cluster.
 
 ## Profile setup
@@ -76,13 +76,13 @@ These come straight off the `execution_profiles` row, not the
 - `executor_type` — must be `'SLURM'`.
 - `container_engine` — `'APPTAINER'` is the cluster default. Set
   `'DOCKER'` only on lab-Slurm clusters that allow it (uncommon in
-  scenario C).
+  Scenario B HPC at university RC).
 - `work_dir` — the per-run scratch root. **Must be a path visible
   identically to the API server and every compute node.** This is
   the H-5 invariant; `jackpot doctor slurm --check-cluster` is the
   test (see "Validating a profile" below).
 
-### Example profile (scenario B)
+### Example profile (Scenario B HPC, lab-internal cluster)
 
 A profile for a lab with a small in-house Slurm queue:
 
@@ -164,10 +164,10 @@ JACKPOT injects this directive into every rendered `nextflow.config`,
 pointing at `/api/v1/pipelines/events`. Whether the POSTs land
 depends on the cluster's egress policy:
 
-- **Scenario B** (lab-internal cluster) — compute nodes typically
+- **Scenario B HPC, lab-internal cluster** — compute nodes typically
   reach the API host's port 8000 over the lab network; the weblog
   works as designed.
-- **Scenario C** (university research-computing) — compute nodes
+- **Scenario B HPC, university research-computing** — compute nodes
   usually have no outbound HTTP. Weblog POSTs silently fail. The
   log poller is the redundancy mechanism.
 

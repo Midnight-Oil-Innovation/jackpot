@@ -6,7 +6,7 @@ A **federation scaffold** is one of those three sibling packages. Each scaffold 
 
 A **federation level** is one of three distinct integration patterns that JACKPOT instances use to interact: **L1 query federation** (async fanout of queries to enabled partners, with result aggregation), **L2 hub push** (qualified upstream reporting of samples to a designated hub), and **L3 bidirectional access** (peer-to-peer sample access requests). Each level has its own Track 1 class, its own set of AIS hooks, and its own use cases. An operator can enable any subset of L1/L2/L3 — they're independent capabilities.
 
-**Current state (Stage 0, on `development`):** FED-A and PRV-A scaffolds are complete with all eleven `AISFederationHooks` + `AISPrivacyHooks` defined. Federation primitives operate via `Null<X>Hooks` defaults — Track 1 functionality works end-to-end without any Track 2 overlay. CRY-A scaffold is pending. Stage 1 (FED-B/C/D/E + CRY-A) is the active sprint candidate; Stages 2 and 3 cover cryptWWDB-readiness and the full Phase IM-4 buildout respectively.
+**Current state (Stage 0, on `development`):** FED-A and PRV-A scaffolds are complete with all eleven `AISFederationHooks` + `AISPrivacyHooks` defined. Federation primitives operate via `Null<X>Hooks` defaults — Track 1 functionality works end-to-end without any Track 2 overlay. CRY-A scaffold is pending. Stage 1 — now expanded per the May 2026 architecture decision to include FL round orchestration, model artifact store, cryptWWDB policy checker (B-CWB-POLICY-1), and the `data_source_lab` federation role (B-CWB-FED-1) — is the active sprint candidate at ~8-10 weeks scope. Stages 2 and 3 cover cryptWWDB-readiness and the full Phase IM-4 buildout respectively.
 
 ## §1. Architectural shape
 
@@ -145,7 +145,7 @@ All Track 1 calls pass through `Null<X>Hooks` no-op defaults by default. Operato
 
 **Use cases.** Trieu's osu-crypto work (MultipartyPSI, BaRK-OPRF, SpOT-PSI) is the natural MPC contribution path — query-time privacy for "do you have a sample matching this signature?" queries. Federated trust score computation where multiple parties contribute without revealing inputs. Federated query joins where no single party sees the full join. Conclave-style multi-party analytics for federation-wide rollups.
 
-**Relationship to HE.** Complementary, not redundant. HE answers "compute on my encrypted data"; MPC answers "compute jointly without sharing inputs." cryptWWDB Use Case 2-time-efficient already uses MPC-style delegation — Muni A sends encrypted time to Muni B, who performs plaintext-ciphertext comparison locally rather than the lab performing ciphertext-ciphertext comparison. Both fit under PRV-A's hooks; both could plug into the same Track 2 implementation.
+**Relationship to HE.** Complementary, not redundant. HE answers "compute on my encrypted data"; MPC answers "compute jointly without sharing inputs." cryptWWDB Use Case 2-time-efficient already uses MPC-style delegation — Muni A sends encrypted time to Muni B, who performs plaintext-ciphertext comparison locally rather than the lab performing ciphertext-ciphertext comparison. Both fit under PRV-A's hooks; both could plug into the same Track 2 implementation. FLARE provides built-in secure aggregation as filter primitives for the FL side; cryptWWDB-style HE is implemented via TenSEAL or OpenFHE behind `AISPrivacyHooks.he_compute` independently of the FL stack.
 
 ### §4.3 Differential privacy (DP)
 
@@ -174,7 +174,7 @@ Plus the related future-phase item:
 - Federation primitives operate via `NullAIS*Hooks` defaults — Track 1 functionality works without any Track 2 overlay.
 - The HRRT scrubber and GCP Cloud DLP that already ship are consolidated under PRV-A's `scrubber.py` and `dlp.py`.
 
-### §5.2 Stage 1 — Scaffold completion (~4-6 weeks)
+### §5.2 Stage 1 — Scaffold completion + FL/cryptWWDB readiness (~8-10 weeks)
 
 Active sprint candidates that close out the Track 1 surface. Four follow-on FED-* items, each roughly one session:
 
@@ -220,7 +220,7 @@ At end of Stage 2, JACKPOT is "ready to collaborate" — drop-in ready to receiv
 
 ### §5.4 Stage 3 — Full Phase IM-4 (Tracked, Not Scheduled, ~6 weeks)
 
-The chat's "true FL with Flower + LoRA" layer corresponds to Phase IM-4 (Federation as Immune Network) in `jackpot_immune_platform_plan.md`. Goal: cross-tenant immune-network with trust scoring and encrypted queries. Two JACKPOT instances on one network share a confirmed memory cell after cross-instance confirmation, and run a homomorphic-encrypted query without raw data leaving either side.
+The chat's "true FL with fine-tuning adapters" layer (originally described as "Flower + LoRA") corresponds to Phase IM-4 (Federation as Immune Network) in `jackpot_immune_platform_plan.md`. With FLARE as the substrate decision (May 2026 architecture), the equivalent pattern is **FLARE + LoRA adapters via PyTorch**. Goal: cross-tenant immune-network with trust scoring and encrypted queries. Two JACKPOT instances on one network share a confirmed memory cell after cross-instance confirmation, and run a homomorphic-encrypted query without raw data leaving either side.
 
 The IM-4 buildout converts the Track 2 sockets to concrete implementations. Sequencing within IM-4:
 
@@ -232,7 +232,7 @@ The IM-4 buildout converts the Track 2 sockets to concrete implementations. Sequ
 | `B-IMMUNE-MEMSYNC-1` | Federation memory cell sync at `backend/immune/net/memory_sync.py`. Memory cell promotes to global pool only after N independent member confirmations. Reference: immune-plan §6.2. | 3-4 sessions |
 | `B-IMMUNE-HE-1` | Single-key HE query layer — wastewater mass balance + memory cell match. Lands inside the existing `B-CRY-1` crypto-scaffold pattern. Reference: immune-plan §6.2.2, §10.5. | 2-4 weeks |
 | `B-IMMUNE-DP-1` | DP aggregator for shared signals. Lands inside the existing `B-PRV-1` privacy-scaffold pattern. | 1 week |
-| `B-FED-PILLARIII-1` | FL framework decision via FedTADBench. | 3 weeks |
+| `B-FED-PILLARIII-1` | Validate NVIDIA FLARE on representative JACKPOT FL workload. | 1-2 weeks |
 | `B-IMMUNE-HE-2` | Multi-key HE extension per Lopez-Alt 2012. | 2-3 weeks |
 | `B-COLLAB-DIVERSITY-2` | Federation diversity index at `backend/immune/net/diversity.py` + `diversity_cli.py`. CI gate fails if diversity drops below threshold. | 2 days |
 | `B-COLLAB-ATRUST-1` | Asymmetric trust at `backend/immune/net/asymmetric_trust.py`. Member A may trust B at level 3 while B trusts A at level 1. **This is the natural Trieu collaboration point.** Depends on `B-IMMUNE-TRUST-1`. | 2 days |
@@ -246,17 +246,17 @@ Phase IM-4 success criterion: two JACKPOT instances on one network can (1) share
 
 Federation work also intersects with phases tracked in other docs:
 
-- **Phase 27 — CDC DMI / North Star / STLT alignment backlog** (tracked, not scheduled) contains **B-CARE-4 Federation-aware deletion propagation**. Depends on B-CARE-3 + Scenario E federation work. Estimated 1 week, Year 2. The propagation primitive lives in `backend/backend/federation/` and uses the L3 `FederationAccessGateway` infrastructure to notify peers when an upstream sample is deleted.
+- **Phase 27 — CDC DMI / North Star / STLT alignment backlog** (tracked, not scheduled) contains **B-CARE-4 Federation-aware deletion propagation**. Depends on B-CARE-3 and Stage 1 federation work (FED-B/C/D/E + CRY-A). Estimated 1 week, Year 2. The propagation primitive lives in `backend/backend/federation/` and uses the L3 `FederationAccessGateway` infrastructure to notify peers when an upstream sample is deleted.
 
 ## §6. Sequencing and unresolved decisions
 
-**The blocking chain.** Stage 1 (FED-B/C/D/E + CRY-A) is the active-sprint pick — it unblocks both Stage 2 and Stage 3. Stage 2 (cryptWWDB-readiness) requires P0b to ship the schema items. Stage 3 (Phase IM-4) is gated on coalition timing: pulling it forward from "Tracked, Not Scheduled" depends on Trieu/Forrest/Halden/Scarpino conversations and any follow-on grant funding.
+**The blocking chain.** Stage 1 (FED-B/C/D/E + CRY-A + B-CWB-FED-1 + B-CWB-POLICY-1 + FL round orchestration + model artifact store) is the active-sprint pick — it unblocks both Stage 2 and Stage 3. The May 2026 architecture decision to support FL and cryptWWDB early expanded Stage 1's scope from ~4-6 weeks to ~8-10 weeks. Stage 2 (cryptWWDB-readiness) requires P0b to ship the schema items. Stage 3 (Phase IM-4) is gated on coalition timing: pulling it forward from "Tracked, Not Scheduled" depends on Trieu/Forrest/Halden/Scarpino conversations and any follow-on grant funding.
 
 **Decisions open for input.**
 
 1. **MPC vs HE for cryptWWDB.** The paper uses single-key HE. JACKPOT supports both via separate hooks. Is there value in implementing MPC-based variants of the wastewater mass-balance query alongside HE, or stay HE-only for the first concrete implementation?
 2. **DP default ε.** `B-IMMUNE-DP-1` needs a default ε. Literature-standard values range from 0.1 (strong) to 10 (weak). Operator policy decision; needs documentation in the federation operations doc.
-3. **FL framework choice.** `B-FED-PILLARIII-1` is the methodology. DataSHIELD vs FedAdapt-CAD vs FedMI vs Conclave-style MPC. Decision depends on benchmark. (See §8 paper-review delta for the substrate-vs-overlay refinement per Riedel et al. 2024.)
+3. **FL framework choice.** **Resolved: NVIDIA FLARE** per the May 2026 architecture decision. `B-FED-PILLARIII-1` is now scoped to validating FLARE on a representative JACKPOT FL workload rather than open framework benchmarking. See §8 paper-review delta for the FLARE selection rationale and the architecture doc (`docs/architecture.md` §20) for the full reasoning.
 4. **Multi-key HE timing.** `B-IMMUNE-HE-2` could land in parallel with `B-IMMUNE-HE-1` (stronger threat model from day one) or after (single-key proves the operational model first). Recommendation: after, unless first production deployment specifically needs the collusion mitigation.
 5. **CRY-A AIS hook surface.** The CRY-A scaffold's hook signatures are TBD per the spec at `todo.md` Federation/Privacy/Crypto Scaffolds section. Refining the surface against `Jackpot_AIS.md` is part of the CRY-A landing PR.
 
@@ -282,14 +282,14 @@ Four genuinely open challenges, surfaced for honesty with collaborators:
 
 **Updates from the 9-paper review (2026-05-13).** Several additions and refinements landed against the original open-challenges framing:
 
-- **FL framework decision rescoped.** Per Riedel et al. 2024 (Int J Machine Learning & Cybernetics), `B-FED-PILLARIII-1` is now a two-stage decision: (1) general-purpose FL substrate selection from the Riedel et al. top-3 (Flower 84.75%, FLARE 80.5%, FederatedScope 78.75%); (2) healthcare-specific overlay (DataSHIELD vs FedAdapt-CAD) for the privacy/aggregation layer.
+- **FL framework decision: NVIDIA FLARE selected (May 2026 architecture decision).** The previous two-stage substrate-vs-overlay framing per Riedel et al. 2024 is superseded by the architecture-level decision to use **NVIDIA FLARE** as the primary FL substrate across JACKPOT. FLARE provides FL orchestration plus built-in privacy primitives (differential privacy, homomorphic encryption, secure aggregation, private set intersection, federated statistics) as filters within a single framework, eliminating the need for a separate substrate+overlay pairing. Riedel et al. 2024 placed FLARE second of the top three (Flower 84.75%, FLARE 80.5%, FederatedScope 78.75%) — the margin is small, and the production-deployment tooling, healthcare deployment track record (COVID-19 analysis, brain tumor segmentation, prostate segmentation, Kaplan-Meier survival), and unified privacy-primitive stack tip the choice to FLARE for JACKPOT's purposes. `B-FED-PILLARIII-1` reduces in scope: from "benchmark multiple frameworks" to "validate FLARE on a representative JACKPOT FL workload." PySyft remains available as a supplementary library for specific MPC workloads where FLARE's primitives are insufficient; the cryptWWDB HE workload uses TenSEAL or OpenFHE separately (FL and cryptWWDB are sibling workloads, not parent-child).
 - **Governance substrate identified.** Per Tangaro et al. 2026 (Frontiers in Genetics), the GA4GH Passports + Data Use Ontology (DUO) substrate is the emerging standard for cross-jurisdictional federated governance. New entry **`B-FED-GOV-1`** tracks Passports + DUO integration as the substrate for `AISFederationHooks.threshold_approve` Track 2.
 - **Policy-checker module surfaced.** Per Driver et al. 2024, the computation coordinator enforcing access controls and repeated-query detection is a discrete component, not an implicit responsibility of the federation router. New entry **`B-CWB-POLICY-1`** tracks a `policy_checker.py` module sitting between the router and HE compute backend.
 - **Non-collusion specification refined.** Per Driver et al. 2024, the cryptWWDB non-collusion model is now documented with the explicit symmetric/asymmetric distinction (symmetric between municipalities, asymmetric toward the lab as compute party). This refinement lives in `docs/federation_operations.md`.
 
 The four open challenges from §8 (heterogeneity, gradient inversion, Byzantine threats, evaluation) remain valid as-stated. The 9-paper review didn't displace any of them — it sharpened the specific items that address them.
 
-## §9. Demo path for laptop Scenario A
+## §9. Demo path for Scenario A (laptop case)
 
 The earlier chat content's "Sol cluster federation simulation" doesn't apply for a laptop demo. The laptop-feasible federation slice:
 

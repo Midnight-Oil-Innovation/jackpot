@@ -1,3 +1,21 @@
+# JACKPOT AIS — Legacy (archived)
+
+> **Superseded 2026-05-16 by `docs/immune_platform.md` and `docs/detection_landscape.md`.** This file is preserved as a historical source. Do not edit. Do not cite as current architecture.
+>
+> **What this file is.** An early exploration (~4,250 lines) covering three topics that have since been more rigorously developed elsewhere:
+>
+> 1. **Concepts 1/2/3 — JACKPOT Academy curriculum + Outbreak game + OPERATION: WILDFIRE multiplayer.** Superseded by `docs/learning_strategic_vision.md` and `docs/learning_curriculum_design.md` (the "JACKPOT Learn" educational platform layer), and by the strategic framing in `docs/immune_platform.md` §7 (Pillar IV — Training) and §8 (Pillar V — Gaming).
+>
+> 2. **Tool Status Analysis & Modern Substitutes (sections starting "Tool Status Analysis").** Superseded by `docs/detection_landscape.md`, which is the canonical component-tier survey of ~85 open-source detection tools across 14 categories. The detection_landscape doc itself notes that it supersedes 9 LeapSpace research files plus this material.
+>
+> 3. **What's Worth Adding (Part 1 onward).** Superseded by the same `docs/detection_landscape.md` plus the strategic adoption priorities in `docs/immune_platform.md` §13 (Open-Source Software Integration Strategy) and §16.2 (OSS project → integration mode).
+>
+> **Why preserved.** Historical traceability. Some of the playful gaming framing — particularly the OPERATION: WILDFIRE multiplayer espionage premise — is more fully developed here than in the later more-disciplined docs, and may be useful reference material when the Learn platform's narrative arcs are written. Some of the legacy-tool callouts (PanGIA, bcbio) and modern-replacement recommendations are good as a snapshot of "what 2025-era pathogen genomics tooling looked like" even where the recommendations have moved on.
+>
+> **If you need to update content here**, don't — update the superseding doc instead. This file is read-only.
+
+---
+
 ## Concept 1 — Strictly Educational Curriculum: **JACKPOT Academy**
 
 A free, AGPL-licensed, modular pathogen genomics curriculum that lives inside the JACKPOT monorepo at `course/` (which is already in your planned tree — convenient!). Think Software Carpentry meets nf-core training meets a microbiology bootcamp, but with a real production platform as the backbone instead of toy notebooks.
