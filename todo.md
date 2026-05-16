@@ -2173,6 +2173,7 @@ This work is **ahead-of-schedule** relative to B-FED-1 / B-PRV-1 / B-CRY-1 in th
 - Schema additions: `B-CWB-SCHEMA-1` through `B-CWB-SCHEMA-5` in **Phase 24.5** (must lock with P0b)
 - Federation role extension: `B-CWB-FED-1` in **FED-D** (`data_source_lab` role)
 - Operations doc: `B-CWB-DOC-1` in **FED-B** (`federation_operations.md` including the non-collusion assumption)
+- [x] **B-CWB-DOC-2** Architectural mapping doc tying Driver et al. 2024 / NSF 2115075 to JACKPOT's integration surface — nine-section structure (Overview, framework summary, integration surface, six-row backlog mapping table, ASCII data-flow diagram, gap analysis ≥6 items, threat-model notes, operational runbook sketch, references). Resolves dangling reference from `## cryptWWDB Integration Track` header. (1 session) → `docs/cryptwwdb_integration.md`
 - HE backend concrete impl: `B-IMMUNE-HE-1` (wastewater mass balance as first concrete query) in **Phase IM-4** — Tracked, Not Scheduled
 - Multi-key HE follow-on: `B-IMMUNE-HE-2` in **Phase IM-4** — Tracked, Not Scheduled
 - Existing wastewater dashboard: `B-WW-1` in **Phase 26** (1.5 sessions, unblocked) — useful demo independent of cryptWWDB work
