@@ -44,7 +44,6 @@ When L2/L3 IO is scheduled, the stubs at
 
 from __future__ import annotations
 
-import hmac
 import logging
 from typing import Any
 from uuid import UUID
@@ -53,8 +52,12 @@ from fastapi import APIRouter, Depends, Request
 from pydantic import BaseModel, Field, HttpUrl
 
 from backend.audit import log_audit
-from backend.auth.guards import get_current_user, require_platform_admin
-from backend.credentials import CredentialError, CredentialNotFoundError, credentials
+from backend.auth.guards import (
+    authenticate_federation_peer,
+    get_current_user,
+    require_platform_admin,
+)
+from backend.credentials import credentials
 from backend.database import execute_query, execute_write, get_db_dep
 from backend.federation.client import FederationClient
 from backend.federation.models import (
@@ -78,8 +81,6 @@ AUDIT_REGISTER_INSTANCE = "REGISTER_FEDERATED_INSTANCE"
 AUDIT_FEDERATION_SEARCH = "FEDERATION_SEARCH"
 AUDIT_FEDERATION_PUSH_RECEIVED = "FEDERATION_PUSH_RECEIVED"
 AUDIT_FEDERATION_ACCESS_REQUEST_RECEIVED = "FEDERATION_ACCESS_REQUEST_RECEIVED"
-
-FEDERATION_KEY_HEADER = "X-JACKPOT-Federation-Key"
 
 
 # ---------------------------------------------------------------------------
@@ -144,40 +145,6 @@ def _serialise(row: dict[str, Any]) -> dict[str, Any]:
 def _row_to_instance(row: dict[str, Any]) -> FederatedInstance:
     """Build a Pydantic FederatedInstance from a DB row."""
     return FederatedInstance.model_validate(row)
-
-
-def _authenticate_federation_peer(request: Request, conn) -> dict[str, Any]:
-    """Return the federated_instances row matching the request's federation key.
-
-    The header value is compared constant-time against every enabled
-    instance's resolved secret. Returns the matched row; raises a
-    ``HTTPException`` -wrapped envelope via the router on the caller
-    side when no match is found.
-    """
-    presented = request.headers.get(FEDERATION_KEY_HEADER)
-    if not presented:
-        return {}
-
-    rows = execute_query(
-        "SELECT * FROM federated_instances WHERE federation_enabled = TRUE",
-        conn=conn,
-    )
-    for row in rows:
-        secret_name = row.get("api_key_secret_name")
-        if not secret_name:
-            continue
-        try:
-            expected = credentials.get(secret_name)
-        except (CredentialNotFoundError, CredentialError) as exc:
-            logger.warning(
-                "federation auth: credential lookup failed for instance %s: %s",
-                row.get("name"),
-                exc,
-            )
-            continue
-        if hmac.compare_digest(presented, expected):
-            return row
-    return {}
 
 
 # ---------------------------------------------------------------------------
@@ -321,7 +288,7 @@ def federation_push_inbound(
     request: Request,
     db=Depends(get_db_dep),  # noqa: B008
 ):
-    instance_row = _authenticate_federation_peer(request, db)
+    instance_row = authenticate_federation_peer(request, db)
     if not instance_row:
         return error(
             "UNAUTHORIZED",
@@ -381,7 +348,7 @@ def federation_access_request_inbound(
     request: Request,
     db=Depends(get_db_dep),  # noqa: B008
 ):
-    instance_row = _authenticate_federation_peer(request, db)
+    instance_row = authenticate_federation_peer(request, db)
     if not instance_row:
         return error(
             "UNAUTHORIZED",
