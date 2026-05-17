@@ -34,6 +34,7 @@ from backend.routers import (
     dataset_access,
     datasets,
     domain_whitelist,
+    federation,
     files,
     gisaid,
     import_mappings,
@@ -178,6 +179,7 @@ app.include_router(dataharmonizer.router)
 app.include_router(dataset_access.router)
 app.include_router(datasets.router)
 app.include_router(domain_whitelist.router)
+app.include_router(federation.router)
 app.include_router(files.router)
 app.include_router(gisaid.router)
 app.include_router(import_mappings.router)

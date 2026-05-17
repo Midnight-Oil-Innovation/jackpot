@@ -31,11 +31,17 @@ from backend.federation.models import (
 # ---------------------------------------------------------------------------
 
 
-def test_federation_role_has_all_three_values() -> None:
+def test_federation_role_has_all_four_values() -> None:
     assert FederationRole.HUB.value == "hub"
     assert FederationRole.SPOKE.value == "spoke"
     assert FederationRole.PEER.value == "peer"
-    assert {r.value for r in FederationRole} == {"hub", "spoke", "peer"}
+    assert FederationRole.DATA_SOURCE_LAB.value == "data_source_lab"
+    assert {r.value for r in FederationRole} == {
+        "hub",
+        "spoke",
+        "peer",
+        "data_source_lab",
+    }
 
 
 def test_federation_role_rejects_unknown_value() -> None:
