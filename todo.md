@@ -2111,6 +2111,11 @@ This work is **ahead-of-schedule** relative to B-FED-1 / B-PRV-1 / B-CRY-1 in th
 - [x] **`tests/federation/test_models.py`** updated to assert the four-value `FederationRole` enum including `data_source_lab` (regression fix for pre-existing breakage from FED-D / PR #55).
 - [x] **B-CWB-DOC-1** Create `docs/federation_operations.md` documenting the three-party non-collusion assumption required by cryptWWDB (Driver et al. 2024 §4), the multi-key HE pathway as future mitigation (Lopez-Alt et al. 2012, tracked as `B-IMMUNE-HE-2`), federation-key rotation policy, partner attestation flow, and the AIS-hook policy points where operators configure per-deployment policy. (1 day, bundles with FED-B) → `docs/federation_operations.md`
 
+### B-CWB-POLICY-1: Encrypted-query policy checker module (COMPLETE 2026-05-16)
+
+- [x] **`backend/backend/federation/policy_checker.py`** (305 lines) — discrete coordinator between the federation router and the HE compute backend. Enforces (1) access control via an injected `access_policy(requester_id, operation, dataset_id) -> bool` callable; (2) repeated-query detection via a per-(requester, encrypted-operand-digest) sliding window (default 60s, 1 occurrence per window) — repeated identical encrypted queries are a known HE side channel per Driver et al. 2024 §3.1. Reuses `HEOperation` from `backend/backend/crypto/_ais_hooks.py`. Track 2 attestation seam via `AISFederationHooks.attest_partner` (federation-originated requests only; local callers skip). Audit log kept in-memory; durable persistence is the router's responsibility. Default-construction uses `NullAISFederationHooks` so Track 1 ships unchanged.
+- [x] **`tests/federation/test_policy_checker.py`** — 15 tests covering ACCESS_DENIED denial, repeated-query budget not consumed by denial, Track 2 UNATTESTED_REQUESTER path, local-request attestation-skip, sliding-window first-allow / replay-deny / post-window re-allow, per-(requester, digest) independence, audit-log accumulation and defensive-copy semantics, default-construction uses Null hooks, constructor parameter validation. 100% module coverage (79/79 stmts). Branch: `B-CWB-POLICY-1`.
+
 ### FED-E: Wire router into `main.py` (PARTIALLY SHIPPED 2026-05-16 — bundled with FED-B)
 
 - [x] **Register the FED-B router in `backend/backend/main.py`.** — done as part of FED-B PR.
