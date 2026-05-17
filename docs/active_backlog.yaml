@@ -243,7 +243,7 @@ sessions:
       backend/backend/auth/guards.py validating X-JACKPOT-Federation-Key
       against federated_instances via Secret Manager.
     phase: federation_stage_1
-    status: open
+    status: shipped
     depends_on:
       - FED-B
     blocked_by_external:
@@ -271,6 +271,8 @@ sessions:
   # cryptWWDB Integration Track
   # ────────────────────────────────────────────────────────────────────────
 
+    merged_at: '2026-05-16'
+    merge_sha: 86971d1
   - id: B-CWB-DOC-1
     title: docs/federation_operations.md
     short_description: |
