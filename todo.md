@@ -1646,6 +1646,15 @@ Shipped in PR #28 (commit `544c98c`).
 
 ### G-5: Per-pipeline default profile
 
+- [x] **User profile CRUD endpoints landed.** Five REST endpoints under
+      `/profiles` (`POST`, `GET /me`, `GET /{user_id}`, `PUT /{user_id}`,
+      `DELETE /{user_id}`) with ownership + admin gating and
+      `403`/`404`/`409` error branches covered. Files:
+      `backend/backend/routers/profiles.py`,
+      `tests/routers/test_profiles.py`,
+      `tests/routers/conftest.py`, registered in
+      `backend/backend/main.py`. 15 tests, 100% coverage on the new
+      router module.
 - [ ] New endpoint `POST /api/v1/pipelines/{id}/default-profiles`
       to associate a profile as default for a pipeline.
 - [ ] Resolution logic at launch: explicit profile in launch request

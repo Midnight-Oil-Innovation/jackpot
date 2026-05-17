@@ -45,6 +45,7 @@ from backend.routers import (
     notifications,
     organizations,
     pipelines,
+    profiles,
     projects,
     sample_access,
     samples,
@@ -190,6 +191,7 @@ app.include_router(ncbi_submissions.router)
 app.include_router(notifications.router)
 app.include_router(organizations.router)
 app.include_router(pipelines.router)
+app.include_router(profiles.router)
 app.include_router(projects.router)
 app.include_router(sample_access.router)
 app.include_router(samples.router)
