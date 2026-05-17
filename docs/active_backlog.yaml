@@ -439,7 +439,7 @@ sessions:
       (a\nside-channel attack vector against HE schemes). Currently this responsibility\nis implicit in the federation router;
       making it a discrete module makes the\npolicy enforcement auditable and testable.\n"
     phase: cryptwwdb_track
-    status: blocked
+    status: open
     depends_on:
       - FED-B
     blocked_by_external:
@@ -902,7 +902,7 @@ sessions:
     pr_title_template:
     branch_name_template:
     role_framing:
-    notes: Per Tangaro et al. 2026 (Frontiers in Genetics). Unblocks AISFederationHooks.threshold_approve Track 2. DUO
+    notes: Per Tangaro et al. 2026 (Frontiers in Genetics). Unblocks AISFederationHooks.threshold_approve Track 2. DUO 
       and Passports are GA4GH standards — coalition coordination needed before scoping in detail.
   - id: B-IMMUNE-NSA-1
     title: Non-self anomaly detector
