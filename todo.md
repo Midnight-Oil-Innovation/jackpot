@@ -2097,21 +2097,24 @@ This work is **ahead-of-schedule** relative to B-FED-1 / B-PRV-1 / B-CRY-1 in th
     - `tests/federation/conftest.py` — no-ops the parent Postgres autouse, mirroring `tests/wastewater/conftest.py`
 - [x] **Coverage target:** 100% on every module in `backend/backend/federation/` (`pytest tests/federation/ --cov=backend.federation` reports 219/219 stmts). Branch: `fed-c`.
 
-### FED-B: Federation router (PENDING)
+### FED-B: Federation router (SHIPPED 2026-05-16)
 
-- [ ] **`backend/backend/routers/federation.py`** exposing the package via:
+- [x] **`backend/backend/routers/federation.py`** exposing the package via the five endpoints listed below — landed at `backend/backend/routers/federation.py` (118 stmts, 96% module coverage from `tests/test_federation_router_api.py`'s 16 router tests):
     - `GET /api/v1/federation/instances` — list registered partners (Platform Admin only)
     - `POST /api/v1/federation/instances` — register a partner (Platform Admin only)
     - `POST /api/v1/federation/search` — broadcast L1 query to enabled partners
     - `POST /api/v1/federation/push` — receive an inbound L2 payload (peer instance only)
     - `POST /api/v1/federation/access-requests` — receive an inbound L3 access request (peer instance only)
-- [ ] **Auth:** federation API keys via `X-JACKPOT-Federation-Key` header for peer-to-peer endpoints (validated against `federated_instances.api_key_secret_name` via Secret Manager); standard JWT + `require_platform_admin` for the admin-facing list/register endpoints. Branch: `b3-federation-router`.
+- [x] **Auth:** federation API keys via `X-JACKPOT-Federation-Key` header for peer-to-peer endpoints validated **inline** against `federated_instances.api_key_secret_name` through the credentials facade with constant-time `hmac.compare_digest`; standard JWT + `require_platform_admin` for the admin-facing list/register endpoints; standard JWT (`get_current_user`) for `/search`. Per FED-E note "if not validated inline" the validation lives in the router itself (`_authenticate_federation_peer`) and FED-E's dedicated guard module is not needed. Branch: `fed-b`.
+- [x] **`tests/test_federation_router_api.py`** — 16 tests covering admin auth on `/instances`, conflict path, `/search` fanout via respx-mocked partners, `/push` and `/access-requests` happy paths plus missing/invalid/mismatched-origin failure modes. Lives at the `tests/test_*_api.py` path rather than `tests/federation/test_router.py` because `tests/federation/conftest.py` intentionally no-ops the DB testcontainer for pure-HTTP FED-A package tests; router tests need real Postgres so they sit alongside the other router-API suites.
+- [x] **`backend/backend/main.py`** wires `federation.router` into the app (FED-E bullet #1 absorbed into FED-B since the router cannot be exercised by `AsyncClient`-fixture tests without registration).
+- [x] **`tests/federation/test_models.py`** updated to assert the four-value `FederationRole` enum including `data_source_lab` (regression fix for pre-existing breakage from FED-D / PR #55).
 - [x] **B-CWB-DOC-1** Create `docs/federation_operations.md` documenting the three-party non-collusion assumption required by cryptWWDB (Driver et al. 2024 §4), the multi-key HE pathway as future mitigation (Lopez-Alt et al. 2012, tracked as `B-IMMUNE-HE-2`), federation-key rotation policy, partner attestation flow, and the AIS-hook policy points where operators configure per-deployment policy. (1 day, bundles with FED-B) → `docs/federation_operations.md`
 
-### FED-E: Wire router into `main.py` (PENDING)
+### FED-E: Wire router into `main.py` (PARTIALLY SHIPPED 2026-05-16 — bundled with FED-B)
 
-- [ ] **Register the FED-B router in `backend/backend/main.py`.**
-- [ ] **Add federation-key guard to `backend/backend/auth/guards.py`** if not validated inline. Branch: `b4-federation-wiring`.
+- [x] **Register the FED-B router in `backend/backend/main.py`.** — done as part of FED-B PR.
+- [ ] **Add federation-key guard to `backend/backend/auth/guards.py`** if not validated inline. — **NOT NEEDED.** FED-B validates inline via `_authenticate_federation_peer` in the router. The dedicated guard module remains an option if a second peer-to-peer endpoint outside the federation router ever needs it; until then this checkbox is intentionally skipped.
 
 ### PRV-A: Privacy scaffold (PENDING — same pattern as FED-A)
 
