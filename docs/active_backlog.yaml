@@ -207,7 +207,7 @@ sessions:
       Federation API keys via X-JACKPOT-Federation-Key header validated
       against federated_instances.api_key_secret_name.
     phase: federation_stage_1
-    status: open
+    status: shipped
     depends_on:
       - FED-D
     blocked_by_external:
@@ -234,6 +234,8 @@ sessions:
       auth-guard wiring are tightly coupled.
     notes: "Often paired with FED-E to close federation Stage 1 in one move."
 
+    merged_at: '2026-05-16'
+    merge_sha: 1bd4547
   - id: FED-E
     title: Federation router wiring + X-JACKPOT-Federation-Key auth guard
     short_description: |
@@ -309,7 +311,9 @@ sessions:
     pr_title_template:
     branch_name_template:
     role_framing:
-    notes: "Bundled into FED-D session — do not session-prompt separately. Shipped as part of FED-D PR #55 (dbf34b0): adds DATA_SOURCE_LAB = 'data_source_lab' to FederationRole in backend/backend/federation/models.py and to the federation_role PostgreSQL ENUM in migration 85d92864ed38_fed_d_federated_instances_and_b_cwb_fed_1_data_source_lab.py."
+    notes: "Bundled into FED-D session — do not session-prompt separately. Shipped as part of FED-D PR #55 (dbf34b0): adds
+      DATA_SOURCE_LAB = 'data_source_lab' to FederationRole in backend/backend/federation/models.py and to the federation_role
+      PostgreSQL ENUM in migration 85d92864ed38_fed_d_federated_instances_and_b_cwb_fed_1_data_source_lab.py."
 
     merged_at: '2026-05-16'
     merge_sha: dbf34b0
