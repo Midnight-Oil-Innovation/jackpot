@@ -150,6 +150,13 @@ class Settings(BaseSettings):
     slurm_reachability_cache_seconds: int = 60
     slurm_reachability_timeout_seconds: int = 10
 
+    # Privacy
+    # B-IMMUNE-DP-1: default ε for the federation-wide DP aggregator
+    # (backend.immune.sec.dp_aggregator). Operators override per-deployment
+    # via the DP_EPSILON env var; callers may override per-call. Smaller
+    # values give stronger privacy at the cost of more noise.
+    dp_epsilon: float = 1.0
+
     # I-3b: Seqsender subprocess execution.
     # Hard wall-time cap on a single Seqsender invocation. Above this
     # the executor kills the subprocess and transitions the submission
