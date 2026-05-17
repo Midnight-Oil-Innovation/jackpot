@@ -439,7 +439,7 @@ sessions:
       (a\nside-channel attack vector against HE schemes). Currently this responsibility\nis implicit in the federation router;
       making it a discrete module makes the\npolicy enforcement auditable and testable.\n"
     phase: cryptwwdb_track
-    status: open
+    status: shipped
     depends_on:
       - FED-B
     blocked_by_external:
@@ -459,6 +459,8 @@ sessions:
       the federation router and the HE compute backend.\n"
     notes: Per Driver et al. 2024 (Sci Total Environ). Discrete coordinator pattern. Repeated-query detection is a known
       side-channel mitigation for HE schemes.
+    merged_at: '2026-05-16'
+    merge_sha: 12bf88f
   - id: B-CWB-SCHEMA-1
     title: wastewater_upstream_of association_type
     short_description: |
