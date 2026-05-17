@@ -1101,7 +1101,7 @@ sessions:
     short_description: |
       User profile CRUD endpoints. Open per session summary.
     phase: p0_series
-    status: open
+    status: shipped
     depends_on: []
     blocked_by_external:
     parallel_safe: false
@@ -1121,6 +1121,8 @@ sessions:
       endpoints that finish out the P0g G-5 sub-phase.
     notes: ""
 
+    merged_at: '2026-05-16'
+    merge_sha: ad1e374
   - id: P0b
     title: Schema v5.0 + multi-tenancy (major phase)
     short_description: |
