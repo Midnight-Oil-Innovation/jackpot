@@ -1,140 +1,91 @@
-# cryptWWDB integration — JACKPOT extension readiness
+# cryptWWDB integration — JACKPOT architectural mapping
 
-A technical readiness assessment of how JACKPOT's wastewater + federation architecture is positioned to host **cryptWWDB** as a Track 2 extension. Written for Driver, Ahsan, Piske, Lee, Forrest, Halden, Trieu (NSF 2115075, Driver et al. 2024 *Sci Total Environ* 940:173315).
+## Overview
 
-## Context
+This document maps the privacy-preserving wastewater epidemiology database framework cryptWWDB (Driver, Ahsan, Piske, Lee, Forrest, Halden, Trieu — *Science of the Total Environment* 940:173315, 2024; NSF award 2115075) onto JACKPOT's integration surface as of development HEAD. cryptWWDB is a homomorphic-encryption-based framework that lets two or more municipalities share wastewater concentration and flow data through a third-party laboratory and a computation coordinator without revealing per-site values to one another. The framework matters to JACKPOT because the platform already commits to operator-agnostic federation and a privacy seam (AIS hooks) into which an MPC/HE backend can plug; cryptWWDB is the first concrete query type that exercises that seam end to end. This file resolves the dangling `docs/cryptwwdb_integration.md` reference from `todo.md` item **B-CWB-DOC-2** and is the canonical entry point for the cryptWWDB workstream.
 
-JACKPOT (Midnight-Oil-Innovation/jackpot, AGPL-3.0) is an operator-agnostic open-source pathogen genomics platform with first-class wastewater support. Active development since March 2026, ~1700 tests, deployed across six scenarios from laptop to federation. Two architectural choices made independently of cryptWWDB turn out to align with the paper's framework in unusually direct ways:
+## cryptWWDB Framework Summary
 
-1. **JACKPOT's federation layer is Track 1 / Track 2 by design.** Each federation primitive (`FederationClient`, `FederationPushJob`, `FederationAccessGateway`) ships with a Track 1 implementation using current primitives plus a `_ais_hooks.py` Protocol seam where AIS-augmented overlays plug in via dependency injection. Track 1 code never imports from Track 2; the seam is one-way.
-2. **JACKPOT already has an `he_compute` AIS hook.** The privacy scaffold (`backend/backend/privacy/`, merged 2026-05-08 as PRV-A) defines `AISPrivacyHooks.he_compute(encrypted_inputs, op)` as one of six Protocol entry points, with the Track 2 implementation site pre-allocated at `backend/backend/immune/sec/he_backend.py`.
+- **Threat model.** Honest-but-curious municipalities and laboratory; non-collusion between the data-holding municipalities and the laboratory is a stated assumption. A coordinator (policy checker) gates queries and enforces access-rate limits. Multi-key HE (Lopez-Alt et al. 2012) is identified as the future mitigation when non-collusion cannot be guaranteed.
+- **Cryptographic primitives.** RLWE-based homomorphic encryption (CKKS scheme via TenSEAL / Microsoft SEAL) for arithmetic over ciphertexts; the mass-balance use case requires addition and plaintext-by-ciphertext multiplication only. Threshold signing and TEE attestation are out of scope for the published reference implementation but are the obvious next layers.
+- **Query interface.** Two reference queries: (1) mass-load `(Q1·C1) − (Q2·C2)` over encrypted flow `Q` and concentration `C` operands for one timestamp, (2) the same with a temporal equality check across two timestamps. Both yield ciphertexts that the data owner decrypts; intermediate parties never see plaintext.
+- **Participation model.** Two data-holding municipalities (Muni A, Muni B) plus a third-party laboratory that produces concentration measurements plus a computation coordinator. Roles are role-distinct: the lab never holds samples, the municipalities never run pipelines, the coordinator never holds keys.
+- **Data schema assumptions.** Per-sample flow rate, concentration of one or more target chemicals, sewershed upstream/downstream relationship, collection timestamp. The framework is target-agnostic — the paper demonstrates the approach with opioid biomarkers (heroin, 6-acetylmorphine) but the same scheme applies to pathogen RNA copies.
+- **Key guarantees.** Correctness — the encrypted mass-balance is bit-for-bit faithful to the plaintext computation within CKKS approximation bounds. Privacy — neither municipality learns the other's `Q` or `C`, and the laboratory never learns either side's flow data. Operator non-collusion — the coordinator policy and the multi-key extension together prevent a single misbehaving operator from breaking confidentiality.
+- **Operational scope.** Rate-limited access via the coordinator, per-query audit, key custody by the data-holding municipalities, and (in the multi-key extension) explicit participation certificates per query.
 
-The combination means cryptWWDB doesn't need a JACKPOT rewrite to become a production framework. It needs (a) wastewater roadmap Level 1 to ship, (b) the federation scaffold to complete, (c) a concrete implementation of `he_compute` against the cryptWWDB mass-balance use cases, and (d) a small number of net-new schema and operational additions detailed below.
+## JACKPOT Integration Surface
 
-## The architectural fit at a glance
+The table below maps each cryptWWDB concept to the JACKPOT module that hosts it today and the status of that hosting as of development HEAD (commit on `cryptwwdb-doc` branch, May 2026). Status values: `implemented` (lands in `development`, used at runtime), `scaffolded` (Protocol/seam defined, Track 1 null default in place, Track 2 implementation pending), `planned` (backlog item exists with concrete file plan), `not-started` (no backlog item yet).
 
-| cryptWWDB component | JACKPOT primitive | Status |
-|---|---|---|
-| Muni A / Muni B (data-holding entities) | JACKPOT instance, `federated_instances` row, `FederationRole` enum (hub/spoke/peer) | FED-A scaffold landed; FED-D schema migration pending |
-| Third-party Laboratory (data producer + computation site) | JACKPOT instance with pipeline-token-authenticated `pipeline_results` writes; potential new `data_source_lab` federation role | Pipeline-token auth exists; lab role is net-new |
-| Computation coordinator (policy checker) | `FederationClient` + AIS hooks: `attest_partner`, `detect_anomalous_traffic`, `threshold_approve`, `validate_push_payload` | All five hooks defined in FED-A; `NullAISFederationHooks` default is the no-op baseline |
-| Public key (pk), evaluation key (evk) distribution | `backend/backend/crypto/` (CRY-A, pending) — `keys.py` + key-rotation policy | CRY-A scaffold pending, mirrors FED-A pattern |
-| Encrypted plaintext → ciphertext encryption (RLWE-based, TenSEAL) | `AISPrivacyHooks.he_compute(encrypted_inputs, op)` Protocol entry point, Track 2 impl at `backend/backend/immune/sec/he_backend.py` | Hook signature defined; Track 2 impl not yet started (`B-IMMUNE-HE-1`, Phase IM-4, Tracked Not Scheduled) |
-| Mass-load formula `(Q1·C1) − (Q2·C2)` over encrypted operands | Concrete query implementation within `he_backend.py` | Net-new |
-| Q1, Q2 (municipality wastewater flow data) | `WastewaterSample.flow_rate_mgd` (LinkML schema) | Schema-aligned, ships today |
-| C1, C2 (target chemical concentrations) | `wastewater_lineage_abundance` result type (Freyja-shaped) or new concentration result type | Result-type extension needed for non-lineage concentration data |
-| Upstream / downstream sewershed relationship | `sample_associations` table (directed cross-sample linkage); `association_type` enum extension | Table exists; new enum value `wastewater_upstream_of` is net-new |
-| Time component (Use Case 2) | `WastewaterSample.collection_datetime` + ciphertext-ciphertext equality check in `he_backend.py` | Schema-aligned; equality-check implementation is net-new |
-| Repeated-query / access-control checks | `detect_anomalous_traffic` + `threshold_approve` AIS hooks + standard JACKPOT RBAC | Hook signatures defined; concrete policy is operator-configurable |
-| Three-party non-collusion assumption | Architectural; documented as a federation operating constraint | Constraint statement net-new in `docs/federation_operations.md` |
-| Multi-key HE extension (Lopez-Alt et al. 2012) | Follow-on `B-IMMUNE-HE-2` after `B-IMMUNE-HE-1` ships | Future direction; same seam, multi-key crypto backend |
+| cryptWWDB Concept | JACKPOT Module | File | Status | Notes | Backlog Item |
+|---|---|---|---|---|---|
+| Privacy hook seam (AISHooks Protocol) | `backend.privacy`, `backend.crypto`, `backend.federation` | `backend/backend/privacy/_ais_hooks.py`, `backend/backend/crypto/_ais_hooks.py`, `backend/backend/federation/_ais_hooks.py` | implemented | Three Protocol surfaces shipped post-PRV-A/FED-A/CRY-A: six privacy hooks (incl. `he_compute`, `mpc_protocol`, `dp_noise`), four crypto hooks (`select_he_backend`, `threshold_sign`, `verify_tee_attestation`, `enforce_key_rotation_policy`), five federation hooks. | — |
+| Null/no-op default implementation (NullHooks) | `backend.privacy`, `backend.crypto`, `backend.federation` | Same three `_ais_hooks.py` files | implemented | `NullAISPrivacyHooks`, `NullAISCryptoHooks`, `NullAISFederationHooks` ship as Track 1 defaults; cryptographically dangerous hooks (`threshold_sign`, `mpc_protocol`) refuse with `NotImplementedError` rather than silently degrade. | — |
+| Federation partner model (FederatedPartner or equivalent) | `backend.federation` | `backend/backend/federation/models.py` (`FederationRole`, `FederatedInstance`) | implemented | `FederationRole.DATA_SOURCE_LAB` enum value already lands (B-CWB-FED-1) for the cryptWWDB three-party model. `FederatedInstance` Pydantic model + `federated_instances` table land in FED-A/FED-D. | B-CWB-FED-1 |
+| Mass-balance / concentration normalisation | `backend.wastewater` | `backend/backend/wastewater/mass_balance.py` | implemented | Tier 1 plaintext reference implementation lands; computes `(Q1·C1) − (Q2·C2)` with unit-aware flow/concentration handling, LOD/2 non-detect substitution, and pluggable negative-mass-balance policy. Tier 2 HE variant delegates to `AISPrivacyHooks.he_compute`. | B-IMMUNE-HE-1 |
+| Operator-agnostic query dispatch | `backend.federation` | `backend/backend/federation/client.py`, `push.py`, `access.py` | scaffolded | Three federation levels (L1 query, L2 hub push, L3 bidirectional access) wired through `FederationClient`/`FederationPushJob`/`FederationAccessGateway`; cross-site aggregate planning that drives cryptWWDB Use Case 1/2 across `data_source_lab` partners is net-new. | R-6 |
+| Cryptographic record linkage / record de-identification | `backend.privacy`, `backend.crypto` | `backend/backend/privacy/dlp.py`, `scrubber.py`, `coarsening.py`; `backend/backend/crypto/crypt4gh.py` | scaffolded | HRRT genomic scrubber + GCP Cloud DLP metadata scanner + coarsening rules + Crypt4GH per-file encryption shipped; cryptographic commitment of audit-log entries and operator participation certificates are not yet wired. | R-4, R-5 |
 
-The match is unusually clean because the AIS hook architecture (designed against the AIS framing now in `docs/immune_platform.md` Part 1, post-Cluster-B merge; was `Jackpot_AIS.md`) anticipated exactly the secure-computation extensibility that cryptWWDB requires. The five `AISFederationHooks` and six `AISPrivacyHooks` Protocol entry points form a complete primitive set for plugging cryptographic overlays into the federation surface.
+## Required Additions
 
-## What's in place today (shipping or merged)
+**R-1 — MPC/secret-sharing adapter behind AISHooks**
+Add a concrete `mpc_protocol` implementation to a Track 2 `AISPrivacyHooks` backend under `backend/backend/immune/sec/mpc_backends.py` that wraps an MPC library (candidate: MP-SPDZ or a Python-native equivalent) so federated mass-load queries that cannot use single-key HE fall through to secret-sharing without leaking the operand boundary into Track 1 code. The natural home is `backend.privacy._ais_hooks.AISPrivacyHooks.mpc_protocol`, which today raises `NotImplementedError` in the null default.
+Backlog: `B-IMMUNE-MPC-1` (TBD — propose at next backlog grooming)
 
-- **`WastewaterSample` LinkML class** (`jackpot_schema.yaml:1065-1198`). NWSS-aligned per cdc.gov/nwss/reporting.html. Site fields (`wwtp_name`, `nwss_sewershed_id`, `county_names` multivalued, `population_served`, `flow_rate_mgd`); collection-event fields (`sample_type`, `sample_matrix`, `pretreatment`, `concentration_method`, `sample_collect_time`); 10 PCR/quantification fields including `pcr_target` (already supports `sars-cov-2`, `influenza-a`, `mpox`, `hMPXV Clade I`); MIxS ENVO terms (`env_broad_scale`, `env_local_scale`, `env_medium`).
-- **`wastewater_lineage_abundance` result type** (`spec.md:1653`). Populated by the Freyja parser via Cecret / viralrecon pipelines. Goes through `POST /api/v1/pipelines/{run_id}/results/wastewater_lineage_abundance` with token auth, written to typed table + `pipeline_results.metrics` JSONB in the same transaction. Append-only — re-running produces new rows, never updates.
-- **`sample_associations` table** (`docs/architecture.md` v6.0 §10, post-Cluster-A merge; was `jackpot_architecture.md`). Directed cross-sample linkage; the existing design note explicitly cites "wastewater↔clinical isolate" as the motivating use case.
-- **FED-A federation scaffold** (`backend/backend/federation/`, merged 2026-05-08). Three federation levels (L1 query federation via `FederationClient`, L2 hub push via `FederationPushJob`, L3 bidirectional access via `FederationAccessGateway`) plus the five `AISFederationHooks` Protocol entry points: `secure_aggregate`, `attest_partner`, `detect_anomalous_traffic`, `threshold_approve`, `validate_push_payload`. Operator-agnostic verified — no proper names in scaffold code.
-- **PRV-A privacy scaffold** (`backend/backend/privacy/`, merged 2026-05-08 as PR #39). Six `AISPrivacyHooks` Protocol entry points: `dp_noise`, `track_dp_budget`, `fl_aggregate`, **`he_compute(encrypted_inputs, op)`**, `mpc_protocol`, `synthetic_substitute`. Consolidates existing HRRT scrubber and GCP Cloud DLP under a unified privacy surface.
-- **Dual PII-gate architecture.** NCBI SRA Human Scrubber (HRRT) for genomic-level PII at ingest; GCP Cloud DLP for metadata-level PII before query exposure. Aligns with WHO/IPSN attribute 6.
+**R-2 — cryptWWDB query schema validation**
+Add a query-schema validator under `backend/backend/wastewater/query_schema.py` (and matching Pydantic models) that asserts the shape of a cryptWWDB-style federated query before it leaves the originating instance: at minimum the `(Q1, C1, Q2, C2, t)` tuple, declared units, sewershed-association identifier, and target identifier. The validator runs ahead of `FederationClient.query()` for any query whose `query_type == "mass_balance"`. This belongs in the `backend.wastewater` module so the schema lives alongside `mass_balance.py`.
+Backlog: `B-CWB-QSV-1` (TBD)
 
-## What's near-term in the JACKPOT roadmap
+**R-3 — Differential-privacy noise injection hook**
+Add a Track 2 `AISPrivacyHooks.dp_noise` implementation that injects calibrated Gaussian/Laplace noise into mass-balance results before they leave the operator boundary, gated by the existing `track_dp_budget` hook so repeated queries deplete a per-partner budget. The natural home is `backend/backend/immune/sec/dp_backend.py` (Track 2) calling out from the existing `backend.privacy._ais_hooks.AISPrivacyHooks` Protocol entry point.
+Backlog: `B-IMMUNE-DP-1`
 
-- **`B-WW-1` Wastewater lineage-abundance dashboard** (1.5 sessions, unblocked). Streamlit page with stacked-area lineage trajectories per sampling site, project/lab-membership filters, PNG/PDF export. Source patterns: NICD-Wastewater-Genomics + andersen-lab/sd_ww_processing. Leverages the existing Freyja output schema. Listed as Phase 26 quick-win #7.
-- **FED-B/C/D/E federation completion** (~4 sessions, active sprint candidate). Federation router (FED-B), tests with ≥95% coverage (FED-C), schema migration adding `federated_instances` table (FED-D), router wiring in `main.py` + federation-key guard in `auth/guards.py` (FED-E). Completes the L1/L2/L3 federation Track 1 path.
-- **CRY-A crypto scaffold** (active sprint candidate, ~1000 lines, 1 PR). Mirrors FED-A and PRV-A patterns. Files: `keys.py` (key management abstraction over PKCS#11 / Secret Manager / file-system keystores), `signing.py` (Sigstore/cosign artifact-signing interface), `crypt4gh.py` (per-file encryption for ingest/egress, GA4GH standard), `_ais_hooks.py` (`AISCryptoHooks` Protocol seam — HE backend selection, threshold signing FROST/BLS/DKG, TEE attestation, key-rotation policy).
-- **`B-IMMUNE-WW-1` Wastewater signal ingestion adapter** (Phase IM-2, 3-4 sessions, Tracked Not Scheduled). Polls at least one feed (NWSS or local STAB); produces `DangerSignal` rows tagged `wastewater_concordance` for the BioDendriticCell multi-modal fusion engine.
-- **`B-WW-ADV-1` Wet-side advisory doc** (1 day). Documents current assumptions about wastewater sampling cadence, preservation, sequencing-prep failure modes.
+**R-4 — Participation certificate / operator attestation**
+Add a participation-certificate flow under `backend.federation`: each cryptWWDB query carries a short-lived certificate signed by the partner's key (FROST/BLS via `AISCryptoHooks.threshold_sign`) that asserts the partner's consent to participate in this specific query, with an `expires_at` and a query-hash binding. The natural home is `backend/backend/federation/participation.py` (net-new module) with verification wired through `AISFederationHooks.attest_partner`.
+Backlog: `B-CWB-PCERT-1` (TBD)
 
-When the items above ship, JACKPOT will be operationally ready to host the cryptWWDB framework as a Track 2 overlay. The remaining gaps are well-bounded and listed below.
+**R-5 — Audit-log cryptographic commitment**
+Extend `backend.audit` so each `audit_log` row carries a Merkle-tree hash chain (or signed-receipt equivalent) over the row's `(action, actor, resource, before, after, metadata, timestamp)` so an operator can prove non-tampering of the cryptWWDB query history to a downstream collaborator without revealing row contents. The natural home is a new column on the existing `audit_log` table plus a writer hook in `backend/backend/audit.py`, with the signing operation delegated to `AISCryptoHooks.threshold_sign`.
+Backlog: `B-CWB-AUDIT-1` (TBD)
 
-## What's net-new in JACKPOT design for cryptWWDB readiness
+**R-6 — Cross-site aggregate query planner**
+Add a planner under `backend/backend/federation/planner.py` that, given a cryptWWDB-shaped query and a directory of `data_source_lab` and data-holding partners, produces the per-partner subqueries, the encrypted-arithmetic plan, and the decryption-key holders for the result; today `FederationClient` dispatches one query to one partner. The planner is the natural place for the three-party (Muni A / Muni B / Lab) coordination logic that cryptWWDB requires.
+Backlog: `B-CWB-PLAN-1` (TBD)
 
-### Required additions
+## Recommended Additions
 
-1. **`association_type` enum value: `wastewater_upstream_of`** (small schema addition). cryptWWDB requires the platform to know that Muni B's sample is upstream of Muni A's sample. Existing `sample_associations` table supports directed linkage; only the enum value is missing. ~0.5 day.
+**Rec-1 — Key-rotation lifecycle**
+Operationalise the `AISCryptoHooks.enforce_key_rotation_policy` hook with a concrete rotation schedule (default 90 days for federation API keys, 180 days for HE evaluation keys, per-operator override), an `expiring_keys` admin view, and a one-shot `jackpot keys rotate` CLI subcommand. Today the null default returns `ALLOW` unconditionally; cryptWWDB participation should track rotation explicitly because the multi-key extension binds participants to specific key versions.
+Backlog: `B-CRY-ROT-1` (TBD)
 
-2. **Mass-balance computation as a JACKPOT operation** (new module). `backend/backend/wastewater/mass_balance.py` with two tiers: Tier 1, plaintext computation against `WastewaterSample.flow_rate_mgd` + concentration data for single-instance or already-shared cases; Tier 2, the federated-encrypted variant that delegates to `AISPrivacyHooks.he_compute`. Tier 1 is plain Python and ships first; Tier 2 is the cryptWWDB integration point. ~1-2 sessions for Tier 1; Tier 2 implementation is the `B-IMMUNE-HE-1` work below.
+**Rec-2 — Synthetic-data regression test fixtures aligned to cryptWWDB schema**
+Add a fixture generator under `backend/tests/fixtures/cryptwwdb_synthetic.py` that produces deterministic `(Q1, C1, Q2, C2, t)` tuples with known mass-balance outcomes, plus matching `WastewaterSample` + `wastewater_target_concentration` rows so the HE backend and the plaintext reference can be compared bit-for-bit in CI. Synthetic-only per Critical Rule 56 — no real operator data.
+Backlog: `B-CWB-FIX-1` (TBD)
 
-3. **Concentration / quantification result type for non-SARS-CoV-2 targets** (schema addition, ~2-3 sessions). The current `wastewater_lineage_abundance` is Freyja-shaped (lineage fractions for SARS-CoV-2). cryptWWDB's C1 and C2 are concentrations of arbitrary target chemicals — heroin, 6-acetylmorphine in the paper, but the framework is target-agnostic. Two options: (a) extend `wastewater_lineage_abundance` with a `target_pathogen` + `concentration` field; (b) add a new `wastewater_target_concentration` result type. Option (b) follows the existing pattern of typed result types per analysis kind. Listed in the wastewater roadmap as Net-new gap 1; cryptWWDB is one strong motivating use case for it.
+**Rec-3 — Federation dashboard privacy-budget indicator**
+Extend the Streamlit federation dashboard (`frontend/pages/federation.py`, planned) with a per-partner privacy-budget bar driven by `AISPrivacyHooks.track_dp_budget` so operators can see in one place how much DP budget cryptWWDB queries have consumed for each `data_source_lab` partner, with the indicator turning red when the operator-configured threshold is crossed.
+Backlog: `B-CWB-DASH-1` (TBD)
 
-4. **`B-IMMUNE-HE-1` scoped to wastewater mass-balance as first concrete query type** (Phase IM-4 work, currently Tracked Not Scheduled). The item is currently spec'd as "one well-defined query type to start (e.g., 'do you have a memory cell matching this signature?')" — that "for example" is the slot where wastewater mass balance becomes the first concrete query. Concrete implementation at `backend/backend/immune/sec/he_backend.py` covering: (a) Use Case 1 — `(Q1·C1) − (Q2·C2)` over RLWE-encrypted operands using TenSEAL; (b) Use Case 2 — temporal equality check (ciphertext-ciphertext); (c) Use Case 2-time-efficient — plaintext-ciphertext check delegated to Muni B. Estimated 1-2 weeks per the existing item description.
+## Open Questions
 
-5. **Federation role for "data-producing laboratory"** (small federation extension). cryptWWDB's three-party model (Muni A, Muni B, Lab) has the Lab as distinct from the data-holding municipalities. Options: (a) add `data_source_lab` value to `FederationRole` enum; (b) keep current `peer` role and distinguish via a `produces_samples=False, produces_results=True` flag pair. Either is a small extension to `backend/backend/federation/models.py`. ~0.5 day.
+- **MPC library choice (gates R-1).** MP-SPDZ has the most complete primitive set and a Python frontend but a heavyweight build; alternatives include Carbyne Stack, secretflow/SPU, and pure-Python `crypten`. The decision is constrained by deployability into JACKPOT's GCP Batch task images and into Scenario B (HPC + Apptainer) environments without a vendor-managed runtime.
+- **NSF data-sharing agreement scope (gates R-2 and R-4).** The cryptWWDB published reference does not bundle a data-sharing agreement template; participating municipalities in JACKPOT need a model agreement covering query rate limits, audit-log retention, key custody, and breach notification before any production query can run. Resolving this depends on the NSF 2115075 follow-on conversation.
+- **Operator key-custody model (gates R-4, Rec-1).** Does each `data_source_lab` partner custody its own evaluation key via GCP Secret Manager / PKCS#11 / OS keychain, or does a coordinator-side key escrow simplify the multi-key extension? The answer changes the `AISCryptoHooks.select_he_backend` signature and the rotation CLI surface.
+- **Schema versioning strategy (gates R-2 and Rec-2).** When the `wastewater_target_concentration` result type and the `wastewater_upstream_of` association type land (B-CWB-SCHEMA-1, B-CWB-SCHEMA-2 in Phase 24.5), every existing cryptWWDB query carries a schema version. We need a published policy on how query producers and partners negotiate schema version compatibility — sticky-version per partner, latest-version-with-fallback, or a `negotiate_schema` federation handshake.
+- **Coordinator placement (gates R-6).** Is the cryptWWDB coordinator a logical role implemented as additional methods on `FederationClient`, or a standalone `FederationCoordinator` deployment that data-holding partners point at? The first reuses existing auth/RBAC; the second matches the paper's three-party diagram more literally and supports multi-coordinator topologies.
+- **Multi-key HE timing (gates R-1, R-6, Rec-1).** Lopez-Alt et al. 2012 multi-key HE removes the non-collusion assumption but is performance-heavy. Does it land alongside the first single-key implementation (`B-IMMUNE-HE-1`) or as a follow-on (`B-IMMUNE-HE-2`) once the single-key path is validated in production?
 
-6. **`docs/federation_operations.md` — three-party non-collusion assumption documented** (1 day). The paper's principal limitation (Section 4) is that Muni A and the Lab must not collude — if they do, Muni A's secret key can decrypt everything. JACKPOT must document this as an operator constraint, with the multi-key HE pathway flagged as the future mitigation.
+## References
 
-### Recommended additions (improve cryptWWDB applicability)
+[1] Driver, A., Ahsan, A., Piske, M., Lee, K., Forrest, S., Halden, R.U., Trieu, N.H. (2024). Encrypted data-sharing for preserving privacy in wastewater-based epidemiology. *Science of the Total Environment*, 940, 173315. https://doi.org/10.1016/j.scitotenv.2024.173315 — funded by NSF award 2115075.
 
-7. **`B-IMMUNE-HE-2` Multi-key HE support** (post `B-IMMUNE-HE-1`). Implements Lopez-Alt et al. 2012 multi-key HE so that decryption requires participation from all key-holding parties. Eliminates the Muni-A-and-Lab collusion risk explicitly identified in the paper. Same `he_backend.py` interface, different crypto backend.
+[2] JACKPOT AIS design — `docs/immune_platform.md` Part 1 (post-Cluster-B merge; absorbed `docs/Jackpot_AIS.md`). AIS framing for the JACKPOT immune platform, including the `AISPrivacyHooks` / `AISCryptoHooks` / `AISFederationHooks` Protocol surfaces that host cryptWWDB integration.
 
-8. **Population / fecal-indicator / excretion / degradation hooks** (Table 2 of paper). Each is a small schema or computation extension:
-   - Population: `WastewaterSample.population_served` exists (constant). Quasi-constant (weekday/weekend) and unique daily values (wastewater population biomarkers per Choi et al. 2018) are net-new.
-   - Fecal indicators: `pcr_target` already supports PMMoV, Bacteroides HF183. A dedicated normalization workflow is net-new.
-   - Excretion factors: `WastewaterSample` extension or per-target lookup table.
-   - Degradation factors: per-target lookup table per Hart & Halden 2020.
-   - Each is a 1-2 session item.
+[3] JACKPOT federation operations — `docs/federation_operations.md` (post-FED-A; B-CWB-DOC-1). Operator-facing reference for federation roles, the three federation levels, partner attestation, and the cryptWWDB three-party non-collusion assumption.
 
-9. **Quality-control and trigger-point computations** (Table 2 of paper). Negative-mass-balance handling, MDL-substitution for non-detects, error-bar propagation, weekly/rolling averages, percent-change calculations. These extend the mass-balance module from item 2 above. ~1 week of cumulative work.
+[4] JACKPOT immune platform plan — `docs/immune_platform.md` §15 (post-Cluster-B merge; absorbed `docs/jackpot_immune_platform_plan.md`). Phases IM-1..IM-6 including IM-4 where the cryptWWDB-specific HE backend (B-IMMUNE-HE-1) lands at `backend/backend/immune/sec/he_backend.py`.
 
-### Total effort estimate for cryptWWDB readiness
+[5] JACKPOT immune collaboration scaffolding — `docs/immune_platform.md` Part 2 §§22-29 (post-Cluster-B merge; absorbed `docs/jackpot_immune_collaboration_scaffolding.md`). Track 1 / Track 2 seam pattern that lets cryptWWDB collaborators land entirely under `backend/backend/immune/` without modifying Track 1 code.
 
-- Required items 1-6: ~3-4 weeks once the active-sprint federation completion and CRY-A scaffold ship.
-- Recommended items 7-9: another ~3-4 weeks if pursued for production maturity.
-- The `B-IMMUNE-HE-1` item (Phase IM-4) is the largest single piece; the paper's TenSEAL-based reference implementation is the natural starting point.
-
-## Collaboration model — Track 1 / Track 2 seam
-
-The Track 1 / Track 2 pattern is the mechanism for collaboration without forking. Track 1 (the federation, privacy, and crypto packages now on `development`) uses current JACKPOT primitives — JWT, presigned URLs, existing `can_access_sample()` permission model, HRRT, DLP. Every Track 1 class accepts a `hooks=` argument that defaults to a `Null<X>Hooks` no-op. Track 2 swaps in concrete implementations via the same constructor argument, with implementations landing under `backend/backend/immune/`. The direction of import is one-way: Track 1 never imports from Track 2.
-
-For cryptWWDB specifically, the integration path is:
-
-1. Concrete implementation of `AISPrivacyHooks.he_compute` at `backend/backend/immune/sec/he_backend.py` wrapping the cryptWWDB protocol (RLWE-based HE via TenSEAL, the mass-balance formula, the temporal equality variants).
-2. Concrete implementation of `AISFederationHooks.attest_partner`, `detect_anomalous_traffic`, and `threshold_approve` reflecting the cryptWWDB policy-checker semantics.
-3. JACKPOT's wastewater service constructs `FederationClient(hooks=AISFederationHooks(...))` and `PrivacyManager(hooks=AISPrivacyHooks(...))` instead of the null defaults. No Track 1 code changes.
-
-Code from a collaborating research group can land entirely under `backend/backend/immune/` — a clearly bounded namespace, separately license-tagged if needed, separately versioned, and removable without breaking the rest of the platform. The operator-agnostic policy applies to Track 2 the same as Track 1: structural descriptors over proper names in code and docs.
-
-## Strategic framing
-
-The NSF 2115075 work was funded through 2024 and produced a peer-reviewed framework with a working reference implementation. cryptWWDB as published demonstrates the algorithm; cryptWWDB integrated into a multi-tenant operator-deployed platform demonstrates the framework in production with audit, RBAC, multi-pathogen, and ICTV-aligned schema. JACKPOT is positioned to be that platform substrate.
-
-The integration story aligns with several stated public-health-data-sharing concerns the paper raises: the paper notes that ~8% of NWSS records are collected before the wastewater treatment plant, and that data-sharing friction between communities is one of the main barriers to expanding community-level surveillance. JACKPOT's federation L1/L2/L3 model plus the cryptWWDB overlay addresses exactly that friction — neighborhood-level commingling across municipal boundaries with cryptographic privacy guarantees.
-
-License compatibility is clean. JACKPOT is AGPL-3.0. The published cryptWWDB Python implementation uses TenSEAL (Apache 2.0) and SEAL (MIT) under the hood — both compatible with AGPL-3.0 redistribution.
-
-## Discussion topics
-
-Specific items where collaborator input would shape the design:
-
-1. **Lab role in federation.** Is `data_source_lab` a distinct `FederationRole` value or a flag on `peer`? The paper's three-party model implies role-distinct; JACKPOT's federation currently treats all peers symmetrically.
-2. **Coordinator implementation site.** The paper's "policy checker" is a logical role; in JACKPOT it could land as additional methods on `FederationClient` or as a standalone `FederationCoordinator` class. Either fits the AIS-hooks pattern.
-3. **First query type vs. multiple query types under `he_compute`.** The current `B-IMMUNE-HE-1` description says "one well-defined query type to start." Wastewater mass balance (with the Use Case 2 time variant) is one type. Are there other priority queries (population-normalized mass loads, percent-change time-series) that should land alongside?
-4. **Multi-key HE timing.** Lopez-Alt et al. 2012 multi-key HE is the explicit mitigation for the Muni-A-and-Lab collusion risk. Does it land as `B-IMMUNE-HE-2` (after single-key HE proves out in production) or earlier (in parallel with `B-IMMUNE-HE-1` because the production deployment needs the stronger threat model)?
-5. **PSI as complementary track.** Trieu's other work (osu-crypto: MultipartyPSI, BaRK-OPRF, SpOT-PSI) is query-time-privacy via PSI rather than computation-time-privacy via HE. PSI fits the same Track 2 seam — the `AISFederationHooks.secure_aggregate` hook could accept a PSI implementation just as cleanly as an HE one. Is there interest in PSI as a parallel JACKPOT extension?
-6. **NSF follow-on funding shape.** With cryptWWDB as published prior art and JACKPOT as the production substrate, what's the natural shape of a follow-on grant? Possibilities: production-hardening grant (NSF CICI again, NIH NIBIB, BARDA); biosurveillance integration grant; multi-site deployment grant.
-
-## Source-of-truth navigation
-
-For collaborators new to JACKPOT:
-
-| Topic | File |
-|---|---|
-| Theoretical anchor (AIS framing) | `docs/immune_platform.md` Part 1 (post-Cluster-B merge; was `Jackpot_AIS.md`) |
-| Immune Platform plan (Phases IM-1..IM-6) | `docs/immune_platform.md` §15 (post-Cluster-B merge; was `jackpot_immune_platform_plan.md`) |
-| Track 1 / Track 2 seam pattern | `docs/immune_platform.md` Part 2 §§22-29 (post-Cluster-B merge; was `jackpot_immune_collaboration_scaffolding.md`) |
-| System architecture | `docs/architecture.md` v6.0 §20 covers federation 3-gate qualification logic (post-Cluster-A merge; was `jackpot_architecture.md` §22) |
-| `WastewaterSample` schema | `jackpot_schema.yaml:1065-1198` |
-| `wastewater_lineage_abundance` result type | `spec.md:1653` |
-| FED-A federation scaffold | `backend/backend/federation/README.md` |
-| PRV-A privacy scaffold (incl. `he_compute` hook) | `backend/backend/privacy/README.md` |
-| `B-IMMUNE-HE-1` item (HE query layer) | `todo.md:2439` |
-| `B-WW-1` wastewater dashboard item | `todo.md:1240` |
-
-Source code: github.com/Midnight-Oil-Innovation/jackpot (AGPL-3.0).
-
-## Acknowledgment
-
-cryptWWDB is the work of Driver, Ahsan, Piske, Lee, Forrest, Halden, and Trieu, funded by NSF award 2115075. The framework described in Driver et al. 2024 *Sci Total Environ* 940:173315 is the foundational reference for the HE integration path described above. Any production integration in JACKPOT would carry forward the citation and acknowledge the originating grant.
+[6] Lopez-Alt, A., Tromer, E., Vaikuntanathan, V. (2012). On-the-fly multiparty computation on the cloud via multikey fully homomorphic encryption. *Proceedings of the 44th ACM Symposium on Theory of Computing* (STOC '12), 1219–1234. The multi-key HE primitive that removes the non-collusion assumption when wired in via R-1.
