@@ -165,7 +165,7 @@ sessions:
     notes: "Adds respx to dev deps if not already pinned."
 
     merged_at: '2026-05-16'
-    merge_sha: b0ddcf3
+    merge_sha: 7584a2f
   - id: FED-D
     title: Schema migration — federated_instances + organizations columns + B-CWB-FED-1
     short_description: |
@@ -174,7 +174,7 @@ sessions:
       data_source_lab to the FederationRole enum (B-CWB-FED-1 bundled in).
       Plus SQLAlchemy ORM updates.
     phase: federation_stage_1
-    status: open
+    status: shipped
     depends_on: []
     blocked_by_external:
     parallel_safe: true
@@ -197,6 +197,8 @@ sessions:
       Alembic + SQLAlchemy work, no router or auth changes.
     notes: "Pre-merge verification: alembic upgrade head against fresh DB + alembic check for drift."
 
+    merged_at: '2026-05-16'
+    merge_sha: dbf34b0
   - id: FED-B
     title: Federation router endpoints
     short_description: |
@@ -316,7 +318,7 @@ sessions:
       framework (NSF 2115075) to JACKPOT's integration surface as of
       development HEAD. Resolves dangling reference in todo.md.
     phase: cryptwwdb_track
-    status: open
+    status: shipped
     depends_on: []
     blocked_by_external:
     parallel_safe: true
@@ -340,6 +342,8 @@ sessions:
       doc that todo.md cross-references but doesn't yet exist on disk.
     notes: "Six required additions + three recommended, six-row backlog mapping table."
 
+    merged_at: '2026-05-16'
+    merge_sha: b0ddcf3
   - id: B-CWB-MB-1
     title: Plaintext mass-balance module (interface-only, shipped)
     short_description: |
@@ -632,7 +636,7 @@ sessions:
       backend/backend/immune/sec/dp_aggregator.py. Default ε via
       backend/backend/settings.py.
     phase: phase_im_4
-    status: open
+    status: shipped
     depends_on: []
     blocked_by_external:
     parallel_safe: true
@@ -659,6 +663,8 @@ sessions:
     notes: "First IM-4 item to land — pulls IM-4 forward modestly. AISPrivacyHooks.dp_noise + track_dp_budget are the consumer
       surface."
 
+    merged_at: '2026-05-16'
+    merge_sha: 8149b79
   - id: B-IMMUNE-HE-1
     title: Single-key HE query layer
     short_description: |
@@ -889,7 +895,7 @@ sessions:
     pr_title_template:
     branch_name_template:
     role_framing:
-    notes: Per Tangaro et al. 2026 (Frontiers in Genetics). Unblocks AISFederationHooks.threshold_approve Track 2. DUO
+    notes: Per Tangaro et al. 2026 (Frontiers in Genetics). Unblocks AISFederationHooks.threshold_approve Track 2. DUO 
       and Passports are GA4GH standards — coalition coordination needed before scoping in detail.
   - id: B-IMMUNE-NSA-1
     title: Non-self anomaly detector
