@@ -27,7 +27,7 @@
 
 meta:
   version: 1
-  last_updated: "2026-05-13"
+  last_updated: "2026-05-16"
   source_documents:
     - todo.md
     - docs/jackpot_session_summary_and_backlog.md
@@ -134,7 +134,7 @@ sessions:
       client, push, access, AISFederationHooks. Postgres autouse no-op
       pattern from tests/wastewater/conftest.py.
     phase: federation_stage_1
-    status: open
+    status: shipped
     depends_on: []
     blocked_by_external:
     parallel_safe: true
@@ -164,6 +164,8 @@ sessions:
       directory, zero conflict with parallel sessions.
     notes: "Adds respx to dev deps if not already pinned."
 
+    merged_at: '2026-05-16'
+    merge_sha: b0ddcf3
   - id: FED-D
     title: Schema migration — federated_instances + organizations columns + B-CWB-FED-1
     short_description: |
