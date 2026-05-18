@@ -2215,7 +2215,7 @@ State in which JACKPOT can credibly host the cryptWWDB framework as a Track 2 ov
 
 - [ ] **Phase 24.5 locked** with `B-CWB-SCHEMA-1` and `B-CWB-SCHEMA-2` at minimum. Schemas 3-5 are nice-to-have for production maturity but not blockers for architectural demonstration.
 - [ ] **P0b shipped** with the cryptWWDB-readiness schema items migrated.
-- [ ] **FED-B/C/D/E shipped** with `B-CWB-FED-1` `data_source_lab` role bundled into FED-D.
+- [x] **FED-B/C/D/E shipped** with `B-CWB-FED-1` `data_source_lab` role bundled into FED-D.
 - [x] **CRY-A scaffold shipped** with `AISCryptoHooks` Protocol seam landed (2026-05-12).
 - [x] **`B-WW-1` shipped** so there is a visible wastewater story end-to-end.
 - [x] **`B-CWB-MB-1` shipped** demonstrating mass-balance computation in-instance.
