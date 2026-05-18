@@ -1162,3 +1162,405 @@ sessions:
     branch_name_template:
     role_framing:
     notes: ""
+  - id: B-BYOP-1
+    title: BYOP manifest schema (jackpot-pipeline.yaml)
+    short_description: |
+      JSON Schema definition for the user-facing jackpot-pipeline.yaml
+      manifest plus operator documentation. Creates
+      schema/byop-pipeline-manifest.schema.json and docs/byop/manifest.md.
+      Foundation for the BYOP infrastructure — every subsequent BYOP item
+      reads or writes manifests that conform to this schema.
+    phase: p0f
+    status: open
+    depends_on: []
+    blocked_by_external:
+    parallel_safe: true
+    parallel_safe_reason: "Schema + docs only; no overlap with backend/services or routers work."
+    effort_sessions: 1.5
+    primary_files:
+      - schema/byop-pipeline-manifest.schema.json
+      - docs/byop/manifest.md
+    test_files: []
+    source_of_truth_views:
+      - docs/byop_and_eukaryotic_design.md
+    pr_title_template: "feat(byop): B-BYOP-1 — jackpot-pipeline.yaml manifest schema + operator docs"
+    branch_name_template: "b-byop-1"
+    role_framing: |
+      Senior engineering collaborator authoring the BYOP manifest schema
+      and operator-facing documentation. Pure JSON Schema + markdown work;
+      no Python, no DB. Foundation for the rest of the P0f BYOP sequence.
+    notes: "Per docs/byop_and_eukaryotic_design.md §N. Originally tagged Phase: P1 in the design doc; reframed to P0f per the 2026-04-29 phasing decision in todo.md."
+
+  - id: B-BYOP-2
+    title: BYOP Stage 1 static validator
+    short_description: |
+      backend/services/byop_validator.py implementing Stage 1 static
+      validation against the B-BYOP-1 manifest schema. Covers manifest
+      schema conformance, engine syntax checks, container reference
+      resolution, reference-data availability, license verification, and
+      operator permission checks. Returns structured pass/fail with
+      per-check diagnostics.
+    phase: p0f
+    status: tracked_not_scheduled
+    depends_on:
+      - B-BYOP-1
+    blocked_by_external:
+    parallel_safe: false
+    effort_sessions: 3.5
+    primary_files:
+      - backend/backend/services/byop_validator.py
+    test_files:
+      - tests/services/test_byop_validator.py
+    source_of_truth_views:
+      - docs/byop_and_eukaryotic_design.md
+      - schema/byop-pipeline-manifest.schema.json
+    pr_title_template: "feat(byop): B-BYOP-2 — Stage 1 static validator (manifest + engine + license + permissions)"
+    branch_name_template: "b-byop-2"
+    role_framing: |
+      Senior engineering collaborator implementing the BYOP Stage 1
+      validator. Reads manifests conforming to B-BYOP-1 schema and runs a
+      battery of static checks before any sandbox execution. No I/O against
+      external containers — that's Stage 2 (B-BYOP-3).
+    notes: "Per docs/byop_and_eukaryotic_design.md §N. Originally tagged Phase: P1 in the design doc; reframed to P0f per todo.md 2026-04-29."
+
+  - id: B-BYOP-3
+    title: BYOP Stage 2 sandbox dry-run
+    short_description: |
+      backend/services/byop_sandbox.py implementing Stage 2 sandbox
+      validation — a dry-run execution of the manifest under Kubernetes
+      namespace + Docker network isolation. Validates that containers
+      actually pull, that the engine binary executes, and that reference
+      data binds correctly. Stage 1 (B-BYOP-2) catches static problems;
+      Stage 2 catches runtime ones.
+    phase: p0f
+    status: tracked_not_scheduled
+    depends_on:
+      - B-BYOP-1
+      - B-BYOP-2
+    blocked_by_external:
+    parallel_safe: false
+    effort_sessions: 5
+    primary_files:
+      - backend/backend/services/byop_sandbox.py
+    test_files:
+      - tests/services/test_byop_sandbox.py
+    source_of_truth_views:
+      - docs/byop_and_eukaryotic_design.md
+    pr_title_function: "feat(byop): B-BYOP-3 — Stage 2 sandbox dry-run (k8s namespace + docker network isolation)"
+    pr_title_template: "feat(byop): B-BYOP-3 — Stage 2 sandbox dry-run (k8s namespace + docker network isolation)"
+    branch_name_template: "b-byop-3"
+    role_framing: |
+      Senior engineering collaborator implementing the BYOP Stage 2 sandbox.
+      Runs candidate manifests under k8s + Docker isolation to catch runtime
+      issues that static validation can't. Largest of the BYOP items by
+      effort (1 week / ~5 sessions per the design doc).
+    notes: "Per docs/byop_and_eukaryotic_design.md §N. Originally tagged Phase: P1 in the design doc; reframed to P0f per todo.md 2026-04-29. Design-doc effort was '1 week'; modeled here as 5 sessions."
+
+  - id: B-BYOP-4
+    title: BYOP CRUD router + lifecycle endpoints
+    short_description: |
+      backend/backend/routers/byop.py exposing full BYOP pipeline CRUD
+      (create, read, update, delete) plus lifecycle endpoints
+      (revalidate, deactivate, archive). Reads/writes the byop_pipelines
+      table introduced in B-BYOP-9. Calls B-BYOP-2 and B-BYOP-3 for
+      validation during create/update.
+    phase: p0f
+    status: tracked_not_scheduled
+    depends_on:
+      - B-BYOP-1
+      - B-BYOP-2
+      - B-BYOP-3
+      - B-BYOP-9
+    blocked_by_external:
+    parallel_safe: false
+    effort_sessions: 2.5
+    primary_files:
+      - backend/backend/routers/byop.py
+    test_files:
+      - tests/routers/test_byop.py
+    source_of_truth_views:
+      - docs/byop_and_eukaryotic_design.md
+    pr_title_template: "feat(byop): B-BYOP-4 — CRUD router + revalidate/deactivate/archive endpoints"
+    branch_name_template: "b-byop-4"
+    role_framing: |
+      Senior engineering collaborator implementing the BYOP CRUD router.
+      Standard FastAPI router work plus the BYOP-specific lifecycle
+      endpoints. Depends on the byop_pipelines table (B-BYOP-9, lands with
+      P0b) and the validation services (B-BYOP-2, B-BYOP-3).
+    notes: "Per docs/byop_and_eukaryotic_design.md §N. Originally tagged Phase: P1 in the design doc; reframed to P0f per todo.md 2026-04-29. Cross-phase dependency on B-BYOP-9 (P0b) — schedulable only after P0b's schema migration lands."
+
+  - id: B-BYOP-5a
+    title: BYOP Nextflow engine launcher (harden existing)
+    short_description: |
+      Harden the existing Nextflow launcher to conform to the BYOP engine-launcher
+      interface. Adapts current backend Nextflow invocation code into a
+      pluggable launcher consumable by B-BYOP-4's router. Smallest of the
+      4 launcher sub-items since the Nextflow code already exists.
+    phase: p0f
+    status: tracked_not_scheduled
+    depends_on:
+      - B-BYOP-4
+    blocked_by_external:
+    parallel_safe: true
+    parallel_safe_reason: "Distinct launcher file; no overlap with snakemake/wdl/manifest launchers (5b/5c/5d)."
+    effort_sessions: 2
+    primary_files:
+      - backend/backend/services/launchers/nextflow_launcher.py
+    test_files:
+      - tests/services/launchers/test_nextflow_launcher.py
+    source_of_truth_views:
+      - docs/byop_and_eukaryotic_design.md
+    pr_title_template: "feat(byop): B-BYOP-5a — harden Nextflow engine launcher for BYOP interface"
+    branch_name_template: "b-byop-5a"
+    role_framing: |
+      Senior engineering collaborator adapting the existing Nextflow
+      invocation code into a BYOP-compatible engine launcher. Mostly
+      interface alignment, some refactoring. Foundation for the other
+      three launchers (snakemake/wdl/manifest in B-BYOP-5b/5c/5d).
+    notes: "Per docs/byop_and_eukaryotic_design.md §N. B-BYOP-5 decomposed into 5a/5b/5c/5d per the per-engine effort estimate (2-3 sessions each) in the design doc and the 4-parallel annotation in the dependency tree."
+
+  - id: B-BYOP-5b
+    title: BYOP Snakemake engine launcher (new)
+    short_description: |
+      Net-new backend/backend/services/launchers/snakemake_launcher.py
+      implementing the BYOP engine-launcher interface for Snakemake
+      pipelines. Mirrors the Nextflow launcher's shape (B-BYOP-5a) but
+      invokes Snakemake instead.
+    phase: p0f
+    status: tracked_not_scheduled
+    depends_on:
+      - B-BYOP-4
+      - B-BYOP-5a
+    blocked_by_external:
+    parallel_safe: true
+    parallel_safe_reason: "Distinct launcher file; no overlap with nextflow/wdl/manifest launchers (5a/5c/5d)."
+    effort_sessions: 2.5
+    primary_files:
+      - backend/backend/services/launchers/snakemake_launcher.py
+    test_files:
+      - tests/services/launchers/test_snakemake_launcher.py
+    source_of_truth_views:
+      - docs/byop_and_eukaryotic_design.md
+    pr_title_template: "feat(byop): B-BYOP-5b — Snakemake engine launcher"
+    branch_name_template: "b-byop-5b"
+    role_framing: |
+      Senior engineering collaborator implementing the Snakemake engine
+      launcher for BYOP. Net-new file mirroring the shape of the
+      Nextflow launcher (B-BYOP-5a). Parallel-safe with B-BYOP-5c/5d.
+    notes: "Per docs/byop_and_eukaryotic_design.md §N. B-BYOP-5 decomposed; this is the snakemake variant."
+
+  - id: B-BYOP-5c
+    title: BYOP WDL engine launcher (new)
+    short_description: |
+      Net-new backend/backend/services/launchers/wdl_launcher.py
+      implementing the BYOP engine-launcher interface for WDL pipelines.
+      Mirrors the Nextflow launcher's shape (B-BYOP-5a) but invokes a
+      WDL execution engine (Cromwell or miniWDL).
+    phase: p0f
+    status: tracked_not_scheduled
+    depends_on:
+      - B-BYOP-4
+      - B-BYOP-5a
+    blocked_by_external:
+    parallel_safe: true
+    parallel_safe_reason: "Distinct launcher file; no overlap with nextflow/snakemake/manifest launchers (5a/5b/5d)."
+    effort_sessions: 2.5
+    primary_files:
+      - backend/backend/services/launchers/wdl_launcher.py
+    test_files:
+      - tests/services/launchers/test_wdl_launcher.py
+    source_of_truth_views:
+      - docs/byop_and_eukaryotic_design.md
+    pr_title_template: "feat(byop): B-BYOP-5c — WDL engine launcher"
+    branch_name_template: "b-byop-5c"
+    role_framing: |
+      Senior engineering collaborator implementing the WDL engine launcher
+      for BYOP. Net-new file mirroring the shape of the Nextflow launcher
+      (B-BYOP-5a). Choose between Cromwell and miniWDL early in the session.
+    notes: "Per docs/byop_and_eukaryotic_design.md §N. B-BYOP-5 decomposed; this is the WDL variant. Sub-item engine choice (Cromwell vs miniWDL) is the first AC."
+
+  - id: B-BYOP-5d
+    title: BYOP manifest-only (no-engine) launcher (new)
+    short_description: |
+      Net-new backend/backend/services/launchers/manifest_launcher.py for
+      pipelines that ship as a static manifest with no native execution
+      engine — i.e., users supply pre-rendered command sequences. Mirrors
+      the launcher interface from B-BYOP-5a but bypasses engine invocation.
+    phase: p0f
+    status: tracked_not_scheduled
+    depends_on:
+      - B-BYOP-4
+      - B-BYOP-5a
+    blocked_by_external:
+    parallel_safe: true
+    parallel_safe_reason: "Distinct launcher file; no overlap with nextflow/snakemake/wdl launchers (5a/5b/5c)."
+    effort_sessions: 2
+    primary_files:
+      - backend/backend/services/launchers/manifest_launcher.py
+    test_files:
+      - tests/services/launchers/test_manifest_launcher.py
+    source_of_truth_views:
+      - docs/byop_and_eukaryotic_design.md
+    pr_title_template: "feat(byop): B-BYOP-5d — manifest-only (engine-less) launcher"
+    branch_name_template: "b-byop-5d"
+    role_framing: |
+      Senior engineering collaborator implementing the manifest-only
+      launcher for BYOP. For pipelines distributed as static command
+      manifests without a native engine. Smallest of the four launchers.
+    notes: "Per docs/byop_and_eukaryotic_design.md §N. B-BYOP-5 decomposed; this is the manifest-only variant."
+
+  - id: B-BYOP-6
+    title: BYOP quarterly revalidation background job
+    short_description: |
+      backend/backend/services/byop_quarterly_revalidation.py — a scheduled
+      background job that re-runs Stage 1 validation (B-BYOP-2) against
+      every active BYOP pipeline quarterly, flagging upstream-rot
+      conditions (deleted containers, expired licenses, vanished
+      reference-data URLs).
+    phase: p0f
+    status: tracked_not_scheduled
+    depends_on:
+      - B-BYOP-2
+      - B-BYOP-4
+    blocked_by_external:
+    parallel_safe: true
+    parallel_safe_reason: "Net-new service file + scheduled-job wiring; no overlap with launchers or router."
+    effort_sessions: 1
+    primary_files:
+      - backend/backend/services/byop_quarterly_revalidation.py
+    test_files:
+      - tests/services/test_byop_quarterly_revalidation.py
+    source_of_truth_views:
+      - docs/byop_and_eukaryotic_design.md
+    pr_title_template: "feat(byop): B-BYOP-6 — quarterly revalidation job for upstream-rot detection"
+    branch_name_template: "b-byop-6"
+    role_framing: |
+      Senior engineering collaborator implementing the quarterly BYOP
+      revalidation job. Detects when registered pipelines silently break
+      due to upstream changes (container retag, license revocation, URL
+      drift). Reuses B-BYOP-2's validator under a scheduled wrapper.
+    notes: "Per docs/byop_and_eukaryotic_design.md §N. Cadence (quarterly) and trigger mechanism are spec'd in the design doc."
+
+  - id: B-BYOP-7
+    title: BYOP registration wizard UI (Streamlit)
+    short_description: |
+      Net-new Streamlit page guiding operators through registering a BYOP
+      pipeline — manifest upload, schema validation feedback, Stage 1
+      validator output, Stage 2 sandbox results, and final commit to the
+      byop_pipelines table via B-BYOP-4's router.
+    phase: p0f
+    status: tracked_not_scheduled
+    depends_on:
+      - B-BYOP-4
+    blocked_by_external:
+    parallel_safe: true
+    parallel_safe_reason: "Net-new Streamlit page; no overlap with backend or catalog-tab work (B-BYOP-8)."
+    effort_sessions: 2.5
+    primary_files:
+      - backend/frontend/pages/byop_register.py
+    test_files: []
+    source_of_truth_views:
+      - docs/byop_and_eukaryotic_design.md
+    pr_title_template: "feat(byop): B-BYOP-7 — Streamlit BYOP registration wizard"
+    branch_name_template: "b-byop-7"
+    role_framing: |
+      Senior engineering collaborator implementing the BYOP registration
+      wizard as a new Streamlit page. Multi-step flow with validation
+      feedback at each stage. Calls B-BYOP-4's CRUD router for the final
+      submit step.
+    notes: "Per docs/byop_and_eukaryotic_design.md §N. Path under backend/frontend/pages/ matches your existing Streamlit page layout."
+
+  - id: B-BYOP-8
+    title: BYOP catalog tab on Pipelines page (Streamlit)
+    short_description: |
+      Catalog tab added to the existing Streamlit Pipelines page listing
+      all registered BYOP pipelines with their current status, last
+      revalidation date, and per-pipeline detail drawer. Read-only for
+      most operators; admin actions deactivate/archive via B-BYOP-4.
+    phase: p0f
+    status: tracked_not_scheduled
+    depends_on:
+      - B-BYOP-4
+    blocked_by_external:
+    parallel_safe: true
+    parallel_safe_reason: "Edits existing Streamlit Pipelines page in a new tab section; no overlap with registration wizard (B-BYOP-7) or backend work."
+    effort_sessions: 1.5
+    primary_files:
+      - backend/frontend/pages/pipelines.py
+    test_files: []
+    source_of_truth_views:
+      - docs/byop_and_eukaryotic_design.md
+    pr_title_template: "feat(byop): B-BYOP-8 — BYOP catalog tab on Pipelines page"
+    branch_name_template: "b-byop-8"
+    role_framing: |
+      Senior engineering collaborator adding the BYOP catalog tab to the
+      existing Streamlit Pipelines page. Lists registered BYOP pipelines
+      with status + last-revalidation, drawer for per-pipeline detail.
+    notes: "Per docs/byop_and_eukaryotic_design.md §N. Caveat: edits backend/frontend/pages/pipelines.py which exists today, so file overlap with any concurrent session touching that file would block the parallel run."
+
+  - id: B-BYOP-9
+    title: BYOP schema migration — byop_pipelines table + pipeline_results FK
+    short_description: |
+      Single Alembic migration creating the byop_pipelines table (27 columns
+      covering manifest content, source type, lifecycle status, validation
+      and sandbox logs, license, citation, cost estimate) plus 4 new enums
+      (PipelineEngineEnum, PipelineSourceTypeEnum, PipelineStatusEnum,
+      DataTypeEnum), and adding pipeline_results.byop_pipeline_id foreign
+      key. Lands with the broader P0b Schema v5.0 migration cycle (not
+      standalone) per the 2026-04-29 phasing decision in todo.md.
+    phase: p0b
+    status: tracked_not_scheduled
+    depends_on: []
+    blocked_by_external: "P0b (lands with P0b's combined schema migration cycle alongside sovereignty + eukaryotic items)"
+    parallel_safe: false
+    effort_sessions: 1
+    primary_files:
+      - alembic/versions/<timestamp>_p0b_byop_pipelines.py
+      - backend/backend/db/models.py
+    test_files:
+      - tests/db/test_byop_pipelines_migration.py
+    source_of_truth_views:
+      - docs/byop_and_eukaryotic_design.md
+      - jackpot_schema.yaml
+    pr_title_template: "feat(db): B-BYOP-9 — byop_pipelines table + pipeline_results.byop_pipeline_id FK + 4 new enums"
+    branch_name_template: "b-byop-9"
+    role_framing: |
+      Senior engineering collaborator landing the BYOP schema migration as
+      part of P0b's combined cycle (alongside sovereignty-deletion columns
+      and eukaryotic items per the 2026-04-29 phasing decision). Pure
+      Alembic + SQLAlchemy + enum-class work; no router or service changes.
+      The router (B-BYOP-4) and validator (B-BYOP-2) sessions depend on
+      this entry existing before they can fire.
+    notes: "Per docs/byop_and_eukaryotic_design.md §7 for the 27-column schema + 4-enum detail. MUST land in the same P0b migration cycle as B-CWB-SCHEMA-1..5, B-EUK-1, B-EUK-2 — splitting into a later migration creates double-migrate operator churn (per todo.md 2026-04-29 phasing decision)."
+
+  - id: B-BYOP-10
+    title: BYOP telemetry — success rate, walltime, cost
+    short_description: |
+      Aggregated telemetry per registered BYOP pipeline — success rate,
+      mean/p95 walltime, mean cost per run. Pulls from existing
+      pipeline_results table (joined to byop_pipelines via the B-BYOP-9
+      FK). Exposed via B-BYOP-4 router endpoint and surfaced in the
+      catalog tab (B-BYOP-8).
+    phase: p0f
+    status: tracked_not_scheduled
+    depends_on:
+      - B-BYOP-4
+      - B-BYOP-5a
+    blocked_by_external:
+    parallel_safe: true
+    parallel_safe_reason: "Net-new aggregation service file plus a router endpoint addition; no overlap with the launcher PRs."
+    effort_sessions: 1.5
+    primary_files:
+      - backend/backend/services/byop_telemetry.py
+    test_files:
+      - tests/services/test_byop_telemetry.py
+    source_of_truth_views:
+      - docs/byop_and_eukaryotic_design.md
+    pr_title_template: "feat(byop): B-BYOP-10 — telemetry (success rate, walltime, cost per pipeline)"
+    branch_name_template: "b-byop-10"
+    role_framing: |
+      Senior engineering collaborator implementing BYOP telemetry —
+      aggregated success rate, walltime, and cost per registered pipeline.
+      Reads pipeline_results, joins to byop_pipelines via the B-BYOP-9 FK,
+      exposes via a new router endpoint and surfaces in the catalog tab.
+    notes: "Per docs/byop_and_eukaryotic_design.md §N. Depends on B-BYOP-5a's launcher emitting telemetry-ready output (or at least its existing telemetry shape being usable)."
