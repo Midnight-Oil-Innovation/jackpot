@@ -77,7 +77,7 @@ def _seed(
         payload["bio"] = bio
     if avatar_url is not None:
         payload["avatar_url"] = avatar_url
-    response = _as(app, owner).post("/profiles/", json=payload)
+    response = _as(app, owner).post("/api/v1/profiles/", json=payload)
     assert response.status_code == 201, response.text
     return response.json()
 
@@ -85,7 +85,7 @@ def _seed(
 def test_create_profile_success(app: FastAPI) -> None:
     client = _as(app, USER_A)
     response = client.post(
-        "/profiles/",
+        "/api/v1/profiles/",
         json={"display_name": "Alice", "bio": "hello", "avatar_url": "https://x/a.png"},
     )
     assert response.status_code == 201
@@ -98,14 +98,14 @@ def test_create_profile_success(app: FastAPI) -> None:
 
 def test_create_profile_duplicate(app: FastAPI) -> None:
     _seed(app, USER_A)
-    response = _as(app, USER_A).post("/profiles/", json={"display_name": "Alice Again"})
+    response = _as(app, USER_A).post("/api/v1/profiles/", json={"display_name": "Alice Again"})
     assert response.status_code == 409
     assert "already exists" in response.json()["detail"].lower()
 
 
 def test_read_own_profile(app: FastAPI) -> None:
     _seed(app, USER_A, display_name="Alice", bio="bio-A")
-    response = _as(app, USER_A).get("/profiles/me")
+    response = _as(app, USER_A).get("/api/v1/profiles/me")
     assert response.status_code == 200
     body = response.json()
     assert body["display_name"] == "Alice"
@@ -114,35 +114,35 @@ def test_read_own_profile(app: FastAPI) -> None:
 
 
 def test_read_own_profile_not_found(app: FastAPI) -> None:
-    response = _as(app, USER_A).get("/profiles/me")
+    response = _as(app, USER_A).get("/api/v1/profiles/me")
     assert response.status_code == 404
     assert response.json()["detail"] == "Profile not found."
 
 
 def test_read_profile_by_id_self(app: FastAPI) -> None:
     _seed(app, USER_A)
-    response = _as(app, USER_A).get(f"/profiles/{USER_A_ID}")
+    response = _as(app, USER_A).get(f"/api/v1/profiles/{USER_A_ID}")
     assert response.status_code == 200
     assert response.json()["user_id"] == str(USER_A_ID)
 
 
 def test_read_profile_by_id_admin(app: FastAPI) -> None:
     _seed(app, USER_A)
-    response = _as(app, ADMIN).get(f"/profiles/{USER_A_ID}")
+    response = _as(app, ADMIN).get(f"/api/v1/profiles/{USER_A_ID}")
     assert response.status_code == 200
     assert response.json()["display_name"] == "Alice"
 
 
 def test_read_profile_by_id_forbidden(app: FastAPI) -> None:
     _seed(app, USER_A)
-    response = _as(app, USER_B).get(f"/profiles/{USER_A_ID}")
+    response = _as(app, USER_B).get(f"/api/v1/profiles/{USER_A_ID}")
     assert response.status_code == 403
     assert response.json()["detail"] == "Not permitted to access this profile."
 
 
 def test_read_profile_not_found(app: FastAPI) -> None:
     missing = uuid.uuid4()
-    response = _as(app, ADMIN).get(f"/profiles/{missing}")
+    response = _as(app, ADMIN).get(f"/api/v1/profiles/{missing}")
     assert response.status_code == 404
     assert str(missing) in response.json()["detail"]
 
@@ -150,7 +150,7 @@ def test_read_profile_not_found(app: FastAPI) -> None:
 def test_update_profile_success(app: FastAPI) -> None:
     _seed(app, USER_A, display_name="Alice", bio="old")
     response = _as(app, USER_A).put(
-        f"/profiles/{USER_A_ID}",
+        f"/api/v1/profiles/{USER_A_ID}",
         json={"display_name": "Alice Renamed", "bio": "new", "avatar_url": "https://x/n.png"},
     )
     assert response.status_code == 200
@@ -163,7 +163,7 @@ def test_update_profile_success(app: FastAPI) -> None:
 def test_update_profile_admin(app: FastAPI) -> None:
     _seed(app, USER_A, display_name="Alice")
     response = _as(app, ADMIN).put(
-        f"/profiles/{USER_A_ID}",
+        f"/api/v1/profiles/{USER_A_ID}",
         json={"display_name": "AdminEdit"},
     )
     assert response.status_code == 200
@@ -173,7 +173,7 @@ def test_update_profile_admin(app: FastAPI) -> None:
 def test_update_profile_forbidden(app: FastAPI) -> None:
     _seed(app, USER_A)
     response = _as(app, USER_B).put(
-        f"/profiles/{USER_A_ID}",
+        f"/api/v1/profiles/{USER_A_ID}",
         json={"display_name": "Hacked"},
     )
     assert response.status_code == 403
@@ -183,7 +183,7 @@ def test_update_profile_forbidden(app: FastAPI) -> None:
 def test_update_profile_not_found(app: FastAPI) -> None:
     missing = uuid.uuid4()
     response = _as(app, ADMIN).put(
-        f"/profiles/{missing}",
+        f"/api/v1/profiles/{missing}",
         json={"display_name": "Whatever"},
     )
     assert response.status_code == 404
@@ -192,21 +192,21 @@ def test_update_profile_not_found(app: FastAPI) -> None:
 
 def test_delete_profile_success(app: FastAPI) -> None:
     _seed(app, USER_A)
-    response = _as(app, ADMIN).delete(f"/profiles/{USER_A_ID}")
+    response = _as(app, ADMIN).delete(f"/api/v1/profiles/{USER_A_ID}")
     assert response.status_code == 204
-    follow = _as(app, ADMIN).get(f"/profiles/{USER_A_ID}")
+    follow = _as(app, ADMIN).get(f"/api/v1/profiles/{USER_A_ID}")
     assert follow.status_code == 404
 
 
 def test_delete_profile_forbidden(app: FastAPI) -> None:
     _seed(app, USER_A)
-    response = _as(app, USER_A).delete(f"/profiles/{USER_A_ID}")
+    response = _as(app, USER_A).delete(f"/api/v1/profiles/{USER_A_ID}")
     assert response.status_code == 403
     assert response.json()["detail"] == "Admin required."
 
 
 def test_delete_profile_not_found(app: FastAPI) -> None:
     missing = uuid.uuid4()
-    response = _as(app, ADMIN).delete(f"/profiles/{missing}")
+    response = _as(app, ADMIN).delete(f"/api/v1/profiles/{missing}")
     assert response.status_code == 404
     assert str(missing) in response.json()["detail"]

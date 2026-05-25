@@ -23,7 +23,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, Field
 
 from backend.audit import AuditActions, log_audit
-from backend.auth.guards import get_current_user
+from backend.auth.guards import get_current_user, get_user_lab_membership
 from backend.database import execute_query, get_db_dep
 from backend.pagination import paginate
 from backend.permissions import visibility_sql_clause
@@ -404,6 +404,18 @@ def promote_file(
     if not file_row:
         return error("FILE_NOT_FOUND", f"File {file_id} not found.", status_code=404)
 
+    # Promotion triggers an expensive storage copy; gate it behind write
+    # authority (Lab Director of the file's lab, or Platform Admin) rather
+    # than mere read-visibility, matching sample archival in routers/samples.py.
+    if not user.get("is_platform_admin"):
+        member = get_user_lab_membership(user["id"], file_row["lab_id"])
+        if not member or not member.get("is_lab_director"):
+            return error(
+                "ACCESS_DENIED",
+                "Lab Director or Platform Admin required to promote files.",
+                status_code=403,
+            )
+
     current = file_row["storage_state"]
     if current == "BROKEN":
         return error(
@@ -514,7 +526,11 @@ async def _promote_file_storage_wrapper(
 
 
 @router.get("/jobs/{job_id}")
-def get_promote_job(job_id: str, request: Request):
+def get_promote_job(
+    job_id: str,
+    request: Request,
+    db=Depends(get_db_dep),  # noqa: B008
+):
     """Look up a promotion job's status.
 
     Phase P0f F-9. Reads from the in-memory tracker in
@@ -523,11 +539,18 @@ def get_promote_job(job_id: str, request: Request):
     until the per-job timeout expires (handles "scheduled but not yet
     run" and "ran on a sibling instance" the same way).
     """
-    get_current_user(request)
+    user = get_current_user(request)
     from backend.jobs import get_promote_job_status
 
     entry = get_promote_job_status(job_id)
     if entry is None:
+        return error("JOB_NOT_FOUND", f"Job {job_id} not found.", status_code=404)
+    # Scope to the file's visibility. The job_id is predictable
+    # (promote_{file_id}_{iso}), so without this any authenticated user
+    # could read another user's job metadata. Collapse "not visible" into
+    # the same 404 as "unknown job" so existence isn't leaked.
+    file_id = entry.get("file_id")
+    if file_id is None or _load_file_row_for_user(file_id, user, db) is None:
         return error("JOB_NOT_FOUND", f"Job {job_id} not found.", status_code=404)
     out = {"job_id": job_id, **entry}
     return success(data=out)

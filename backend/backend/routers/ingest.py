@@ -9,6 +9,7 @@ from datetime import date
 from pathlib import Path
 from typing import Any
 
+from botocore.exceptions import BotoCoreError, ClientError
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
 from pydantic import BaseModel
 
@@ -867,11 +868,14 @@ async def register_paths(
                 metadata={"ingest_method": "register", "role": spec.role},
                 db_conn=db,
             )
-    except (FileNotFoundError, PermissionError, OSError) as exc:
+    except (FileNotFoundError, PermissionError, OSError, BotoCoreError, ClientError) as exc:
         # Phase P0f F-6: roll back the entire sample registration if
         # any file is unreachable — partial success is worse than clean
-        # failure for an ingest API. The transaction is owned by
-        # get_db_dep; raising here triggers rollback in the dep cleanup.
+        # failure for an ingest API. gs://-/s3:// fingerprinting raises
+        # botocore ClientError/BotoCoreError (not OSError) for a missing,
+        # forbidden, or unreachable object, so those map to 400 too. The
+        # transaction is owned by get_db_dep; raising here triggers
+        # rollback in the dep cleanup.
         bad_uri = current_spec.uri if current_spec else "<unknown>"
         raise HTTPException(
             status_code=400,

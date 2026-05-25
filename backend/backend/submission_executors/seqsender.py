@@ -30,6 +30,7 @@ ENA earlier with a user-facing error message.
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import os
 import tempfile
 import time
@@ -105,10 +106,18 @@ def write_seqsender_config(
 
     fd, path = tempfile.mkstemp(suffix=".yaml", prefix=f"seqsender_config_{submission_id}_")
     try:
-        os.write(fd, yaml.safe_dump(config_data).encode("utf-8"))
-    finally:
-        os.close(fd)
-    os.chmod(path, 0o600)
+        try:
+            os.write(fd, yaml.safe_dump(config_data).encode("utf-8"))
+        finally:
+            os.close(fd)
+        os.chmod(path, 0o600)
+    except BaseException:
+        # The caller only deletes files it receives a path for. If the
+        # write/chmod fails we never return, so unlink here to avoid
+        # leaking a credential-bearing temp file on disk.
+        with contextlib.suppress(OSError):
+            os.unlink(path)
+        raise
 
     return Path(path), credential_values
 

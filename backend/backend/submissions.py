@@ -598,6 +598,16 @@ _REPOSITORY_REQUIRED_FIELDS: dict[str, tuple[str, ...]] = {
 }
 
 
+def _field_missing(value: Any) -> bool:
+    """True if a required field is absent. None and blank/whitespace-only
+    strings count as missing; legitimately falsy values (0, 0.0, False)
+    do not.
+    """
+    if value is None:
+        return True
+    return isinstance(value, str) and not value.strip()
+
+
 def validate_submission_readiness(submission_id: int, conn) -> SubmissionValidationResult:
     """Return per-sample validation issues; the caller decides what to do.
 
@@ -622,7 +632,7 @@ def validate_submission_readiness(submission_id: int, conn) -> SubmissionValidat
 
     per_sample: list[SampleValidationIssue] = []
     for row in rows:
-        missing = [f for f in required if not row.get(f)]
+        missing = [f for f in required if _field_missing(row.get(f))]
         if missing:
             per_sample.append(
                 SampleValidationIssue(
@@ -883,6 +893,15 @@ def register_accessions(
             conn=conn,
         )
 
+    # No accession row matched a sample in this submission — nothing was
+    # processed. Treat as a client error rather than silently transitioning
+    # the submission to RELEASED/EMBARGOED with zero accessions written.
+    if accepted_count == 0 and rejected_count == 0:
+        raise HTTPException(
+            status_code=422,
+            detail="No accession rows matched samples in this submission.",
+        )
+
     # Decide the new submission status based on per-sample counts.
     if rejected_count and accepted_count:
         new_status = "PARTIAL_SUCCESS"
@@ -904,7 +923,10 @@ def register_accessions(
         """
         UPDATE submissions
            SET status = :st,
-               accepted_at = COALESCE(accepted_at, NOW())
+               accepted_at = CASE
+                   WHEN :st = 'REJECTED' THEN accepted_at
+                   ELSE COALESCE(accepted_at, NOW())
+               END
          WHERE id = :id
          RETURNING *
         """,

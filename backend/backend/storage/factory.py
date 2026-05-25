@@ -40,13 +40,16 @@ def get_storage_backend(bucket: JackpotBucket = JackpotBucket.STAGING) -> Storag
             backend_name="s3",
         )
 
-    # GCS via S3-compatible HMAC credentials
+    # GCS via S3-compatible HMAC credentials. Use get_optional so that a
+    # deployment relying on ambient/ADC credentials (no HMAC keys set)
+    # gets None here and lets boto3 resolve credentials itself, rather
+    # than crashing with CredentialNotFoundError on the first storage call.
     return S3StorageBackend(
         bucket_name=bucket_name,
         region="auto",
         endpoint_url="https://storage.googleapis.com",
-        access_key=credentials.get("gcs_hmac_access_key"),
-        secret_key=credentials.get("gcs_hmac_secret"),
+        access_key=credentials.get_optional("gcs_hmac_access_key"),
+        secret_key=credentials.get_optional("gcs_hmac_secret"),
         use_path_style=False,
         backend_name="gcs",
     )

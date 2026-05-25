@@ -29,6 +29,7 @@ README pointing at follow-up work for full vendor-format coverage.
 from __future__ import annotations
 
 import csv
+import hashlib
 import logging
 import os
 import shutil
@@ -107,14 +108,27 @@ def _link_or_copy(uri: str, dest_dir: Path, *, copy: bool = False) -> str:
         return f"# BROKEN: {uri}"
 
     dest_dir.mkdir(parents=True, exist_ok=True)
+    src_resolved = src_path.resolve()
     dest = dest_dir / src_path.name
+    # Two different source files can share a basename (e.g. R1.fastq.gz from
+    # two samples). If the slot already holds a *different* file that still
+    # exists, disambiguate with a short hash of the source path so the second
+    # placement can't clobber the first (which would make that sample's TSV
+    # row reference the wrong file's contents). Stale leftovers and
+    # re-placements of the same source are simply overwritten.
+    if dest.exists() or dest.is_symlink():
+        existing = Path(os.readlink(dest)) if dest.is_symlink() else dest
+        if existing.exists() and existing.resolve() != src_resolved:
+            digest = hashlib.sha256(str(src_resolved).encode()).hexdigest()[:8]
+            dest = dest_dir / f"{digest}_{src_path.name}"
+
     if dest.exists() or dest.is_symlink():
         dest.unlink()
 
     if copy:
         shutil.copy2(src_path, dest)
     else:
-        os.symlink(src_path.resolve(), dest)
+        os.symlink(src_resolved, dest)
 
     return str(dest.relative_to(dest_dir.parent))
 

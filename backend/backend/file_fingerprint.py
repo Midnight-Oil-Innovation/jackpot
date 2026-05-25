@@ -111,7 +111,7 @@ def _fingerprint_object_storage(bucket: str, key: str) -> tuple[int, str, str]:
         empty = hashlib.sha256(b"").hexdigest()
         return (0, empty, empty)
 
-    if size <= 2 * FINGERPRINT_CHUNK_SIZE:
+    if size < 2 * FINGERPRINT_CHUNK_SIZE:
         body = client.get_object(
             Bucket=bucket,
             Key=key,

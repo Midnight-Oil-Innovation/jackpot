@@ -73,11 +73,13 @@ def _get_client():
             config=BotoConfig(signature_version="s3v4"),
             region_name="us-east-1",
         )
+    # get_optional so ambient/ADC credentials still work: None lets boto3
+    # resolve credentials via its own chain instead of raising.
     return boto3.client(
         "s3",
         endpoint_url="https://storage.googleapis.com",
-        aws_access_key_id=credentials.get("gcs_hmac_access_key"),
-        aws_secret_access_key=credentials.get("gcs_hmac_secret"),
+        aws_access_key_id=credentials.get_optional("gcs_hmac_access_key"),
+        aws_secret_access_key=credentials.get_optional("gcs_hmac_secret"),
         config=BotoConfig(signature_version="s3v4"),
         region_name="auto",
     )

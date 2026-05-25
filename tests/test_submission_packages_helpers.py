@@ -132,6 +132,40 @@ def test_link_or_copy_overwrites_existing_dest_symlink(tmp_path):
     assert pre_existing.resolve() == src.resolve()
 
 
+def test_link_or_copy_disambiguates_same_basename_different_sources(tmp_path):
+    """Two different sources sharing a basename must not clobber each other."""
+    a_dir = tmp_path / "sample_a"
+    b_dir = tmp_path / "sample_b"
+    a_dir.mkdir()
+    b_dir.mkdir()
+    src_a = a_dir / "R1.fastq.gz"
+    src_b = b_dir / "R1.fastq.gz"
+    src_a.write_bytes(b"AAA")
+    src_b.write_bytes(b"BBB")
+    dest_dir = tmp_path / "files"
+
+    out_a = _link_or_copy(f"file://{src_a}", dest_dir)
+    out_b = _link_or_copy(f"file://{src_b}", dest_dir)
+
+    # Distinct placed paths, each resolving to its own source.
+    assert out_a != out_b
+    assert (dest_dir.parent / out_a).resolve() == src_a.resolve()
+    assert (dest_dir.parent / out_b).resolve() == src_b.resolve()
+
+
+def test_link_or_copy_reuses_slot_for_same_source(tmp_path):
+    """Re-placing the identical source keeps the original basename (idempotent)."""
+    src = tmp_path / "R1.fastq.gz"
+    src.write_bytes(b"AAA")
+    dest_dir = tmp_path / "files"
+
+    first = _link_or_copy(f"file://{src}", dest_dir)
+    second = _link_or_copy(f"file://{src}", dest_dir)
+
+    assert first == second == "files/R1.fastq.gz"
+    assert (dest_dir.parent / second).resolve() == src.resolve()
+
+
 def test_sample_file_uris_skips_invalid_json_entries():
     """Malformed JSON in the joined ``files`` array is skipped silently."""
     row = {

@@ -110,51 +110,56 @@ def _parse_xlsx(file_bytes: bytes) -> SpreadsheetMeta:
     except Exception as exc:
         raise HTTPException(status_code=400, detail=f"Could not parse xlsx: {exc}") from exc
 
-    sheets = wb.sheetnames
-    if not sheets:
-        raise HTTPException(status_code=400, detail="Workbook has no sheets.")
+    # read_only workbooks keep the underlying zip/file open until closed;
+    # close in a finally so repeated parses don't leak file descriptors.
+    try:
+        sheets = wb.sheetnames
+        if not sheets:
+            raise HTTPException(status_code=400, detail="Workbook has no sheets.")
 
-    columns_by_sheet: dict[str, list[str]] = {}
-    sample_values_by_sheet: dict[str, dict[str, list[str]]] = {}
-    row_counts_by_sheet: dict[str, int] = {}
+        columns_by_sheet: dict[str, list[str]] = {}
+        sample_values_by_sheet: dict[str, dict[str, list[str]]] = {}
+        row_counts_by_sheet: dict[str, int] = {}
 
-    for name in sheets:
-        ws = wb[name]
-        rows = ws.iter_rows(values_only=True)
-        try:
-            header = next(rows)
-        except StopIteration:
-            columns_by_sheet[name] = []
-            sample_values_by_sheet[name] = {}
-            row_counts_by_sheet[name] = 0
-            continue
-
-        cols = [str(c) if c is not None else "" for c in header]
-        cols = [c for c in cols if c]  # drop trailing empty header cells
-        columns_by_sheet[name] = cols
-        samples: dict[str, list[str]] = {c: [] for c in cols}
-        count = 0
-        for row in rows:
-            if row is None or all(c is None for c in row):
+        for name in sheets:
+            ws = wb[name]
+            rows = ws.iter_rows(values_only=True)
+            try:
+                header = next(rows)
+            except StopIteration:
+                columns_by_sheet[name] = []
+                sample_values_by_sheet[name] = {}
+                row_counts_by_sheet[name] = 0
                 continue
-            for idx, val in enumerate(row):
-                if idx >= len(cols):
-                    break
-                if val is None:
-                    continue
-                col = cols[idx]
-                if len(samples[col]) < 5 and str(val) not in samples[col]:
-                    samples[col].append(str(val))
-            count += 1
-        sample_values_by_sheet[name] = samples
-        row_counts_by_sheet[name] = count
 
-    return SpreadsheetMeta(
-        sheets=sheets,
-        columns_by_sheet=columns_by_sheet,
-        sample_values_by_sheet=sample_values_by_sheet,
-        row_counts_by_sheet=row_counts_by_sheet,
-    )
+            cols = [str(c) if c is not None else "" for c in header]
+            cols = [c for c in cols if c]  # drop trailing empty header cells
+            columns_by_sheet[name] = cols
+            samples: dict[str, list[str]] = {c: [] for c in cols}
+            count = 0
+            for row in rows:
+                if row is None or all(c is None for c in row):
+                    continue
+                for idx, val in enumerate(row):
+                    if idx >= len(cols):
+                        break
+                    if val is None:
+                        continue
+                    col = cols[idx]
+                    if len(samples[col]) < 5 and str(val) not in samples[col]:
+                        samples[col].append(str(val))
+                count += 1
+            sample_values_by_sheet[name] = samples
+            row_counts_by_sheet[name] = count
+
+        return SpreadsheetMeta(
+            sheets=sheets,
+            columns_by_sheet=columns_by_sheet,
+            sample_values_by_sheet=sample_values_by_sheet,
+            row_counts_by_sheet=row_counts_by_sheet,
+        )
+    finally:
+        wb.close()
 
 
 def _parse_csv_like(file_bytes: bytes, delimiter: str) -> SpreadsheetMeta:
@@ -456,29 +461,34 @@ def _row_iter_from_session(session: dict, conn) -> tuple[list[str], list[dict[st
         from openpyxl import load_workbook  # noqa: PLC0415
 
         wb = load_workbook(io.BytesIO(file_bytes), read_only=True, data_only=True)
-        sheet_name = blob["selected_sheet"] or wb.sheetnames[0]
-        ws = wb[sheet_name]
-        iter_rows = ws.iter_rows(values_only=True)
+        # read_only workbooks hold the underlying file open; close in a
+        # finally so repeated wizard steps don't leak file descriptors.
         try:
-            header = next(iter_rows)
-        except StopIteration:
-            return [], []
-        cols = [str(c) if c is not None else "" for c in header]
-        cols = [c for c in cols if c]
-        rows_out: list[dict[str, str]] = []
-        for raw in iter_rows:
-            if raw is None or all(c is None for c in raw):
-                continue
-            entry: dict[str, str] = {}
-            for idx, c in enumerate(cols):
-                if idx < len(raw) and raw[idx] is not None:
-                    entry[c] = str(raw[idx])
-                else:
-                    entry[c] = ""
-            rows_out.append(entry)
-            if len(rows_out) >= MAX_ROWS_PER_IMPORT:
-                break
-        return cols, rows_out
+            sheet_name = blob["selected_sheet"] or wb.sheetnames[0]
+            ws = wb[sheet_name]
+            iter_rows = ws.iter_rows(values_only=True)
+            try:
+                header = next(iter_rows)
+            except StopIteration:
+                return [], []
+            cols = [str(c) if c is not None else "" for c in header]
+            cols = [c for c in cols if c]
+            rows_out: list[dict[str, str]] = []
+            for raw in iter_rows:
+                if raw is None or all(c is None for c in raw):
+                    continue
+                entry: dict[str, str] = {}
+                for idx, c in enumerate(cols):
+                    if idx < len(raw) and raw[idx] is not None:
+                        entry[c] = str(raw[idx])
+                    else:
+                        entry[c] = ""
+                rows_out.append(entry)
+                if len(rows_out) >= MAX_ROWS_PER_IMPORT:
+                    break
+            return cols, rows_out
+        finally:
+            wb.close()
 
     delimiter = "," if fmt == "csv" else "\t"
     text = file_bytes.decode("utf-8")

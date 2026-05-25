@@ -38,11 +38,21 @@ def get_current_user(request: Request) -> dict:
     token = request.cookies.get("access")
     if not token:
         raise HTTPException(status_code=401, detail="Not authenticated.")
+    # Resolve the signing key separately: a credential-backend failure is a
+    # 503 (service issue), not a 401 (bad token), and must not leak a raw
+    # stack trace to the caller.
     try:
-        payload = jwt.decode(token, credentials.get("jwt_signing_key"), algorithms=["HS256"])
+        signing_key = credentials.get("jwt_signing_key")
+    except CredentialError as exc:
+        logger.error("auth: jwt signing key unavailable: %s", exc)
+        raise HTTPException(
+            status_code=503, detail="Authentication temporarily unavailable."
+        ) from exc
+    try:
+        payload = jwt.decode(token, signing_key, algorithms=["HS256"])
     except jwt.ExpiredSignatureError as exc:
         raise HTTPException(status_code=401, detail="Access token expired.") from exc
-    except jwt.InvalidTokenError as exc:
+    except jwt.JWTError as exc:
         raise HTTPException(status_code=401, detail="Invalid token.") from exc
 
     if payload.get("type") != "access":

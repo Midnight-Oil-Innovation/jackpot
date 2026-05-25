@@ -120,13 +120,16 @@ class FederationClient:
         if not eligible:
             return []
 
-        # Fan out concurrently
-        tasks = [self._query_one(partner, query, api_key_resolver(partner)) for partner in eligible]
+        # Fan out concurrently. Resolve each partner's key *inside*
+        # _query_one so a resolver failure (e.g. a deleted Secret Manager
+        # entry) is captured per-partner by return_exceptions=True rather
+        # than aborting the whole fan-out before it starts.
+        tasks = [self._query_one(partner, query, api_key_resolver) for partner in eligible]
         per_partner_results = await asyncio.gather(*tasks, return_exceptions=True)
 
         merged: list[FederationQueryResult] = []
         for partner, result in zip(eligible, per_partner_results, strict=True):
-            if isinstance(result, Exception):
+            if isinstance(result, BaseException):
                 logger.warning(
                     "federation: partner %s query failed: %s",
                     partner.name,
@@ -144,11 +147,15 @@ class FederationClient:
         self,
         partner: FederatedInstance,
         query: FederationQuery,
-        api_key: str,
+        api_key_resolver,  # callable: FederatedInstance -> str
     ) -> list[FederationQueryResult]:
         """Issue the GET /api/v1/samples/ call to a single partner."""
         if self._http is None:  # pragma: no cover — guarded by query()
             raise RuntimeError("http client unavailable")
+
+        # Resolve the key here (not eagerly in query()) so a failure for
+        # this partner doesn't take down the whole fan-out.
+        api_key = api_key_resolver(partner)
 
         params = query.model_dump(exclude_none=True)
         # Always force ANALYZABLE+ at the wire level even if caller didn't.

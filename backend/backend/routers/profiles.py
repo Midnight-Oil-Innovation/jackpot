@@ -73,7 +73,7 @@ class ProfileRead(BaseModel):
     avatar_url: str | None = None
 
 
-router = APIRouter(prefix="/profiles", tags=["profiles"])
+router = APIRouter(prefix="/api/v1/profiles", tags=["profiles"])
 
 
 def _is_admin(user: dict) -> bool:
