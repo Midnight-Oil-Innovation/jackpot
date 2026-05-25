@@ -5,7 +5,6 @@ description: >
   bioinformatics, and public health research.
 
   Schema v4.1 — fully merged. Incorporates:
-    - All APGAP spreadsheet field definitions (All_Sequences, human_host,
       wildlife_host, companion_animal, livestock, wastewater, water, air,
       soil, surface, food_products, produce_ag, vectors)
     - Reportable communicable diseases organism list (operator-configurable)
@@ -54,7 +53,6 @@ classes:
 
   Organization:
     description: >
-      An institution (e.g. a public health agency, academic lab, NGO, or CDC). Maps to APGAP Organization model.
     attributes:
       display_name:
         identifier: true
@@ -87,7 +85,6 @@ classes:
   Sample:
     description: >
       Base class for all sequenced samples. Pathogen-agnostic.
-      Fields derived from APGAP All_Sequences.xlsx.
       Every URI maps to GenEpiO, NCBI BioSample, MIxS, or OBI where
       a standard term exists.
     attributes:
@@ -100,7 +97,6 @@ classes:
         description: >
           Unique alphanumeric identifier for this sample.
           Must not already be in use in the system.
-          APGAP: 'Sample ID'. Validation: alphanumeric, unique.
           Portal mints persistent URI at ingest:
           https://data.jackpot.health/samples/{sample_id}
 
@@ -120,7 +116,6 @@ classes:
         range: SourceTypeEnum
         required: true
         description: >
-          APGAP: 'Source type'. Determines which host-specific subclass
           is required. Further required fields depend on this value.
           Validation: match defined allowable entries.
 
@@ -136,7 +131,6 @@ classes:
           Platform Admins may add new values when novel pathogens emerge.
           Researchers may request additions via the portal.
           Use 'metagenome' when no specific organism is targeted.
-          APGAP: 'Pathogen/organism name (or metagenomic)'.
 
       strain:
         slot_uri: ncbi:strain
@@ -149,7 +143,6 @@ classes:
       isolate:
         slot_uri: ncbi:isolate
         description: >
-          APGAP: 'Isolate'. Identification or description of the specific
           individual from which the sample was obtained.
 
       serotype:
@@ -178,27 +171,23 @@ classes:
         range: ExperimentTypeEnum
         required: true
         description: >
-          APGAP: 'Type of experiment'.
           Validation: match defined allowable entries (one only).
 
       nucleic_acid_extraction_method:
         multivalued: true
         required: true
         description: >
-          APGAP: 'Nucleic acid extraction method'.
           Multiple values permitted. Match defined allowable entries.
 
       library_preparation_method:
         required: true
         description: >
-          APGAP: 'Nucleic acid library preparation method'.
           Match defined allowable entries (one only).
 
       sequencing_protocol:
         slot_uri: genepio:0001243
         required: true
         description: >
-          APGAP: 'Sequencing protocol'. URL to protocol document.
           Validation: URL format preferred
           (e.g. https://www.protocols.io/view/artic-v4-1).
 
@@ -207,7 +196,6 @@ classes:
         range: SequencingPlatformEnum
         required: true
         description: >
-          APGAP: 'Sequencing instrument make and model'.
           Validation: match defined allowable entries (one only).
 
       sequencing_instrument:
@@ -219,30 +207,25 @@ classes:
       sequencing_lab:
         required: true
         description: >
-          APGAP: 'Sequencing lab (originating lab)'. The lab that
           performed the sequencing. NOT a static enum — validated at
           ingest against the sequencing_labs database table, which is
           a Platform Admin-managed controlled vocabulary.
-          Seeded values: 'Sonora Quest Laboratories',
+          Seeded values: 'Example Reference Lab',
           'Laboratory Corporation of America'.
-          Registered JACKPOT Labs are auto-added (APGAP backlog #42).
           Unknown values trigger validation error directing Lab Director
           to submit a sequencing lab addition request via the portal
-          (APGAP backlog #7).
 
       date_collected:
         slot_uri: ncbi:collection_date
         range: date
         required: true
         description: >
-          APGAP: 'Date Collected'. ISO 8601 format (YYYY-MM-DD).
           Validation: flag if >5 years in past; reject if future date.
 
       date_sequenced:
         range: date
         required: true
         description: >
-          APGAP: 'Date Sequenced'. ISO 8601 format.
           Validation: must not be future date; must not precede
           date_collected.
 
@@ -250,14 +233,12 @@ classes:
         slot_uri: ncbi:collected_by
         required: true
         description: >
-          APGAP: 'Collection facility'. Institution or facility where
           the sample was collected. Match defined allowable entries.
 
       purpose_for_collection:
         multivalued: true
         required: true
         description: >
-          APGAP: 'Purpose for collection and sequencing'.
           Multiple selections permitted. Match defined allowable entries.
 
       # ── Geography ────────────────────────────────────────────────────────
@@ -574,7 +555,6 @@ classes:
       associated_sample_ids:
         multivalued: true
         description: >
-          APGAP: 'IDs of any associated samples'. Present in ALL sample
           type spreadsheets. Links sequences from the same investigation
           (e.g. pet and owner, food product and patient, vector and host).
           Validation: each ID should match an existing sample_id in the
@@ -586,25 +566,21 @@ classes:
       ct_value:
         range: float
         description: >
-          APGAP: 'Ct value'. PCR cycle threshold value.
           Validation: numeric, range [0, 50].
 
       other_testing_performed:
         multivalued: true
         description: >
-          APGAP: 'Other Testing Performed'. Multiple entries permitted.
           Match defined allowable entries. Flag error if 'none' entered
           alongside any other value.
 
       lab_of_other_testing:
         multivalued: true
         description: >
-          APGAP: 'Lab of Other Testing'. Conditional: required if
           other_testing_performed is not empty or 'none'.
 
       intermediary_clinical_lab:
         description: >
-          APGAP: 'Intermediary clinical lab name'. Optional.
           Match defined allowable entries.
 
       # ── Sequencing Results (auto-populated post-pipeline) ────────────────
@@ -740,13 +716,10 @@ classes:
       # ── Administrative (all optional) ─────────────────────────────────────
       pi_name:
         description: >
-          APGAP: 'PI name'. Defaults to Lab Director.
           Validation: must match existing user in the platform.
       grant_number:
-        description: "APGAP: 'Grant number'. Alphanumeric."
       contact_other:
         description: >
-          APGAP: 'Contact (if other than user uploading data)'.
           Email format. Phase 2: allow non-user contacts.
       comments:
         description: "Free text comments"
@@ -759,7 +732,6 @@ classes:
     is_a: Sample
     description: >
       Clinical or surveillance sample from a human host.
-      Fields from APGAP human_host.xlsx.
       Maps to GA4GH Phenopacket Individual + Disease elements.
     attributes:
 
@@ -781,27 +753,23 @@ classes:
         range: BiospecimenTypeEnum
         required: true
         description: >
-          APGAP: 'Biospecimen type'. Type of biological specimen collected.
 
       reason_for_collection:
         multivalued: true
         range: ReasonForCollectionEnum
         required: true
         description: >
-          APGAP: 'Reason for sample collection'.
           Whether sample was obtained during clinical care or research study.
 
       host_sex:
         slot_uri: ncbi:host_sex
         range: BiologicalSexEnum
         description: >
-          APGAP: 'Sex'. Biological sex of the human host.
 
       host_age:
         slot_uri: ncbi:host_age
         range: integer
         description: >
-          APGAP: 'Age (years)'. Age at time of collection.
           Validation: integer, range [0, 120]. Unit: years.
 
       host_age_unit:
@@ -818,7 +786,6 @@ classes:
         multivalued: true
         required: true
         description: >
-          APGAP: 'Disease'. The disease caused by the pathogen (whether or
           not the host is symptomatic). Match defined allowable entries.
 
       isolation_source:
@@ -901,14 +868,12 @@ classes:
     is_a: Sample
     description: >
       Sample from a wild animal host.
-      Fields from APGAP wildlife_host.xlsx.
     attributes:
 
       host_species:
         slot_uri: ncbi:host
         required: true
         description: >
-          APGAP: 'Host species'. Scientific name preferred (genus + species);
           genus only acceptable. Match defined allowable entries.
           Examples: Eptesicus fuscus, Canis latrans, Odocoileus virginianus.
 
@@ -944,14 +909,12 @@ classes:
     is_a: Sample
     description: >
       Sample from a companion (pet) animal host.
-      Fields from APGAP Companion_animal_host.xlsx.
     attributes:
 
       host_species:
         slot_uri: ncbi:host
         required: true
         description: >
-          APGAP: 'Host species'. Genus and species.
           Examples: felis catus, canis familiaris.
 
       companion_subject_id:
@@ -960,7 +923,6 @@ classes:
       location_type:
         range: CompanionAnimalLocationEnum
         description: >
-          APGAP: 'Location type'. Animal's setting.
 
       biospecimen_type:
         range: BiospecimenTypeEnum
@@ -968,7 +930,6 @@ classes:
 
       vaccine_status_against_pathogen:
         range: VaccineStatusEnum
-        description: "APGAP: 'Vaccine status against pathogen'"
 
       host_disease:
         slot_uri: ncbi:host_disease
@@ -989,14 +950,12 @@ classes:
     is_a: Sample
     description: >
       Sample from a livestock or agricultural animal host.
-      Fields from APGAP Livestock_Ag_animal_host.xlsx.
     attributes:
 
       host_species:
         slot_uri: ncbi:host
         required: true
         description: >
-          APGAP: 'Host species'. Scientific name of livestock species.
           Examples: Gallus gallus domesticus, Sus domesticus, Lama glama.
 
       livestock_subject_id:
@@ -1036,13 +995,11 @@ classes:
     is_a: Sample
     description: >
       Sample from a disease vector (arthropod).
-      Fields from APGAP vectors.xlsx.
     attributes:
 
       vector_species:
         required: true
         description: >
-          APGAP: 'Vector species'. Scientific name.
           Examples: Aedes aegypti, Culex tarsalis,
           Rhipicephalus sanguineus, Dermacentor andersoni.
 
@@ -1084,16 +1041,14 @@ classes:
     is_a: EnvironmentalSample
     description: >
       Sample from a wastewater collection or treatment system.
-      Fields from APGAP wastewater_sample.xlsx, aligned with CDC NWSS
       mandatory reporting fields.
       Reference: https://www.cdc.gov/nwss/reporting.html
     attributes:
 
       wwtp_name:
         description: >
-          APGAP: 'Location (sample_location_specify)'. NWSS: sample_location.
           Wastewater facility name or upstream sewer location.
-          Examples: 'South Tempe Water Reclamation Facility',
+          Examples: 'Example Water Reclamation Facility',
           'undisclosed sewer line upstream of 5th Ave'.
 
       nwss_sewershed_id:
@@ -1113,7 +1068,6 @@ classes:
       county_names:
         multivalued: true
         description: >
-          APGAP: 'Service area (county_names)'. NWSS: county_names.
           Counties served by this sampling site, by name or FIPS code.
           System cross-maps name ↔ FIPS. Multiple entries permitted.
           Examples: 'Some County', '04013', 'Another County'.
@@ -1122,19 +1076,16 @@ classes:
         range: integer
         required: true
         description: >
-          APGAP/NWSS: 'Population served'. Estimated number of persons
           served by this sampling site. Validation: positive integer.
 
       sample_type:
         range: WastewaterSampleTypeEnum
         required: true
-        description: "APGAP/NWSS: 'Sample type'. e.g. grab, 24-hr composite"
 
       sample_matrix:
         range: SampleMatrixEnum
         required: true
         description: >
-          APGAP/NWSS: 'Sample matrix'. Wastewater matrix from which
           the sample was collected.
 
       pretreatment:
@@ -1142,7 +1093,6 @@ classes:
         range: PretreatmentEnum
         required: true
         description: >
-          APGAP: 'Pretreatment'. Treatment applied prior to collection.
           Flag if 'none' co-occurs with any other value.
 
       concentration_method:
@@ -1153,7 +1103,6 @@ classes:
         range: float
         required: true
         description: >
-          APGAP: 'Flow rate (MGD)'. NWSS: flow_rate.
           Wastewater volumetric flow rate in million gallons per day.
           Validation: positive float. Unit: MGD.
 
@@ -1218,37 +1167,31 @@ classes:
     is_a: EnvironmentalSample
     description: >
       Sample from a non-wastewater water source.
-      Fields from APGAP Water_sample.xlsx.
     attributes:
 
       water_source:
         range: WaterSourceEnum
-        description: "APGAP: 'Water source'. Type of water body or supply."
 
       water_temperature_c:
         range: float
         required: true
         description: >
-          APGAP: 'Water temperature (C)'.
           Validation: range [-36, 100]. Unit: °C.
 
       turbidity_ntu:
         range: float
         required: true
         description: >
-          APGAP: 'Turbidity (NTU)'. Nephelometric Turbidity Units.
           Validation: range (0, 4000]; values above 4000 flagged for
           confirmation (possible decimal point omission). Unit: NTU.
 
       ph:
         range: float
         required: true
-        description: "APGAP: 'pH'. Validation: range [0, 14]."
 
       salinity_ppm:
         range: float
         required: true
-        description: "APGAP: 'Salinity (ppm)'. Unit: ppm."
 
       env_broad_scale:
         slot_uri: MIXS:env_broad_scale
@@ -1261,30 +1204,25 @@ classes:
     is_a: EnvironmentalSample
     description: >
       Airborne/aerosol sample.
-      Fields from APGAP Air.xlsx.
     attributes:
 
       air_source:
         range: AirSourceEnum
         required: true
         description: >
-          APGAP: 'Source'. Origin of the air sample.
           Examples: cooling tower, internal vent, urban, plane.
 
       airflow_rate_m3_s:
         range: float
         required: true
-        description: "APGAP: 'Airflow rate (m³/s)'. Validation: positive float. Unit: m³/s."
 
       pm25_ug_m3:
         range: float
         required: true
-        description: "APGAP: 'PM2.5 (µg/m³)'. Validation: positive float. Unit: µg/m³."
 
       pm10_ug_m3:
         range: float
         required: true
-        description: "APGAP: 'PM10 (µg/m³)'. Validation: positive float. Unit: µg/m³."
 
       env_broad_scale:
         slot_uri: MIXS:env_broad_scale
@@ -1297,49 +1235,40 @@ classes:
     is_a: EnvironmentalSample
     description: >
       Sample from a soil matrix.
-      Fields from APGAP Soil_sample.xlsx.
     attributes:
 
       soil_site_type:
         slot_uri: ncbi:isolation_source
         required: true
         description: >
-          APGAP: 'Type of soil site'. Characterization of the soil context.
           Examples: rodent burrow, construction site, agricultural,
           CAFO vicinity.
 
       sample_depth_cm:
         required: true
         description: >
-          APGAP: 'Depth of sample (cm)'. Single value or range.
           Examples: 5, [0, 2], [0, 10].
           Validation: positive numeric, single value or range notation.
 
       nitrogen_mg_kg:
         range: float
-        description: "APGAP: 'Nitrogen (mg/kg)'. Unit: mg/kg."
 
       soil_temperature_c:
         range: float
         description: >
-          APGAP: 'Temperature (C)'. Soil temperature.
           Validation: range [-36, 100]. Unit: °C.
 
       moisture_g_g:
         range: float
-        description: "APGAP: 'Moisture (g/g)'. Gravimetric water content. Unit: g/g."
 
       organic_carbon_g_kg:
         range: float
-        description: "APGAP: 'Organic carbon (g/kg)'. Unit: g/kg."
 
       soil_ph:
         range: float
-        description: "APGAP: 'pH'. Validation: range [0, 14]."
 
       soil_salinity_ppm:
         range: float
-        description: "APGAP: 'Salinity (ppm)'. Unit: ppm."
 
       env_broad_scale:
         slot_uri: MIXS:env_broad_scale
@@ -1355,7 +1284,6 @@ classes:
     is_a: EnvironmentalSample
     description: >
       Surface swab sample (indoor or outdoor).
-      Fields from APGAP Surface.xlsx.
       NCBI MIMS.me.built_environment package.
     attributes:
 
@@ -1363,7 +1291,6 @@ classes:
         slot_uri: MIXS:indoor_space
         required: true
         description: >
-          APGAP/NCBI: 'indoor_space'. Distinguishable space within a structure.
           Allowable: bedroom, office, bathroom, foyer, kitchen, locker room,
           hallway, elevator, missing, not applicable, not collected,
           not provided, restricted access.
@@ -1372,78 +1299,65 @@ classes:
         slot_uri: MIXS:indoor_surface
         required: true
         description: >
-          APGAP/NCBI: 'indoor_surface'. Type of indoor surface.
           Allowable: counter top, window, wall, cabinet, ceiling, door,
           shelving, vent cover, missing, not applicable, not collected,
           not provided, restricted access.
 
       indoor_surface_subpart:
         slot_uri: MIXS:indoor_surf_subpart
-        description: "APGAP/NCBI: 'indoor_surf_subpart'. Subpart of object swabbed."
 
       surface_orientation:
         multivalued: true
-        description: "APGAP/NCBI: 'surface_orientation'. e.g. underside, top, corner."
 
       surface_material:
         slot_uri: MIXS:surf_material
         multivalued: true
         required: true
         description: >
-          APGAP/NCBI: 'surf_material'. Surface materials at sampling point.
           Examples: concrete, wood, tile, plastic, glass, stainless steel.
 
       surface_temperature_c:
         slot_uri: MIXS:surf_temp
         range: float
-        description: "APGAP/NCBI: 'surf_temp'. Surface temperature. Unit: °C."
 
       surface_air_contaminants:
         slot_uri: MIXS:surf_air_cont
         multivalued: true
         description: >
-          APGAP/NCBI: 'surf_air_cont'. Contaminant on surface.
           Examples: dust, organic matter, particulate matter, VOCs.
 
       surface_moisture_qualitative:
         slot_uri: MIXS:samp_surf_moisture
         description: >
-          APGAP/NCBI: 'samp_surf_moisture'. Qualitative moisture.
           Values: intermittent moisture, not present, submerged.
 
       surface_moisture_cm3_cm3:
         slot_uri: MIXS:surf_moisture
         range: float
-        description: "APGAP/NCBI: 'surf_moisture'. Numeric moisture. Unit: cm³/cm³."
 
       surface_moisture_ph:
         slot_uri: MIXS:surf_moisture_ph
         range: float
-        description: "APGAP/NCBI: 'surf_moisture_ph'. pH of surface moisture. Range [0,14]."
 
       surface_humidity_pct:
         slot_uri: MIXS:surf_humidity
         range: float
-        description: "APGAP/NCBI: 'surf_humidity'. Water activity. Unit: %."
 
       wall_surface_treatment:
         slot_uri: MIXS:wall_surf_treatment
         multivalued: true
         description: >
-          APGAP/NCBI: 'wall_surf_treatment'.
           e.g. painted, wall paper, no treatment, stucco, fabric.
 
       wall_texture:
         slot_uri: MIXS:wall_texture
         multivalued: true
         description: >
-          APGAP/NCBI: 'wall_texture'.
           e.g. smooth, popcorn, orange peel, knockdown, Santa-Fe texture.
 
       wall_mold_signs:
         slot_uri: MIXS:wall_water_mold
         description: >
-          APGAP/NCBI: 'wall_water_mold'. Signs of mold/mildew.
           Values: yes, no, unknown.
 
       env_broad_scale:
@@ -1458,24 +1372,20 @@ classes:
     is_a: EnvironmentalSample
     description: >
       Sample from a food product.
-      Fields from APGAP Food-Products.xlsx.
     attributes:
 
       food_location_type:
         range: FoodLocationTypeEnum
         required: true
-        description: "APGAP: 'Location type'. Where the food sample was collected."
 
       storage_temperature_setting:
         description: >
-          APGAP: 'Storage temperature setting'. Numeric (°C) or descriptive string.
           Examples: freezer, frozen, refrigerator, shelf, room temperature.
           Validation: numeric OR match defined allowable entries.
 
       product_temperature_c:
         range: float
         description: >
-          APGAP: 'Product temperature (C)'. Actual measured temperature.
           Validation: range [-36, 100]. Unit: °C.
 
       food_product_type:
@@ -1493,13 +1403,11 @@ classes:
     is_a: EnvironmentalSample
     description: >
       Sample from an agricultural produce crop.
-      Fields from APGAP Produce_Ag.xlsx.
     attributes:
 
       plant_species:
         required: true
         description: >
-          APGAP: 'Plant species'. Scientific name of the agricultural plant.
           Examples: Lactuca sativa var. longifolia, Allium cepa.
 
       distribution_scale:
@@ -1538,7 +1446,6 @@ classes:
     description: >
       Links two samples from the same investigation.
       Derived from 'IDs of any associated samples' field present in ALL
-      APGAP sample type spreadsheets.
       Stored as directed pairs in the sample_associations table.
       Bidirectional: A→B implies B→A but stored as two records.
     attributes:
@@ -1808,6 +1715,127 @@ classes:
         description: >
           Timestamp of the most recent change to this row. Maintained by a
           DB trigger on UPDATE; not user-writable.
+
+# ════════════════════════════════════════════════════════════════════════════
+# EXECUTION PROFILES  (Phase P0g — per-run executor selection)
+# Per Critical Rule 59, pipeline executor selection is a per-run choice
+# driven by operator-configured profiles, not a deployment-time decision.
+# ════════════════════════════════════════════════════════════════════════════
+
+  ExecutionProfile:
+    description: >
+      A named, operator-configured set of execution settings that the
+      launch endpoint applies to a single pipeline run. Each profile
+      carries an executor type (LOCAL, SLURM, GCP_BATCH, ...), a
+      container engine, a work directory, and executor-specific
+      overrides in config_overrides JSONB. At most one profile per
+      deployment may carry is_default=true; that profile is the
+      fallback when neither the launch request nor the pipeline's
+      default-profile association picks one. Soft-deleted via
+      active=false. See Critical Rule 59 and spec.md Phase P0g.
+    attributes:
+      profile_id:
+        identifier: true
+        required: true
+        description: >
+          UUID primary key. Generated DB-side via gen_random_uuid()
+          on insert.
+      name:
+        required: true
+        description: >
+          Operator-friendly profile name; UNIQUE within a deployment.
+          Examples: "default-local", "slurm-mylab-apptainer",
+          "gcp-batch-spot-us-central1".
+      executor_type:
+        range: ExecutorTypeEnum
+        required: true
+        description: >
+          Which Nextflow executor this profile drives.
+      container_engine:
+        range: ContainerEngineEnum
+        required: true
+        description: >
+          Container runtime used to materialize pipeline processes.
+          NONE means processes run as native binaries on the host.
+      work_dir:
+        required: true
+        description: >
+          Filesystem path or cloud URI (gs://, s3://) where Nextflow
+          stages task work directories for runs that select this
+          profile.
+      config_overrides:
+        range: string
+        required: true
+        ifabsent: "string({})"
+        description: >
+          Executor-specific fields rendered into the per-run
+          nextflow.config — e.g. Slurm account/partition/QOS, GCP
+          project/region, Kubernetes namespace, weblog_reachable.
+          Stored as JSONB at the database level; modeled as a string
+          here because LinkML has no native JSONB range. The renderer
+          (G-4) parses this column with json.loads. Defaults to the
+          empty object.
+      is_default:
+        range: boolean
+        required: true
+        ifabsent: "false"
+        description: >
+          True for the deployment-default profile. The migration
+          enforces "at most one row with is_default=true" via a
+          partial unique index. Defaults to false.
+      created_by_id:
+        range: integer
+        required: true
+        description: >
+          FK to users.id — the operator who created the profile.
+      created_at:
+        range: datetime
+        required: true
+        description: >
+          Timestamp the profile was created. Set DB-side to NOW() at
+          insert; never updated.
+      active:
+        range: boolean
+        required: true
+        ifabsent: "true"
+        description: >
+          Soft-delete flag. Inactive profiles are hidden from launch
+          selection but retained for audit. Defaults to true.
+
+  PipelineDefaultProfile:
+    description: >
+      Association linking a pipeline to one or more execution
+      profiles that the launch endpoint should consider as defaults
+      when the request does not name a profile explicitly. A pipeline
+      may have multiple default profiles; the launcher picks the
+      lowest priority value (priority=1 wins over priority=100).
+      pipeline_id is intentionally a string-typed UUID reference
+      rather than a typed FK because the pipelines surface is not yet
+      represented as a LinkML class — only at the SQL level via
+      pipeline_catalog (which carries a SERIAL id, not a UUID). When
+      the pipelines surface gets a LinkML class with a UUID PK, this
+      field becomes a typed range. See spec.md Phase P0g and the
+      Phase P0g G-1 prompt's "FK fallback" guidance.
+    attributes:
+      pipeline_id:
+        range: string
+        required: true
+        description: >
+          UUID of the pipeline this association applies to.
+          Composite PK component with profile_id.
+      profile_id:
+        range: ExecutionProfile
+        required: true
+        description: >
+          The default profile for the named pipeline. Composite PK
+          component with pipeline_id.
+      priority:
+        range: integer
+        required: true
+        ifabsent: "int(100)"
+        description: >
+          Tie-breaker when a pipeline has multiple default profiles —
+          lower numeric values are preferred. Defaults to 100.
 
 # ════════════════════════════════════════════════════════════════════════════
 # ENUMERATIONS
@@ -2790,3 +2818,44 @@ enums:
         description: "Formally closed — investigation_close_date populated"
       surveillance_only:
         description: "Cluster resolved; enhanced surveillance continues"
+
+  # ── Execution profiles (Phase P0g) ────────────────────────────────────────
+
+  ExecutorTypeEnum:
+    description: >-
+      Which Nextflow executor a profile drives. LOCAL runs Nextflow
+      against the API host; the remaining values map to the well-known
+      Nextflow executor names. See Critical Rule 59.
+    permissible_values:
+      LOCAL:
+        description: "Nextflow runs in-process on the API host."
+      SLURM:
+        description: "Nextflow submits jobs to a Slurm cluster."
+      PBS:
+        description: "Nextflow submits jobs to PBS / OpenPBS / Torque."
+      LSF:
+        description: "Nextflow submits jobs to IBM Spectrum LSF."
+      GCP_BATCH:
+        description: "Nextflow submits jobs to Google Cloud Batch."
+      AWS_BATCH:
+        description: "Nextflow submits jobs to AWS Batch."
+      KUBERNETES:
+        description: "Nextflow submits jobs to a Kubernetes cluster."
+
+  ContainerEngineEnum:
+    description: >-
+      Container runtime used to materialize pipeline processes for a
+      profile. APPTAINER and SINGULARITY are listed separately because
+      their CLI flags and Nextflow configuration differ; choose
+      APPTAINER on modern HPC systems and SINGULARITY only when the
+      operator's site has not migrated. NONE means processes run as
+      native binaries on the host.
+    permissible_values:
+      DOCKER:
+        description: "Docker engine — typical for laptops and cloud."
+      APPTAINER:
+        description: "Apptainer — typical for modern HPC clusters."
+      SINGULARITY:
+        description: "SingularityCE — legacy HPC sites."
+      NONE:
+        description: "No container — processes run as native binaries."

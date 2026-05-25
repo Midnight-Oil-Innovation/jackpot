@@ -57,12 +57,11 @@ def _get_client():
     set, returns an S3 client pointed at it; otherwise returns an S3 client
     pointed at GCS via HMAC credentials.
     """
-    import os
-
     import boto3
     from botocore.client import Config as BotoConfig
 
     from backend.config import get_settings
+    from backend.credentials import credentials
 
     settings = get_settings()
     if settings.storage_endpoint:
@@ -70,15 +69,17 @@ def _get_client():
             "s3",
             endpoint_url=settings.storage_endpoint,
             aws_access_key_id=settings.storage_access_key,
-            aws_secret_access_key=settings.storage_secret_key,
+            aws_secret_access_key=credentials.get("s3_storage_secret_key"),
             config=BotoConfig(signature_version="s3v4"),
             region_name="us-east-1",
         )
+    # get_optional so ambient/ADC credentials still work: None lets boto3
+    # resolve credentials via its own chain instead of raising.
     return boto3.client(
         "s3",
         endpoint_url="https://storage.googleapis.com",
-        aws_access_key_id=os.environ.get("GCS_HMAC_ACCESS_KEY"),
-        aws_secret_access_key=os.environ.get("GCS_HMAC_SECRET"),
+        aws_access_key_id=credentials.get_optional("gcs_hmac_access_key"),
+        aws_secret_access_key=credentials.get_optional("gcs_hmac_secret"),
         config=BotoConfig(signature_version="s3v4"),
         region_name="auto",
     )

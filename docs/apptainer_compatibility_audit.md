@@ -1,8 +1,11 @@
 # Apptainer Compatibility Audit (post-monorepo housekeeping)
 
 Reviewed `Dockerfile.api` and `Dockerfile.ui` for Apptainer compatibility
-per the Phase P0e/P0f scenario C requirement (university research-
-computing operators where Docker is not allowed on the cluster). This is
+per the Phase P0e/P0f Scenario B (HPC) requirement (university research-
+computing operators where Docker is not allowed on the cluster; per
+the May 2026 Cluster A merge, what was historically called "Scenario C
+university RC-hosted" is now folded into Scenario B HPC, with single-org
+cloud taking the C slot). This is
 an **audit, not a fix** — results inform the actual Apptainer-support
 work in the `jackpot init` CLI (P0e ongoing).
 
@@ -28,7 +31,7 @@ Key (column "Status"):
 - ✅ — clean (no Docker-specific assumption found)
 - ⚠️ — works in Docker but flags an Apptainer footgun; needs operator
   awareness or a runtime override
-- ❌ — outright incompatible; needs a code/config fix before scenario C
+- ❌ — outright incompatible; needs a code/config fix before Scenario B HPC
   can run this image
 
 ---
@@ -55,9 +58,9 @@ CMD ["/usr/local/bin/jackpot-entrypoint.sh"]
 | USER directive    | ✅     | None set; container runs as root in Docker. Apptainer will ignore root and run as the invoking user — uvicorn binds to `0.0.0.0:8000` (non-privileged), so this is fine.                                                                                                                           |
 | Root-write paths  | ⚠️     | `entrypoint.sh` does `cd /app/backend` and `alembic upgrade head`. Alembic doesn't write to `/app`, but **`/opt/venv` was built at image-build time and is read-only at runtime under Apptainer.** Any runtime `pip install` (none today, but worth flagging) would fail.                          |
 | Root-write paths  | ⚠️     | The api process writes pytest cache, log files, and Nextflow temp dirs to the cwd if cwd is `/app`. Under Apptainer, `/app` is in the read-only image layer. Operator must bind-mount a writable scratch dir over `/app/.pytest_cache` or `cd` into `$HOME` before running tests inside the image. |
-| Docker socket     | ❌     | `docker-compose.yml` mounts `/var/run/docker.sock` into this container so testcontainers can spawn sibling Postgres containers. **Apptainer has no docker daemon to talk to.** Scenario C must use a bind-mounted live Postgres (or a SIF Postgres run as a sibling) — not testcontainers.         |
+| Docker socket     | ❌     | `docker-compose.yml` mounts `/var/run/docker.sock` into this container so testcontainers can spawn sibling Postgres containers. **Apptainer has no docker daemon to talk to.** Scenario B HPC must use a bind-mounted live Postgres (or a SIF Postgres run as a sibling) — not testcontainers.         |
 | Privileged ports  | ✅     | Only port 8000 is exposed (uvicorn). Above 1024.                                                                                                                                                                                                                                                   |
-| PID-1 signals     | ⚠️     | `entrypoint.sh` does `exec uvicorn ...` so uvicorn becomes PID 1. Uvicorn handles SIGINT/SIGTERM correctly. Under Apptainer, signal forwarding goes through the Apptainer runtime — verified to work for SIGTERM-clean shutdown but worth a smoke test in the Apptainer scenario C harness.        |
+| PID-1 signals     | ⚠️     | `entrypoint.sh` does `exec uvicorn ...` so uvicorn becomes PID 1. Uvicorn handles SIGINT/SIGTERM correctly. Under Apptainer, signal forwarding goes through the Apptainer runtime — verified to work for SIGTERM-clean shutdown but worth a smoke test in the Apptainer Scenario B harness.        |
 
 ---
 
@@ -97,7 +100,7 @@ container; that user can read `/opt/venv` because it was built world-
 readable by `uv sync`. Verified safe on a smoke test against Apptainer
 1.3.
 
-A scenario C deployment that customizes the venv permissions (e.g. a
+A Scenario B HPC deployment that customizes the venv permissions (e.g. a
 restrictive operator umask) could break this. The Apptainer-support
 work in P0e should produce a definition file (`.def`) that explicitly
 chmods `/opt/venv` to 0755 and sets `umask 022` before `uv sync`, as
@@ -107,7 +110,7 @@ defense in depth.
 
 ## Recommended fixes (prioritized)
 
-1. **High — testcontainers and the docker socket.** Scenario C needs a
+1. **High — testcontainers and the docker socket.** Scenario B HPC needs a
    first-class "use a real Postgres bind-mount or sibling SIF" path
    that doesn't depend on the docker socket. The api image as-is
    cannot run integration tests under Apptainer. Concretely: add a

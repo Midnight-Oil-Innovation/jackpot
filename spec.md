@@ -2,37 +2,31 @@
 
 **Version:** 2.2
 **Last updated:** 2026-04-29 (post-BYOP and eukaryotic pipelines design session)
-**Status:** Month 1 + most of Month 2 complete — Phase 21 UI page triage closing out, P0d monorepo migration starting now. Pivot to independence + AGPL-3.0 + multi-deployment-target architecture decided April 2026; cleanup phases (6.1–11) complete. Three architectural design documents now drive the post-P0d roadmap: `jackpot_pathoplexus_loculus_overview.md` (peer-platform adoption — Phase 26), `jackpot_cdc_dmi_stlt_overview.md` (US public-health-data ecosystem alignment — Phase 27), `jackpot_byop_and_eukaryotic_design.md` (BYOP infrastructure for P0f, eukaryotic pathogen pipelines for Phase 28).
+**Status:** Month 1 + most of Month 2 complete — Phase 21 UI page triage closing out, P0d monorepo migration starting now. Pivot to independence + AGPL-3.0 + multi-deployment-target architecture decided April 2026; cleanup phases (6.1–11) complete. Three architectural design documents now drive the post-P0d roadmap: `jackpot_pathoplexus_loculus_overview.md` (peer-platform adoption — Phase 26), `jackpot_cdc_dmi_stlt_overview.md` (US public-health-data ecosystem alignment — Phase 27), `byop_and_eukaryotic_design.md` (BYOP infrastructure for P0f, eukaryotic pathogen pipelines for Phase 28).
 **Audience:** Claude Code autonomous agent + the maintainer
 
 ---
 
 ## 1. Project Goal
 
-> **Pivot context (April 2026):** JACKPOT is now an **independent project** under `Midnight-Oil-Innovation/jackpot`, no longer ADHS/ASU-coupled and no longer specifically the APGAP successor. License flipped from Apache 2.0 to **AGPL-3.0**. The platform is now **multi-deployment-target by design**, with 7 install scenarios:
 >
-> - **A** Single academic lab on a laptop (first priority — designed in P0e)
-> - **B** Single org on cloud (GCP/AWS/Azure)
-> - **C** Multi-lab agency (e.g. state health dept — the original ADHS shape)
-> - **D** Hosted multi-tenant SaaS
-> - **E** Federation member (peers with other JACKPOT instances)
-> - **F** CI / e2e test harness
-> - **T** Tribal-sovereignty deployment (variant of A or E with sovereignty-aware defaults: deletion-on-request, no auto-publish, federation off-by-default, CARE Principles compliance)
+> - **A** Self-hosted commodity infrastructure (laptop through agency datacenter; ephemeral or persistent; single-lab, multi-lab, or multi-org)
+> - **B** HPC (Apptainer + Slurm + institutional storage + LDAP/SAML)
+> - **C** Single-org cloud (GKE/EKS/AKS, cloud-native)
+> - **D** CI / e2e test harness
 >
-> Production code knows nothing about Glen, Midnight-Oil-Innovation, or any specific operator. Only the operator-bootstrap layer (`jackpot init` CLI, P0e) does, and it learns those names at install time. APGAP-compatibility constraints below are now **historical** — kept here for any operator continuing to migrate from APGAP. New deployments don't need APGAP compatibility.
+> Federation membership, hosted-SaaS multi-org tenancy, and Indigenous data sovereignty (CARE-aligned governance) are runtime configurations applied to scenarios A/B/C — not separate install scenarios. See `docs/architecture.md` §3 for scenario detail and `docs/architecture.md` §22 for sovereignty-as-runtime-policy.
+>
 >
 > **Phase chain:** Phase 21 (UI close-out) → P0d (monorepo migration, in progress) → P0e (jackpot init CLI) → Phase 24.5 (architectural design lockdown — sovereignty deletion + BYOP/eukaryotic schema decisions before P0b) → P0f (BYOP infrastructure — Phase 24.7 in todo.md) → P0b (Schema v5.0 with all 24.5 lockdowns + instances/tenants/federated_peers) → P0c (multi-tenancy middleware + sovereignty deletion implementation) → P1–P5 (operator-type configurability, federation, governance, reference deployments, new-needs integration). Tracked-but-not-scheduled: Phase 25 (Month 3 stretch — admin UI, JupyterHub, GCP prod), Phase 26 (Pathoplexus/Loculus 34-item adoption backlog), Phase 27 (CDC DMI / STLT / CARE 14-item alignment backlog), Phase 28 (10 default eukaryotic pipelines + parsers + dashboards, internally tier-prioritized).
 >
 > **Source-of-truth design documents:**
 >
 > - `jackpot_pathoplexus_loculus_overview.md` — comparative analysis between JACKPOT and the open-source pathogen-genomics ecosystem (Pathoplexus/Loculus + 8 peer platforms). Drives Phase 26.
-> - `jackpot_cdc_dmi_stlt_overview.md` — alignment with US public-health-data ecosystem (CDC DMI / North Star Architecture, STLT operators, CARE Principles for Tribal data sovereignty). Drives Phase 27 and Scenario T defaults.
-> - `jackpot_byop_and_eukaryotic_design.md` — multi-engine BYOP architecture (Nextflow + Snakemake + WDL + manifest-wrapped scripts) with two-stage validation gating, plus full-parity eukaryotic pathogen support across 8 pathogen groups. Drives P0f and Phase 28.
+> - `jackpot_cdc_dmi_stlt_overview.md` — alignment with US public-health-data ecosystem (CDC DMI / North Star Architecture, STLT operators, CARE Principles for Indigenous data sovereignty). Drives Phase 27 and the sovereignty-aligned runtime policy capabilities described in `docs/architecture.md` §22.
+> - `byop_and_eukaryotic_design.md` — multi-engine BYOP architecture (Nextflow + Snakemake + WDL + manifest-wrapped scripts) with two-stage validation gating, plus full-parity eukaryotic pathogen support across 8 pathogen groups. Drives P0f and Phase 28.
 
-Build **JACKPOT** — a pathogen genomics platform for genomic epidemiology,
-bioinformatics, and public health research — for the host operator. JACKPOT is the successor to APGAP
-(legacy single-institution platform). It must be APGAP-compatible: same org/lab/project/user
-hierarchy, same PermissionGroups enum string values, same role semantics.
+Build **JACKPOT** — a pathogen genomics platform for genomic epidemiology, bioinformatics analysis, and public-health research.
 
 The platform enables public health labs to:
 
@@ -71,6 +65,30 @@ policy, one audit surface, and one schema to keep current. Grant
 narratives that reference North Star alignment can point at this
 section.
 
+### 1.2 Alignment with WHO Global Genomic Surveillance Strategy 2022-2032
+
+The WHO strategy defines five objectives that JACKPOT's deployment scenarios
+serve. Each scenario advances a subset of objectives:
+
+| Scenario | Description | Obj. 1 (tools) | Obj. 2 (workforce) | Obj. 3 (data utility) | Obj. 4 (connectivity) | Obj. 5 (readiness) |
+|---|---|---|---|---|---|---|
+| A | Self-hosted commodity (laptop through agency, ephemeral or persistent, single-lab to multi-org) | ✓ | ✓ | ✓ | ✓ | ✓ |
+| B | HPC (Apptainer + Slurm + institutional storage) | ✓ | ✓ | ✓ | • | ✓ |
+| C | Single-org cloud (GKE/EKS/AKS) | ✓ | ✓ | ✓ | • | ✓ |
+| D | CI test | | | | | |
+
+✓ = primary mode; • = partial / context-dependent
+
+Scenario A's range from a single-user laptop through a multi-lab agency datacenter means it collectively serves all five WHO objectives — different configurations within A advance different objectives. Federation participation (Obj. 4 connectivity) is a runtime configuration available to A, B, and C; it is the primary operating mode for some A deployments and a context-dependent capability for B and C.
+
+**Non-functional requirement: 7-day turnaround.** The WHO strategy defines
+"timely" as triggering genomic sequencing within seven days of event or
+pathogen detection. JACKPOT's pipeline orchestration (ingest → scrub → DLP →
+analysis → result publication) must support end-to-end latency under this
+target when deployed for surge-event use. The 6-state lifecycle of
+`ingest_scrubber.nf` and the `SCRUBBER_MAX_CONCURRENT=10` concurrency setting
+are dimensioned for this target.
+
 ---
 
 ## 2. Current Baseline (post-P0e — May 2026)
@@ -80,8 +98,8 @@ section.
 - CI threshold: 80% — must never fall below this. (The post-P0d 39%
   number we briefly carried was a pytest-cov misconfiguration; see
   `docs/learnings.md` "Coverage measurement bug" entry.)
-- The `jackpot init` CLI (P0e) bootstraps any of the 7 install
-  scenarios from `git clone` to running stack in under 10 minutes —
+- The `jackpot init` CLI (P0e) bootstraps any of the 4 install
+  scenarios (A/B/C/D) from `git clone` to running stack in under 10 minutes —
   see `docs/install/quickstart.md`.
 - Health check local: `curl http://localhost:8000/health` →
   `{"status":"ok","version":"5.0.0","project":"JACKPOT","database":"connected"}`
@@ -116,7 +134,6 @@ These constraints are non-negotiable. Every implementation must respect them.
                             │
 ┌─────────────────────────────────────────────────────────────┐
 │  ELECTRONIC CASE REPORTING / LAB REPORTING ROUTING          │
-│  eCR via APHL AIMS, ELR via state systems                   │
 │  Routes structured FHIR/HL7 messages from healthcare to PHA │
 └─────────────────────────────────────────────────────────────┘
                             ▲
@@ -151,7 +168,6 @@ layer. It is **fed by** the LIMS and **feeds** the downstream
 platforms. JACKPOT integrates with NBS, eCR, AIMS, and the rest of
 the public-health-data stack; it does not try to absorb any of their
 scope. See `docs/jackpot_cdc_dmi_stlt_overview.md §9` for the
-full positioning rationale, including why APHL AIMS in particular is
 a peer system at a different layer (not a competitor).
 
 ### Language and Tools
@@ -205,7 +221,6 @@ a peer system at a different layer (not a competitor).
 
 ### Business Logic Constraints
 
-- `PermissionGroups` enum values are sacred — must match APGAP exactly
   (see Critical Rule 1)
 - `sequencing_lab` validated at runtime against `sequencing_labs` DB table
   — not a static enum
@@ -247,6 +262,18 @@ a peer system at a different layer (not a competitor).
   20 Q-11) is to move the schemas into the backend package. Until then,
   every image that runs the API must `COPY nf/ ./nf/`. See Critical Rule 44.
 
+### Architectural design lockdowns gating P0b
+
+Two design documents must be locked in before P0b touches the schema:
+`docs/architecture/sovereignty-compliant-deletion.md` (sovereignty-
+compliant deletion design — Phase 24.5) and
+`docs/byop_and_eukaryotic_design.md` (multi-engine BYOP
+infrastructure plus full-parity eukaryotic pathogen support — Phase
+24.5 schema scope and Phase 24.7 / P0f-BYOP behavior scope). P0b's
+migration plan must accommodate every column, enum, table, and
+constraint enumerated in §12 of the sovereignty design and §§7 + 12 of
+the BYOP/eukaryotic design.
+
 ---
 
 ## 4. What's Built — Month 1 + Month 2 Status
@@ -261,16 +288,7 @@ These blocking bugs were resolved before any router session began:
 3. ✅ `valid_human_sample` fixture — "Example Lab" references fixed.
 4. ✅ `active` vs `is_active` — CLAUDE.md note added; routers follow the
    convention (orgs/labs use `active`, everything else `is_active`).
-5. ⚠️ JWT refresh endpoint — `POST /api/v1/auth/refresh` was MARKED
-   complete during pre-session fixes but never actually implemented
-   (Phase 22 review surfaced the gap; P0e C.5 confirmed). The
-   refresh-token cookie IS issued at login by `auth/oauth.py` and
-   stays valid for 7 days; clients with a long-lived session do not
-   need to call `/auth/refresh` because the cookie is automatically
-   sent on every request and `auth/guards.py` accepts both. Building
-   a separate refresh endpoint is deferred to **P1** (real
-   token-rotation work alongside the broader auth-architecture
-   review). Tracked in `todo.md`.
+5. ✅ JWT refresh endpoint — `POST /api/v1/auth/refresh` shipped in PR #22 (P1, commit ba03143) with single-use rotation, replay detection, refresh_tokens table, and daily cleanup. Closes the P0e C.5 deferral and the Phase 22 review gap.
 6. ✅ Full test suite — passing, coverage ≥ 80% (post-P0e).
 7. ✅ `log_audit()` `db_conn` forwarding — transactional cohesion.
 8. ✅ `create_notification()` `db_conn` forwarding — same.
@@ -484,12 +502,28 @@ participate in caller transactions.
 - `pipeline_results` rows remain immutable and append-only — file
   references attached to results are new `sample_files` rows, not
   mutations of input rows.
-- Pre-launch verification iterates all input files; refuses launch if
-  any are `BROKEN`.
+- Pre-launch verification reads `sample_files.storage_state` for every
+  input row of every requested sample and refuses the launch with
+  `400 BROKEN_INPUTS` if any row is in `BROKEN` state. This is a fast
+  read of the verification job's last-known state — not a re-stat at
+  launch time. Stronger guarantees come from operator-tunable knobs:
+  shorten `Settings.verification_interval_seconds` or trigger
+  `POST /api/v1/admin/jobs/verify_file_references/run` before a
+  critical launch. The error response includes a `broken_files` list
+  (with `sample_files_id`, `sample_id`, `uri`,
+  `last_verification_status`) and a `suggestion` field telling the
+  user how to unblock.
 - All writes participate in caller transaction via `conn` parameter
   (matches existing `execute_write` and `log_audit` conventions).
-- Audit actions added: `REGISTER_FILE`, `PROMOTE_FILE`,
+- Audit actions added: `REGISTER_FILE`, `DEDUP_FILE`, `PROMOTE_FILE`,
   `VERIFY_FILE_FAILED`, `MARK_FILE_BROKEN`.
+- New error code `FILE_UNREACHABLE` (HTTP 400) — returned by
+  `/api/v1/ingest/register` when a URI cannot be read (and by any
+  future ingest path that does an at-ingest cheap fingerprint).
+- The success envelope (`backend/responses.py::success`) gains an
+  optional top-level `warnings` array carrying non-fatal advisories.
+  Used by `/api/v1/ingest/csv` to surface the EXTERNAL-by-default
+  behavior change when the `storage_intent` column is absent.
 - See Critical Rules 57 (no copy on ingest) and 58 (sample_files is
   the dedup primitive).
 
@@ -627,10 +661,10 @@ days). Honors a per-profile retention override.
 
 - `Settings.work_dir` is the default `JACKPOT_WORK_DIR` for runs that
   don't override via profile. Default per scenario:
-  - Scenario A: `~/.jackpot/work/`
-  - Scenario B (Docker): `/srv/jackpot/work/`
-  - Scenario B/C (Slurm): operator-provided shared filesystem path
-  - Scenario D/E: `gs://<deployment>-jackpot-work/` or `s3://...`
+  - Scenario A (laptop / single-server): `~/.jackpot/work/`
+  - Scenario A (multi-server / agency, Docker): `/srv/jackpot/work/`
+  - Scenario B (HPC, Slurm): operator-provided shared filesystem path (Lustre/GPFS)
+  - Scenario C (cloud-native): `gs://<deployment>-jackpot-work/` or `s3://...`
 - Quick-fast pipelines (file_detector smoke runs, DLP scans, validation)
   default to the deployment's `LOCAL` profile during seeding — they
   always run on the API server.
@@ -657,12 +691,156 @@ days). Honors a per-profile retention override.
   contain the right executor-specific fields.
 
 ---
+## Federation Track 1 + Track 2-seam Scaffold (FED-A through FED-E)
+
+**Status:** FED-A merged 2026-05-08. FED-B through FED-E pending.
+**Lives at:** `backend/backend/federation/`
+**Ahead of:** B-FED-1 (central CA federation peer authentication) in the
+future-phases list — FED-A lands the package surface so B-FED-1 reduces
+to router + tests + migration + central CA integration on top.
+
+### Two-track architectural pattern
+
+Two parallel namespaces under `backend/backend/`:
+
+- `backend/backend/federation/` — Track 1, ships now using current JACKPOT
+  primitives (JWT, presigned URLs, the existing `can_access_sample()`
+  permission model)
+- `backend/backend/immune/` — Track 2, AIS-augmented overlays scheduled
+  per `jackpot_immune_collaboration_scaffolding.md`. Concrete implementations
+  of the Protocol seams in each Track 1 package's `_ais_hooks.py` module.
+
+The seam between tracks is dependency injection. Every Track 1 class accepts
+a `hooks=` argument defaulting to `Null<X>Hooks` (no-op). Track 2 swaps in
+concrete implementations via the same constructor argument. **No code
+changes required to Track 1 modules when Track 2 lands.**
+
+Direction of dependency is one-way: `backend/backend/federation/` never
+imports from `backend/backend/immune/`. The reverse is fine — Track 2's
+`backend/backend/immune/net/federation_hooks.py` will import the
+`AISFederationHooks` Protocol from `backend/backend/federation/_ais_hooks.py`
+and the AIS primitives from sibling immune-platform modules.
+
+This same pattern applies to `backend/backend/privacy/` (PRV-A, pending) and
+`backend/backend/crypto/` (CRY-A, pending).
+
+### Federation Levels (per `jackpot_architecture.md` §22)
+
+| Level | Description | Track 1 Status |
+|---|---|---|
+| L1 — Query federation | DISCOVERABLE-equivalent metadata search across registered partners. No clinical metadata, no file URLs, 30-min cache. | ✅ Concrete in `client.py` |
+| L2 — De-identified hub push | Spoke instances push surveillance data nightly. FASTA presigned URL + typing + AMR + lineage + organism + date + country/state. Raw FASTQ and PII never leave the spoke. | Logic concrete in `push.py` (3 qualification gates); IO stubbed via `NotImplementedError` |
+| L3 — Bidirectional sharing | Cross-instance access requests. Reuses the existing internal `sample_access` workflow for approval. Files copied via presigned URL on approval. | Integration shape concrete in `access.py`; IO stubbed |
+
+### `AISFederationHooks` Protocol surface
+
+Five hooks, each tied to a specific AIS doc section and a Track 2 impl
+location under `backend/backend/immune/`. Track 1 ships with
+`NullAISFederationHooks` providing no-op safe defaults for every hook.
+
+| Hook | AIS doc ref | Track 2 impl module |
+|---|---|---|
+| `secure_aggregate(results, partner_set)` | §1.6 inter-instance signaling | `backend/backend/immune/net/federation_hooks.py` ← `backend/backend/immune/sec/cs_cyber_federated.py` |
+| `attest_partner(instance)` | §1.7 attribution & deception | `backend/backend/immune/net/federation_hooks.py` ← `backend/backend/immune/sec/` (attestation primitives, new) |
+| `detect_anomalous_traffic(query, partner)` | §1.3 innate immunity | `backend/backend/immune/net/federation_hooks.py` ← `backend/backend/immune/algorithms/featurizers/`, `backend/backend/immune/redteam/attack_federation.py` |
+| `threshold_approve(action, partner_set)` | §1.8 tolerance / regulation | `backend/backend/immune/net/federation_hooks.py` ← `backend/backend/immune/sec/` (threshold-crypto primitives, new) |
+| `validate_push_payload(payload, target)` | §1.8 tolerance ("don't attack self") | `backend/backend/immune/net/federation_hooks.py` ← `backend/backend/immune/sec/refusal.py`, `backend/backend/immune/sec/parsers_safe.py` |
+
+### Operator-agnostic policy
+
+No proper names in code, docs, or commit messages. When generating from
+strategic vision docs (`Jackpot_AIS.md`,
+`jackpot_immune_collaboration_scaffolding.md`):
+
+- Replace `TODO(forrest-collab)` markers with `TODO(immune-algorithms-collab)` keyed on directory location and expertise area
+- Replace prose like "Forrest's lane" / "Trieu's bread and butter" / "Lee-specific hooks" with structural descriptions ("AIS-theoretic expertise", "applied cryptography", "adversarial security testing")
+- Keep technical-paper citations by their conventional name; protocol names like FROST/BLS/DKG are abbreviations and stay; eponymous protocol names like "Bonawitz protocol" should be genericized to "secure aggregation protocol" with the technical concept preserved
+
+The cleanup script `scripts_jackpot/audit_proper_names.py` (sibling to repo)
+verifies a directory tree is clean before committing.
+
+### FED-B — Federation router
+
+`backend/backend/routers/federation.py` exposing the package via
+`/api/v1/federation/*`:
+
+- `GET /api/v1/federation/instances` — list registered partners (Platform Admin only)
+- `POST /api/v1/federation/instances` — register a partner (Platform Admin only)
+- `POST /api/v1/federation/search` — broadcast L1 query to enabled partners
+- `POST /api/v1/federation/push` — receive an inbound L2 payload (peer instance only)
+- `POST /api/v1/federation/access-requests` — receive an inbound L3 access request (peer instance only)
+
+Auth: federation API keys via `X-JACKPOT-Federation-Key` header for
+peer-to-peer endpoints; standard JWT for the admin-facing list/register
+endpoints.
+
+### FED-C — Tests
+
+`tests/federation/`:
+
+- `test_models.py` — Pydantic v2 shape and serialization round-trip
+- `test_client_l1.py` — `FederationClient` async fanout, hook invocation order, partner attestation rejection, anomaly detection rejection. Use `respx` to mock partner HTTP.
+- `test_push_l2.py` — qualification logic (port the smoke test cases from FED-A delivery), payload composition, negative-list enforcement
+- `test_access_l3.py` — outbound + inbound shapes, `NotImplementedError` raises where appropriate
+- `test_ais_hooks.py` — `NullAISFederationHooks` satisfies `AISFederationHooks` Protocol, all five hooks return safe defaults
+
+Coverage target: 95%+ on every module in `backend/backend/federation/`.
+
+### FED-D — Schema migration
+
+LinkML schema YAML edits first (canonical source of truth), then
+`uv run python scripts/regen_schema.py`, then Alembic autogenerate plus
+manual cleanup.
+
+New table:
+- `federated_instances` (columns per `models.py` `FederatedInstance` shape:
+  id, name, base_url, role, federation_enabled, min_sharing_level_for_federation,
+  hub_instance_url, api_key_secret_name, last_seen_at, created_at, updated_at)
+
+New columns on `organizations`:
+- `min_sharing_level_for_federation` (default `'DISCOVERABLE'`)
+- `federation_enabled` (default `false`)
+- `hub_instance_url` (nullable)
+- `federation_role` (enum: `hub`, `spoke`, `peer`, nullable)
+
+### FED-E — Wiring
+
+Register the FED-B router in `backend/backend/main.py`. Update
+`backend/backend/auth/guards.py` if a federation-key guard is needed
+(otherwise the router can validate keys inline).
+
+### Pending expansion: PRV-A and CRY-A
+
+Same scaffold pattern at `backend/backend/privacy/` and `backend/backend/crypto/`:
+
+- **PRV-A** — `coarsening.py` (consolidates host_age_range and similar generalization), `scrubber.py` (HRRT integration interface), `dlp.py` (consolidates `dlp_scanner.py`), `budget.py` (placeholder for DP budget tracking — Track 2 anchor); `_ais_hooks.py` defines `AISPrivacyHooks` Protocol with hooks for FL aggregation, DP noise injection, DP budget tracking, HE compute, MPC protocols, synthetic-data substitution.
+
+- **CRY-A** — `keys.py` (key management abstraction over PKCS#11), `signing.py` (Sigstore/cosign artifact signing interface), `crypt4gh.py` (per-file encryption for ingest/egress); `_ais_hooks.py` defines `AISCryptoHooks` Protocol with hooks for HE backend selection, threshold signing (FROST/BLS/DKG), TEE attestation evidence verification.
+
+Each scaffold is roughly 1000 lines, 7 files, 1 PR. Each adds five Track 2
+hook seams with the same `Null<X>Hooks` no-op default pattern.
+
 
 ## Phase P0h Specification — Slurm executor support
 
-> **Status:** Specification — implementation tracked in `todo.md` Phase P0h.
+> **Status (2026-05-12):** Six of ten H-blocks merged in Session 21
+> (PRs #35 H-1, #36 H-2, #37 H-3, #38 H-4, #40 H-5, #41 H-6, #42
+> H-10); H-9 tests interleaved per-PR throughout. H-7 (GCP Batch
+> staging) and H-8 (real-cluster smoke test) deferred to Phase 25
+> with named dependencies. See `todo.md` Phase P0h for the merged-vs-
+> deferred breakdown.
 > Builds on P0g profile model; makes Slurm a peer of the local executor
-> for scenarios B and C without code duplication.
+> for scenarios A (multi-server with Slurm profile) and B (HPC) without
+> code duplication.
+>
+> **Operator-facing surface:** `docs/slurm_executor.md` is the
+> canonical guide (profile setup, network requirements, Apptainer
+> pre-staging, weblog vs. log poller redundancy, `jackpot doctor`,
+> common cluster-policy gotchas).
+> **Pipeline-zoo Apptainer pre-staging:** `docs/pipeline_apptainer_audit.md`
+> documents the per-pipeline OCI-image manifest format
+> (`pipelines/pipelines/<name>/apptainer_images.txt`) consumed by the
+> future `jackpot images audit` / `jackpot images export` CLI.
 
 ### Schema additions
 
@@ -728,7 +906,134 @@ cluster is unreachable. For multi-tenant launches, validate optional
 **Pipeline definitions in `pipelines/`** — Audit each for an
 `apptainer` profile; add where missing. Most are nf-core-standards and
 already have one.
+## Federation Track 1 + Track 2-seam Scaffold (FED-A through FED-E)
 
+**Status:** FED-A merged 2026-05-08. FED-B through FED-E pending.
+**Lives at:** `backend/backend/federation/`
+**Ahead of:** B-FED-1 (central CA federation peer authentication) in the
+future-phases list — FED-A lands the package surface so B-FED-1 reduces
+to router + tests + migration + central CA integration on top.
+
+### Two-track architectural pattern
+
+Two parallel namespaces under `backend/backend/`:
+
+- `backend/backend/federation/` — Track 1, ships now using current JACKPOT
+  primitives (JWT, presigned URLs, the existing `can_access_sample()`
+  permission model)
+- `backend/backend/immune/` — Track 2, AIS-augmented overlays scheduled
+  per `jackpot_immune_collaboration_scaffolding.md`. Concrete implementations
+  of the Protocol seams in each Track 1 package's `_ais_hooks.py` module.
+
+The seam between tracks is dependency injection. Every Track 1 class accepts
+a `hooks=` argument defaulting to `Null<X>Hooks` (no-op). Track 2 swaps in
+concrete implementations via the same constructor argument. **No code
+changes required to Track 1 modules when Track 2 lands.**
+
+Direction of dependency is one-way: `backend/backend/federation/` never
+imports from `backend/backend/immune/`. The reverse is fine — Track 2's
+`backend/backend/immune/net/federation_hooks.py` will import the
+`AISFederationHooks` Protocol from `backend/backend/federation/_ais_hooks.py`
+and the AIS primitives from sibling immune-platform modules.
+
+This same pattern applies to `backend/backend/privacy/` (PRV-A, pending) and
+`backend/backend/crypto/` (CRY-A, pending).
+
+### Federation Levels (per `jackpot_architecture.md` §22)
+
+| Level | Description | Track 1 Status |
+|---|---|---|
+| L1 — Query federation | DISCOVERABLE-equivalent metadata search across registered partners. No clinical metadata, no file URLs, 30-min cache. | ✅ Concrete in `client.py` |
+| L2 — De-identified hub push | Spoke instances push surveillance data nightly. FASTA presigned URL + typing + AMR + lineage + organism + date + country/state. Raw FASTQ and PII never leave the spoke. | Logic concrete in `push.py` (3 qualification gates); IO stubbed via `NotImplementedError` |
+| L3 — Bidirectional sharing | Cross-instance access requests. Reuses the existing internal `sample_access` workflow for approval. Files copied via presigned URL on approval. | Integration shape concrete in `access.py`; IO stubbed |
+
+### `AISFederationHooks` Protocol surface
+
+Five hooks, each tied to a specific AIS doc section and a Track 2 impl
+location under `backend/backend/immune/`. Track 1 ships with
+`NullAISFederationHooks` providing no-op safe defaults for every hook.
+
+| Hook | AIS doc ref | Track 2 impl module |
+|---|---|---|
+| `secure_aggregate(results, partner_set)` | §1.6 inter-instance signaling | `backend/backend/immune/net/federation_hooks.py` ← `backend/backend/immune/sec/cs_cyber_federated.py` |
+| `attest_partner(instance)` | §1.7 attribution & deception | `backend/backend/immune/net/federation_hooks.py` ← `backend/backend/immune/sec/` (attestation primitives, new) |
+| `detect_anomalous_traffic(query, partner)` | §1.3 innate immunity | `backend/backend/immune/net/federation_hooks.py` ← `backend/backend/immune/algorithms/featurizers/`, `backend/backend/immune/redteam/attack_federation.py` |
+| `threshold_approve(action, partner_set)` | §1.8 tolerance / regulation | `backend/backend/immune/net/federation_hooks.py` ← `backend/backend/immune/sec/` (threshold-crypto primitives, new) |
+| `validate_push_payload(payload, target)` | §1.8 tolerance ("don't attack self") | `backend/backend/immune/net/federation_hooks.py` ← `backend/backend/immune/sec/refusal.py`, `backend/backend/immune/sec/parsers_safe.py` |
+
+### Operator-agnostic policy
+
+No proper names in code, docs, or commit messages. When generating from
+strategic vision docs (`Jackpot_AIS.md`,
+`jackpot_immune_collaboration_scaffolding.md`):
+
+- Replace `TODO(forrest-collab)` markers with `TODO(immune-algorithms-collab)` keyed on directory location and expertise area
+- Replace prose like "Forrest's lane" / "Trieu's bread and butter" / "Lee-specific hooks" with structural descriptions ("AIS-theoretic expertise", "applied cryptography", "adversarial security testing")
+- Keep technical-paper citations by their conventional name; protocol names like FROST/BLS/DKG are abbreviations and stay; eponymous protocol names like "Bonawitz protocol" should be genericized to "secure aggregation protocol" with the technical concept preserved
+
+The cleanup script `scripts_jackpot/audit_proper_names.py` (sibling to repo)
+verifies a directory tree is clean before committing.
+
+### FED-B — Federation router
+
+`backend/backend/routers/federation.py` exposing the package via
+`/api/v1/federation/*`:
+
+- `GET /api/v1/federation/instances` — list registered partners (Platform Admin only)
+- `POST /api/v1/federation/instances` — register a partner (Platform Admin only)
+- `POST /api/v1/federation/search` — broadcast L1 query to enabled partners
+- `POST /api/v1/federation/push` — receive an inbound L2 payload (peer instance only)
+- `POST /api/v1/federation/access-requests` — receive an inbound L3 access request (peer instance only)
+
+Auth: federation API keys via `X-JACKPOT-Federation-Key` header for
+peer-to-peer endpoints; standard JWT for the admin-facing list/register
+endpoints.
+
+### FED-C — Tests
+
+`tests/federation/`:
+
+- `test_models.py` — Pydantic v2 shape and serialization round-trip
+- `test_client_l1.py` — `FederationClient` async fanout, hook invocation order, partner attestation rejection, anomaly detection rejection. Use `respx` to mock partner HTTP.
+- `test_push_l2.py` — qualification logic (port the smoke test cases from FED-A delivery), payload composition, negative-list enforcement
+- `test_access_l3.py` — outbound + inbound shapes, `NotImplementedError` raises where appropriate
+- `test_ais_hooks.py` — `NullAISFederationHooks` satisfies `AISFederationHooks` Protocol, all five hooks return safe defaults
+
+Coverage target: 95%+ on every module in `backend/backend/federation/`.
+
+### FED-D — Schema migration
+
+LinkML schema YAML edits first (canonical source of truth), then
+`uv run python scripts/regen_schema.py`, then Alembic autogenerate plus
+manual cleanup.
+
+New table:
+- `federated_instances` (columns per `models.py` `FederatedInstance` shape:
+  id, name, base_url, role, federation_enabled, min_sharing_level_for_federation,
+  hub_instance_url, api_key_secret_name, last_seen_at, created_at, updated_at)
+
+New columns on `organizations`:
+- `min_sharing_level_for_federation` (default `'DISCOVERABLE'`)
+- `federation_enabled` (default `false`)
+- `hub_instance_url` (nullable)
+- `federation_role` (enum: `hub`, `spoke`, `peer`, nullable)
+
+### FED-E — Wiring
+
+Register the FED-B router in `backend/backend/main.py`. Update
+`backend/backend/auth/guards.py` if a federation-key guard is needed
+(otherwise the router can validate keys inline).
+
+### Pending expansion: PRV-A and CRY-A
+
+Same scaffold pattern at `backend/backend/privacy/` and `backend/backend/crypto/`:
+
+- **PRV-A** — `coarsening.py` (consolidates host_age_range and similar generalization), `scrubber.py` (HRRT integration interface), `dlp.py` (consolidates `dlp_scanner.py`), `budget.py` (placeholder for DP budget tracking — Track 2 anchor); `_ais_hooks.py` defines `AISPrivacyHooks` Protocol with hooks for FL aggregation, DP noise injection, DP budget tracking, HE compute, MPC protocols, synthetic-data substitution.
+
+- **CRY-A** — `keys.py` (key management abstraction over PKCS#11), `signing.py` (Sigstore/cosign artifact signing interface), `crypt4gh.py` (per-file encryption for ingest/egress); `_ais_hooks.py` defines `AISCryptoHooks` Protocol with hooks for HE backend selection, threshold signing (FROST/BLS/DKG), TEE attestation evidence verification.
+
+Each scaffold is roughly 1000 lines, 7 files, 1 PR. Each adds five Track 2
+hook seams with the same `Null<X>Hooks` no-op default pattern.
 ### Key rules
 
 - Cluster-bound runs must work whether or not compute nodes can reach
@@ -736,8 +1041,8 @@ already have one.
   raises on errors. The log poller is the source of truth when
   `weblog_reachable=false` in the profile.
 - Per-launch `launch_account` override (for grant accounting in
-  scenario C) is validated against the user's lab memberships, never
-  trusted from the request body alone.
+  scenario B HPC deployments) is validated against the user's lab
+  memberships, never trusted from the request body alone.
 - Apptainer is the default container engine for Slurm profiles. Docker
   remains an option for lab-Slurm cases where the cluster allows it.
 - Compute-side scratch and stage directories use Nextflow's
@@ -761,6 +1066,384 @@ already have one.
 - Manual end-to-end smoke tests against a real Slurm cluster covering:
   weblog-reachable run, weblog-blocked run with poller, 10-sample
   batch with queueSize throttling, and a mid-run BROKEN-input failure.
+
+---
+
+## Phase I-2 Specification — Submissions
+
+> **Status:** Shipped (Session 19, PR-merged into `development`).
+> First-class submissions tracking and Seqsender-compatible package
+> generation. v1 deliberately excludes credential management — JACKPOT
+> generates the package, the operator runs Seqsender (or DDBJ /
+> GISAID-equivalent tools) themselves with their own credentials. I-3
+> adds optional backend-driven execution on top of this foundation.
+> Implementation lives in `backend/backend/submissions.py` (state-machine
+> business logic) and `backend/backend/routers/submissions.py` (thin
+> HTTP shell). The CLI (`cli/jackpot/cli/submissions.py`) and SDK
+> (`cli/jackpot/sdk/submissions.py`) call the service module directly.
+
+### State machine
+
+The submission lifecycle is a 13-state machine encoded in
+`submissions.py`'s `VALID_STATUSES` constant:
+
+```
+DRAFT
+  ↓ (mark_package_generated — writes package_path + package_generated_at)
+READY_TO_SUBMIT
+  ↓ (mark_submitted — sets submitted_at)
+SUBMITTED
+  ↓ (register_accessions — TSV ingest, sets per-sample accessions)
+  ├→ ACCEPTED          (all samples accepted)
+  ├→ PARTIAL_SUCCESS   (some samples rejected)
+  └→ REJECTED          (all samples rejected, mark_rejected)
+ACCEPTED / PARTIAL_SUCCESS
+  ↓ (release_date set + EMBARGOED elected by operator)
+EMBARGOED
+  ↓ (release_embargoed_submissions daily job at midnight UTC)
+RELEASED
+```
+
+Plus side-paths:
+
+- **`WITHDRAWN`** — reachable from any post-`DRAFT` state via
+  `withdraw_submission`. The samples list is locked; the row is kept
+  for audit history.
+- **`FAILED`** — terminal failure surfaced when package generation or
+  validation reports an unrecoverable error. Operator must withdraw
+  and create a new submission.
+
+I-3a backend-execution states (used only when `allow_backend_submission`
+is set on the lab and `backend_submission_repos` includes the target):
+
+- **`EXECUTING`** — set by `mark_execution_queued` when the
+  Seqsender subprocess starts. Withdrawal is intentionally blocked from
+  this state to avoid mid-flight executor races.
+- **`EXECUTION_FAILED`** — Seqsender returned non-zero (I-3b);
+  reachable via `mark_execution_retried` for retry.
+- **`EXECUTION_INTERRUPTED`** — set by the lifespan recovery hook
+  (Critical Rule 60 cluster-bound runs pattern, applied here at the
+  process-supervision layer) when an API restart abandons an in-flight
+  subprocess.
+
+The set `_POST_SUBMITTED_STATUSES` defines the withdraw-allowed states
+(`SUBMITTED`, `PARTIAL_SUCCESS`, `ACCEPTED`, `EMBARGOED`, `RELEASED`,
+`REJECTED`, plus the two execution-failure states). The set
+`_SAMPLES_LOCKED_STATUSES` covers everything except `DRAFT` —
+`add_samples_to_submission` and `remove_samples_from_submission`
+refuse outside of `DRAFT`.
+
+### Schema
+
+`submissions` table:
+
+| Column | Type | Notes |
+|---|---|---|
+| `id` | BIGSERIAL | PK |
+| `created_by_user_id` | INTEGER | FK users(id) |
+| `lab_id` | INTEGER | FK labs(id) |
+| `target_repository` | VARCHAR(32) | One of `NCBI`, `GISAID_EPICOV`, `GISAID_EPIFLU`, `GISAID_EPIPOX`, `ENA`, `DDBJ` |
+| `title` | TEXT | Required |
+| `description` | TEXT | Optional |
+| `status` | VARCHAR(32) | Default `DRAFT`; CHECK against `VALID_STATUSES` |
+| `bioproject_accession` | TEXT | NCBI-only; supplied by operator before submission |
+| `release_date` | DATE | Optional embargo end-date |
+| `package_path` | TEXT | URI of generated package |
+| `package_generated_at` | TIMESTAMPTZ | Set by `mark_package_generated` |
+| `submitted_at` | TIMESTAMPTZ | Set by `mark_submitted` |
+| `accepted_at` | TIMESTAMPTZ | Set by `register_accessions` when status moves to `ACCEPTED` or `PARTIAL_SUCCESS` |
+| `rejection_reason` | TEXT | Free-text reason for `REJECTED` status |
+| `withdrawal_reason` | TEXT | Free-text reason for `WITHDRAWN` status |
+| `created_at` | TIMESTAMPTZ | Default `NOW()` |
+| `updated_at` | TIMESTAMPTZ | Default `NOW()`, bumped by writes |
+| `is_deleted` | BOOLEAN | Soft-delete flag; default FALSE |
+
+Indexes: `submissions_lab_status_idx` `(lab_id, status) WHERE is_deleted = FALSE`,
+`submissions_creator_idx` `(created_by_user_id) WHERE is_deleted = FALSE`.
+
+`submission_samples` table:
+
+| Column | Type | Notes |
+|---|---|---|
+| `id` | BIGSERIAL | PK |
+| `submission_id` | BIGINT | FK submissions(id) ON DELETE CASCADE |
+| `sample_id_fk` | INTEGER | FK samples(id) |
+| `per_sample_status` | VARCHAR(16) | One of `PENDING`, `ACCEPTED`, `REJECTED` |
+| `biosample_accession` | TEXT | Returned by NCBI BioSample registration |
+| `sra_accession` | TEXT | Returned by NCBI SRA registration |
+| `genbank_accession` | TEXT | Returned by NCBI GenBank registration |
+| `gisaid_accession` | TEXT | Returned by GISAID after acceptance |
+| `ena_accession` | TEXT | Returned by ENA after acceptance |
+| `ddbj_accession` | TEXT | Returned by DDBJ after acceptance |
+| `per_sample_rejection_reason` | TEXT | Per-sample rejection reason |
+| `created_at` / `updated_at` | TIMESTAMPTZ | Standard |
+
+UNIQUE constraint: `(submission_id, sample_id_fk)`.
+
+### Transition rules
+
+Each transition is gated, audited (Critical Rule 4), and may emit a
+notification (the `NotificationEvents` constants are documented in
+`docs/CLAUDE.md` Notification System section).
+
+| From | To | Function | Actor permission | Audit action |
+|---|---|---|---|---|
+| `DRAFT` | `READY_TO_SUBMIT` | `mark_package_generated` | Lab Collaborator+ | `SUBMISSION_PACKAGE_GENERATED` |
+| `READY_TO_SUBMIT` | `SUBMITTED` | `mark_submitted` | Lab Collaborator+ | `SUBMISSION_MARKED_SUBMITTED` |
+| `SUBMITTED` | `ACCEPTED` / `PARTIAL_SUCCESS` / `REJECTED` | `register_accessions` (or `mark_rejected`) | Lab Collaborator+ | `SUBMISSION_ACCESSIONS_REGISTERED` / `SUBMISSION_REJECTED` |
+| `ACCEPTED` / `PARTIAL_SUCCESS` | `EMBARGOED` | `update_submission` (operator sets `release_date`) | Lab Director | `SUBMISSION_UPDATED` |
+| `EMBARGOED` | `RELEASED` | `release_embargoed_submissions` daily job | system | `SUBMISSION_RELEASED` |
+| post-`SUBMITTED` (excl. `EXECUTING`) | `WITHDRAWN` | `withdraw_submission` | Lab Director | `SUBMISSION_WITHDRAWN` |
+| `READY_TO_SUBMIT` | `EXECUTING` | `mark_execution_queued` (I-3a) | Lab Director | `SUBMISSION_EXECUTION_QUEUED` |
+| `EXECUTION_FAILED` / `EXECUTION_INTERRUPTED` | `EXECUTING` | `mark_execution_retried` (I-3a) | Lab Director | `SUBMISSION_EXECUTION_RETRIED` |
+| `EXECUTING` | `ACCEPTED` / `PARTIAL_SUCCESS` / `REJECTED` | `mark_execution_completed` (I-3b) | system | `SUBMISSION_EXECUTION_COMPLETED` |
+| `EXECUTING` | `EXECUTION_FAILED` | `mark_execution_failed` (I-3b) | system | `SUBMISSION_EXECUTION_FAILED` |
+| `EXECUTING` | `EXECUTION_INTERRUPTED` | `recover_interrupted_executions` (lifespan hook, I-3b) | system | `SUBMISSION_EXECUTION_INTERRUPTED` |
+
+### Endpoints
+
+All routes are under `/api/v1/submissions/`. See
+`docs/api/submissions.md` for full request/response shapes.
+
+- `POST /` — create submission (DRAFT)
+- `GET /` — list submissions visible to the user (paginated)
+- `GET /{id}` — get a single submission
+- `PATCH /{id}` — partial update (Critical Rule 39 pattern)
+- `DELETE /{id}` — soft delete (only allowed in `DRAFT`)
+- `POST /{id}/samples` / `DELETE /{id}/samples/{sample_id}` — sample list management (locked outside `DRAFT`)
+- `POST /{id}/validate` — readiness check (per-sample issues + per-submission errors)
+- `POST /{id}/generate` — generate package on disk; transitions to `READY_TO_SUBMIT`
+- `POST /{id}/submitted` — mark as `SUBMITTED` after operator handed package to Seqsender
+- `POST /{id}/accessions` — TSV ingest of per-sample accessions
+- `POST /{id}/rejected` — mark fully rejected with reason
+- `POST /{id}/withdraw` — withdraw with reason
+- `POST /{id}/execute` (I-3a) — gated on `allow_backend_submission`; queues backend execution
+- `POST /{id}/retry` (I-3a) — retry from `EXECUTION_FAILED` / `EXECUTION_INTERRUPTED`
+- `GET /{id}/logs` (I-3b) — view execution log via signed URL
+
+### Package generation handoff
+
+JACKPOT v1 does NOT execute submissions on the backend by default
+(Session 18 decision). The package generator writes a Seqsender-
+compatible directory (or DDBJ / GISAID-equivalent for non-NCBI
+targets) under `<submission_packages_dir>/<submission_id>/`. The
+generated `seqsender_config.yaml` references the operator's own
+credentials by environment-variable name — JACKPOT never holds
+NCBI/GISAID/ENA secrets in v1, sidestepping the Scenario A
+laptop-case connectivity-and-IP-rotation problem entirely. The operator
+runs `seqsender submit ./<submission_id>/` from a stable host.
+
+The opt-in path to backend execution (I-3) is gated by:
+
+1. `allow_backend_submission=true` on the lab (Lab Director consent), and
+2. `backend_submission_repos` listing the specific repos the operator
+   trusts JACKPOT to call (subset of `VALID_REPOSITORIES`), and
+3. The C-1 credential infrastructure (Phase C-1 below) configured for
+   each enabled repo's required credentials per
+   `backend/credentials/registry.py`'s `REQUIRED_CREDENTIALS`.
+
+If any of those preconditions are missing, `POST /{id}/execute`
+returns `400 NO_CREDENTIALS_CONFIGURED` (or `400 BACKEND_SUBMISSION_DISABLED`)
+and the operator falls back to manual Seqsender execution against
+the still-existing package.
+
+### Daily release-embargoed-submissions job
+
+`backend/jobs.py::release_embargoed_submissions` runs once per day at
+midnight UTC (cron `hour=0, minute=0`, registered alongside the
+existing `run_access_request_job`). It scans for `status=EMBARGOED`
+rows where `release_date <= CURRENT_DATE`, transitions each to
+`RELEASED`, writes the `SUBMISSION_RELEASED` audit event, and
+notifies the creator. Idempotent — re-running on the same day is a
+no-op for already-released submissions because the WHERE clause
+excludes them.
+
+### Audit actions added by I-2 + I-3
+
+- `SUBMISSION_CREATED`
+- `SUBMISSION_UPDATED`
+- `SUBMISSION_DELETED`
+- `SUBMISSION_PACKAGE_GENERATED`
+- `SUBMISSION_MARKED_SUBMITTED`
+- `SUBMISSION_ACCESSIONS_REGISTERED`
+- `SUBMISSION_REJECTED`
+- `SUBMISSION_WITHDRAWN`
+- `SUBMISSION_RELEASED`
+- `SUBMISSION_SAMPLES_ADDED` / `SUBMISSION_SAMPLES_REMOVED`
+- `SUBMISSION_EXECUTION_QUEUED` (I-3a)
+- `SUBMISSION_EXECUTION_RETRIED` (I-3a)
+- `SUBMISSION_EXECUTION_COMPLETED` (I-3b)
+- `SUBMISSION_EXECUTION_FAILED` (I-3b)
+- `SUBMISSION_EXECUTION_INTERRUPTED` (I-3b)
+
+### Tests
+
+Tests live at `tests/test_submissions_router.py`,
+`tests/test_submission_packages.py`, and the per-repo generator suites
+(`tests/test_submission_packages_ena.py` etc.). Coverage targets
+include every state-machine transition and every refusal path, the
+TSV accession-ingest parser including malformed input, the
+embargo-release job idempotency, and the I-3a backend-execution gates.
+
+---
+
+## Phase C-1 Specification — Pluggable credential infrastructure
+
+> **Status:** Shipped (Session 20, PR-merged into `development`).
+> Pluggable credential layer behind a single `CredentialFacade` so
+> consuming code (submissions, future LLM features, federation API
+> keys) reads credentials by name without knowing where they come
+> from. v1 ships three backends: env vars (default, works
+> everywhere), file-based YAML (config-management-friendly), GCP
+> Secret Manager (cloud deployments). AWS Secrets Manager, Azure
+> Key Vault, and OS keychain backends are future work, gated on
+> demand. See Critical Rule 62 in `docs/CLAUDE.md`.
+
+### Architecture
+
+```
+caller (router / job / submission service)
+    │
+    ▼
+backend.credentials.credentials       ← public proxy (lazy-init facade)
+    │
+    ▼
+CredentialFacade                       ← cache + audit + registry
+    │
+    ▼
+CredentialBackend (one of)             ← interface
+    ├─ EnvBackend          — os.environ lookup
+    ├─ FileBackend         — YAML at credential_file_path
+    └─ GCPSecretManagerBackend — google-cloud-secret-manager client
+```
+
+The facade is the single entry point. It wraps the chosen backend
+with a TTL'd cache (`credential_cache_ttl_seconds`, default 300),
+emits structured audit logs (`CREDENTIAL_READ` / `CREDENTIAL_READ_FAILED`)
+to the `backend.credentials.audit` stdlib logger (NOT the DB-bound
+`log_audit` — credential reads happen outside any DB transaction),
+and validates required credentials at startup against
+`REQUIRED_CREDENTIALS` from `backend/credentials/registry.py`.
+
+### Settings
+
+In `backend/config.py`:
+
+| Field | Type | Default | Description |
+|---|---|---|---|
+| `credential_backend` | `Literal["env", "file", "gcp_secret_manager"]` | `"env"` | Which backend `CredentialFactory` constructs |
+| `credential_file_path` | `str` | `"~/.config/jackpot/credentials.yaml"` | Path used by `FileBackend` |
+| `credential_gcp_secret_prefix` | `str` | `"jackpot-cred-"` | Secret-name prefix in GCP Secret Manager |
+| `credential_cache_ttl_seconds` | `int` | `300` | Cache TTL on the facade |
+
+### Backends
+
+**`EnvBackend`** — `os.environ.get(key)`. Default for Scenarios A
+(commodity self-hosted) and D (CI). Zero new infrastructure; operator
+sets env vars in `.env.local` / `docker-compose.yml` / Helm values.
+Best for single-operator deployments and CI.
+
+**`FileBackend`** — reads a YAML file at `credential_file_path` whose
+top-level keys are credential names. File mode must be 0600 (the
+backend refuses to read otherwise). Best for config-management-
+friendly multi-host deployments without a cloud secret store.
+
+**`GCPSecretManagerBackend`** — fetches from GCP Secret Manager with
+secret name `{credential_gcp_secret_prefix}{key}`. Requires
+`google-cloud-secret-manager` (already in the dependency tree for
+Scenario C cloud). Best for GCP-native deployments where IAM-gated
+secret access matters.
+
+### Public surface
+
+`backend.credentials.credentials` is a module-level proxy that
+lazily constructs the facade on first access (via `CredentialFactory`
+which inspects `Settings.credential_backend`). Three call shapes:
+
+```python
+from backend.credentials import credentials
+
+api_key = credentials.get("ncbi_api_key")              # raises if missing
+optional_token = credentials.get_optional("github_token")  # returns None if missing
+keys = credentials.list_keys()                          # for diagnostics
+```
+
+`get` and `get_optional` are documented in
+`backend/credentials/facade.py`. `list_keys` is implementation-
+defined per backend (`EnvBackend.list_keys` returns the union of env
+vars matching the registry's known keys; `FileBackend` returns the
+file's keys; `GCPSecretManagerBackend` lists secrets matching the
+prefix).
+
+### Migration path for existing credential reads
+
+C-1 migrated three call sites already in production:
+
+- **Globus** — `globus_client_id` / `globus_client_secret` /
+  `globus_endpoint_id` previously read from `Settings`; now read via
+  `credentials.get(...)`.
+- **Cloud storage** (GCS / MinIO / S3) — service-account credentials
+  previously bootstrapped via `google.auth.default()` paths; now the
+  facade routes through `GCPSecretManagerBackend` when
+  `credential_backend = "gcp_secret_manager"`. Local dev still uses
+  ADC by default since `EnvBackend` doesn't shadow auth.
+- **JWT signing key** — formerly `Settings.secret_key`; now
+  `credentials.get("jwt_secret_key")`. Production validation in
+  `Settings.validate_for_production()` was simplified accordingly
+  (the secret-key check moved to credential validation at startup).
+
+Future credential reads (NCBI / ENA / GISAID for I-3, federation
+peer keys for B-FED-1, LLM API keys for assistant) MUST go through
+`backend.credentials` — never via `Settings` or direct `os.environ`
+lookups. This is **Critical Rule 62**.
+
+### Credential registry
+
+`backend/credentials/registry.py` defines `REQUIRED_CREDENTIALS` as
+a list of `CredentialSpec(key, required_predicate, description,
+example)` records. `required_predicate` is a `Settings`-typed
+callable returning `True` only when that credential is required for
+the current configuration. Examples:
+
+- `globus_client_id` is required only when
+  `settings.globus_enabled` is `True`.
+- `ncbi_api_key` is required only when
+  `settings.allow_backend_submission` is `True` AND
+  `"NCBI" in settings.backend_submission_repos`.
+- `jwt_secret_key` is always required.
+
+`facade.validate_required()` walks the registry, calls each
+predicate against the live settings, and raises `RuntimeError`
+listing the missing keys if any required credential is unreachable.
+The lifespan handler in `main.py` calls this at startup so a
+mis-configured deployment fails fast at boot rather than at first
+request.
+
+### Future backends
+
+- **AWS Secrets Manager** — stub interface in place; activates when
+  `credential_backend = "aws_secrets_manager"`. Scenario C on AWS
+  (EKS-hosted) is the trigger.
+- **Azure Key Vault** — same pattern; gated on Azure-hosted
+  scenarios.
+- **OS keychain** — macOS Keychain / Windows Credential Manager /
+  freedesktop Secret Service for Scenario A laptop-case operators who
+  don't want plaintext env vars or YAML files.
+
+Each new backend implements `CredentialBackend` and registers with
+`CredentialFactory`. No consumer code changes when a new backend is
+added.
+
+### Tests
+
+Tests at `backend/backend/credentials/test_helpers.py` provide an
+`InMemoryBackend` for unit tests and a fixture that constructs a
+facade against it. End-to-end tests cover the three v1 backends
+against fixture YAML / monkeypatched env / mocked GCP client. The
+factory's settings-driven dispatch is covered with a settings-builder
+parametrize. The startup-validation failure mode is covered by
+constructing a facade with deliberately-missing required credentials
+and asserting `validate_required()` raises with the expected key list.
 
 ---
 
@@ -833,7 +1516,7 @@ already have one.
 **Purpose:** Validates `sequencing_lab` field at ingest; drives Globus arrival
 notifications.
 
-**Tests:** CRUD, assignment workflow, list returns seed data (Sonora Quest,
+**Tests:** CRUD, assignment workflow, list returns seed data (Example Reference Lab,
 LabCorp, Example Lab).
 
 ---
@@ -1495,7 +2178,7 @@ workaround until public Ingress lands (Phase 20 Q-14).
 
 **Access control:**
 `docs/staging_access.md` (in `jackpot-iac/docs/`) documents who has access
-(Glen + 2 operator staff members), how to reach staging URLs, how to redeploy, how to
+(the project owner + designated reviewers), how to reach staging URLs, how to redeploy, how to
 read Cloud Logging.
 
 **Key rules:**
@@ -1865,8 +2548,8 @@ result registration → UI-visible MultiQC report. Once green, tag
 All in `~/jackpot/docs/` unless noted:
 
 - `jackpot_gcp_staging_deployment.html` — Infrastructure reference
-  (APGAP-style) + mental model (layered with Session 5 callouts)
-- `jackpot_architecture_v5.md` — 1,860-line architecture doc
+  + mental model (layered with Session 5 callouts)
+- `architecture.md` (v6.0) — consolidated architecture doc (replaces `jackpot_architecture_v5.md`, `JACKPOT_Architecture_Synthesis_May_2026.md`, and `Core_Technical_Pillars_copy.md` per the May 2026 Cluster A merge)
 - `jackpot_session_summary_and_backlog.md` — design decisions + backlog,
   the running engineering log (v2.4 includes Phase 26 backlog)
 - `jackpot_schema.yaml` — LinkML schema source of truth
@@ -1877,9 +2560,9 @@ These three documents are the source of truth for the post-P0d roadmap. Cross-re
 
 - **`jackpot_pathoplexus_loculus_overview.md`** (1,873 lines, 2026-04-28) — Comparative analysis between JACKPOT and the Pathoplexus/Loculus stack plus 8 peer platforms (GenSpectrum/LAPIS, Pathogenwatch, EnteroBase, NCBI Pathogen Detection on GCP, BV-BRC, Solu, RT-MetA, GISAID). Source of truth for: AGPL-3.0 license decision rationale (§3), peer-platform landscape (§4), JACKPOT vs Loculus architectural divergence (§6-10), two-PII-gate architecture documentation (§9), code adoption recommendations A1-A6 (§11), federation tiers (§12), Phase 26 backlog of 34 items grouped A-J by source platform (§16.10).
 
-- **`jackpot_cdc_dmi_stlt_overview.md`** (816 lines, 2026-04-28) — Alignment with US public-health-data ecosystem. Source of truth for: CDC DMI history and North Star Architecture goals (§1), STLT public health landscape with extra weight on Tribal sovereignty (§2), CARE Principles formal adoption (§2.3c), seven install scenarios with Scenario T addition (§6), tombstone-and-vacuum architectural pattern for sovereignty-compliant deletion (§7), Tribal Epidemiology Center federation pattern (§8), JACKPOT vs NBS/eCR/AIMS layer-cake (§9), funding-source map for STLT operators (§10), Phase 27 backlog of 14 items grouped K-M.
+- **`jackpot_cdc_dmi_stlt_overview.md`** (816 lines, 2026-04-28) — Alignment with US public-health-data ecosystem. Source of truth for: CDC DMI history and North Star Architecture goals (§1), STLT public health landscape with extra weight on Indigenous data sovereignty (§2), CARE Principles formal adoption (§2.3c), four install scenarios with sovereignty-aligned runtime policy capabilities (§6 — per the Cluster A merge, sovereignty is a runtime policy applicable to any scenario rather than a separate Scenario T), tombstone-and-vacuum architectural pattern for sovereignty-compliant deletion (§7), Tribal Epidemiology Center federation pattern (§8), JACKPOT vs NBS/eCR/AIMS layer-cake (§9), funding-source map for STLT operators (§10), Phase 27 backlog of 14 items grouped K-M.
 
-- **`jackpot_byop_and_eukaryotic_design.md`** (1,456 lines, 2026-04-29) — Multi-engine BYOP infrastructure plus full-parity eukaryotic pathogen support. Source of truth for: four-engine BYOP architecture — Nextflow, Snakemake, WDL, manifest-wrapped scripts (§1-3), `jackpot-pipeline.yaml` manifest schema (§2), four source types — public/private Git, tarball upload, Docker image (§4), two-stage validation gating with sandbox dry-run isolation (§5), pipeline lifecycle state machine (§6), schema additions for `byop_pipelines` table and 8 eukaryotic pipeline-result tables (§7, §12), 8 default eukaryotic pathogen pipelines (§13), 25 backlog items split across Phase 24.5 schema lockdown (4 items), Phase 24.7 / P0f BYOP infrastructure (10 items), Phase 28 default eukaryotic pipelines + parsers + dashboards (11 items, internally tier-prioritized).
+- **`byop_and_eukaryotic_design.md`** (1,456 lines, 2026-04-29) — Multi-engine BYOP infrastructure plus full-parity eukaryotic pathogen support. Source of truth for: four-engine BYOP architecture — Nextflow, Snakemake, WDL, manifest-wrapped scripts (§1-3), `jackpot-pipeline.yaml` manifest schema (§2), four source types — public/private Git, tarball upload, Docker image (§4), two-stage validation gating with sandbox dry-run isolation (§5), pipeline lifecycle state machine (§6), schema additions for `byop_pipelines` table and 8 eukaryotic pipeline-result tables (§7, §12), 8 default eukaryotic pathogen pipelines (§13), 25 backlog items split across Phase 24.5 schema lockdown (4 items), Phase 24.7 / P0f BYOP infrastructure (10 items), Phase 28 default eukaryotic pipelines + parsers + dashboards (11 items, internally tier-prioritized).
 
 ### Operational runbooks
 
@@ -1904,12 +2587,11 @@ These three documents are the source of truth for the post-P0d roadmap. Cross-re
 ### April 2026 — pivot decisions
 
 - **License flipped Apache 2.0 → AGPL-3.0.** Strategic, not legal. Closes the SaaS loophole via §13. Joins the European public-health pathogen-genomics cluster (Loculus, GenSpectrum/LAPIS, SILO, dashboard-components — all AGPL-3.0). Anti-GISAID-capture stance. Unblocks direct code adoption from the entire Loculus stack. See `jackpot_pathoplexus_loculus_overview.md` Section 3 for the full rationale.
-- **JACKPOT is independent.** No longer ADHS-contracted, no longer ASU-affiliated, no longer specifically the APGAP successor. Single-owner project under `Midnight-Oil-Innovation/jackpot`.
-- **Multi-deployment-target architecture.** 7 install scenarios (A–F + T). Production code is operator-agnostic; `jackpot init` (P0e) handles per-operator bootstrap.
+- **Multi-deployment-target architecture.** 4 install scenarios (A–D), reduced from 7 in the May 2026 Cluster A merge. Federation, multi-org tenancy, and Indigenous data sovereignty are runtime configurations applied to A/B/C rather than separate install scenarios. Production code is operator-agnostic; `jackpot init` (P0e) handles per-operator bootstrap.
 - **Phasing post-Phase-11.** Phases 6.1–11 cosmetic genericization → P0d (monorepo migration) → P0e (install/CLI architecture) → Phase 24.5 (architectural design lockdown) → P0f (BYOP infrastructure) → P0b (Schema v5.0 — instances/tenants/federated_peers + BYOP/eukaryotic schema) → P0c (multi-tenancy middleware + sovereignty deletion) → P1–P5 (operator-type configurability, federation, governance, reference deployments, new-needs integration).
 - **Don't replace existing ingest gates.** `file_detector.py`, `validator.py`, `dlp_scanner.py`, and the `sra-human-scrubber` Nextflow integration collectively constitute a more thorough ingest pipeline than anything in Loculus's preprocessing for JACKPOT's surveillance-focused operating model. The recommendation is to expose the Loculus pluggable preprocessing HTTP contract (`/extract-unprocessed-data`, `/submit-processed-data`) as an *opt-in* for sophisticated operators while keeping in-process validation as the default.
-- **Scenario T (Tribal-sovereignty deployment) added** as a variant of A or E with sovereignty-aware defaults: deletion-on-request that actually removes the data (tombstone-and-vacuum lifecycle, not soft-delete), no auto-publish to NCBI/INSDC, federation off-by-default, CARE Principles compliance documented in `governance/care-principles-and-tribal-data-sovereignty.md`. See `jackpot_cdc_dmi_stlt_overview.md` Section 6 for the full design.
-- **CARE Principles formally adopted** alongside FAIR. Indigenous Data Sovereignty (Collective Benefit, Authority to Control, Responsibility, Ethics) becomes a first-class design constraint for Scenario T deployments.
+- **Sovereignty as runtime policy (May 2026, supersedes original Scenario T design).** Indigenous data sovereignty was originally framed as a separate deployment scenario (Scenario T as a variant of A or E). The May 2026 Cluster A merge reframed this: sovereignty-aware capabilities — deletion-on-request via tombstone-and-vacuum lifecycle, no auto-publish to NCBI/INSDC, federation policy restrictions, audit visibility, residency enforcement, revocable consent — are runtime policies that any deployment can configure post-install, rather than a dedicated scenario. A Tribal college running JACKPOT for genomics coursework picks Scenario A and does not configure sovereignty policies. A Tribal Nation health department running JACKPOT under CARE Principles also picks Scenario A and configures sovereignty policies via `jackpot policy enable ...`. CARE Principles compliance documented in `governance/care-principles-and-indigenous-data-sovereignty.md`. See `docs/architecture.md` §22 for the full design and `jackpot_cdc_dmi_stlt_overview.md` Section 6 for the original Scenario T design notes.
+- **CARE Principles formally adopted** alongside FAIR. Indigenous Data Sovereignty (Collective Benefit, Authority to Control, Responsibility, Ethics) becomes a first-class design constraint for any deployment configured with sovereignty-aligned runtime policies. The platform's enforcement primitives (residency, revocable consent, no-auto-publish defaults, federation policy restrictions, audit portal) are available to all scenarios; per-org policy enablement determines which apply.
 - **Layer-cake positioning.** JACKPOT is the genomics layer between LIMS and downstream analysis platforms (NCBI Pathogen Detection, Pathoplexus, Pathogenwatch, Nextstrain). It integrates with NBS/eCR/AIMS — does not replace them. See `jackpot_cdc_dmi_stlt_overview.md` Section 9.
 
 ### April 2026 — BYOP and eukaryotic pipelines decisions

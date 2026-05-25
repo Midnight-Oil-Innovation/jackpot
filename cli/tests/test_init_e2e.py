@@ -280,11 +280,11 @@ class TestCommittedCiFixture:
             "gotero@linuxprophet",
             "gotero3@asu",
             "linuxprophet",
-            "Otero Lab",
-            "ADHS",
-            "ASU",
+            "Example Lab Alpha",
+            "Example Lab Beta",
+            "Example Lab Gamma",
             "gotero3-acdp-488517",
-            "Sonora Quest",
+            "Example Lab Delta",
         )
         ci_dir = _REPO_ROOT / "instances" / "ci"
         if not ci_dir.exists():

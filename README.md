@@ -47,6 +47,22 @@ domains, or infrastructure identifiers are hardcoded. The `jackpot
 init` CLI is the only place where operator-specific values are learned
 at install time.
 
+### Compute environment
+
+The install scenario above governs **where the API server lives**;
+the **compute environment** for pipeline execution is an orthogonal
+choice and lives on the `execution_profiles` row. JACKPOT supports
+local-Nextflow-on-the-API-host (laptop default), Slurm (single-lab
+on-prem or shared university research-computing), and GCP Batch /
+AWS Batch / Kubernetes (cloud). Operators set this at install time
+via `jackpot init` or later via `jackpot profiles add` (when the
+G-5 CRUD endpoints land). See:
+
+- **[`docs/slurm_executor.md`](./docs/slurm_executor.md)** —
+  scenario-B-or-C lab with a Slurm queue. Profile setup, network
+  requirements, Apptainer pre-staging, weblog vs. log poller, and
+  common cluster-policy gotchas.
+
 ## Operations runbooks
 
 For deploying and operating a JACKPOT instance:
@@ -135,7 +151,6 @@ see:
 └────────────────────────────────▲─────────────────────────────┘
                                  │ ECR/ELR via TEFCA
 ┌────────────────────────────────┴─────────────────────────────┐
-│  ELECTRONIC CASE / LAB REPORTING ROUTING (APHL AIMS)         │
 └────────────────────────────────▲─────────────────────────────┘
                                  │ HL7 / FHIR
 ┌────────────────────────────────┴─────────────────────────────┐

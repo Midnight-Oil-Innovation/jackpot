@@ -64,7 +64,6 @@ omit = [
     "**/backend/pagination.py",
     "**/backend/responses.py",
     "**/backend/routers/archive_requests.py",
-    "**/backend/routers/auth.py",
     "**/backend/routers/billing.py",
     "**/backend/routers/dataset_access.py",
     "**/backend/routers/datasets.py",
@@ -120,3 +119,8 @@ select = ["E", "F", "I", "N", "W", "UP", "B", "SIM"]
 "cli/jackpot/cli/upload.py"               = ["F841"]
 "cli/jackpot/cli/samples.py"              = ["F841"]
 "cli/jackpot/cli/pipelines.py"            = ["F841"]
+
+[dependency-groups]
+dev = [
+    "bandit[toml]>=1.9.4",
+]

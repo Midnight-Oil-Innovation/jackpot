@@ -21,6 +21,8 @@ P0f (BYOP infrastructure) → P0b (Schema v5.0 with instances/tenants/
 federated_peers + BYOP/eukaryotic schema) → P0c (multi-tenancy middleware
 + sovereignty deletion) → P1–P5.
 
+**Forward-looking note (May 2026 cluster-doc-merge):** The "7 install scenarios" + Scenario T framing in the paragraph above reflects current *code* state — the `jackpot init` CLI accepts `--scenario A` through `F` plus `T`, the `schema/jackpot_scenarios/` defaults registry has 7 entries, and Critical Rule 56's `instances/ci/` is the committed Scenario F (CI test) artifact set. The canonical architecture in `docs/architecture.md` v6.0 §3 (post-Cluster-A merge, May 2026) consolidates these to **4 install scenarios** — A self-hosted commodity (laptop through agency multi-server), B HPC (Apptainer + Slurm + institutional storage), C single-org cloud (GKE/EKS/AKS cloud-native), D CI test — with **federation, multi-tenancy, and Indigenous data sovereignty as runtime configurations** layered on top of any scenario, not as separate install scenarios. **Sovereignty-as-runtime-policy** per `docs/architecture.md` §22 supersedes the Scenario T framing above: the four sovereignty-aware defaults (deletion-on-request, no auto-publish, federation off-by-default, CARE-Principles compliance) are now sovereignty-runtime-policy defaults that can be enabled on any scenario via `jackpot policy enable sovereignty`, not the defining characteristics of a separate deployment scenario. The code consolidation will land post-P0e as the CLI and scenarios registry catch up to the canonical architecture; until then, this file describes operational reality (what the CLI accepts today), and `docs/architecture.md` describes the architectural direction (what the CLI will accept after the post-P0e consolidation). Companion canonical reference docs from the May 2026 cluster-merge work: `docs/immune_platform.md` (post-Cluster-B; absorbed `Jackpot_AIS.md` + `jackpot_immune_platform_plan.md` + `jackpot_immune_collaboration_scaffolding.md`), `docs/platform_landscape.md` (post-Cluster-E; supersedes `jackpot_pathoplexus_loculus_overview.md`), `docs/strategic_vision.md` + `docs/governance_alignment.md` (post-Cluster-F; absorbed `jackpot_cdc_dmi_stlt_overview.md` content), `docs/detection_landscape.md`, `docs/learning_strategic_vision.md` + `docs/learning_curriculum_design.md`, `docs/federation.md` + `docs/federation_operations.md`, `docs/wastewater.md` + `docs/wastewater_software_landscape.md`, `docs/deploy/gcp.md` (post-Cluster-F; supersedes 3 predecessor GCP deploy guides). See `docs/domain_reference.md` for the full glossary + source-of-truth map.
+
 ---
 
 ## Autonomous Operating Mode
@@ -29,8 +31,51 @@ federated_peers + BYOP/eukaryotic schema) → P0c (multi-tenancy middleware
 
 1. Read `spec.md` — understand the goals and constraints for the current sprint
 2. Read `todo.md` — find the next unchecked task
-3. Re-read this file (`docs/CLAUDE.md`) — all 56 Critical Rules apply at all times
-4. Confirm the baseline is stable: `uv run pytest tests/ schema/tests/ cli/tests/` from the workspace root — **≥970 tests passing, ≥80% coverage** (post-P0e baseline). The post-P0d 39% number we carried briefly was a pytest-cov misconfiguration (omit list wasn't reaching the report-time matcher); fixed by making `--cov-config=pyproject.toml` explicit in addopts — see `docs/learnings.md` "Coverage measurement bug" entry. P0e (`docs/architecture/jackpot-init-cli.md`) shipped `jackpot init` operator-bootstrap CLI plus 13 absorbed Phase 22 cleanup items; see `docs/review_log.md` "P0e closeout" section.
+3. Re-read this file (`docs/CLAUDE.md`) — all 67 Critical Rules apply at all times
+4. Confirm the baseline is stable: `uv run pytest tests/ schema/tests/ cli/tests/` from the workspace root — **≥1591 tests passing, ≥80% coverage** (post-R-1, R-2 work in progress, R-3 doc/tracking hygiene as of 2026-05-06). Earlier baselines: 970 passing post-P0e, 1527 post-PR #28 P0g G-3+G-4. The post-P0d 39% number we carried briefly was a pytest-cov misconfiguration (omit list wasn't reaching the report-time matcher); fixed by making `--cov-config=pyproject.toml` explicit in addopts — see `docs/learnings.md` "Coverage measurement bug" entry. P0e (`docs/architecture/jackpot-init-cli.md`) shipped `jackpot init` operator-bootstrap CLI plus 13 absorbed Phase 22 cleanup items; see `docs/review_log.md` "P0e closeout" section.
+
+## Session-start checklist
+
+**Run this as the FIRST action of any session involving file edits, git ops, schema work, or backlog edits.** Paste the output to the chat verbatim so Claude has verified state before proposing any commands. Applies in Claude Code, Claude in chat, and any other Claude surface. Skipping it is a Critical Rule N violation (pre-action state verification), regardless of how trivial the requested action appears.
+
+```bash
+# 1. Working tree + index state
+pwd
+git status
+
+# 2. Origin divergence — has anything moved since last sync?
+git fetch origin
+BRANCH=$(git branch --show-current)
+echo "=== local ahead of origin/$BRANCH ===" && git log --oneline "origin/$BRANCH..HEAD"
+echo "=== origin ahead of local  ($BRANCH) ===" && git log --oneline "HEAD..origin/$BRANCH"
+
+# 3. Recent history for context
+git log --oneline -5
+
+# 4. Worktree check (Critical Rule 61 — confirm you're in the worktree you think you are)
+git worktree list
+```
+
+### What Claude does with this output
+
+- **`git status` shows unexpected modified/staged files** (files Claude didn't author this session, files unrelated to the current task) → ask before proceeding. Don't assume the maintainer wants them included.
+- **`origin/$BRANCH..HEAD` is non-empty** → local commits exist that aren't pushed. Warn before any `reset --hard` or destructive operation.
+- **`HEAD..origin/$BRANCH` is non-empty** → origin has moved since last sync. Treat any uploaded files as STALE per Critical Rule N+3 (stale upload detection). Warn before any merge script run or backlog edit that depends on anchor strings — they may have shifted in the new commits.
+- **`git worktree list` shows multiple worktrees** and the current `pwd` doesn't match the intended branch → stop, switch worktrees per Critical Rule 61 before continuing.
+
+### When to re-run mid-session
+
+- After the maintainer runs any terminal command Claude didn't propose (especially git operations).
+- After any `git fetch` / `git pull` / `git push` / `git rebase` / `git reset`.
+- Before any merge script run, even if the script ran successfully earlier in the session — anchors may have shifted.
+- Before any `gac` invocation, to confirm only the intended files are staged.
+
+### When the maintainer can skip it
+
+- Pure-conversation sessions with no file or git operations (asking questions, reviewing designs, drafting docs into chat).
+- Read-only inspection sessions (`view`, `cat`, `grep` only).
+
+If the session crosses from conversation into action — even a single edit — run the checklist first.
 
 ### Work Loop
 
@@ -113,6 +158,36 @@ After completing any router session or significant fix, append a new entry to
 - Environment management: uv — never use pip directly
 - Tests: pytest + testcontainers (real PostgreSQL container in tests)
 
+### ruff version is pinned across three sources of truth
+
+ruff is pinned to one specific version in three independent places that
+all must match:
+
+| Where | What |
+|---|---|
+| `.pre-commit-config.yaml` | `rev: v<version>` under `astral-sh/ruff-pre-commit` |
+| `backend/pyproject.toml` | `ruff==<version>` in the `dev` dependency group |
+| `cli/pyproject.toml` | `ruff==<version>` in the `dev` dependency group |
+
+Plus `schema/pyproject.toml` if it lists ruff (currently does not).
+
+After bumping the version in any of these places, **all** of them must be
+bumped together, then everyone pulling the change must run:
+
+```bash
+uv run pre-commit clean
+uv run pre-commit install --install-hooks
+uv sync
+```
+
+This refreshes the pre-commit hook cache (which doesn't auto-detect
+version changes) and the resolved lockfile.
+
+Why this matters: pre-commit caches hook environments by config hash, not
+by version. The result of misalignment is "lint clean locally, fails on
+CI" — which bit PR #22 (P1) on its first run before the in-PR reformat
+workaround. This permanent pin alignment (PR #N) prevents recurrence.
+
 ---
 
 ## Directory Structure
@@ -180,13 +255,29 @@ six-repo + git-submodule arrangement is gone; what used to be submodules
 │   ├── helm/jackpot-api/          Chart + values-staging.yaml
 │   ├── scripts/                   bootstrap_project.sh, staging_smoke_test.sh
 │   └── docs/                      Deploy-specific docs (production_runbook, env examples)
-├── docs/                          Product + design docs (CLAUDE.md, learnings, design overviews)
+├── docs/                          Product + design docs (CLAUDE.md, canonical reference docs, archived sources)
 │   ├── CLAUDE.md                  ← this file
-│   ├── architecture/              P0e: jackpot-init-cli.md design lockdown
+│   ├── architecture.md            Canonical system architecture v6.0 (post-Cluster-A merge; absorbed jackpot_architecture.md, JACKPOT_Architecture_Synthesis_May_2026.md, Core_Technical_Pillars.md)
+│   ├── architecture/              P0e: jackpot-init-cli.md design lockdown (subdirectory, distinct from canonical architecture.md above)
+│   ├── immune_platform.md         Immune Platform reference (post-Cluster-B; absorbed Jackpot_AIS.md, jackpot_immune_platform_plan.md, jackpot_immune_collaboration_scaffolding.md)
+│   ├── detection_landscape.md     Component-tier OSS detection tool landscape (~85 tools)
+│   ├── platform_landscape.md      Platform-tier comparative landscape (post-Cluster-E; supersedes jackpot_pathoplexus_loculus_overview.md)
+│   ├── strategic_vision.md        Strategic synthesis covering CDC DMI / North Star / STLT (post-Cluster-F; absorbed jackpot_cdc_dmi_stlt_overview.md)
+│   ├── governance_alignment.md    WHO/IPSN / GA4GH / North Star / FAIR+CARE alignment matrices (post-Cluster-F)
+│   ├── federation.md              Federation architecture (3 levels) — Track 1 baseline
+│   ├── federation_operations.md   Federation operator-facing reference (B-CWB-DOC-1)
+│   ├── learning_strategic_vision.md + learning_curriculum_design.md   JACKPOT Learn (Academy + Field Edition + SENTINEL + WILDFIRE)
+│   ├── wastewater.md + wastewater_software_landscape.md   Wastewater surveillance schema + comparative OSS landscape
 │   ├── install/                   P0e: quickstart.md (10-minute fresh-clone walk)
 │   ├── deploy/stlt/               Five STLT-tier deploy guides (Phase 21.5)
+│   ├── deploy/gcp.md              GCP deployment guide (post-Cluster-F; supersedes 3 predecessor docs)
+│   ├── todo.md                    Backlog (active sprint + tracked-not-scheduled phases; Cluster-G refreshed)
+│   ├── spec.md                    Build spec + scenario definitions (Cluster-A refreshed)
 │   ├── fhir-mapping.md            FHIR R5 translation map
-│   └── jackpot_*_overview.md      Pathoplexus, CDC DMI, BYOP design documents
+│   ├── domain_reference.md        Cross-doc glossary + source-of-truth map (Tier-1 reference)
+│   ├── cryptwwdb_integration.md, epistorm_integration.md, demo_data_sources.md, schema_sufficiency_observatory.md, sample_status_vs_access.md, fasta_upload_discussion.md, dockerfile_strategy.md, slurm_executor.md, file_references.md, staging_access.md, local_test_checklist.md, apptainer_compatibility_audit.md, pipeline_apptainer_audit.md   Individual Tier-3 reference docs (Cluster-H)
+│   ├── byop_and_eukaryotic_design.md   BYOP + 8 eukaryotic pathogen groups design doc (not yet absorbed into a canonical reference)
+│   └── archived/                  Superseded source docs preserved as audit trail (apgap_migration_context, jackpot_ais_legacy, ml_infrastructure_inventory, backlog_consolidation_report, backlog_reconciliation)
 ├── governance/                    8 charter + policy markdown files (P0d Phase 21.5)
 ├── instances/                     P0e: per-instance jackpot init output (gitignored except instances/ci/)
 │   ├── .gitignore                 Whitelist: only ci/ + .gitignore are committed
@@ -217,9 +308,12 @@ Notification System sections for their exact interfaces.
 
 ## Current Baseline
 
-- **970 tests passing, 1 skipped, 0 failed** (post-P0e); up from 944
-  at P0e close + 26 from the ultrareview security follow-up.
-- **Coverage: 86%+** workspace-wide. The pre-P0d 86.99% baseline was
+- **1591 tests passing, 2 skipped, 0 failed** (post-R-1 PR #31; verified
+  2026-05-06 against `r3-doc-and-tracking-hygiene` based at `2609a1f`).
+  Earlier baselines: 970 post-P0e, 944 at P0e close, 1527 post-PR #28
+  P0g G-3+G-4.
+- **Coverage: 87.85%** post-PR #28; expected to hold at the same level
+  (R-3 is doc-only; R-1 added security-correctness tests). The pre-P0d 86.99% baseline was
   briefly under-reported as 39% due to a pytest-cov misconfiguration
   (omit list wasn't reaching the report-time matcher because
   `--cov-config=pyproject.toml` wasn't explicit in addopts). Fix landed
@@ -381,7 +475,7 @@ Never write file parsing or pairing logic in a router.
 
 **20. `gen-pydantic` requires two steps after every run:**
 (1) Always use the `--pydantic-version 2` flag:
-    `uv run gen-pydantic --pydantic-version 2 schema/schema/jackpot_schema.yaml > backend/models_generated.py`
+    `uv run gen-pydantic --pydantic-version 2 schema/schema/jackpot_schema.yaml > backend/backend/models_generated.py`
 (2) Apply the boolean keyword patch AND trailing newline fix immediately after:
 
 ```python
@@ -1001,45 +1095,160 @@ launch or sets one.
 Many HPC clusters block outbound HTTPS from compute nodes. This
 breaks Nextflow's standard weblog mechanism, which expects to POST
 trace events to a URL during execution. JACKPOT handles this by
-treating the HTTP weblog receiver as **best-effort** and providing a
-log poller as the source of truth when reachability is uncertain.
+treating the HTTP weblog receiver as **best-effort** and running a
+log poller as the always-on fallback so cluster runs reach a
+terminal state regardless of compute-node egress policy.
 
-**Two paths, both supported:**
+**Two paths, both running concurrently:**
 
-- **HTTP weblog (default):** compute nodes POST to
-  `/api/v1/pipelines/events`. The receiver in `backend/routers/pipelines.py`
-  **never raises on errors** — Nextflow does not retry weblog
-  delivery. Receiver tolerates duplicate events idempotently on
-  `(run_id, task_id, status)`.
-- **Log poller (fallback):** when the launch profile has
-  `weblog_reachable=false`, the launch endpoint omits the weblog
-  directive from the generated `nextflow.config` and instead starts
-  an APScheduler job in `backend/pipelines/log_poller.py`. The poller
-  tails `<work_dir>/runs/<run_id>/.nextflow.log` over the shared
-  filesystem every 30 seconds, parses Nextflow's known event
-  patterns, and emits synthetic events to the same handler the HTTP
-  receiver uses.
+- **HTTP weblog (best-effort):** every rendered `nextflow.config`
+  carries a `weblog` directive pointing at
+  `/api/v1/pipelines/events`. The receiver in
+  `backend/backend/routers/pipelines.py` **never raises on errors**
+  — Nextflow does not retry weblog delivery. The receiver tolerates
+  duplicate events idempotently because `pipeline_runs.status`
+  writes are idempotent, `pipeline_tasks` upserts on `(run_id,
+  task_id)`, and the diagnostic `pipeline_events` table accepts
+  duplicate inserts. Per-task accounting (`process.submitted`,
+  `process.completed`, etc.) is weblog-only — the poller observes
+  workflow-level state but not individual task transitions.
+- **Log poller (always-on fallback):** an APScheduler job in
+  `backend/backend/log_poller.py` fires every
+  `settings.log_poller_interval_seconds` (default 30) for every run
+  in `('PENDING', 'QUEUED', 'RUNNING')` whose `work_dir` is set.
+  The poller tails `<work_dir>/runs/<run_id>/.nextflow.log` from a
+  per-run `pipeline_runs.poller_log_offset` byte position, parses
+  Nextflow's logger-prefixed start/completed/failed lines, and
+  dispatches terminal classifications through the same
+  `_handle_workflow_complete` codepath the receiver uses (so result
+  loading runs once whether the trigger came through HTTP or
+  polling). No flag gates the poller — it runs unconditionally;
+  idempotency keeps state consistent when both paths observe the
+  same event.
 
-The two paths can coexist for redundancy without duplicating writes,
-because the receiver dedups on the `(run_id, task_id, status)`
-tuple. Operators in scenario C (university research-computing
-hosted) typically run with `weblog_reachable=false` and rely solely
-on the poller; scenario B operators with their own server typically
-run with `weblog_reachable=true`.
+**Pre-launch reachability gate:** the launch endpoint runs
+`sinfo -h` on the API host before queueing a SLURM-targeted run
+(via `backend/backend/pipeline_config/cluster_reachability.py`).
+Failure surfaces as 400 `SLURM_UNREACHABLE` with a pointer to
+`jackpot doctor slurm --check-cluster`. Reachability is cached per
+`(account, partition)` for 60 seconds so bulk launches don't spawn
+50 subprocesses; tests opt out via
+`settings.slurm_reachability_check_enabled = False`.
 
 **For multi-tenant scenario C deployments**, per-launch
 `launch_account` overrides (which Slurm account to charge) must be
 validated against the user's lab memberships via the P0c
-multi-tenancy guard. Never trust `launch_account` from the request
-body alone.
+multi-tenancy guard. Today's launch_account flow is a P0c stub:
+the override is accepted verbatim and an
+`SLURM_LAUNCH_ACCOUNT_OVERRIDE` audit row captures actor + before
+(profile default) + after (override value) so a P0c-aware audit
+review can retroactively flag overrides that would have been
+rejected. Never trust `launch_account` from the request body alone
+once P0c lands.
 
-**Related schema:** `execution_profiles.config_overrides`
-(`weblog_reachable` boolean for Slurm/PBS/LSF profiles).
+**Related schema:** `pipeline_runs.poller_log_offset` (per-run
+poller byte position), `execution_profiles.config_overrides`
+(Slurm-specific knobs in JSONB).
 
 **Related backlog:** Phase P0h in `todo.md`,
-`backend/pipelines/log_poller.py`, `backend/pipelines/cluster_health.py`.
+`backend/backend/log_poller.py`,
+`backend/backend/pipeline_config/cluster_reachability.py`,
+`backend/backend/pipeline_config/profile_validation.py`,
+`cli/jackpot/cli/doctor.py`. See `docs/slurm_executor.md` for the
+operator-facing setup guide.
 
 ---
+
+**61. Worktree + branch verification at session start.**
+
+Every Claude Code session that runs in a git worktree must run a verification
+check as its first action and refuse to proceed if either assertion fails.
+The check (with `<branch>` filled in per session):
+
+```bash
+EXPECTED_WORKTREE="$HOME/Projects/jackpot-<branch>"
+EXPECTED_BRANCH="<branch-name>"
+[ "$(pwd -P)" = "$EXPECTED_WORKTREE" ] || { echo "FATAL: wrong cwd ($(pwd -P)). Stop." >&2; exit 1; }
+[ "$(git branch --show-current)" = "$EXPECTED_BRANCH" ] || { echo "FATAL: wrong branch ($(git branch --show-current)). Stop." >&2; exit 1; }
+echo "Worktree + branch verified."
+```
+
+Why this matters: parallel Claude Code sessions sharing one filesystem can
+silently cross-pollute working trees when an agent starts in the wrong cwd
+or when `git switch` is run inside a worktree. The Sessions 20-21
+worktree-contamination saga consumed significant recovery time and prompted
+this rule. Never `git switch` inside a worktree — each worktree is pinned
+to its anchor branch by virtue of being created with `-b`.
+
+**62. Credential reads go through `CredentialFacade`, never directly via env var or `Settings`.**
+
+Sensitive string values (NCBI/ENA/GISAID API keys, Globus client secret,
+JWT signing key, future federation peer keys, future LLM API keys) are
+read via the C-1 credential infrastructure:
+
+```python
+from backend.credentials import credentials
+
+api_key = credentials.get("ncbi_api_key")               # raises CredentialNotFoundError if missing
+optional_token = credentials.get_optional("github_token")   # returns None if missing
+```
+
+Never read these from `os.environ` directly, never expose them as plain
+`Settings` fields. Routes through the facade are the only call shape
+that:
+
+- inherits the operator-selected backend (env / file YAML / GCP Secret
+  Manager / future AWS / Azure / OS keychain) without per-call branching;
+- emits the `CREDENTIAL_READ` / `CREDENTIAL_READ_FAILED` audit events
+  to the dedicated `backend.credentials.audit` stdlib logger;
+- is registered in `backend/credentials/registry.py`'s
+  `REQUIRED_CREDENTIALS` so `validate_required()` at startup catches a
+  mis-configured deployment before the first request.
+
+Adding a new credential is a three-step change: (1) add a
+`CredentialSpec(...)` to `REQUIRED_CREDENTIALS` with a
+`required_predicate` against `Settings`; (2) add the value to whichever
+backends the deployment uses (env var / YAML key / GCP secret); (3)
+read via `credentials.get(...)` from the consuming module.
+
+Selectors live in `Settings`:
+
+| Field | Default | Meaning |
+|---|---|---|
+| `credential_backend` | `"env"` | One of `"env"`, `"file"`, `"gcp_secret_manager"` |
+| `credential_file_path` | `~/.config/jackpot/credentials.yaml` | Used only when `credential_backend = "file"`; file mode must be 0600 |
+| `credential_gcp_secret_prefix` | `"jackpot-cred-"` | Used only when `credential_backend = "gcp_secret_manager"` |
+| `credential_cache_ttl_seconds` | `300` | Facade-level TTL'd cache |
+
+Existing migrated call sites: Globus client_id/client_secret/endpoint_id,
+cloud-storage service-account credentials, JWT signing key. New code
+follows the same pattern. See `spec.md` Phase C-1 Specification for the
+full design.
+
+**63 — Pre-action state verification.** Before any operation that modifies the repo (file edits, git operations, applying patches, merge-script runs), Claude must verify and report three things: (a) `git status` output for the current working tree state; (b) `git fetch && git log --oneline HEAD..origin/<current-branch>` output showing whether origin has moved since Claude's last verified context; (c) the actual current state of any file Claude is about to modify (via `view` or `cat`, not relying on prior uploads). If any check returns unexpected state — divergence, stale uploads, files modified by something other than the current Claude session — Claude pauses and asks before continuing. Operating on stale context is the most common failure mode and is preventable. Anchor session: 2026-05-12 cryptWWDB merge — ~45 minutes of git recovery from skipping this check.
+
+**64 — Manual edits below 20-edit threshold.** For one-off backlog edits, doc additions, or other structural changes affecting fewer than ~20 edits, Claude provides exact text + unambiguous placement markers (line numbers, surrounding context, section headers) and the maintainer edits the file directly in their editor. Merge scripts (`merge_*.py` pattern) are only warranted for: (a) repeated structural changes across many files; (b) edits with mechanical regularity that benefit from programmatic application; (c) >20 edits to a single file; (d) edits the maintainer explicitly requests as scripted. The cost of debugging a brittle merge script exceeds the cost of manual edits below this threshold.
+
+**65 — Merge scripts must be drift-resistant.** When merge scripts are warranted (per Rule N+1), they must: (a) be idempotent — detect already-applied state and exit cleanly without re-applying; (b) use structural anchors (section headers + subsection navigation) rather than long exact-string matches that break on any nearby edit; (c) print a pre-flight diff showing what WOULD change before any write occurs, and require explicit confirmation to apply; (d) verify anchor uniqueness against the live file at run time, not against the file Claude assumed when authoring the script; (e) state in their docstring the exact baseline commit SHA they were authored against; (f) write to `.new` files first, never modify in place. Scripts that work once and break on the next commit are violations.
+
+**66 — Stale upload detection.** When the maintainer uploads a file, that upload reflects a single point in time. If the maintainer has taken any terminal actions between the upload and Claude's next operation (running scripts, git operations, edits), Claude treats the uploaded file as STALE and re-verifies state before acting. When Claude is about to give commands that depend on file content (anchor strings, line numbers, item IDs), Claude first asks "have you run anything that might have changed this file since the upload?" If yes or uncertain, request fresh state via `cat` / `git show HEAD -- <file>` / equivalent before proceeding.
+
+**67 — Operating-protocol rules are read-first.** Rules N through N+3 are session-level operational rules. Every Claude session involving file edits, schema work, git operations, or backlog work must reference these rules explicitly before taking action. The rules don't enforce themselves — they require maintainer call-out when violated until the pattern is internalized. If Claude proposes commands without verifying state per Rule N, or proposes a merge script below the Rule N+1 threshold without justification, the maintainer should pause the session and reference the rule number.
+
+**68 — Session prompt closing-steps mandatory.** Every JACKPOT session prompt that produces a code commit MUST include a Closing Steps section executing the following sequence after the commit lands:
+
+1. `git push -u origin <branch>`
+2. `gh pr create --base development --title "..." --body "..."` with the full PR body following the template at `docs/session_prompt_template.md`
+3. `gh pr merge --squash --delete-branch`
+4. `git -C ~/Projects/jackpot fetch --prune`
+5. `git -C ~/Projects/jackpot pull --ff-only origin development`
+6. Session summary reports PR URL, merge SHA, main checkout HEAD SHA after sync, and an explicit "maintainer next step: run `jackpot-finish <branch>` from outside the session to remove the worktree and delete the local branch"
+
+The session MUST NOT include `git worktree remove` of the current worktree — git refuses to remove the in-use worktree, and the maintainer's `jackpot-finish` helper handles this from outside. Out of Scope sections must include this exclusion explicitly.
+
+Every code-commit session prompt structure must follow `docs/session_prompt_template.md`: required sections (Operating Rules, Role, Session Task, Acceptance Criteria, Out of Scope, Closing Steps, Source-of-truth docs to verify before coding), required acceptance criteria for the push/PR/merge/sync sequence, and the PR body template.
+
+Sessions that do NOT produce a code commit (pure-research, pure-design, pure-documentation-without-commit) are exempt from Closing Steps but must explicitly state this exemption in Operating Rules.
 
 ## Local Dev Role Switching
 
@@ -1204,18 +1413,6 @@ meaningful error when WORKSPACE_ENABLED=false or equivalent:
 
 ---
 
-## APGAP Compatibility (historical)
-
-> **Note:** APGAP-compatibility is no longer a hard constraint. JACKPOT is now an independent project, not specifically the APGAP successor. The compatibility points below are preserved for any in-flight migration of an APGAP deployment to JACKPOT, and because the org/lab/project/user hierarchy and PermissionGroups enum values designed for APGAP-compat happen to be solid choices in their own right. New deployments don't need to satisfy any of these.
-
-- Organization → Lab → Project → User hierarchy is identical
-- PermissionGroups enum string values match APGAP exactly (also enforced by Critical Rule 1 for backwards compatibility on existing deployments)
-- `is_lab_director=TRUE` on `lab_membership` = Lab Director
-- Projects preserve all Seqera fields (`workspace_id`, `compute_env_id`, `credentials_id`)
-- Migration script: `scripts/migrate_from_apgap.py` (only relevant for APGAP→JACKPOT migration deployments)
-
----
-
 ## OrganismNameEnum (62 values in default reference set)
 
 The default 62-value enum was originally derived from a specific jurisdiction's mandatory reportable communicable diseases list and includes one-Health additions (`Coccidioides immitis`, `Coccidioides posadasii` for Valley fever, `metagenome` for metagenomic samples, `novel pathogen` for emerging/exotic disease). All values use NCBI Taxonomy names for BioSample/SRA/GenBank/GISAID compatibility.
@@ -1284,6 +1481,16 @@ response shape in a router — use the helpers from `backend/responses.py`.
 
 # Action with no resource to return (e.g. DELETE, state change)
 {"success": true, "message": "Sample archived."}
+
+# With non-fatal advisory warnings (Phase P0f F-6 — e.g. /api/v1/ingest/csv
+# surfacing the new EXTERNAL default when storage_intent column is absent)
+{
+  "success": true,
+  "data": {...},
+  "warnings": [
+    "storage_intent column missing from CSV. Files registered with the default storage_state='EXTERNAL'..."
+  ]
+}
 ```
 
 ### Error responses
@@ -1335,6 +1542,8 @@ response shape in a router — use the helpers from `backend/responses.py`.
 | `CONFLICT` | 409 | Duplicate sample_id, duplicate access request |
 | `SCRUB_PENDING` | 409 | Files not yet available (scrub in progress) |
 | `SCRUB_APPROVAL_REQUIRED` | 409 | Skip requested, awaiting Lab Director approval |
+| `BROKEN_INPUTS` | 400 | Pipeline launch refused because one or more input `sample_files` rows are in `BROKEN` storage state (Phase P0f F-8) |
+| `FILE_UNREACHABLE` | 400 | URI provided to ingest cannot be read (404, permission denied, network error). Phase P0f F-6. |
 | `INTERNAL_ERROR` | 500 | Unexpected exception — log and return generic message |
 
 ### Response helpers (backend/responses.py)
@@ -2092,7 +2301,7 @@ No pod-level autoscaling — each pod is personal to one researcher, sized
 by their chosen profile. Scaling unit is nodes: cluster autoscaler adds
 workspace-pool nodes as more pods are scheduled. Scale-to-zero when no
 workspaces active. Placeholder pod (low-priority pause container) keeps
-one node warm during business hours (8am–8pm AZ) via CronJob — prevents
+one node warm during business hours (8am–8pm UTC−8:00) via CronJob — prevents
 3–5 minute cold starts for the first researcher of the day.
 
 **Scrubber jobs (scrubber-pool)**
@@ -2120,7 +2329,7 @@ Scale-to-zero means the first workspace launch after inactivity waits for
 node provisioning (~3–5 minutes without mitigation). Two mitigations:
 
 1. **Placeholder pod (CronJob)**: low-priority pause container keeps one
-   workspace-pool node warm 8am–8pm AZ time. Evicted when a real workspace
+   workspace-pool node warm 8am–8pm UTC−8:00. Evicted when a real workspace
    pod is scheduled. Defined in jackpot-iac as a Kubernetes CronJob.
 
 2. **Pre-cached node image**: workspace-pool uses a custom node image with
@@ -2147,7 +2356,7 @@ node provisioning (~3–5 minutes without mitigation). Two mitigations:
 All autoscaling configuration lives in jackpot-iac Terraform:
 - Three node pool definitions with cluster autoscaler config
 - HPA manifest for API and frontend deployments
-- Workspace placeholder pod CronJob (8am–8pm AZ)
+- Workspace placeholder pod CronJob (8am–8pm UTC−8:00)
 - Scrubber GKE Job template
 - GCP Budget alert policies
 - jackpot-work bucket with lifecycle rule
@@ -2171,7 +2380,6 @@ where Redis is legitimately used.
 
 ### What replaces Celery/Redis
 
-| APGAP pattern | JACKPOT replacement | Why |
 |---|---|---|
 | Celery tasks for pipeline execution | GCP Batch + Nextflow | Nextflow manages its own worker VMs |
 | Celery tasks for scrubbing | GKE Jobs + scrubber queue in jobs.py | Container manages its own lifecycle |
@@ -2264,7 +2472,7 @@ or anything that touches the database or GCS buckets.
 
 Three layers of protection, all defined in jackpot-iac/terraform/cloudsql.tf:
 
-**Automated daily backups** — full backup once per day during 2–4am AZ
+**Automated daily backups** — full backup once per day during 2–4am UTC−8:00
 maintenance window. Stored in GCS. 30-day retention. Costs a few dollars
 per month at JACKPOT's scale.
 

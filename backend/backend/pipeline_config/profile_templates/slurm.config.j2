@@ -1,0 +1,57 @@
+{# Expected config_overrides keys (all optional unless noted):
+     queue            string  default 'normal' — Slurm partition (-p / queue=)
+     account          string  optional → emitted via clusterOptions
+     qos              string  optional → emitted via clusterOptions
+     time             string  default '1h'    — process.time default
+     memory           string  optional        — process.memory default (e.g. '8 GB')
+     cpus             integer optional        — process.cpus default
+     queue_size       integer optional        — executor.queueSize (max concurrent jobs)
+     cluster_options  string  optional        — free-form sbatch flags appended to clusterOptions
+
+   ``apptainer_cache_dir`` is a cross-cutting key consumed by the
+   ``apptainer { cacheDir = … }`` block in ``base.config.j2``; it is
+   not Slurm-specific and is documented there.
+
+   The ``params`` block at the bottom mirrors the env-block in
+   ``base.config.j2`` but exposes the run_id / weblog / results / token
+   under ``params.*`` so DSL2 pipelines can read them directly without
+   reaching into ``System.getenv()``.
+#}
+{% extends "base.config.j2" %}
+{% block executor_block %}
+{%- set ov = profile.config_overrides %}
+{%- set queue_val = ov.get('queue', 'normal') %}
+{%- set time_val = ov.get('time', '1h') %}
+{%- set extra_parts = [] %}
+{%- if ov.get('account') %}{% set _ = extra_parts.append('--account=' ~ (ov['account'] | groovy_escape)) %}{% endif %}
+{%- if ov.get('qos') %}{% set _ = extra_parts.append('--qos=' ~ (ov['qos'] | groovy_escape)) %}{% endif %}
+{%- if ov.get('cluster_options') %}{% set _ = extra_parts.append(ov['cluster_options'] | groovy_escape) %}{% endif %}
+process {
+    executor = 'slurm'
+    queue = '{{ queue_val | groovy_escape }}'
+    time = '{{ time_val | groovy_escape }}'
+{%- if ov.get('memory') %}
+    memory = '{{ ov['memory'] | groovy_escape }}'
+{%- endif %}
+{%- if ov.get('cpus') is not none %}
+    cpus = {{ ov['cpus'] | int }}
+{%- endif %}
+{%- if extra_parts %}
+    clusterOptions = '{{ extra_parts | join(" ") }}'
+{%- endif %}
+}
+{%- if ov.get('queue_size') is not none %}
+
+executor {
+    name = 'slurm'
+    queueSize = {{ ov['queue_size'] | int }}
+}
+{%- endif %}
+
+params {
+    jackpot_run_id      = '{{ run_id | groovy_escape }}'
+    jackpot_weblog_url  = '{{ weblog_url | groovy_escape }}'
+    jackpot_results_url = '{{ result_registration_url | groovy_escape }}'
+    jackpot_token       = '{{ pipeline_token | groovy_escape }}'
+}
+{% endblock %}

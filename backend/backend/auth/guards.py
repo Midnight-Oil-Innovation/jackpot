@@ -1,8 +1,17 @@
+import hmac
+import logging
+from typing import Any
+
 from fastapi import HTTPException, Request
 from jose import jwt
 
 from backend.config import get_settings
+from backend.credentials import CredentialError, CredentialNotFoundError, credentials
 from backend.database import execute_query
+
+logger = logging.getLogger(__name__)
+
+FEDERATION_KEY_HEADER = "X-JACKPOT-Federation-Key"
 
 
 def get_current_user(request: Request) -> dict:
@@ -29,11 +38,21 @@ def get_current_user(request: Request) -> dict:
     token = request.cookies.get("access")
     if not token:
         raise HTTPException(status_code=401, detail="Not authenticated.")
+    # Resolve the signing key separately: a credential-backend failure is a
+    # 503 (service issue), not a 401 (bad token), and must not leak a raw
+    # stack trace to the caller.
     try:
-        payload = jwt.decode(token, settings.secret_key, algorithms=["HS256"])
+        signing_key = credentials.get("jwt_signing_key")
+    except CredentialError as exc:
+        logger.error("auth: jwt signing key unavailable: %s", exc)
+        raise HTTPException(
+            status_code=503, detail="Authentication temporarily unavailable."
+        ) from exc
+    try:
+        payload = jwt.decode(token, signing_key, algorithms=["HS256"])
     except jwt.ExpiredSignatureError as exc:
         raise HTTPException(status_code=401, detail="Access token expired.") from exc
-    except jwt.InvalidTokenError as exc:
+    except jwt.JWTError as exc:
         raise HTTPException(status_code=401, detail="Invalid token.") from exc
 
     if payload.get("type") != "access":
@@ -87,3 +106,55 @@ def require_lab_access(current_user: dict, lab_id: int) -> None:
     )
     if not rows:
         raise HTTPException(status_code=403, detail="Lab access required.")
+
+
+def authenticate_federation_peer(request: Request, conn: Any = None) -> dict[str, Any] | None:
+    # FED-E: validate X-JACKPOT-Federation-Key against every enabled row in
+    # federated_instances. The expected key is resolved per-row through the
+    # credentials facade (GCP Secret Manager in prod, InMemoryBackend in
+    # tests). Comparisons are constant-time. Disabled instances are
+    # excluded by the SQL filter so their keys cannot authenticate even if
+    # the secret backend still resolves them.
+    presented = request.headers.get(FEDERATION_KEY_HEADER)
+    if not presented:
+        return None
+
+    rows = execute_query(
+        "SELECT * FROM federated_instances WHERE federation_enabled = TRUE",
+        conn=conn,
+    )
+    for row in rows:
+        secret_name = row.get("api_key_secret_name")
+        if not secret_name:
+            continue
+        try:
+            expected = credentials.get(secret_name)
+        except (CredentialNotFoundError, CredentialError) as exc:
+            logger.warning(
+                "federation auth: credential lookup failed for instance %s: %s",
+                row.get("name"),
+                exc,
+            )
+            continue
+        # Strip surrounding whitespace: secrets created via shell `echo`
+        # or an editor often carry a trailing newline in the store, which
+        # would otherwise permanently fail the constant-time comparison and
+        # lock out a correctly-configured peer.
+        if hmac.compare_digest(presented.strip(), expected.strip()):
+            return row
+    return None
+
+
+def require_federation_peer(request: Request, conn: Any = None) -> dict[str, Any]:
+    # FED-E: thin wrapper that raises 401 when the X-JACKPOT-Federation-Key
+    # header is missing or does not match any enabled instance. Routers that
+    # also need to cross-check origin (e.g. /access-requests matching
+    # requesting_instance_id) call authenticate_federation_peer directly so
+    # they can produce a 403 instead of a 401.
+    instance_row = authenticate_federation_peer(request, conn)
+    if not instance_row:
+        raise HTTPException(
+            status_code=401,
+            detail="Invalid or missing federation key.",
+        )
+    return instance_row

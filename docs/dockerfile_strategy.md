@@ -7,10 +7,15 @@ the previous state had multiple unsigned-off implicit choices.
 ## Image variants
 
 JACKPOT ships two images out of `Dockerfile.api` and `Dockerfile.ui`
-at the workspace root. Production deploys (scenarios B/C/D/E/T) use
-the Helm chart at `deploy/helm/jackpot-api/` and pin specific tags;
-local dev (scenario A) and CI (scenario F) use `docker-compose.yml`
-which builds the images from the same Dockerfiles via `build:`.
+at the workspace root. Production deploys (Scenarios A multi-server,
+B HPC, C cloud — plus the federation-as-runtime-config and sovereignty-as-
+runtime-policy variants of those) use the Helm chart at
+`deploy/helm/jackpot-api/` and pin specific tags; local dev (Scenario A
+laptop case) and CI (Scenario D test) use `docker-compose.yml` which
+builds the images from the same Dockerfiles via `build:`. (Note: this
+doc predates the May 2026 Cluster A merge, which consolidated 6 install
+scenarios A-F to 4 scenarios A-D with federation / multi-tenancy /
+sovereignty as runtime configurations. See `docs/architecture.md` v6.0 §3.)
 
 | Image           | Source              | Used by                           | Contains                                  |
 |-----------------|---------------------|-----------------------------------|-------------------------------------------|
@@ -39,7 +44,7 @@ stays on `--no-dev` because the UI image never runs tests.
 
 The reasoning for including dev deps in the api image:
 
-1. **Local dev (scenario A) and CI (scenario F) both run the test
+1. **Local dev (Scenario A laptop case) and CI (Scenario D test) both run the test
    suite from inside the api container** once the docker socket is
    mounted (see `docker-compose.yml`). A lean image forces
    contributors to run tests from the host, which works but creates

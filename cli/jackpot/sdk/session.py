@@ -25,10 +25,12 @@ from jackpot.cli.config import get_client_credentials
 from jackpot.core.client import JACKPOTClient
 from jackpot.core.exceptions import ConfigError
 from jackpot.sdk.datasets import DatasetsModule
+from jackpot.sdk.files import FilesModule
 from jackpot.sdk.pipelines import PipelinesModule
 from jackpot.sdk.references import ReferencesModule
 from jackpot.sdk.samples import SamplesModule
 from jackpot.sdk.sra import SRAModule
+from jackpot.sdk.submissions import SubmissionsModule
 from jackpot.sdk.workspace import WorkspaceModule
 
 
@@ -84,6 +86,8 @@ class Session:
         self._sra = None
         self._references = None
         self._workspace = None
+        self._files = None
+        self._submissions = None
 
     # ── Module accessors ────────────────────────────────────────────────────
 
@@ -122,6 +126,18 @@ class Session:
         if self._workspace is None:
             self._workspace = WorkspaceModule(self._client)
         return self._workspace
+
+    @property
+    def files(self) -> FilesModule:
+        if self._files is None:
+            self._files = FilesModule(self._client)
+        return self._files
+
+    @property
+    def submissions(self) -> SubmissionsModule:
+        if self._submissions is None:
+            self._submissions = SubmissionsModule(self._client)
+        return self._submissions
 
     # ── Representation ──────────────────────────────────────────────────────
 

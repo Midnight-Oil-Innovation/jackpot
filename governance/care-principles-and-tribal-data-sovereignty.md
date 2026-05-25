@@ -207,7 +207,7 @@ platform supports the exercise of it.
 
 ## Further reading
 
-- Carroll SR et al. (2020). "The CARE Principles for Indigenous Data
+- Carroll and others (2020). "The CARE Principles for Indigenous Data
   Governance." *Data Science Journal*, 19(1): 43.
   https://doi.org/10.5334/dsj-2020-043
 - Global Indigenous Data Alliance (GIDA). https://www.gida-global.org/

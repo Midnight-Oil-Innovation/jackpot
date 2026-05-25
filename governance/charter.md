@@ -29,7 +29,6 @@ maintainers run is for testing and demonstration only; it is not a
 production data store for anyone else's samples.
 
 JACKPOT is not a replacement for case-management systems (NBS, MAVEN,
-Trisano), eCR/ELR routing infrastructure (APHL AIMS), LIMS, or downstream
 analysis platforms (NCBI Pathogen Detection, Pathoplexus, Pathogenwatch,
 Nextstrain, GenSpectrum). JACKPOT integrates with these systems through
 documented contracts; it does not try to absorb their scope. See

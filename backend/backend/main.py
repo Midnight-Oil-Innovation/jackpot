@@ -1,3 +1,4 @@
+import logging
 from contextlib import asynccontextmanager
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
@@ -9,13 +10,18 @@ from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
 
 from backend.config import get_settings
-from backend.database import execute_query
+from backend.credentials import credentials
+from backend.database import execute_query, get_db
 from backend.jobs import (
+    cleanup_expired_import_sessions,
+    cleanup_old_refresh_tokens,
     compute_full_content_hash,
+    release_embargoed_submissions,
     run_access_request_job,
     run_scrubber_queue_job,
     verify_file_references,
 )
+from backend.log_poller import poll_cluster_run_logs
 from backend.logging_config import configure_logging
 from backend.middleware import RequestIDMiddleware
 from backend.rate_limit import limiter
@@ -28,31 +34,60 @@ from backend.routers import (
     dataset_access,
     datasets,
     domain_whitelist,
+    federation,
+    files,
     gisaid,
+    import_mappings,
+    imports,
     ingest,
     labs,
     ncbi_submissions,
     notifications,
     organizations,
     pipelines,
+    profiles,
     projects,
     sample_access,
     samples,
     saved_searches,
     sequencing_labs,
+    submissions,
     templates,
     tokens,
     users,
+    wastewater,
 )
+from backend.routers import (
+    settings as settings_router,
+)
+from backend.submissions import recover_interrupted_executions
 from backend.version import __version__
 
 scheduler = AsyncIOScheduler()
+logger = logging.getLogger(__name__)
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     configure_logging()
     get_settings().validate_for_production()
+    credentials.validate_required()
+
+    # I-3a: recover any submissions left in EXECUTING by a prior shutdown.
+    # Per Critical Rule 60, the DB row survives a restart but the
+    # in-flight Seqsender subprocess does not; we transition each row to
+    # EXECUTION_INTERRUPTED so the user can decide whether to retry. The
+    # query is a no-op when no submissions are in EXECUTING — backed by
+    # the partial index added in migration 3644749bf4c6.
+    with get_db() as db:
+        counters = recover_interrupted_executions(db)
+        if counters.get("recovered", 0) > 0:
+            logger.warning(
+                "i3a recovery: transitioned %d submission(s) from EXECUTING "
+                "to EXECUTION_INTERRUPTED",
+                counters["recovered"],
+            )
+
     if get_settings().scheduler_enabled:
         scheduler.add_job(
             run_scrubber_queue_job,
@@ -83,6 +118,42 @@ async def lifespan(app: FastAPI):
             replace_existing=True,
             max_instances=1,
         )
+        scheduler.add_job(
+            cleanup_expired_import_sessions,
+            "interval",
+            seconds=get_settings().import_session_cleanup_interval_seconds,
+            id="cleanup_expired_import_sessions",
+            replace_existing=True,
+            max_instances=1,
+        )
+        scheduler.add_job(
+            release_embargoed_submissions,
+            "cron",
+            hour=get_settings().embargo_release_check_hour,
+            minute=0,
+            id="release_embargoed_submissions",
+            replace_existing=True,
+            max_instances=1,
+        )
+        scheduler.add_job(
+            cleanup_old_refresh_tokens,
+            "interval",
+            seconds=get_settings().refresh_token_cleanup_interval_seconds,
+            id="cleanup_old_refresh_tokens",
+            replace_existing=True,
+            max_instances=1,
+        )
+        # P0h H-4: weblog-fallback log poller. Tails .nextflow.log on
+        # the shared filesystem so cluster runs whose compute nodes have
+        # no outbound HTTP still reach a terminal state.
+        scheduler.add_job(
+            poll_cluster_run_logs,
+            "interval",
+            seconds=get_settings().log_poller_interval_seconds,
+            id="poll_cluster_run_logs",
+            replace_existing=True,
+            max_instances=1,
+        )
         scheduler.start()
     yield
     if scheduler.running:
@@ -109,21 +180,29 @@ app.include_router(dataharmonizer.router)
 app.include_router(dataset_access.router)
 app.include_router(datasets.router)
 app.include_router(domain_whitelist.router)
+app.include_router(federation.router)
+app.include_router(files.router)
 app.include_router(gisaid.router)
+app.include_router(import_mappings.router)
+app.include_router(imports.router)
 app.include_router(ingest.router)
 app.include_router(labs.router)
 app.include_router(ncbi_submissions.router)
 app.include_router(notifications.router)
 app.include_router(organizations.router)
 app.include_router(pipelines.router)
+app.include_router(profiles.router)
 app.include_router(projects.router)
 app.include_router(sample_access.router)
 app.include_router(samples.router)
 app.include_router(saved_searches.router)
 app.include_router(sequencing_labs.router)
+app.include_router(settings_router.router)
+app.include_router(submissions.router)
 app.include_router(tokens.router)
 app.include_router(users.router)
 app.include_router(templates.router)
+app.include_router(wastewater.router)
 
 app.add_middleware(RequestIDMiddleware)
 app.add_middleware(SlowAPIMiddleware)

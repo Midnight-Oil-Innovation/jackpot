@@ -1,5 +1,6 @@
 import contextlib
 import csv
+import hashlib
 import io
 import json
 import logging
@@ -8,7 +9,9 @@ from datetime import date
 from pathlib import Path
 from typing import Any
 
+from botocore.exceptions import BotoCoreError, ClientError
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
+from pydantic import BaseModel
 
 from backend.audit import AuditActions, log_audit
 from backend.auth.guards import get_current_user, require_platform_admin
@@ -21,6 +24,8 @@ from backend.file_detector import (
     get_convenience_uris,
     validate_file_type,
 )
+from backend.file_fingerprint import FINGERPRINT_CHUNK_SIZE
+from backend.ingest_files import VALID_STORAGE_INTENTS, register_file
 from backend.notifications import NotificationEvents, create_notification
 from backend.rate_limit import limiter
 from backend.responses import success
@@ -213,6 +218,25 @@ def _insert_sample(payload: dict, conn) -> dict:
     return rows[0]
 
 
+def _cheap_fingerprint_bytes(data: bytes) -> tuple[int, str, str]:
+    """Compute the cheap fingerprint from in-memory bytes.
+
+    Mirrors :func:`backend.file_fingerprint.cheap_fingerprint` but skips
+    the URI-resolution layer for the ``/upload`` path where the bytes
+    are already in hand. Phase P0f F-6.
+    """
+    size = len(data)
+    if size == 0:
+        empty = hashlib.sha256(b"").hexdigest()
+        return (0, empty, empty)
+    if size < 2 * FINGERPRINT_CHUNK_SIZE:
+        digest = hashlib.sha256(data).hexdigest()
+        return (size, digest, digest)
+    head = hashlib.sha256(data[:FINGERPRINT_CHUNK_SIZE]).hexdigest()
+    tail = hashlib.sha256(data[-FINGERPRINT_CHUNK_SIZE:]).hexdigest()
+    return (size, head, tail)
+
+
 def _insert_sample_files(
     sample_id_fk: int,
     detected,
@@ -220,30 +244,53 @@ def _insert_sample_files(
     size_map: dict[str, int],
     scrub_status: str,
     ingest_method: str,
+    storage_intent: str,
     conn,
+    fingerprint_map: dict[str, tuple[int, str, str]] | None = None,
 ) -> list[dict]:
+    """Insert one ``sample_files`` row per detected file.
+
+    Phase P0f F-6: populates cheap-fingerprint columns and
+    ``storage_state`` per file. ``storage_intent`` is the user-facing
+    intent (``EXTERNAL`` / ``MANAGED`` / ``MIRRORED``); it lands directly
+    on the row as ``storage_state``. ``fingerprint_map`` lets callers
+    pass precomputed fingerprints for files whose bytes they already
+    have in memory (e.g. ``/upload``).
+    """
     inserted: list[dict] = []
+    fingerprint_map = fingerprint_map or {}
     for f in detected.files:
+        fp = fingerprint_map.get(f.filename)
+        size = fp[0] if fp else size_map.get(f.filename)
+        head_hash = fp[1] if fp else None
+        tail_hash = fp[2] if fp else None
         row = execute_write(
             """
             INSERT INTO sample_files
-                (sample_id_fk, uri, filename, file_size_bytes, file_type,
-                 library_layout, read_direction, lane, chunk_index,
-                 scrub_status, ingest_method)
+                (sample_id_fk, uri, filename,
+                 file_size_bytes, head64k_hash, tail64k_hash,
+                 file_type, library_layout, read_direction, lane, chunk_index,
+                 storage_state, scrub_status, ingest_method)
             VALUES
-                (:sid, :uri, :fn, :sz, :ft, :ll, :rd, :ln, :ci, :ss, :im)
+                (:sid, :uri, :fn,
+                 :sz, :hh, :th,
+                 :ft, :ll, :rd, :ln, :ci,
+                 CAST(:state AS file_storage_state), :ss, :im)
             RETURNING *
             """,
             {
                 "sid": sample_id_fk,
                 "uri": uri_map[f.filename],
                 "fn": f.filename,
-                "sz": size_map.get(f.filename),
+                "sz": size,
+                "hh": head_hash,
+                "th": tail_hash,
                 "ft": f.file_type,
                 "ll": f.library_layout,
                 "rd": f.read_direction,
                 "ln": f.lane,
                 "ci": f.chunk_index,
+                "state": storage_intent,
                 "ss": scrub_status,
                 "im": ingest_method,
             },
@@ -260,10 +307,19 @@ def _ingest_one(
     user: dict,
     db,
     ingest_method: str,
+    *,
+    storage_intent: str = "EXTERNAL",
+    fingerprint_map: dict[str, tuple[int, str, str]] | None = None,
 ) -> tuple[dict, list[dict]]:
     """
     Shared ingest core: validate, detect, INSERT sample + sample_files, audit.
     Raises HTTPException on validation / sequencing_lab errors.
+
+    Phase P0f F-6: ``storage_intent`` is the user-facing intent to apply
+    to every ``sample_files`` row created here (``EXTERNAL`` /
+    ``MANAGED`` / ``MIRRORED``). Default ``EXTERNAL`` per Critical Rule
+    57. ``fingerprint_map`` lets callers pass precomputed cheap
+    fingerprints for files whose bytes they already have in memory.
     """
     validation = validate_sample(metadata)
     if not validation.valid:
@@ -314,7 +370,15 @@ def _ingest_one(
 
     sample = _insert_sample(payload, db)
     inserted_files = _insert_sample_files(
-        sample["id"], detected, uri_map, size_map, scrub_status, ingest_method, db
+        sample["id"],
+        detected,
+        uri_map,
+        size_map,
+        scrub_status,
+        ingest_method,
+        storage_intent,
+        db,
+        fingerprint_map=fingerprint_map,
     )
 
     log_audit(
@@ -338,8 +402,68 @@ def list_ingest() -> dict:
             "POST /api/v1/ingest/upload",
             "POST /api/v1/ingest/csv",
             "POST /api/v1/ingest/globus",
+            "POST /api/v1/ingest/register",
         ],
     }
+
+
+# Phase P0f F-6 — request body for the new path-based registration
+# endpoint. Pydantic does request-shape validation; storage_intent
+# vocabulary checks happen up-front in register_paths and again inside
+# register_file as a defence in depth.
+
+
+class _RegisterFileSpec(BaseModel):
+    role: str
+    uri: str
+    storage_intent: str | None = None  # default EXTERNAL applied server-side
+
+
+class _RegisterRequest(BaseModel):
+    sample_metadata: dict
+    files: list[_RegisterFileSpec]
+
+
+# R-1 #2: SSRF + local-file-read defence at the /register entry point.
+# /register's URI flows into cheap_fingerprint(), which dereferences
+# http(s) via httpx and bare-paths/file:// via the local filesystem. An
+# authenticated user could otherwise (a) probe internal infrastructure
+# (cloud metadata service, internal admin endpoints), or (b) read
+# arbitrary local files. JACKPOT's storage model (Critical Rule 57:
+# EXTERNAL by default; file references only) needs gs://, s3://, sra://
+# but not http(s) or bare paths.
+#
+# file:// is allowed only in non-production deployments (settings.env ==
+# "local") so the F-6 local-dev workflow keeps working; production sees
+# a strict allowlist. This is the brief's option (b) — a non-production
+# gate, not a silent bypass.
+_REGISTER_ALLOWED_URI_SCHEMES: frozenset[str] = frozenset({"gs", "s3", "sra"})
+_REGISTER_LOCAL_DEV_URI_SCHEMES: frozenset[str] = frozenset({"file"})
+
+
+def _validate_register_uri_scheme(uri: str) -> None:
+    """Reject /register URIs whose scheme is not in the allowlist.
+
+    Logs the attempted scheme server-side for forensics; the 400 reply
+    lists only the supported schemes (no echo of what the user tried).
+    """
+    settings = get_settings()
+    parsed_scheme = uri.split("://", 1)[0].lower() if "://" in uri else ""
+    if parsed_scheme in _REGISTER_ALLOWED_URI_SCHEMES:
+        return
+    if settings.env == "local" and parsed_scheme in _REGISTER_LOCAL_DEV_URI_SCHEMES:
+        return
+    logger.warning(
+        "register_paths: rejected URI scheme=%r (env=%r)",
+        parsed_scheme or "<bare>",
+        settings.env,
+    )
+    raise HTTPException(
+        status_code=400,
+        detail=(
+            "Unsupported URI scheme. JACKPOT supports gs://, s3://, and sra:// for file references."
+        ),
+    )
 
 
 @router.post("/upload", status_code=201)
@@ -369,6 +493,7 @@ async def upload(
 
     uri_map: dict[str, str] = {}
     size_map: dict[str, int] = {}
+    fingerprint_map: dict[str, tuple[int, str, str]] = {}
     for up in uploads:
         filename = up.filename
         if not filename:
@@ -385,6 +510,10 @@ async def upload(
                 validate_file_type(tmp_path)
             except FileDetectorError as exc:
                 raise HTTPException(status_code=400, detail=str(exc)) from exc
+        # Phase P0f F-6: compute the cheap fingerprint from the bytes in
+        # hand. cheap_fingerprint(uri) on the staged URI would round-trip
+        # through object storage; the bytes are identical so we skip it.
+        fingerprint_map[filename] = _cheap_fingerprint_bytes(data)
         key = f"staging/{sample_id}/{filename}"
         try:
             uri = stage_file(io.BytesIO(data), key)
@@ -393,7 +522,22 @@ async def upload(
         uri_map[filename] = uri
         size_map[filename] = len(data)
 
-    sample, files = _ingest_one(meta, uri_map, size_map, user, db, "gui")
+    # /upload always stages bytes into JACKPOT-managed storage.
+    # TODO(P0f F-9): when a fresh upload cheap-fingerprint-matches an
+    # existing MANAGED row, register_file dedups by reusing it; the
+    # newly-staged file at gs://staging/... becomes orphaned. A future
+    # cleanup job sweeps the staging bucket — we do not delete inline
+    # because operators may run append-only buckets by policy.
+    sample, files = _ingest_one(
+        meta,
+        uri_map,
+        size_map,
+        user,
+        db,
+        "gui",
+        storage_intent="MANAGED",
+        fingerprint_map=fingerprint_map,
+    )
     out = _serialise(sample)
     out["files"] = [_serialise(f) for f in files]
     return success(data=out, status_code=201)
@@ -467,21 +611,27 @@ def _coerce_csv_row(row: dict[str, str]) -> dict[str, Any]:
     return out
 
 
-@router.post("/csv")
-@limiter.limit(_INGEST_LIMIT)
-async def ingest_csv(
-    request: Request,
-    file: UploadFile = File(...),  # noqa: B008
-    db=Depends(get_db_dep),  # noqa: B008
-):
-    user = get_current_user(request)
-    content = await file.read()
-    try:
-        text = content.decode("utf-8")
-    except UnicodeDecodeError as exc:
-        raise HTTPException(status_code=422, detail=f"CSV must be UTF-8 encoded: {exc}") from exc
+_CSV_STORAGE_INTENT_MISSING_WARNING = (
+    "storage_intent column missing from CSV. Files registered with the "
+    "default storage_state='EXTERNAL' (no copy made) per Critical Rule "
+    "57. To request copies, add a storage_intent column with value "
+    "'MANAGED' (or 'MIRRORED') for the relevant rows. See "
+    "docs/file_references.md."
+)
 
-    reader = csv.DictReader(io.StringIO(text))
+
+def run_csv_ingest(*, csv_text: str, user: dict, db) -> dict:
+    """Process a CSV string through the standard ingest pipeline.
+
+    I-1 extracted this as a standalone callable so the importer wizard
+    (``backend/imports.py::execute_import``) can submit a CSV without
+    going through HTTP. The HTTP endpoint :func:`ingest_csv` delegates
+    here. Returns the envelope-shaped result dict (``data`` plus
+    optional ``warnings``); callers re-wrap as needed.
+    """
+    reader = csv.DictReader(io.StringIO(csv_text))
+    fieldnames = reader.fieldnames or []
+    storage_intent_column_present = "storage_intent" in fieldnames
     successes = 0
     failures = 0
     errors: list[dict] = []
@@ -493,10 +643,33 @@ async def ingest_csv(
             filenames = _split_files_column(metadata.pop("files", "") or "")
             if not filenames:
                 raise HTTPException(status_code=422, detail="Row missing 'files' column.")
+            # Phase P0f F-6: per-row storage intent. Default EXTERNAL per
+            # Critical Rule 57; STAGED/BROKEN are internal lifecycle
+            # states and rejected here. Missing column → EXTERNAL plus
+            # an envelope-level warning surfaced below.
+            row_intent = (metadata.pop("storage_intent", None) or "EXTERNAL").strip().upper()
+            if row_intent == "":
+                row_intent = "EXTERNAL"
+            if row_intent not in VALID_STORAGE_INTENTS:
+                raise HTTPException(
+                    status_code=422,
+                    detail=(
+                        f"Invalid storage_intent {row_intent!r}; "
+                        f"must be one of {sorted(VALID_STORAGE_INTENTS)}."
+                    ),
+                )
             sample_id = metadata.get("sample_id", f"row-{idx}")
             uri_map = {fn: f"gs://jackpot-staging/{sample_id}/{fn}" for fn in filenames}
             size_map = {fn: 0 for fn in filenames}
-            sample, _files = _ingest_one(metadata, uri_map, size_map, user, db, "csv")
+            sample, _files = _ingest_one(
+                metadata,
+                uri_map,
+                size_map,
+                user,
+                db,
+                "csv",
+                storage_intent=row_intent,
+            )
             successes += 1
             created_ids.append(sample["id"])
         except HTTPException as exc:
@@ -519,13 +692,218 @@ async def ingest_csv(
                 }
             )
 
-    return success(
-        data={
+    warnings: list[str] = []
+    if not storage_intent_column_present:
+        warnings.append(_CSV_STORAGE_INTENT_MISSING_WARNING)
+
+    return {
+        "data": {
             "success": successes,
             "failed": failures,
             "errors": errors,
             "created_ids": created_ids,
         },
+        "warnings": warnings or None,
+    }
+
+
+@router.post("/csv")
+@limiter.limit(_INGEST_LIMIT)
+async def ingest_csv(
+    request: Request,
+    file: UploadFile = File(...),  # noqa: B008
+    db=Depends(get_db_dep),  # noqa: B008
+):
+    user = get_current_user(request)
+    content = await file.read()
+    try:
+        text = content.decode("utf-8")
+    except UnicodeDecodeError as exc:
+        raise HTTPException(status_code=422, detail=f"CSV must be UTF-8 encoded: {exc}") from exc
+
+    result = run_csv_ingest(csv_text=text, user=user, db=db)
+    return success(data=result["data"], warnings=result["warnings"])
+
+
+@router.post("/register", status_code=201)
+@limiter.limit(_INGEST_LIMIT)
+async def register_paths(
+    request: Request,
+    payload: _RegisterRequest,
+    db=Depends(get_db_dep),  # noqa: B008
+):
+    """Register a sample with one or more files at given URIs.
+
+    Phase P0f F-6. No file bytes are uploaded — JACKPOT registers
+    metadata pointing at file paths/URIs the operator has already
+    placed. Per Critical Rule 57 the default ``storage_state`` is
+    ``EXTERNAL``; ``MANAGED`` and ``MIRRORED`` are accepted intents but
+    the actual byte-copy is owned by F-9 (``promote``) and only the
+    ``storage_state`` flag is set here. See ``spec.md`` Phase P0f
+    Specification, Critical Rules 57 (no copy on ingest) and 58
+    (sample_files is the dedup primitive).
+    """
+    user = get_current_user(request)
+
+    if not payload.files:
+        raise HTTPException(status_code=422, detail="files must be a non-empty list.")
+
+    # R-1 #2: validate every URI scheme up-front before any DB row is
+    # written. Any rejected scheme aborts the entire request — partial
+    # registrations would leave the sample row half-created.
+    for spec in payload.files:
+        _validate_register_uri_scheme(spec.uri)
+
+    # Up-front validation of every file's storage_intent so we don't
+    # half-create a sample before discovering an invalid value mid-loop.
+    resolved_intents: list[str] = []
+    for spec in payload.files:
+        intent = (spec.storage_intent or "EXTERNAL").strip().upper()
+        if intent == "":
+            intent = "EXTERNAL"
+        if intent not in VALID_STORAGE_INTENTS:
+            raise HTTPException(
+                status_code=422,
+                detail=(
+                    f"Invalid storage_intent {intent!r}; "
+                    f"must be one of {sorted(VALID_STORAGE_INTENTS)}."
+                ),
+            )
+        resolved_intents.append(intent)
+
+    metadata = dict(payload.sample_metadata)
+    validation = validate_sample(metadata)
+    if not validation.valid:
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "errors": validation.errors,
+                "warnings": validation.warnings,
+                "tier2_missing": validation.tier2_missing,
+                "tier3_missing": validation.tier3_missing,
+            },
+        )
+    _check_sequencing_lab(metadata.get("sequencing_lab", ""), db)
+
+    raw_date = metadata["date_collected"]
+    collected = date.fromisoformat(raw_date) if isinstance(raw_date, str) else raw_date
+    precision = metadata.get("date_collected_precision", "day")
+    epi = compute_epiweeks(collected, precision)
+
+    quality_status = compute_quality_status(validation)
+    reportable = _get_reportable_organisms(db)
+    surveillance_relevant = compute_surveillance_relevant(
+        metadata.get("organism_name", ""),
+        metadata.get("target_organisms"),
+        reportable,
+    )
+
+    # Convenience URIs (samples.fastq_r1_uri is NOT NULL): the first
+    # R1/R2 file in the request fills in the legacy columns. Long-read
+    # / assembly-only registrations satisfy the constraint with the
+    # first file's URI as a placeholder.
+    fastq_r1_uri = next((s.uri for s in payload.files if s.role == "R1"), None)
+    fastq_r2_uri = next((s.uri for s in payload.files if s.role == "R2"), None)
+    if fastq_r1_uri is None:
+        fastq_r1_uri = payload.files[0].uri
+
+    record = dict(metadata)
+    record["owner_id"] = user["id"]
+    record.update(epi)
+    record["sector"] = validation.sector or record.get("sector")
+    record["surveillance_relevant"] = surveillance_relevant
+    record["quality_status"] = quality_status
+    record.setdefault("scrub_status", "PENDING")
+    record.setdefault("pii_scan_status", "PENDING")
+    record["ingest_method"] = "register"
+    record.setdefault("sharing_level", "PRIVATE")
+    record["fastq_r1_uri"] = fastq_r1_uri
+    if fastq_r2_uri is not None:
+        record["fastq_r2_uri"] = fastq_r2_uri
+
+    sample = _insert_sample(record, db)
+    log_audit(
+        action=AuditActions.CREATE_SAMPLE,
+        actor_id=user["id"],
+        resource_type="sample",
+        resource_id=str(sample["id"]),
+        before=None,
+        after=_serialise(sample),
+        metadata={"ingest_method": "register", "tier": validation.tier},
+        db_conn=db,
+    )
+
+    registered_files: list[dict] = []
+    current_spec = None
+    try:
+        for spec, intent in zip(payload.files, resolved_intents, strict=True):
+            current_spec = spec
+            sf_id, was_dedup = register_file(
+                spec.uri,
+                intent,
+                sample["id"],
+                spec.role,
+                conn=db,
+                ingest_method="register",
+            )
+            registered_files.append(
+                {
+                    "sample_files_id": sf_id,
+                    "uri": spec.uri,
+                    "storage_state": intent,
+                    "deduplicated": was_dedup,
+                }
+            )
+            log_audit(
+                action=(AuditActions.DEDUP_FILE if was_dedup else AuditActions.REGISTER_FILE),
+                actor_id=user["id"],
+                resource_type="sample_files",
+                resource_id=str(sf_id),
+                before=None,
+                after={
+                    "uri": spec.uri,
+                    "storage_state": intent,
+                    "sample_id_fk": sample["id"],
+                },
+                metadata={"ingest_method": "register", "role": spec.role},
+                db_conn=db,
+            )
+    except (FileNotFoundError, PermissionError, OSError, BotoCoreError, ClientError) as exc:
+        # Phase P0f F-6: roll back the entire sample registration if
+        # any file is unreachable — partial success is worse than clean
+        # failure for an ingest API. gs://-/s3:// fingerprinting raises
+        # botocore ClientError/BotoCoreError (not OSError) for a missing,
+        # forbidden, or unreachable object, so those map to 400 too. The
+        # transaction is owned by get_db_dep; raising here triggers
+        # rollback in the dep cleanup.
+        bad_uri = current_spec.uri if current_spec else "<unknown>"
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "code": "FILE_UNREACHABLE",
+                "message": f"Unable to read file at {bad_uri}: {exc}",
+                "detail": {
+                    "uri": bad_uri,
+                    "underlying_error": f"{type(exc).__name__}: {exc}",
+                    "suggestion": (
+                        "Check that the JACKPOT service user can read this "
+                        "path, or upload via /api/v1/ingest/upload instead."
+                    ),
+                },
+            },
+        ) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+    return success(
+        data={
+            "sample_id": sample["sample_id"],
+            "id": sample["id"],
+            "quality_status": quality_status,
+            "surveillance_relevant": surveillance_relevant,
+            "files": registered_files,
+        },
+        status_code=201,
     )
 
 
@@ -542,6 +920,16 @@ async def ingest_globus(
     Lab Directors assigned to that facility so they can submit metadata.
     No sample rows are created here — only notifications — because
     metadata is not yet known at deposit time.
+
+    Phase P0f F-6: when metadata arrives later (the lab director
+    follows the notification through to the ingest UI), the actual
+    sample_files registration flows through ``register_file`` via
+    ``/upload`` or ``/register``. Files registered from a Globus
+    deposit are always ``EXTERNAL`` — JACKPOT references the file at
+    its Globus access endpoint rather than copying. The cheap
+    fingerprint of a Globus URI translates to its underlying HTTPS
+    access form (covered by the ``http(s)://`` branch of
+    ``cheap_fingerprint``).
     """
     user = get_current_user(request)
     require_platform_admin(user)

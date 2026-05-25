@@ -23,6 +23,17 @@ SCRUB_STATUSES: tuple[str, ...] = (
     "FAILED",
     "SKIPPED",
 )
+# Phase P0f F-10: storage_state values surfaced on the sample detail
+# page and the broken-files admin view. Order is the lifecycle order
+# (EXTERNAL → MANAGED → MIRRORED → STAGED, with BROKEN as the terminal
+# failure state).
+STORAGE_STATES: tuple[str, ...] = (
+    "EXTERNAL",
+    "MANAGED",
+    "MIRRORED",
+    "STAGED",
+    "BROKEN",
+)
 
 _TIER_COLORS: dict[str, tuple[str, str]] = {
     "PRELIMINARY": ("#7f1d1d", "#fecaca"),  # red-900 on red-200
@@ -43,6 +54,25 @@ _SCRUB_COLORS: dict[str, tuple[str, str]] = {
     "COMPLETE": ("#14532d", "#bbf7d0"),
     "FAILED": ("#7f1d1d", "#fecaca"),
     "SKIPPED": ("#1f2937", "#e5e7eb"),
+}
+
+_STORAGE_STATE_COLORS: dict[str, tuple[str, str]] = {
+    # Phase P0f F-10. Neutral gray for the no-copy default; green for
+    # JACKPOT-owned bytes; blue for managed-with-origin; amber for the
+    # transient run-staging state; red for the terminal BROKEN state.
+    "EXTERNAL": ("#1f2937", "#e5e7eb"),  # gray-800 on gray-200
+    "MANAGED": ("#14532d", "#bbf7d0"),  # green-900 on green-200
+    "MIRRORED": ("#1e3a8a", "#bfdbfe"),  # blue-900 on blue-200
+    "STAGED": ("#92400e", "#fde68a"),  # amber-900 on amber-200
+    "BROKEN": ("#7f1d1d", "#fecaca"),  # red-900 on red-200
+}
+
+_STORAGE_STATE_LABELS: dict[str, str] = {
+    "EXTERNAL": "External",
+    "MANAGED": "Managed",
+    "MIRRORED": "Mirrored",
+    "STAGED": "Staged",
+    "BROKEN": "Broken",
 }
 
 _RUN_STATUS_COLORS: dict[str, tuple[str, str]] = {
@@ -91,6 +121,21 @@ def run_status_badge(status: str | None) -> str:
         return _pill("—", "#1f2937", "#e5e7eb")
     fg, bg = _RUN_STATUS_COLORS.get(status, ("#1f2937", "#e5e7eb"))
     return _pill(status, fg, bg)
+
+
+def storage_state_badge(state: str | None) -> str:
+    """Render a storage_state pill for the sample detail and broken-files views.
+
+    Phase P0f F-10. Maps ``EXTERNAL`` / ``MANAGED`` / ``MIRRORED`` /
+    ``STAGED`` / ``BROKEN`` to the canonical colour for that state and
+    the human-readable label. Unknown states fall back to the neutral
+    gray pill so a future schema addition does not crash the UI.
+    """
+    if not state:
+        return _pill("—", "#1f2937", "#e5e7eb")
+    fg, bg = _STORAGE_STATE_COLORS.get(state, ("#1f2937", "#e5e7eb"))
+    label = _STORAGE_STATE_LABELS.get(state, state.title())
+    return _pill(label, fg, bg)
 
 
 def render_badge(html: str) -> None:

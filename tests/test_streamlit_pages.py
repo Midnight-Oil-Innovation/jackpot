@@ -113,6 +113,12 @@ class SimpleStreamlit:
                 "link_button",
             }:
                 return False
+            if name == "multiselect":
+                default = kw.get("default")
+                if default is not None:
+                    return list(default)
+                options = kw.get("options") or (a[1] if len(a) > 1 else None)
+                return list(options) if options else []
             if name == "columns":
                 n = a[0] if a else 2
                 if isinstance(n, int):
@@ -250,6 +256,10 @@ PAGE_MODULES = [
     "frontend.pages.access_requests",
     "frontend.pages.notifications",
     "frontend.pages.pipelines",
+    "frontend.pages.broken_files",
+    "frontend.pages.import_spreadsheet",
+    "frontend.pages.submissions",
+    "frontend.pages.wastewater",
 ]
 
 

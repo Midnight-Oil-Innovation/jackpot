@@ -1,0 +1,1009 @@
+# =============================================================================
+# JACKPOT Wastewater Surveillance Schema Additions
+# =============================================================================
+# Module: wastewater.yaml
+# Version: 0.1.0
+# Description: LinkML schema additions for wastewater-based surveillance
+#   as a first-class One Health data stream within JACKPOT.
+#
+# Design rationale:
+#   - Wastewater samples represent community-level signal, not individual hosts
+#   - Metadata requirements differ fundamentally from clinical isolates
+#   - Must accommodate both targeted (qPCR) and untargeted (metagenomic) analyses
+#   - NWSS (National Wastewater Surveillance System) compatibility
+#   - PHA4GE contextual data spec alignment where applicable
+#   - WHO Tricycle protocol compatibility for ESBL E. coli environmental sampling
+#
+# Ontology alignments:
+#   - ENVO (Environment Ontology) for environmental feature types
+#   - GenEpiO for epidemiological context
+#   - PHA4GE contextual data specification for sample metadata
+#   - NWSS data dictionary for US reporting compatibility
+#
+# References:
+#   - Struelens et al. 2024 (Frontiers in Science) — wastewater as One Health stream
+#   - Djordjevic et al. 2024 (Nat Rev Genet) — AMR resistome profiling from sewage
+#   - Hendriksen et al. 2019 (Nat Commun) — global sewage AMR metagenomics
+#   - Munk et al. 2022 (Nat Commun) — sewage from 101 countries
+# =============================================================================
+
+id: https://jackpot.biosurveillance.org/schema/wastewater
+name: jackpot_wastewater
+title: JACKPOT Wastewater Surveillance Module
+description: >-
+  Schema additions for wastewater-based pathogen and AMR surveillance
+  within the JACKPOT biosurveillance platform. Treats wastewater as a
+  first-class One Health sample source with community-level metadata.
+
+license: Apache-2.0
+version: 0.1.0
+
+prefixes:
+  linkml: https://w3id.org/linkml/
+  jackpot: https://jackpot.biosurveillance.org/schema/
+  ENVO: http://purl.obolibrary.org/obo/ENVO_
+  GENEPIO: http://purl.obolibrary.org/obo/GENEPIO_
+  GEO: http://purl.obolibrary.org/obo/GEO_
+  OBI: http://purl.obolibrary.org/obo/OBI_
+  UBERON: http://purl.obolibrary.org/obo/UBERON_
+
+imports:
+  - linkml:types
+  # - jackpot:core         # import from JACKPOT core schema when integrating
+  # - jackpot:sample       # import from JACKPOT sample schema when integrating
+
+default_range: string
+
+
+# =============================================================================
+# ENUMS
+# =============================================================================
+
+enums:
+
+  WastewaterSiteTypeEnum:
+    description: >-
+      Classification of the wastewater collection site. Aligns with ENVO
+      environmental feature terms and NWSS site type categories.
+    permissible_values:
+      wastewater_treatment_plant:
+        description: Municipal wastewater treatment plant (WWTP) influent or effluent
+        meaning: ENVO:00002001
+      pump_station:
+        description: Sewage pump/lift station upstream of WWTP
+      manhole:
+        description: Sewer access point for upstream/neighborhood-level sampling
+      building_level:
+        description: >-
+          Building-specific collection (hospital, school, correctional facility,
+          long-term care facility, university dormitory)
+      combined_sewer_overflow:
+        description: Combined sewer overflow point
+      stormwater_outfall:
+        description: Stormwater discharge point (relevant for runoff-carried AMR)
+      surface_water:
+        description: >-
+          Receiving water body (river, lake, estuary) downstream of discharge.
+          Important for environmental AMR surveillance.
+        meaning: ENVO:00000063
+      agricultural_runoff:
+        description: >-
+          Agricultural drainage or irrigation return flow. Key One Health
+          vector for veterinary antibiotic residues and resistant organisms.
+      aquaculture_effluent:
+        description: Discharge from aquaculture/fishery operations
+      slaughterhouse_effluent:
+        description: Wastewater from meat processing facilities
+      septage:
+        description: Septic system or decentralized wastewater
+      open_drain:
+        description: >-
+          Open waste canal or drain, common in LMICs. Relevant per
+          Djordjevic et al. for AMR aerosol transmission studies.
+      other:
+        description: Other site type not listed above
+
+  WastewaterCollectionMethodEnum:
+    description: >-
+      Method used to collect the wastewater sample. Critical for
+      interpreting concentration and detection results.
+    permissible_values:
+      composite_24h:
+        description: >-
+          24-hour flow-weighted or time-weighted composite sample.
+          Gold standard for WWTP influent surveillance.
+      composite_other:
+        description: Composite sample with non-standard duration (specify in notes)
+      grab:
+        description: >-
+          Single-point-in-time grab sample. Less representative but
+          simpler logistics. Common for manhole/upstream sampling.
+      passive_moore_swab:
+        description: >-
+          Moore swab (passive sampler) deployed in flow for extended period.
+          Good for low-resource settings and detecting rare targets.
+      passive_trap:
+        description: Other passive sampling device (e.g., Innova Prep, electronegative filter)
+      settled_solids:
+        description: >-
+          Settled solids / primary sludge. Higher pathogen concentration
+          than liquid fraction for some targets (e.g., SARS-CoV-2).
+      biofilm_swab:
+        description: Biofilm swab from pipe or infrastructure surface
+      other:
+        description: Other method not listed above
+
+  WastewaterConcentrationMethodEnum:
+    description: >-
+      Laboratory method used to concentrate pathogens/nucleic acids
+      from the wastewater matrix before extraction.
+    permissible_values:
+      peg_precipitation:
+        description: Polyethylene glycol (PEG) precipitation
+      electronegative_filtration:
+        description: Electronegative membrane filtration (e.g., HA or MCE filters)
+      ultracentrifugation:
+        description: Ultracentrifugation
+      ultrafiltration:
+        description: Ultrafiltration (e.g., Centricon, Amicon, InnovaPrep)
+      skimmed_milk_flocculation:
+        description: Skimmed milk flocculation
+      adsorption_extraction:
+        description: Direct adsorption-extraction (e.g., 4S method, Wizard Enviro)
+      magnetic_bead_capture:
+        description: Magnetic bead-based capture/concentration
+      no_concentration:
+        description: Direct extraction without prior concentration step
+      other:
+        description: Other concentration method
+
+  WastewaterTreatmentStageEnum:
+    description: >-
+      Stage of wastewater treatment at which the sample was collected.
+      Critical for interpreting AMR removal efficiency studies.
+    permissible_values:
+      influent_raw:
+        description: Raw influent before any treatment
+      post_primary:
+        description: After primary clarification/settling
+      post_secondary:
+        description: After secondary (biological) treatment
+      post_tertiary:
+        description: After tertiary treatment (filtration, UV, ozone, etc.)
+      effluent_final:
+        description: Final effluent before discharge to receiving water
+      biosolids:
+        description: Dewatered or treated sludge/biosolids
+      reclaimed_water:
+        description: Treated wastewater designated for reuse
+      not_applicable:
+        description: Site has no treatment (e.g., open drain, surface water)
+
+
+# =============================================================================
+# CLASSES
+# =============================================================================
+
+classes:
+
+  # ---------------------------------------------------------------------------
+  # WastewaterCollectionSite
+  # ---------------------------------------------------------------------------
+  # Represents a persistent sampling location. Many samples can be
+  # collected from one site over time. This is the "where" that persists
+  # across longitudinal surveillance programs.
+  # ---------------------------------------------------------------------------
+
+  WastewaterCollectionSite:
+    description: >-
+      A wastewater sampling location with associated catchment and
+      infrastructure metadata. Designed to persist across longitudinal
+      surveillance; individual samples reference this entity.
+    attributes:
+
+      site_id:
+        description: Unique identifier for this collection site within JACKPOT
+        identifier: true
+        range: string
+        required: true
+
+      site_name:
+        description: Human-readable name (e.g., "91st Ave WWTP", "Tempe Manhole MH-42")
+        range: string
+        required: true
+
+      site_type:
+        description: Classification of the collection site
+        range: WastewaterSiteTypeEnum
+        required: true
+
+      # --- Geographic / Spatial ---
+
+      latitude:
+        description: Latitude of sampling point (WGS84, decimal degrees)
+        range: float
+        required: true
+
+      longitude:
+        description: Longitude of sampling point (WGS84, decimal degrees)
+        range: float
+        required: true
+
+      geo_precision:
+        description: >-
+          Precision level of the coordinates. May be jittered for privacy
+          in building-level or small-catchment scenarios.
+        range: string
+        examples:
+          - value: "exact"
+          - value: "centroid_of_catchment"
+          - value: "jittered_500m"
+
+      county_fips:
+        description: US county FIPS code for the site location
+        range: string
+        pattern: "^[0-9]{5}$"
+
+      state:
+        description: US state abbreviation or ISO 3166-2 code
+        range: string
+
+      country:
+        description: ISO 3166-1 alpha-3 country code
+        range: string
+        pattern: "^[A-Z]{3}$"
+
+      # --- Catchment / Population ---
+
+      population_served:
+        description: >-
+          Estimated population in the sewershed contributing to this
+          collection point. Critical denominator for normalization.
+          For building-level sites, this is the building population.
+        range: integer
+        recommended: true
+
+      catchment_area_km2:
+        description: >-
+          Approximate area of the sewershed in square kilometers.
+          May be null for building-level or point-source sites.
+        range: float
+
+      catchment_description:
+        description: >-
+          Free-text description of the catchment area (e.g., "Downtown
+          Phoenix mixed residential/commercial", "ASU Tempe campus
+          dormitory complex")
+        range: string
+
+      sewershed_id:
+        description: >-
+          Identifier for the sewershed/catchment if defined by the
+          local utility or NWSS. Links to external GIS shapefiles.
+        range: string
+
+      # --- Infrastructure ---
+
+      sewer_system_type:
+        description: Type of sewer system
+        range: string
+        examples:
+          - value: "separate_sanitary"
+          - value: "combined"
+          - value: "open_drain"
+          - value: "decentralized"
+
+      treatment_plant_name:
+        description: >-
+          Name of the downstream WWTP if this site is upstream (e.g.,
+          manhole or pump station). Null if site IS the WWTP.
+        range: string
+
+      treatment_plant_capacity_mgd:
+        description: >-
+          Design capacity of the treatment plant in million gallons
+          per day (MGD). Null for non-WWTP sites.
+        range: float
+
+      industrial_input_fraction:
+        description: >-
+          Estimated fraction (0.0–1.0) of flow from industrial/commercial
+          sources vs. residential. Affects interpretation of AMR signals
+          (biocides, heavy metals, pharmaceutical residues).
+        range: float
+        minimum_value: 0.0
+        maximum_value: 1.0
+
+      # --- One Health Context ---
+
+      one_health_sector:
+        description: >-
+          Primary One Health sector classification for this site.
+          Most wastewater sites are "environment" but
+          slaughterhouse/aquaculture sites bridge to "animal".
+        range: string
+        required: true
+        examples:
+          - value: "environment"
+          - value: "animal"
+          - value: "human"
+          - value: "agriculture"
+
+      known_upstream_sources:
+        description: >-
+          Notable upstream contributors that may affect pathogen/AMR
+          profiles (e.g., hospitals, pharmaceutical manufacturing,
+          livestock operations, food processing plants).
+          Comma-separated list or structured in future versions.
+        range: string
+        multivalued: true
+
+      # --- NWSS Compatibility ---
+
+      nwss_site_id:
+        description: >-
+          CDC NWSS (National Wastewater Surveillance System) site
+          identifier, if this site participates in NWSS reporting.
+        range: string
+
+      # --- Administrative ---
+
+      operating_authority:
+        description: >-
+          Organization responsible for the collection site
+          (e.g., "City of Phoenix Water Services", "Pima County RWRD")
+        range: string
+
+      date_established:
+        description: Date surveillance sampling began at this site
+        range: date
+
+      is_active:
+        description: Whether this site is currently active for sampling
+        range: boolean
+
+      notes:
+        description: Free-text notes about the site
+        range: string
+
+
+  # ---------------------------------------------------------------------------
+  # WastewaterSample
+  # ---------------------------------------------------------------------------
+  # Represents a single collection event at a site. This is the entity
+  # that links upward to the site and downward to sequencing runs,
+  # qPCR results, and metagenomic analyses.
+  # ---------------------------------------------------------------------------
+
+  WastewaterSample:
+    description: >-
+      A single wastewater sample collection event. Links to the
+      persistent WastewaterCollectionSite and downstream to
+      sequencing/analysis results. Designed to integrate with
+      JACKPOT's core BioSample model via the sample_id foreign key.
+    attributes:
+
+      sample_id:
+        description: >-
+          Unique identifier for this sample within JACKPOT. Should
+          match or cross-reference the core BioSample.sample_id
+          when integrated into the main schema.
+        identifier: true
+        range: string
+        required: true
+
+      site_id:
+        description: Foreign key to WastewaterCollectionSite
+        range: WastewaterCollectionSite
+        required: true
+
+      # --- Collection Details ---
+
+      collection_date:
+        description: Date the sample collection began (ISO 8601)
+        range: date
+        required: true
+
+      collection_end_date:
+        description: >-
+          Date/time collection ended (for composite samples).
+          Null for grab samples.
+        range: datetime
+
+      collection_method:
+        description: Method used to collect this sample
+        range: WastewaterCollectionMethodEnum
+        required: true
+
+      composite_duration_hours:
+        description: >-
+          Duration of composite sampling in hours (e.g., 24).
+          Null for grab samples.
+        range: float
+
+      composite_type:
+        description: >-
+          For composite samples: flow-weighted, time-weighted,
+          or volume-weighted.
+        range: string
+        examples:
+          - value: "flow_weighted"
+          - value: "time_weighted"
+          - value: "volume_weighted"
+
+      treatment_stage:
+        description: Treatment stage at which sample was collected
+        range: WastewaterTreatmentStageEnum
+        required: true
+
+      sample_matrix:
+        description: >-
+          Physical matrix of the sample. Most wastewater samples are
+          liquid, but settled solids and biosolids are also used.
+        range: string
+        required: true
+        examples:
+          - value: "liquid"
+          - value: "settled_solids"
+          - value: "primary_sludge"
+          - value: "biosolids"
+          - value: "biofilm"
+
+      sample_volume_ml:
+        description: Volume of sample collected in milliliters
+        range: float
+
+      # --- Environmental / Hydraulic Measurements ---
+
+      flow_rate_mgd:
+        description: >-
+          Wastewater flow rate at time of collection in million gallons
+          per day (MGD). Critical for normalization of pathogen
+          concentrations to per-capita estimates.
+        range: float
+
+      water_temperature_c:
+        description: Water temperature at collection in degrees Celsius
+        range: float
+
+      ph:
+        description: pH of the wastewater at collection
+        range: float
+
+      conductivity_us_cm:
+        description: Electrical conductivity in microsiemens per cm
+        range: float
+
+      turbidity_ntu:
+        description: Turbidity in nephelometric turbidity units (NTU)
+        range: float
+
+      tss_mg_l:
+        description: Total suspended solids in mg/L
+        range: float
+
+      bod_mg_l:
+        description: Biochemical oxygen demand in mg/L
+        range: float
+
+      ammonia_mg_l:
+        description: Ammonia concentration in mg/L (population biomarker)
+        range: float
+
+      rainfall_48h_mm:
+        description: >-
+          Total rainfall in the catchment area in the 48 hours
+          preceding sample collection. Important for dilution
+          effects, especially in combined sewer systems.
+        range: float
+
+      # --- Lab Processing ---
+
+      concentration_method:
+        description: Method used to concentrate the sample
+        range: WastewaterConcentrationMethodEnum
+
+      extraction_method:
+        description: >-
+          Nucleic acid extraction method/kit used
+          (e.g., "Qiagen AllPrep PowerViral", "MagMAX Microbiome")
+        range: string
+
+      extraction_date:
+        description: Date nucleic acid extraction was performed
+        range: date
+
+      inhibition_detected:
+        description: >-
+          Whether PCR inhibition was detected via internal controls.
+          Critical QC flag for wastewater matrices.
+        range: boolean
+
+      process_control_organism:
+        description: >-
+          Surrogate/process control organism spiked before concentration
+          to estimate recovery efficiency (e.g., "BCoV", "MHV",
+          "Phi6", "CrAssphage", "PMMoV")
+        range: string
+
+      recovery_efficiency_pct:
+        description: >-
+          Percent recovery of the process control, used to
+          adjust target concentrations for matrix effects.
+        range: float
+        minimum_value: 0.0
+        maximum_value: 100.0
+
+      # --- Population Normalization Biomarkers ---
+
+      pmmov_gc_l:
+        description: >-
+          Pepper mild mottle virus (PMMoV) concentration in gene
+          copies per liter. Used as a fecal strength/population
+          normalization biomarker. Widely adopted in NWSS.
+        range: float
+
+      crassphage_gc_l:
+        description: >-
+          CrAssphage concentration in gene copies per liter.
+          Alternative human fecal biomarker.
+        range: float
+
+      # --- Provenance / Chain of Custody ---
+
+      collected_by:
+        description: Organization or individual who collected the sample
+        range: string
+
+      shipped_date:
+        description: Date the sample was shipped to the processing laboratory
+        range: date
+
+      received_date:
+        description: Date the sample was received by the processing laboratory
+        range: date
+
+      processing_lab:
+        description: >-
+          Laboratory that processed the sample for sequencing/qPCR.
+          Maps to JACKPOT's originating_lab attribution system.
+        range: string
+
+      storage_conditions:
+        description: >-
+          How the sample was stored between collection and processing
+          (e.g., "4C_within_24h", "-80C_frozen", "ambient")
+        range: string
+
+      # --- NWSS Compatibility ---
+
+      nwss_sample_id:
+        description: CDC NWSS sample identifier if reported to NWSS
+        range: string
+
+      nwss_reporting_jurisdiction:
+        description: >-
+          Jurisdiction responsible for NWSS reporting
+          (typically state health department)
+        range: string
+
+      # --- Quality Flags ---
+
+      qc_status:
+        description: Overall quality control status of this sample
+        range: string
+        examples:
+          - value: "pass"
+          - value: "fail_inhibition"
+          - value: "fail_low_recovery"
+          - value: "preliminary"
+          - value: "under_review"
+
+      qc_notes:
+        description: Free-text QC notes
+        range: string
+
+      # --- Linking to Core JACKPOT Entities ---
+
+      sequencing_run_ids:
+        description: >-
+          List of JACKPOT sequencing run IDs derived from this sample.
+          Links to the core SequencingRun entity.
+        range: string
+        multivalued: true
+
+      analysis_ids:
+        description: >-
+          List of JACKPOT analysis IDs (AMR profiling, phylogenetic
+          placement, etc.) derived from this sample.
+        range: string
+        multivalued: true
+
+      notes:
+        description: Free-text notes about this sample
+        range: string
+
+
+  # ---------------------------------------------------------------------------
+  # WastewaterTargetResult
+  # ---------------------------------------------------------------------------
+  # Represents a single qPCR or ddPCR target measurement from a
+  # wastewater sample. Many targets can be measured per sample.
+  # This is the workhorse entity for targeted wastewater surveillance.
+  # ---------------------------------------------------------------------------
+
+  WastewaterTargetResult:
+    description: >-
+      A single quantitative target measurement (qPCR/ddPCR) from a
+      wastewater sample. Supports multi-target panels where a single
+      sample is assayed for multiple pathogens or AMR markers.
+    attributes:
+
+      result_id:
+        description: Unique identifier for this result
+        identifier: true
+        range: string
+        required: true
+
+      sample_id:
+        description: Foreign key to WastewaterSample
+        range: WastewaterSample
+        required: true
+
+      # --- Target Specification ---
+
+      target_name:
+        description: >-
+          Name of the molecular target (e.g., "SARS-CoV-2 N1",
+          "SARS-CoV-2 N2", "Influenza A M gene", "blaNDM-1",
+          "mcr-1", "intI1", "16S rRNA")
+        range: string
+        required: true
+
+      target_gene:
+        description: >-
+          Specific gene targeted (e.g., "N gene", "S gene", "blaCTX-M",
+          "sul1", "tetA"). Use CARD/ResFinder nomenclature for ARGs.
+        range: string
+
+      target_organism:
+        description: >-
+          Target organism if applicable (e.g., "SARS-CoV-2",
+          "Influenza A", "Norovirus GII", "MPXV"). Null for
+          broad AMR markers like class 1 integrons.
+        range: string
+
+      target_category:
+        description: >-
+          Broad category of what this target represents.
+          Helps with dashboard filtering and aggregation.
+        range: string
+        required: true
+        examples:
+          - value: "respiratory_virus"
+          - value: "enteric_virus"
+          - value: "enteric_bacteria"
+          - value: "amr_gene"
+          - value: "amr_mutation"
+          - value: "fecal_indicator"
+          - value: "population_biomarker"
+          - value: "process_control"
+
+      # --- Quantitative Results ---
+
+      assay_method:
+        description: Quantification method used
+        range: string
+        required: true
+        examples:
+          - value: "qPCR"
+          - value: "ddPCR"
+          - value: "RT-qPCR"
+          - value: "RT-ddPCR"
+
+      concentration_gc_l:
+        description: >-
+          Concentration in gene copies per liter of original
+          wastewater sample (back-calculated from extracted volume
+          and concentration factor).
+        range: float
+
+      concentration_gc_g:
+        description: >-
+          Concentration in gene copies per gram of solids
+          (for settled solids / sludge samples).
+        range: float
+
+      log10_concentration:
+        description: Log10 transformation of the concentration value
+        range: float
+
+      normalized_concentration:
+        description: >-
+          Concentration normalized by the population biomarker
+          (e.g., target_gc_l / pmmov_gc_l). Dimensionless ratio.
+          Helps control for dilution and population fluctuations.
+        range: float
+
+      ct_value:
+        description: >-
+          Cycle threshold value from qPCR. Lower Ct = higher
+          concentration. Null for ddPCR results.
+        range: float
+
+      lod_gc_l:
+        description: Limit of detection for this assay in gene copies per liter
+        range: float
+
+      loq_gc_l:
+        description: Limit of quantification for this assay in gene copies per liter
+        range: float
+
+      below_lod:
+        description: Whether the result was below the limit of detection
+        range: boolean
+
+      detected:
+        description: >-
+          Boolean: was the target detected? True even if below LOQ
+          but above LOD. Enables presence/absence analyses when
+          quantification is unreliable.
+        range: boolean
+        required: true
+
+      # --- Variant / Lineage Info (for viral targets) ---
+
+      variant_lineage:
+        description: >-
+          For viral targets with variant-level resolution: the
+          Pango lineage, Nextstrain clade, or WHO label detected
+          (e.g., "BA.2.86", "JN.1", "XBB.1.5")
+        range: string
+
+      variant_detection_method:
+        description: >-
+          How the variant was identified: mutation-specific qPCR,
+          sequencing, or computational deconvolution from mixed signal.
+        range: string
+        examples:
+          - value: "mutation_specific_qpcr"
+          - value: "amplicon_sequencing"
+          - value: "metagenomic_deconvolution"
+          - value: "freyja"
+
+      variant_proportion:
+        description: >-
+          Estimated proportion of this variant in the sample
+          (0.0–1.0), as determined by deconvolution tools like
+          Freyja. Null for single-variant assays.
+        range: float
+        minimum_value: 0.0
+        maximum_value: 1.0
+
+      # --- QC ---
+
+      replicate_count:
+        description: Number of technical replicates run for this target
+        range: integer
+
+      replicate_agreement:
+        description: >-
+          Whether replicates agreed (all positive, all negative, or mixed).
+          Mixed results may indicate near-LOD concentrations.
+        range: string
+        examples:
+          - value: "all_positive"
+          - value: "all_negative"
+          - value: "mixed"
+
+      inhibition_controlled:
+        description: Whether the result was adjusted for matrix inhibition
+        range: boolean
+
+      # --- Temporal Context ---
+
+      analysis_date:
+        description: Date the qPCR/ddPCR assay was performed
+        range: date
+
+      notes:
+        description: Free-text notes about this result
+        range: string
+
+
+  # ---------------------------------------------------------------------------
+  # WastewaterMetagenomicProfile
+  # ---------------------------------------------------------------------------
+  # Represents the results of untargeted metagenomic analysis of a
+  # wastewater sample. Complements targeted qPCR with broad resistome,
+  # taxonomic, and functional profiling.
+  # ---------------------------------------------------------------------------
+
+  WastewaterMetagenomicProfile:
+    description: >-
+      Summary results from untargeted metagenomic sequencing of a
+      wastewater sample. Links to the core JACKPOT SequencingRun
+      for raw data access and to WastewaterSample for context.
+      Designed to hold AMR resistome profiles, taxonomic composition,
+      and mobile genetic element inventories.
+    attributes:
+
+      profile_id:
+        description: Unique identifier for this metagenomic profile
+        identifier: true
+        range: string
+        required: true
+
+      sample_id:
+        description: Foreign key to WastewaterSample
+        range: WastewaterSample
+        required: true
+
+      sequencing_run_id:
+        description: Foreign key to JACKPOT core SequencingRun entity
+        range: string
+        required: true
+
+      # --- Sequencing QC ---
+
+      sequencing_platform:
+        description: Sequencing platform used
+        range: string
+        required: true
+        examples:
+          - value: "illumina_novaseq"
+          - value: "illumina_miseq"
+          - value: "ont_minion"
+          - value: "ont_promethion"
+
+      read_type:
+        description: Short-read, long-read, or hybrid
+        range: string
+        required: true
+        examples:
+          - value: "short_read"
+          - value: "long_read"
+          - value: "hybrid"
+
+      total_reads:
+        description: Total number of sequencing reads after QC
+        range: integer
+
+      total_bases_gb:
+        description: Total sequencing yield in gigabases after QC
+        range: float
+
+      host_reads_removed_pct:
+        description: >-
+          Percentage of reads identified as human and removed
+          before analysis. Should be stripped per WHO Principle 3.
+        range: float
+
+      # --- Taxonomic Composition ---
+
+      taxonomic_profiler:
+        description: >-
+          Tool used for taxonomic profiling
+          (e.g., "Kraken2", "MetaPhlAn4", "mOTUs3", "Centrifuge")
+        range: string
+
+      taxonomic_profile_path:
+        description: >-
+          Path or URI to the full taxonomic profile output file
+          (e.g., Kraken2 report, MetaPhlAn table)
+        range: string
+
+      species_richness:
+        description: Number of species detected above threshold
+        range: integer
+
+      shannon_diversity:
+        description: Shannon diversity index of the microbial community
+        range: float
+
+      # --- AMR Resistome ---
+
+      amr_profiler:
+        description: >-
+          Tool(s) used for AMR gene detection. Should use
+          hAMRonization-compatible output format.
+          (e.g., "AMRFinderPlus", "CARD-RGI", "ResFinder", "ABRicate")
+        range: string
+
+      amr_database:
+        description: >-
+          Database used for AMR gene detection
+          (e.g., "NCBI", "CARD", "ResFinder")
+        range: string
+
+      amr_database_version:
+        description: Version of the AMR database used
+        range: string
+
+      amr_profile_path:
+        description: >-
+          Path or URI to the full hAMRonization-compatible AMR
+          results file
+        range: string
+
+      total_arg_types_detected:
+        description: >-
+          Count of distinct ARG types detected above threshold.
+          "Types" = unique gene families, not allelic variants.
+        range: integer
+
+      total_arg_classes_detected:
+        description: >-
+          Count of distinct antibiotic classes for which resistance
+          genes were detected (e.g., beta-lactam, aminoglycoside,
+          tetracycline, etc.)
+        range: integer
+
+      arg_reads_per_million:
+        description: >-
+          Total ARG-mapping reads normalized per million total reads.
+          Enables cross-sample comparison of overall AMR burden.
+        range: float
+
+      # --- Mobile Genetic Elements ---
+
+      mge_profiler:
+        description: Tool used for MGE detection (e.g., "PlasmidFinder", "mobileOG-db")
+        range: string
+
+      integron_types_detected:
+        description: >-
+          Class 1, 2, 3 integron types detected. Class 1 integrons
+          are key sentinels for anthropogenic AMR pollution
+          (Djordjevic et al. 2024).
+        range: string
+        multivalued: true
+
+      plasmid_replicon_types:
+        description: >-
+          Plasmid replicon types detected (e.g., IncF, IncHI2, IncX3).
+          Uses PlasmidFinder nomenclature.
+        range: string
+        multivalued: true
+
+      # --- MAG Quality (if assembly was performed) ---
+
+      num_mags_recovered:
+        description: Number of metagenome-assembled genomes (MAGs) recovered
+        range: integer
+
+      num_high_quality_mags:
+        description: >-
+          Number of MAGs meeting high-quality criteria
+          (>90% completeness, <5% contamination per MIMAG standards)
+        range: integer
+
+      assembler:
+        description: >-
+          Metagenomic assembler used (e.g., "metaSPAdes", "MEGAHIT",
+          "metaFlye" for long reads)
+        range: string
+
+      binner:
+        description: >-
+          MAG binning tool used (e.g., "MetaBAT2", "CONCOCT",
+          "SemiBin", "vRhyme")
+        range: string
+
+      # --- Analysis Provenance ---
+
+      pipeline_name:
+        description: Name of the analysis pipeline used
+        range: string
+
+      pipeline_version:
+        description: Version of the analysis pipeline
+        range: string
+
+      analysis_date:
+        description: Date the metagenomic analysis was performed
+        range: date
+
+      notes:
+        description: Free-text notes about this metagenomic profile
+        range: string

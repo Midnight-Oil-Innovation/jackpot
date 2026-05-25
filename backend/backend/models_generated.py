@@ -1073,11 +1073,44 @@ class OutbreakStatusEnum(str, Enum):
 
 
 
-class Organization(ConfiguredBaseModel):
+class ExecutorTypeEnum(str, Enum):
     """
-    An institution (e.g. a public health agency, academic lab, NGO, or CDC). Maps to APGAP Organization model.
+    Which Nextflow executor a profile drives. LOCAL runs Nextflow against the API host; the remaining values map to the well-known Nextflow executor names. See Critical Rule 59.
+    """
+    # Nextflow runs in-process on the API host.
+    LOCAL = "LOCAL"
+    # Nextflow submits jobs to a Slurm cluster.
+    SLURM = "SLURM"
+    # Nextflow submits jobs to PBS / OpenPBS / Torque.
+    PBS = "PBS"
+    # Nextflow submits jobs to IBM Spectrum LSF.
+    LSF = "LSF"
+    # Nextflow submits jobs to Google Cloud Batch.
+    GCP_BATCH = "GCP_BATCH"
+    # Nextflow submits jobs to AWS Batch.
+    AWS_BATCH = "AWS_BATCH"
+    # Nextflow submits jobs to a Kubernetes cluster.
+    KUBERNETES = "KUBERNETES"
 
+
+
+class ContainerEngineEnum(str, Enum):
     """
+    Container runtime used to materialize pipeline processes for a profile. APPTAINER and SINGULARITY are listed separately because their CLI flags and Nextflow configuration differ; choose APPTAINER on modern HPC systems and SINGULARITY only when the operator's site has not migrated. NONE means processes run as native binaries on the host.
+    """
+    # Docker engine — typical for laptops and cloud.
+    DOCKER = "DOCKER"
+    # Apptainer — typical for modern HPC clusters.
+    APPTAINER = "APPTAINER"
+    # SingularityCE — legacy HPC sites.
+    SINGULARITY = "SINGULARITY"
+    # No container — processes run as native binaries.
+    NONE = "NONE"
+
+
+
+class Organization(ConfiguredBaseModel):
+
     display_name: str = Field(...)
     default_approve_analytical_dataset_requests: Optional[bool] = Field(None, description="""Auto-approve dataset access requests from this org""")
 
@@ -1106,23 +1139,23 @@ class Project(ConfiguredBaseModel):
 
 class Sample(ConfiguredBaseModel):
     """
-    Base class for all sequenced samples. Pathogen-agnostic. Fields derived from APGAP All_Sequences.xlsx. Every URI maps to GenEpiO, NCBI BioSample, MIxS, or OBI where a standard term exists.
+    Base class for all sequenced samples. Pathogen-agnostic. Every URI maps to GenEpiO, NCBI BioSample, MIxS, or OBI where a standard term exists.
 
     """
-    sample_id: str = Field(..., description="""Unique alphanumeric identifier for this sample. Must not already be in use in the system. APGAP: 'Sample ID'. Validation: alphanumeric, unique. Portal mints persistent URI at ingest: https://data.jackpot.health/samples/{sample_id}
+    sample_id: str = Field(..., description="""Unique alphanumeric identifier for this sample. Must not already be in use in the system. Portal mints persistent URI at ingest: https://data.jackpot.health/samples/{sample_id}
 """)
     jackpot_uri: Optional[str] = Field(None, description="""Persistent URI minted at ingest for FAIR Findability (F1). Format: https://data.jackpot.health/samples/{sample_id} Stable before NCBI/GISAID accessions are assigned.
 """)
     lab: str = Field(...)
     project: str = Field(...)
     owner: str = Field(..., description="""Email of the researcher who uploaded the sample""")
-    source_type: SourceTypeEnum = Field(..., description="""APGAP: 'Source type'. Determines which host-specific subclass is required. Further required fields depend on this value. Validation: match defined allowable entries.
+    source_type: SourceTypeEnum = Field(..., description="""is required. Further required fields depend on this value. Validation: match defined allowable entries.
 """)
-    organism_name: OrganismNameEnum = Field(..., description="""NCBI organism name. Controlled vocabulary derived from the host jurisdiction's reportable communicable diseases list, plus Coccidioides spp. (Valley fever) and metagenome for metagenomic samples. Platform Admins may add new values when novel pathogens emerge. Researchers may request additions via the portal. Use 'metagenome' when no specific organism is targeted. APGAP: 'Pathogen/organism name (or metagenomic)'.
+    organism_name: OrganismNameEnum = Field(..., description="""NCBI organism name. Controlled vocabulary derived from the host jurisdiction's reportable communicable diseases list, plus Coccidioides spp. (Valley fever) and metagenome for metagenomic samples. Platform Admins may add new values when novel pathogens emerge. Researchers may request additions via the portal. Use 'metagenome' when no specific organism is targeted.
 """)
     strain: Optional[str] = Field(None, description="""Pathogen strain designation. Also used for: Influenza subtype (H1N1, H3N2), Pango lineage pre-Pangolin-pipeline, rabies variant, poliovirus type (wild vs. vaccine-derived).
 """)
-    isolate: Optional[str] = Field(None, description="""APGAP: 'Isolate'. Identification or description of the specific individual from which the sample was obtained.
+    isolate: Optional[str] = Field(None, description="""individual from which the sample was obtained.
 """)
     serotype: Optional[str] = Field(None, description="""Serotype of the pathogen isolate. Use for: Salmonella serovar (e.g. Typhimurium, Enteritidis), Dengue serotype (DENV-1 to DENV-4), Poliovirus type (1, 2, 3), Influenza subtype (H1N1, H3N2, H5N1).
 """)
@@ -1131,27 +1164,27 @@ class Sample(ConfiguredBaseModel):
     genbank_accession: Optional[str] = Field(None, description="""GenBank accession (e.g. OQ123456)""")
     gisaid_accession: Optional[str] = Field(None, description="""GISAID EPI_ accession (e.g. EPI_ISL_1234567)""")
     bioproject_accession: Optional[str] = Field(None, description="""NCBI BioProject accession (e.g. PRJNA123456)""")
-    type_of_experiment: ExperimentTypeEnum = Field(..., description="""APGAP: 'Type of experiment'. Validation: match defined allowable entries (one only).
+    type_of_experiment: ExperimentTypeEnum = Field(..., description="""Validation: match defined allowable entries (one only).
 """)
-    nucleic_acid_extraction_method: List[str] = Field(default_factory=list, description="""APGAP: 'Nucleic acid extraction method'. Multiple values permitted. Match defined allowable entries.
+    nucleic_acid_extraction_method: List[str] = Field(default_factory=list, description="""Multiple values permitted. Match defined allowable entries.
 """)
-    library_preparation_method: str = Field(..., description="""APGAP: 'Nucleic acid library preparation method'. Match defined allowable entries (one only).
+    library_preparation_method: str = Field(..., description="""Match defined allowable entries (one only).
 """)
-    sequencing_protocol: str = Field(..., description="""APGAP: 'Sequencing protocol'. URL to protocol document. Validation: URL format preferred (e.g. https://www.protocols.io/view/artic-v4-1).
+    sequencing_protocol: str = Field(..., description="""Validation: URL format preferred (e.g. https://www.protocols.io/view/artic-v4-1).
 """)
-    sequencing_platform: SequencingPlatformEnum = Field(..., description="""APGAP: 'Sequencing instrument make and model'. Validation: match defined allowable entries (one only).
+    sequencing_platform: SequencingPlatformEnum = Field(..., description="""Validation: match defined allowable entries (one only).
 """)
     sequencing_instrument: Optional[str] = Field(None, description="""Specific instrument model. Examples: NextSeq 2000, MinION, Sequel IIe, Ion S5.
 """)
-    sequencing_lab: str = Field(..., description="""APGAP: 'Sequencing lab (originating lab)'. The lab that performed the sequencing. NOT a static enum — validated at ingest against the sequencing_labs database table, which is a Platform Admin-managed controlled vocabulary. Seeded values: 'Sonora Quest Laboratories', 'Laboratory Corporation of America'. Registered JACKPOT Labs are auto-added (APGAP backlog #42). Unknown values trigger validation error directing Lab Director to submit a sequencing lab addition request via the portal (APGAP backlog #7).
+    sequencing_lab: str = Field(..., description="""performed the sequencing. NOT a static enum — validated at ingest against the sequencing_labs database table, which is a Platform Admin-managed controlled vocabulary. Seeded values: 'Example Reference Lab', 'Laboratory Corporation of America'. Unknown values trigger validation error directing Lab Director to submit a sequencing lab addition request via the portal
 """)
-    date_collected: date = Field(..., description="""APGAP: 'Date Collected'. ISO 8601 format (YYYY-MM-DD). Validation: flag if >5 years in past; reject if future date.
+    date_collected: date = Field(..., description="""Validation: flag if >5 years in past; reject if future date.
 """)
-    date_sequenced: date = Field(..., description="""APGAP: 'Date Sequenced'. ISO 8601 format. Validation: must not be future date; must not precede date_collected.
+    date_sequenced: date = Field(..., description="""Validation: must not be future date; must not precede date_collected.
 """)
-    collection_facility: str = Field(..., description="""APGAP: 'Collection facility'. Institution or facility where the sample was collected. Match defined allowable entries.
+    collection_facility: str = Field(..., description="""the sample was collected. Match defined allowable entries.
 """)
-    purpose_for_collection: List[str] = Field(default_factory=list, description="""APGAP: 'Purpose for collection and sequencing'. Multiple selections permitted. Match defined allowable entries.
+    purpose_for_collection: List[str] = Field(default_factory=list, description="""Multiple selections permitted. Match defined allowable entries.
 """)
     collection_location_country: str = Field(..., description="""Country of sample collection. Free text — no controlled vocabulary enforced at Tier 1 or Tier 2. At Tier 3 (SUBMITTABLE), must match an INSDC-approved country name for BioSample submission via TOSTADAS (e.g. \"USA\" not \"United States\", \"United Kingdom\" not \"UK\"). INSDC country list: https://www.insdc.org/submitting-standards/country-qualifier-vocabulary/ portal_to_tostadas.py validates against the INSDC list before constructing the geo_loc_name field (format: Country:State:City).""")
     collection_location_state: Optional[str] = Field(None, description="""Sub-national administrative region of sample collection. Accepts any equivalent administrative division regardless of country: US state, Canadian province, Mexican estado, Australian state, Brazilian estado, UK county/nation, German Bundesland, Japanese prefecture, etc. Free text — not a controlled vocabulary since administrative divisions vary by country. Used in NCBI BioSample geo_loc_name construction (Country:State:City).""")
@@ -1195,15 +1228,15 @@ class Sample(ConfiguredBaseModel):
     date_sequence_uploaded: Optional[date] = Field(None, description="""Date consensus genome uploaded to JACKPOT. Rockefeller target: ≤10 days from date_received_lab.""")
     date_lineage_assigned: Optional[date] = Field(None, description="""Date lineage or sequence type assignment completed (Pangolin, MLST, cgMLST). Rockefeller target: ≤48 hours from date_sequence_uploaded.""")
     date_phenotype_reported: Optional[date] = Field(None, description="""Date phenotypic threat assessment (AMR profile, virulence) reported. Rockefeller target: ≤21 days from date_sequence_uploaded.""")
-    associated_sample_ids: Optional[List[str]] = Field(default_factory=list, description="""APGAP: 'IDs of any associated samples'. Present in ALL sample type spreadsheets. Links sequences from the same investigation (e.g. pet and owner, food product and patient, vector and host). Validation: each ID should match an existing sample_id in the system. Flag (not reject) if linked sample not yet uploaded — may arrive later. Bidirectional linkage confirmed at resolution. Stored as directed pairs in the sample_associations table.
+    associated_sample_ids: Optional[List[str]] = Field(default_factory=list, description="""type spreadsheets. Links sequences from the same investigation (e.g. pet and owner, food product and patient, vector and host). Validation: each ID should match an existing sample_id in the system. Flag (not reject) if linked sample not yet uploaded — may arrive later. Bidirectional linkage confirmed at resolution. Stored as directed pairs in the sample_associations table.
 """)
-    ct_value: Optional[float] = Field(None, description="""APGAP: 'Ct value'. PCR cycle threshold value. Validation: numeric, range [0, 50].
+    ct_value: Optional[float] = Field(None, description="""Validation: numeric, range [0, 50].
 """)
-    other_testing_performed: Optional[List[str]] = Field(default_factory=list, description="""APGAP: 'Other Testing Performed'. Multiple entries permitted. Match defined allowable entries. Flag error if 'none' entered alongside any other value.
+    other_testing_performed: Optional[List[str]] = Field(default_factory=list, description="""Match defined allowable entries. Flag error if 'none' entered alongside any other value.
 """)
-    lab_of_other_testing: Optional[List[str]] = Field(default_factory=list, description="""APGAP: 'Lab of Other Testing'. Conditional: required if other_testing_performed is not empty or 'none'.
+    lab_of_other_testing: Optional[List[str]] = Field(default_factory=list, description="""other_testing_performed is not empty or 'none'.
 """)
-    intermediary_clinical_lab: Optional[str] = Field(None, description="""APGAP: 'Intermediary clinical lab name'. Optional. Match defined allowable entries.
+    intermediary_clinical_lab: Optional[str] = Field(None, description="""Match defined allowable entries.
 """)
     assembly_method: Optional[str] = Field(None, description="""e.g. SPAdes 3.15, IVAR 1.4, Flye 2.9, Unicycler 0.5""")
     coverage_depth: Optional[float] = Field(None, description="""Mean sequencing depth (X)""")
@@ -1242,10 +1275,10 @@ class Sample(ConfiguredBaseModel):
     pii_scan_status: PIIScanStatusEnum = Field(...)
     ingest_method: IngestMethodEnum = Field(...)
     sharing_level: SharingLevelEnum = Field(...)
-    pi_name: Optional[str] = Field(None, description="""APGAP: 'PI name'. Defaults to Lab Director. Validation: must match existing user in the platform.
+    pi_name: Optional[str] = Field(None, description="""Validation: must match existing user in the platform.
 """)
-    grant_number: Optional[str] = Field(None, description="""APGAP: 'Grant number'. Alphanumeric.""")
-    contact_other: Optional[str] = Field(None, description="""APGAP: 'Contact (if other than user uploading data)'. Email format. Phase 2: allow non-user contacts.
+    grant_number: Optional[str] = Field(None)
+    contact_other: Optional[str] = Field(None, description="""Email format. Phase 2: allow non-user contacts.
 """)
     comments: Optional[str] = Field(None, description="""Free text comments""")
 
@@ -1253,23 +1286,21 @@ class Sample(ConfiguredBaseModel):
 
 class HumanSample(Sample):
     """
-    Clinical or surveillance sample from a human host. Fields from APGAP human_host.xlsx. Maps to GA4GH Phenopacket Individual + Disease elements.
+    Clinical or surveillance sample from a human host. Maps to GA4GH Phenopacket Individual + Disease elements.
 
     """
     external_case_id: str = Field(..., description="""Operator-issued anonymized identifier or exemption code for a human sample. Either (1) an anonymized ID linking to the host jurisdiction's case-management system, or (2) an exemption code obtained for the study if the sample does not originate from surveillance. Validation: cross-checked against the operator's authoritative ID list when that list becomes available. Currently free text. Distinct from case_id (used by samples whose case identifier comes from a different surveillance system).
 """)
-    biospecimen_type: BiospecimenTypeEnum = Field(..., description="""APGAP: 'Biospecimen type'. Type of biological specimen collected.
+    biospecimen_type: BiospecimenTypeEnum = Field(...)
+    reason_for_collection: List[ReasonForCollectionEnum] = Field(default_factory=list, description="""Whether sample was obtained during clinical care or research study.
 """)
-    reason_for_collection: List[ReasonForCollectionEnum] = Field(default_factory=list, description="""APGAP: 'Reason for sample collection'. Whether sample was obtained during clinical care or research study.
-""")
-    host_sex: Optional[BiologicalSexEnum] = Field(None, description="""APGAP: 'Sex'. Biological sex of the human host.
-""")
-    host_age: Optional[int] = Field(None, description="""APGAP: 'Age (years)'. Age at time of collection. Validation: integer, range [0, 120]. Unit: years.
+    host_sex: Optional[BiologicalSexEnum] = Field(None)
+    host_age: Optional[int] = Field(None, description="""Validation: integer, range [0, 120]. Unit: years.
 """)
     host_age_unit: Optional[AgeUnitEnum] = Field(None, description="""Unit for host_age when age < 1 year""")
     host_species: Optional[str] = Field(None, description="""Auto-populated as 'Homo sapiens' for HumanSample. Not user-entered.
 """)
-    host_disease: List[str] = Field(default_factory=list, description="""APGAP: 'Disease'. The disease caused by the pathogen (whether or not the host is symptomatic). Match defined allowable entries.
+    host_disease: List[str] = Field(default_factory=list, description="""not the host is symptomatic). Match defined allowable entries.
 """)
     isolation_source: Optional[str] = Field(None, description="""Auto-populated as 'human clinical specimen' for HumanSample.
 """)
@@ -1284,20 +1315,20 @@ class HumanSample(Sample):
     travel_history_days: Optional[int] = Field(None, description="""Days since return from travel when sample was collected. Used alongside travel_history_country to calculate exposure window. Integer. Optional — only populated when travel_history_country is provided.""")
     host_age_range: Optional[AgeRangeEnum] = Field(None, description="""Age of the human host expressed as a decade bracket for privacy-preserving public surveillance reporting. NNDSS, ArboNET, and CDC public surveillance datasets use age brackets rather than exact ages. host_age (exact integer) is retained for internal analysis; host_age_range is the shareable tier. Populated automatically from host_age at ingest. Reviewers and external users see age range; Lab Directors and above see both.""")
     collection_method: Optional[CollectionMethodEnum] = Field(None, description="""Method used to collect the specimen. Different collection methods for the same biospecimen type have different sensitivity profiles (e.g. nasopharyngeal swab vs. saliva vs. mid-turbinate swab for SARS-CoV-2; induced sputum vs. BAL fluid vs. gastric aspirate for TB). Standard PHA4GE and NCBI BioSample field. Required for Tier 2 (ANALYZABLE) and above. Maps to NCBI collection_method attribute.""")
-    sample_id: str = Field(..., description="""Unique alphanumeric identifier for this sample. Must not already be in use in the system. APGAP: 'Sample ID'. Validation: alphanumeric, unique. Portal mints persistent URI at ingest: https://data.jackpot.health/samples/{sample_id}
+    sample_id: str = Field(..., description="""Unique alphanumeric identifier for this sample. Must not already be in use in the system. Portal mints persistent URI at ingest: https://data.jackpot.health/samples/{sample_id}
 """)
     jackpot_uri: Optional[str] = Field(None, description="""Persistent URI minted at ingest for FAIR Findability (F1). Format: https://data.jackpot.health/samples/{sample_id} Stable before NCBI/GISAID accessions are assigned.
 """)
     lab: str = Field(...)
     project: str = Field(...)
     owner: str = Field(..., description="""Email of the researcher who uploaded the sample""")
-    source_type: SourceTypeEnum = Field(..., description="""APGAP: 'Source type'. Determines which host-specific subclass is required. Further required fields depend on this value. Validation: match defined allowable entries.
+    source_type: SourceTypeEnum = Field(..., description="""is required. Further required fields depend on this value. Validation: match defined allowable entries.
 """)
-    organism_name: OrganismNameEnum = Field(..., description="""NCBI organism name. Controlled vocabulary derived from the host jurisdiction's reportable communicable diseases list, plus Coccidioides spp. (Valley fever) and metagenome for metagenomic samples. Platform Admins may add new values when novel pathogens emerge. Researchers may request additions via the portal. Use 'metagenome' when no specific organism is targeted. APGAP: 'Pathogen/organism name (or metagenomic)'.
+    organism_name: OrganismNameEnum = Field(..., description="""NCBI organism name. Controlled vocabulary derived from the host jurisdiction's reportable communicable diseases list, plus Coccidioides spp. (Valley fever) and metagenome for metagenomic samples. Platform Admins may add new values when novel pathogens emerge. Researchers may request additions via the portal. Use 'metagenome' when no specific organism is targeted.
 """)
     strain: Optional[str] = Field(None, description="""Pathogen strain designation. Also used for: Influenza subtype (H1N1, H3N2), Pango lineage pre-Pangolin-pipeline, rabies variant, poliovirus type (wild vs. vaccine-derived).
 """)
-    isolate: Optional[str] = Field(None, description="""APGAP: 'Isolate'. Identification or description of the specific individual from which the sample was obtained.
+    isolate: Optional[str] = Field(None, description="""individual from which the sample was obtained.
 """)
     serotype: Optional[str] = Field(None, description="""Serotype of the pathogen isolate. Use for: Salmonella serovar (e.g. Typhimurium, Enteritidis), Dengue serotype (DENV-1 to DENV-4), Poliovirus type (1, 2, 3), Influenza subtype (H1N1, H3N2, H5N1).
 """)
@@ -1306,27 +1337,27 @@ class HumanSample(Sample):
     genbank_accession: Optional[str] = Field(None, description="""GenBank accession (e.g. OQ123456)""")
     gisaid_accession: Optional[str] = Field(None, description="""GISAID EPI_ accession (e.g. EPI_ISL_1234567)""")
     bioproject_accession: Optional[str] = Field(None, description="""NCBI BioProject accession (e.g. PRJNA123456)""")
-    type_of_experiment: ExperimentTypeEnum = Field(..., description="""APGAP: 'Type of experiment'. Validation: match defined allowable entries (one only).
+    type_of_experiment: ExperimentTypeEnum = Field(..., description="""Validation: match defined allowable entries (one only).
 """)
-    nucleic_acid_extraction_method: List[str] = Field(default_factory=list, description="""APGAP: 'Nucleic acid extraction method'. Multiple values permitted. Match defined allowable entries.
+    nucleic_acid_extraction_method: List[str] = Field(default_factory=list, description="""Multiple values permitted. Match defined allowable entries.
 """)
-    library_preparation_method: str = Field(..., description="""APGAP: 'Nucleic acid library preparation method'. Match defined allowable entries (one only).
+    library_preparation_method: str = Field(..., description="""Match defined allowable entries (one only).
 """)
-    sequencing_protocol: str = Field(..., description="""APGAP: 'Sequencing protocol'. URL to protocol document. Validation: URL format preferred (e.g. https://www.protocols.io/view/artic-v4-1).
+    sequencing_protocol: str = Field(..., description="""Validation: URL format preferred (e.g. https://www.protocols.io/view/artic-v4-1).
 """)
-    sequencing_platform: SequencingPlatformEnum = Field(..., description="""APGAP: 'Sequencing instrument make and model'. Validation: match defined allowable entries (one only).
+    sequencing_platform: SequencingPlatformEnum = Field(..., description="""Validation: match defined allowable entries (one only).
 """)
     sequencing_instrument: Optional[str] = Field(None, description="""Specific instrument model. Examples: NextSeq 2000, MinION, Sequel IIe, Ion S5.
 """)
-    sequencing_lab: str = Field(..., description="""APGAP: 'Sequencing lab (originating lab)'. The lab that performed the sequencing. NOT a static enum — validated at ingest against the sequencing_labs database table, which is a Platform Admin-managed controlled vocabulary. Seeded values: 'Sonora Quest Laboratories', 'Laboratory Corporation of America'. Registered JACKPOT Labs are auto-added (APGAP backlog #42). Unknown values trigger validation error directing Lab Director to submit a sequencing lab addition request via the portal (APGAP backlog #7).
+    sequencing_lab: str = Field(..., description="""performed the sequencing. NOT a static enum — validated at ingest against the sequencing_labs database table, which is a Platform Admin-managed controlled vocabulary. Seeded values: 'Example Reference Lab', 'Laboratory Corporation of America'. Unknown values trigger validation error directing Lab Director to submit a sequencing lab addition request via the portal
 """)
-    date_collected: date = Field(..., description="""APGAP: 'Date Collected'. ISO 8601 format (YYYY-MM-DD). Validation: flag if >5 years in past; reject if future date.
+    date_collected: date = Field(..., description="""Validation: flag if >5 years in past; reject if future date.
 """)
-    date_sequenced: date = Field(..., description="""APGAP: 'Date Sequenced'. ISO 8601 format. Validation: must not be future date; must not precede date_collected.
+    date_sequenced: date = Field(..., description="""Validation: must not be future date; must not precede date_collected.
 """)
-    collection_facility: str = Field(..., description="""APGAP: 'Collection facility'. Institution or facility where the sample was collected. Match defined allowable entries.
+    collection_facility: str = Field(..., description="""the sample was collected. Match defined allowable entries.
 """)
-    purpose_for_collection: List[str] = Field(default_factory=list, description="""APGAP: 'Purpose for collection and sequencing'. Multiple selections permitted. Match defined allowable entries.
+    purpose_for_collection: List[str] = Field(default_factory=list, description="""Multiple selections permitted. Match defined allowable entries.
 """)
     collection_location_country: str = Field(..., description="""Country of sample collection. Free text — no controlled vocabulary enforced at Tier 1 or Tier 2. At Tier 3 (SUBMITTABLE), must match an INSDC-approved country name for BioSample submission via TOSTADAS (e.g. \"USA\" not \"United States\", \"United Kingdom\" not \"UK\"). INSDC country list: https://www.insdc.org/submitting-standards/country-qualifier-vocabulary/ portal_to_tostadas.py validates against the INSDC list before constructing the geo_loc_name field (format: Country:State:City).""")
     collection_location_state: Optional[str] = Field(None, description="""Sub-national administrative region of sample collection. Accepts any equivalent administrative division regardless of country: US state, Canadian province, Mexican estado, Australian state, Brazilian estado, UK county/nation, German Bundesland, Japanese prefecture, etc. Free text — not a controlled vocabulary since administrative divisions vary by country. Used in NCBI BioSample geo_loc_name construction (Country:State:City).""")
@@ -1370,15 +1401,15 @@ class HumanSample(Sample):
     date_sequence_uploaded: Optional[date] = Field(None, description="""Date consensus genome uploaded to JACKPOT. Rockefeller target: ≤10 days from date_received_lab.""")
     date_lineage_assigned: Optional[date] = Field(None, description="""Date lineage or sequence type assignment completed (Pangolin, MLST, cgMLST). Rockefeller target: ≤48 hours from date_sequence_uploaded.""")
     date_phenotype_reported: Optional[date] = Field(None, description="""Date phenotypic threat assessment (AMR profile, virulence) reported. Rockefeller target: ≤21 days from date_sequence_uploaded.""")
-    associated_sample_ids: Optional[List[str]] = Field(default_factory=list, description="""APGAP: 'IDs of any associated samples'. Present in ALL sample type spreadsheets. Links sequences from the same investigation (e.g. pet and owner, food product and patient, vector and host). Validation: each ID should match an existing sample_id in the system. Flag (not reject) if linked sample not yet uploaded — may arrive later. Bidirectional linkage confirmed at resolution. Stored as directed pairs in the sample_associations table.
+    associated_sample_ids: Optional[List[str]] = Field(default_factory=list, description="""type spreadsheets. Links sequences from the same investigation (e.g. pet and owner, food product and patient, vector and host). Validation: each ID should match an existing sample_id in the system. Flag (not reject) if linked sample not yet uploaded — may arrive later. Bidirectional linkage confirmed at resolution. Stored as directed pairs in the sample_associations table.
 """)
-    ct_value: Optional[float] = Field(None, description="""APGAP: 'Ct value'. PCR cycle threshold value. Validation: numeric, range [0, 50].
+    ct_value: Optional[float] = Field(None, description="""Validation: numeric, range [0, 50].
 """)
-    other_testing_performed: Optional[List[str]] = Field(default_factory=list, description="""APGAP: 'Other Testing Performed'. Multiple entries permitted. Match defined allowable entries. Flag error if 'none' entered alongside any other value.
+    other_testing_performed: Optional[List[str]] = Field(default_factory=list, description="""Match defined allowable entries. Flag error if 'none' entered alongside any other value.
 """)
-    lab_of_other_testing: Optional[List[str]] = Field(default_factory=list, description="""APGAP: 'Lab of Other Testing'. Conditional: required if other_testing_performed is not empty or 'none'.
+    lab_of_other_testing: Optional[List[str]] = Field(default_factory=list, description="""other_testing_performed is not empty or 'none'.
 """)
-    intermediary_clinical_lab: Optional[str] = Field(None, description="""APGAP: 'Intermediary clinical lab name'. Optional. Match defined allowable entries.
+    intermediary_clinical_lab: Optional[str] = Field(None, description="""Match defined allowable entries.
 """)
     assembly_method: Optional[str] = Field(None, description="""e.g. SPAdes 3.15, IVAR 1.4, Flye 2.9, Unicycler 0.5""")
     coverage_depth: Optional[float] = Field(None, description="""Mean sequencing depth (X)""")
@@ -1417,10 +1448,10 @@ class HumanSample(Sample):
     pii_scan_status: PIIScanStatusEnum = Field(...)
     ingest_method: IngestMethodEnum = Field(...)
     sharing_level: SharingLevelEnum = Field(...)
-    pi_name: Optional[str] = Field(None, description="""APGAP: 'PI name'. Defaults to Lab Director. Validation: must match existing user in the platform.
+    pi_name: Optional[str] = Field(None, description="""Validation: must match existing user in the platform.
 """)
-    grant_number: Optional[str] = Field(None, description="""APGAP: 'Grant number'. Alphanumeric.""")
-    contact_other: Optional[str] = Field(None, description="""APGAP: 'Contact (if other than user uploading data)'. Email format. Phase 2: allow non-user contacts.
+    grant_number: Optional[str] = Field(None)
+    contact_other: Optional[str] = Field(None, description="""Email format. Phase 2: allow non-user contacts.
 """)
     comments: Optional[str] = Field(None, description="""Free text comments""")
 
@@ -1428,10 +1459,10 @@ class HumanSample(Sample):
 
 class WildlifeSample(Sample):
     """
-    Sample from a wild animal host. Fields from APGAP wildlife_host.xlsx.
+    Sample from a wild animal host.
 
     """
-    host_species: str = Field(..., description="""APGAP: 'Host species'. Scientific name preferred (genus + species); genus only acceptable. Match defined allowable entries. Examples: Eptesicus fuscus, Canis latrans, Odocoileus virginianus.
+    host_species: str = Field(..., description="""genus only acceptable. Match defined allowable entries. Examples: Eptesicus fuscus, Canis latrans, Odocoileus virginianus.
 """)
     wildlife_subject_id: Optional[str] = Field(None, description="""Optional alphanumeric field identifier for the animal""")
     biospecimen_type: BiospecimenTypeEnum = Field(...)
@@ -1439,16 +1470,16 @@ class WildlifeSample(Sample):
     isolation_source: Optional[str] = Field(None, description="""Auto-derived from host species + biospecimen type""")
     isolate: Optional[str] = Field(None)
     travel_origin_region: Optional[str] = Field(None, description="""For migratory or translocated wildlife — the geographic region of origin or most recent stopover before the animal was sampled. Equivalent to travel_history for humans. Particularly relevant for migratory bird HPAI (H5N1) surveillance where flyway routes determine exposure risk. Free text. Examples: 'Atlantic Flyway', 'East Asia Pacific Flyway', 'Mongolia', 'Central Valley CA'.""")
-    sample_id: str = Field(..., description="""Unique alphanumeric identifier for this sample. Must not already be in use in the system. APGAP: 'Sample ID'. Validation: alphanumeric, unique. Portal mints persistent URI at ingest: https://data.jackpot.health/samples/{sample_id}
+    sample_id: str = Field(..., description="""Unique alphanumeric identifier for this sample. Must not already be in use in the system. Portal mints persistent URI at ingest: https://data.jackpot.health/samples/{sample_id}
 """)
     jackpot_uri: Optional[str] = Field(None, description="""Persistent URI minted at ingest for FAIR Findability (F1). Format: https://data.jackpot.health/samples/{sample_id} Stable before NCBI/GISAID accessions are assigned.
 """)
     lab: str = Field(...)
     project: str = Field(...)
     owner: str = Field(..., description="""Email of the researcher who uploaded the sample""")
-    source_type: SourceTypeEnum = Field(..., description="""APGAP: 'Source type'. Determines which host-specific subclass is required. Further required fields depend on this value. Validation: match defined allowable entries.
+    source_type: SourceTypeEnum = Field(..., description="""is required. Further required fields depend on this value. Validation: match defined allowable entries.
 """)
-    organism_name: OrganismNameEnum = Field(..., description="""NCBI organism name. Controlled vocabulary derived from the host jurisdiction's reportable communicable diseases list, plus Coccidioides spp. (Valley fever) and metagenome for metagenomic samples. Platform Admins may add new values when novel pathogens emerge. Researchers may request additions via the portal. Use 'metagenome' when no specific organism is targeted. APGAP: 'Pathogen/organism name (or metagenomic)'.
+    organism_name: OrganismNameEnum = Field(..., description="""NCBI organism name. Controlled vocabulary derived from the host jurisdiction's reportable communicable diseases list, plus Coccidioides spp. (Valley fever) and metagenome for metagenomic samples. Platform Admins may add new values when novel pathogens emerge. Researchers may request additions via the portal. Use 'metagenome' when no specific organism is targeted.
 """)
     strain: Optional[str] = Field(None, description="""Pathogen strain designation. Also used for: Influenza subtype (H1N1, H3N2), Pango lineage pre-Pangolin-pipeline, rabies variant, poliovirus type (wild vs. vaccine-derived).
 """)
@@ -1459,27 +1490,27 @@ class WildlifeSample(Sample):
     genbank_accession: Optional[str] = Field(None, description="""GenBank accession (e.g. OQ123456)""")
     gisaid_accession: Optional[str] = Field(None, description="""GISAID EPI_ accession (e.g. EPI_ISL_1234567)""")
     bioproject_accession: Optional[str] = Field(None, description="""NCBI BioProject accession (e.g. PRJNA123456)""")
-    type_of_experiment: ExperimentTypeEnum = Field(..., description="""APGAP: 'Type of experiment'. Validation: match defined allowable entries (one only).
+    type_of_experiment: ExperimentTypeEnum = Field(..., description="""Validation: match defined allowable entries (one only).
 """)
-    nucleic_acid_extraction_method: List[str] = Field(default_factory=list, description="""APGAP: 'Nucleic acid extraction method'. Multiple values permitted. Match defined allowable entries.
+    nucleic_acid_extraction_method: List[str] = Field(default_factory=list, description="""Multiple values permitted. Match defined allowable entries.
 """)
-    library_preparation_method: str = Field(..., description="""APGAP: 'Nucleic acid library preparation method'. Match defined allowable entries (one only).
+    library_preparation_method: str = Field(..., description="""Match defined allowable entries (one only).
 """)
-    sequencing_protocol: str = Field(..., description="""APGAP: 'Sequencing protocol'. URL to protocol document. Validation: URL format preferred (e.g. https://www.protocols.io/view/artic-v4-1).
+    sequencing_protocol: str = Field(..., description="""Validation: URL format preferred (e.g. https://www.protocols.io/view/artic-v4-1).
 """)
-    sequencing_platform: SequencingPlatformEnum = Field(..., description="""APGAP: 'Sequencing instrument make and model'. Validation: match defined allowable entries (one only).
+    sequencing_platform: SequencingPlatformEnum = Field(..., description="""Validation: match defined allowable entries (one only).
 """)
     sequencing_instrument: Optional[str] = Field(None, description="""Specific instrument model. Examples: NextSeq 2000, MinION, Sequel IIe, Ion S5.
 """)
-    sequencing_lab: str = Field(..., description="""APGAP: 'Sequencing lab (originating lab)'. The lab that performed the sequencing. NOT a static enum — validated at ingest against the sequencing_labs database table, which is a Platform Admin-managed controlled vocabulary. Seeded values: 'Sonora Quest Laboratories', 'Laboratory Corporation of America'. Registered JACKPOT Labs are auto-added (APGAP backlog #42). Unknown values trigger validation error directing Lab Director to submit a sequencing lab addition request via the portal (APGAP backlog #7).
+    sequencing_lab: str = Field(..., description="""performed the sequencing. NOT a static enum — validated at ingest against the sequencing_labs database table, which is a Platform Admin-managed controlled vocabulary. Seeded values: 'Example Reference Lab', 'Laboratory Corporation of America'. Unknown values trigger validation error directing Lab Director to submit a sequencing lab addition request via the portal
 """)
-    date_collected: date = Field(..., description="""APGAP: 'Date Collected'. ISO 8601 format (YYYY-MM-DD). Validation: flag if >5 years in past; reject if future date.
+    date_collected: date = Field(..., description="""Validation: flag if >5 years in past; reject if future date.
 """)
-    date_sequenced: date = Field(..., description="""APGAP: 'Date Sequenced'. ISO 8601 format. Validation: must not be future date; must not precede date_collected.
+    date_sequenced: date = Field(..., description="""Validation: must not be future date; must not precede date_collected.
 """)
-    collection_facility: str = Field(..., description="""APGAP: 'Collection facility'. Institution or facility where the sample was collected. Match defined allowable entries.
+    collection_facility: str = Field(..., description="""the sample was collected. Match defined allowable entries.
 """)
-    purpose_for_collection: List[str] = Field(default_factory=list, description="""APGAP: 'Purpose for collection and sequencing'. Multiple selections permitted. Match defined allowable entries.
+    purpose_for_collection: List[str] = Field(default_factory=list, description="""Multiple selections permitted. Match defined allowable entries.
 """)
     collection_location_country: str = Field(..., description="""Country of sample collection. Free text — no controlled vocabulary enforced at Tier 1 or Tier 2. At Tier 3 (SUBMITTABLE), must match an INSDC-approved country name for BioSample submission via TOSTADAS (e.g. \"USA\" not \"United States\", \"United Kingdom\" not \"UK\"). INSDC country list: https://www.insdc.org/submitting-standards/country-qualifier-vocabulary/ portal_to_tostadas.py validates against the INSDC list before constructing the geo_loc_name field (format: Country:State:City).""")
     collection_location_state: Optional[str] = Field(None, description="""Sub-national administrative region of sample collection. Accepts any equivalent administrative division regardless of country: US state, Canadian province, Mexican estado, Australian state, Brazilian estado, UK county/nation, German Bundesland, Japanese prefecture, etc. Free text — not a controlled vocabulary since administrative divisions vary by country. Used in NCBI BioSample geo_loc_name construction (Country:State:City).""")
@@ -1523,15 +1554,15 @@ class WildlifeSample(Sample):
     date_sequence_uploaded: Optional[date] = Field(None, description="""Date consensus genome uploaded to JACKPOT. Rockefeller target: ≤10 days from date_received_lab.""")
     date_lineage_assigned: Optional[date] = Field(None, description="""Date lineage or sequence type assignment completed (Pangolin, MLST, cgMLST). Rockefeller target: ≤48 hours from date_sequence_uploaded.""")
     date_phenotype_reported: Optional[date] = Field(None, description="""Date phenotypic threat assessment (AMR profile, virulence) reported. Rockefeller target: ≤21 days from date_sequence_uploaded.""")
-    associated_sample_ids: Optional[List[str]] = Field(default_factory=list, description="""APGAP: 'IDs of any associated samples'. Present in ALL sample type spreadsheets. Links sequences from the same investigation (e.g. pet and owner, food product and patient, vector and host). Validation: each ID should match an existing sample_id in the system. Flag (not reject) if linked sample not yet uploaded — may arrive later. Bidirectional linkage confirmed at resolution. Stored as directed pairs in the sample_associations table.
+    associated_sample_ids: Optional[List[str]] = Field(default_factory=list, description="""type spreadsheets. Links sequences from the same investigation (e.g. pet and owner, food product and patient, vector and host). Validation: each ID should match an existing sample_id in the system. Flag (not reject) if linked sample not yet uploaded — may arrive later. Bidirectional linkage confirmed at resolution. Stored as directed pairs in the sample_associations table.
 """)
-    ct_value: Optional[float] = Field(None, description="""APGAP: 'Ct value'. PCR cycle threshold value. Validation: numeric, range [0, 50].
+    ct_value: Optional[float] = Field(None, description="""Validation: numeric, range [0, 50].
 """)
-    other_testing_performed: Optional[List[str]] = Field(default_factory=list, description="""APGAP: 'Other Testing Performed'. Multiple entries permitted. Match defined allowable entries. Flag error if 'none' entered alongside any other value.
+    other_testing_performed: Optional[List[str]] = Field(default_factory=list, description="""Match defined allowable entries. Flag error if 'none' entered alongside any other value.
 """)
-    lab_of_other_testing: Optional[List[str]] = Field(default_factory=list, description="""APGAP: 'Lab of Other Testing'. Conditional: required if other_testing_performed is not empty or 'none'.
+    lab_of_other_testing: Optional[List[str]] = Field(default_factory=list, description="""other_testing_performed is not empty or 'none'.
 """)
-    intermediary_clinical_lab: Optional[str] = Field(None, description="""APGAP: 'Intermediary clinical lab name'. Optional. Match defined allowable entries.
+    intermediary_clinical_lab: Optional[str] = Field(None, description="""Match defined allowable entries.
 """)
     assembly_method: Optional[str] = Field(None, description="""e.g. SPAdes 3.15, IVAR 1.4, Flye 2.9, Unicycler 0.5""")
     coverage_depth: Optional[float] = Field(None, description="""Mean sequencing depth (X)""")
@@ -1570,10 +1601,10 @@ class WildlifeSample(Sample):
     pii_scan_status: PIIScanStatusEnum = Field(...)
     ingest_method: IngestMethodEnum = Field(...)
     sharing_level: SharingLevelEnum = Field(...)
-    pi_name: Optional[str] = Field(None, description="""APGAP: 'PI name'. Defaults to Lab Director. Validation: must match existing user in the platform.
+    pi_name: Optional[str] = Field(None, description="""Validation: must match existing user in the platform.
 """)
-    grant_number: Optional[str] = Field(None, description="""APGAP: 'Grant number'. Alphanumeric.""")
-    contact_other: Optional[str] = Field(None, description="""APGAP: 'Contact (if other than user uploading data)'. Email format. Phase 2: allow non-user contacts.
+    grant_number: Optional[str] = Field(None)
+    contact_other: Optional[str] = Field(None, description="""Email format. Phase 2: allow non-user contacts.
 """)
     comments: Optional[str] = Field(None, description="""Free text comments""")
 
@@ -1581,30 +1612,29 @@ class WildlifeSample(Sample):
 
 class CompanionAnimalSample(Sample):
     """
-    Sample from a companion (pet) animal host. Fields from APGAP Companion_animal_host.xlsx.
+    Sample from a companion (pet) animal host.
 
     """
-    host_species: str = Field(..., description="""APGAP: 'Host species'. Genus and species. Examples: felis catus, canis familiaris.
+    host_species: str = Field(..., description="""Examples: felis catus, canis familiaris.
 """)
     companion_subject_id: Optional[str] = Field(None, description="""Optional alphanumeric field identifier for the animal""")
-    location_type: Optional[CompanionAnimalLocationEnum] = Field(None, description="""APGAP: 'Location type'. Animal's setting.
-""")
+    location_type: Optional[CompanionAnimalLocationEnum] = Field(None)
     biospecimen_type: BiospecimenTypeEnum = Field(...)
-    vaccine_status_against_pathogen: Optional[VaccineStatusEnum] = Field(None, description="""APGAP: 'Vaccine status against pathogen'""")
+    vaccine_status_against_pathogen: Optional[VaccineStatusEnum] = Field(None)
     host_disease: List[str] = Field(default_factory=list)
     symptomatic: Optional[SymptomaticEnum] = Field(None, description="""Whether animal was symptomatic at time of collection""")
     isolation_source: Optional[str] = Field(None)
     isolate: Optional[str] = Field(None)
-    sample_id: str = Field(..., description="""Unique alphanumeric identifier for this sample. Must not already be in use in the system. APGAP: 'Sample ID'. Validation: alphanumeric, unique. Portal mints persistent URI at ingest: https://data.jackpot.health/samples/{sample_id}
+    sample_id: str = Field(..., description="""Unique alphanumeric identifier for this sample. Must not already be in use in the system. Portal mints persistent URI at ingest: https://data.jackpot.health/samples/{sample_id}
 """)
     jackpot_uri: Optional[str] = Field(None, description="""Persistent URI minted at ingest for FAIR Findability (F1). Format: https://data.jackpot.health/samples/{sample_id} Stable before NCBI/GISAID accessions are assigned.
 """)
     lab: str = Field(...)
     project: str = Field(...)
     owner: str = Field(..., description="""Email of the researcher who uploaded the sample""")
-    source_type: SourceTypeEnum = Field(..., description="""APGAP: 'Source type'. Determines which host-specific subclass is required. Further required fields depend on this value. Validation: match defined allowable entries.
+    source_type: SourceTypeEnum = Field(..., description="""is required. Further required fields depend on this value. Validation: match defined allowable entries.
 """)
-    organism_name: OrganismNameEnum = Field(..., description="""NCBI organism name. Controlled vocabulary derived from the host jurisdiction's reportable communicable diseases list, plus Coccidioides spp. (Valley fever) and metagenome for metagenomic samples. Platform Admins may add new values when novel pathogens emerge. Researchers may request additions via the portal. Use 'metagenome' when no specific organism is targeted. APGAP: 'Pathogen/organism name (or metagenomic)'.
+    organism_name: OrganismNameEnum = Field(..., description="""NCBI organism name. Controlled vocabulary derived from the host jurisdiction's reportable communicable diseases list, plus Coccidioides spp. (Valley fever) and metagenome for metagenomic samples. Platform Admins may add new values when novel pathogens emerge. Researchers may request additions via the portal. Use 'metagenome' when no specific organism is targeted.
 """)
     strain: Optional[str] = Field(None, description="""Pathogen strain designation. Also used for: Influenza subtype (H1N1, H3N2), Pango lineage pre-Pangolin-pipeline, rabies variant, poliovirus type (wild vs. vaccine-derived).
 """)
@@ -1615,27 +1645,27 @@ class CompanionAnimalSample(Sample):
     genbank_accession: Optional[str] = Field(None, description="""GenBank accession (e.g. OQ123456)""")
     gisaid_accession: Optional[str] = Field(None, description="""GISAID EPI_ accession (e.g. EPI_ISL_1234567)""")
     bioproject_accession: Optional[str] = Field(None, description="""NCBI BioProject accession (e.g. PRJNA123456)""")
-    type_of_experiment: ExperimentTypeEnum = Field(..., description="""APGAP: 'Type of experiment'. Validation: match defined allowable entries (one only).
+    type_of_experiment: ExperimentTypeEnum = Field(..., description="""Validation: match defined allowable entries (one only).
 """)
-    nucleic_acid_extraction_method: List[str] = Field(default_factory=list, description="""APGAP: 'Nucleic acid extraction method'. Multiple values permitted. Match defined allowable entries.
+    nucleic_acid_extraction_method: List[str] = Field(default_factory=list, description="""Multiple values permitted. Match defined allowable entries.
 """)
-    library_preparation_method: str = Field(..., description="""APGAP: 'Nucleic acid library preparation method'. Match defined allowable entries (one only).
+    library_preparation_method: str = Field(..., description="""Match defined allowable entries (one only).
 """)
-    sequencing_protocol: str = Field(..., description="""APGAP: 'Sequencing protocol'. URL to protocol document. Validation: URL format preferred (e.g. https://www.protocols.io/view/artic-v4-1).
+    sequencing_protocol: str = Field(..., description="""Validation: URL format preferred (e.g. https://www.protocols.io/view/artic-v4-1).
 """)
-    sequencing_platform: SequencingPlatformEnum = Field(..., description="""APGAP: 'Sequencing instrument make and model'. Validation: match defined allowable entries (one only).
+    sequencing_platform: SequencingPlatformEnum = Field(..., description="""Validation: match defined allowable entries (one only).
 """)
     sequencing_instrument: Optional[str] = Field(None, description="""Specific instrument model. Examples: NextSeq 2000, MinION, Sequel IIe, Ion S5.
 """)
-    sequencing_lab: str = Field(..., description="""APGAP: 'Sequencing lab (originating lab)'. The lab that performed the sequencing. NOT a static enum — validated at ingest against the sequencing_labs database table, which is a Platform Admin-managed controlled vocabulary. Seeded values: 'Sonora Quest Laboratories', 'Laboratory Corporation of America'. Registered JACKPOT Labs are auto-added (APGAP backlog #42). Unknown values trigger validation error directing Lab Director to submit a sequencing lab addition request via the portal (APGAP backlog #7).
+    sequencing_lab: str = Field(..., description="""performed the sequencing. NOT a static enum — validated at ingest against the sequencing_labs database table, which is a Platform Admin-managed controlled vocabulary. Seeded values: 'Example Reference Lab', 'Laboratory Corporation of America'. Unknown values trigger validation error directing Lab Director to submit a sequencing lab addition request via the portal
 """)
-    date_collected: date = Field(..., description="""APGAP: 'Date Collected'. ISO 8601 format (YYYY-MM-DD). Validation: flag if >5 years in past; reject if future date.
+    date_collected: date = Field(..., description="""Validation: flag if >5 years in past; reject if future date.
 """)
-    date_sequenced: date = Field(..., description="""APGAP: 'Date Sequenced'. ISO 8601 format. Validation: must not be future date; must not precede date_collected.
+    date_sequenced: date = Field(..., description="""Validation: must not be future date; must not precede date_collected.
 """)
-    collection_facility: str = Field(..., description="""APGAP: 'Collection facility'. Institution or facility where the sample was collected. Match defined allowable entries.
+    collection_facility: str = Field(..., description="""the sample was collected. Match defined allowable entries.
 """)
-    purpose_for_collection: List[str] = Field(default_factory=list, description="""APGAP: 'Purpose for collection and sequencing'. Multiple selections permitted. Match defined allowable entries.
+    purpose_for_collection: List[str] = Field(default_factory=list, description="""Multiple selections permitted. Match defined allowable entries.
 """)
     collection_location_country: str = Field(..., description="""Country of sample collection. Free text — no controlled vocabulary enforced at Tier 1 or Tier 2. At Tier 3 (SUBMITTABLE), must match an INSDC-approved country name for BioSample submission via TOSTADAS (e.g. \"USA\" not \"United States\", \"United Kingdom\" not \"UK\"). INSDC country list: https://www.insdc.org/submitting-standards/country-qualifier-vocabulary/ portal_to_tostadas.py validates against the INSDC list before constructing the geo_loc_name field (format: Country:State:City).""")
     collection_location_state: Optional[str] = Field(None, description="""Sub-national administrative region of sample collection. Accepts any equivalent administrative division regardless of country: US state, Canadian province, Mexican estado, Australian state, Brazilian estado, UK county/nation, German Bundesland, Japanese prefecture, etc. Free text — not a controlled vocabulary since administrative divisions vary by country. Used in NCBI BioSample geo_loc_name construction (Country:State:City).""")
@@ -1679,15 +1709,15 @@ class CompanionAnimalSample(Sample):
     date_sequence_uploaded: Optional[date] = Field(None, description="""Date consensus genome uploaded to JACKPOT. Rockefeller target: ≤10 days from date_received_lab.""")
     date_lineage_assigned: Optional[date] = Field(None, description="""Date lineage or sequence type assignment completed (Pangolin, MLST, cgMLST). Rockefeller target: ≤48 hours from date_sequence_uploaded.""")
     date_phenotype_reported: Optional[date] = Field(None, description="""Date phenotypic threat assessment (AMR profile, virulence) reported. Rockefeller target: ≤21 days from date_sequence_uploaded.""")
-    associated_sample_ids: Optional[List[str]] = Field(default_factory=list, description="""APGAP: 'IDs of any associated samples'. Present in ALL sample type spreadsheets. Links sequences from the same investigation (e.g. pet and owner, food product and patient, vector and host). Validation: each ID should match an existing sample_id in the system. Flag (not reject) if linked sample not yet uploaded — may arrive later. Bidirectional linkage confirmed at resolution. Stored as directed pairs in the sample_associations table.
+    associated_sample_ids: Optional[List[str]] = Field(default_factory=list, description="""type spreadsheets. Links sequences from the same investigation (e.g. pet and owner, food product and patient, vector and host). Validation: each ID should match an existing sample_id in the system. Flag (not reject) if linked sample not yet uploaded — may arrive later. Bidirectional linkage confirmed at resolution. Stored as directed pairs in the sample_associations table.
 """)
-    ct_value: Optional[float] = Field(None, description="""APGAP: 'Ct value'. PCR cycle threshold value. Validation: numeric, range [0, 50].
+    ct_value: Optional[float] = Field(None, description="""Validation: numeric, range [0, 50].
 """)
-    other_testing_performed: Optional[List[str]] = Field(default_factory=list, description="""APGAP: 'Other Testing Performed'. Multiple entries permitted. Match defined allowable entries. Flag error if 'none' entered alongside any other value.
+    other_testing_performed: Optional[List[str]] = Field(default_factory=list, description="""Match defined allowable entries. Flag error if 'none' entered alongside any other value.
 """)
-    lab_of_other_testing: Optional[List[str]] = Field(default_factory=list, description="""APGAP: 'Lab of Other Testing'. Conditional: required if other_testing_performed is not empty or 'none'.
+    lab_of_other_testing: Optional[List[str]] = Field(default_factory=list, description="""other_testing_performed is not empty or 'none'.
 """)
-    intermediary_clinical_lab: Optional[str] = Field(None, description="""APGAP: 'Intermediary clinical lab name'. Optional. Match defined allowable entries.
+    intermediary_clinical_lab: Optional[str] = Field(None, description="""Match defined allowable entries.
 """)
     assembly_method: Optional[str] = Field(None, description="""e.g. SPAdes 3.15, IVAR 1.4, Flye 2.9, Unicycler 0.5""")
     coverage_depth: Optional[float] = Field(None, description="""Mean sequencing depth (X)""")
@@ -1726,10 +1756,10 @@ class CompanionAnimalSample(Sample):
     pii_scan_status: PIIScanStatusEnum = Field(...)
     ingest_method: IngestMethodEnum = Field(...)
     sharing_level: SharingLevelEnum = Field(...)
-    pi_name: Optional[str] = Field(None, description="""APGAP: 'PI name'. Defaults to Lab Director. Validation: must match existing user in the platform.
+    pi_name: Optional[str] = Field(None, description="""Validation: must match existing user in the platform.
 """)
-    grant_number: Optional[str] = Field(None, description="""APGAP: 'Grant number'. Alphanumeric.""")
-    contact_other: Optional[str] = Field(None, description="""APGAP: 'Contact (if other than user uploading data)'. Email format. Phase 2: allow non-user contacts.
+    grant_number: Optional[str] = Field(None)
+    contact_other: Optional[str] = Field(None, description="""Email format. Phase 2: allow non-user contacts.
 """)
     comments: Optional[str] = Field(None, description="""Free text comments""")
 
@@ -1737,10 +1767,10 @@ class CompanionAnimalSample(Sample):
 
 class LivestockSample(Sample):
     """
-    Sample from a livestock or agricultural animal host. Fields from APGAP Livestock_Ag_animal_host.xlsx.
+    Sample from a livestock or agricultural animal host.
 
     """
-    host_species: str = Field(..., description="""APGAP: 'Host species'. Scientific name of livestock species. Examples: Gallus gallus domesticus, Sus domesticus, Lama glama.
+    host_species: str = Field(..., description="""Examples: Gallus gallus domesticus, Sus domesticus, Lama glama.
 """)
     livestock_subject_id: Optional[str] = Field(None, description="""Optional field identifier for the individual animal""")
     biospecimen_type: BiospecimenTypeEnum = Field(...)
@@ -1751,16 +1781,16 @@ class LivestockSample(Sample):
     host_disease: List[str] = Field(default_factory=list)
     isolation_source: Optional[str] = Field(None)
     isolate: Optional[str] = Field(None)
-    sample_id: str = Field(..., description="""Unique alphanumeric identifier for this sample. Must not already be in use in the system. APGAP: 'Sample ID'. Validation: alphanumeric, unique. Portal mints persistent URI at ingest: https://data.jackpot.health/samples/{sample_id}
+    sample_id: str = Field(..., description="""Unique alphanumeric identifier for this sample. Must not already be in use in the system. Portal mints persistent URI at ingest: https://data.jackpot.health/samples/{sample_id}
 """)
     jackpot_uri: Optional[str] = Field(None, description="""Persistent URI minted at ingest for FAIR Findability (F1). Format: https://data.jackpot.health/samples/{sample_id} Stable before NCBI/GISAID accessions are assigned.
 """)
     lab: str = Field(...)
     project: str = Field(...)
     owner: str = Field(..., description="""Email of the researcher who uploaded the sample""")
-    source_type: SourceTypeEnum = Field(..., description="""APGAP: 'Source type'. Determines which host-specific subclass is required. Further required fields depend on this value. Validation: match defined allowable entries.
+    source_type: SourceTypeEnum = Field(..., description="""is required. Further required fields depend on this value. Validation: match defined allowable entries.
 """)
-    organism_name: OrganismNameEnum = Field(..., description="""NCBI organism name. Controlled vocabulary derived from the host jurisdiction's reportable communicable diseases list, plus Coccidioides spp. (Valley fever) and metagenome for metagenomic samples. Platform Admins may add new values when novel pathogens emerge. Researchers may request additions via the portal. Use 'metagenome' when no specific organism is targeted. APGAP: 'Pathogen/organism name (or metagenomic)'.
+    organism_name: OrganismNameEnum = Field(..., description="""NCBI organism name. Controlled vocabulary derived from the host jurisdiction's reportable communicable diseases list, plus Coccidioides spp. (Valley fever) and metagenome for metagenomic samples. Platform Admins may add new values when novel pathogens emerge. Researchers may request additions via the portal. Use 'metagenome' when no specific organism is targeted.
 """)
     strain: Optional[str] = Field(None, description="""Pathogen strain designation. Also used for: Influenza subtype (H1N1, H3N2), Pango lineage pre-Pangolin-pipeline, rabies variant, poliovirus type (wild vs. vaccine-derived).
 """)
@@ -1771,27 +1801,27 @@ class LivestockSample(Sample):
     genbank_accession: Optional[str] = Field(None, description="""GenBank accession (e.g. OQ123456)""")
     gisaid_accession: Optional[str] = Field(None, description="""GISAID EPI_ accession (e.g. EPI_ISL_1234567)""")
     bioproject_accession: Optional[str] = Field(None, description="""NCBI BioProject accession (e.g. PRJNA123456)""")
-    type_of_experiment: ExperimentTypeEnum = Field(..., description="""APGAP: 'Type of experiment'. Validation: match defined allowable entries (one only).
+    type_of_experiment: ExperimentTypeEnum = Field(..., description="""Validation: match defined allowable entries (one only).
 """)
-    nucleic_acid_extraction_method: List[str] = Field(default_factory=list, description="""APGAP: 'Nucleic acid extraction method'. Multiple values permitted. Match defined allowable entries.
+    nucleic_acid_extraction_method: List[str] = Field(default_factory=list, description="""Multiple values permitted. Match defined allowable entries.
 """)
-    library_preparation_method: str = Field(..., description="""APGAP: 'Nucleic acid library preparation method'. Match defined allowable entries (one only).
+    library_preparation_method: str = Field(..., description="""Match defined allowable entries (one only).
 """)
-    sequencing_protocol: str = Field(..., description="""APGAP: 'Sequencing protocol'. URL to protocol document. Validation: URL format preferred (e.g. https://www.protocols.io/view/artic-v4-1).
+    sequencing_protocol: str = Field(..., description="""Validation: URL format preferred (e.g. https://www.protocols.io/view/artic-v4-1).
 """)
-    sequencing_platform: SequencingPlatformEnum = Field(..., description="""APGAP: 'Sequencing instrument make and model'. Validation: match defined allowable entries (one only).
+    sequencing_platform: SequencingPlatformEnum = Field(..., description="""Validation: match defined allowable entries (one only).
 """)
     sequencing_instrument: Optional[str] = Field(None, description="""Specific instrument model. Examples: NextSeq 2000, MinION, Sequel IIe, Ion S5.
 """)
-    sequencing_lab: str = Field(..., description="""APGAP: 'Sequencing lab (originating lab)'. The lab that performed the sequencing. NOT a static enum — validated at ingest against the sequencing_labs database table, which is a Platform Admin-managed controlled vocabulary. Seeded values: 'Sonora Quest Laboratories', 'Laboratory Corporation of America'. Registered JACKPOT Labs are auto-added (APGAP backlog #42). Unknown values trigger validation error directing Lab Director to submit a sequencing lab addition request via the portal (APGAP backlog #7).
+    sequencing_lab: str = Field(..., description="""performed the sequencing. NOT a static enum — validated at ingest against the sequencing_labs database table, which is a Platform Admin-managed controlled vocabulary. Seeded values: 'Example Reference Lab', 'Laboratory Corporation of America'. Unknown values trigger validation error directing Lab Director to submit a sequencing lab addition request via the portal
 """)
-    date_collected: date = Field(..., description="""APGAP: 'Date Collected'. ISO 8601 format (YYYY-MM-DD). Validation: flag if >5 years in past; reject if future date.
+    date_collected: date = Field(..., description="""Validation: flag if >5 years in past; reject if future date.
 """)
-    date_sequenced: date = Field(..., description="""APGAP: 'Date Sequenced'. ISO 8601 format. Validation: must not be future date; must not precede date_collected.
+    date_sequenced: date = Field(..., description="""Validation: must not be future date; must not precede date_collected.
 """)
-    collection_facility: str = Field(..., description="""APGAP: 'Collection facility'. Institution or facility where the sample was collected. Match defined allowable entries.
+    collection_facility: str = Field(..., description="""the sample was collected. Match defined allowable entries.
 """)
-    purpose_for_collection: List[str] = Field(default_factory=list, description="""APGAP: 'Purpose for collection and sequencing'. Multiple selections permitted. Match defined allowable entries.
+    purpose_for_collection: List[str] = Field(default_factory=list, description="""Multiple selections permitted. Match defined allowable entries.
 """)
     collection_location_country: str = Field(..., description="""Country of sample collection. Free text — no controlled vocabulary enforced at Tier 1 or Tier 2. At Tier 3 (SUBMITTABLE), must match an INSDC-approved country name for BioSample submission via TOSTADAS (e.g. \"USA\" not \"United States\", \"United Kingdom\" not \"UK\"). INSDC country list: https://www.insdc.org/submitting-standards/country-qualifier-vocabulary/ portal_to_tostadas.py validates against the INSDC list before constructing the geo_loc_name field (format: Country:State:City).""")
     collection_location_state: Optional[str] = Field(None, description="""Sub-national administrative region of sample collection. Accepts any equivalent administrative division regardless of country: US state, Canadian province, Mexican estado, Australian state, Brazilian estado, UK county/nation, German Bundesland, Japanese prefecture, etc. Free text — not a controlled vocabulary since administrative divisions vary by country. Used in NCBI BioSample geo_loc_name construction (Country:State:City).""")
@@ -1835,15 +1865,15 @@ class LivestockSample(Sample):
     date_sequence_uploaded: Optional[date] = Field(None, description="""Date consensus genome uploaded to JACKPOT. Rockefeller target: ≤10 days from date_received_lab.""")
     date_lineage_assigned: Optional[date] = Field(None, description="""Date lineage or sequence type assignment completed (Pangolin, MLST, cgMLST). Rockefeller target: ≤48 hours from date_sequence_uploaded.""")
     date_phenotype_reported: Optional[date] = Field(None, description="""Date phenotypic threat assessment (AMR profile, virulence) reported. Rockefeller target: ≤21 days from date_sequence_uploaded.""")
-    associated_sample_ids: Optional[List[str]] = Field(default_factory=list, description="""APGAP: 'IDs of any associated samples'. Present in ALL sample type spreadsheets. Links sequences from the same investigation (e.g. pet and owner, food product and patient, vector and host). Validation: each ID should match an existing sample_id in the system. Flag (not reject) if linked sample not yet uploaded — may arrive later. Bidirectional linkage confirmed at resolution. Stored as directed pairs in the sample_associations table.
+    associated_sample_ids: Optional[List[str]] = Field(default_factory=list, description="""type spreadsheets. Links sequences from the same investigation (e.g. pet and owner, food product and patient, vector and host). Validation: each ID should match an existing sample_id in the system. Flag (not reject) if linked sample not yet uploaded — may arrive later. Bidirectional linkage confirmed at resolution. Stored as directed pairs in the sample_associations table.
 """)
-    ct_value: Optional[float] = Field(None, description="""APGAP: 'Ct value'. PCR cycle threshold value. Validation: numeric, range [0, 50].
+    ct_value: Optional[float] = Field(None, description="""Validation: numeric, range [0, 50].
 """)
-    other_testing_performed: Optional[List[str]] = Field(default_factory=list, description="""APGAP: 'Other Testing Performed'. Multiple entries permitted. Match defined allowable entries. Flag error if 'none' entered alongside any other value.
+    other_testing_performed: Optional[List[str]] = Field(default_factory=list, description="""Match defined allowable entries. Flag error if 'none' entered alongside any other value.
 """)
-    lab_of_other_testing: Optional[List[str]] = Field(default_factory=list, description="""APGAP: 'Lab of Other Testing'. Conditional: required if other_testing_performed is not empty or 'none'.
+    lab_of_other_testing: Optional[List[str]] = Field(default_factory=list, description="""other_testing_performed is not empty or 'none'.
 """)
-    intermediary_clinical_lab: Optional[str] = Field(None, description="""APGAP: 'Intermediary clinical lab name'. Optional. Match defined allowable entries.
+    intermediary_clinical_lab: Optional[str] = Field(None, description="""Match defined allowable entries.
 """)
     assembly_method: Optional[str] = Field(None, description="""e.g. SPAdes 3.15, IVAR 1.4, Flye 2.9, Unicycler 0.5""")
     coverage_depth: Optional[float] = Field(None, description="""Mean sequencing depth (X)""")
@@ -1882,10 +1912,10 @@ class LivestockSample(Sample):
     pii_scan_status: PIIScanStatusEnum = Field(...)
     ingest_method: IngestMethodEnum = Field(...)
     sharing_level: SharingLevelEnum = Field(...)
-    pi_name: Optional[str] = Field(None, description="""APGAP: 'PI name'. Defaults to Lab Director. Validation: must match existing user in the platform.
+    pi_name: Optional[str] = Field(None, description="""Validation: must match existing user in the platform.
 """)
-    grant_number: Optional[str] = Field(None, description="""APGAP: 'Grant number'. Alphanumeric.""")
-    contact_other: Optional[str] = Field(None, description="""APGAP: 'Contact (if other than user uploading data)'. Email format. Phase 2: allow non-user contacts.
+    grant_number: Optional[str] = Field(None)
+    contact_other: Optional[str] = Field(None, description="""Email format. Phase 2: allow non-user contacts.
 """)
     comments: Optional[str] = Field(None, description="""Free text comments""")
 
@@ -1893,10 +1923,10 @@ class LivestockSample(Sample):
 
 class VectorSample(Sample):
     """
-    Sample from a disease vector (arthropod). Fields from APGAP vectors.xlsx.
+    Sample from a disease vector (arthropod).
 
     """
-    vector_species: str = Field(..., description="""APGAP: 'Vector species'. Scientific name. Examples: Aedes aegypti, Culex tarsalis, Rhipicephalus sanguineus, Dermacentor andersoni.
+    vector_species: str = Field(..., description="""Examples: Aedes aegypti, Culex tarsalis, Rhipicephalus sanguineus, Dermacentor andersoni.
 """)
     vector_host_species: Optional[str] = Field(None, description="""Host animal the vector was collected from, if known""")
     biospecimen_type: VectorBiospecimenTypeEnum = Field(...)
@@ -1904,20 +1934,20 @@ class VectorSample(Sample):
 """)
     pool_size_max: Optional[int] = Field(None, description="""Maximum number of individual arthropods in this pool. For an exact count, set pool_size_min = pool_size_max. Required when biospecimen_type = pooled_homogenate.
 """)
-    sample_id: str = Field(..., description="""Unique alphanumeric identifier for this sample. Must not already be in use in the system. APGAP: 'Sample ID'. Validation: alphanumeric, unique. Portal mints persistent URI at ingest: https://data.jackpot.health/samples/{sample_id}
+    sample_id: str = Field(..., description="""Unique alphanumeric identifier for this sample. Must not already be in use in the system. Portal mints persistent URI at ingest: https://data.jackpot.health/samples/{sample_id}
 """)
     jackpot_uri: Optional[str] = Field(None, description="""Persistent URI minted at ingest for FAIR Findability (F1). Format: https://data.jackpot.health/samples/{sample_id} Stable before NCBI/GISAID accessions are assigned.
 """)
     lab: str = Field(...)
     project: str = Field(...)
     owner: str = Field(..., description="""Email of the researcher who uploaded the sample""")
-    source_type: SourceTypeEnum = Field(..., description="""APGAP: 'Source type'. Determines which host-specific subclass is required. Further required fields depend on this value. Validation: match defined allowable entries.
+    source_type: SourceTypeEnum = Field(..., description="""is required. Further required fields depend on this value. Validation: match defined allowable entries.
 """)
-    organism_name: OrganismNameEnum = Field(..., description="""NCBI organism name. Controlled vocabulary derived from the host jurisdiction's reportable communicable diseases list, plus Coccidioides spp. (Valley fever) and metagenome for metagenomic samples. Platform Admins may add new values when novel pathogens emerge. Researchers may request additions via the portal. Use 'metagenome' when no specific organism is targeted. APGAP: 'Pathogen/organism name (or metagenomic)'.
+    organism_name: OrganismNameEnum = Field(..., description="""NCBI organism name. Controlled vocabulary derived from the host jurisdiction's reportable communicable diseases list, plus Coccidioides spp. (Valley fever) and metagenome for metagenomic samples. Platform Admins may add new values when novel pathogens emerge. Researchers may request additions via the portal. Use 'metagenome' when no specific organism is targeted.
 """)
     strain: Optional[str] = Field(None, description="""Pathogen strain designation. Also used for: Influenza subtype (H1N1, H3N2), Pango lineage pre-Pangolin-pipeline, rabies variant, poliovirus type (wild vs. vaccine-derived).
 """)
-    isolate: Optional[str] = Field(None, description="""APGAP: 'Isolate'. Identification or description of the specific individual from which the sample was obtained.
+    isolate: Optional[str] = Field(None, description="""individual from which the sample was obtained.
 """)
     serotype: Optional[str] = Field(None, description="""Serotype of the pathogen isolate. Use for: Salmonella serovar (e.g. Typhimurium, Enteritidis), Dengue serotype (DENV-1 to DENV-4), Poliovirus type (1, 2, 3), Influenza subtype (H1N1, H3N2, H5N1).
 """)
@@ -1926,27 +1956,27 @@ class VectorSample(Sample):
     genbank_accession: Optional[str] = Field(None, description="""GenBank accession (e.g. OQ123456)""")
     gisaid_accession: Optional[str] = Field(None, description="""GISAID EPI_ accession (e.g. EPI_ISL_1234567)""")
     bioproject_accession: Optional[str] = Field(None, description="""NCBI BioProject accession (e.g. PRJNA123456)""")
-    type_of_experiment: ExperimentTypeEnum = Field(..., description="""APGAP: 'Type of experiment'. Validation: match defined allowable entries (one only).
+    type_of_experiment: ExperimentTypeEnum = Field(..., description="""Validation: match defined allowable entries (one only).
 """)
-    nucleic_acid_extraction_method: List[str] = Field(default_factory=list, description="""APGAP: 'Nucleic acid extraction method'. Multiple values permitted. Match defined allowable entries.
+    nucleic_acid_extraction_method: List[str] = Field(default_factory=list, description="""Multiple values permitted. Match defined allowable entries.
 """)
-    library_preparation_method: str = Field(..., description="""APGAP: 'Nucleic acid library preparation method'. Match defined allowable entries (one only).
+    library_preparation_method: str = Field(..., description="""Match defined allowable entries (one only).
 """)
-    sequencing_protocol: str = Field(..., description="""APGAP: 'Sequencing protocol'. URL to protocol document. Validation: URL format preferred (e.g. https://www.protocols.io/view/artic-v4-1).
+    sequencing_protocol: str = Field(..., description="""Validation: URL format preferred (e.g. https://www.protocols.io/view/artic-v4-1).
 """)
-    sequencing_platform: SequencingPlatformEnum = Field(..., description="""APGAP: 'Sequencing instrument make and model'. Validation: match defined allowable entries (one only).
+    sequencing_platform: SequencingPlatformEnum = Field(..., description="""Validation: match defined allowable entries (one only).
 """)
     sequencing_instrument: Optional[str] = Field(None, description="""Specific instrument model. Examples: NextSeq 2000, MinION, Sequel IIe, Ion S5.
 """)
-    sequencing_lab: str = Field(..., description="""APGAP: 'Sequencing lab (originating lab)'. The lab that performed the sequencing. NOT a static enum — validated at ingest against the sequencing_labs database table, which is a Platform Admin-managed controlled vocabulary. Seeded values: 'Sonora Quest Laboratories', 'Laboratory Corporation of America'. Registered JACKPOT Labs are auto-added (APGAP backlog #42). Unknown values trigger validation error directing Lab Director to submit a sequencing lab addition request via the portal (APGAP backlog #7).
+    sequencing_lab: str = Field(..., description="""performed the sequencing. NOT a static enum — validated at ingest against the sequencing_labs database table, which is a Platform Admin-managed controlled vocabulary. Seeded values: 'Example Reference Lab', 'Laboratory Corporation of America'. Unknown values trigger validation error directing Lab Director to submit a sequencing lab addition request via the portal
 """)
-    date_collected: date = Field(..., description="""APGAP: 'Date Collected'. ISO 8601 format (YYYY-MM-DD). Validation: flag if >5 years in past; reject if future date.
+    date_collected: date = Field(..., description="""Validation: flag if >5 years in past; reject if future date.
 """)
-    date_sequenced: date = Field(..., description="""APGAP: 'Date Sequenced'. ISO 8601 format. Validation: must not be future date; must not precede date_collected.
+    date_sequenced: date = Field(..., description="""Validation: must not be future date; must not precede date_collected.
 """)
-    collection_facility: str = Field(..., description="""APGAP: 'Collection facility'. Institution or facility where the sample was collected. Match defined allowable entries.
+    collection_facility: str = Field(..., description="""the sample was collected. Match defined allowable entries.
 """)
-    purpose_for_collection: List[str] = Field(default_factory=list, description="""APGAP: 'Purpose for collection and sequencing'. Multiple selections permitted. Match defined allowable entries.
+    purpose_for_collection: List[str] = Field(default_factory=list, description="""Multiple selections permitted. Match defined allowable entries.
 """)
     collection_location_country: str = Field(..., description="""Country of sample collection. Free text — no controlled vocabulary enforced at Tier 1 or Tier 2. At Tier 3 (SUBMITTABLE), must match an INSDC-approved country name for BioSample submission via TOSTADAS (e.g. \"USA\" not \"United States\", \"United Kingdom\" not \"UK\"). INSDC country list: https://www.insdc.org/submitting-standards/country-qualifier-vocabulary/ portal_to_tostadas.py validates against the INSDC list before constructing the geo_loc_name field (format: Country:State:City).""")
     collection_location_state: Optional[str] = Field(None, description="""Sub-national administrative region of sample collection. Accepts any equivalent administrative division regardless of country: US state, Canadian province, Mexican estado, Australian state, Brazilian estado, UK county/nation, German Bundesland, Japanese prefecture, etc. Free text — not a controlled vocabulary since administrative divisions vary by country. Used in NCBI BioSample geo_loc_name construction (Country:State:City).""")
@@ -1990,15 +2020,15 @@ class VectorSample(Sample):
     date_sequence_uploaded: Optional[date] = Field(None, description="""Date consensus genome uploaded to JACKPOT. Rockefeller target: ≤10 days from date_received_lab.""")
     date_lineage_assigned: Optional[date] = Field(None, description="""Date lineage or sequence type assignment completed (Pangolin, MLST, cgMLST). Rockefeller target: ≤48 hours from date_sequence_uploaded.""")
     date_phenotype_reported: Optional[date] = Field(None, description="""Date phenotypic threat assessment (AMR profile, virulence) reported. Rockefeller target: ≤21 days from date_sequence_uploaded.""")
-    associated_sample_ids: Optional[List[str]] = Field(default_factory=list, description="""APGAP: 'IDs of any associated samples'. Present in ALL sample type spreadsheets. Links sequences from the same investigation (e.g. pet and owner, food product and patient, vector and host). Validation: each ID should match an existing sample_id in the system. Flag (not reject) if linked sample not yet uploaded — may arrive later. Bidirectional linkage confirmed at resolution. Stored as directed pairs in the sample_associations table.
+    associated_sample_ids: Optional[List[str]] = Field(default_factory=list, description="""type spreadsheets. Links sequences from the same investigation (e.g. pet and owner, food product and patient, vector and host). Validation: each ID should match an existing sample_id in the system. Flag (not reject) if linked sample not yet uploaded — may arrive later. Bidirectional linkage confirmed at resolution. Stored as directed pairs in the sample_associations table.
 """)
-    ct_value: Optional[float] = Field(None, description="""APGAP: 'Ct value'. PCR cycle threshold value. Validation: numeric, range [0, 50].
+    ct_value: Optional[float] = Field(None, description="""Validation: numeric, range [0, 50].
 """)
-    other_testing_performed: Optional[List[str]] = Field(default_factory=list, description="""APGAP: 'Other Testing Performed'. Multiple entries permitted. Match defined allowable entries. Flag error if 'none' entered alongside any other value.
+    other_testing_performed: Optional[List[str]] = Field(default_factory=list, description="""Match defined allowable entries. Flag error if 'none' entered alongside any other value.
 """)
-    lab_of_other_testing: Optional[List[str]] = Field(default_factory=list, description="""APGAP: 'Lab of Other Testing'. Conditional: required if other_testing_performed is not empty or 'none'.
+    lab_of_other_testing: Optional[List[str]] = Field(default_factory=list, description="""other_testing_performed is not empty or 'none'.
 """)
-    intermediary_clinical_lab: Optional[str] = Field(None, description="""APGAP: 'Intermediary clinical lab name'. Optional. Match defined allowable entries.
+    intermediary_clinical_lab: Optional[str] = Field(None, description="""Match defined allowable entries.
 """)
     assembly_method: Optional[str] = Field(None, description="""e.g. SPAdes 3.15, IVAR 1.4, Flye 2.9, Unicycler 0.5""")
     coverage_depth: Optional[float] = Field(None, description="""Mean sequencing depth (X)""")
@@ -2037,10 +2067,10 @@ class VectorSample(Sample):
     pii_scan_status: PIIScanStatusEnum = Field(...)
     ingest_method: IngestMethodEnum = Field(...)
     sharing_level: SharingLevelEnum = Field(...)
-    pi_name: Optional[str] = Field(None, description="""APGAP: 'PI name'. Defaults to Lab Director. Validation: must match existing user in the platform.
+    pi_name: Optional[str] = Field(None, description="""Validation: must match existing user in the platform.
 """)
-    grant_number: Optional[str] = Field(None, description="""APGAP: 'Grant number'. Alphanumeric.""")
-    contact_other: Optional[str] = Field(None, description="""APGAP: 'Contact (if other than user uploading data)'. Email format. Phase 2: allow non-user contacts.
+    grant_number: Optional[str] = Field(None)
+    contact_other: Optional[str] = Field(None, description="""Email format. Phase 2: allow non-user contacts.
 """)
     comments: Optional[str] = Field(None, description="""Free text comments""")
 
@@ -2051,20 +2081,20 @@ class EnvironmentalSample(Sample):
     Base class for all environmental samples. Do not instantiate directly — use the specific environmental subclasses below.
 
     """
-    sample_id: str = Field(..., description="""Unique alphanumeric identifier for this sample. Must not already be in use in the system. APGAP: 'Sample ID'. Validation: alphanumeric, unique. Portal mints persistent URI at ingest: https://data.jackpot.health/samples/{sample_id}
+    sample_id: str = Field(..., description="""Unique alphanumeric identifier for this sample. Must not already be in use in the system. Portal mints persistent URI at ingest: https://data.jackpot.health/samples/{sample_id}
 """)
     jackpot_uri: Optional[str] = Field(None, description="""Persistent URI minted at ingest for FAIR Findability (F1). Format: https://data.jackpot.health/samples/{sample_id} Stable before NCBI/GISAID accessions are assigned.
 """)
     lab: str = Field(...)
     project: str = Field(...)
     owner: str = Field(..., description="""Email of the researcher who uploaded the sample""")
-    source_type: SourceTypeEnum = Field(..., description="""APGAP: 'Source type'. Determines which host-specific subclass is required. Further required fields depend on this value. Validation: match defined allowable entries.
+    source_type: SourceTypeEnum = Field(..., description="""is required. Further required fields depend on this value. Validation: match defined allowable entries.
 """)
-    organism_name: OrganismNameEnum = Field(..., description="""NCBI organism name. Controlled vocabulary derived from the host jurisdiction's reportable communicable diseases list, plus Coccidioides spp. (Valley fever) and metagenome for metagenomic samples. Platform Admins may add new values when novel pathogens emerge. Researchers may request additions via the portal. Use 'metagenome' when no specific organism is targeted. APGAP: 'Pathogen/organism name (or metagenomic)'.
+    organism_name: OrganismNameEnum = Field(..., description="""NCBI organism name. Controlled vocabulary derived from the host jurisdiction's reportable communicable diseases list, plus Coccidioides spp. (Valley fever) and metagenome for metagenomic samples. Platform Admins may add new values when novel pathogens emerge. Researchers may request additions via the portal. Use 'metagenome' when no specific organism is targeted.
 """)
     strain: Optional[str] = Field(None, description="""Pathogen strain designation. Also used for: Influenza subtype (H1N1, H3N2), Pango lineage pre-Pangolin-pipeline, rabies variant, poliovirus type (wild vs. vaccine-derived).
 """)
-    isolate: Optional[str] = Field(None, description="""APGAP: 'Isolate'. Identification or description of the specific individual from which the sample was obtained.
+    isolate: Optional[str] = Field(None, description="""individual from which the sample was obtained.
 """)
     serotype: Optional[str] = Field(None, description="""Serotype of the pathogen isolate. Use for: Salmonella serovar (e.g. Typhimurium, Enteritidis), Dengue serotype (DENV-1 to DENV-4), Poliovirus type (1, 2, 3), Influenza subtype (H1N1, H3N2, H5N1).
 """)
@@ -2073,27 +2103,27 @@ class EnvironmentalSample(Sample):
     genbank_accession: Optional[str] = Field(None, description="""GenBank accession (e.g. OQ123456)""")
     gisaid_accession: Optional[str] = Field(None, description="""GISAID EPI_ accession (e.g. EPI_ISL_1234567)""")
     bioproject_accession: Optional[str] = Field(None, description="""NCBI BioProject accession (e.g. PRJNA123456)""")
-    type_of_experiment: ExperimentTypeEnum = Field(..., description="""APGAP: 'Type of experiment'. Validation: match defined allowable entries (one only).
+    type_of_experiment: ExperimentTypeEnum = Field(..., description="""Validation: match defined allowable entries (one only).
 """)
-    nucleic_acid_extraction_method: List[str] = Field(default_factory=list, description="""APGAP: 'Nucleic acid extraction method'. Multiple values permitted. Match defined allowable entries.
+    nucleic_acid_extraction_method: List[str] = Field(default_factory=list, description="""Multiple values permitted. Match defined allowable entries.
 """)
-    library_preparation_method: str = Field(..., description="""APGAP: 'Nucleic acid library preparation method'. Match defined allowable entries (one only).
+    library_preparation_method: str = Field(..., description="""Match defined allowable entries (one only).
 """)
-    sequencing_protocol: str = Field(..., description="""APGAP: 'Sequencing protocol'. URL to protocol document. Validation: URL format preferred (e.g. https://www.protocols.io/view/artic-v4-1).
+    sequencing_protocol: str = Field(..., description="""Validation: URL format preferred (e.g. https://www.protocols.io/view/artic-v4-1).
 """)
-    sequencing_platform: SequencingPlatformEnum = Field(..., description="""APGAP: 'Sequencing instrument make and model'. Validation: match defined allowable entries (one only).
+    sequencing_platform: SequencingPlatformEnum = Field(..., description="""Validation: match defined allowable entries (one only).
 """)
     sequencing_instrument: Optional[str] = Field(None, description="""Specific instrument model. Examples: NextSeq 2000, MinION, Sequel IIe, Ion S5.
 """)
-    sequencing_lab: str = Field(..., description="""APGAP: 'Sequencing lab (originating lab)'. The lab that performed the sequencing. NOT a static enum — validated at ingest against the sequencing_labs database table, which is a Platform Admin-managed controlled vocabulary. Seeded values: 'Sonora Quest Laboratories', 'Laboratory Corporation of America'. Registered JACKPOT Labs are auto-added (APGAP backlog #42). Unknown values trigger validation error directing Lab Director to submit a sequencing lab addition request via the portal (APGAP backlog #7).
+    sequencing_lab: str = Field(..., description="""performed the sequencing. NOT a static enum — validated at ingest against the sequencing_labs database table, which is a Platform Admin-managed controlled vocabulary. Seeded values: 'Example Reference Lab', 'Laboratory Corporation of America'. Unknown values trigger validation error directing Lab Director to submit a sequencing lab addition request via the portal
 """)
-    date_collected: date = Field(..., description="""APGAP: 'Date Collected'. ISO 8601 format (YYYY-MM-DD). Validation: flag if >5 years in past; reject if future date.
+    date_collected: date = Field(..., description="""Validation: flag if >5 years in past; reject if future date.
 """)
-    date_sequenced: date = Field(..., description="""APGAP: 'Date Sequenced'. ISO 8601 format. Validation: must not be future date; must not precede date_collected.
+    date_sequenced: date = Field(..., description="""Validation: must not be future date; must not precede date_collected.
 """)
-    collection_facility: str = Field(..., description="""APGAP: 'Collection facility'. Institution or facility where the sample was collected. Match defined allowable entries.
+    collection_facility: str = Field(..., description="""the sample was collected. Match defined allowable entries.
 """)
-    purpose_for_collection: List[str] = Field(default_factory=list, description="""APGAP: 'Purpose for collection and sequencing'. Multiple selections permitted. Match defined allowable entries.
+    purpose_for_collection: List[str] = Field(default_factory=list, description="""Multiple selections permitted. Match defined allowable entries.
 """)
     collection_location_country: str = Field(..., description="""Country of sample collection. Free text — no controlled vocabulary enforced at Tier 1 or Tier 2. At Tier 3 (SUBMITTABLE), must match an INSDC-approved country name for BioSample submission via TOSTADAS (e.g. \"USA\" not \"United States\", \"United Kingdom\" not \"UK\"). INSDC country list: https://www.insdc.org/submitting-standards/country-qualifier-vocabulary/ portal_to_tostadas.py validates against the INSDC list before constructing the geo_loc_name field (format: Country:State:City).""")
     collection_location_state: Optional[str] = Field(None, description="""Sub-national administrative region of sample collection. Accepts any equivalent administrative division regardless of country: US state, Canadian province, Mexican estado, Australian state, Brazilian estado, UK county/nation, German Bundesland, Japanese prefecture, etc. Free text — not a controlled vocabulary since administrative divisions vary by country. Used in NCBI BioSample geo_loc_name construction (Country:State:City).""")
@@ -2137,15 +2167,15 @@ class EnvironmentalSample(Sample):
     date_sequence_uploaded: Optional[date] = Field(None, description="""Date consensus genome uploaded to JACKPOT. Rockefeller target: ≤10 days from date_received_lab.""")
     date_lineage_assigned: Optional[date] = Field(None, description="""Date lineage or sequence type assignment completed (Pangolin, MLST, cgMLST). Rockefeller target: ≤48 hours from date_sequence_uploaded.""")
     date_phenotype_reported: Optional[date] = Field(None, description="""Date phenotypic threat assessment (AMR profile, virulence) reported. Rockefeller target: ≤21 days from date_sequence_uploaded.""")
-    associated_sample_ids: Optional[List[str]] = Field(default_factory=list, description="""APGAP: 'IDs of any associated samples'. Present in ALL sample type spreadsheets. Links sequences from the same investigation (e.g. pet and owner, food product and patient, vector and host). Validation: each ID should match an existing sample_id in the system. Flag (not reject) if linked sample not yet uploaded — may arrive later. Bidirectional linkage confirmed at resolution. Stored as directed pairs in the sample_associations table.
+    associated_sample_ids: Optional[List[str]] = Field(default_factory=list, description="""type spreadsheets. Links sequences from the same investigation (e.g. pet and owner, food product and patient, vector and host). Validation: each ID should match an existing sample_id in the system. Flag (not reject) if linked sample not yet uploaded — may arrive later. Bidirectional linkage confirmed at resolution. Stored as directed pairs in the sample_associations table.
 """)
-    ct_value: Optional[float] = Field(None, description="""APGAP: 'Ct value'. PCR cycle threshold value. Validation: numeric, range [0, 50].
+    ct_value: Optional[float] = Field(None, description="""Validation: numeric, range [0, 50].
 """)
-    other_testing_performed: Optional[List[str]] = Field(default_factory=list, description="""APGAP: 'Other Testing Performed'. Multiple entries permitted. Match defined allowable entries. Flag error if 'none' entered alongside any other value.
+    other_testing_performed: Optional[List[str]] = Field(default_factory=list, description="""Match defined allowable entries. Flag error if 'none' entered alongside any other value.
 """)
-    lab_of_other_testing: Optional[List[str]] = Field(default_factory=list, description="""APGAP: 'Lab of Other Testing'. Conditional: required if other_testing_performed is not empty or 'none'.
+    lab_of_other_testing: Optional[List[str]] = Field(default_factory=list, description="""other_testing_performed is not empty or 'none'.
 """)
-    intermediary_clinical_lab: Optional[str] = Field(None, description="""APGAP: 'Intermediary clinical lab name'. Optional. Match defined allowable entries.
+    intermediary_clinical_lab: Optional[str] = Field(None, description="""Match defined allowable entries.
 """)
     assembly_method: Optional[str] = Field(None, description="""e.g. SPAdes 3.15, IVAR 1.4, Flye 2.9, Unicycler 0.5""")
     coverage_depth: Optional[float] = Field(None, description="""Mean sequencing depth (X)""")
@@ -2184,10 +2214,10 @@ class EnvironmentalSample(Sample):
     pii_scan_status: PIIScanStatusEnum = Field(...)
     ingest_method: IngestMethodEnum = Field(...)
     sharing_level: SharingLevelEnum = Field(...)
-    pi_name: Optional[str] = Field(None, description="""APGAP: 'PI name'. Defaults to Lab Director. Validation: must match existing user in the platform.
+    pi_name: Optional[str] = Field(None, description="""Validation: must match existing user in the platform.
 """)
-    grant_number: Optional[str] = Field(None, description="""APGAP: 'Grant number'. Alphanumeric.""")
-    contact_other: Optional[str] = Field(None, description="""APGAP: 'Contact (if other than user uploading data)'. Email format. Phase 2: allow non-user contacts.
+    grant_number: Optional[str] = Field(None)
+    contact_other: Optional[str] = Field(None, description="""Email format. Phase 2: allow non-user contacts.
 """)
     comments: Optional[str] = Field(None, description="""Free text comments""")
 
@@ -2195,24 +2225,24 @@ class EnvironmentalSample(Sample):
 
 class WastewaterSample(EnvironmentalSample):
     """
-    Sample from a wastewater collection or treatment system. Fields from APGAP wastewater_sample.xlsx, aligned with CDC NWSS mandatory reporting fields. Reference: https://www.cdc.gov/nwss/reporting.html
+    Sample from a wastewater collection or treatment system. mandatory reporting fields. Reference: https://www.cdc.gov/nwss/reporting.html
 
     """
-    wwtp_name: Optional[str] = Field(None, description="""APGAP: 'Location (sample_location_specify)'. NWSS: sample_location. Wastewater facility name or upstream sewer location. Examples: 'South Tempe Water Reclamation Facility', 'undisclosed sewer line upstream of 5th Ave'.
+    wwtp_name: Optional[str] = Field(None, description="""Wastewater facility name or upstream sewer location. Examples: 'Example Water Reclamation Facility', 'undisclosed sewer line upstream of 5th Ave'.
 """)
     nwss_sewershed_id: Optional[str] = Field(None, description="""CDC NWSS-assigned identifier for this wastewater sampling site. Links JACKPOT wastewater data to CDC's authoritative sewershed geometry layer (catchment area polygon, population denominator, WWTP capacity). Enables unambiguous matching when JACKPOT data is reported to CDC NWSS. Format: integer or NWSS site code. Reference: https://www.cdc.gov/nwss/reporting.html Optional — not all sites are registered in NWSS at time of sample collection, but should be populated at Tier 2 and above.""")
     sample_location_zipcode: Optional[str] = Field(None, description="""US ZIP code of wastewater sampling location (5-digit)""")
-    county_names: Optional[List[str]] = Field(default_factory=list, description="""APGAP: 'Service area (county_names)'. NWSS: county_names. Counties served by this sampling site, by name or FIPS code. System cross-maps name ↔ FIPS. Multiple entries permitted. Examples: 'Some County', '04013', 'Another County'.
+    county_names: Optional[List[str]] = Field(default_factory=list, description="""Counties served by this sampling site, by name or FIPS code. System cross-maps name ↔ FIPS. Multiple entries permitted. Examples: 'Some County', '04013', 'Another County'.
 """)
-    population_served: int = Field(..., description="""APGAP/NWSS: 'Population served'. Estimated number of persons served by this sampling site. Validation: positive integer.
+    population_served: int = Field(..., description="""served by this sampling site. Validation: positive integer.
 """)
-    sample_type: WastewaterSampleTypeEnum = Field(..., description="""APGAP/NWSS: 'Sample type'. e.g. grab, 24-hr composite""")
-    sample_matrix: SampleMatrixEnum = Field(..., description="""APGAP/NWSS: 'Sample matrix'. Wastewater matrix from which the sample was collected.
+    sample_type: WastewaterSampleTypeEnum = Field(...)
+    sample_matrix: SampleMatrixEnum = Field(..., description="""the sample was collected.
 """)
-    pretreatment: List[PretreatmentEnum] = Field(default_factory=list, description="""APGAP: 'Pretreatment'. Treatment applied prior to collection. Flag if 'none' co-occurs with any other value.
+    pretreatment: List[PretreatmentEnum] = Field(default_factory=list, description="""Flag if 'none' co-occurs with any other value.
 """)
     concentration_method: ConcentrationMethodEnum = Field(...)
-    flow_rate_mgd: float = Field(..., description="""APGAP: 'Flow rate (MGD)'. NWSS: flow_rate. Wastewater volumetric flow rate in million gallons per day. Validation: positive float. Unit: MGD.
+    flow_rate_mgd: float = Field(..., description="""Wastewater volumetric flow rate in million gallons per day. Validation: positive float. Unit: MGD.
 """)
     sample_collect_time: Optional[str] = Field(None, description="""NWSS: 'sample_collect_time'. Local 24-hr time (HH:MM). For composite samples: start time.
 """)
@@ -2232,20 +2262,20 @@ class WastewaterSample(EnvironmentalSample):
     env_broad_scale: Optional[str] = Field(None, description="""MIxS required. ENVO term. e.g. ENVO:00002001 (wastewater)""")
     env_local_scale: Optional[str] = Field(None, description="""MIxS required. ENVO term. e.g. ENVO:01000621 (municipal WWTP)""")
     env_medium: Optional[str] = Field(None, description="""MIxS required. ENVO term. e.g. ENVO:00002040 (sewage)""")
-    sample_id: str = Field(..., description="""Unique alphanumeric identifier for this sample. Must not already be in use in the system. APGAP: 'Sample ID'. Validation: alphanumeric, unique. Portal mints persistent URI at ingest: https://data.jackpot.health/samples/{sample_id}
+    sample_id: str = Field(..., description="""Unique alphanumeric identifier for this sample. Must not already be in use in the system. Portal mints persistent URI at ingest: https://data.jackpot.health/samples/{sample_id}
 """)
     jackpot_uri: Optional[str] = Field(None, description="""Persistent URI minted at ingest for FAIR Findability (F1). Format: https://data.jackpot.health/samples/{sample_id} Stable before NCBI/GISAID accessions are assigned.
 """)
     lab: str = Field(...)
     project: str = Field(...)
     owner: str = Field(..., description="""Email of the researcher who uploaded the sample""")
-    source_type: SourceTypeEnum = Field(..., description="""APGAP: 'Source type'. Determines which host-specific subclass is required. Further required fields depend on this value. Validation: match defined allowable entries.
+    source_type: SourceTypeEnum = Field(..., description="""is required. Further required fields depend on this value. Validation: match defined allowable entries.
 """)
-    organism_name: OrganismNameEnum = Field(..., description="""NCBI organism name. Controlled vocabulary derived from the host jurisdiction's reportable communicable diseases list, plus Coccidioides spp. (Valley fever) and metagenome for metagenomic samples. Platform Admins may add new values when novel pathogens emerge. Researchers may request additions via the portal. Use 'metagenome' when no specific organism is targeted. APGAP: 'Pathogen/organism name (or metagenomic)'.
+    organism_name: OrganismNameEnum = Field(..., description="""NCBI organism name. Controlled vocabulary derived from the host jurisdiction's reportable communicable diseases list, plus Coccidioides spp. (Valley fever) and metagenome for metagenomic samples. Platform Admins may add new values when novel pathogens emerge. Researchers may request additions via the portal. Use 'metagenome' when no specific organism is targeted.
 """)
     strain: Optional[str] = Field(None, description="""Pathogen strain designation. Also used for: Influenza subtype (H1N1, H3N2), Pango lineage pre-Pangolin-pipeline, rabies variant, poliovirus type (wild vs. vaccine-derived).
 """)
-    isolate: Optional[str] = Field(None, description="""APGAP: 'Isolate'. Identification or description of the specific individual from which the sample was obtained.
+    isolate: Optional[str] = Field(None, description="""individual from which the sample was obtained.
 """)
     serotype: Optional[str] = Field(None, description="""Serotype of the pathogen isolate. Use for: Salmonella serovar (e.g. Typhimurium, Enteritidis), Dengue serotype (DENV-1 to DENV-4), Poliovirus type (1, 2, 3), Influenza subtype (H1N1, H3N2, H5N1).
 """)
@@ -2254,27 +2284,27 @@ class WastewaterSample(EnvironmentalSample):
     genbank_accession: Optional[str] = Field(None, description="""GenBank accession (e.g. OQ123456)""")
     gisaid_accession: Optional[str] = Field(None, description="""GISAID EPI_ accession (e.g. EPI_ISL_1234567)""")
     bioproject_accession: Optional[str] = Field(None, description="""NCBI BioProject accession (e.g. PRJNA123456)""")
-    type_of_experiment: ExperimentTypeEnum = Field(..., description="""APGAP: 'Type of experiment'. Validation: match defined allowable entries (one only).
+    type_of_experiment: ExperimentTypeEnum = Field(..., description="""Validation: match defined allowable entries (one only).
 """)
-    nucleic_acid_extraction_method: List[str] = Field(default_factory=list, description="""APGAP: 'Nucleic acid extraction method'. Multiple values permitted. Match defined allowable entries.
+    nucleic_acid_extraction_method: List[str] = Field(default_factory=list, description="""Multiple values permitted. Match defined allowable entries.
 """)
-    library_preparation_method: str = Field(..., description="""APGAP: 'Nucleic acid library preparation method'. Match defined allowable entries (one only).
+    library_preparation_method: str = Field(..., description="""Match defined allowable entries (one only).
 """)
-    sequencing_protocol: str = Field(..., description="""APGAP: 'Sequencing protocol'. URL to protocol document. Validation: URL format preferred (e.g. https://www.protocols.io/view/artic-v4-1).
+    sequencing_protocol: str = Field(..., description="""Validation: URL format preferred (e.g. https://www.protocols.io/view/artic-v4-1).
 """)
-    sequencing_platform: SequencingPlatformEnum = Field(..., description="""APGAP: 'Sequencing instrument make and model'. Validation: match defined allowable entries (one only).
+    sequencing_platform: SequencingPlatformEnum = Field(..., description="""Validation: match defined allowable entries (one only).
 """)
     sequencing_instrument: Optional[str] = Field(None, description="""Specific instrument model. Examples: NextSeq 2000, MinION, Sequel IIe, Ion S5.
 """)
-    sequencing_lab: str = Field(..., description="""APGAP: 'Sequencing lab (originating lab)'. The lab that performed the sequencing. NOT a static enum — validated at ingest against the sequencing_labs database table, which is a Platform Admin-managed controlled vocabulary. Seeded values: 'Sonora Quest Laboratories', 'Laboratory Corporation of America'. Registered JACKPOT Labs are auto-added (APGAP backlog #42). Unknown values trigger validation error directing Lab Director to submit a sequencing lab addition request via the portal (APGAP backlog #7).
+    sequencing_lab: str = Field(..., description="""performed the sequencing. NOT a static enum — validated at ingest against the sequencing_labs database table, which is a Platform Admin-managed controlled vocabulary. Seeded values: 'Example Reference Lab', 'Laboratory Corporation of America'. Unknown values trigger validation error directing Lab Director to submit a sequencing lab addition request via the portal
 """)
-    date_collected: date = Field(..., description="""APGAP: 'Date Collected'. ISO 8601 format (YYYY-MM-DD). Validation: flag if >5 years in past; reject if future date.
+    date_collected: date = Field(..., description="""Validation: flag if >5 years in past; reject if future date.
 """)
-    date_sequenced: date = Field(..., description="""APGAP: 'Date Sequenced'. ISO 8601 format. Validation: must not be future date; must not precede date_collected.
+    date_sequenced: date = Field(..., description="""Validation: must not be future date; must not precede date_collected.
 """)
-    collection_facility: str = Field(..., description="""APGAP: 'Collection facility'. Institution or facility where the sample was collected. Match defined allowable entries.
+    collection_facility: str = Field(..., description="""the sample was collected. Match defined allowable entries.
 """)
-    purpose_for_collection: List[str] = Field(default_factory=list, description="""APGAP: 'Purpose for collection and sequencing'. Multiple selections permitted. Match defined allowable entries.
+    purpose_for_collection: List[str] = Field(default_factory=list, description="""Multiple selections permitted. Match defined allowable entries.
 """)
     collection_location_country: str = Field(..., description="""Country of sample collection. Free text — no controlled vocabulary enforced at Tier 1 or Tier 2. At Tier 3 (SUBMITTABLE), must match an INSDC-approved country name for BioSample submission via TOSTADAS (e.g. \"USA\" not \"United States\", \"United Kingdom\" not \"UK\"). INSDC country list: https://www.insdc.org/submitting-standards/country-qualifier-vocabulary/ portal_to_tostadas.py validates against the INSDC list before constructing the geo_loc_name field (format: Country:State:City).""")
     collection_location_state: Optional[str] = Field(None, description="""Sub-national administrative region of sample collection. Accepts any equivalent administrative division regardless of country: US state, Canadian province, Mexican estado, Australian state, Brazilian estado, UK county/nation, German Bundesland, Japanese prefecture, etc. Free text — not a controlled vocabulary since administrative divisions vary by country. Used in NCBI BioSample geo_loc_name construction (Country:State:City).""")
@@ -2318,15 +2348,15 @@ class WastewaterSample(EnvironmentalSample):
     date_sequence_uploaded: Optional[date] = Field(None, description="""Date consensus genome uploaded to JACKPOT. Rockefeller target: ≤10 days from date_received_lab.""")
     date_lineage_assigned: Optional[date] = Field(None, description="""Date lineage or sequence type assignment completed (Pangolin, MLST, cgMLST). Rockefeller target: ≤48 hours from date_sequence_uploaded.""")
     date_phenotype_reported: Optional[date] = Field(None, description="""Date phenotypic threat assessment (AMR profile, virulence) reported. Rockefeller target: ≤21 days from date_sequence_uploaded.""")
-    associated_sample_ids: Optional[List[str]] = Field(default_factory=list, description="""APGAP: 'IDs of any associated samples'. Present in ALL sample type spreadsheets. Links sequences from the same investigation (e.g. pet and owner, food product and patient, vector and host). Validation: each ID should match an existing sample_id in the system. Flag (not reject) if linked sample not yet uploaded — may arrive later. Bidirectional linkage confirmed at resolution. Stored as directed pairs in the sample_associations table.
+    associated_sample_ids: Optional[List[str]] = Field(default_factory=list, description="""type spreadsheets. Links sequences from the same investigation (e.g. pet and owner, food product and patient, vector and host). Validation: each ID should match an existing sample_id in the system. Flag (not reject) if linked sample not yet uploaded — may arrive later. Bidirectional linkage confirmed at resolution. Stored as directed pairs in the sample_associations table.
 """)
-    ct_value: Optional[float] = Field(None, description="""APGAP: 'Ct value'. PCR cycle threshold value. Validation: numeric, range [0, 50].
+    ct_value: Optional[float] = Field(None, description="""Validation: numeric, range [0, 50].
 """)
-    other_testing_performed: Optional[List[str]] = Field(default_factory=list, description="""APGAP: 'Other Testing Performed'. Multiple entries permitted. Match defined allowable entries. Flag error if 'none' entered alongside any other value.
+    other_testing_performed: Optional[List[str]] = Field(default_factory=list, description="""Match defined allowable entries. Flag error if 'none' entered alongside any other value.
 """)
-    lab_of_other_testing: Optional[List[str]] = Field(default_factory=list, description="""APGAP: 'Lab of Other Testing'. Conditional: required if other_testing_performed is not empty or 'none'.
+    lab_of_other_testing: Optional[List[str]] = Field(default_factory=list, description="""other_testing_performed is not empty or 'none'.
 """)
-    intermediary_clinical_lab: Optional[str] = Field(None, description="""APGAP: 'Intermediary clinical lab name'. Optional. Match defined allowable entries.
+    intermediary_clinical_lab: Optional[str] = Field(None, description="""Match defined allowable entries.
 """)
     assembly_method: Optional[str] = Field(None, description="""e.g. SPAdes 3.15, IVAR 1.4, Flye 2.9, Unicycler 0.5""")
     coverage_depth: Optional[float] = Field(None, description="""Mean sequencing depth (X)""")
@@ -2365,10 +2395,10 @@ class WastewaterSample(EnvironmentalSample):
     pii_scan_status: PIIScanStatusEnum = Field(...)
     ingest_method: IngestMethodEnum = Field(...)
     sharing_level: SharingLevelEnum = Field(...)
-    pi_name: Optional[str] = Field(None, description="""APGAP: 'PI name'. Defaults to Lab Director. Validation: must match existing user in the platform.
+    pi_name: Optional[str] = Field(None, description="""Validation: must match existing user in the platform.
 """)
-    grant_number: Optional[str] = Field(None, description="""APGAP: 'Grant number'. Alphanumeric.""")
-    contact_other: Optional[str] = Field(None, description="""APGAP: 'Contact (if other than user uploading data)'. Email format. Phase 2: allow non-user contacts.
+    grant_number: Optional[str] = Field(None)
+    contact_other: Optional[str] = Field(None, description="""Email format. Phase 2: allow non-user contacts.
 """)
     comments: Optional[str] = Field(None, description="""Free text comments""")
 
@@ -2376,33 +2406,33 @@ class WastewaterSample(EnvironmentalSample):
 
 class WaterSample(EnvironmentalSample):
     """
-    Sample from a non-wastewater water source. Fields from APGAP Water_sample.xlsx.
+    Sample from a non-wastewater water source.
 
     """
-    water_source: Optional[WaterSourceEnum] = Field(None, description="""APGAP: 'Water source'. Type of water body or supply.""")
-    water_temperature_c: float = Field(..., description="""APGAP: 'Water temperature (C)'. Validation: range [-36, 100]. Unit: °C.
+    water_source: Optional[WaterSourceEnum] = Field(None)
+    water_temperature_c: float = Field(..., description="""Validation: range [-36, 100]. Unit: °C.
 """)
-    turbidity_ntu: float = Field(..., description="""APGAP: 'Turbidity (NTU)'. Nephelometric Turbidity Units. Validation: range (0, 4000]; values above 4000 flagged for confirmation (possible decimal point omission). Unit: NTU.
+    turbidity_ntu: float = Field(..., description="""Validation: range (0, 4000]; values above 4000 flagged for confirmation (possible decimal point omission). Unit: NTU.
 """)
-    ph: float = Field(..., description="""APGAP: 'pH'. Validation: range [0, 14].""")
-    salinity_ppm: float = Field(..., description="""APGAP: 'Salinity (ppm)'. Unit: ppm.""")
+    ph: float = Field(...)
+    salinity_ppm: float = Field(...)
     env_broad_scale: Optional[str] = Field(None)
     env_local_scale: Optional[str] = Field(None)
     env_medium: Optional[str] = Field(None)
-    sample_id: str = Field(..., description="""Unique alphanumeric identifier for this sample. Must not already be in use in the system. APGAP: 'Sample ID'. Validation: alphanumeric, unique. Portal mints persistent URI at ingest: https://data.jackpot.health/samples/{sample_id}
+    sample_id: str = Field(..., description="""Unique alphanumeric identifier for this sample. Must not already be in use in the system. Portal mints persistent URI at ingest: https://data.jackpot.health/samples/{sample_id}
 """)
     jackpot_uri: Optional[str] = Field(None, description="""Persistent URI minted at ingest for FAIR Findability (F1). Format: https://data.jackpot.health/samples/{sample_id} Stable before NCBI/GISAID accessions are assigned.
 """)
     lab: str = Field(...)
     project: str = Field(...)
     owner: str = Field(..., description="""Email of the researcher who uploaded the sample""")
-    source_type: SourceTypeEnum = Field(..., description="""APGAP: 'Source type'. Determines which host-specific subclass is required. Further required fields depend on this value. Validation: match defined allowable entries.
+    source_type: SourceTypeEnum = Field(..., description="""is required. Further required fields depend on this value. Validation: match defined allowable entries.
 """)
-    organism_name: OrganismNameEnum = Field(..., description="""NCBI organism name. Controlled vocabulary derived from the host jurisdiction's reportable communicable diseases list, plus Coccidioides spp. (Valley fever) and metagenome for metagenomic samples. Platform Admins may add new values when novel pathogens emerge. Researchers may request additions via the portal. Use 'metagenome' when no specific organism is targeted. APGAP: 'Pathogen/organism name (or metagenomic)'.
+    organism_name: OrganismNameEnum = Field(..., description="""NCBI organism name. Controlled vocabulary derived from the host jurisdiction's reportable communicable diseases list, plus Coccidioides spp. (Valley fever) and metagenome for metagenomic samples. Platform Admins may add new values when novel pathogens emerge. Researchers may request additions via the portal. Use 'metagenome' when no specific organism is targeted.
 """)
     strain: Optional[str] = Field(None, description="""Pathogen strain designation. Also used for: Influenza subtype (H1N1, H3N2), Pango lineage pre-Pangolin-pipeline, rabies variant, poliovirus type (wild vs. vaccine-derived).
 """)
-    isolate: Optional[str] = Field(None, description="""APGAP: 'Isolate'. Identification or description of the specific individual from which the sample was obtained.
+    isolate: Optional[str] = Field(None, description="""individual from which the sample was obtained.
 """)
     serotype: Optional[str] = Field(None, description="""Serotype of the pathogen isolate. Use for: Salmonella serovar (e.g. Typhimurium, Enteritidis), Dengue serotype (DENV-1 to DENV-4), Poliovirus type (1, 2, 3), Influenza subtype (H1N1, H3N2, H5N1).
 """)
@@ -2411,27 +2441,27 @@ class WaterSample(EnvironmentalSample):
     genbank_accession: Optional[str] = Field(None, description="""GenBank accession (e.g. OQ123456)""")
     gisaid_accession: Optional[str] = Field(None, description="""GISAID EPI_ accession (e.g. EPI_ISL_1234567)""")
     bioproject_accession: Optional[str] = Field(None, description="""NCBI BioProject accession (e.g. PRJNA123456)""")
-    type_of_experiment: ExperimentTypeEnum = Field(..., description="""APGAP: 'Type of experiment'. Validation: match defined allowable entries (one only).
+    type_of_experiment: ExperimentTypeEnum = Field(..., description="""Validation: match defined allowable entries (one only).
 """)
-    nucleic_acid_extraction_method: List[str] = Field(default_factory=list, description="""APGAP: 'Nucleic acid extraction method'. Multiple values permitted. Match defined allowable entries.
+    nucleic_acid_extraction_method: List[str] = Field(default_factory=list, description="""Multiple values permitted. Match defined allowable entries.
 """)
-    library_preparation_method: str = Field(..., description="""APGAP: 'Nucleic acid library preparation method'. Match defined allowable entries (one only).
+    library_preparation_method: str = Field(..., description="""Match defined allowable entries (one only).
 """)
-    sequencing_protocol: str = Field(..., description="""APGAP: 'Sequencing protocol'. URL to protocol document. Validation: URL format preferred (e.g. https://www.protocols.io/view/artic-v4-1).
+    sequencing_protocol: str = Field(..., description="""Validation: URL format preferred (e.g. https://www.protocols.io/view/artic-v4-1).
 """)
-    sequencing_platform: SequencingPlatformEnum = Field(..., description="""APGAP: 'Sequencing instrument make and model'. Validation: match defined allowable entries (one only).
+    sequencing_platform: SequencingPlatformEnum = Field(..., description="""Validation: match defined allowable entries (one only).
 """)
     sequencing_instrument: Optional[str] = Field(None, description="""Specific instrument model. Examples: NextSeq 2000, MinION, Sequel IIe, Ion S5.
 """)
-    sequencing_lab: str = Field(..., description="""APGAP: 'Sequencing lab (originating lab)'. The lab that performed the sequencing. NOT a static enum — validated at ingest against the sequencing_labs database table, which is a Platform Admin-managed controlled vocabulary. Seeded values: 'Sonora Quest Laboratories', 'Laboratory Corporation of America'. Registered JACKPOT Labs are auto-added (APGAP backlog #42). Unknown values trigger validation error directing Lab Director to submit a sequencing lab addition request via the portal (APGAP backlog #7).
+    sequencing_lab: str = Field(..., description="""performed the sequencing. NOT a static enum — validated at ingest against the sequencing_labs database table, which is a Platform Admin-managed controlled vocabulary. Seeded values: 'Example Reference Lab', 'Laboratory Corporation of America'. Unknown values trigger validation error directing Lab Director to submit a sequencing lab addition request via the portal
 """)
-    date_collected: date = Field(..., description="""APGAP: 'Date Collected'. ISO 8601 format (YYYY-MM-DD). Validation: flag if >5 years in past; reject if future date.
+    date_collected: date = Field(..., description="""Validation: flag if >5 years in past; reject if future date.
 """)
-    date_sequenced: date = Field(..., description="""APGAP: 'Date Sequenced'. ISO 8601 format. Validation: must not be future date; must not precede date_collected.
+    date_sequenced: date = Field(..., description="""Validation: must not be future date; must not precede date_collected.
 """)
-    collection_facility: str = Field(..., description="""APGAP: 'Collection facility'. Institution or facility where the sample was collected. Match defined allowable entries.
+    collection_facility: str = Field(..., description="""the sample was collected. Match defined allowable entries.
 """)
-    purpose_for_collection: List[str] = Field(default_factory=list, description="""APGAP: 'Purpose for collection and sequencing'. Multiple selections permitted. Match defined allowable entries.
+    purpose_for_collection: List[str] = Field(default_factory=list, description="""Multiple selections permitted. Match defined allowable entries.
 """)
     collection_location_country: str = Field(..., description="""Country of sample collection. Free text — no controlled vocabulary enforced at Tier 1 or Tier 2. At Tier 3 (SUBMITTABLE), must match an INSDC-approved country name for BioSample submission via TOSTADAS (e.g. \"USA\" not \"United States\", \"United Kingdom\" not \"UK\"). INSDC country list: https://www.insdc.org/submitting-standards/country-qualifier-vocabulary/ portal_to_tostadas.py validates against the INSDC list before constructing the geo_loc_name field (format: Country:State:City).""")
     collection_location_state: Optional[str] = Field(None, description="""Sub-national administrative region of sample collection. Accepts any equivalent administrative division regardless of country: US state, Canadian province, Mexican estado, Australian state, Brazilian estado, UK county/nation, German Bundesland, Japanese prefecture, etc. Free text — not a controlled vocabulary since administrative divisions vary by country. Used in NCBI BioSample geo_loc_name construction (Country:State:City).""")
@@ -2475,15 +2505,15 @@ class WaterSample(EnvironmentalSample):
     date_sequence_uploaded: Optional[date] = Field(None, description="""Date consensus genome uploaded to JACKPOT. Rockefeller target: ≤10 days from date_received_lab.""")
     date_lineage_assigned: Optional[date] = Field(None, description="""Date lineage or sequence type assignment completed (Pangolin, MLST, cgMLST). Rockefeller target: ≤48 hours from date_sequence_uploaded.""")
     date_phenotype_reported: Optional[date] = Field(None, description="""Date phenotypic threat assessment (AMR profile, virulence) reported. Rockefeller target: ≤21 days from date_sequence_uploaded.""")
-    associated_sample_ids: Optional[List[str]] = Field(default_factory=list, description="""APGAP: 'IDs of any associated samples'. Present in ALL sample type spreadsheets. Links sequences from the same investigation (e.g. pet and owner, food product and patient, vector and host). Validation: each ID should match an existing sample_id in the system. Flag (not reject) if linked sample not yet uploaded — may arrive later. Bidirectional linkage confirmed at resolution. Stored as directed pairs in the sample_associations table.
+    associated_sample_ids: Optional[List[str]] = Field(default_factory=list, description="""type spreadsheets. Links sequences from the same investigation (e.g. pet and owner, food product and patient, vector and host). Validation: each ID should match an existing sample_id in the system. Flag (not reject) if linked sample not yet uploaded — may arrive later. Bidirectional linkage confirmed at resolution. Stored as directed pairs in the sample_associations table.
 """)
-    ct_value: Optional[float] = Field(None, description="""APGAP: 'Ct value'. PCR cycle threshold value. Validation: numeric, range [0, 50].
+    ct_value: Optional[float] = Field(None, description="""Validation: numeric, range [0, 50].
 """)
-    other_testing_performed: Optional[List[str]] = Field(default_factory=list, description="""APGAP: 'Other Testing Performed'. Multiple entries permitted. Match defined allowable entries. Flag error if 'none' entered alongside any other value.
+    other_testing_performed: Optional[List[str]] = Field(default_factory=list, description="""Match defined allowable entries. Flag error if 'none' entered alongside any other value.
 """)
-    lab_of_other_testing: Optional[List[str]] = Field(default_factory=list, description="""APGAP: 'Lab of Other Testing'. Conditional: required if other_testing_performed is not empty or 'none'.
+    lab_of_other_testing: Optional[List[str]] = Field(default_factory=list, description="""other_testing_performed is not empty or 'none'.
 """)
-    intermediary_clinical_lab: Optional[str] = Field(None, description="""APGAP: 'Intermediary clinical lab name'. Optional. Match defined allowable entries.
+    intermediary_clinical_lab: Optional[str] = Field(None, description="""Match defined allowable entries.
 """)
     assembly_method: Optional[str] = Field(None, description="""e.g. SPAdes 3.15, IVAR 1.4, Flye 2.9, Unicycler 0.5""")
     coverage_depth: Optional[float] = Field(None, description="""Mean sequencing depth (X)""")
@@ -2522,10 +2552,10 @@ class WaterSample(EnvironmentalSample):
     pii_scan_status: PIIScanStatusEnum = Field(...)
     ingest_method: IngestMethodEnum = Field(...)
     sharing_level: SharingLevelEnum = Field(...)
-    pi_name: Optional[str] = Field(None, description="""APGAP: 'PI name'. Defaults to Lab Director. Validation: must match existing user in the platform.
+    pi_name: Optional[str] = Field(None, description="""Validation: must match existing user in the platform.
 """)
-    grant_number: Optional[str] = Field(None, description="""APGAP: 'Grant number'. Alphanumeric.""")
-    contact_other: Optional[str] = Field(None, description="""APGAP: 'Contact (if other than user uploading data)'. Email format. Phase 2: allow non-user contacts.
+    grant_number: Optional[str] = Field(None)
+    contact_other: Optional[str] = Field(None, description="""Email format. Phase 2: allow non-user contacts.
 """)
     comments: Optional[str] = Field(None, description="""Free text comments""")
 
@@ -2533,31 +2563,31 @@ class WaterSample(EnvironmentalSample):
 
 class AirSample(EnvironmentalSample):
     """
-    Airborne/aerosol sample. Fields from APGAP Air.xlsx.
+    Airborne/aerosol sample.
 
     """
-    air_source: AirSourceEnum = Field(..., description="""APGAP: 'Source'. Origin of the air sample. Examples: cooling tower, internal vent, urban, plane.
+    air_source: AirSourceEnum = Field(..., description="""Examples: cooling tower, internal vent, urban, plane.
 """)
-    airflow_rate_m3_s: float = Field(..., description="""APGAP: 'Airflow rate (m³/s)'. Validation: positive float. Unit: m³/s.""")
-    pm25_ug_m3: float = Field(..., description="""APGAP: 'PM2.5 (µg/m³)'. Validation: positive float. Unit: µg/m³.""")
-    pm10_ug_m3: float = Field(..., description="""APGAP: 'PM10 (µg/m³)'. Validation: positive float. Unit: µg/m³.""")
+    airflow_rate_m3_s: float = Field(...)
+    pm25_ug_m3: float = Field(...)
+    pm10_ug_m3: float = Field(...)
     env_broad_scale: Optional[str] = Field(None)
     env_local_scale: Optional[str] = Field(None)
     env_medium: Optional[str] = Field(None)
-    sample_id: str = Field(..., description="""Unique alphanumeric identifier for this sample. Must not already be in use in the system. APGAP: 'Sample ID'. Validation: alphanumeric, unique. Portal mints persistent URI at ingest: https://data.jackpot.health/samples/{sample_id}
+    sample_id: str = Field(..., description="""Unique alphanumeric identifier for this sample. Must not already be in use in the system. Portal mints persistent URI at ingest: https://data.jackpot.health/samples/{sample_id}
 """)
     jackpot_uri: Optional[str] = Field(None, description="""Persistent URI minted at ingest for FAIR Findability (F1). Format: https://data.jackpot.health/samples/{sample_id} Stable before NCBI/GISAID accessions are assigned.
 """)
     lab: str = Field(...)
     project: str = Field(...)
     owner: str = Field(..., description="""Email of the researcher who uploaded the sample""")
-    source_type: SourceTypeEnum = Field(..., description="""APGAP: 'Source type'. Determines which host-specific subclass is required. Further required fields depend on this value. Validation: match defined allowable entries.
+    source_type: SourceTypeEnum = Field(..., description="""is required. Further required fields depend on this value. Validation: match defined allowable entries.
 """)
-    organism_name: OrganismNameEnum = Field(..., description="""NCBI organism name. Controlled vocabulary derived from the host jurisdiction's reportable communicable diseases list, plus Coccidioides spp. (Valley fever) and metagenome for metagenomic samples. Platform Admins may add new values when novel pathogens emerge. Researchers may request additions via the portal. Use 'metagenome' when no specific organism is targeted. APGAP: 'Pathogen/organism name (or metagenomic)'.
+    organism_name: OrganismNameEnum = Field(..., description="""NCBI organism name. Controlled vocabulary derived from the host jurisdiction's reportable communicable diseases list, plus Coccidioides spp. (Valley fever) and metagenome for metagenomic samples. Platform Admins may add new values when novel pathogens emerge. Researchers may request additions via the portal. Use 'metagenome' when no specific organism is targeted.
 """)
     strain: Optional[str] = Field(None, description="""Pathogen strain designation. Also used for: Influenza subtype (H1N1, H3N2), Pango lineage pre-Pangolin-pipeline, rabies variant, poliovirus type (wild vs. vaccine-derived).
 """)
-    isolate: Optional[str] = Field(None, description="""APGAP: 'Isolate'. Identification or description of the specific individual from which the sample was obtained.
+    isolate: Optional[str] = Field(None, description="""individual from which the sample was obtained.
 """)
     serotype: Optional[str] = Field(None, description="""Serotype of the pathogen isolate. Use for: Salmonella serovar (e.g. Typhimurium, Enteritidis), Dengue serotype (DENV-1 to DENV-4), Poliovirus type (1, 2, 3), Influenza subtype (H1N1, H3N2, H5N1).
 """)
@@ -2566,27 +2596,27 @@ class AirSample(EnvironmentalSample):
     genbank_accession: Optional[str] = Field(None, description="""GenBank accession (e.g. OQ123456)""")
     gisaid_accession: Optional[str] = Field(None, description="""GISAID EPI_ accession (e.g. EPI_ISL_1234567)""")
     bioproject_accession: Optional[str] = Field(None, description="""NCBI BioProject accession (e.g. PRJNA123456)""")
-    type_of_experiment: ExperimentTypeEnum = Field(..., description="""APGAP: 'Type of experiment'. Validation: match defined allowable entries (one only).
+    type_of_experiment: ExperimentTypeEnum = Field(..., description="""Validation: match defined allowable entries (one only).
 """)
-    nucleic_acid_extraction_method: List[str] = Field(default_factory=list, description="""APGAP: 'Nucleic acid extraction method'. Multiple values permitted. Match defined allowable entries.
+    nucleic_acid_extraction_method: List[str] = Field(default_factory=list, description="""Multiple values permitted. Match defined allowable entries.
 """)
-    library_preparation_method: str = Field(..., description="""APGAP: 'Nucleic acid library preparation method'. Match defined allowable entries (one only).
+    library_preparation_method: str = Field(..., description="""Match defined allowable entries (one only).
 """)
-    sequencing_protocol: str = Field(..., description="""APGAP: 'Sequencing protocol'. URL to protocol document. Validation: URL format preferred (e.g. https://www.protocols.io/view/artic-v4-1).
+    sequencing_protocol: str = Field(..., description="""Validation: URL format preferred (e.g. https://www.protocols.io/view/artic-v4-1).
 """)
-    sequencing_platform: SequencingPlatformEnum = Field(..., description="""APGAP: 'Sequencing instrument make and model'. Validation: match defined allowable entries (one only).
+    sequencing_platform: SequencingPlatformEnum = Field(..., description="""Validation: match defined allowable entries (one only).
 """)
     sequencing_instrument: Optional[str] = Field(None, description="""Specific instrument model. Examples: NextSeq 2000, MinION, Sequel IIe, Ion S5.
 """)
-    sequencing_lab: str = Field(..., description="""APGAP: 'Sequencing lab (originating lab)'. The lab that performed the sequencing. NOT a static enum — validated at ingest against the sequencing_labs database table, which is a Platform Admin-managed controlled vocabulary. Seeded values: 'Sonora Quest Laboratories', 'Laboratory Corporation of America'. Registered JACKPOT Labs are auto-added (APGAP backlog #42). Unknown values trigger validation error directing Lab Director to submit a sequencing lab addition request via the portal (APGAP backlog #7).
+    sequencing_lab: str = Field(..., description="""performed the sequencing. NOT a static enum — validated at ingest against the sequencing_labs database table, which is a Platform Admin-managed controlled vocabulary. Seeded values: 'Example Reference Lab', 'Laboratory Corporation of America'. Unknown values trigger validation error directing Lab Director to submit a sequencing lab addition request via the portal
 """)
-    date_collected: date = Field(..., description="""APGAP: 'Date Collected'. ISO 8601 format (YYYY-MM-DD). Validation: flag if >5 years in past; reject if future date.
+    date_collected: date = Field(..., description="""Validation: flag if >5 years in past; reject if future date.
 """)
-    date_sequenced: date = Field(..., description="""APGAP: 'Date Sequenced'. ISO 8601 format. Validation: must not be future date; must not precede date_collected.
+    date_sequenced: date = Field(..., description="""Validation: must not be future date; must not precede date_collected.
 """)
-    collection_facility: str = Field(..., description="""APGAP: 'Collection facility'. Institution or facility where the sample was collected. Match defined allowable entries.
+    collection_facility: str = Field(..., description="""the sample was collected. Match defined allowable entries.
 """)
-    purpose_for_collection: List[str] = Field(default_factory=list, description="""APGAP: 'Purpose for collection and sequencing'. Multiple selections permitted. Match defined allowable entries.
+    purpose_for_collection: List[str] = Field(default_factory=list, description="""Multiple selections permitted. Match defined allowable entries.
 """)
     collection_location_country: str = Field(..., description="""Country of sample collection. Free text — no controlled vocabulary enforced at Tier 1 or Tier 2. At Tier 3 (SUBMITTABLE), must match an INSDC-approved country name for BioSample submission via TOSTADAS (e.g. \"USA\" not \"United States\", \"United Kingdom\" not \"UK\"). INSDC country list: https://www.insdc.org/submitting-standards/country-qualifier-vocabulary/ portal_to_tostadas.py validates against the INSDC list before constructing the geo_loc_name field (format: Country:State:City).""")
     collection_location_state: Optional[str] = Field(None, description="""Sub-national administrative region of sample collection. Accepts any equivalent administrative division regardless of country: US state, Canadian province, Mexican estado, Australian state, Brazilian estado, UK county/nation, German Bundesland, Japanese prefecture, etc. Free text — not a controlled vocabulary since administrative divisions vary by country. Used in NCBI BioSample geo_loc_name construction (Country:State:City).""")
@@ -2630,15 +2660,15 @@ class AirSample(EnvironmentalSample):
     date_sequence_uploaded: Optional[date] = Field(None, description="""Date consensus genome uploaded to JACKPOT. Rockefeller target: ≤10 days from date_received_lab.""")
     date_lineage_assigned: Optional[date] = Field(None, description="""Date lineage or sequence type assignment completed (Pangolin, MLST, cgMLST). Rockefeller target: ≤48 hours from date_sequence_uploaded.""")
     date_phenotype_reported: Optional[date] = Field(None, description="""Date phenotypic threat assessment (AMR profile, virulence) reported. Rockefeller target: ≤21 days from date_sequence_uploaded.""")
-    associated_sample_ids: Optional[List[str]] = Field(default_factory=list, description="""APGAP: 'IDs of any associated samples'. Present in ALL sample type spreadsheets. Links sequences from the same investigation (e.g. pet and owner, food product and patient, vector and host). Validation: each ID should match an existing sample_id in the system. Flag (not reject) if linked sample not yet uploaded — may arrive later. Bidirectional linkage confirmed at resolution. Stored as directed pairs in the sample_associations table.
+    associated_sample_ids: Optional[List[str]] = Field(default_factory=list, description="""type spreadsheets. Links sequences from the same investigation (e.g. pet and owner, food product and patient, vector and host). Validation: each ID should match an existing sample_id in the system. Flag (not reject) if linked sample not yet uploaded — may arrive later. Bidirectional linkage confirmed at resolution. Stored as directed pairs in the sample_associations table.
 """)
-    ct_value: Optional[float] = Field(None, description="""APGAP: 'Ct value'. PCR cycle threshold value. Validation: numeric, range [0, 50].
+    ct_value: Optional[float] = Field(None, description="""Validation: numeric, range [0, 50].
 """)
-    other_testing_performed: Optional[List[str]] = Field(default_factory=list, description="""APGAP: 'Other Testing Performed'. Multiple entries permitted. Match defined allowable entries. Flag error if 'none' entered alongside any other value.
+    other_testing_performed: Optional[List[str]] = Field(default_factory=list, description="""Match defined allowable entries. Flag error if 'none' entered alongside any other value.
 """)
-    lab_of_other_testing: Optional[List[str]] = Field(default_factory=list, description="""APGAP: 'Lab of Other Testing'. Conditional: required if other_testing_performed is not empty or 'none'.
+    lab_of_other_testing: Optional[List[str]] = Field(default_factory=list, description="""other_testing_performed is not empty or 'none'.
 """)
-    intermediary_clinical_lab: Optional[str] = Field(None, description="""APGAP: 'Intermediary clinical lab name'. Optional. Match defined allowable entries.
+    intermediary_clinical_lab: Optional[str] = Field(None, description="""Match defined allowable entries.
 """)
     assembly_method: Optional[str] = Field(None, description="""e.g. SPAdes 3.15, IVAR 1.4, Flye 2.9, Unicycler 0.5""")
     coverage_depth: Optional[float] = Field(None, description="""Mean sequencing depth (X)""")
@@ -2677,10 +2707,10 @@ class AirSample(EnvironmentalSample):
     pii_scan_status: PIIScanStatusEnum = Field(...)
     ingest_method: IngestMethodEnum = Field(...)
     sharing_level: SharingLevelEnum = Field(...)
-    pi_name: Optional[str] = Field(None, description="""APGAP: 'PI name'. Defaults to Lab Director. Validation: must match existing user in the platform.
+    pi_name: Optional[str] = Field(None, description="""Validation: must match existing user in the platform.
 """)
-    grant_number: Optional[str] = Field(None, description="""APGAP: 'Grant number'. Alphanumeric.""")
-    contact_other: Optional[str] = Field(None, description="""APGAP: 'Contact (if other than user uploading data)'. Email format. Phase 2: allow non-user contacts.
+    grant_number: Optional[str] = Field(None)
+    contact_other: Optional[str] = Field(None, description="""Email format. Phase 2: allow non-user contacts.
 """)
     comments: Optional[str] = Field(None, description="""Free text comments""")
 
@@ -2688,38 +2718,38 @@ class AirSample(EnvironmentalSample):
 
 class SoilSample(EnvironmentalSample):
     """
-    Sample from a soil matrix. Fields from APGAP Soil_sample.xlsx.
+    Sample from a soil matrix.
 
     """
-    soil_site_type: str = Field(..., description="""APGAP: 'Type of soil site'. Characterization of the soil context. Examples: rodent burrow, construction site, agricultural, CAFO vicinity.
+    soil_site_type: str = Field(..., description="""Examples: rodent burrow, construction site, agricultural, CAFO vicinity.
 """)
-    sample_depth_cm: str = Field(..., description="""APGAP: 'Depth of sample (cm)'. Single value or range. Examples: 5, [0, 2], [0, 10]. Validation: positive numeric, single value or range notation.
+    sample_depth_cm: str = Field(..., description="""Examples: 5, [0, 2], [0, 10]. Validation: positive numeric, single value or range notation.
 """)
-    nitrogen_mg_kg: Optional[float] = Field(None, description="""APGAP: 'Nitrogen (mg/kg)'. Unit: mg/kg.""")
-    soil_temperature_c: Optional[float] = Field(None, description="""APGAP: 'Temperature (C)'. Soil temperature. Validation: range [-36, 100]. Unit: °C.
+    nitrogen_mg_kg: Optional[float] = Field(None)
+    soil_temperature_c: Optional[float] = Field(None, description="""Validation: range [-36, 100]. Unit: °C.
 """)
-    moisture_g_g: Optional[float] = Field(None, description="""APGAP: 'Moisture (g/g)'. Gravimetric water content. Unit: g/g.""")
-    organic_carbon_g_kg: Optional[float] = Field(None, description="""APGAP: 'Organic carbon (g/kg)'. Unit: g/kg.""")
-    soil_ph: Optional[float] = Field(None, description="""APGAP: 'pH'. Validation: range [0, 14].""")
-    soil_salinity_ppm: Optional[float] = Field(None, description="""APGAP: 'Salinity (ppm)'. Unit: ppm.""")
+    moisture_g_g: Optional[float] = Field(None)
+    organic_carbon_g_kg: Optional[float] = Field(None)
+    soil_ph: Optional[float] = Field(None)
+    soil_salinity_ppm: Optional[float] = Field(None)
     env_broad_scale: Optional[str] = Field(None, description="""MIxS required. ENVO term. e.g. ENVO:00001998 (soil), ENVO:00000046 (agricultural soil)
 """)
     env_local_scale: Optional[str] = Field(None)
     env_medium: Optional[str] = Field(None)
-    sample_id: str = Field(..., description="""Unique alphanumeric identifier for this sample. Must not already be in use in the system. APGAP: 'Sample ID'. Validation: alphanumeric, unique. Portal mints persistent URI at ingest: https://data.jackpot.health/samples/{sample_id}
+    sample_id: str = Field(..., description="""Unique alphanumeric identifier for this sample. Must not already be in use in the system. Portal mints persistent URI at ingest: https://data.jackpot.health/samples/{sample_id}
 """)
     jackpot_uri: Optional[str] = Field(None, description="""Persistent URI minted at ingest for FAIR Findability (F1). Format: https://data.jackpot.health/samples/{sample_id} Stable before NCBI/GISAID accessions are assigned.
 """)
     lab: str = Field(...)
     project: str = Field(...)
     owner: str = Field(..., description="""Email of the researcher who uploaded the sample""")
-    source_type: SourceTypeEnum = Field(..., description="""APGAP: 'Source type'. Determines which host-specific subclass is required. Further required fields depend on this value. Validation: match defined allowable entries.
+    source_type: SourceTypeEnum = Field(..., description="""is required. Further required fields depend on this value. Validation: match defined allowable entries.
 """)
-    organism_name: OrganismNameEnum = Field(..., description="""NCBI organism name. Controlled vocabulary derived from the host jurisdiction's reportable communicable diseases list, plus Coccidioides spp. (Valley fever) and metagenome for metagenomic samples. Platform Admins may add new values when novel pathogens emerge. Researchers may request additions via the portal. Use 'metagenome' when no specific organism is targeted. APGAP: 'Pathogen/organism name (or metagenomic)'.
+    organism_name: OrganismNameEnum = Field(..., description="""NCBI organism name. Controlled vocabulary derived from the host jurisdiction's reportable communicable diseases list, plus Coccidioides spp. (Valley fever) and metagenome for metagenomic samples. Platform Admins may add new values when novel pathogens emerge. Researchers may request additions via the portal. Use 'metagenome' when no specific organism is targeted.
 """)
     strain: Optional[str] = Field(None, description="""Pathogen strain designation. Also used for: Influenza subtype (H1N1, H3N2), Pango lineage pre-Pangolin-pipeline, rabies variant, poliovirus type (wild vs. vaccine-derived).
 """)
-    isolate: Optional[str] = Field(None, description="""APGAP: 'Isolate'. Identification or description of the specific individual from which the sample was obtained.
+    isolate: Optional[str] = Field(None, description="""individual from which the sample was obtained.
 """)
     serotype: Optional[str] = Field(None, description="""Serotype of the pathogen isolate. Use for: Salmonella serovar (e.g. Typhimurium, Enteritidis), Dengue serotype (DENV-1 to DENV-4), Poliovirus type (1, 2, 3), Influenza subtype (H1N1, H3N2, H5N1).
 """)
@@ -2728,27 +2758,27 @@ class SoilSample(EnvironmentalSample):
     genbank_accession: Optional[str] = Field(None, description="""GenBank accession (e.g. OQ123456)""")
     gisaid_accession: Optional[str] = Field(None, description="""GISAID EPI_ accession (e.g. EPI_ISL_1234567)""")
     bioproject_accession: Optional[str] = Field(None, description="""NCBI BioProject accession (e.g. PRJNA123456)""")
-    type_of_experiment: ExperimentTypeEnum = Field(..., description="""APGAP: 'Type of experiment'. Validation: match defined allowable entries (one only).
+    type_of_experiment: ExperimentTypeEnum = Field(..., description="""Validation: match defined allowable entries (one only).
 """)
-    nucleic_acid_extraction_method: List[str] = Field(default_factory=list, description="""APGAP: 'Nucleic acid extraction method'. Multiple values permitted. Match defined allowable entries.
+    nucleic_acid_extraction_method: List[str] = Field(default_factory=list, description="""Multiple values permitted. Match defined allowable entries.
 """)
-    library_preparation_method: str = Field(..., description="""APGAP: 'Nucleic acid library preparation method'. Match defined allowable entries (one only).
+    library_preparation_method: str = Field(..., description="""Match defined allowable entries (one only).
 """)
-    sequencing_protocol: str = Field(..., description="""APGAP: 'Sequencing protocol'. URL to protocol document. Validation: URL format preferred (e.g. https://www.protocols.io/view/artic-v4-1).
+    sequencing_protocol: str = Field(..., description="""Validation: URL format preferred (e.g. https://www.protocols.io/view/artic-v4-1).
 """)
-    sequencing_platform: SequencingPlatformEnum = Field(..., description="""APGAP: 'Sequencing instrument make and model'. Validation: match defined allowable entries (one only).
+    sequencing_platform: SequencingPlatformEnum = Field(..., description="""Validation: match defined allowable entries (one only).
 """)
     sequencing_instrument: Optional[str] = Field(None, description="""Specific instrument model. Examples: NextSeq 2000, MinION, Sequel IIe, Ion S5.
 """)
-    sequencing_lab: str = Field(..., description="""APGAP: 'Sequencing lab (originating lab)'. The lab that performed the sequencing. NOT a static enum — validated at ingest against the sequencing_labs database table, which is a Platform Admin-managed controlled vocabulary. Seeded values: 'Sonora Quest Laboratories', 'Laboratory Corporation of America'. Registered JACKPOT Labs are auto-added (APGAP backlog #42). Unknown values trigger validation error directing Lab Director to submit a sequencing lab addition request via the portal (APGAP backlog #7).
+    sequencing_lab: str = Field(..., description="""performed the sequencing. NOT a static enum — validated at ingest against the sequencing_labs database table, which is a Platform Admin-managed controlled vocabulary. Seeded values: 'Example Reference Lab', 'Laboratory Corporation of America'. Unknown values trigger validation error directing Lab Director to submit a sequencing lab addition request via the portal
 """)
-    date_collected: date = Field(..., description="""APGAP: 'Date Collected'. ISO 8601 format (YYYY-MM-DD). Validation: flag if >5 years in past; reject if future date.
+    date_collected: date = Field(..., description="""Validation: flag if >5 years in past; reject if future date.
 """)
-    date_sequenced: date = Field(..., description="""APGAP: 'Date Sequenced'. ISO 8601 format. Validation: must not be future date; must not precede date_collected.
+    date_sequenced: date = Field(..., description="""Validation: must not be future date; must not precede date_collected.
 """)
-    collection_facility: str = Field(..., description="""APGAP: 'Collection facility'. Institution or facility where the sample was collected. Match defined allowable entries.
+    collection_facility: str = Field(..., description="""the sample was collected. Match defined allowable entries.
 """)
-    purpose_for_collection: List[str] = Field(default_factory=list, description="""APGAP: 'Purpose for collection and sequencing'. Multiple selections permitted. Match defined allowable entries.
+    purpose_for_collection: List[str] = Field(default_factory=list, description="""Multiple selections permitted. Match defined allowable entries.
 """)
     collection_location_country: str = Field(..., description="""Country of sample collection. Free text — no controlled vocabulary enforced at Tier 1 or Tier 2. At Tier 3 (SUBMITTABLE), must match an INSDC-approved country name for BioSample submission via TOSTADAS (e.g. \"USA\" not \"United States\", \"United Kingdom\" not \"UK\"). INSDC country list: https://www.insdc.org/submitting-standards/country-qualifier-vocabulary/ portal_to_tostadas.py validates against the INSDC list before constructing the geo_loc_name field (format: Country:State:City).""")
     collection_location_state: Optional[str] = Field(None, description="""Sub-national administrative region of sample collection. Accepts any equivalent administrative division regardless of country: US state, Canadian province, Mexican estado, Australian state, Brazilian estado, UK county/nation, German Bundesland, Japanese prefecture, etc. Free text — not a controlled vocabulary since administrative divisions vary by country. Used in NCBI BioSample geo_loc_name construction (Country:State:City).""")
@@ -2792,15 +2822,15 @@ class SoilSample(EnvironmentalSample):
     date_sequence_uploaded: Optional[date] = Field(None, description="""Date consensus genome uploaded to JACKPOT. Rockefeller target: ≤10 days from date_received_lab.""")
     date_lineage_assigned: Optional[date] = Field(None, description="""Date lineage or sequence type assignment completed (Pangolin, MLST, cgMLST). Rockefeller target: ≤48 hours from date_sequence_uploaded.""")
     date_phenotype_reported: Optional[date] = Field(None, description="""Date phenotypic threat assessment (AMR profile, virulence) reported. Rockefeller target: ≤21 days from date_sequence_uploaded.""")
-    associated_sample_ids: Optional[List[str]] = Field(default_factory=list, description="""APGAP: 'IDs of any associated samples'. Present in ALL sample type spreadsheets. Links sequences from the same investigation (e.g. pet and owner, food product and patient, vector and host). Validation: each ID should match an existing sample_id in the system. Flag (not reject) if linked sample not yet uploaded — may arrive later. Bidirectional linkage confirmed at resolution. Stored as directed pairs in the sample_associations table.
+    associated_sample_ids: Optional[List[str]] = Field(default_factory=list, description="""type spreadsheets. Links sequences from the same investigation (e.g. pet and owner, food product and patient, vector and host). Validation: each ID should match an existing sample_id in the system. Flag (not reject) if linked sample not yet uploaded — may arrive later. Bidirectional linkage confirmed at resolution. Stored as directed pairs in the sample_associations table.
 """)
-    ct_value: Optional[float] = Field(None, description="""APGAP: 'Ct value'. PCR cycle threshold value. Validation: numeric, range [0, 50].
+    ct_value: Optional[float] = Field(None, description="""Validation: numeric, range [0, 50].
 """)
-    other_testing_performed: Optional[List[str]] = Field(default_factory=list, description="""APGAP: 'Other Testing Performed'. Multiple entries permitted. Match defined allowable entries. Flag error if 'none' entered alongside any other value.
+    other_testing_performed: Optional[List[str]] = Field(default_factory=list, description="""Match defined allowable entries. Flag error if 'none' entered alongside any other value.
 """)
-    lab_of_other_testing: Optional[List[str]] = Field(default_factory=list, description="""APGAP: 'Lab of Other Testing'. Conditional: required if other_testing_performed is not empty or 'none'.
+    lab_of_other_testing: Optional[List[str]] = Field(default_factory=list, description="""other_testing_performed is not empty or 'none'.
 """)
-    intermediary_clinical_lab: Optional[str] = Field(None, description="""APGAP: 'Intermediary clinical lab name'. Optional. Match defined allowable entries.
+    intermediary_clinical_lab: Optional[str] = Field(None, description="""Match defined allowable entries.
 """)
     assembly_method: Optional[str] = Field(None, description="""e.g. SPAdes 3.15, IVAR 1.4, Flye 2.9, Unicycler 0.5""")
     coverage_depth: Optional[float] = Field(None, description="""Mean sequencing depth (X)""")
@@ -2839,10 +2869,10 @@ class SoilSample(EnvironmentalSample):
     pii_scan_status: PIIScanStatusEnum = Field(...)
     ingest_method: IngestMethodEnum = Field(...)
     sharing_level: SharingLevelEnum = Field(...)
-    pi_name: Optional[str] = Field(None, description="""APGAP: 'PI name'. Defaults to Lab Director. Validation: must match existing user in the platform.
+    pi_name: Optional[str] = Field(None, description="""Validation: must match existing user in the platform.
 """)
-    grant_number: Optional[str] = Field(None, description="""APGAP: 'Grant number'. Alphanumeric.""")
-    contact_other: Optional[str] = Field(None, description="""APGAP: 'Contact (if other than user uploading data)'. Email format. Phase 2: allow non-user contacts.
+    grant_number: Optional[str] = Field(None)
+    contact_other: Optional[str] = Field(None, description="""Email format. Phase 2: allow non-user contacts.
 """)
     comments: Optional[str] = Field(None, description="""Free text comments""")
 
@@ -2850,48 +2880,48 @@ class SoilSample(EnvironmentalSample):
 
 class SurfaceSample(EnvironmentalSample):
     """
-    Surface swab sample (indoor or outdoor). Fields from APGAP Surface.xlsx. NCBI MIMS.me.built_environment package.
+    Surface swab sample (indoor or outdoor). NCBI MIMS.me.built_environment package.
 
     """
-    indoor_space: str = Field(..., description="""APGAP/NCBI: 'indoor_space'. Distinguishable space within a structure. Allowable: bedroom, office, bathroom, foyer, kitchen, locker room, hallway, elevator, missing, not applicable, not collected, not provided, restricted access.
+    indoor_space: str = Field(..., description="""Allowable: bedroom, office, bathroom, foyer, kitchen, locker room, hallway, elevator, missing, not applicable, not collected, not provided, restricted access.
 """)
-    indoor_surface: str = Field(..., description="""APGAP/NCBI: 'indoor_surface'. Type of indoor surface. Allowable: counter top, window, wall, cabinet, ceiling, door, shelving, vent cover, missing, not applicable, not collected, not provided, restricted access.
+    indoor_surface: str = Field(..., description="""Allowable: counter top, window, wall, cabinet, ceiling, door, shelving, vent cover, missing, not applicable, not collected, not provided, restricted access.
 """)
-    indoor_surface_subpart: Optional[str] = Field(None, description="""APGAP/NCBI: 'indoor_surf_subpart'. Subpart of object swabbed.""")
-    surface_orientation: Optional[List[str]] = Field(default_factory=list, description="""APGAP/NCBI: 'surface_orientation'. e.g. underside, top, corner.""")
-    surface_material: List[str] = Field(default_factory=list, description="""APGAP/NCBI: 'surf_material'. Surface materials at sampling point. Examples: concrete, wood, tile, plastic, glass, stainless steel.
+    indoor_surface_subpart: Optional[str] = Field(None)
+    surface_orientation: Optional[List[str]] = Field(default_factory=list)
+    surface_material: List[str] = Field(default_factory=list, description="""Examples: concrete, wood, tile, plastic, glass, stainless steel.
 """)
-    surface_temperature_c: Optional[float] = Field(None, description="""APGAP/NCBI: 'surf_temp'. Surface temperature. Unit: °C.""")
-    surface_air_contaminants: Optional[List[str]] = Field(default_factory=list, description="""APGAP/NCBI: 'surf_air_cont'. Contaminant on surface. Examples: dust, organic matter, particulate matter, VOCs.
+    surface_temperature_c: Optional[float] = Field(None)
+    surface_air_contaminants: Optional[List[str]] = Field(default_factory=list, description="""Examples: dust, organic matter, particulate matter, VOCs.
 """)
-    surface_moisture_qualitative: Optional[str] = Field(None, description="""APGAP/NCBI: 'samp_surf_moisture'. Qualitative moisture. Values: intermittent moisture, not present, submerged.
+    surface_moisture_qualitative: Optional[str] = Field(None, description="""Values: intermittent moisture, not present, submerged.
 """)
-    surface_moisture_cm3_cm3: Optional[float] = Field(None, description="""APGAP/NCBI: 'surf_moisture'. Numeric moisture. Unit: cm³/cm³.""")
-    surface_moisture_ph: Optional[float] = Field(None, description="""APGAP/NCBI: 'surf_moisture_ph'. pH of surface moisture. Range [0,14].""")
-    surface_humidity_pct: Optional[float] = Field(None, description="""APGAP/NCBI: 'surf_humidity'. Water activity. Unit: %.""")
-    wall_surface_treatment: Optional[List[str]] = Field(default_factory=list, description="""APGAP/NCBI: 'wall_surf_treatment'. e.g. painted, wall paper, no treatment, stucco, fabric.
+    surface_moisture_cm3_cm3: Optional[float] = Field(None)
+    surface_moisture_ph: Optional[float] = Field(None)
+    surface_humidity_pct: Optional[float] = Field(None)
+    wall_surface_treatment: Optional[List[str]] = Field(default_factory=list, description="""e.g. painted, wall paper, no treatment, stucco, fabric.
 """)
-    wall_texture: Optional[List[str]] = Field(default_factory=list, description="""APGAP/NCBI: 'wall_texture'. e.g. smooth, popcorn, orange peel, knockdown, Santa-Fe texture.
+    wall_texture: Optional[List[str]] = Field(default_factory=list, description="""e.g. smooth, popcorn, orange peel, knockdown, Santa-Fe texture.
 """)
-    wall_mold_signs: Optional[str] = Field(None, description="""APGAP/NCBI: 'wall_water_mold'. Signs of mold/mildew. Values: yes, no, unknown.
+    wall_mold_signs: Optional[str] = Field(None, description="""Values: yes, no, unknown.
 """)
     env_broad_scale: Optional[str] = Field(None, description="""MIxS required. ENVO term. e.g. ENVO:01000162 (built environment)""")
     env_local_scale: Optional[str] = Field(None)
     env_medium: Optional[str] = Field(None)
-    sample_id: str = Field(..., description="""Unique alphanumeric identifier for this sample. Must not already be in use in the system. APGAP: 'Sample ID'. Validation: alphanumeric, unique. Portal mints persistent URI at ingest: https://data.jackpot.health/samples/{sample_id}
+    sample_id: str = Field(..., description="""Unique alphanumeric identifier for this sample. Must not already be in use in the system. Portal mints persistent URI at ingest: https://data.jackpot.health/samples/{sample_id}
 """)
     jackpot_uri: Optional[str] = Field(None, description="""Persistent URI minted at ingest for FAIR Findability (F1). Format: https://data.jackpot.health/samples/{sample_id} Stable before NCBI/GISAID accessions are assigned.
 """)
     lab: str = Field(...)
     project: str = Field(...)
     owner: str = Field(..., description="""Email of the researcher who uploaded the sample""")
-    source_type: SourceTypeEnum = Field(..., description="""APGAP: 'Source type'. Determines which host-specific subclass is required. Further required fields depend on this value. Validation: match defined allowable entries.
+    source_type: SourceTypeEnum = Field(..., description="""is required. Further required fields depend on this value. Validation: match defined allowable entries.
 """)
-    organism_name: OrganismNameEnum = Field(..., description="""NCBI organism name. Controlled vocabulary derived from the host jurisdiction's reportable communicable diseases list, plus Coccidioides spp. (Valley fever) and metagenome for metagenomic samples. Platform Admins may add new values when novel pathogens emerge. Researchers may request additions via the portal. Use 'metagenome' when no specific organism is targeted. APGAP: 'Pathogen/organism name (or metagenomic)'.
+    organism_name: OrganismNameEnum = Field(..., description="""NCBI organism name. Controlled vocabulary derived from the host jurisdiction's reportable communicable diseases list, plus Coccidioides spp. (Valley fever) and metagenome for metagenomic samples. Platform Admins may add new values when novel pathogens emerge. Researchers may request additions via the portal. Use 'metagenome' when no specific organism is targeted.
 """)
     strain: Optional[str] = Field(None, description="""Pathogen strain designation. Also used for: Influenza subtype (H1N1, H3N2), Pango lineage pre-Pangolin-pipeline, rabies variant, poliovirus type (wild vs. vaccine-derived).
 """)
-    isolate: Optional[str] = Field(None, description="""APGAP: 'Isolate'. Identification or description of the specific individual from which the sample was obtained.
+    isolate: Optional[str] = Field(None, description="""individual from which the sample was obtained.
 """)
     serotype: Optional[str] = Field(None, description="""Serotype of the pathogen isolate. Use for: Salmonella serovar (e.g. Typhimurium, Enteritidis), Dengue serotype (DENV-1 to DENV-4), Poliovirus type (1, 2, 3), Influenza subtype (H1N1, H3N2, H5N1).
 """)
@@ -2900,27 +2930,27 @@ class SurfaceSample(EnvironmentalSample):
     genbank_accession: Optional[str] = Field(None, description="""GenBank accession (e.g. OQ123456)""")
     gisaid_accession: Optional[str] = Field(None, description="""GISAID EPI_ accession (e.g. EPI_ISL_1234567)""")
     bioproject_accession: Optional[str] = Field(None, description="""NCBI BioProject accession (e.g. PRJNA123456)""")
-    type_of_experiment: ExperimentTypeEnum = Field(..., description="""APGAP: 'Type of experiment'. Validation: match defined allowable entries (one only).
+    type_of_experiment: ExperimentTypeEnum = Field(..., description="""Validation: match defined allowable entries (one only).
 """)
-    nucleic_acid_extraction_method: List[str] = Field(default_factory=list, description="""APGAP: 'Nucleic acid extraction method'. Multiple values permitted. Match defined allowable entries.
+    nucleic_acid_extraction_method: List[str] = Field(default_factory=list, description="""Multiple values permitted. Match defined allowable entries.
 """)
-    library_preparation_method: str = Field(..., description="""APGAP: 'Nucleic acid library preparation method'. Match defined allowable entries (one only).
+    library_preparation_method: str = Field(..., description="""Match defined allowable entries (one only).
 """)
-    sequencing_protocol: str = Field(..., description="""APGAP: 'Sequencing protocol'. URL to protocol document. Validation: URL format preferred (e.g. https://www.protocols.io/view/artic-v4-1).
+    sequencing_protocol: str = Field(..., description="""Validation: URL format preferred (e.g. https://www.protocols.io/view/artic-v4-1).
 """)
-    sequencing_platform: SequencingPlatformEnum = Field(..., description="""APGAP: 'Sequencing instrument make and model'. Validation: match defined allowable entries (one only).
+    sequencing_platform: SequencingPlatformEnum = Field(..., description="""Validation: match defined allowable entries (one only).
 """)
     sequencing_instrument: Optional[str] = Field(None, description="""Specific instrument model. Examples: NextSeq 2000, MinION, Sequel IIe, Ion S5.
 """)
-    sequencing_lab: str = Field(..., description="""APGAP: 'Sequencing lab (originating lab)'. The lab that performed the sequencing. NOT a static enum — validated at ingest against the sequencing_labs database table, which is a Platform Admin-managed controlled vocabulary. Seeded values: 'Sonora Quest Laboratories', 'Laboratory Corporation of America'. Registered JACKPOT Labs are auto-added (APGAP backlog #42). Unknown values trigger validation error directing Lab Director to submit a sequencing lab addition request via the portal (APGAP backlog #7).
+    sequencing_lab: str = Field(..., description="""performed the sequencing. NOT a static enum — validated at ingest against the sequencing_labs database table, which is a Platform Admin-managed controlled vocabulary. Seeded values: 'Example Reference Lab', 'Laboratory Corporation of America'. Unknown values trigger validation error directing Lab Director to submit a sequencing lab addition request via the portal
 """)
-    date_collected: date = Field(..., description="""APGAP: 'Date Collected'. ISO 8601 format (YYYY-MM-DD). Validation: flag if >5 years in past; reject if future date.
+    date_collected: date = Field(..., description="""Validation: flag if >5 years in past; reject if future date.
 """)
-    date_sequenced: date = Field(..., description="""APGAP: 'Date Sequenced'. ISO 8601 format. Validation: must not be future date; must not precede date_collected.
+    date_sequenced: date = Field(..., description="""Validation: must not be future date; must not precede date_collected.
 """)
-    collection_facility: str = Field(..., description="""APGAP: 'Collection facility'. Institution or facility where the sample was collected. Match defined allowable entries.
+    collection_facility: str = Field(..., description="""the sample was collected. Match defined allowable entries.
 """)
-    purpose_for_collection: List[str] = Field(default_factory=list, description="""APGAP: 'Purpose for collection and sequencing'. Multiple selections permitted. Match defined allowable entries.
+    purpose_for_collection: List[str] = Field(default_factory=list, description="""Multiple selections permitted. Match defined allowable entries.
 """)
     collection_location_country: str = Field(..., description="""Country of sample collection. Free text — no controlled vocabulary enforced at Tier 1 or Tier 2. At Tier 3 (SUBMITTABLE), must match an INSDC-approved country name for BioSample submission via TOSTADAS (e.g. \"USA\" not \"United States\", \"United Kingdom\" not \"UK\"). INSDC country list: https://www.insdc.org/submitting-standards/country-qualifier-vocabulary/ portal_to_tostadas.py validates against the INSDC list before constructing the geo_loc_name field (format: Country:State:City).""")
     collection_location_state: Optional[str] = Field(None, description="""Sub-national administrative region of sample collection. Accepts any equivalent administrative division regardless of country: US state, Canadian province, Mexican estado, Australian state, Brazilian estado, UK county/nation, German Bundesland, Japanese prefecture, etc. Free text — not a controlled vocabulary since administrative divisions vary by country. Used in NCBI BioSample geo_loc_name construction (Country:State:City).""")
@@ -2964,15 +2994,15 @@ class SurfaceSample(EnvironmentalSample):
     date_sequence_uploaded: Optional[date] = Field(None, description="""Date consensus genome uploaded to JACKPOT. Rockefeller target: ≤10 days from date_received_lab.""")
     date_lineage_assigned: Optional[date] = Field(None, description="""Date lineage or sequence type assignment completed (Pangolin, MLST, cgMLST). Rockefeller target: ≤48 hours from date_sequence_uploaded.""")
     date_phenotype_reported: Optional[date] = Field(None, description="""Date phenotypic threat assessment (AMR profile, virulence) reported. Rockefeller target: ≤21 days from date_sequence_uploaded.""")
-    associated_sample_ids: Optional[List[str]] = Field(default_factory=list, description="""APGAP: 'IDs of any associated samples'. Present in ALL sample type spreadsheets. Links sequences from the same investigation (e.g. pet and owner, food product and patient, vector and host). Validation: each ID should match an existing sample_id in the system. Flag (not reject) if linked sample not yet uploaded — may arrive later. Bidirectional linkage confirmed at resolution. Stored as directed pairs in the sample_associations table.
+    associated_sample_ids: Optional[List[str]] = Field(default_factory=list, description="""type spreadsheets. Links sequences from the same investigation (e.g. pet and owner, food product and patient, vector and host). Validation: each ID should match an existing sample_id in the system. Flag (not reject) if linked sample not yet uploaded — may arrive later. Bidirectional linkage confirmed at resolution. Stored as directed pairs in the sample_associations table.
 """)
-    ct_value: Optional[float] = Field(None, description="""APGAP: 'Ct value'. PCR cycle threshold value. Validation: numeric, range [0, 50].
+    ct_value: Optional[float] = Field(None, description="""Validation: numeric, range [0, 50].
 """)
-    other_testing_performed: Optional[List[str]] = Field(default_factory=list, description="""APGAP: 'Other Testing Performed'. Multiple entries permitted. Match defined allowable entries. Flag error if 'none' entered alongside any other value.
+    other_testing_performed: Optional[List[str]] = Field(default_factory=list, description="""Match defined allowable entries. Flag error if 'none' entered alongside any other value.
 """)
-    lab_of_other_testing: Optional[List[str]] = Field(default_factory=list, description="""APGAP: 'Lab of Other Testing'. Conditional: required if other_testing_performed is not empty or 'none'.
+    lab_of_other_testing: Optional[List[str]] = Field(default_factory=list, description="""other_testing_performed is not empty or 'none'.
 """)
-    intermediary_clinical_lab: Optional[str] = Field(None, description="""APGAP: 'Intermediary clinical lab name'. Optional. Match defined allowable entries.
+    intermediary_clinical_lab: Optional[str] = Field(None, description="""Match defined allowable entries.
 """)
     assembly_method: Optional[str] = Field(None, description="""e.g. SPAdes 3.15, IVAR 1.4, Flye 2.9, Unicycler 0.5""")
     coverage_depth: Optional[float] = Field(None, description="""Mean sequencing depth (X)""")
@@ -3011,10 +3041,10 @@ class SurfaceSample(EnvironmentalSample):
     pii_scan_status: PIIScanStatusEnum = Field(...)
     ingest_method: IngestMethodEnum = Field(...)
     sharing_level: SharingLevelEnum = Field(...)
-    pi_name: Optional[str] = Field(None, description="""APGAP: 'PI name'. Defaults to Lab Director. Validation: must match existing user in the platform.
+    pi_name: Optional[str] = Field(None, description="""Validation: must match existing user in the platform.
 """)
-    grant_number: Optional[str] = Field(None, description="""APGAP: 'Grant number'. Alphanumeric.""")
-    contact_other: Optional[str] = Field(None, description="""APGAP: 'Contact (if other than user uploading data)'. Email format. Phase 2: allow non-user contacts.
+    grant_number: Optional[str] = Field(None)
+    contact_other: Optional[str] = Field(None, description="""Email format. Phase 2: allow non-user contacts.
 """)
     comments: Optional[str] = Field(None, description="""Free text comments""")
 
@@ -3022,32 +3052,32 @@ class SurfaceSample(EnvironmentalSample):
 
 class FoodSample(EnvironmentalSample):
     """
-    Sample from a food product. Fields from APGAP Food-Products.xlsx.
+    Sample from a food product.
 
     """
-    food_location_type: FoodLocationTypeEnum = Field(..., description="""APGAP: 'Location type'. Where the food sample was collected.""")
-    storage_temperature_setting: Optional[str] = Field(None, description="""APGAP: 'Storage temperature setting'. Numeric (°C) or descriptive string. Examples: freezer, frozen, refrigerator, shelf, room temperature. Validation: numeric OR match defined allowable entries.
+    food_location_type: FoodLocationTypeEnum = Field(...)
+    storage_temperature_setting: Optional[str] = Field(None, description="""Examples: freezer, frozen, refrigerator, shelf, room temperature. Validation: numeric OR match defined allowable entries.
 """)
-    product_temperature_c: Optional[float] = Field(None, description="""APGAP: 'Product temperature (C)'. Actual measured temperature. Validation: range [-36, 100]. Unit: °C.
+    product_temperature_c: Optional[float] = Field(None, description="""Validation: range [-36, 100]. Unit: °C.
 """)
     food_product_type: FoodProductTypeEnum = Field(...)
     env_broad_scale: Optional[str] = Field(None)
     env_local_scale: Optional[str] = Field(None)
     env_medium: Optional[str] = Field(None)
-    sample_id: str = Field(..., description="""Unique alphanumeric identifier for this sample. Must not already be in use in the system. APGAP: 'Sample ID'. Validation: alphanumeric, unique. Portal mints persistent URI at ingest: https://data.jackpot.health/samples/{sample_id}
+    sample_id: str = Field(..., description="""Unique alphanumeric identifier for this sample. Must not already be in use in the system. Portal mints persistent URI at ingest: https://data.jackpot.health/samples/{sample_id}
 """)
     jackpot_uri: Optional[str] = Field(None, description="""Persistent URI minted at ingest for FAIR Findability (F1). Format: https://data.jackpot.health/samples/{sample_id} Stable before NCBI/GISAID accessions are assigned.
 """)
     lab: str = Field(...)
     project: str = Field(...)
     owner: str = Field(..., description="""Email of the researcher who uploaded the sample""")
-    source_type: SourceTypeEnum = Field(..., description="""APGAP: 'Source type'. Determines which host-specific subclass is required. Further required fields depend on this value. Validation: match defined allowable entries.
+    source_type: SourceTypeEnum = Field(..., description="""is required. Further required fields depend on this value. Validation: match defined allowable entries.
 """)
-    organism_name: OrganismNameEnum = Field(..., description="""NCBI organism name. Controlled vocabulary derived from the host jurisdiction's reportable communicable diseases list, plus Coccidioides spp. (Valley fever) and metagenome for metagenomic samples. Platform Admins may add new values when novel pathogens emerge. Researchers may request additions via the portal. Use 'metagenome' when no specific organism is targeted. APGAP: 'Pathogen/organism name (or metagenomic)'.
+    organism_name: OrganismNameEnum = Field(..., description="""NCBI organism name. Controlled vocabulary derived from the host jurisdiction's reportable communicable diseases list, plus Coccidioides spp. (Valley fever) and metagenome for metagenomic samples. Platform Admins may add new values when novel pathogens emerge. Researchers may request additions via the portal. Use 'metagenome' when no specific organism is targeted.
 """)
     strain: Optional[str] = Field(None, description="""Pathogen strain designation. Also used for: Influenza subtype (H1N1, H3N2), Pango lineage pre-Pangolin-pipeline, rabies variant, poliovirus type (wild vs. vaccine-derived).
 """)
-    isolate: Optional[str] = Field(None, description="""APGAP: 'Isolate'. Identification or description of the specific individual from which the sample was obtained.
+    isolate: Optional[str] = Field(None, description="""individual from which the sample was obtained.
 """)
     serotype: Optional[str] = Field(None, description="""Serotype of the pathogen isolate. Use for: Salmonella serovar (e.g. Typhimurium, Enteritidis), Dengue serotype (DENV-1 to DENV-4), Poliovirus type (1, 2, 3), Influenza subtype (H1N1, H3N2, H5N1).
 """)
@@ -3056,27 +3086,27 @@ class FoodSample(EnvironmentalSample):
     genbank_accession: Optional[str] = Field(None, description="""GenBank accession (e.g. OQ123456)""")
     gisaid_accession: Optional[str] = Field(None, description="""GISAID EPI_ accession (e.g. EPI_ISL_1234567)""")
     bioproject_accession: Optional[str] = Field(None, description="""NCBI BioProject accession (e.g. PRJNA123456)""")
-    type_of_experiment: ExperimentTypeEnum = Field(..., description="""APGAP: 'Type of experiment'. Validation: match defined allowable entries (one only).
+    type_of_experiment: ExperimentTypeEnum = Field(..., description="""Validation: match defined allowable entries (one only).
 """)
-    nucleic_acid_extraction_method: List[str] = Field(default_factory=list, description="""APGAP: 'Nucleic acid extraction method'. Multiple values permitted. Match defined allowable entries.
+    nucleic_acid_extraction_method: List[str] = Field(default_factory=list, description="""Multiple values permitted. Match defined allowable entries.
 """)
-    library_preparation_method: str = Field(..., description="""APGAP: 'Nucleic acid library preparation method'. Match defined allowable entries (one only).
+    library_preparation_method: str = Field(..., description="""Match defined allowable entries (one only).
 """)
-    sequencing_protocol: str = Field(..., description="""APGAP: 'Sequencing protocol'. URL to protocol document. Validation: URL format preferred (e.g. https://www.protocols.io/view/artic-v4-1).
+    sequencing_protocol: str = Field(..., description="""Validation: URL format preferred (e.g. https://www.protocols.io/view/artic-v4-1).
 """)
-    sequencing_platform: SequencingPlatformEnum = Field(..., description="""APGAP: 'Sequencing instrument make and model'. Validation: match defined allowable entries (one only).
+    sequencing_platform: SequencingPlatformEnum = Field(..., description="""Validation: match defined allowable entries (one only).
 """)
     sequencing_instrument: Optional[str] = Field(None, description="""Specific instrument model. Examples: NextSeq 2000, MinION, Sequel IIe, Ion S5.
 """)
-    sequencing_lab: str = Field(..., description="""APGAP: 'Sequencing lab (originating lab)'. The lab that performed the sequencing. NOT a static enum — validated at ingest against the sequencing_labs database table, which is a Platform Admin-managed controlled vocabulary. Seeded values: 'Sonora Quest Laboratories', 'Laboratory Corporation of America'. Registered JACKPOT Labs are auto-added (APGAP backlog #42). Unknown values trigger validation error directing Lab Director to submit a sequencing lab addition request via the portal (APGAP backlog #7).
+    sequencing_lab: str = Field(..., description="""performed the sequencing. NOT a static enum — validated at ingest against the sequencing_labs database table, which is a Platform Admin-managed controlled vocabulary. Seeded values: 'Example Reference Lab', 'Laboratory Corporation of America'. Unknown values trigger validation error directing Lab Director to submit a sequencing lab addition request via the portal
 """)
-    date_collected: date = Field(..., description="""APGAP: 'Date Collected'. ISO 8601 format (YYYY-MM-DD). Validation: flag if >5 years in past; reject if future date.
+    date_collected: date = Field(..., description="""Validation: flag if >5 years in past; reject if future date.
 """)
-    date_sequenced: date = Field(..., description="""APGAP: 'Date Sequenced'. ISO 8601 format. Validation: must not be future date; must not precede date_collected.
+    date_sequenced: date = Field(..., description="""Validation: must not be future date; must not precede date_collected.
 """)
-    collection_facility: str = Field(..., description="""APGAP: 'Collection facility'. Institution or facility where the sample was collected. Match defined allowable entries.
+    collection_facility: str = Field(..., description="""the sample was collected. Match defined allowable entries.
 """)
-    purpose_for_collection: List[str] = Field(default_factory=list, description="""APGAP: 'Purpose for collection and sequencing'. Multiple selections permitted. Match defined allowable entries.
+    purpose_for_collection: List[str] = Field(default_factory=list, description="""Multiple selections permitted. Match defined allowable entries.
 """)
     collection_location_country: str = Field(..., description="""Country of sample collection. Free text — no controlled vocabulary enforced at Tier 1 or Tier 2. At Tier 3 (SUBMITTABLE), must match an INSDC-approved country name for BioSample submission via TOSTADAS (e.g. \"USA\" not \"United States\", \"United Kingdom\" not \"UK\"). INSDC country list: https://www.insdc.org/submitting-standards/country-qualifier-vocabulary/ portal_to_tostadas.py validates against the INSDC list before constructing the geo_loc_name field (format: Country:State:City).""")
     collection_location_state: Optional[str] = Field(None, description="""Sub-national administrative region of sample collection. Accepts any equivalent administrative division regardless of country: US state, Canadian province, Mexican estado, Australian state, Brazilian estado, UK county/nation, German Bundesland, Japanese prefecture, etc. Free text — not a controlled vocabulary since administrative divisions vary by country. Used in NCBI BioSample geo_loc_name construction (Country:State:City).""")
@@ -3120,15 +3150,15 @@ class FoodSample(EnvironmentalSample):
     date_sequence_uploaded: Optional[date] = Field(None, description="""Date consensus genome uploaded to JACKPOT. Rockefeller target: ≤10 days from date_received_lab.""")
     date_lineage_assigned: Optional[date] = Field(None, description="""Date lineage or sequence type assignment completed (Pangolin, MLST, cgMLST). Rockefeller target: ≤48 hours from date_sequence_uploaded.""")
     date_phenotype_reported: Optional[date] = Field(None, description="""Date phenotypic threat assessment (AMR profile, virulence) reported. Rockefeller target: ≤21 days from date_sequence_uploaded.""")
-    associated_sample_ids: Optional[List[str]] = Field(default_factory=list, description="""APGAP: 'IDs of any associated samples'. Present in ALL sample type spreadsheets. Links sequences from the same investigation (e.g. pet and owner, food product and patient, vector and host). Validation: each ID should match an existing sample_id in the system. Flag (not reject) if linked sample not yet uploaded — may arrive later. Bidirectional linkage confirmed at resolution. Stored as directed pairs in the sample_associations table.
+    associated_sample_ids: Optional[List[str]] = Field(default_factory=list, description="""type spreadsheets. Links sequences from the same investigation (e.g. pet and owner, food product and patient, vector and host). Validation: each ID should match an existing sample_id in the system. Flag (not reject) if linked sample not yet uploaded — may arrive later. Bidirectional linkage confirmed at resolution. Stored as directed pairs in the sample_associations table.
 """)
-    ct_value: Optional[float] = Field(None, description="""APGAP: 'Ct value'. PCR cycle threshold value. Validation: numeric, range [0, 50].
+    ct_value: Optional[float] = Field(None, description="""Validation: numeric, range [0, 50].
 """)
-    other_testing_performed: Optional[List[str]] = Field(default_factory=list, description="""APGAP: 'Other Testing Performed'. Multiple entries permitted. Match defined allowable entries. Flag error if 'none' entered alongside any other value.
+    other_testing_performed: Optional[List[str]] = Field(default_factory=list, description="""Match defined allowable entries. Flag error if 'none' entered alongside any other value.
 """)
-    lab_of_other_testing: Optional[List[str]] = Field(default_factory=list, description="""APGAP: 'Lab of Other Testing'. Conditional: required if other_testing_performed is not empty or 'none'.
+    lab_of_other_testing: Optional[List[str]] = Field(default_factory=list, description="""other_testing_performed is not empty or 'none'.
 """)
-    intermediary_clinical_lab: Optional[str] = Field(None, description="""APGAP: 'Intermediary clinical lab name'. Optional. Match defined allowable entries.
+    intermediary_clinical_lab: Optional[str] = Field(None, description="""Match defined allowable entries.
 """)
     assembly_method: Optional[str] = Field(None, description="""e.g. SPAdes 3.15, IVAR 1.4, Flye 2.9, Unicycler 0.5""")
     coverage_depth: Optional[float] = Field(None, description="""Mean sequencing depth (X)""")
@@ -3167,10 +3197,10 @@ class FoodSample(EnvironmentalSample):
     pii_scan_status: PIIScanStatusEnum = Field(...)
     ingest_method: IngestMethodEnum = Field(...)
     sharing_level: SharingLevelEnum = Field(...)
-    pi_name: Optional[str] = Field(None, description="""APGAP: 'PI name'. Defaults to Lab Director. Validation: must match existing user in the platform.
+    pi_name: Optional[str] = Field(None, description="""Validation: must match existing user in the platform.
 """)
-    grant_number: Optional[str] = Field(None, description="""APGAP: 'Grant number'. Alphanumeric.""")
-    contact_other: Optional[str] = Field(None, description="""APGAP: 'Contact (if other than user uploading data)'. Email format. Phase 2: allow non-user contacts.
+    grant_number: Optional[str] = Field(None)
+    contact_other: Optional[str] = Field(None, description="""Email format. Phase 2: allow non-user contacts.
 """)
     comments: Optional[str] = Field(None, description="""Free text comments""")
 
@@ -3178,10 +3208,10 @@ class FoodSample(EnvironmentalSample):
 
 class ProduceAgSample(EnvironmentalSample):
     """
-    Sample from an agricultural produce crop. Fields from APGAP Produce_Ag.xlsx.
+    Sample from an agricultural produce crop.
 
     """
-    plant_species: str = Field(..., description="""APGAP: 'Plant species'. Scientific name of the agricultural plant. Examples: Lactuca sativa var. longifolia, Allium cepa.
+    plant_species: str = Field(..., description="""Examples: Lactuca sativa var. longifolia, Allium cepa.
 """)
     distribution_scale: Optional[List[DistributionScaleEnum]] = Field(default_factory=list)
     produce_water_source: List[ProduceWaterSourceEnum] = Field(default_factory=list)
@@ -3191,20 +3221,20 @@ class ProduceAgSample(EnvironmentalSample):
     env_broad_scale: Optional[str] = Field(None)
     env_local_scale: Optional[str] = Field(None)
     env_medium: Optional[str] = Field(None)
-    sample_id: str = Field(..., description="""Unique alphanumeric identifier for this sample. Must not already be in use in the system. APGAP: 'Sample ID'. Validation: alphanumeric, unique. Portal mints persistent URI at ingest: https://data.jackpot.health/samples/{sample_id}
+    sample_id: str = Field(..., description="""Unique alphanumeric identifier for this sample. Must not already be in use in the system. Portal mints persistent URI at ingest: https://data.jackpot.health/samples/{sample_id}
 """)
     jackpot_uri: Optional[str] = Field(None, description="""Persistent URI minted at ingest for FAIR Findability (F1). Format: https://data.jackpot.health/samples/{sample_id} Stable before NCBI/GISAID accessions are assigned.
 """)
     lab: str = Field(...)
     project: str = Field(...)
     owner: str = Field(..., description="""Email of the researcher who uploaded the sample""")
-    source_type: SourceTypeEnum = Field(..., description="""APGAP: 'Source type'. Determines which host-specific subclass is required. Further required fields depend on this value. Validation: match defined allowable entries.
+    source_type: SourceTypeEnum = Field(..., description="""is required. Further required fields depend on this value. Validation: match defined allowable entries.
 """)
-    organism_name: OrganismNameEnum = Field(..., description="""NCBI organism name. Controlled vocabulary derived from the host jurisdiction's reportable communicable diseases list, plus Coccidioides spp. (Valley fever) and metagenome for metagenomic samples. Platform Admins may add new values when novel pathogens emerge. Researchers may request additions via the portal. Use 'metagenome' when no specific organism is targeted. APGAP: 'Pathogen/organism name (or metagenomic)'.
+    organism_name: OrganismNameEnum = Field(..., description="""NCBI organism name. Controlled vocabulary derived from the host jurisdiction's reportable communicable diseases list, plus Coccidioides spp. (Valley fever) and metagenome for metagenomic samples. Platform Admins may add new values when novel pathogens emerge. Researchers may request additions via the portal. Use 'metagenome' when no specific organism is targeted.
 """)
     strain: Optional[str] = Field(None, description="""Pathogen strain designation. Also used for: Influenza subtype (H1N1, H3N2), Pango lineage pre-Pangolin-pipeline, rabies variant, poliovirus type (wild vs. vaccine-derived).
 """)
-    isolate: Optional[str] = Field(None, description="""APGAP: 'Isolate'. Identification or description of the specific individual from which the sample was obtained.
+    isolate: Optional[str] = Field(None, description="""individual from which the sample was obtained.
 """)
     serotype: Optional[str] = Field(None, description="""Serotype of the pathogen isolate. Use for: Salmonella serovar (e.g. Typhimurium, Enteritidis), Dengue serotype (DENV-1 to DENV-4), Poliovirus type (1, 2, 3), Influenza subtype (H1N1, H3N2, H5N1).
 """)
@@ -3213,27 +3243,27 @@ class ProduceAgSample(EnvironmentalSample):
     genbank_accession: Optional[str] = Field(None, description="""GenBank accession (e.g. OQ123456)""")
     gisaid_accession: Optional[str] = Field(None, description="""GISAID EPI_ accession (e.g. EPI_ISL_1234567)""")
     bioproject_accession: Optional[str] = Field(None, description="""NCBI BioProject accession (e.g. PRJNA123456)""")
-    type_of_experiment: ExperimentTypeEnum = Field(..., description="""APGAP: 'Type of experiment'. Validation: match defined allowable entries (one only).
+    type_of_experiment: ExperimentTypeEnum = Field(..., description="""Validation: match defined allowable entries (one only).
 """)
-    nucleic_acid_extraction_method: List[str] = Field(default_factory=list, description="""APGAP: 'Nucleic acid extraction method'. Multiple values permitted. Match defined allowable entries.
+    nucleic_acid_extraction_method: List[str] = Field(default_factory=list, description="""Multiple values permitted. Match defined allowable entries.
 """)
-    library_preparation_method: str = Field(..., description="""APGAP: 'Nucleic acid library preparation method'. Match defined allowable entries (one only).
+    library_preparation_method: str = Field(..., description="""Match defined allowable entries (one only).
 """)
-    sequencing_protocol: str = Field(..., description="""APGAP: 'Sequencing protocol'. URL to protocol document. Validation: URL format preferred (e.g. https://www.protocols.io/view/artic-v4-1).
+    sequencing_protocol: str = Field(..., description="""Validation: URL format preferred (e.g. https://www.protocols.io/view/artic-v4-1).
 """)
-    sequencing_platform: SequencingPlatformEnum = Field(..., description="""APGAP: 'Sequencing instrument make and model'. Validation: match defined allowable entries (one only).
+    sequencing_platform: SequencingPlatformEnum = Field(..., description="""Validation: match defined allowable entries (one only).
 """)
     sequencing_instrument: Optional[str] = Field(None, description="""Specific instrument model. Examples: NextSeq 2000, MinION, Sequel IIe, Ion S5.
 """)
-    sequencing_lab: str = Field(..., description="""APGAP: 'Sequencing lab (originating lab)'. The lab that performed the sequencing. NOT a static enum — validated at ingest against the sequencing_labs database table, which is a Platform Admin-managed controlled vocabulary. Seeded values: 'Sonora Quest Laboratories', 'Laboratory Corporation of America'. Registered JACKPOT Labs are auto-added (APGAP backlog #42). Unknown values trigger validation error directing Lab Director to submit a sequencing lab addition request via the portal (APGAP backlog #7).
+    sequencing_lab: str = Field(..., description="""performed the sequencing. NOT a static enum — validated at ingest against the sequencing_labs database table, which is a Platform Admin-managed controlled vocabulary. Seeded values: 'Example Reference Lab', 'Laboratory Corporation of America'. Unknown values trigger validation error directing Lab Director to submit a sequencing lab addition request via the portal
 """)
-    date_collected: date = Field(..., description="""APGAP: 'Date Collected'. ISO 8601 format (YYYY-MM-DD). Validation: flag if >5 years in past; reject if future date.
+    date_collected: date = Field(..., description="""Validation: flag if >5 years in past; reject if future date.
 """)
-    date_sequenced: date = Field(..., description="""APGAP: 'Date Sequenced'. ISO 8601 format. Validation: must not be future date; must not precede date_collected.
+    date_sequenced: date = Field(..., description="""Validation: must not be future date; must not precede date_collected.
 """)
-    collection_facility: str = Field(..., description="""APGAP: 'Collection facility'. Institution or facility where the sample was collected. Match defined allowable entries.
+    collection_facility: str = Field(..., description="""the sample was collected. Match defined allowable entries.
 """)
-    purpose_for_collection: List[str] = Field(default_factory=list, description="""APGAP: 'Purpose for collection and sequencing'. Multiple selections permitted. Match defined allowable entries.
+    purpose_for_collection: List[str] = Field(default_factory=list, description="""Multiple selections permitted. Match defined allowable entries.
 """)
     collection_location_country: str = Field(..., description="""Country of sample collection. Free text — no controlled vocabulary enforced at Tier 1 or Tier 2. At Tier 3 (SUBMITTABLE), must match an INSDC-approved country name for BioSample submission via TOSTADAS (e.g. \"USA\" not \"United States\", \"United Kingdom\" not \"UK\"). INSDC country list: https://www.insdc.org/submitting-standards/country-qualifier-vocabulary/ portal_to_tostadas.py validates against the INSDC list before constructing the geo_loc_name field (format: Country:State:City).""")
     collection_location_state: Optional[str] = Field(None, description="""Sub-national administrative region of sample collection. Accepts any equivalent administrative division regardless of country: US state, Canadian province, Mexican estado, Australian state, Brazilian estado, UK county/nation, German Bundesland, Japanese prefecture, etc. Free text — not a controlled vocabulary since administrative divisions vary by country. Used in NCBI BioSample geo_loc_name construction (Country:State:City).""")
@@ -3277,15 +3307,15 @@ class ProduceAgSample(EnvironmentalSample):
     date_sequence_uploaded: Optional[date] = Field(None, description="""Date consensus genome uploaded to JACKPOT. Rockefeller target: ≤10 days from date_received_lab.""")
     date_lineage_assigned: Optional[date] = Field(None, description="""Date lineage or sequence type assignment completed (Pangolin, MLST, cgMLST). Rockefeller target: ≤48 hours from date_sequence_uploaded.""")
     date_phenotype_reported: Optional[date] = Field(None, description="""Date phenotypic threat assessment (AMR profile, virulence) reported. Rockefeller target: ≤21 days from date_sequence_uploaded.""")
-    associated_sample_ids: Optional[List[str]] = Field(default_factory=list, description="""APGAP: 'IDs of any associated samples'. Present in ALL sample type spreadsheets. Links sequences from the same investigation (e.g. pet and owner, food product and patient, vector and host). Validation: each ID should match an existing sample_id in the system. Flag (not reject) if linked sample not yet uploaded — may arrive later. Bidirectional linkage confirmed at resolution. Stored as directed pairs in the sample_associations table.
+    associated_sample_ids: Optional[List[str]] = Field(default_factory=list, description="""type spreadsheets. Links sequences from the same investigation (e.g. pet and owner, food product and patient, vector and host). Validation: each ID should match an existing sample_id in the system. Flag (not reject) if linked sample not yet uploaded — may arrive later. Bidirectional linkage confirmed at resolution. Stored as directed pairs in the sample_associations table.
 """)
-    ct_value: Optional[float] = Field(None, description="""APGAP: 'Ct value'. PCR cycle threshold value. Validation: numeric, range [0, 50].
+    ct_value: Optional[float] = Field(None, description="""Validation: numeric, range [0, 50].
 """)
-    other_testing_performed: Optional[List[str]] = Field(default_factory=list, description="""APGAP: 'Other Testing Performed'. Multiple entries permitted. Match defined allowable entries. Flag error if 'none' entered alongside any other value.
+    other_testing_performed: Optional[List[str]] = Field(default_factory=list, description="""Match defined allowable entries. Flag error if 'none' entered alongside any other value.
 """)
-    lab_of_other_testing: Optional[List[str]] = Field(default_factory=list, description="""APGAP: 'Lab of Other Testing'. Conditional: required if other_testing_performed is not empty or 'none'.
+    lab_of_other_testing: Optional[List[str]] = Field(default_factory=list, description="""other_testing_performed is not empty or 'none'.
 """)
-    intermediary_clinical_lab: Optional[str] = Field(None, description="""APGAP: 'Intermediary clinical lab name'. Optional. Match defined allowable entries.
+    intermediary_clinical_lab: Optional[str] = Field(None, description="""Match defined allowable entries.
 """)
     assembly_method: Optional[str] = Field(None, description="""e.g. SPAdes 3.15, IVAR 1.4, Flye 2.9, Unicycler 0.5""")
     coverage_depth: Optional[float] = Field(None, description="""Mean sequencing depth (X)""")
@@ -3324,10 +3354,10 @@ class ProduceAgSample(EnvironmentalSample):
     pii_scan_status: PIIScanStatusEnum = Field(...)
     ingest_method: IngestMethodEnum = Field(...)
     sharing_level: SharingLevelEnum = Field(...)
-    pi_name: Optional[str] = Field(None, description="""APGAP: 'PI name'. Defaults to Lab Director. Validation: must match existing user in the platform.
+    pi_name: Optional[str] = Field(None, description="""Validation: must match existing user in the platform.
 """)
-    grant_number: Optional[str] = Field(None, description="""APGAP: 'Grant number'. Alphanumeric.""")
-    contact_other: Optional[str] = Field(None, description="""APGAP: 'Contact (if other than user uploading data)'. Email format. Phase 2: allow non-user contacts.
+    grant_number: Optional[str] = Field(None)
+    contact_other: Optional[str] = Field(None, description="""Email format. Phase 2: allow non-user contacts.
 """)
     comments: Optional[str] = Field(None, description="""Free text comments""")
 
@@ -3335,7 +3365,7 @@ class ProduceAgSample(EnvironmentalSample):
 
 class SampleAssociation(ConfiguredBaseModel):
     """
-    Links two samples from the same investigation. Derived from 'IDs of any associated samples' field present in ALL APGAP sample type spreadsheets. Stored as directed pairs in the sample_associations table. Bidirectional: A→B implies B→A but stored as two records.
+    Links two samples from the same investigation. Derived from 'IDs of any associated samples' field present in ALL Stored as directed pairs in the sample_associations table. Bidirectional: A→B implies B→A but stored as two records.
 
     """
     source_sample_id: str = Field(...)
@@ -3447,6 +3477,48 @@ Supported extensions (case-insensitive):
 
 
 
+class ExecutionProfile(ConfiguredBaseModel):
+    """
+    A named, operator-configured set of execution settings that the launch endpoint applies to a single pipeline run. Each profile carries an executor type (LOCAL, SLURM, GCP_BATCH, ...), a container engine, a work directory, and executor-specific overrides in config_overrides JSONB. At most one profile per deployment may carry is_default=true; that profile is the fallback when neither the launch request nor the pipeline's default-profile association picks one. Soft-deleted via active=false. See Critical Rule 59 and spec.md Phase P0g.
+
+    """
+    profile_id: str = Field(..., description="""UUID primary key. Generated DB-side via gen_random_uuid() on insert.
+""")
+    name: str = Field(..., description="""Operator-friendly profile name; UNIQUE within a deployment. Examples: \"default-local\", \"slurm-mylab-apptainer\", \"gcp-batch-spot-us-central1\".
+""")
+    executor_type: ExecutorTypeEnum = Field(..., description="""Which Nextflow executor this profile drives.
+""")
+    container_engine: ContainerEngineEnum = Field(..., description="""Container runtime used to materialize pipeline processes. NONE means processes run as native binaries on the host.
+""")
+    work_dir: str = Field(..., description="""Filesystem path or cloud URI (gs://, s3://) where Nextflow stages task work directories for runs that select this profile.
+""")
+    config_overrides: str = Field("{}", description="""Executor-specific fields rendered into the per-run nextflow.config — e.g. Slurm account/partition/QOS, GCP project/region, Kubernetes namespace, weblog_reachable. Stored as JSONB at the database level; modeled as a string here because LinkML has no native JSONB range. The renderer (G-4) parses this column with json.loads. Defaults to the empty object.
+""")
+    is_default: bool = Field(False, description="""True for the deployment-default profile. The migration enforces \"at most one row with is_default=true\" via a partial unique index. Defaults to false.
+""")
+    created_by_id: int = Field(..., description="""FK to users.id — the operator who created the profile.
+""")
+    created_at: datetime  = Field(..., description="""Timestamp the profile was created. Set DB-side to NOW() at insert; never updated.
+""")
+    active: bool = Field(True, description="""Soft-delete flag. Inactive profiles are hidden from launch selection but retained for audit. Defaults to true.
+""")
+
+
+
+class PipelineDefaultProfile(ConfiguredBaseModel):
+    """
+    Association linking a pipeline to one or more execution profiles that the launch endpoint should consider as defaults when the request does not name a profile explicitly. A pipeline may have multiple default profiles; the launcher picks the lowest priority value (priority=1 wins over priority=100). pipeline_id is intentionally a string-typed UUID reference rather than a typed FK because the pipelines surface is not yet represented as a LinkML class — only at the SQL level via pipeline_catalog (which carries a SERIAL id, not a UUID). When the pipelines surface gets a LinkML class with a UUID PK, this field becomes a typed range. See spec.md Phase P0g and the Phase P0g G-1 prompt's \"FK fallback\" guidance.
+
+    """
+    pipeline_id: str = Field(..., description="""UUID of the pipeline this association applies to. Composite PK component with profile_id.
+""")
+    profile_id: str = Field(..., description="""The default profile for the named pipeline. Composite PK component with pipeline_id.
+""")
+    priority: int = Field(100, description="""Tie-breaker when a pipeline has multiple default profiles — lower numeric values are preferred. Defaults to 100.
+""")
+
+
+
 
 # Model rebuild
 # see https://pydantic-docs.helpmanual.io/usage/models/#rebuilding-a-model
@@ -3471,3 +3543,5 @@ SampleAssociation.model_rebuild()
 OutbreakInvestigation.model_rebuild()
 PipelineProvenance.model_rebuild()
 SampleFile.model_rebuild()
+ExecutionProfile.model_rebuild()
+PipelineDefaultProfile.model_rebuild()

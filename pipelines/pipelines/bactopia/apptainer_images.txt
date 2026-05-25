@@ -1,0 +1,15 @@
+# bactopia/bactopia — OCI images this pipeline pulls when run with
+# apptainer.enabled = true. bactopia ships its own per-tool conda /
+# Apptainer container set; the canonical pre-staging path is `bactopia
+# build` against the deployment's container cache.
+
+@upstream bactopia/bactopia
+@upstream-config https://raw.githubusercontent.com/bactopia/bactopia/master/nextflow.config
+@audit-status partial
+@audit-note bactopia uses its own ${BACTOPIA_CACHE} convention for pre-pulled images. Enumerate via `bactopia build --pull` against the target cluster's cache; `jackpot images audit bactopia/bactopia` is a CLI follow-up.
+
+# JACKPOT register process (parsers run via `uv run python -m
+# pipelines.bactopia.register` — wrapper Nextflow integration is a
+# K-track follow-up; once shipped this container is what label
+# 'jackpot_register' will resolve to):
+docker.io/library/python:3.12-slim-bookworm

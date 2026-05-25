@@ -46,7 +46,11 @@ def main() -> None:
         "- **Datasets** — analytical datasets (Month 3 placeholder)\n"
         "- **Pipelines** — launch + monitor + resume\n"
         "- **Access requests** — request + review access\n"
-        "- **Notifications** — inbox (Month 3 placeholder)"
+        "- **Notifications** — inbox (Month 3 placeholder)\n"
+        "- **Broken files** — operator triage for unreachable file references (P0f)\n"
+        "- **Import spreadsheet** — interactive xlsx/csv/tsv import wizard (I-1)\n"
+        "- **Submissions** — generate NCBI/GISAID/ENA/DDBJ packages, track lifecycle (I-2)\n"
+        "- **Wastewater** — Freyja lineage-abundance time-series per sewershed (B-WW-1)"
     )
 
 

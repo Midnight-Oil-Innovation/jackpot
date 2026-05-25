@@ -1,0 +1,11 @@
+# nf-core/viralrecon — OCI images this pipeline pulls when run with
+# apptainer.enabled = true. One image per line; # / @ lines are
+# metadata. See pipelines.apptainer_manifest for the parser contract.
+
+@upstream nf-core/viralrecon
+@upstream-config https://raw.githubusercontent.com/nf-core/viralrecon/master/conf/modules.config
+@audit-status partial
+@audit-note Per-process BioContainer images live in upstream conf/modules.config; enumerate via `jackpot images audit nf-core/viralrecon` (CLI deferred to a later H-2 follow-up).
+
+# JACKPOT register process (REGISTER_RESULTS in jackpot_wrapper.nf):
+docker.io/library/python:3.12-slim-bookworm
