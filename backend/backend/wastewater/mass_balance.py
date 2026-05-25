@@ -208,7 +208,7 @@ def _resolve_concentration(
 
     Returns the canonical concentration (ng/L for mass targets, copies/L
     for pathogen targets). Appends quality flags to ``flags`` in-place when
-    non-detect (value == 0) or below-LOD (0 < value < lod) substitution
+    non-detect (value <= 0) or below-LOD (0 < value < lod) substitution
     fires. Per Hornung & Reed 1990 the substitution value is LOD/2.
     """
     canonical = to_ng_per_l(conc) if is_mass else to_copies_per_l(conc)
@@ -216,7 +216,11 @@ def _resolve_concentration(
         conc.lod * _canonical_factor(conc.unit) if conc.lod is not None else None
     )
 
-    if conc.value == 0.0:
+    # <= 0 rather than == 0: a measured concentration is physically
+    # non-negative, so treat exact zero and any (erroneous or
+    # baseline-subtracted) non-positive value as a non-detect instead of
+    # letting a brittle float-equality check pass a negative through.
+    if conc.value <= 0.0:
         flags.append(
             QualityFlag.NON_DETECT_UPSTREAM if upstream else QualityFlag.NON_DETECT_DOWNSTREAM
         )

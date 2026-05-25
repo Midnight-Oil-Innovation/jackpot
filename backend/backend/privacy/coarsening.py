@@ -94,7 +94,19 @@ class Coarsener:
         granularity = self.policy.date_granularity
         if granularity == "day":
             return date_str
-        if granularity in ("week", "month"):
+        if granularity == "week":
+            # ISO week bucket (YYYY-Www) — finer than month. Falls back to
+            # month precision if the input isn't a parseable date.
+            try:
+                from datetime import date as _date
+
+                from backend.epiweek import compute_epiweeks
+
+                ew = compute_epiweeks(_date.fromisoformat(date_str[:10]))
+                return f"{ew['iso_year']}-W{ew['iso_week']:02d}"
+            except ValueError:
+                return date_str[:7]
+        if granularity == "month":
             return date_str[:7]  # YYYY-MM
         if granularity == "quarter":
             year, month = date_str[:4], int(date_str[5:7])

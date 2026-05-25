@@ -1,3 +1,5 @@
+import logging
+
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from jose import jwt
 from jose.exceptions import JWTError
@@ -16,6 +18,8 @@ from backend.config import get_settings
 from backend.credentials import credentials
 from backend.database import execute_query, execute_write, get_db_dep
 from backend.rate_limit import limiter
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/v1/auth", tags=["auth"])
 settings = get_settings()
@@ -363,6 +367,12 @@ def logout(
         except JWTError:
             # Logout works even if the refresh token is unparseable.
             pass
+        except Exception as exc:  # noqa: BLE001 — logout is best-effort
+            # A credential-backend hiccup or a DB error (e.g. the
+            # refresh_tokens table missing pre-migration) must not block
+            # the user from ending their session. Log and still clear
+            # cookies below.
+            logger.warning("logout: refresh-token revocation failed: %s", exc)
 
     response.delete_cookie("access")
     response.delete_cookie("refresh")

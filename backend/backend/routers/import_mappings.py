@@ -194,7 +194,7 @@ def patch_mapping(
         return success(data=_serialise(rows[0]))
 
     sets: list[str] = []
-    params: dict = {"id": mapping_id}
+    params: dict = {"id": mapping_id, "_lab": rows[0]["lab_id"]}
     for k, v in fields.items():
         if k in ("column_mapping", "file_reference_pattern"):
             sets.append(f"{k} = CAST(:{k} AS JSONB)")
@@ -203,11 +203,21 @@ def patch_mapping(
             sets.append(f"{k} = :{k}")
             params[k] = v
 
+    # Scope the write to the lab we authorized against, so a concurrent
+    # reassignment between the SELECT and UPDATE can't let this patch land
+    # on a mapping the caller no longer has access to.
     updated = execute_write(
-        f"UPDATE import_mappings SET {', '.join(sets)} WHERE id = :id RETURNING *",
+        f"UPDATE import_mappings SET {', '.join(sets)} "
+        "WHERE id = :id AND lab_id = :_lab RETURNING *",
         params,
         conn=db,
     )
+    if not updated:
+        return error(
+            "CONFLICT",
+            f"Mapping {mapping_id} changed concurrently; retry.",
+            status_code=409,
+        )
     return success(data=_serialise(updated[0]))
 
 
@@ -228,8 +238,8 @@ def delete_mapping(
         return error("NOT_FOUND", f"Mapping {mapping_id} not found.", status_code=404)
     _ensure_lab_access(user, rows[0]["lab_id"])
     execute_write(
-        "UPDATE import_mappings SET is_active = FALSE WHERE id = :id",
-        {"id": mapping_id},
+        "UPDATE import_mappings SET is_active = FALSE WHERE id = :id AND lab_id = :_lab",
+        {"id": mapping_id, "_lab": rows[0]["lab_id"]},
         conn=db,
     )
     return success(data={"id": mapping_id, "is_active": False})

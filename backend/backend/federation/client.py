@@ -165,8 +165,12 @@ class FederationClient:
             "X-JACKPOT-Federation-Origin": str(partner.id),
         }
 
+        # Normalize the join: HttpUrl only auto-appends a trailing slash for
+        # bare authorities, so a base_url with a path component (e.g.
+        # https://host/jackpot) would otherwise run straight into "api/...".
+        base = str(partner.base_url).rstrip("/")
         response = await self._http.get(
-            f"{partner.base_url}api/v1/samples/",
+            f"{base}/api/v1/samples/",
             params=params,
             headers=headers,
             timeout=self._timeout,

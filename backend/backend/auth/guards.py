@@ -136,7 +136,11 @@ def authenticate_federation_peer(request: Request, conn: Any = None) -> dict[str
                 exc,
             )
             continue
-        if hmac.compare_digest(presented, expected):
+        # Strip surrounding whitespace: secrets created via shell `echo`
+        # or an editor often carry a trailing newline in the store, which
+        # would otherwise permanently fail the constant-time comparison and
+        # lock out a correctly-configured peer.
+        if hmac.compare_digest(presented.strip(), expected.strip()):
             return row
     return None
 
