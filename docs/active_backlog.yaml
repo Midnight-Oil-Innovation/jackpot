@@ -1607,3 +1607,427 @@ sessions:
       string change to backend/backend/services/byop_telemetry.py and then verify if you can
       successfully write a debug statement into backend/backend/main.py.
     merged_at: '2026-05-26'
+# ────────────────────────────────────────────────────────────────────────
+  # Access-Model Redesign (M0–M5) — greenfield capability-first authz.
+  # Design of record: docs/access_model.md (§1–§11). Replaces the APGAP
+  # ladder in backend/backend/permissions.py with permit() + grants/policies.
+  # Dependency graph (access_model.md §11.2):
+  #   M0 → M1 → M2 → {M3, M4, M5}; ACCESS-GUARD-MAP + ACCESS-SEED block M2.
+  # ────────────────────────────────────────────────────────────────────────
+
+  - id: M0
+    title: permit() engine + grants/policy tables, dark (wired into no route)
+    short_description: |
+      Build the capability-first decision engine from access_model.md §5 as
+      NEW code, called by nothing — the old permissions.py ladder still runs.
+      FIRST TASK of this session is a scoping decision: choose the authz
+      module location (recommend backend/backend/authz/) and record it in a
+      one-line note in docs/access_model.md or the session summary; then build
+      permit() + the grants and policy tables THERE. Deliverables:
+        - permit(principal, capability, resource, context) -> ALLOW|DENY with
+          strict deny-wins and default-deny (§5.1, §5.2 sketch).
+        - Grants table (capability + scope_ref + conditions + source) and
+          policy set (§2.2, §2.5) as hand-written migrations — NO ORM, raw
+          SQL via text(), target_metadata=None convention (§5.2).
+        - Unit tests turning the §9 worked examples into fixtures: 9.1 laptop,
+          9.2 SaaS tenant isolation + surveillance read, 9.4 cryptWWDB
+          compute-without-read. These must pass against permit() in isolation.
+      Ships behind no flag because nothing calls it yet — that is the point;
+      it de-risks everything downstream by proving the decision function
+      correct before anything depends on it. Run as MANUAL flow (Workflow 1),
+      not jackpot-batch: this is a new session shape and the scaffolding
+      decisions want turn-by-turn eyes.
+    phase: access_model_redesign
+    status: open
+    depends_on: []
+    blocked_by_external:
+    parallel_safe: false
+    parallel_safe_reason: "Foundational new package + migrations; scaffolding decisions need interactive review. Manual flow per coding_scripts_howto 'first time running a new session shape'."
+    effort_sessions: 3
+    primary_files:
+      - backend/backend/authz/
+    test_files:
+      - tests/authz/test_permit.py
+    source_of_truth_views:
+      - docs/access_model.md
+    pr_title_template:
+    pr_title_function:
+    branch_name_template: m0-permit-engine
+    role_framing:
+    notes: "authz module path is an M0 scoping decision (recommend backend/backend/authz/); primary_files lists the recommended dir and tightens once chosen. access_model.md §5 + §9 fixtures."
+
+  - id: M1
+    title: visibility_sql_clause companion — list-filtering, cross-checked vs permit()
+    short_description: |
+      Build the SQL list-filtering compiler (access_model.md §5.2) that
+      produces a WHERE fragment matching what permit() allows per-row, so the
+      samples list endpoint filters at the DB tier instead of calling permit()
+      per row. The existing permissions.py.visibility_sql_clause is the model
+      to evolve. CRITICAL property: a row is list-visible iff permit() says it
+      is detail-accessible — prove this with cross-checking tests on the SAME
+      §9 fixtures M0 used. Highest-risk piece (two implementations of one
+      logic that must not diverge), which is why it is its own phase. Still
+      dark — no route uses it yet. No ORM; raw SQL via text().
+    phase: access_model_redesign
+    status: blocked
+    depends_on:
+      - M0
+    blocked_by_external:
+    parallel_safe: false
+    parallel_safe_reason: "Must cross-check against M0's permit() on shared fixtures; serial to M0 by construction."
+    effort_sessions: 2
+    primary_files:
+      - backend/backend/authz/
+    test_files:
+      - tests/authz/test_visibility_sql_clause.py
+    source_of_truth_views:
+      - docs/access_model.md
+    pr_title_template:
+    pr_title_function:
+    branch_name_template: m1-visibility-sql
+    role_framing:
+    notes: "Behavioral-equivalence tests vs M0 are the acceptance gate. access_model.md §5.2."
+
+  - id: ACCESS-GUARD-MAP
+    title: Endpoint→capability map for the M2 guard rewrite
+    short_description: |
+      Produce the endpoint→capability map M2 needs (access_model.md §10.3):
+      walk every current require_platform_admin and lab-role guard call site
+      and record the capability each route requires (e.g.
+      POST /federation/instances -> federation:configure_peer or org:manage;
+      POST /samples -> sample:create at target scope; deletion-approval route
+      -> deletion:approve, inheriting the §6.2-1b separation-of-duties DENY).
+      One row per guarded route. Deliverable: a checked-in map (markdown or
+      a small module) plus the renamed guard helpers — guards renamed to their
+      capability (require_capability(...)), NOT kept as role-named aliases.
+      This is a prerequisite for M2, not part of it, so the cutover session is
+      not also doing discovery.
+    phase: access_model_redesign
+    status: open
+    depends_on: []
+    blocked_by_external:
+    parallel_safe: false
+    parallel_safe_reason: "Touches the auth guard surface; do not parallel-batch auth-adjacent work (coding_scripts_howto)."
+    effort_sessions: 1
+    primary_files:
+      - backend/backend/auth/guards.py
+    test_files:
+    source_of_truth_views:
+      - docs/access_model.md
+    pr_title_template:
+    pr_title_function:
+    branch_name_template: access-guard-map
+    role_framing:
+    notes: "Independent of M0/M1 (pure discovery over current guards); blocks M2. access_model.md §10.3."
+
+  - id: ACCESS-SEED
+    title: Reseed script — stored APGAP roles become preset grants
+    short_description: |
+      The one-time reseed (access_model.md §10.2). Python, raw SQL via text().
+      Reads is_platform_admin / is_data_analyst / lab_membership rows and
+      issues the matching preset grants per the §8.5 mapping table
+      (Instance Administrator / Surveillance Officer / Lab Lead / Lab Member
+      RW / Lab Member RO; Bioinformatics User folds to Lab Member RW +
+      pipeline:run). The migration that CONTAINS the reseed then drops the old
+      columns and the PermissionGroups enum — reads-then-drops in one
+      migration so there is never a dual-authoritative window. Bundles into
+      the M2 cutover PR but is scoped here so it can be written and tested
+      against M0's grants table ahead of the cutover.
+    phase: access_model_redesign
+    status: blocked
+    depends_on:
+      - M0
+    blocked_by_external:
+    parallel_safe: false
+    parallel_safe_reason: "Writes into M0's grants table; auth/migration-adjacent."
+    effort_sessions: 1
+    primary_files:
+      - backend/backend/authz/
+    test_files:
+      - tests/authz/test_reseed.py
+    source_of_truth_views:
+      - docs/access_model.md
+    pr_title_template:
+    pr_title_function:
+    branch_name_template: access-seed
+    role_framing:
+    notes: "Depends on M0's grants table existing; lands as part of M2. access_model.md §10.2 + §8.5."
+
+  - id: M2
+    title: Reseed + cutover (IRREVERSIBLE — manual flow only)
+    short_description: |
+      The one irreversible step (access_model.md §10, §11.1). In ONE change:
+        (a) run ACCESS-SEED (read old roles, issue preset grants);
+        (b) rewrite every route guard role-check -> capability-check using
+            ACCESS-GUARD-MAP;
+        (c) switch list endpoints to the M1 visibility_sql_clause companion;
+        (d) drop users.is_platform_admin, users.is_data_analyst, the
+            PermissionGroups enum, and the permissions.py _base_access ladder.
+      No rollback-to-dual-running — greenfield (§10), so safety comes from M0
+      and M1 having proven the engine and companion, NOT from a shim. Run as
+      MANUAL flow, single session, high attention — this is on the
+      do-NOT-parallel-batch list (auth + migrations + route guards). Do not
+      start until M0 and M1 are both shipped and ACCESS-GUARD-MAP + ACCESS-SEED
+      are ready.
+    phase: access_model_redesign
+    status: blocked
+    depends_on:
+      - M0
+      - M1
+      - ACCESS-GUARD-MAP
+      - ACCESS-SEED
+    blocked_by_external:
+    parallel_safe: false
+    parallel_safe_reason: "Irreversible cutover touching auth, migrations, route guards, and the list path. Manual flow only; never parallel-batch."
+    effort_sessions: 3
+    primary_files:
+      - backend/backend/permissions.py
+      - backend/backend/auth/guards.py
+      - backend/backend/authz/
+    test_files:
+      - tests/authz/test_cutover.py
+    source_of_truth_views:
+      - docs/access_model.md
+    pr_title_template:
+    pr_title_function:
+    branch_name_template: m2-cutover
+    role_framing:
+    notes: "IRREVERSIBLE. access_model.md §10 (greenfield, no shim) + §11.1. Verify M0/M1 proven before starting — the project-wide 'verify before operating' discipline applied to the cutover."
+
+  - id: M3
+    title: Sovereignty policies (deletion-lifecycle guards + Scenario-T preset)
+    short_description: |
+      Register the §6 sovereignty policies on the M0 engine: the
+      deletion-lifecycle guards (no-publish-while-deleting on
+      deletion_status != ACTIVE; no-federate-while-deleting), the
+      separation-of-duties DENY on deletion:approve, and the Scenario-T
+      Tribal Authority Designee preset with its separation-of-duties carve-out
+      (§8.3). Rides on the already-shipped samples.deletion_status lifecycle
+      and the M0 engine — additive, no decision-path change. Gated by
+      sovereignty_mode; off-deployments unaffected. Resolve AM-OPEN-1 (designee
+      representation) before finalizing.
+    phase: access_model_redesign
+    status: blocked
+    depends_on:
+      - M2
+    blocked_by_external:
+    parallel_safe: false
+    parallel_safe_reason: "Authz policy surface; additive but touches the engine's policy set."
+    effort_sessions: 2
+    primary_files:
+      - backend/backend/authz/
+    test_files:
+      - tests/authz/test_sovereignty_policies.py
+    source_of_truth_views:
+      - docs/access_model.md
+      - docs/architecture/sovereignty-compliant-deletion.md
+    pr_title_template:
+    pr_title_function:
+    branch_name_template: m3-sovereignty-policies
+    role_framing:
+    notes: "Depends on AM-OPEN-1 resolution for the Tribal-authority preset. access_model.md §6 + §8.3."
+
+  - id: M4
+    title: Federation Layer 2 — sharing_agreements table + agreement-sourced grants
+    short_description: |
+      Add the sharing_agreements table (access_model.md §7.3, §7.6 Q3 — net-new
+      schema, hand-written migration, no ORM) and wire agreement-sourced grants
+      into the M0 engine. Federated L1 visibility stops being
+      PUBLIC/DISCOVERABLE-only and starts honoring per-peer agreements;
+      lab-to-lab federation (§7.7) works on the data-holder's side at this
+      point. Shipped FED-A/B flow code is unchanged — what changes is that the
+      peer principal now has agreement grants for permit()/visibility_sql_clause
+      to find. Pin AM-OPEN-2 (the min_sharing_level floor composition) when L2
+      push IO is wired. Sequences with or just after P0c.
+    phase: access_model_redesign
+    status: blocked
+    depends_on:
+      - M2
+    blocked_by_external:
+    parallel_safe: false
+    parallel_safe_reason: "New migration + engine grant-source wiring; federation-adjacent."
+    effort_sessions: 3
+    primary_files:
+      - backend/backend/authz/
+      - backend/backend/federation/
+    test_files:
+      - tests/authz/test_sharing_agreements.py
+    source_of_truth_views:
+      - docs/access_model.md
+    pr_title_template:
+    pr_title_function:
+    branch_name_template: m4-sharing-agreements
+    role_framing:
+    notes: "Net-new sharing_agreements schema. Carries AM-OPEN-2. access_model.md §7.3 + §7.7."
+
+  - id: M5
+    title: Compute plane / cryptWWDB — permit() as the PolicyChecker access_policy
+    short_description: |
+      Add the §4.6 compute:* capabilities and the he_operation_to_capability
+      mapping (§7.6 Q4), then build the make_access_policy adapter (§7.4)
+      injecting permit() into PolicyChecker.access_policy — the injected
+      callable B-CWB-POLICY-1 already ships with. The PolicyChecker and its
+      repeated-query side-channel guard already shipped, so this is the adapter
+      plus the capability additions, not new infrastructure. The cryptWWDB
+      privacy property (data_source_lab computes without seeing) is structural:
+      that principal holds compute:* and NOT sample:read_detail, so permit()
+      ALLOWs the HE op and DENYs a raw read (§9.4). Pin AM-OPEN-4 (exact
+      HEOperation enum membership) here. Gated on the cryptWWDB compute path
+      being scheduled (Track 2).
+    phase: access_model_redesign
+    status: blocked
+    depends_on:
+      - M2
+    blocked_by_external:
+    parallel_safe: false
+    parallel_safe_reason: "Engine capability additions + federation/crypto adapter wiring."
+    effort_sessions: 2
+    primary_files:
+      - backend/backend/authz/
+      - backend/backend/federation/policy_checker.py
+    test_files:
+      - tests/authz/test_compute_plane.py
+    source_of_truth_views:
+      - docs/access_model.md
+    pr_title_template:
+    pr_title_function:
+    branch_name_template: m5-compute-plane
+    role_framing:
+    notes: "Adapter over shipped PolicyChecker; carries AM-OPEN-4. access_model.md §4.6 + §7.4 + §9.4."
+
+  # ── Open DESIGN items from access_model.md §11.4 — not codeable sessions ──
+  # Tracked, not scheduled. Each is a design question resolved before (or
+  # within) the M-phase that carries it; none is a standalone coding session.
+
+  - id: AM-OPEN-1
+    title: "DESIGN: representing the Tribal authority designee (§6.4)"
+    short_description: |
+      How to represent the Tribal authority designee in the schema.
+      Recommendation (access_model.md §6.4 / §8.3): a HUMAN principal holding
+      a Scenario-T preset at Org scope, which collapses the one remaining
+      sovereignty policy (deletion-request) into a structural grant plus the
+      separation-of-duties carve-out. Open part: whether "their authority"
+      maps cleanly to an Org or needs its own scope level. Confirm against a
+      real Scenario T deployment before M3 finalizes.
+    phase: access_model_redesign
+    status: tracked_not_scheduled
+    depends_on: []
+    blocked_by_external:
+    parallel_safe:
+    parallel_safe_reason:
+    effort_sessions:
+    primary_files:
+    test_files:
+    source_of_truth_views:
+      - docs/access_model.md
+    pr_title_template:
+    pr_title_function:
+    branch_name_template:
+    role_framing:
+    notes: "Design question, blocks M3 finalization. access_model.md §6.4."
+
+  - id: AM-OPEN-2
+    title: "DESIGN: min_sharing_level_for_federation floor composition (§7.6 Q1)"
+    short_description: |
+      The shipped L1 /search path ignores min_sharing_level_for_federation
+      entirely (filters only on federation_enabled = TRUE); the floor is an
+      L2-push concept in is_qualifying_sample. When L2 push IO is wired,
+      confirm whether the value passed is the org's floor, the peer's, or the
+      stricter of the two. Also confirm the directional default: a lower floor
+      is MORE permissive, so org default PRIVATE is maximally permissive on
+      that axis (safe today only because federation_enabled defaults off —
+      FED-FIX-1). Pin within M4 or the FED L2-IO work.
+    phase: access_model_redesign
+    status: tracked_not_scheduled
+    depends_on: []
+    blocked_by_external:
+    parallel_safe:
+    parallel_safe_reason:
+    effort_sessions:
+    primary_files:
+    test_files:
+    source_of_truth_views:
+      - docs/access_model.md
+    pr_title_template:
+    pr_title_function:
+    branch_name_template:
+    role_framing:
+    notes: "Carried by M4. access_model.md §7.6 Q1."
+
+  - id: AM-OPEN-3
+    title: "DESIGN: cross-instance consumer sub-scope not carried (§7.7)"
+    short_description: |
+      A data holder (B) can confine which of B's labs a peer (A) reaches, but
+      cannot condition on which of A's labs ultimately consumes the data — the
+      channel authenticates A-as-instance, and internal redistribution is A's
+      own permit() concern. A design extension ONLY if a deployment needs B to
+      enforce recipient-lab restrictions; the currently-informational
+      X-JACKPOT-Federation-Origin header is the natural carrier if so. NOT
+      needed for M4's lab-to-lab support (which works on the data-holder side).
+    phase: access_model_redesign
+    status: tracked_not_scheduled
+    depends_on: []
+    blocked_by_external:
+    parallel_safe:
+    parallel_safe_reason:
+    effort_sessions:
+    primary_files:
+    test_files:
+    source_of_truth_views:
+      - docs/access_model.md
+    pr_title_template:
+    pr_title_function:
+    branch_name_template:
+    role_framing:
+    notes: "Only if a deployment requires enforced recipient-lab restrictions. access_model.md §7.7."
+
+  - id: AM-OPEN-4
+    title: "DESIGN: exact HEOperation enum membership for compute:* plane (§7.6 Q4)"
+    short_description: |
+      Finalize the compute:* capability set by reading the actual HEOperation
+      enum from backend/backend/crypto/_ais_hooks.py and pinning the
+      he_operation_to_capability mapping. The §4.6 entries
+      (compute:he_aggregate / he_query / register_dataset) are representative
+      until then. Pin at M5.
+    phase: access_model_redesign
+    status: tracked_not_scheduled
+    depends_on: []
+    blocked_by_external:
+    parallel_safe:
+    parallel_safe_reason:
+    effort_sessions:
+    primary_files:
+    test_files:
+    source_of_truth_views:
+      - docs/access_model.md
+    pr_title_template:
+    pr_title_function:
+    branch_name_template:
+    role_framing:
+    notes: "Folds into M5. access_model.md §7.6 Q4 / §4.6."
+
+  - id: AM-OPEN-5
+    title: "DESIGN: reconcile proposed audit-action names against audit.py (§4.3/§4.6/§6.2)"
+    short_description: |
+      The federation and compute audit-action names are PROPOSED in the design
+      doc, not yet in backend/backend/audit.py (the FED-B router emits its own
+      router-local actions like FEDERATION_PUSH_RECEIVED). Reconcile the
+      design doc's proposed names — and the deletion design's lowercase
+      event_type names (sample_deletion_requested etc.) — against audit.py's
+      AuditActions constants when M4/M5 land their audited actions.
+    phase: access_model_redesign
+    status: tracked_not_scheduled
+    depends_on: []
+    blocked_by_external:
+    parallel_safe:
+    parallel_safe_reason:
+    effort_sessions:
+    primary_files:
+    test_files:
+    source_of_truth_views:
+      - docs/access_model.md
+    pr_title_template:
+    pr_title_function:
+    branch_name_template:
+    role_framing:
+    notes: "Reconciliation with M4/M5. access_model.md §4.3 / §4.6 / §6.2."
