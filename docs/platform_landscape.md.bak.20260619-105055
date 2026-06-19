@@ -619,26 +619,19 @@ Likely to surface differences worth understanding:
 
 **JACKPOT relevance.** **Already adopted.** JACKPOT generates DataHarmonizer-compatible templates from its LinkML schema (per `docs/architecture.md` v6.0 §11) — three template tiers (T1/T2/T3), source-type-specific combined templates, embedded version markers. The Mpox package is one of several upstream examples JACKPOT learned from.
 
-The Mpox-package paper surfaces a **per-pathogen contextual specification** pattern — schema-versioned per pathogen, with curation guidance per organism. The UX appeal is real: a lab analyst filling out only Salmonella forms sees only Salmonella-relevant fields rather than a wide monolith with most columns greyed out. **Decision (2026-05): adopt per-pathogen as a generated *view* layer over the monolith, NOT as a schema decomposition.** JACKPOT's schema stays monolithic — one schema covering all source types and organisms via discriminators — because that monolith is what makes JACKPOT's differentiators (CARE/sovereignty slots, tier×sharing axis, federation disclosure annotations) *structural*: those are cross-cutting horizontal concerns that must hold uniformly over the entire field space. Per-pathogen templates are generated views (an organism-discriminator filter over the monolith that hides irrelevant slots at entry time without deleting them), so every view inherits the governance slots and cannot drop them. The rejected alternative — factoring the monolith into independently-versioned per-pathogen specs (the CIDGOH `is_a` core+extension pattern) — would turn each structural governance guarantee into a per-template invariant to audit, and adopting upstream specs wholesale would mean new fields arriving on CIDGOH's release schedule without JACKPOT governance annotations. The view approach delivers the entry-UX win at zero governance cost.
+The new finding from the Mpox-package paper that's worth absorbing into JACKPOT: their **per-pathogen contextual specifications** — schema-versioned per pathogen with explicit "version 1.0 / version 1.1" markers in the template, along with curation guidance for users on edge cases. JACKPOT's schema is monolithic (one schema covers all source types and all organisms with discriminators); per-pathogen specs would be more user-friendly for lab analysts who are filling out only Salmonella forms or only TB forms.
 
-**Adoption shape.** Already largely adopted. Extension: per-pathogen template *views* generated from the monolith (see decision above) — entry-UX improvement, no schema change.
+**Adoption shape.** Already largely adopted; modest extension worth considering.
 
 **Backlog item:**
 ```text
-[ ] B-DH-1    Add per-pathogen DataHarmonizer template *projections* over
-              the existing monolithic schema. Generated-view layer, NOT a
-              schema refactor: extend the T1/T2/T3 template generator with an
-              organism filter that emits one DataHarmonizer JSON template per
-              pathogen from the same LinkML schema. Governance slots
-              (CARE/sovereignty, tier×sharing, federation disclosure) stay
-              core in the monolith and are inherited by every view. First
-              template: Mpox, to validate the projection mechanism end to end.
-              REJECTED (do not re-litigate): factoring the monolith into
-              independently-versioned per-pathogen specs — sacrifices the
-              cross-cutting governance guarantees that are JACKPOT's
-              differentiators for a commodity UX win the view layer already
-              delivers. Effort: 1-2 sessions. Phase: any time DataHarmonizer
-              template work is touched.
+[ ] B-DH-1    Study the Mpox-package per-pathogen contextual specification
+              pattern. Decide whether to factor JACKPOT's monolithic
+              DataHarmonizer template into per-pathogen contextual specs
+              (Salmonella spec, TB spec, mpox spec, etc.) versioned
+              independently from the master schema. Effort: 1-2 sessions
+              decision + multiple weeks if implemented. Phase: when
+              schema v6.0 is on deck.
 ```
 
 #### 5.4.5 BioGenome Portal (out of scope — biodiversity cataloging)
@@ -2429,7 +2422,7 @@ These are deeper analyses or pattern studies that would inform major roadmap dec
 
 3. **FAIR Data Pipeline provenance audit** (B-FDP-1). Compare JACKPOT's `PipelineProvenance` + `pipeline_runs` to the FAIR Data Pipeline metadata model. Identify gaps in input-data version tracking, execution-environment snapshot, parameter immutability. Drives R1.2 from 🔶 to ✅ on the FAIR scorecard. **Section 5.4.3.**
 
-4. **Per-pathogen DataHarmonizer template views** (B-DH-1). Generate per-pathogen template *projections* over the monolithic schema (organism filter in the existing T1/T2/T3 generator) for an entry-UX win, with governance slots inherited structurally. Schema-decomposition into independently-versioned per-pathogen specs was considered and **rejected** — it would scatter JACKPOT's cross-cutting governance guarantees across organism boundaries. **Section 5.4.4.**
+4. **Mpox-package per-pathogen contextual specification pattern** (B-DH-1). Study whether to factor JACKPOT's monolithic DataHarmonizer template into per-pathogen contextual specs (Salmonella spec, TB spec, mpox spec, etc.) versioned independently from the master schema. **Section 5.4.4.**
 
 ### 19.3 Tier 2 — Strategic / Year 2 implementations
 
