@@ -634,6 +634,16 @@ The new finding from the Mpox-package paper that's worth absorbing into JACKPOT:
               schema v6.0 is on deck.
 ```
 
+#### 5.4.5 BioGenome Portal (out of scope — biodiversity cataloging)
+
+**Function.** Web portal for organizing and displaying biodiversity genomics metadata (guigolab/biogenome-portal, CRG Barcelona). Catalogs eukaryotic species' genome-sequencing progress against target lists, tracks INSDC submission status, and presents data on a taxonomic tree plus a geographic map. Production instances back the Earth Biogenome Project, ERGA, and the Catalan Initiative.
+
+**License / stack.** MIT. Python Flask + uWSGI backend, MongoDB store, Vue.js SPA, docker-compose. Fully divergent from JACKPOT's FastAPI / PostgreSQL / SQLAlchemy / Streamlit / Helm stack — no clean code-adoption path.
+
+**Maturity.** Peer-reviewed (NAR Genomics & Bioinformatics, Mar 2025; DOI 10.1093/nargab/lqaf020). Maintained through v3.3.1 (Jul 2025), but single-maintainer and ~6 stars — low durability.
+
+**JACKPOT relevance.** Out of scope for surveillance. Same data-portal category as Overture (§5.4.2) but biodiversity-scope: no pathogen detection, SoC screening, AMR, federated query, or PII gating. Not a competitor and not an integration candidate. One reusable idea only — its INSDC import-by-BioProject-accession pattern (import everything under a BioProject umbrella, then re-sync on a schedule), captured as a UX enhancement on the external-search backlog item. Evaluated and rejected for adoption 2026-06-16.
+
 ---
 
 ### 5.5 Decentralized / Privacy-Preserving Tools

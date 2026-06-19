@@ -892,6 +892,7 @@ Level 2 (Year 2, later) — Tool-augmented RAG. LLM given access to curated read
 17. **Build Lab page** — summary tiles (no sequencing lab in header), projects list, recent samples and runs, unassigned samples pool, bulk assign to project.
 18. **Build Project page** — six tabs, bulk select on Samples tab, inline pipeline launchpad dialog, cross-sample pivot on Results tab.
 19. **Implement GET /api/v1/external-search/** — proxy to NCBI E-utilities, ENA REST API, GISAID API. Results cached via backend/cache.py (30-minute TTL). Cross-database deduplication by accession.
+    - **UX enhancement (backlog, no code dependency):** evaluate BioProject-umbrella bulk import + scheduled re-sync — point at one BioProject accession, import all assemblies/runs under it, then re-sync on a schedule. Concept borrowed from BioGenome Portal (guigolab/biogenome-portal, MIT). Idea only; BGP's Flask/MongoDB stack is not adoptable. Evaluated 2026-06-16.
 
 29a. **Write backend/cache.py** — cache abstraction with cache_get(), cache_set(), cache_delete(). SEARCH_CACHE_BACKEND=memory routes to in-memory dict (local dev). SEARCH_CACHE_BACKEND=redis routes to Cloud Memorystore (GKE). Must be written before external search endpoint.
 

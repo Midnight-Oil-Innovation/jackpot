@@ -86,7 +86,7 @@ Brief redirect stubs remain at §§7-8 in this doc to preserve the pillar narrat
 
 ## 1. Executive Summary
 
-JACKPOT is already a credible operator-agnostic pathogen genomics platform. This document lays out how it becomes the **most complete public health biosurveillance platform on the planet** by adopting an **artificial immune system (AIS) architecture** as its organizing principle, with **public health workforce capacity** as a co-equal first principle.
+This document lays out how Jackpot becomes the **most complete public health biosurveillance platform on the planet** by adopting an **artificial immune system (AIS) architecture** as its organizing principle, with **public health workforce capacity** as a co-equal first principle.
 
 Two theses, in equal balance:
 
