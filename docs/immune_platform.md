@@ -252,7 +252,7 @@ Before we name modules, we need to align on the AIS algorithm vocabulary. Each a
 **Mechanism:** Combine concept-drift detection with anomaly detection so the model knows when its "self" model has aged out and needs refresh.
 
 **JACKPOT applications:**
-- Reference-database freshness: detect when the operator's "self" reference set has drifted enough (new dominant lineage, new commensal microbiome composition) that NSA detectors need regeneration.
+- Reference-database freshness: detect when the operator's "self" reference set has drifted enough (new dominant lineage, new commensal microbiome composition) that the bio detector pool (DeepSVDD baseline) needs regeneration.
 
 ### 3.9 The Two Self/Non-Self Boundaries
 
@@ -286,7 +286,7 @@ The dual-AIS thesis in one diagram:
                   └──────────────────────────────────────────────────┘
 ```
 
-The same NSA implementation runs both. The same DCA aggregator fuses both kinds of danger signals. The same memory consolidation logic services both. **One immune substrate, two threat surfaces.**
+Bio and cyber use *different* detectors, not one shared algorithm. Bio detection is DeepSVDD over genomic-foundation-model embeddings, bound to an `AnomalyDetector` Protocol; cyber detection is negative selection over API-call features. What they share is the aggregation pattern, not the detector: the same DCA fuses both kinds of danger signals and the same memory-consolidation logic services both. **One aggregation substrate (the `AnomalyDetector` Protocol + DCA), two detectors, two threat surfaces** (per `immune_detection_core_redesign.md` §1).
 
 ---
 
@@ -328,7 +328,7 @@ The DCA module (`jackpot-dca`) is what separates JACKPOT from every other genomi
 
 | Signal class | Source | Example feature |
 | --- | --- | --- |
-| **Genomic anomaly** | `jackpot-amand`, `jackpot-mg2vec`, `jackpot-biosig` | NSA detector activations, embedding distance |
+| **Genomic anomaly** | `jackpot-amand`, `jackpot-mg2vec`, `jackpot-biosig` | DeepSVDD anomaly score over embeddings, embedding distance |
 | **Wastewater** | external feed → `jackpot-stream` | Freyja lineage abundance over time, raw signal concentration |
 | **Clinical** | LIMS / ELR feeds | Case clusters by ZIP/county, ICU admission rate, syndromic surveillance |
 | **Mobility / travel** | external feeds (CDC traveler genomic surveillance, transit data) | Air-traffic anomalies, border-crossing surveillance |
@@ -425,7 +425,7 @@ async def assess_submission_for_poisoning(
       - Embedding distance from submitter's prior submissions (sudden distributional shift)
       - Adversarial perturbation detection (high-frequency / unnatural gradient signature)
       - Submitter trust score from jackpot-immnet-trust
-      - Whether the submission shifts NSA detector boundary disproportionately
+      - Whether the submission shifts the bio detector boundary (DeepSVDD baseline) disproportionately
     """
 ```
 
@@ -810,73 +810,42 @@ The Leapspace research identified 10 microservices. Here we map them to JACKPOT 
 
 ### 9.4 The shared algorithm substrate
 
-The crux of the dual-AIS thesis is **one algorithm implementation, two threat surfaces**. The substrate lives in `backend/immune/algorithms/`:
+The dual-AIS thesis is preserved at the *interface* level, which is a stronger claim than "one NSA everywhere." The shared substrate is an `AnomalyDetector` Protocol (`B-IMMUNE-DETECT-1`), not one literal algorithm. Bio binds a DeepSVDD detector over genomic-foundation-model embeddings; cyber binds a negative-selection detector over API-call features. Literal real-valued negative selection does not scale on k-mer/embedding feature spaces and is removed from the bio path; it survives only as the cyber binding (gated on a one-class bake-off) and as a Module-9 teaching artifact (per `immune_detection_core_redesign.md` §1.1-§1.3). The substrate lives in `backend/immune/algorithms/base.py`:
 
 ```python
-# backend/immune/algorithms/nsa.py
-from dataclasses import dataclass
-from typing import Generic, TypeVar, Callable
+# backend/immune/algorithms/base.py
+from __future__ import annotations
+from typing import Protocol, runtime_checkable
 import numpy as np
 
-T = TypeVar("T")    # antigen type — bytes, np.ndarray, dict, anything
 
-@dataclass
-class Detector(Generic[T]):
-    feature_vector: np.ndarray
-    affinity_threshold: float
-    detector_id: str
+@runtime_checkable
+class AnomalyDetector(Protocol):
+    """Domain-agnostic one-class anomaly detector contract.
 
-class NegativeSelectionAlgorithm(Generic[T]):
+    The shared bio/cyber substrate is THIS interface, not a single algorithm.
+    Bio binds DeepSVDDDetector (over genomic-FM embeddings); cyber binds
+    NegativeSelectionDetector (or, if the B-IMMUNE-NSA-1 bake-off fails, a
+    one-class SVM behind the same contract).
+
+    Featurizers (B-IMMUNE-FEAT-1) produce the np.ndarray these methods consume,
+    so k-mer / METAGENE-1 / ESM / DNABERT-v2 featurizers are swappable without
+    touching detectors.
     """
-    Domain-agnostic negative selection.
-    Works for genomic k-mers (Pillar I) AND API call patterns (Pillar II).
-    """
 
-    def __init__(
-        self,
-        featurize: Callable[[T], np.ndarray],
-        self_set: list[T],
-        n_detectors: int = 1000,
-        affinity_metric: str = "euclidean",
-    ):
-        self.featurize = featurize
-        self.self_features = np.array([featurize(x) for x in self_set])
-        self.n_detectors = n_detectors
-        self.affinity_metric = affinity_metric
-        self.detectors: list[Detector[T]] = []
+    def fit(self, self_set: np.ndarray) -> None:
+        """Learn 'self' from a 2-D array (n_samples, n_features)."""
+        ...
 
-    def train(self, dim: int, threshold: float) -> None:
-        """Generate detectors that don't match self set."""
-        survivors: list[Detector[T]] = []
-        attempts = 0
-        max_attempts = self.n_detectors * 100
+    def score(self, antigens: np.ndarray) -> np.ndarray:
+        """Return anomaly scores in [0, 1] for each row. Higher = more anomalous."""
+        ...
 
-        while len(survivors) < self.n_detectors and attempts < max_attempts:
-            candidate = np.random.randn(dim)
-            distances = np.linalg.norm(self.self_features - candidate, axis=1)
-            if distances.min() > threshold:
-                survivors.append(
-                    Detector(
-                        feature_vector=candidate,
-                        affinity_threshold=threshold,
-                        detector_id=f"d{len(survivors):06d}",
-                    )
-                )
-            attempts += 1
-
-        self.detectors = survivors
-
-    def classify(self, antigen: T) -> tuple[bool, list[str]]:
-        """Returns (is_anomalous, list_of_activated_detector_ids)."""
-        features = self.featurize(antigen)
-        activated: list[str] = []
-        for d in self.detectors:
-            if np.linalg.norm(d.feature_vector - features) < d.affinity_threshold:
-                activated.append(d.detector_id)
-        return (len(activated) > 0, activated)
+    def is_fitted(self) -> bool:
+        ...
 ```
 
-The bio-AIS instantiates this with a k-mer featurizer; the cyber-AIS instantiates it with an API-call-sequence featurizer. Same code, two threat models.
+The bio detector (`DeepSVDDDetector` in `backend/immune/bio/amand.py`) implements this Protocol over an embedding feature space; the cyber detector (`NegativeSelectionDetector` in `backend/immune/sec/nsa_cyber.py`) implements the same Protocol over low-dimensional API-call features. Different detectors, one contract, one DCA.
 
 
 ---
@@ -887,7 +856,7 @@ This section gives implementation-level detail for the most important new module
 
 ### 10.1 `jackpot-amand` (Anomaly Mining and Novelty Detection)
 
-The flagship bio-AIS module. Negative selection over a multi-feature space.
+The flagship bio-AIS module. Deep one-class / OOD detection (DeepSVDD) over genomic-foundation-model embeddings (METAGENE-1, Apache-2.0, license-cleared and self-hostable), with AMAnD as one citable baseline ensemble member. Not negative selection (per `immune_detection_core_redesign.md` §1).
 
 #### 10.1.1 API surface (FastAPI)
 
@@ -907,7 +876,7 @@ async def scan_sample_for_anomaly(
     db: AsyncSession = Depends(get_db),
 ) -> AmandScanResponse:
     """
-    Scan a sample with the AMAnD NSA detectors.
+    Scan a sample with the bio anomaly detector (DeepSVDD over embeddings; AMAnD baseline).
     Returns immediate response with scan_id; full results land in pipeline_results.
     """
 
@@ -1117,7 +1086,7 @@ class ClonalSelectionEngine:
 
 ### 10.4 `jackpot-nsa-cyber` (Platform Self-Defense NSA)
 
-Same NSA algorithm, different featurizer.
+Cyber-only negative selection behind the shared `AnomalyDetector` Protocol, distinct from the bio DeepSVDD detector. Gated on the one-class bake-off in `B-IMMUNE-NSA-1` (per `immune_detection_core_redesign.md` §1.3).
 
 ```python
 # backend/immune/sec/nsa_cyber.py
@@ -1190,7 +1159,7 @@ This section summarizes how detection_landscape's findings map to the immune pil
 
 | Component | What it provides | detection_landscape backlog | Priority |
 |---|---|---|---|
-| **AMAnD** (Price & Russell 2023) | DeepSVDD metagenome anomaly detector — the canonical bio-NSA layer | `B-AMAND-1` | Tier 1 |
+| **AMAnD** (Price & Russell 2023) | DeepSVDD metagenome anomaly detector — one baseline ensemble member behind the `AnomalyDetector` Protocol (bio detector is DeepSVDD over embeddings) | `B-AMAND-1` | Tier 1 |
 | **TaxTriage** (Merritt et al. 2026) | Untargeted pathogen discovery pipeline | `B-TAXTRIAGE-1` | Tier 1 |
 | **nf-UnO** (Guzman-Cole & Huang 2025) | Cohort co-assembly for outbreak novel-pathogen investigations | `B-NFUNO-1` | Tier 1 |
 | **DeePaC** (Bartoszewicz et al. 2020) | Pathogenicity scoring | `B-DEEPAC-1` | Tier 2 |
@@ -1201,7 +1170,7 @@ Plus continued evaluation of **KOMB/KombOver** (Balaji et al. 2022; Sapoval et a
 
 **Pillar II — Platform Self-Defense AIS.** Detection_landscape §4.2 surveys cyberbiosecurity components. The strategically important findings:
 
-- No dedicated AIS-for-platform-security tool exists in the open-source landscape; Pillar II's `jackpot-immune-sec` will be built from cyber-AIS substrate (the shared NSA module per `B-IMMUNE-NSA-1`) plus per-vector featurizers (`B-IMMUNE-FEAT-1` registry pattern, with API-call featurizer for Pillar V cybersecurity workloads alongside the k-mer featurizer for Pillar I)
+- No dedicated AIS-for-platform-security tool exists in the open-source landscape; Pillar II's `jackpot-immune-sec` will be built from the cyber-only negative-selection detector per `B-IMMUNE-NSA-1` (behind the shared `AnomalyDetector` Protocol; not shared with the bio path, which uses DeepSVDD over embeddings) plus per-vector featurizers (`B-IMMUNE-FEAT-1` registry pattern, with API-call featurizer for Pillar V cybersecurity workloads alongside the k-mer featurizer for Pillar I)
 - **VAE-based detectors** (Gu & Yang 2021) for malicious-FL-update detection — relevant when federation members might submit poisoned model updates
 
 **Pillar III — Federation as Immune Network.** Detection_landscape §4.3 distinguishes "general federated analysis framework" (substrate decision) from "specialized FL primitives" (overlays). The May 2026 architecture decision resolved the substrate question: **NVIDIA FLARE** is the FL substrate, with reference frameworks DataSHIELD-class (federated trend analysis), FedAdapt-CAD / FedMI (distributed-edge anomaly detection), and VAE-based defenses (adversarial-resistance) available as overlays for specific niches. The cryptWWDB HE workload uses TenSEAL or OpenFHE separately (sibling, not subtype).
@@ -1540,7 +1509,7 @@ The immune platform is delivered across six sub-phases. Each has a coherent goal
 
 #### Phase IM-1 — Bio-AIS MVP + Academy module 9 (~6 weeks)
 
-**Goal:** First end-to-end NSA detector firing on real samples, plus the corresponding Academy module 9.
+**Goal:** First end-to-end bio anomaly detector (DeepSVDD over embeddings, behind the `AnomalyDetector` Protocol) firing on real samples, plus the corresponding Academy module 9.
 
 **Definition of done:** A submitted sample runs through `jackpot-amand`, lands a row in `dca_priority_scores`, surfaces in the Triage UI, and is auditable end-to-end. A student completing module 9 has working starter code that compiles and runs.
 
@@ -1572,7 +1541,7 @@ The immune platform is delivered across six sub-phases. Each has a coherent goal
 
 #### Phase IM-5 — Cyber-AIS for Platform Self-Defense (~5 weeks)
 
-**Goal:** Pillar II live. Same NSA, different threat surface.
+**Goal:** Pillar II live. Cyber-only negative-selection detector behind the shared `AnomalyDetector` Protocol, distinct from the bio DeepSVDD detector.
 
 **Definition of done:** A simulated insider-threat scenario (a researcher account suddenly enumerating all samples) raises a high-priority `cyber_assessments` row within 60 seconds. Sample submission with adversarial perturbation gets flagged by `poisondetect`.
 
@@ -3659,7 +3628,7 @@ A representative module:
 """
 Adversarial perturbation attack against jackpot-amand.
 
-Generates synthetic samples engineered to evade NSA detectors. Used in
+Generates synthetic samples engineered to evade the bio anomaly detector (DeepSVDD baseline). Used in
 nightly red-team runs to measure detector robustness over time.
 
 TODO(lee-collab): iterative attack-and-defend framework. The current
@@ -4079,9 +4048,9 @@ JACKPOT's anomaly-detection plan exists. It lives in Phase IM-1 ("Immune Platfor
 Core architectural primitives (Phase IM-1.A, all Tracked Not Scheduled):
 
 - **`B-IMMUNE-SCHEMA-1`** Schema v6.0 stub. Alembic migration adding `detectors`, `detector_activations`, `dca_priority_scores`, `memory_cells` tables. Lands behind `IMMUNE_PILLAR_I_ENABLED=false` feature flag. Forces schema design conversation early. 1-2 sessions. **Quick-win flagged for landing alongside current sprint.**
-- **`B-IMMUNE-NSA-1`** Negative Selection Algorithm substrate at `backend/immune/algorithms/nsa.py`. Shared between bio-AIS (Pillar I) and cyber-AIS (Pillar V) — same code, different feature spaces. 3-4 sessions.
+- **`B-IMMUNE-NSA-1`** Cyber-only `NegativeSelectionDetector` at `backend/immune/sec/nsa_cyber.py`, implementing the `AnomalyDetector` Protocol, gated on a one-class-SVM bake-off (keep literal NSA only if it matches or beats one-class on held-out attack traces), plus the Module-9 teaching NSA. Not the bio path. Prereq: `B-IMMUNE-DETECT-1`. Per `immune_detection_core_redesign.md` §1.3-§1.4. 3-4 sessions.
 - **`B-IMMUNE-FEAT-1`** Featurizer registry pattern at `backend/immune/algorithms/features.py` and `backend/immune/algorithms/featurizers/__init__.py`. k-mer featurizer for Pillar I, API-call featurizer stub for Pillar V. Registry pattern lets external collaborators (e.g. AIS-theory researchers) plug in alternative featurizers — k-mer, ESM-small, ESM-large, DNABERT-v2 — without touching core code. 2-3 sessions. **This is what makes the work collaboration-friendly per `jackpot_immune_collaboration_scaffolding.md` §3.2.1.**
-- **`B-AMAND-1`** Adopt AMAnD (Price & Russell, *Frontiers in Public Health* 2023) as the canonical metagenome anomaly detector. Two layers: `backend/immune/bio/amand.py` (bio-NSA module wrapping AMAnD's DeepSVDD model into JACKPOT's NSA substrate) plus `pipelines/immune/amand.nf` (the Nextflow process for reproducible scans). Document the baseline-curation workflow ("what is normal for this operator's deployment context") in the Pillar IV training materials. 3 sessions for the pipeline + 2 weeks for the baseline-curation tooling.
+- **`B-AMAND-1`** Adopt AMAnD (Price & Russell, *Frontiers in Public Health* 2023) as one citable baseline ensemble member, not the spine. `backend/immune/bio/amand.py` implements `DeepSVDDDetector(AnomalyDetector)` directly (one detector per feature space: PanGIA taxonomic + k-mer), plus `pipelines/immune/amand.nf` (the Nextflow process for reproducible scans). The bio detection core is the `AnomalyDetector` Protocol with DeepSVDD over genomic-FM embeddings; AMAnD is one baseline behind that contract. Document the baseline-curation workflow ("what is normal for this operator's deployment context") in the Pillar IV training materials. Prereq: `B-IMMUNE-DETECT-1`. Per `immune_detection_core_redesign.md` §1. 3 sessions for the pipeline + 2 weeks for the baseline-curation tooling.
 
 API and UI surfaces:
 
@@ -4118,7 +4087,7 @@ My chat content split "anomaly in pathogen genomes over time" into five types. T
 | Phylogenetic placement outliers | Not in IM-1. UShER parsimony + placement uncertainty. Would be net-new. | n/a |
 | AMR fingerprint anomaly | Not directly in IM-1. Isolation Forest on hAMRonization vectors would be net-new. | n/a |
 
-The chat's framing (foundation models like Nucleotide Transformer / Evo / HyenaDNA / DNABERT-2 / ESM-2) is design-thinking. The committed JACKPOT plan uses **AMAnD's DeepSVDD model** as the canonical metagenome anomaly detector, with the featurizer registry (`B-IMMUNE-FEAT-1`) leaving room for foundation-model embeddings as plug-in alternatives without core code changes. This is more conservative and more collaboration-friendly than the chat suggested.
+The committed engine is deep one-class / OOD detection (DeepSVDD) over genomic-foundation-model embeddings. METAGENE-1 (Apache-2.0) is the license-cleared, self-hostable embedding substrate; Nucleotide Transformer, Evo, HyenaDNA, and DNABERT-2 are alternatives routed through `B-LICENSE-1`. Foundation-model embeddings are the default feature space, not optional plug-ins: novelty in a function-aware embedding is meaningful in a way that distance in 3-to-5-mer composition space is not. AMAnD's DeepSVDD (over PanGIA taxonomic + k-mer features) is one citable baseline ensemble member behind the same `AnomalyDetector` Protocol. The featurizer/embedding registry (`B-IMMUNE-FEAT-1`) keeps this collaboration-friendly by letting the AIS-theory collaborator swap featurizers without touching detectors, but the default is embeddings-first (per `immune_detection_core_redesign.md` §1).
 
 ## The DCA fusion (Phase IM-2)
 
