@@ -309,16 +309,16 @@ Each bio-AIS module either **wraps** an existing OSS project, **forks** one, or 
 | Module | AIS concept | OSS basis | Mode | What it does |
 | --- | --- | --- | --- | --- |
 | `jackpot-amand` | Negative Selection over k-mer/embedding space | inspired by Hosseini & Seilani 2021, ANDES (Kanjilal 2025), STREAM (Bae 2026) | **new** | k-mer compositional + sequence-embedding NSA; flags samples whose distance to all known references exceeds threshold |
-| `jackpot-mg2vec` | NSA + density-based anomaly (LOF) over metagenomic communities | inspired by Wang, Wang, Liu (2026 *Cell Systems* AI for microbiome) | **new** | Embedding model trained on normal microbiomes; flags compositional outliers |
+| `jackpot-mg2vec` | density-based anomaly (LOF) over metagenomic communities | inspired by Wang, Wang, Liu (2026 *Cell Systems* AI for microbiome) | **new** | Embedding model trained on normal microbiomes; flags compositional outliers |
 | `jackpot-biosig` | Multi-site recognition (Perelson & Oster 1979) over functional features | wraps ESMFold; adds codon-bias, restriction-site, ORF anomaly checks | **new + wraps** | "What does this sequence *do*?" — toxin-fold detection, immune-evasion epitope shifts, engineering scars |
-| `jackpot-recombhunt` | NSA over recombination breakpoint patterns | wraps **OpenRecombinHunt** (Alfonsi et al. 2026) | **wraps** | Automatic detection of viral recombinants; SARS-CoV-2, RSV, Mpox, Zika, YF, H5N1 |
+| `jackpot-recombhunt` | anomaly detection over recombination breakpoint patterns | wraps **OpenRecombinHunt** (Alfonsi et al. 2026) | **wraps** | Automatic detection of viral recombinants; SARS-CoV-2, RSV, Mpox, Zika, YF, H5N1 |
 | `jackpot-amrmemory` | Memory cells (innate immune memory) | wraps **amr.watch** (David et al. 2025), **AMRFinderPlus**, **CARD**, **abricate** | **wraps** | Fast-path AMR signature recall; >600k genome reference base |
 | `jackpot-dca` | Dendritic Cell Algorithm — multi-modal context fusion | inspired by Pinto et al. 2022, Wang 2022 innate immune memory | **new** | Combines genomic anomaly score with wastewater, clinical, mobility, host-response signals → priority score |
 | `jackpot-cs` | Clonal Selection / online learning | inspired by Liu et al. 2023, de Castro & Von Zuben 2002 | **new** | Detector evolution under variant drift; analyst-in-the-loop labeling |
 | `jackpot-nka` | NK Cell Algorithm — anomaly by absence + imbalanced data | inspired by Wang 2022 NKA, Deng 2025 NK-DCHS | **new** | Missing-commensal detection; handles class imbalance natively |
 | `jackpot-edge` | Innate immunity at the edge | wraps **SeqScreen-Nano** (Balaji et al. 2023) | **wraps** | Streaming, in-field pathogen characterization on ONT/MinION; <32GB RAM |
 | `jackpot-mngs` | Cloud mNGS pipeline | wraps **CZ-ID/IDseq** (Kalantar et al. 2021) | **wraps** | Established mNGS pipeline as the "go-to" mode for clinical metagenomics |
-| `jackpot-amand-fda` | Functional data analysis | wraps **ANDES** (Kanjilal et al. 2025) | **wraps** | Genomic windows as functional curves; complementary to k-mer/embedding NSA |
+| `jackpot-amand-fda` | Functional data analysis | wraps **ANDES** (Kanjilal et al. 2025) | **wraps** | Genomic windows as functional curves; complementary to k-mer/embedding anomaly detection |
 | `jackpot-stream` | Streaming time-series anomaly | wraps **STREAM** (Bae et al. 2026), **Coniferest** (Kornilov et al. 2025) | **wraps** | Generic time-series anomaly engine for wastewater, case counts, etc. |
 | `jackpot-immune-evasion` | AI-driven immune evasion analysis | inspired by Ibrahim 2026 | **new** | Detects mutations consistent with immune-evasion strategies (epitope shifts, glycosylation site changes, antigenic variation patterns) |
 
@@ -344,7 +344,7 @@ Critical: the bio-AIS does not replace existing modules; it **layers on top of a
 | Existing module | AIS role | Integration |
 | --- | --- | --- |
 | `file_detector.py` | Innate immunity — PAMP recognition | First line of defense; rejects malformed files before they reach detectors |
-| HRRT (`ingest_scrubber.nf`) | Self filtration — host removal | Removes "self" host genomic content before NSA scanning |
+| HRRT (`ingest_scrubber.nf`) | Self filtration — host removal | Removes "self" host genomic content before anomaly scanning |
 | Cloud DLP (`dlp_scanner.py`) | Metadata immune scan | Catches PII leakage; maps to "tolerance" boundary |
 | `pipeline_results_loader.py` | Memory consolidation | Pipeline results land in immutable append-only `pipeline_results` rows; this is our "memory cell" persistence |
 | Validator (Tier 1/2/3) | Negative selection threshold | Tier-1 PRELIMINARY samples are pre-NSA; Tier-2 ANALYZABLE pass innate filters; Tier-3 SUBMITTABLE have full DCA scores |
@@ -369,7 +369,7 @@ The bio-AIS modules are designed to fit JACKPOT's existing six deployment target
 
 | Target | Bio-AIS modules available |
 | --- | --- |
-| A — laptop | `jackpot-amand` (lightweight NSA), `jackpot-edge` (ONT), `jackpot-recombhunt` (lightweight wrapper), Academy synthetic data; **no DCA fusion** (not enough signal sources) |
+| A — laptop | `jackpot-amand` (lightweight anomaly detector), `jackpot-edge` (ONT), `jackpot-recombhunt` (lightweight wrapper), Academy synthetic data; **no DCA fusion** (not enough signal sources) |
 | B — single-org cloud | A + `jackpot-dca`, `jackpot-mg2vec`, `jackpot-biosig`, `jackpot-cs` (full bio-AIS stack) |
 | C — multi-lab agency | B + cross-lab DCA fusion, `jackpot-amrmemory` shared across labs |
 | D — hosted SaaS | Same as B/C with multi-tenant isolation; DCA fusion within tenant only |
@@ -409,7 +409,7 @@ The Leapspace research synthesizes a STRIDE threat model specifically for biosec
 
 #### 5.3.1 Adversarial input detection
 
-Every sample submission goes through a poison-detect pass before NSA training data is updated. Inspired by Meiseles et al. (2023) on Pangolin adversarial attack:
+Every sample submission goes through a poison-detect pass before the bio detector's training data is updated. Inspired by Meiseles et al. (2023) on Pangolin adversarial attack:
 
 ```python
 # backend/immune/cyber/poisondetect.py (planned)
@@ -697,8 +697,8 @@ flowchart TB
     end
 
     subgraph ADAPT["Adaptive layer (Pillar I bio)"]
-        AMAND["jackpot-amand<br/>NSA"]
-        MG2VEC["jackpot-mg2vec<br/>microbiome NSA"]
+        AMAND["jackpot-amand<br/>anomaly"]
+        MG2VEC["jackpot-mg2vec<br/>microbiome anomaly"]
         BIOSIG["jackpot-biosig<br/>functional"]
         RECOMB["jackpot-recombhunt<br/>OpenRecombinHunt"]
         DCABIO["jackpot-dca<br/>multi-modal fusion"]
@@ -1568,7 +1568,7 @@ Tied to phases above. The full per-tool adoption details (effort, dependencies, 
 | AMAnD | IM-1 | Bio-AIS core anomaly detector | `B-AMAND-1` |
 | SeqScreen-Nano | IM-5 | Synthetic-DNA screening at ingest | `B-SOC-1` (combined SeqScreen+BLiSS) |
 | Coniferest / STREAM | IM-2 | Generic streaming anomaly engine for non-genomic signals | (folded into `B-IMMUNE-DCA-1`) |
-| ANDES (Kanjilal 2025) | IM-3 | Functional-data complement to k-mer NSA | (study; not yet a backlog item) |
+| ANDES (Kanjilal 2025) | IM-3 | Functional-data complement to k-mer anomaly detection | (study; not yet a backlog item) |
 | HPD-Kit | IM-2 | Reference DB layer | (deferred — see detection-landscape §2.a) |
 | Bactopia | IM-3 | Bacterial pipeline coverage | (already in pipeline zoo) |
 | MARTi | IM-1 | Real-time nanopore arm | `B-MARTI-1` (already in todo.md) |
@@ -3609,7 +3609,7 @@ The fix is a deliberate adversarial pipeline that attacks JACKPOT's own detector
 backend/immune/redteam/
 ├── __init__.py
 ├── cli.py                      # entry point for uv run python -m backend.immune.redteam.cli
-├── attack_amand.py             # adversarial perturbation against jackpot-amand NSA
+├── attack_amand.py             # adversarial perturbation against jackpot-amand (bio anomaly detector)
 ├── attack_mg2vec.py            # membership inference against microbiome embeddings
 ├── attack_biosig.py            # adversarial perturbation against ESMFold-based detector
 ├── attack_federation.py        # re-identification attacks on aggregated federation signals
