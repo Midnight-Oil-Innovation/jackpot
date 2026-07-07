@@ -2487,7 +2487,7 @@ The consolidation rationale, full mapping of source IDs to canonical IDs, and ov
 
 - [ ] **B-IMMUNE-SCHEMA-1** Schema v6.0 stub — Alembic migration adding `detectors`, `detector_activations`, `dca_priority_scores`, `memory_cells` tables. Initial landing is empty migration with table definitions but no business logic, behind a feature flag (`IMMUNE_PILLAR_I_ENABLED=false`). Forces schema design conversation early. `[quick-win — land alongside current P0d sprint]`. (1-2 sessions, P0d or after)
 
-- [ ] **B-IMMUNE-DETECT-1** [NEW per immune_detection_core_redesign.md] Implement `backend/immune/anomaly/base.py` — the `AnomalyDetector` Protocol, the real shared detection substrate (replaces the deleted "shared NSA substrate" concept). Prereq for `B-AMAND-1` (DeepSVDD) and the cyber `B-IMMUNE-NSA-1`. Reference: immune_detection_core_redesign.md. (2-3 sessions)
+- [ ] **B-IMMUNE-DETECT-1** [NEW per immune_detection_core_redesign.md] Implement `backend/immune/algorithms/base.py` — the `AnomalyDetector` Protocol, the real shared detection substrate (replaces the deleted "shared NSA substrate" concept). Prereq for `B-AMAND-1` (DeepSVDD) and the cyber `B-IMMUNE-NSA-1`. Reference: immune_detection_core_redesign.md. (2-3 sessions)
 
 - [ ] **B-IMMUNE-NSA-1** [REVISED per immune_detection_core_redesign.md] Implement `backend/immune/sec/nsa_cyber.py` — Negative Selection Algorithm for the CYBER path only (Pillar V) and as a teaching baseline. REMOVED from the bio detection path: real-valued NSA does not scale on k-mer/embedding feature spaces. Adoption gated on a one-class bake-off vs DeepSVDD. Depends on `B-IMMUNE-DETECT-1`. Reference: immune_detection_core_redesign.md. (2-3 sessions, cyber-only)
 
