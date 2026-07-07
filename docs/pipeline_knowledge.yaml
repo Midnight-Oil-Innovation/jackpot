@@ -1,0 +1,149 @@
+# ============================================================================
+# pipeline_knowledge.yaml — quality knowledge for the JACKPOT coding pipeline.
+#
+# Two bodies of knowledge, each a map of  phase -> list  (plus a reserved
+# `global` key that applies everywhere):
+#
+#   fill_guardrails   — constraints injected into the fill prompt
+#                       (jackpot-fill-prompt) so the generator stops repeating
+#                       known mistakes.
+#   review_patterns   — checks injected into multi-model review
+#                       (jackpot-consult) on top of the standard /deepreview
+#                       perspectives.
+#
+# Keyed by the entry's `phase` (every active_backlog.yaml entry has exactly
+# one). A guardrail/pattern under a phase applies to ALL entries in that phase
+# with no per-entry annotation. Cross-cutting items go under `global`.
+# One-off items live on the entry itself (fill_guardrails_extra /
+# review_patterns_extra). The resolver composes:  global + phase + entry-extra.
+#
+# This file is WRITTEN BY jackpot-propagate at session close (the feedback
+# loop) and READ BY jackpot-fill-prompt and jackpot-consult. It is separate
+# from active_backlog.yaml on purpose: scheduling knowledge (what runs, in
+# what order) and quality knowledge (how to fill/review well) change at
+# different rates and are consumed by different scripts.
+#
+# Provenance: each non-trivial item carries `origin` (which session's review
+# surfaced it) and, where useful, `source` (the authoritative doc span). A
+# bare string is also accepted and coerced to {rule|pattern: <string>}.
+#
+# Spec: docs/pipeline_knowledge_routing.md
+# ============================================================================
+
+version: 1
+
+# ----------------------------------------------------------------------------
+# FILL GUARDRAILS — injected into the fill prompt as hard constraints.
+# ----------------------------------------------------------------------------
+fill_guardrails:
+
+  # Apply to every fill, regardless of phase. These subsume the domain-shaped
+  # convention text that previously lived hardcoded in the fill script's
+  # SYSTEM_PROMPT (point 1b: convention moves from code to data).
+  global:
+    - rule: "Python and Bash only. No other languages. No placeholder code — write full implementations always."
+    - rule: "File edits use Python scripts with str.replace() and an `assert count == 1` guard; never sed. Write to /tmp first, then mv into place."
+    - rule: "Never use `status` as a bash variable name (zsh collision)."
+    - rule: "Every test file includes at least one failure-path test, not only the happy path."
+    - rule: "Out-of-Scope items use the 'X (because Y)' pattern so the reason is explicit."
+    - rule: "Commit via the `gac` alias (lint-format-commit). Commit pyproject.toml and uv.lock together when either changes."
+    - rule: "Do NOT assume conventions from other domains (federation scaffolds, respx, AISHooks, a fixed coverage figure) unless the entry's notes, guardrails, or ground-truth sections state them. Take coverage thresholds and library choices from the entry, not from a default."
+    - rule: "Build the MINIMUM that satisfies the design doc - not the minimum that merely works, and not more than the doc specifies. Before adding a class, field, column, config option, abstraction, layer, or dependency, confirm the design doc or the entry's context_anchors actually call for it; if they do not, do not add it. Stop at the first rung that satisfies the spec: stdlib > native platform feature > an already-installed dependency > one line > the minimum the doc requires. (The M0 fill invented a roles field, a principal_matcher, and a priority column the design never names - that is the failure this prevents.) NEVER cut trust-boundary validation, PII/PHI handling, security, or sovereignty constraints in the name of minimalism - those are required by the spec, not optional."
+      origin: "ponytail review 2026-06"
+
+  # Seeded directly from the M0 prompt review (the corrections made by hand on
+  # m0-filled-corrected.md). These now constrain every authz entry — M1, M2,
+  # M3, M4, M5, ACCESS-SEED, ACCESS-GUARD-MAP — automatically.
+  access_model_redesign:
+    - rule: "A Principal has `kind` (HUMAN|PEER_INSTANCE|SERVICE) and `on_behalf_of`. It has NO `roles` field — roles are presets, demoted out of the engine; the engine never sees a role."
+      source: "access_model.md 2.1, 8.1"
+      origin: "M0 fill review"
+    - rule: "A CapabilityGrant is capability + scope_ref + conditions + source. There is no `principal_matcher` — grants are HELD BY a principal (principal.grants), not matched to one."
+      source: "access_model.md 2.2"
+      origin: "M0 fill review"
+    - rule: "Capability names are `domain:action` strings drawn from the section 4 catalog (sample:read_detail, sample:read_surveillance, compute:he_aggregate, federation:push, deletion:request, ...). Do NOT invent verbs like sequence:read, sequence:delete, or compute:run."
+      source: "access_model.md 4"
+      origin: "M0 fill review"
+    - rule: "permit() has a structural scope-containment step (step 3: is the capability granted at a scope that CONTAINS the resource's scope?) AND a separate policy-evaluation step — two independent ALLOW paths. Strict deny-wins, default-deny. Do not collapse them into a single 'collect ALLOW grants' pass."
+      source: "access_model.md 5.1, 5.4"
+      origin: "M0 fill review"
+    - rule: "Resource scope levels are Instance / Org / Lab / Project / Sample (section 3.1). Do not invent resource types like 'wwdb' or 'tenant' as scope levels; tenant IS the Org boundary."
+      source: "access_model.md 3.1, 3.2"
+      origin: "M0 fill review"
+    - rule: "The engine has no ORM. Data access is raw SQL via text(); migrations are hand-written with target_metadata=None. Do not introduce SQLAlchemy ORM models or op.create_table helpers for authz tables."
+      source: "access_model.md 5.2"
+      origin: "M0 fill review"
+    - rule: "There is no precedence/priority number on policies — strict deny-wins is absolute. Do not add a `priority` column or field to the policy set."
+      source: "access_model.md 5.4"
+      origin: "M0 fill review"
+    - rule: "When implementing any authorization, tenant-isolation, or compute-without-read enforcement, the tests you write MUST include a NEGATIVE test that removes the authorizing grant or scope (or sets zero underlying permission) and asserts the request FAILS, not only a positive test that the happy path returns authorized rows. A positive-only test still passes when the enforcement is silently out of the data path."
+      origin: "guidewire federated-query 2026-06 (prevention complement of the negative-isolation review pattern)"
+
+# ----------------------------------------------------------------------------
+# REVIEW PATTERNS — injected into multi-model review (jackpot-consult) as
+# explicit checks, on top of the standard /deepreview six perspectives.
+# ----------------------------------------------------------------------------
+review_patterns:
+
+  global:
+    - pattern: "Confirm at least one failure-path test exists for every new module; flag happy-path-only test files."
+    - pattern: "Confirm no secrets, tokens, or operator-specific proper names were introduced into production code or committed files."
+    - pattern: "Over-engineering delete-list: flag every abstraction, class, field, column, config option, dependency, or layer in the diff that the design doc (or the entry's context_anchors) does not require, and propose deleting it. Justify any complexity by pointing to the spec; treat unjustified complexity as a defect. CARVE-OUT: do NOT flag JACKPOT's genuinely-required architecture as over-engineering - the AIS / AMAND anomaly-detection design, the sovereignty deletion lifecycle, the two-layer federation model, and the PII/DLP ingest gates are spec-required, not bloat. Prune deviations FROM the design, never the design's necessary complexity."
+      rationale: "JACKPOT's recurring failure mode is confabulated complexity (invented fields/columns), not under-building. The delete-list (ponytail) surfaces it; the carve-out stops it from misfiring on required architecture."
+      origin: "ponytail review 2026-06"
+
+  # Security review checks — ALWAYS-ON (a reserved key like `global`): run on
+  # EVERY review regardless of phase. The consult resolver composes
+  #   review_patterns:  global + security + phase + entry-extra.
+  # Seeded from a pre-launch security checklist mapped onto JACKPOT's actual
+  # stack (FastAPI / raw-SQL PostgreSQL / Google OAuth + JWT / GCP Secret
+  # Manager). These are ABSENCE-checks — they catch MISSING protections, which
+  # a correctness review does not. A per-diff review can only see what changed;
+  # whole-surface absence questions ("is EVERY expensive route rate-limited?")
+  # belong to the read-only AUDIT mode (jackpot-audit over a package), not here.
+  #
+  # Deliberately NOT in this block (do not belong in a code-review loop):
+  #   - Email verification: handled by Google OAuth, not self-serve signup.
+  #   - DB-native RLS (Supabase/Firebase): JACKPOT has neither; row protection
+  #     is enforced at the app tier via permit() + visibility_sql_clause.
+  #   - HTTPS / TLS >= 1.2 / SPF / DMARC / DNSSEC: deployment/infra settings
+  #     (Terraform / GKE / operator DNS / email domain), invisible to the loop.
+  #     These need a SEPARATE per-deployment-scenario infra security checklist —
+  #     see pipeline_knowledge_routing.md; scope it when a deployment scenario
+  #     (A laptop / D SaaS / T Tribal / R rural ...) approaches production.
+  security:
+    - pattern: "Rate limiting (checklist 1): flag any new or modified endpoint lacking rate limiting, especially auth/login/token, password-reset-equivalent, contact, pipeline-trigger, federation /search, and any compute-expensive route. SEC-2 (Phase 22) established the rate-limit pattern; new routes must adopt it, not ship unthrottled."
+      rationale: "New expensive/auth routes silently shipping without throttling is the gap a per-PR review misses without an explicit check."
+      origin: "security checklist 2026-06"
+    - pattern: "Server-side validation (checklist 4): flag any endpoint consuming request body, query, or path data without a Pydantic v2 model or explicit server-side validation. Client-side validation is never sufficient; every user-supplied field is validated at the API boundary."
+      origin: "security checklist 2026-06"
+    - pattern: "IDOR / cross-tenant access (checklist 5): flag any by-id fetch or list query returning a resource WITHOUT confirming the requesting principal is authorized for that specific resource's scope. Could user A obtain user B's / org B's / lab B's data by changing an id? Every by-id read and every list must filter by the caller's authorization (permit() / visibility_sql_clause once M2 lands; the sample_access path until then). This is the platform's primary IDOR surface."
+      rationale: "General cross-phase complement to the access_model_redesign shape checks, which only fire on authz PRs. A federation or wastewater PR could introduce an IDOR the phase patterns would never see."
+      origin: "security checklist 2026-06"
+    - pattern: "Write-side authorization (checklist 4/5): flag any state-changing endpoint (create / update / delete / approve / push) that mutates without a capability check first. Read protection without matching write protection is a common gap."
+      origin: "security checklist 2026-06"
+    - pattern: "Secrets in code/frontend (checklist 3): flag any literal resembling a key, token, password, or credential in committed code, including the Streamlit frontend and any built/bundled JS. Secrets live only in the credentials facade (GCP Secret Manager / env); store the secret's NAME (the api_key_secret_name pattern), never the secret itself."
+      origin: "security checklist 2026-06"
+    - pattern: "Hand-rolled auth/crypto (checklist 8): flag custom cryptographic, session, token, or authentication code introduced where Google OAuth, a vetted library, or the credentials facade should be used. JACKPOT's legitimate crypto (cryptWWDB HE, Ed25519 federation keys, X-JACKPOT-Federation-Key) belongs in the crypto subsystem with reviewed primitives and constant-time comparison (hmac.compare_digest) — never ad-hoc string compares, home-grown token formats, or roll-your-own session handling."
+      origin: "security checklist 2026-06"
+    - pattern: "Secrets / PII in logs (JACKPOT-specific): flag log or print statements that could emit secrets, tokens, federation keys, raw PII/PHI, or un-scrubbed sample data. Genomic and wastewater data carry re-identification risk; app and audit logs must not become a PII sink."
+      rationale: "Not in the generic web checklist, but high-relevance for a pathogen-genomics platform handling PII/PHI."
+      origin: "security checklist 2026-06"
+    - pattern: "Negative-isolation test required: when the diff adds or changes any tenant-isolation, cross-instance, or compute-without-read enforcement, verify the tests include a NEGATIVE test that removes the underlying grant / credential / authorizing scope and asserts the request FAILS — not only a positive test that the happy path returns authorized rows. A positive-only test still passes when the enforcement layer is silently out of the data path."
+      rationale: "Guidewire proved isolation by setting zero underlying S3 permissions with grants in place; logs showed the engine bypassed the governance layer entirely and only the negative test caught it. Same failure mode applies to permit() / visibility_sql_clause being silently not in the query path (the M2 risk) and to the data_source_lab compute-without-read preset."
+      origin: "guidewire federated-query review 2026-06"
+    - pattern: "Scope-inheritance by default: when the diff creates a child resource (a Sample, Project, or any resource under an Org / Lab / Instance scope), verify the new resource inherits its parent's scope restriction automatically via a parent-derived scope_ref / containment, NOT via a separate explicit grant a code path could forget. A resource created with a null, root, or wrong scope_ref escapes scope-containment and becomes cross-tenant-visible. Flag any resource-creation path that does not set a parent-derived scope_ref."
+      rationale: "Guidewire's tag-inheritance property: tag the parent and every child (including newly-added tables) inherits the restriction with no new grants. The inverse — a new resource that must be explicitly granted — is a 'forgot to tag the new table' IDOR. Applies in any phase that creates resources, not just authz, hence the always-on security block."
+      origin: "guidewire federated-query review 2026-06"
+
+  access_model_redesign:
+    - pattern: "Verify every capability name used in the diff (code and tests) exists in the access_model.md section 4 catalog. Flag any invented verb."
+      rationale: "Catalog drift is the recurring authz fill error — the M0 fill invented sequence:read / compute:run."
+      origin: "M0 review"
+    - pattern: "Verify Principal / CapabilityGrant / Resource shapes match access_model.md 2.1–2.4 exactly: Principal has kind + on_behalf_of and NO roles field; CapabilityGrant has no principal_matcher."
+      origin: "M0 review"
+    - pattern: "Verify permit() implements BOTH the structural scope-containment check and the policy step as independent ALLOW paths, with deny-wins. Flag any single-pass collapse that would miss tenant isolation (section 9.2)."
+      source: "access_model.md 5.1"
+      origin: "M0 review"
+    - pattern: "Verify no ORM crept into the authz package: no SQLAlchemy model classes, no Base.metadata, migrations carry target_metadata=None."
+      origin: "M0 review"

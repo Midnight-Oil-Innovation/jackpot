@@ -1,0 +1,3306 @@
+=== 85d92864ed38 (backend/db/migrations/versions/85d92864ed38_fed_d_federated_instances_and_b_cwb_fed_1_data_source_lab.py) ===
+"""FED-D federated_instances + organizations federation columns + B-CWB-FED-1 data_source_lab role
+
+Schema migration backing the FED-A federation package (backend/backend/federation/).
+
+What this migration does:
+
+1. Creates the ``federation_role`` PostgreSQL ENUM with the four values
+   needed by the cryptWWDB three-party model (Driver et al. 2024 §4):
+   ``hub``, ``spoke``, ``peer``, ``data_source_lab``. The last value is
+   B-CWB-FED-1 — the Lab produces pipeline_results via X-Pipeline-Token
+   auth but holds no samples of its own, so FederationClient queryable
+   predicates filter it differently from a data-holding peer.
+
+2. Creates the ``federated_instances`` table — one row per registered
+   partner deployment. Field shape matches the FED-A Pydantic
+   ``FederatedInstance`` model in
+   ``backend/backend/federation/models.py``. ``api_key_secret_name`` is
+   a GCP Secret Manager reference, not the key itself — keys never live
+   in DB rows (architecture §22).
+
+3. Extends ``organizations`` with the four federation-policy columns
+   per FED-A: ``min_sharing_level_for_federation``, ``federation_enabled``,
+   ``hub_instance_url``, ``federation_role``.
+
+Divergence from the FED-D session-prompt wording (FED-A models.py is the
+source of truth per Critical Rule N+3):
+
+  * Instance role column is named ``role`` (matches Pydantic field
+    name) — not ``federation_role``.
+  * Master switch column is ``federation_enabled`` with default FALSE
+    (matches FED-A description: "set False to silently drop without
+    removal"), not ``enabled`` with default TRUE.
+  * Sharing-level column is ``min_sharing_level_for_federation`` (matches
+    FED-A), not ``min_sharing_level_accepted``.
+  * Liveness column is ``last_seen_at`` (matches FED-A), not
+    ``last_health_check_at``.
+  * The org-level ``federation_role`` is nullable (NULL = no role)
+    rather than carrying a sentinel ``'none'`` enum value — cleaner SQL
+    semantics, no migration needed when an org steps in or out of
+    federation, and the enum stays valid for both the instance and the
+    org columns. Application code must treat NULL as "no federation
+    role".
+  * ``min_sharing_level_for_federation`` is stored as TEXT with a CHECK
+    constraint rather than as a Postgres ENUM, matching the existing
+    ``samples.sharing_level`` column convention (baseline migration
+    5adf11b77c19 line 296 — TEXT NOT NULL DEFAULT 'PRIVATE').
+
+No SQLAlchemy ORM updates: this codebase queries the DB through raw SQL
+via ``sqlalchemy.text()`` (see ``backend/backend/database.py``). The
+Alembic env.py has ``target_metadata = None``. There is no
+``backend/backend/db/models.py`` to update; the FED-A Pydantic model in
+``backend/backend/federation/models.py`` is the API-layer counterpart
+and already carries the matching FederatedInstance shape (+ the
+DATA_SOURCE_LAB enum value added in this PR).
+
+Revision ID: 85d92864ed38
+Revises:    591318fd3049
+Create Date: 2026-05-12
+"""
+
+from __future__ import annotations
+
+from collections.abc import Sequence
+
+import sqlalchemy as sa
+from alembic import op
+
+revision: str = "85d92864ed38"
+down_revision: str | None = "591318fd3049"
+branch_labels: str | Sequence[str] | None = None
+depends_on: str | Sequence[str] | None = None
+
+
+# SharingLevelEnum values from backend/backend/models_generated.py.
+# Stored as TEXT + CHECK to match the existing samples.sharing_level
+# column convention (baseline migration 5adf11b77c19).
+_SHARING_LEVELS = (
+    "PRIVATE",
+    "LAB",
+    "DISCOVERABLE",
+    "REGISTERED_ACCESS",
+    "PUBLIC",
+)
+
+
+def upgrade() -> None:
+    # pgcrypto already enabled by earlier migration (bac8dbb11c0b) but
+    # CREATE EXTENSION IF NOT EXISTS is idempotent — guard against the
+    # case where this migration runs against an environment that has
+    # not yet reached bac8dbb11c0b.
+    op.execute(sa.text("CREATE EXTENSION IF NOT EXISTS pgcrypto;"))
+
+    # 1. federation_role ENUM type.
+    op.execute(
+        sa.text(
+            """
+        CREATE TYPE federation_role AS ENUM (
+            'hub',
+            'spoke',
+            'peer',
+            'data_source_lab'
+        );
+        """
+        )
+    )
+
+    # 2. federated_instances table — matches FED-A Pydantic FederatedInstance.
+    sharing_levels_sql = ", ".join(f"'{v}'" for v in _SHARING_LEVELS)
+    op.execute(
+        sa.text(
+            f"""
+        CREATE TABLE federated_instances (
+            id                               UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            name                             TEXT NOT NULL UNIQUE,
+            base_url                         TEXT NOT NULL,
+            role                             federation_role NOT NULL,
+            federation_enabled               BOOLEAN NOT NULL DEFAULT FALSE,
+            min_sharing_level_for_federation TEXT NOT NULL DEFAULT 'DISCOVERABLE'
+                                             CHECK (min_sharing_level_for_federation IN ({sharing_levels_sql})),
+            hub_instance_url                 TEXT,
+            api_key_secret_name              TEXT NOT NULL,
+            last_seen_at                     TIMESTAMPTZ,
+            created_at                       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            updated_at                       TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        );
+        """  # noqa: S608 — sharing_levels_sql is built from a constant tuple, not user input
+        )
+    )
+
+    op.execute(
+        sa.text(
+            """
+        CREATE INDEX idx_federated_instances_role
+            ON federated_instances (role)
+            WHERE federation_enabled = TRUE;
+        """
+        )
+    )
+
+    # 3. updated_at trigger — same pattern as sample_files (34382b7b82c6).
+    op.execute(
+        sa.text(
+            """
+        CREATE OR REPLACE FUNCTION set_federated_instances_updated_at()
+        RETURNS TRIGGER AS $$
+        BEGIN
+            NEW.updated_at = NOW();
+            RETURN NEW;
+        END;
+        $$ LANGUAGE plpgsql;
+        """
+        )
+    )
+    op.execute(
+        sa.text(
+            """
+        CREATE TRIGGER federated_instances_updated_at_trigger
+            BEFORE UPDATE ON federated_instances
+            FOR EACH ROW
+            EXECUTE FUNCTION set_federated_instances_updated_at();
+        """
+        )
+    )
+
+    op.execute(
+        sa.text(
+            """
+        COMMENT ON TABLE federated_instances IS
+            'Registered partner JACKPOT deployments. Field shape mirrors '
+            'the FED-A Pydantic FederatedInstance model in '
+            'backend/backend/federation/models.py. api_key_secret_name '
+            'is a GCP Secret Manager reference — keys never live in DB '
+            'rows. data_source_lab role added per B-CWB-FED-1 for the '
+            'cryptWWDB three-party model (Driver et al. 2024 §4).';
+        """
+        )
+    )
+
+    # 4. organizations federation-policy columns.
+    op.execute(
+        sa.text(
+            f"""
+        ALTER TABLE organizations
+            ADD COLUMN min_sharing_level_for_federation TEXT
+                NOT NULL DEFAULT 'PRIVATE'
+                CHECK (min_sharing_level_for_federation IN ({sharing_levels_sql})),
+            ADD COLUMN federation_enabled               BOOLEAN NOT NULL DEFAULT FALSE,
+            ADD COLUMN hub_instance_url                 TEXT,
+            ADD COLUMN federation_role                  federation_role;
+        """  # noqa: S608 — sharing_levels_sql is built from a constant tuple, not user input
+        )
+    )
+
+    op.execute(
+        sa.text(
+            """
+        COMMENT ON COLUMN organizations.federation_role IS
+            'Federation role this organization plays in the partner '
+            'topology. NULL = no federation role assigned. Shared enum '
+            'with federated_instances.role; see B-CWB-FED-1 for the '
+            'data_source_lab value.';
+        """
+        )
+    )
+
+
+def downgrade() -> None:
+    op.execute(
+        sa.text(
+            """
+        ALTER TABLE organizations
+            DROP COLUMN IF EXISTS federation_role,
+            DROP COLUMN IF EXISTS hub_instance_url,
+            DROP COLUMN IF EXISTS federation_enabled,
+            DROP COLUMN IF EXISTS min_sharing_level_for_federation;
+        """
+        )
+    )
+    op.execute(
+        sa.text(
+            "DROP TRIGGER IF EXISTS federated_instances_updated_at_trigger ON federated_instances;"
+        )
+    )
+    op.execute(sa.text("DROP FUNCTION IF EXISTS set_federated_instances_updated_at();"))
+    op.execute(sa.text("DROP INDEX IF EXISTS idx_federated_instances_role;"))
+    op.execute(sa.text("DROP TABLE IF EXISTS federated_instances;"))
+    op.execute(sa.text("DROP TYPE IF EXISTS federation_role;"))
+=== 591318fd3049 (backend/db/migrations/versions/591318fd3049_p0h_h_4_add_pipeline_runs_poller_log_.py) ===
+"""P0h H-4 — pipeline_runs.poller_log_offset
+
+The H-4 sidecar log poller tails ``<work_dir>/runs/<run_id>/.nextflow.log``
+on a 30-second cadence for active cluster runs and synthesises
+weblog-equivalent state transitions when the compute nodes cannot
+reach the API directly. The poller persists its byte position per run
+so each tick processes only new lines.
+
+Revision ID: 591318fd3049
+Revises: f5f4727258b8
+Create Date: 2026-05-08
+"""
+
+from collections.abc import Sequence
+
+import sqlalchemy as sa
+from alembic import op
+
+revision: str = "591318fd3049"
+down_revision: str | None = "f5f4727258b8"
+branch_labels: str | Sequence[str] | None = None
+depends_on: str | Sequence[str] | None = None
+
+
+def upgrade() -> None:
+    op.execute(
+        sa.text(
+            """
+        ALTER TABLE pipeline_runs
+            ADD COLUMN IF NOT EXISTS poller_log_offset BIGINT NOT NULL DEFAULT 0;
+        """
+        )
+    )
+
+
+def downgrade() -> None:
+    op.execute(sa.text("ALTER TABLE pipeline_runs DROP COLUMN IF EXISTS poller_log_offset;"))
+=== f5f4727258b8 (backend/db/migrations/versions/f5f4727258b8_r1_6_unique_replaced_by_jti_partial_.py) ===
+"""R-1 #6 defense-in-depth — unique partial index on replaced_by_jti.
+
+The primary fix for the refresh-token rotation race lives in the
+router (``SELECT ... FOR UPDATE`` serialises rotations on the same
+JTI). This migration adds a database-level constraint that catches a
+race even if the application-level lock is bypassed: every active
+``replaced_by_jti`` value must be unique, so two concurrent rotations
+that both somehow tried to set the same ``replaced_by_jti`` would
+fail at the database with a UniqueViolation rather than producing two
+valid refresh chains.
+
+Partial index because pre-rotation rows (and rotated rows whose
+replacement was itself purged) carry NULL — those should not collide.
+
+Revision ID: f5f4727258b8
+Revises: 9b62dcbacaeb
+Create Date: 2026-05-06 17:30:40.051176
+"""
+
+from collections.abc import Sequence
+
+from alembic import op
+
+# revision identifiers, used by Alembic.
+revision: str = "f5f4727258b8"
+down_revision: str | None = "9b62dcbacaeb"
+branch_labels: str | Sequence[str] | None = None
+depends_on: str | Sequence[str] | None = None
+
+
+def upgrade() -> None:
+    op.create_index(
+        "uq_refresh_tokens_replaced_by_jti",
+        "refresh_tokens",
+        ["replaced_by_jti"],
+        unique=True,
+        postgresql_where="replaced_by_jti IS NOT NULL",
+    )
+
+
+def downgrade() -> None:
+    op.drop_index(
+        "uq_refresh_tokens_replaced_by_jti",
+        table_name="refresh_tokens",
+    )
+=== 9b62dcbacaeb (backend/db/migrations/versions/9b62dcbacaeb_p1_add_refresh_tokens_table.py) ===
+"""p1_add_refresh_tokens_table
+
+P1: server-side tracking for issued refresh tokens. The new table is the
+backing store for the ``POST /api/v1/auth/refresh`` endpoint's
+single-use rotation invariant. Each row corresponds to one refresh JWT
+identified by its ``jti`` claim; once used, the row's ``revoked_at`` is
+stamped and ``replaced_by_jti`` points at the successor token. A reuse
+of an already-rotated token is treated as a replay attempt and triggers
+bulk revocation of all of the user's active tokens (handled in the
+endpoint, not the migration).
+
+Indexes:
+
+* PK on ``jti`` — every lookup goes by JTI from the JWT payload.
+* ``idx_refresh_tokens_user_id`` — supports the bulk-revoke-on-replay
+  query and any future "list this user's active sessions" UI.
+* ``idx_refresh_tokens_expires_active`` — partial index on
+  ``expires_at`` filtered to ``revoked_at IS NULL``; lets the daily
+  cleanup job sweep efficiently as the table grows.
+
+Revision ID: 9b62dcbacaeb
+Revises:    bac8dbb11c0b
+"""
+
+from __future__ import annotations
+
+import sqlalchemy as sa
+from alembic import op
+
+# revision identifiers, used by Alembic.
+revision = "9b62dcbacaeb"
+down_revision = "bac8dbb11c0b"
+branch_labels = None
+depends_on = None
+
+
+def upgrade() -> None:
+    op.execute(
+        sa.text("""
+        CREATE TABLE refresh_tokens (
+            jti              TEXT PRIMARY KEY,
+            user_id          INTEGER NOT NULL
+                REFERENCES users(id) ON DELETE CASCADE,
+            issued_at        TIMESTAMPTZ NOT NULL,
+            expires_at       TIMESTAMPTZ NOT NULL,
+            revoked_at       TIMESTAMPTZ,
+            revoked_reason   TEXT,
+            replaced_by_jti  TEXT,
+            CONSTRAINT refresh_tokens_revoked_reason_valid CHECK (
+                revoked_reason IS NULL OR
+                revoked_reason IN (
+                    'rotated', 'logout', 'admin_revoke', 'replay_detected'
+                )
+            )
+        );
+        """)
+    )
+
+    op.execute(
+        sa.text("""
+        CREATE INDEX idx_refresh_tokens_user_id
+            ON refresh_tokens (user_id);
+        """)
+    )
+
+    op.execute(
+        sa.text("""
+        CREATE INDEX idx_refresh_tokens_expires_active
+            ON refresh_tokens (expires_at)
+         WHERE revoked_at IS NULL;
+        """)
+    )
+
+
+def downgrade() -> None:
+    op.execute(sa.text("DROP INDEX IF EXISTS idx_refresh_tokens_expires_active;"))
+    op.execute(sa.text("DROP INDEX IF EXISTS idx_refresh_tokens_user_id;"))
+    op.execute(sa.text("DROP TABLE IF EXISTS refresh_tokens;"))
+=== bac8dbb11c0b (backend/db/migrations/versions/bac8dbb11c0b_add_execution_profiles_and_pipeline_.py) ===
+"""add_execution_profiles_and_pipeline_default_profile
+
+Phase P0g G-2 schema additions for per-run executor selection
+(Critical Rule 59). Creates two tables — ``execution_profiles`` and
+``pipeline_default_profile`` — plus a partial unique index that
+enforces "at most one deployment-default profile" without blocking
+the common case of many non-default profiles.
+
+The seed step inserts a single ``default-local`` profile so existing
+deployments have a fallback profile to launch with after upgrade. The
+seed runs only when the deployment already has at least one user (so
+the FK from ``execution_profiles.created_by_id`` to ``users.id`` can
+be satisfied) and uses ``ON CONFLICT (name) DO NOTHING`` so re-running
+``alembic upgrade head`` is idempotent.
+
+Pipelines FK fallback: the spec calls for a UUID FK from
+``pipeline_default_profile.pipeline_id`` to ``pipelines.pipeline_id``,
+but the current schema does not expose pipelines as either a LinkML
+class or a UUID-keyed SQL table — the closest analog,
+``pipeline_catalog``, carries a SERIAL integer id. Per the G-1 prompt's
+fallback guidance, this migration declares ``pipeline_id`` as
+``UUID NOT NULL`` with no FK constraint; when the pipelines surface
+gets a LinkML class with a UUID PK, a follow-up migration can add the
+FK. See the PR body for the rationale.
+
+Revision ID: bac8dbb11c0b
+Revises:    3644749bf4c6
+"""
+
+from __future__ import annotations
+
+import sqlalchemy as sa
+from alembic import op
+
+# revision identifiers, used by Alembic.
+revision = "bac8dbb11c0b"
+down_revision = "3644749bf4c6"
+branch_labels = None
+depends_on = None
+
+
+_EXECUTOR_TYPES = (
+    "LOCAL",
+    "SLURM",
+    "PBS",
+    "LSF",
+    "GCP_BATCH",
+    "AWS_BATCH",
+    "KUBERNETES",
+)
+_CONTAINER_ENGINES = ("DOCKER", "APPTAINER", "SINGULARITY", "NONE")
+
+
+def _quoted_in_list(values: tuple[str, ...]) -> str:
+    return ", ".join(f"'{v}'" for v in values)
+
+
+def upgrade() -> None:
+    # ── prerequisite: gen_random_uuid() lives in pgcrypto ───────────
+    # Postgres 13+ ships pgcrypto in core; ``CREATE EXTENSION IF NOT
+    # EXISTS`` is a no-op on existing installations and a safe
+    # one-liner on fresh ones. Done here rather than in the baseline
+    # migration because P0g is the first JACKPOT migration to need a
+    # UUID DEFAULT.
+    op.execute(sa.text("CREATE EXTENSION IF NOT EXISTS pgcrypto;"))
+
+    # ── execution_profiles ─────────────────────────────────────────
+    op.execute(
+        sa.text(
+            f"""
+        CREATE TABLE execution_profiles (
+            profile_id        UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            name              TEXT NOT NULL UNIQUE,
+            executor_type     TEXT NOT NULL
+                              CHECK (executor_type IN ({_quoted_in_list(_EXECUTOR_TYPES)})),
+            container_engine  TEXT NOT NULL
+                              CHECK (container_engine IN ({_quoted_in_list(_CONTAINER_ENGINES)})),
+            work_dir          TEXT NOT NULL,
+            config_overrides  JSONB NOT NULL DEFAULT '{{}}'::jsonb,
+            is_default        BOOLEAN NOT NULL DEFAULT FALSE,
+            created_by_id     INTEGER NOT NULL REFERENCES users(id),
+            created_at        TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            active            BOOLEAN NOT NULL DEFAULT TRUE
+        );
+        """
+        )
+    )
+
+    # ── partial unique index: at most one is_default=true ──────────
+    # The partial WHERE clause means only rows with is_default=TRUE
+    # participate in the uniqueness check; many rows with FALSE are
+    # always permitted.
+    op.execute(
+        sa.text(
+            """
+        CREATE UNIQUE INDEX idx_execution_profiles_one_default
+            ON execution_profiles (is_default)
+            WHERE is_default = TRUE;
+        """
+        )
+    )
+
+    # ── pipeline_default_profile ───────────────────────────────────
+    # pipeline_id is UUID without an FK — see module docstring.
+    # ON DELETE CASCADE on profile_id keeps the association table
+    # tidy when an operator hard-deletes a profile (the typical path
+    # is soft-delete via active=false; hard-delete is reserved for
+    # operator cleanup).
+    op.execute(
+        sa.text(
+            """
+        CREATE TABLE pipeline_default_profile (
+            pipeline_id  UUID NOT NULL,
+            profile_id   UUID NOT NULL
+                         REFERENCES execution_profiles(profile_id)
+                         ON DELETE CASCADE,
+            priority     INTEGER NOT NULL DEFAULT 100,
+            PRIMARY KEY (pipeline_id, profile_id)
+        );
+        """
+        )
+    )
+
+    # ── seed: default-local profile ────────────────────────────────
+    # Idempotent (ON CONFLICT (name) DO NOTHING) and conditional on
+    # at least one user existing (so the FK to users.id can be
+    # satisfied). Fresh installations that run alembic upgrade head
+    # before any user is created will skip the seed; operators can
+    # create the default profile via the future G-9 CLI or by
+    # re-running the migration after the first user lands.
+    op.execute(
+        sa.text(
+            """
+        DO $$
+        DECLARE
+            seed_user_id INTEGER;
+        BEGIN
+            SELECT id INTO seed_user_id FROM users ORDER BY id ASC LIMIT 1;
+            IF seed_user_id IS NOT NULL THEN
+                INSERT INTO execution_profiles (
+                    name, executor_type, container_engine, work_dir,
+                    config_overrides, is_default, created_by_id, active
+                ) VALUES (
+                    'default-local',
+                    'LOCAL',
+                    'DOCKER',
+                    '/srv/jackpot/work',
+                    '{}'::jsonb,
+                    TRUE,
+                    seed_user_id,
+                    TRUE
+                )
+                ON CONFLICT (name) DO NOTHING;
+            END IF;
+        END $$;
+        """
+        )
+    )
+
+    # ── documentation comments ─────────────────────────────────────
+    op.execute(
+        sa.text(
+            """
+        COMMENT ON TABLE execution_profiles IS
+            'Phase P0g — operator-configured execution profiles. Per '
+            'Critical Rule 59, pipeline executor selection is per-run, '
+            'not per-deployment. Soft-deleted via active=false.';
+        """
+        )
+    )
+    op.execute(
+        sa.text(
+            """
+        COMMENT ON TABLE pipeline_default_profile IS
+            'Phase P0g — default execution profile association for a '
+            'pipeline. priority breaks ties when multiple defaults '
+            'match (lower wins). pipeline_id is intentionally an '
+            'unenforced UUID until pipelines gets a UUID-keyed table.';
+        """
+        )
+    )
+
+
+def downgrade() -> None:
+    # Drop in reverse FK-dependency order: association table first,
+    # then the partial unique index, then the parent table. The
+    # pgcrypto extension is intentionally left in place — dropping it
+    # would break unrelated installations that rely on it.
+    op.execute(sa.text("DROP TABLE IF EXISTS pipeline_default_profile;"))
+    op.execute(sa.text("DROP INDEX IF EXISTS idx_execution_profiles_one_default;"))
+    op.execute(sa.text("DROP TABLE IF EXISTS execution_profiles;"))
+=== 3644749bf4c6 (backend/db/migrations/versions/3644749bf4c6_i3a_add_execution_tracking_to_.py) ===
+"""i3a_add_execution_tracking_to_submissions
+
+I-3a: foundation for backend-driven submission execution. Adds six
+tracking columns to ``submissions`` plus a partial index on the new
+``EXECUTING`` state, and extends the existing ``submissions_status_valid``
+CHECK constraint to permit the three new states (``EXECUTING``,
+``EXECUTION_FAILED``, ``EXECUTION_INTERRUPTED``).
+
+The migration is data-safe: every new column is either nullable or has
+a default that fits already-existing rows. No row mutations.
+
+Revision ID: 3644749bf4c6
+Revises:    2a1b3c4d5e6f
+"""
+
+from __future__ import annotations
+
+import sqlalchemy as sa
+from alembic import op
+
+# revision identifiers, used by Alembic.
+revision = "3644749bf4c6"
+down_revision = "2a1b3c4d5e6f"
+branch_labels = None
+depends_on = None
+
+
+def upgrade() -> None:
+    # ── new tracking columns ───────────────────────────────────────
+    op.execute(
+        sa.text("""
+        ALTER TABLE submissions
+            ADD COLUMN execution_started_at      TIMESTAMPTZ,
+            ADD COLUMN execution_completed_at    TIMESTAMPTZ,
+            ADD COLUMN execution_log_uris        JSONB
+                NOT NULL DEFAULT '[]'::jsonb,
+            ADD COLUMN execution_error_message   TEXT,
+            ADD COLUMN execution_attempt_count   INTEGER
+                NOT NULL DEFAULT 0,
+            ADD COLUMN executor_backend          TEXT;
+    """)
+    )
+
+    # ── extend the status CHECK constraint with the three I-3a states ──
+    # We drop and re-add because PostgreSQL does not support ALTER
+    # CONSTRAINT with the new expression in-place. The submissions table
+    # is small in v1 deployments; the rewrite is fast.
+    op.execute(
+        sa.text("""
+        ALTER TABLE submissions
+            DROP CONSTRAINT submissions_status_valid;
+    """)
+    )
+    op.execute(
+        sa.text("""
+        ALTER TABLE submissions
+            ADD CONSTRAINT submissions_status_valid CHECK (
+                status IN (
+                    'DRAFT', 'READY_TO_SUBMIT', 'SUBMITTED',
+                    'PARTIAL_SUCCESS', 'ACCEPTED', 'REJECTED',
+                    'EMBARGOED', 'RELEASED', 'WITHDRAWN', 'FAILED',
+                    'EXECUTING', 'EXECUTION_FAILED',
+                    'EXECUTION_INTERRUPTED'
+                )
+            );
+    """)
+    )
+
+    # ── partial index for the lifespan recovery query ──────────────
+    op.execute(
+        sa.text("""
+        CREATE INDEX idx_submissions_status_executing
+            ON submissions (id)
+         WHERE status = 'EXECUTING';
+    """)
+    )
+
+
+def downgrade() -> None:
+    # Order matters: drop the partial index before dropping the column
+    # it depends on isn't required (it indexes id, not status), but we
+    # drop everything I-3a added in reverse declaration order for
+    # clarity.
+    op.execute(sa.text("DROP INDEX IF EXISTS idx_submissions_status_executing;"))
+
+    # Restore the pre-I-3a status CHECK constraint.
+    op.execute(
+        sa.text("""
+        ALTER TABLE submissions
+            DROP CONSTRAINT IF EXISTS submissions_status_valid;
+    """)
+    )
+    op.execute(
+        sa.text("""
+        ALTER TABLE submissions
+            ADD CONSTRAINT submissions_status_valid CHECK (
+                status IN (
+                    'DRAFT', 'READY_TO_SUBMIT', 'SUBMITTED',
+                    'PARTIAL_SUCCESS', 'ACCEPTED', 'REJECTED',
+                    'EMBARGOED', 'RELEASED', 'WITHDRAWN', 'FAILED'
+                )
+            );
+    """)
+    )
+
+    op.execute(
+        sa.text("""
+        ALTER TABLE submissions
+            DROP COLUMN IF EXISTS executor_backend,
+            DROP COLUMN IF EXISTS execution_attempt_count,
+            DROP COLUMN IF EXISTS execution_error_message,
+            DROP COLUMN IF EXISTS execution_log_uris,
+            DROP COLUMN IF EXISTS execution_completed_at,
+            DROP COLUMN IF EXISTS execution_started_at;
+    """)
+    )
+=== 2a1b3c4d5e6f (backend/db/migrations/versions/2a1b3c4d5e6f_add_submissions_and_submission_samples_tables.py) ===
+"""add_submissions_and_submission_samples_tables
+
+I-2 submission package generation. Two new tables:
+
+- ``submissions`` — first-class submission entity with full lifecycle
+  state machine (DRAFT → READY_TO_SUBMIT → SUBMITTED → ACCEPTED /
+  PARTIAL_SUCCESS / REJECTED → EMBARGOED → RELEASED, plus terminal
+  WITHDRAWN). Lab-scoped per Critical Rule 22.
+
+- ``submission_samples`` — join table with per-sample status and
+  per-repository accession columns. ``UNIQUE (submission_id,
+  sample_id_fk)`` so the same sample can't appear twice in the same
+  submission.
+
+Per Critical Rule 4 every state transition writes log_audit. Per
+Critical Rule 24 router responses use the standard envelope.
+
+Revision ID: 2a1b3c4d5e6f
+Revises:    9a1b2c3d4e5f
+"""
+
+from __future__ import annotations
+
+import sqlalchemy as sa
+from alembic import op
+
+# revision identifiers, used by Alembic.
+revision = "2a1b3c4d5e6f"
+down_revision = "9a1b2c3d4e5f"
+branch_labels = None
+depends_on = None
+
+
+def upgrade() -> None:
+    # ── submissions ─────────────────────────────────────────────────
+    op.execute(
+        sa.text("""
+        CREATE TABLE submissions (
+            id                       BIGSERIAL PRIMARY KEY,
+            created_by_user_id       INTEGER NOT NULL REFERENCES users(id),
+            lab_id                   INTEGER NOT NULL REFERENCES labs(id),
+            target_repository        VARCHAR(32) NOT NULL,
+            title                    TEXT NOT NULL,
+            description              TEXT,
+            status                   VARCHAR(32) NOT NULL DEFAULT 'DRAFT',
+            bioproject_accession     TEXT,
+            release_date             DATE,
+            package_path             TEXT,
+            package_generated_at     TIMESTAMPTZ,
+            submitted_at             TIMESTAMPTZ,
+            accepted_at              TIMESTAMPTZ,
+            rejection_reason         TEXT,
+            withdrawal_reason        TEXT,
+            created_at               TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            updated_at               TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            is_deleted               BOOLEAN NOT NULL DEFAULT FALSE,
+            CONSTRAINT submissions_target_repository_valid CHECK (
+                target_repository IN (
+                    'NCBI', 'GISAID_EPICOV', 'GISAID_EPIFLU',
+                    'GISAID_EPIPOX', 'ENA', 'DDBJ'
+                )
+            ),
+            CONSTRAINT submissions_status_valid CHECK (
+                status IN (
+                    'DRAFT', 'READY_TO_SUBMIT', 'SUBMITTED',
+                    'PARTIAL_SUCCESS', 'ACCEPTED', 'REJECTED',
+                    'EMBARGOED', 'RELEASED', 'WITHDRAWN', 'FAILED'
+                )
+            )
+        );
+    """)
+    )
+
+    op.execute(
+        sa.text("""
+        CREATE INDEX submissions_lab_status_idx
+            ON submissions (lab_id, status)
+            WHERE is_deleted = FALSE;
+    """)
+    )
+    op.execute(
+        sa.text("""
+        CREATE INDEX submissions_creator_idx
+            ON submissions (created_by_user_id)
+            WHERE is_deleted = FALSE;
+    """)
+    )
+    op.execute(
+        sa.text("""
+        CREATE INDEX submissions_embargoed_release_idx
+            ON submissions (status, release_date)
+            WHERE status = 'EMBARGOED' AND is_deleted = FALSE;
+    """)
+    )
+
+    op.execute(
+        sa.text("""
+        CREATE OR REPLACE FUNCTION set_submissions_updated_at()
+        RETURNS TRIGGER AS $$
+        BEGIN
+            NEW.updated_at = NOW();
+            RETURN NEW;
+        END;
+        $$ LANGUAGE plpgsql;
+    """)
+    )
+    op.execute(
+        sa.text("""
+        CREATE TRIGGER submissions_updated_at_trigger
+            BEFORE UPDATE ON submissions
+            FOR EACH ROW
+            EXECUTE FUNCTION set_submissions_updated_at();
+    """)
+    )
+
+    # ── submission_samples ──────────────────────────────────────────
+    op.execute(
+        sa.text("""
+        CREATE TABLE submission_samples (
+            id                          BIGSERIAL PRIMARY KEY,
+            submission_id               BIGINT NOT NULL
+                                        REFERENCES submissions(id) ON DELETE CASCADE,
+            sample_id_fk                INTEGER NOT NULL
+                                        REFERENCES samples(id),
+            per_sample_status           VARCHAR(16) NOT NULL DEFAULT 'PENDING',
+            biosample_accession         TEXT,
+            sra_accession               TEXT,
+            genbank_accession           TEXT,
+            gisaid_accession            TEXT,
+            ena_accession               TEXT,
+            ddbj_accession              TEXT,
+            per_sample_rejection_reason TEXT,
+            created_at                  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            updated_at                  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            CONSTRAINT submission_samples_status_valid CHECK (
+                per_sample_status IN ('PENDING', 'ACCEPTED', 'REJECTED')
+            ),
+            CONSTRAINT submission_samples_unique
+                UNIQUE (submission_id, sample_id_fk)
+        );
+    """)
+    )
+
+    op.execute(
+        sa.text("""
+        CREATE INDEX submission_samples_status_idx
+            ON submission_samples (submission_id, per_sample_status);
+    """)
+    )
+    op.execute(
+        sa.text("""
+        CREATE INDEX submission_samples_sample_idx
+            ON submission_samples (sample_id_fk);
+    """)
+    )
+
+    op.execute(
+        sa.text("""
+        CREATE OR REPLACE FUNCTION set_submission_samples_updated_at()
+        RETURNS TRIGGER AS $$
+        BEGIN
+            NEW.updated_at = NOW();
+            RETURN NEW;
+        END;
+        $$ LANGUAGE plpgsql;
+    """)
+    )
+    op.execute(
+        sa.text("""
+        CREATE TRIGGER submission_samples_updated_at_trigger
+            BEFORE UPDATE ON submission_samples
+            FOR EACH ROW
+            EXECUTE FUNCTION set_submission_samples_updated_at();
+    """)
+    )
+
+    op.execute(
+        sa.text("""
+        COMMENT ON TABLE submissions IS
+            'I-2 submission lifecycle. Critical Rules 4, 22, 24.';
+    """)
+    )
+    op.execute(
+        sa.text("""
+        COMMENT ON TABLE submission_samples IS
+            'I-2 per-sample submission status with repository accession columns.';
+    """)
+    )
+
+
+def downgrade() -> None:
+    op.execute(
+        sa.text(
+            "DROP TRIGGER IF EXISTS submission_samples_updated_at_trigger ON submission_samples;"
+        )
+    )
+    op.execute(sa.text("DROP FUNCTION IF EXISTS set_submission_samples_updated_at();"))
+    op.execute(sa.text("DROP INDEX IF EXISTS submission_samples_sample_idx;"))
+    op.execute(sa.text("DROP INDEX IF EXISTS submission_samples_status_idx;"))
+    op.execute(sa.text("DROP TABLE IF EXISTS submission_samples;"))
+
+    op.execute(sa.text("DROP TRIGGER IF EXISTS submissions_updated_at_trigger ON submissions;"))
+    op.execute(sa.text("DROP FUNCTION IF EXISTS set_submissions_updated_at();"))
+    op.execute(sa.text("DROP INDEX IF EXISTS submissions_embargoed_release_idx;"))
+    op.execute(sa.text("DROP INDEX IF EXISTS submissions_creator_idx;"))
+    op.execute(sa.text("DROP INDEX IF EXISTS submissions_lab_status_idx;"))
+    op.execute(sa.text("DROP TABLE IF EXISTS submissions;"))
+=== 9a1b2c3d4e5f (backend/db/migrations/versions/9a1b2c3d4e5f_add_import_sessions_and_import_mappings_tables.py) ===
+"""add_import_sessions_and_import_mappings_tables
+
+I-1 spreadsheet importer wizard. Two new tables:
+
+- ``import_sessions`` — short-lived, server-side wizard state. Holds
+  the uploaded file bytes (bytea, capped at 10 MB), the wizard's
+  step-by-step decisions (column mapping, value mapping, file-reference
+  pattern), and cached preview/diff results. TTL: 24 hours; cleanup job
+  removes expired rows hourly.
+
+- ``import_mappings`` — long-lived, lab-scoped reusable mapping
+  templates. Distinct from import_sessions because the mapping config
+  has different lifecycle from the in-flight session.
+
+Per Critical Rule 22, both tables include ``lab_id`` from the start
+even though P0c multi-tenancy hasn't shipped — anticipates the cutover
+and avoids a follow-up migration.
+
+Revision ID: 9a1b2c3d4e5f
+Revises:    34382b7b82c6
+"""
+
+from __future__ import annotations
+
+import sqlalchemy as sa
+from alembic import op
+
+# revision identifiers, used by Alembic.
+revision = "9a1b2c3d4e5f"
+down_revision = "34382b7b82c6"
+branch_labels = None
+depends_on = None
+
+
+def upgrade() -> None:
+    # ── import_sessions ──────────────────────────────────────────────
+    op.execute(
+        sa.text("""
+        CREATE TABLE import_sessions (
+            id                       BIGSERIAL PRIMARY KEY,
+            created_by_user_id       INTEGER NOT NULL REFERENCES users(id),
+            lab_id                   INTEGER NOT NULL REFERENCES labs(id),
+            file_name                TEXT NOT NULL,
+            file_format              VARCHAR(8) NOT NULL,
+            file_bytes               BYTEA NOT NULL,
+            file_size_bytes          INTEGER NOT NULL,
+            selected_sheet           TEXT,
+            column_mapping           JSONB,
+            value_mapping            JSONB,
+            file_reference_pattern   JSONB,
+            preview_results          JSONB,
+            diff_results             JSONB,
+            current_step             INTEGER NOT NULL DEFAULT 1,
+            status                   VARCHAR(16) NOT NULL DEFAULT 'in_progress',
+            created_at               TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            updated_at               TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            expires_at               TIMESTAMPTZ NOT NULL
+                                     DEFAULT NOW() + INTERVAL '24 hours',
+            CONSTRAINT import_sessions_format_valid
+                CHECK (file_format IN ('xlsx', 'csv', 'tsv')),
+            CONSTRAINT import_sessions_status_valid
+                CHECK (status IN ('in_progress', 'imported', 'abandoned')),
+            CONSTRAINT import_sessions_size_capped
+                CHECK (file_size_bytes BETWEEN 0 AND 10485760),
+            CONSTRAINT import_sessions_step_in_range
+                CHECK (current_step BETWEEN 1 AND 8)
+        );
+    """)
+    )
+
+    op.execute(
+        sa.text("""
+        CREATE INDEX import_sessions_user_status_expires_idx
+            ON import_sessions (created_by_user_id, status, expires_at);
+    """)
+    )
+    op.execute(
+        sa.text("""
+        CREATE INDEX import_sessions_in_progress_expires_idx
+            ON import_sessions (expires_at)
+            WHERE status = 'in_progress';
+    """)
+    )
+
+    # updated_at trigger — same pattern as F-2's sample_files trigger.
+    op.execute(
+        sa.text("""
+        CREATE OR REPLACE FUNCTION set_import_sessions_updated_at()
+        RETURNS TRIGGER AS $$
+        BEGIN
+            NEW.updated_at = NOW();
+            RETURN NEW;
+        END;
+        $$ LANGUAGE plpgsql;
+    """)
+    )
+    op.execute(
+        sa.text("""
+        CREATE TRIGGER import_sessions_updated_at_trigger
+            BEFORE UPDATE ON import_sessions
+            FOR EACH ROW
+            EXECUTE FUNCTION set_import_sessions_updated_at();
+    """)
+    )
+
+    # ── import_mappings ──────────────────────────────────────────────
+    op.execute(
+        sa.text("""
+        CREATE TABLE import_mappings (
+            id                       BIGSERIAL PRIMARY KEY,
+            lab_id                   INTEGER NOT NULL REFERENCES labs(id),
+            display_name             TEXT NOT NULL,
+            description              TEXT,
+            column_mapping           JSONB NOT NULL,
+            file_reference_pattern   JSONB NOT NULL DEFAULT '{}'::jsonb,
+            created_by_user_id       INTEGER NOT NULL REFERENCES users(id),
+            created_at               TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            updated_at               TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            last_used_at             TIMESTAMPTZ,
+            is_active                BOOLEAN NOT NULL DEFAULT TRUE
+        );
+    """)
+    )
+
+    op.execute(
+        sa.text("""
+        CREATE INDEX import_mappings_lab_active_idx
+            ON import_mappings (lab_id, is_active);
+    """)
+    )
+
+    op.execute(
+        sa.text("""
+        CREATE OR REPLACE FUNCTION set_import_mappings_updated_at()
+        RETURNS TRIGGER AS $$
+        BEGIN
+            NEW.updated_at = NOW();
+            RETURN NEW;
+        END;
+        $$ LANGUAGE plpgsql;
+    """)
+    )
+    op.execute(
+        sa.text("""
+        CREATE TRIGGER import_mappings_updated_at_trigger
+            BEFORE UPDATE ON import_mappings
+            FOR EACH ROW
+            EXECUTE FUNCTION set_import_mappings_updated_at();
+    """)
+    )
+
+    op.execute(
+        sa.text("""
+        COMMENT ON TABLE import_sessions IS
+            'I-1 wizard state. TTL 24h; cleanup job purges expired rows.';
+    """)
+    )
+    op.execute(
+        sa.text("""
+        COMMENT ON TABLE import_mappings IS
+            'I-1 reusable column-to-field mapping templates per lab.';
+    """)
+    )
+
+
+def downgrade() -> None:
+    op.execute(
+        sa.text("DROP TRIGGER IF EXISTS import_mappings_updated_at_trigger ON import_mappings;")
+    )
+    op.execute(sa.text("DROP FUNCTION IF EXISTS set_import_mappings_updated_at();"))
+    op.execute(sa.text("DROP INDEX IF EXISTS import_mappings_lab_active_idx;"))
+    op.execute(sa.text("DROP TABLE IF EXISTS import_mappings;"))
+
+    op.execute(
+        sa.text("DROP TRIGGER IF EXISTS import_sessions_updated_at_trigger ON import_sessions;")
+    )
+    op.execute(sa.text("DROP FUNCTION IF EXISTS set_import_sessions_updated_at();"))
+    op.execute(sa.text("DROP INDEX IF EXISTS import_sessions_in_progress_expires_idx;"))
+    op.execute(sa.text("DROP INDEX IF EXISTS import_sessions_user_status_expires_idx;"))
+    op.execute(sa.text("DROP TABLE IF EXISTS import_sessions;"))
+=== 34382b7b82c6 (backend/db/migrations/versions/34382b7b82c6_add_file_references.py) ===
+"""add_file_references
+
+Phase P0f schema additions for in-place file registration with
+content-hash deduplication. Extends the existing sample_files table
+with content_hash (SHA-256), cheap fingerprint pieces, storage_state
+ENUM, alternate_uris, verification metadata, retention_policy,
+original_uri (for MIRRORED), staged_for_run_id (for STAGED), and an
+updated_at trigger.
+
+The existing sample_files table already carries sample_id_fk, uri,
+md5, file_size_bytes, scrub_status, paired_file_id, etc. — P0f
+extends it rather than introducing a parallel file_references table.
+See spec.md Phase P0f and Critical Rules 57 and 58.
+
+Revision ID: 34382b7b82c6
+Revises:    00b4bd99ddee
+"""
+
+from __future__ import annotations
+
+import sqlalchemy as sa
+from alembic import op
+
+# revision identifiers, used by Alembic.
+revision = "34382b7b82c6"
+down_revision = "00b4bd99ddee"
+branch_labels = None
+depends_on = None
+
+
+def upgrade() -> None:
+    # 1. ENUM type for storage state.
+    op.execute(
+        sa.text("""
+        CREATE TYPE file_storage_state AS ENUM (
+            'EXTERNAL',
+            'MANAGED',
+            'MIRRORED',
+            'STAGED',
+            'BROKEN'
+        );
+    """)
+    )
+
+    # 2. Extend the existing sample_files table with P0f columns.
+    op.execute(
+        sa.text("""
+        ALTER TABLE sample_files
+            ADD COLUMN content_hash             VARCHAR(64),
+            ADD COLUMN head64k_hash             VARCHAR(64),
+            ADD COLUMN tail64k_hash             VARCHAR(64),
+            ADD COLUMN storage_state            file_storage_state
+                                                NOT NULL
+                                                DEFAULT 'EXTERNAL',
+            ADD COLUMN alternate_uris           TEXT[]
+                                                NOT NULL
+                                                DEFAULT ARRAY[]::TEXT[],
+            ADD COLUMN first_seen_at            TIMESTAMPTZ
+                                                NOT NULL
+                                                DEFAULT NOW(),
+            ADD COLUMN last_verified_at         TIMESTAMPTZ,
+            ADD COLUMN last_verification_status VARCHAR(32),
+            ADD COLUMN retention_policy         VARCHAR(32)
+                                                NOT NULL
+                                                DEFAULT 'STANDARD',
+            ADD COLUMN original_uri             TEXT,
+            ADD COLUMN staged_for_run_id        UUID,
+            ADD COLUMN updated_at               TIMESTAMPTZ
+                                                NOT NULL
+                                                DEFAULT NOW();
+    """)
+    )
+
+    # 3. Backfill cheap-fingerprint columns from existing md5.
+    op.execute(
+        sa.text("""
+        UPDATE sample_files
+           SET head64k_hash = md5,
+               tail64k_hash = md5
+         WHERE md5 IS NOT NULL
+           AND head64k_hash IS NULL;
+    """)
+    )
+
+    # 4. Constraints.
+    op.execute(
+        sa.text("""
+        ALTER TABLE sample_files
+            ADD CONSTRAINT sample_files_managed_size_not_null
+                CHECK (
+                    storage_state NOT IN ('MANAGED', 'STAGED')
+                    OR file_size_bytes IS NOT NULL
+                ),
+            ADD CONSTRAINT sample_files_mirrored_has_origin
+                CHECK (
+                    storage_state <> 'MIRRORED'
+                    OR original_uri IS NOT NULL
+                ),
+            ADD CONSTRAINT sample_files_staged_has_run
+                CHECK (
+                    storage_state <> 'STAGED'
+                    OR staged_for_run_id IS NOT NULL
+                ),
+            ADD CONSTRAINT sample_files_retention_valid
+                CHECK (retention_policy IN
+                    ('STANDARD', 'LONG_TERM', 'EPHEMERAL'));
+    """)
+    )
+
+    # 5. Indexes for the dedup hot paths.
+    op.execute(
+        sa.text("""
+        CREATE UNIQUE INDEX sample_files_content_hash_uniq
+            ON sample_files (content_hash)
+            WHERE content_hash IS NOT NULL;
+    """)
+    )
+    op.execute(
+        sa.text("""
+        CREATE INDEX sample_files_fingerprint_idx
+            ON sample_files (file_size_bytes, head64k_hash, tail64k_hash)
+            WHERE content_hash IS NULL
+              AND file_size_bytes IS NOT NULL;
+    """)
+    )
+    op.execute(
+        sa.text("""
+        CREATE INDEX sample_files_verification_idx
+            ON sample_files (storage_state, last_verified_at)
+            WHERE storage_state IN ('EXTERNAL', 'MIRRORED');
+    """)
+    )
+
+    # 6. updated_at trigger.
+    op.execute(
+        sa.text("""
+        CREATE OR REPLACE FUNCTION set_sample_files_updated_at()
+        RETURNS TRIGGER AS $$
+        BEGIN
+            NEW.updated_at = NOW();
+            RETURN NEW;
+        END;
+        $$ LANGUAGE plpgsql;
+    """)
+    )
+    op.execute(
+        sa.text("""
+        CREATE TRIGGER sample_files_updated_at_trigger
+            BEFORE UPDATE ON sample_files
+            FOR EACH ROW
+            EXECUTE FUNCTION set_sample_files_updated_at();
+    """)
+    )
+
+    # 7. Documentation comment.
+    op.execute(
+        sa.text("""
+        COMMENT ON TABLE sample_files IS
+            'Sample-to-file association with file metadata. Phase P0f '
+            'extended this table with content_hash, cheap fingerprint, '
+            'storage_state, alternate_uris, and verification metadata. '
+            'See Critical Rules 57 and 58.';
+    """)
+    )
+
+
+def downgrade() -> None:
+    op.execute(sa.text("DROP TRIGGER IF EXISTS sample_files_updated_at_trigger ON sample_files;"))
+    op.execute(sa.text("DROP FUNCTION IF EXISTS set_sample_files_updated_at();"))
+    op.execute(sa.text("DROP INDEX IF EXISTS sample_files_verification_idx;"))
+    op.execute(sa.text("DROP INDEX IF EXISTS sample_files_fingerprint_idx;"))
+    op.execute(sa.text("DROP INDEX IF EXISTS sample_files_content_hash_uniq;"))
+    op.execute(
+        sa.text("""
+        ALTER TABLE sample_files
+            DROP CONSTRAINT IF EXISTS sample_files_retention_valid,
+            DROP CONSTRAINT IF EXISTS sample_files_staged_has_run,
+            DROP CONSTRAINT IF EXISTS sample_files_mirrored_has_origin,
+            DROP CONSTRAINT IF EXISTS sample_files_managed_size_not_null;
+    """)
+    )
+    op.execute(
+        sa.text("""
+        ALTER TABLE sample_files
+            DROP COLUMN IF EXISTS updated_at,
+            DROP COLUMN IF EXISTS staged_for_run_id,
+            DROP COLUMN IF EXISTS original_uri,
+            DROP COLUMN IF EXISTS retention_policy,
+            DROP COLUMN IF EXISTS last_verification_status,
+            DROP COLUMN IF EXISTS last_verified_at,
+            DROP COLUMN IF EXISTS first_seen_at,
+            DROP COLUMN IF EXISTS alternate_uris,
+            DROP COLUMN IF EXISTS storage_state,
+            DROP COLUMN IF EXISTS tail64k_hash,
+            DROP COLUMN IF EXISTS head64k_hash,
+            DROP COLUMN IF EXISTS content_hash;
+    """)
+    )
+    op.execute(sa.text("DROP TYPE IF EXISTS file_storage_state;"))
+=== 00b4bd99ddee (backend/db/migrations/versions/00b4bd99ddee_rename_linux_prophet_and_outpost_to_.py) ===
+"""rename  example org and lab
+
+Revision ID: 00b4bd99ddee
+Revises: 8e963caa3d13
+Create Date: 2026-04-28 13:51:26.516224
+
+Phase 7 — final renaming step in the institutional-cleanup chain. The
+prior c1bd67369a7c renamed ASU → Linux Prophet; e5315db18d40 renamed
+Otero Lab → Otero Outpost. Per Critical Rule 55 (production code is
+operator-agnostic), the seeded operator identity now lands on neutral
+'Example Org' / 'Example Lab' / 'admin@example.org' values. The
+operator-bootstrap layer (jackpot init, P0e) will rename these to
+real operator values at install time.
+
+WHERE matches by old value rather than by id so the migration is
+portable across forks/clones and idempotent (re-running on an
+already-renamed DB is a no-op).
+
+P0e A.3 (Critical Rule 55): HISTORICAL — no-op on fresh installs.
+The baseline migration `5adf11b77c19` was edited in P0e to seed the
+`Example Org` / `Example Lab` / `admin@example.org` /
+`Example Sequencing Lab` / `Example Reference Lab` end-state values
+directly, so this rename now matches zero rows on a fresh install.
+This file remains in the chain for any deployed environment that
+was at the pre-P0e revision before the baseline edit landed.
+"""
+
+from collections.abc import Sequence
+
+from alembic import op
+
+revision: str = "00b4bd99ddee"
+down_revision: str | None = "8e963caa3d13"
+branch_labels: str | Sequence[str] | None = None
+depends_on: str | Sequence[str] | None = None
+
+
+def upgrade() -> None:
+    # organizations table: 'Linux Prophet' → 'Example Org'
+    op.execute(
+        "UPDATE organizations SET display_name = 'Example Org' WHERE display_name = 'Linux Prophet'"
+    )
+
+    # sequencing_labs.organization (denormalised text):
+    op.execute(
+        "UPDATE sequencing_labs SET organization = 'Example Org' "
+        "WHERE organization = 'Linux Prophet'"
+    )
+    op.execute(
+        "UPDATE sequencing_labs SET organization = 'Example Sequencing Lab' "
+        "WHERE organization = 'Sonora Quest'"
+    )
+    op.execute(
+        "UPDATE sequencing_labs SET organization = 'Example Reference Lab' "
+        "WHERE organization = 'LabCorp'"
+    )
+
+    # sequencing_labs.name:
+    op.execute("UPDATE sequencing_labs SET name = 'Example Lab' WHERE name = 'Otero Outpost'")
+    op.execute(
+        "UPDATE sequencing_labs SET name = 'Example Sequencing Lab' "
+        "WHERE name = 'Sonora Quest Laboratories'"
+    )
+    op.execute(
+        "UPDATE sequencing_labs SET name = 'Example Reference Lab' "
+        "WHERE name = 'Laboratory Corporation of America'"
+    )
+
+    # labs.display_name: 'Otero Outpost' → 'Example Lab'
+    op.execute("UPDATE labs SET display_name = 'Example Lab' WHERE display_name = 'Otero Outpost'")
+
+    # domain_whitelist: 'linuxprophet.org' → 'example.org'
+    op.execute(
+        "UPDATE domain_whitelist "
+        "SET domain = 'example.org', description = 'Example Org' "
+        "WHERE domain = 'linuxprophet.org'"
+    )
+
+    # users: rename the seeded admin email
+    op.execute(
+        "UPDATE users SET email = 'admin@example.org' WHERE email = 'gotero@linuxprophet.com'"
+    )
+
+
+def downgrade() -> None:
+    op.execute(
+        "UPDATE users SET email = 'gotero@linuxprophet.com' WHERE email = 'admin@example.org'"
+    )
+    op.execute(
+        "UPDATE domain_whitelist "
+        "SET domain = 'linuxprophet.org', description = 'Linux Prophet' "
+        "WHERE domain = 'example.org'"
+    )
+    op.execute("UPDATE labs SET display_name = 'Otero Outpost' WHERE display_name = 'Example Lab'")
+    op.execute(
+        "UPDATE sequencing_labs SET name = 'Laboratory Corporation of America' "
+        "WHERE name = 'Example Reference Lab'"
+    )
+    op.execute(
+        "UPDATE sequencing_labs SET name = 'Sonora Quest Laboratories' "
+        "WHERE name = 'Example Sequencing Lab'"
+    )
+    op.execute("UPDATE sequencing_labs SET name = 'Otero Outpost' WHERE name = 'Example Lab'")
+    op.execute(
+        "UPDATE sequencing_labs SET organization = 'LabCorp' "
+        "WHERE organization = 'Example Reference Lab'"
+    )
+    op.execute(
+        "UPDATE sequencing_labs SET organization = 'Sonora Quest' "
+        "WHERE organization = 'Example Sequencing Lab'"
+    )
+    op.execute(
+        "UPDATE sequencing_labs SET organization = 'Example Org' "
+        "WHERE organization = 'Linux Prophet'"
+    )
+    op.execute(
+        "UPDATE organizations SET display_name = 'Linux Prophet' WHERE display_name = 'Example Org'"
+    )
+=== 8e963caa3d13 (backend/db/migrations/versions/8e963caa3d13_rename_adhs_medsis_id_to_external_case_.py) ===
+"""rename adhs_medsis_id to external_case_id
+
+Revision ID: 8e963caa3d13
+Revises: c1bd67369a7c
+Create Date: 2026-04-26
+
+Renames the human-sample case-management identifier column from the
+operator-specific name `adhs_medsis_id` to the operator-neutral
+`external_case_id`. The column semantics, type, and nullability are
+unchanged.
+
+The schema YAML at schema/schema/jackpot_schema.yaml has been updated
+to match. The Pydantic models at backend/models_generated.py have been
+regenerated. Backend code and tests that reference the old name are
+updated in companion changes (Phase 3 — tests, Phase 4 — backend code).
+
+This is a non-idempotent column rename. Re-running on an
+already-renamed DB will fail because the source column no longer
+exists. That is acceptable for an Alembic migration — Alembic tracks
+applied revisions and will not re-run.
+"""
+
+from collections.abc import Sequence
+
+from alembic import op
+
+revision: str = "8e963caa3d13"
+down_revision: str | None = "c1bd67369a7c"
+branch_labels: str | Sequence[str] | None = None
+depends_on: str | Sequence[str] | None = None
+
+
+def upgrade() -> None:
+    op.alter_column("samples", "adhs_medsis_id", new_column_name="external_case_id")
+
+
+def downgrade() -> None:
+    op.alter_column("samples", "external_case_id", new_column_name="adhs_medsis_id")
+=== c1bd67369a7c (backend/db/migrations/versions/c1bd67369a7c_rename_asu_organization_to_linux_prophet.py) ===
+"""rename asu organization to linux prophet
+
+Revision ID: c1bd67369a7c
+Revises: e5315db18d40
+Create Date: 2026-04-24 22:53:33.792568
+
+Glen's lab "Otero Outpost" lives under the Linux Prophet organisation,
+not ASU. Rename the JACKPOT-internal organisation record + the
+denormalised organisation text on the seeded sequencing lab + the
+domain-whitelist row that gated sign-ups.
+
+WHERE matches by old value rather than by id so the migration is
+portable across forks/clones and idempotent (re-running on an
+already-renamed DB is a no-op). display_name has a UNIQUE constraint
+so the match is unambiguous.
+
+P0e A.3 (Critical Rule 55): HISTORICAL — no-op on fresh installs.
+The baseline migration `5adf11b77c19` was edited in P0e to seed
+`Example Org` directly, so on a fresh `alembic upgrade head` no row
+named `ASU` exists for this migration to update. The UPDATE statements
+still execute but match zero rows. This file remains in the chain for
+any deployed environment that was at this revision before the P0e edit.
+"""
+
+from collections.abc import Sequence
+
+from alembic import op
+
+revision: str = "c1bd67369a7c"
+down_revision: str | None = "e5315db18d40"
+branch_labels: str | Sequence[str] | None = None
+depends_on: str | Sequence[str] | None = None
+
+
+def upgrade() -> None:
+    op.execute("UPDATE organizations SET display_name = 'Linux Prophet' WHERE display_name = 'ASU'")
+    op.execute(
+        "UPDATE sequencing_labs SET organization = 'Linux Prophet' WHERE organization = 'ASU'"
+    )
+    op.execute(
+        "UPDATE domain_whitelist "
+        "SET domain = 'linuxprophet.org', description = 'Linux Prophet' "
+        "WHERE domain = 'asu.edu'"
+    )
+
+
+def downgrade() -> None:
+    op.execute(
+        "UPDATE domain_whitelist "
+        "SET domain = 'asu.edu', description = 'Arizona State University' "
+        "WHERE domain = 'linuxprophet.org'"
+    )
+    op.execute(
+        "UPDATE sequencing_labs SET organization = 'ASU' WHERE organization = 'Linux Prophet'"
+    )
+    op.execute("UPDATE organizations SET display_name = 'ASU' WHERE display_name = 'Linux Prophet'")
+=== e5315db18d40 (backend/db/migrations/versions/e5315db18d40_rename_otero_seed_lab_to_outpost.py) ===
+"""rename otero seed lab to outpost
+
+Revision ID: e5315db18d40
+Revises: dc1d08fa8c41
+Create Date: 2026-04-24 22:38:53.139282
+
+UI-B: the local-dev seed lab is "Otero Outpost", not "Otero Lab".
+Update both the JACKPOT lab row and the linked sequencing-lab row.
+Idempotent — only renames when the old name is still present so it's
+safe to re-run on environments that already adopted the new name.
+
+P0e A.3 (Critical Rule 55): HISTORICAL — no-op on fresh installs.
+The baseline migration `5adf11b77c19` was edited in P0e to seed
+`Example Lab` directly, so on a fresh `alembic upgrade head` no row
+named `Otero Lab` exists for this migration to update. The UPDATE
+statements still execute but match zero rows, which is harmless
+(idempotent by design). This file remains in the chain for any
+deployed environment that was at this revision before the P0e edit.
+"""
+
+from collections.abc import Sequence
+
+from alembic import op
+
+revision: str = "e5315db18d40"
+down_revision: str | None = "dc1d08fa8c41"
+branch_labels: str | Sequence[str] | None = None
+depends_on: str | Sequence[str] | None = None
+
+
+def upgrade() -> None:
+    op.execute("UPDATE sequencing_labs SET name = 'Otero Outpost' WHERE name = 'Otero Lab'")
+    op.execute("UPDATE labs SET display_name = 'Otero Outpost' WHERE display_name = 'Otero Lab'")
+
+
+def downgrade() -> None:
+    op.execute("UPDATE labs SET display_name = 'Otero Lab' WHERE display_name = 'Otero Outpost'")
+    op.execute("UPDATE sequencing_labs SET name = 'Otero Lab' WHERE name = 'Otero Outpost'")
+=== dc1d08fa8c41 (backend/db/migrations/versions/dc1d08fa8c41_session_o_sample_access_grants_and_.py) ===
+"""session_o_sample_access_grants_and_request_extensions
+
+Revision ID: dc1d08fa8c41
+Revises: cea9c08543ee
+Create Date: 2026-04-17 10:47:55.368354
+
+Session O: sample_access router (request → approve/deny → grant lifecycle).
+
+Extends sample_access_requests with the columns the new endpoint needs
+(justification, requested_duration_days, auto_approve_after, approver/
+denier identity + timestamps, and a last_warning_sent_at marker the
+nightly job uses to avoid double-firing the 75-day / 7-day notifications).
+
+Creates sample_access_grants — the table can_access_sample() consults
+to authorise reads. A grant is the durable artefact of an APPROVED
+request and carries the absolute access_expires_at; revocation is a
+boolean so historical grants stay queryable for audit.
+"""
+
+from collections.abc import Sequence
+
+from alembic import op
+
+revision: str = "dc1d08fa8c41"
+down_revision: str | None = "cea9c08543ee"
+branch_labels: str | Sequence[str] | None = None
+depends_on: str | Sequence[str] | None = None
+
+
+def upgrade() -> None:
+    op.execute(
+        """
+        ALTER TABLE sample_access_requests
+            ADD COLUMN IF NOT EXISTS justification           TEXT,
+            ADD COLUMN IF NOT EXISTS requested_duration_days INTEGER,
+            ADD COLUMN IF NOT EXISTS auto_approve_after      TIMESTAMPTZ,
+            ADD COLUMN IF NOT EXISTS access_expires_at       TIMESTAMPTZ,
+            ADD COLUMN IF NOT EXISTS approved_by_id          INTEGER REFERENCES users(id),
+            ADD COLUMN IF NOT EXISTS approved_at             TIMESTAMPTZ,
+            ADD COLUMN IF NOT EXISTS denied_by_id            INTEGER REFERENCES users(id),
+            ADD COLUMN IF NOT EXISTS denied_at               TIMESTAMPTZ,
+            ADD COLUMN IF NOT EXISTS last_warning_sent_at    TIMESTAMPTZ
+        """
+    )
+
+    op.execute(
+        "CREATE INDEX IF NOT EXISTS sample_access_requests_status_idx "
+        "ON sample_access_requests (status)"
+    )
+    op.execute(
+        "CREATE INDEX IF NOT EXISTS sample_access_requests_sample_idx "
+        "ON sample_access_requests (sample_id)"
+    )
+    op.execute(
+        "CREATE INDEX IF NOT EXISTS sample_access_requests_requester_idx "
+        "ON sample_access_requests (requester_id)"
+    )
+
+    op.execute(
+        """
+        CREATE TABLE IF NOT EXISTS sample_access_grants (
+            id                 BIGSERIAL PRIMARY KEY,
+            sample_id          INTEGER NOT NULL REFERENCES samples(id) ON DELETE CASCADE,
+            requester_id       INTEGER NOT NULL REFERENCES users(id),
+            request_id         INTEGER REFERENCES sample_access_requests(id) ON DELETE SET NULL,
+            granted_by_id      INTEGER REFERENCES users(id),
+            granted_at         TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            access_expires_at  TIMESTAMPTZ,
+            revoked            BOOLEAN NOT NULL DEFAULT FALSE,
+            revoked_at         TIMESTAMPTZ,
+            revoked_by_id      INTEGER REFERENCES users(id)
+        )
+        """
+    )
+    op.execute(
+        "CREATE INDEX IF NOT EXISTS sample_access_grants_lookup_idx "
+        "ON sample_access_grants (requester_id, sample_id) "
+        "WHERE revoked = FALSE"
+    )
+    op.execute(
+        "CREATE INDEX IF NOT EXISTS sample_access_grants_expiry_idx "
+        "ON sample_access_grants (access_expires_at) "
+        "WHERE revoked = FALSE"
+    )
+
+
+def downgrade() -> None:
+    op.execute("DROP INDEX IF EXISTS sample_access_grants_expiry_idx")
+    op.execute("DROP INDEX IF EXISTS sample_access_grants_lookup_idx")
+    op.execute("DROP TABLE IF EXISTS sample_access_grants")
+
+    op.execute("DROP INDEX IF EXISTS sample_access_requests_requester_idx")
+    op.execute("DROP INDEX IF EXISTS sample_access_requests_sample_idx")
+    op.execute("DROP INDEX IF EXISTS sample_access_requests_status_idx")
+
+    op.execute(
+        """
+        ALTER TABLE sample_access_requests
+            DROP COLUMN IF EXISTS last_warning_sent_at,
+            DROP COLUMN IF EXISTS denied_at,
+            DROP COLUMN IF EXISTS denied_by_id,
+            DROP COLUMN IF EXISTS approved_at,
+            DROP COLUMN IF EXISTS approved_by_id,
+            DROP COLUMN IF EXISTS access_expires_at,
+            DROP COLUMN IF EXISTS auto_approve_after,
+            DROP COLUMN IF EXISTS requested_duration_days,
+            DROP COLUMN IF EXISTS justification
+        """
+    )
+=== cea9c08543ee (backend/db/migrations/versions/cea9c08543ee_session_n_add_pipeline_events_tasks_.py) ===
+"""session_n_add_pipeline_events_tasks_files_restarts_catalog
+
+Revision ID: cea9c08543ee
+Revises: b1a4c9d2e8f0
+Create Date: 2026-04-17 10:11:26.820032
+
+Session N: pipelines router launch/monitor/resume + BYOP + promotion.
+
+Creates the operational tables that back the launch → weblog → results
+flow end to end:
+
+* pipeline_events — raw Nextflow -weblog payloads (audit trail)
+* pipeline_tasks  — one row per Nextflow task_id, updated on trace events
+* pipeline_files  — output file registry populated by the results loader
+* pipeline_restarts — links a resumed run_id back to its FAILED ancestor
+* project_pipelines — BYOP skeleton (UNVERIFIED until Month 3)
+* lab_pipelines — project→lab promotion records
+
+Also adds columns to pipeline_runs that the launch endpoint needs
+(result_uri is already there; add parameters JSONB + soft_warnings JSONB
+so /resume can replay the same config) and adds a compatibility_rules
+JSONB column to pipeline_catalog so launch's compat check is data-driven.
+"""
+
+from collections.abc import Sequence
+
+from alembic import op
+
+revision: str = "cea9c08543ee"
+down_revision: str | None = "b1a4c9d2e8f0"
+branch_labels: str | Sequence[str] | None = None
+depends_on: str | Sequence[str] | None = None
+
+
+def upgrade() -> None:
+    op.execute(
+        """
+        ALTER TABLE pipeline_runs
+            ADD COLUMN IF NOT EXISTS parameters JSONB NOT NULL DEFAULT '{}'::JSONB,
+            ADD COLUMN IF NOT EXISTS soft_warnings JSONB NOT NULL DEFAULT '[]'::JSONB,
+            ADD COLUMN IF NOT EXISTS pipeline_catalog_id INTEGER
+                REFERENCES pipeline_catalog(id)
+        """
+    )
+
+    op.execute(
+        """
+        ALTER TABLE pipeline_catalog
+            ADD COLUMN IF NOT EXISTS pipeline_uri TEXT,
+            ADD COLUMN IF NOT EXISTS default_profile TEXT,
+            ADD COLUMN IF NOT EXISTS compatibility_rules JSONB
+                NOT NULL DEFAULT '{}'::JSONB,
+            ADD COLUMN IF NOT EXISTS scope_lab_id INTEGER REFERENCES labs(id),
+            ADD COLUMN IF NOT EXISTS scope_project_id INTEGER REFERENCES projects(id)
+        """
+    )
+
+    op.execute(
+        """
+        CREATE TABLE IF NOT EXISTS pipeline_events (
+            id           BIGSERIAL PRIMARY KEY,
+            run_id       TEXT NOT NULL,
+            event_type   TEXT NOT NULL,
+            event_json   JSONB NOT NULL,
+            received_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        )
+        """
+    )
+    op.execute(
+        "CREATE INDEX IF NOT EXISTS pipeline_events_run_id_idx "
+        "ON pipeline_events (run_id, received_at DESC)"
+    )
+
+    op.execute(
+        """
+        CREATE TABLE IF NOT EXISTS pipeline_tasks (
+            id            BIGSERIAL PRIMARY KEY,
+            run_id        TEXT NOT NULL,
+            task_id       TEXT NOT NULL,
+            task_name     TEXT,
+            status        TEXT,
+            container     TEXT,
+            cpus          INTEGER,
+            memory_mb     BIGINT,
+            duration_ms   BIGINT,
+            submitted_at  TEXT,
+            started_at    TEXT,
+            completed_at  TEXT,
+            updated_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            UNIQUE (run_id, task_id)
+        )
+        """
+    )
+    op.execute("CREATE INDEX IF NOT EXISTS pipeline_tasks_run_id_idx ON pipeline_tasks (run_id)")
+
+    op.execute(
+        """
+        CREATE TABLE IF NOT EXISTS pipeline_files (
+            id          BIGSERIAL PRIMARY KEY,
+            run_id      TEXT NOT NULL,
+            sample_id   TEXT,
+            file_uri    TEXT NOT NULL,
+            file_type   TEXT NOT NULL,
+            scope       TEXT NOT NULL DEFAULT 'sample',
+            created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            UNIQUE (run_id, file_uri)
+        )
+        """
+    )
+    op.execute("CREATE INDEX IF NOT EXISTS pipeline_files_run_id_idx ON pipeline_files (run_id)")
+
+    op.execute(
+        """
+        CREATE TABLE IF NOT EXISTS pipeline_restarts (
+            id                BIGSERIAL PRIMARY KEY,
+            new_run_id        TEXT NOT NULL,
+            previous_run_id   TEXT NOT NULL,
+            resumed_by_id     INTEGER REFERENCES users(id),
+            resumed_at        TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            UNIQUE (new_run_id)
+        )
+        """
+    )
+    op.execute(
+        "CREATE INDEX IF NOT EXISTS pipeline_restarts_previous_idx "
+        "ON pipeline_restarts (previous_run_id)"
+    )
+
+    op.execute(
+        """
+        CREATE TABLE IF NOT EXISTS project_pipelines (
+            id                 SERIAL PRIMARY KEY,
+            project_id         INTEGER NOT NULL REFERENCES projects(id)
+                                    ON DELETE CASCADE,
+            pipeline_name      TEXT NOT NULL,
+            github_url         TEXT NOT NULL,
+            revision           TEXT NOT NULL,
+            parameter_schema   JSONB NOT NULL DEFAULT '{}'::JSONB,
+            status             TEXT NOT NULL DEFAULT 'UNVERIFIED',
+            created_by_id      INTEGER REFERENCES users(id),
+            created_at         TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            updated_at         TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            UNIQUE (project_id, pipeline_name)
+        )
+        """
+    )
+
+    op.execute(
+        """
+        CREATE TABLE IF NOT EXISTS lab_pipelines (
+            id                          SERIAL PRIMARY KEY,
+            lab_id                      INTEGER NOT NULL REFERENCES labs(id)
+                                              ON DELETE CASCADE,
+            pipeline_catalog_id         INTEGER REFERENCES pipeline_catalog(id),
+            source_project_pipeline_id  INTEGER REFERENCES project_pipelines(id),
+            promoted_by_id              INTEGER REFERENCES users(id),
+            promoted_at                 TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            UNIQUE (lab_id, pipeline_catalog_id)
+        )
+        """
+    )
+
+
+def downgrade() -> None:
+    op.execute("DROP TABLE IF EXISTS lab_pipelines")
+    op.execute("DROP TABLE IF EXISTS project_pipelines")
+    op.execute("DROP INDEX IF EXISTS pipeline_restarts_previous_idx")
+    op.execute("DROP TABLE IF EXISTS pipeline_restarts")
+    op.execute("DROP INDEX IF EXISTS pipeline_files_run_id_idx")
+    op.execute("DROP TABLE IF EXISTS pipeline_files")
+    op.execute("DROP INDEX IF EXISTS pipeline_tasks_run_id_idx")
+    op.execute("DROP TABLE IF EXISTS pipeline_tasks")
+    op.execute("DROP INDEX IF EXISTS pipeline_events_run_id_idx")
+    op.execute("DROP TABLE IF EXISTS pipeline_events")
+
+    op.execute(
+        """
+        ALTER TABLE pipeline_catalog
+            DROP COLUMN IF EXISTS scope_project_id,
+            DROP COLUMN IF EXISTS scope_lab_id,
+            DROP COLUMN IF EXISTS compatibility_rules,
+            DROP COLUMN IF EXISTS default_profile,
+            DROP COLUMN IF EXISTS pipeline_uri
+        """
+    )
+
+    op.execute(
+        """
+        ALTER TABLE pipeline_runs
+            DROP COLUMN IF EXISTS pipeline_catalog_id,
+            DROP COLUMN IF EXISTS soft_warnings,
+            DROP COLUMN IF EXISTS parameters
+        """
+    )
+=== b1a4c9d2e8f0 (backend/db/migrations/versions/b1a4c9d2e8f0_add_pipeline_catalog_and_parser_.py) ===
+"""add_pipeline_catalog_and_parser_version
+
+Revision ID: b1a4c9d2e8f0
+Revises: acd770bb1753
+Create Date: 2026-04-17 12:00:00.000000
+
+Session M-3: introduces the ``pipeline_catalog`` table and the
+``parser_version`` column called out in spec.md line 379.
+
+The catalog is the backing table for the zoo/lab/project three-tier
+pipeline hierarchy (Session N adds the launch endpoint that reads
+from it).  This migration creates the *minimal* shape required so
+the Session M parser-version workflow has something to point at:
+
+* ``(pipeline_name, pipeline_version)`` uniquely identifies a row.
+* ``parser_version`` is semver, bumped when the matching parser in
+  ``jackpot-nf/pipelines/<name>/parsers`` changes shape — callers
+  compare against ``pipeline_runs.parser_version_used`` to detect
+  drift at replay time.
+* ``tier`` is one of 'zoo' / 'lab' / 'project' — Session N enforces
+  hierarchy semantics; here we just need the column so seed rows
+  can be written.
+
+Future Session N/O migrations will ALTER TABLE to add launch-related
+fields (pipeline_uri, pipeline_revision, compute_config, etc.) —
+adding a column is cheap, so we deliberately keep the catalog thin
+here rather than speculating on shape.
+"""
+
+from collections.abc import Sequence
+
+from alembic import op
+
+revision: str = "b1a4c9d2e8f0"
+down_revision: str | None = "acd770bb1753"
+branch_labels: str | Sequence[str] | None = None
+depends_on: str | Sequence[str] | None = None
+
+
+def upgrade() -> None:
+    op.execute(
+        """
+        CREATE TABLE IF NOT EXISTS pipeline_catalog (
+            id                SERIAL PRIMARY KEY,
+            pipeline_name     TEXT NOT NULL,
+            pipeline_version  TEXT NOT NULL,
+            parser_version    TEXT NOT NULL,
+            tier              TEXT NOT NULL DEFAULT 'zoo',
+            is_active         BOOLEAN NOT NULL DEFAULT TRUE,
+            created_at        TIMESTAMPTZ DEFAULT NOW(),
+            updated_at        TIMESTAMPTZ DEFAULT NOW(),
+            UNIQUE (pipeline_name, pipeline_version)
+        )
+        """
+    )
+    op.execute(
+        """
+        ALTER TABLE pipeline_catalog
+            ADD COLUMN IF NOT EXISTS parser_version TEXT NOT NULL DEFAULT '0.0.0'
+        """
+    )
+    op.execute(
+        "CREATE INDEX IF NOT EXISTS pipeline_catalog_tier_active_idx "
+        "ON pipeline_catalog (tier, is_active)"
+    )
+
+
+def downgrade() -> None:
+    op.execute("DROP INDEX IF EXISTS pipeline_catalog_tier_active_idx")
+    op.execute("DROP TABLE IF EXISTS pipeline_catalog")
+=== acd770bb1753 (backend/db/migrations/versions/acd770bb1753_add_pipeline_token_and_typed_result_.py) ===
+"""add_pipeline_token_and_typed_result_tables
+
+Revision ID: acd770bb1753
+Revises: e2dede78c435
+Create Date: 2026-04-17 00:52:34.924705
+
+Adds the pipeline_runs columns needed by the jackpot-nf registration
+protocol (external run_id, per-run pipeline_token, workdir, and
+parser_version_used) and creates the nine typed result tables that
+parsers POST into via the /api/v1/pipelines/{run_id}/results/{result_type}
+endpoint. Also adds a pipeline_results table with a metrics JSONB column
+that the registration endpoint merges into in the same transaction.
+"""
+
+from collections.abc import Sequence
+
+from alembic import op
+
+# revision identifiers, used by Alembic.
+revision: str = "acd770bb1753"
+down_revision: str | None = "e2dede78c435"
+branch_labels: str | Sequence[str] | None = None
+depends_on: str | Sequence[str] | None = None
+
+
+def upgrade() -> None:
+    op.execute(
+        """
+        ALTER TABLE pipeline_runs
+            ADD COLUMN IF NOT EXISTS run_id TEXT,
+            ADD COLUMN IF NOT EXISTS pipeline_token TEXT,
+            ADD COLUMN IF NOT EXISTS work_dir TEXT,
+            ADD COLUMN IF NOT EXISTS parser_version_used TEXT
+        """
+    )
+    op.execute(
+        "CREATE UNIQUE INDEX IF NOT EXISTS pipeline_runs_run_id_key "
+        "ON pipeline_runs (run_id) WHERE run_id IS NOT NULL"
+    )
+
+    op.execute(
+        """
+        CREATE TABLE IF NOT EXISTS pipeline_results (
+            id                SERIAL PRIMARY KEY,
+            run_id            TEXT NOT NULL,
+            sample_id         TEXT NOT NULL,
+            pipeline_name     TEXT,
+            pipeline_version  TEXT,
+            metrics           JSONB NOT NULL DEFAULT '{}'::JSONB,
+            results_json      JSONB,
+            created_at        TIMESTAMPTZ DEFAULT NOW(),
+            updated_at        TIMESTAMPTZ DEFAULT NOW(),
+            UNIQUE (run_id, sample_id)
+        )
+        """
+    )
+
+    op.execute(
+        """
+        CREATE TABLE IF NOT EXISTS pangolin_results (
+            id                       SERIAL PRIMARY KEY,
+            run_id                   TEXT NOT NULL,
+            sample_id                TEXT NOT NULL,
+            lineage                  TEXT NOT NULL,
+            conflict                 DOUBLE PRECISION,
+            ambiguity_score          DOUBLE PRECISION,
+            scorpio_call             TEXT,
+            scorpio_support          DOUBLE PRECISION,
+            scorpio_conflict         DOUBLE PRECISION,
+            scorpio_notes            TEXT,
+            pangolin_version         TEXT NOT NULL,
+            pangolin_data_version    TEXT,
+            scorpio_version          TEXT,
+            constellation_version    TEXT,
+            qc_status                TEXT,
+            qc_notes                 TEXT,
+            note                     TEXT,
+            created_at               TIMESTAMPTZ DEFAULT NOW(),
+            UNIQUE (run_id, sample_id)
+        )
+        """
+    )
+
+    op.execute(
+        """
+        CREATE TABLE IF NOT EXISTS nextclade_results (
+            id                  SERIAL PRIMARY KEY,
+            run_id              TEXT NOT NULL,
+            sample_id           TEXT NOT NULL,
+            clade               TEXT,
+            nextclade_pango     TEXT,
+            qc_overall_status   TEXT,
+            qc_overall_score    DOUBLE PRECISION,
+            total_substitutions INTEGER,
+            total_deletions     INTEGER,
+            total_insertions    INTEGER,
+            total_missing       INTEGER,
+            total_non_acgtns    INTEGER,
+            total_frame_shifts  INTEGER,
+            substitutions       JSONB,
+            aa_substitutions    JSONB,
+            nextclade_version   TEXT NOT NULL,
+            dataset_name        TEXT,
+            dataset_version     TEXT,
+            created_at          TIMESTAMPTZ DEFAULT NOW(),
+            UNIQUE (run_id, sample_id)
+        )
+        """
+    )
+
+    op.execute(
+        """
+        CREATE TABLE IF NOT EXISTS typing_results (
+            id               SERIAL PRIMARY KEY,
+            run_id           TEXT NOT NULL,
+            sample_id        TEXT NOT NULL,
+            scheme           TEXT NOT NULL,
+            scheme_version   TEXT,
+            sequence_type    TEXT,
+            clade            TEXT,
+            allele_calls     JSONB,
+            tool_name        TEXT NOT NULL,
+            tool_version     TEXT,
+            created_at       TIMESTAMPTZ DEFAULT NOW(),
+            UNIQUE (run_id, sample_id, scheme)
+        )
+        """
+    )
+
+    op.execute(
+        """
+        CREATE TABLE IF NOT EXISTS tb_typing_results (
+            id                        SERIAL PRIMARY KEY,
+            run_id                    TEXT NOT NULL,
+            sample_id                 TEXT NOT NULL,
+            main_lineage              TEXT,
+            sub_lineage               TEXT,
+            spoligotype               TEXT,
+            drug_resistance_profile   TEXT,
+            who_drug_susceptibility   JSONB,
+            tbprofiler_version        TEXT NOT NULL,
+            tbprofiler_db_version     TEXT,
+            created_at                TIMESTAMPTZ DEFAULT NOW(),
+            UNIQUE (run_id, sample_id)
+        )
+        """
+    )
+
+    op.execute(
+        """
+        CREATE TABLE IF NOT EXISTS assembly_qc (
+            id                     SERIAL PRIMARY KEY,
+            run_id                 TEXT NOT NULL,
+            sample_id              TEXT NOT NULL,
+            total_length           BIGINT,
+            num_contigs            INTEGER,
+            largest_contig         INTEGER,
+            n50                    INTEGER,
+            l50                    INTEGER,
+            gc_percent             DOUBLE PRECISION,
+            n_count                BIGINT,
+            coverage_depth         DOUBLE PRECISION,
+            genome_completeness    DOUBLE PRECISION,
+            contamination_percent  DOUBLE PRECISION,
+            assembly_method        TEXT,
+            tool_name              TEXT NOT NULL,
+            tool_version           TEXT,
+            created_at             TIMESTAMPTZ DEFAULT NOW(),
+            UNIQUE (run_id, sample_id)
+        )
+        """
+    )
+
+    op.execute(
+        """
+        CREATE TABLE IF NOT EXISTS amr_results (
+            id                     SERIAL PRIMARY KEY,
+            run_id                 TEXT NOT NULL,
+            sample_id              TEXT NOT NULL,
+            gene_symbol            TEXT NOT NULL,
+            gene_name              TEXT,
+            drug_class             TEXT,
+            drug                   TEXT,
+            resistance_phenotype   TEXT,
+            coverage_percent       DOUBLE PRECISION,
+            identity_percent       DOUBLE PRECISION,
+            reference_database     TEXT,
+            reference_accession    TEXT,
+            contig_id              TEXT,
+            start_pos              INTEGER,
+            end_pos                INTEGER,
+            strand                 TEXT,
+            tool_name              TEXT NOT NULL,
+            tool_version           TEXT,
+            created_at             TIMESTAMPTZ DEFAULT NOW(),
+            UNIQUE (run_id, sample_id, gene_symbol, contig_id, start_pos)
+        )
+        """
+    )
+
+    op.execute(
+        """
+        CREATE TABLE IF NOT EXISTS mag_qc (
+            id                      SERIAL PRIMARY KEY,
+            run_id                  TEXT NOT NULL,
+            sample_id               TEXT NOT NULL,
+            bin_id                  TEXT NOT NULL,
+            completeness_percent    DOUBLE PRECISION,
+            contamination_percent   DOUBLE PRECISION,
+            strain_heterogeneity    DOUBLE PRECISION,
+            bin_size_bp             BIGINT,
+            num_contigs             INTEGER,
+            n50                     INTEGER,
+            gc_percent              DOUBLE PRECISION,
+            taxonomy                TEXT,
+            tool_name               TEXT NOT NULL,
+            tool_version            TEXT,
+            created_at              TIMESTAMPTZ DEFAULT NOW(),
+            UNIQUE (run_id, sample_id, bin_id)
+        )
+        """
+    )
+
+    op.execute(
+        """
+        CREATE TABLE IF NOT EXISTS taxonomic_profile (
+            id                   SERIAL PRIMARY KEY,
+            run_id               TEXT NOT NULL,
+            sample_id            TEXT NOT NULL,
+            taxon_id             TEXT NOT NULL,
+            taxon_name           TEXT,
+            rank                 TEXT,
+            lineage              TEXT,
+            abundance_percent    DOUBLE PRECISION,
+            read_count           BIGINT,
+            reference_database   TEXT,
+            tool_name            TEXT NOT NULL,
+            tool_version         TEXT,
+            created_at           TIMESTAMPTZ DEFAULT NOW(),
+            UNIQUE (run_id, sample_id, taxon_id, tool_name)
+        )
+        """
+    )
+
+    op.execute(
+        """
+        CREATE TABLE IF NOT EXISTS wastewater_lineage_abundance (
+            id                         SERIAL PRIMARY KEY,
+            run_id                     TEXT NOT NULL,
+            sample_id                  TEXT NOT NULL,
+            lineage                    TEXT NOT NULL,
+            abundance                  DOUBLE PRECISION NOT NULL,
+            confidence_interval_low    DOUBLE PRECISION,
+            confidence_interval_high   DOUBLE PRECISION,
+            coverage_depth             DOUBLE PRECISION,
+            tool_name                  TEXT NOT NULL,
+            tool_version               TEXT,
+            barcode_version            TEXT,
+            created_at                 TIMESTAMPTZ DEFAULT NOW(),
+            UNIQUE (run_id, sample_id, lineage)
+        )
+        """
+    )
+
+
+def downgrade() -> None:
+    op.execute("DROP TABLE IF EXISTS wastewater_lineage_abundance")
+    op.execute("DROP TABLE IF EXISTS taxonomic_profile")
+    op.execute("DROP TABLE IF EXISTS mag_qc")
+    op.execute("DROP TABLE IF EXISTS amr_results")
+    op.execute("DROP TABLE IF EXISTS assembly_qc")
+    op.execute("DROP TABLE IF EXISTS tb_typing_results")
+    op.execute("DROP TABLE IF EXISTS typing_results")
+    op.execute("DROP TABLE IF EXISTS nextclade_results")
+    op.execute("DROP TABLE IF EXISTS pangolin_results")
+    op.execute("DROP TABLE IF EXISTS pipeline_results")
+    op.execute("DROP INDEX IF EXISTS pipeline_runs_run_id_key")
+    op.execute(
+        """
+        ALTER TABLE pipeline_runs
+            DROP COLUMN IF EXISTS parser_version_used,
+            DROP COLUMN IF EXISTS work_dir,
+            DROP COLUMN IF EXISTS pipeline_token,
+            DROP COLUMN IF EXISTS run_id
+        """
+    )
+=== e2dede78c435 (backend/db/migrations/versions/e2dede78c435_add_default_lab_id_and_default_project_.py) ===
+"""add default_lab_id and default_project_id to personal_tokens
+
+Revision ID: e2dede78c435
+Revises: 919759af99a1
+Create Date: 2026-04-16 22:39:30.617318
+
+"""
+
+from collections.abc import Sequence
+
+import sqlalchemy as sa
+from alembic import op
+
+# revision identifiers, used by Alembic.
+revision: str = "e2dede78c435"
+down_revision: str | None = "919759af99a1"
+branch_labels: str | Sequence[str] | None = None
+depends_on: str | Sequence[str] | None = None
+
+
+def upgrade() -> None:
+    op.add_column(
+        "personal_tokens",
+        sa.Column(
+            "default_lab_id",
+            sa.Integer(),
+            sa.ForeignKey("labs.id", ondelete="SET NULL"),
+            nullable=True,
+        ),
+    )
+    op.add_column(
+        "personal_tokens",
+        sa.Column(
+            "default_project_id",
+            sa.Integer(),
+            sa.ForeignKey("projects.id", ondelete="SET NULL"),
+            nullable=True,
+        ),
+    )
+
+
+def downgrade() -> None:
+    op.drop_column("personal_tokens", "default_project_id")
+    op.drop_column("personal_tokens", "default_lab_id")
+=== 919759af99a1 (backend/db/migrations/versions/919759af99a1_add_sequencing_lab_assignments_join_.py) ===
+"""add sequencing_lab_assignments join table
+
+Revision ID: 919759af99a1
+Revises: 10066df35f84
+Create Date: 2026-04-16 22:30:08.705081
+
+"""
+
+from collections.abc import Sequence
+
+import sqlalchemy as sa
+from alembic import op
+
+# revision identifiers, used by Alembic.
+revision: str = "919759af99a1"
+down_revision: str | None = "10066df35f84"
+branch_labels: str | Sequence[str] | None = None
+depends_on: str | Sequence[str] | None = None
+
+
+def upgrade() -> None:
+    op.create_table(
+        "sequencing_lab_assignments",
+        sa.Column("id", sa.Integer(), primary_key=True),
+        sa.Column(
+            "sequencing_lab_id",
+            sa.Integer(),
+            sa.ForeignKey("sequencing_labs.id", ondelete="CASCADE"),
+            nullable=False,
+        ),
+        sa.Column(
+            "lab_id",
+            sa.Integer(),
+            sa.ForeignKey("labs.id", ondelete="CASCADE"),
+            nullable=False,
+        ),
+        sa.Column("created_at", sa.TIMESTAMP(timezone=True), server_default=sa.func.now()),
+        sa.UniqueConstraint("sequencing_lab_id", "lab_id", name="uq_seq_lab_assignment"),
+    )
+
+
+def downgrade() -> None:
+    op.drop_table("sequencing_lab_assignments")
+=== 10066df35f84 (backend/db/migrations/versions/10066df35f84_add_pool_size_min_and_pool_size_max_to_.py) ===
+"""add pool_size_min and pool_size_max to vector samples
+
+Revision ID: 10066df35f84  # pragma: allowlist secret
+Revises: c536de6329e0
+Create Date: 2026-04-15 22:03:13.944206
+
+"""
+
+from collections.abc import Sequence
+
+import sqlalchemy as sa
+from alembic import op
+
+# revision identifiers, used by Alembic.
+revision: str = "10066df35f84"  # pragma: allowlist secret
+down_revision: str | None = "c536de6329e0"  # pragma: allowlist secret
+branch_labels: str | Sequence[str] | None = None
+depends_on: str | Sequence[str] | None = None
+
+
+def upgrade() -> None:
+    op.add_column("samples", sa.Column("pool_size_min", sa.Integer(), nullable=True))
+    op.add_column("samples", sa.Column("pool_size_max", sa.Integer(), nullable=True))
+
+
+def downgrade() -> None:
+    op.drop_column("samples", "pool_size_max")
+    op.drop_column("samples", "pool_size_min")
+=== c536de6329e0 (backend/db/migrations/versions/c536de6329e0_create_reportable_organisms.py) ===
+"""create_reportable_organisms
+
+Revision ID: c536de6329e0
+Revises: 3f18545e3844
+Create Date: 2026-04-10 22:50:05.298971
+
+"""
+
+from collections.abc import Sequence
+
+from alembic import op
+
+# revision identifiers, used by Alembic.
+revision: str = "c536de6329e0"  # pragma: allowlist secret
+down_revision: str | None = "3f18545e3844"
+branch_labels: str | Sequence[str] | None = None
+depends_on: str | Sequence[str] | None = None
+
+
+def upgrade() -> None:
+    op.execute("""
+        CREATE TABLE IF NOT EXISTS reportable_organisms (
+            id             SERIAL PRIMARY KEY,
+            organism_name  TEXT NOT NULL UNIQUE,
+            is_active      BOOLEAN NOT NULL DEFAULT TRUE,
+            added_by_id    INTEGER REFERENCES users(id),
+            notes          TEXT,
+            created_at     TIMESTAMPTZ DEFAULT NOW()
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_reportable_organisms_name
+            ON reportable_organisms(organism_name)
+            WHERE is_active = TRUE;
+    """)
+
+
+def downgrade() -> None:
+    op.execute("DROP TABLE IF EXISTS reportable_organisms;")
+=== 3f18545e3844 (backend/db/migrations/versions/3f18545e3844_redesign_notifications.py) ===
+"""redesign_notifications
+
+Revision ID: 3f18545e3844
+Revises: 655903cf2603
+Create Date: 2026-04-10 20:52:18.879685
+
+"""
+
+from collections.abc import Sequence
+
+from alembic import op
+
+# revision identifiers, used by Alembic.
+revision: str = "3f18545e3844"
+down_revision: str | None = "655903cf2603"
+branch_labels: str | Sequence[str] | None = None
+depends_on: str | Sequence[str] | None = None
+
+
+def upgrade() -> None:
+    op.execute("""
+        ALTER TABLE notifications
+            RENAME COLUMN user_id TO recipient_id;
+        ALTER TABLE notifications
+            RENAME COLUMN type TO event_type;
+        ALTER TABLE notifications
+            RENAME COLUMN link TO action_url;
+        ALTER TABLE notifications
+            ADD COLUMN resource_type TEXT,
+            ADD COLUMN resource_id   TEXT;
+    """)
+
+
+def downgrade() -> None:
+    op.execute("""
+        ALTER TABLE notifications
+            DROP COLUMN resource_type,
+            DROP COLUMN resource_id;
+        ALTER TABLE notifications
+            RENAME COLUMN recipient_id TO user_id;
+        ALTER TABLE notifications
+            RENAME COLUMN event_type TO type;
+        ALTER TABLE notifications
+            RENAME COLUMN action_url TO link;
+    """)
+=== 655903cf2603 (backend/db/migrations/versions/655903cf2603_redesign_audit_log.py) ===
+"""redesign_audit_log
+
+Revision ID: 655903cf2603
+Revises: 1de94c16e612
+Create Date: 2026-04-10 20:47:05.298224
+
+"""
+
+from collections.abc import Sequence
+
+from alembic import op
+
+# revision identifiers, used by Alembic.
+revision: str = "655903cf2603"
+down_revision: str | None = "1de94c16e612"
+branch_labels: str | Sequence[str] | None = None
+depends_on: str | Sequence[str] | None = None
+
+
+def upgrade() -> None:
+    op.execute("""
+        ALTER TABLE audit_log
+            RENAME COLUMN user_id TO actor_id;
+        ALTER TABLE audit_log
+            RENAME COLUMN resource TO resource_type;
+        ALTER TABLE audit_log
+            ADD COLUMN before_state JSONB,
+            ADD COLUMN after_state  JSONB,
+            ADD COLUMN metadata     JSONB;
+        ALTER TABLE audit_log
+            DROP COLUMN detail,
+            DROP COLUMN ip_address,
+            DROP COLUMN request_id;
+    """)
+
+
+def downgrade() -> None:
+    op.execute("""
+        ALTER TABLE audit_log
+            ADD COLUMN detail     JSONB,
+            ADD COLUMN ip_address TEXT,
+            ADD COLUMN request_id TEXT;
+        ALTER TABLE audit_log
+            DROP COLUMN before_state,
+            DROP COLUMN after_state,
+            DROP COLUMN metadata;
+        ALTER TABLE audit_log
+            RENAME COLUMN actor_id TO user_id;
+        ALTER TABLE audit_log
+            RENAME COLUMN resource_type TO resource;
+    """)
+=== 1de94c16e612 (backend/db/migrations/versions/1de94c16e612_schema_v4_2_case_sector_surveillance_.py) ===
+"""schema_v4_2_case_sector_surveillance_quality
+
+Revision ID: 1de94c16e612
+Revises: a7fd1fcccb77
+Create Date: 2026-04-08 18:42:18.756406
+
+"""
+
+from collections.abc import Sequence
+
+from alembic import op
+
+# revision identifiers, used by Alembic.
+revision: str = "1de94c16e612"
+down_revision: str | None = "a7fd1fcccb77"
+branch_labels: str | Sequence[str] | None = None
+depends_on: str | Sequence[str] | None = None
+
+
+def upgrade() -> None:
+    op.execute("""
+        ALTER TABLE samples
+            ADD COLUMN IF NOT EXISTS case_id                            TEXT,
+            ADD COLUMN IF NOT EXISTS case_source_system                 TEXT,
+            ADD COLUMN IF NOT EXISTS case_type                          TEXT,
+            ADD COLUMN IF NOT EXISTS sector                             TEXT NOT NULL DEFAULT 'clinical',
+            ADD COLUMN IF NOT EXISTS surveillance_relevant              BOOLEAN NOT NULL DEFAULT FALSE,
+            ADD COLUMN IF NOT EXISTS surveillance_relevant_override
+                BOOLEAN,
+            ADD COLUMN IF NOT EXISTS surveillance_override_pending
+                BOOLEAN,
+            ADD COLUMN IF NOT EXISTS surveillance_override_category     TEXT,
+            ADD COLUMN IF NOT EXISTS surveillance_override_reason       TEXT,
+            ADD COLUMN IF NOT EXISTS surveillance_override_approved_by_id
+                INTEGER,
+            ADD COLUMN IF NOT EXISTS surveillance_override_date         DATE,
+            ADD COLUMN IF NOT EXISTS target_organisms                   TEXT[],
+            ADD COLUMN IF NOT EXISTS quality_status                     TEXT NOT NULL DEFAULT 'PRELIMINARY',
+            ADD COLUMN IF NOT EXISTS date_collected_precision           TEXT NOT NULL DEFAULT 'day',
+            ADD COLUMN IF NOT EXISTS read_type                          TEXT,
+            ADD COLUMN IF NOT EXISTS assembly_type                      TEXT,
+            ADD COLUMN IF NOT EXISTS mag_completeness_pct               DOUBLE PRECISION,
+            ADD COLUMN IF NOT EXISTS mag_contamination_pct              DOUBLE PRECISION,
+            ADD COLUMN IF NOT EXISTS mag_strain_heterogeneity_pct       DOUBLE PRECISION,
+            ADD COLUMN IF NOT EXISTS mag_bin_count                      INTEGER,
+            ADD COLUMN IF NOT EXISTS originating_lab                    TEXT,
+            ADD COLUMN IF NOT EXISTS submitting_lab                     TEXT,
+            ADD COLUMN IF NOT EXISTS data_generator                     TEXT,
+            ADD COLUMN IF NOT EXISTS ena_accession                      TEXT,
+            ADD COLUMN IF NOT EXISTS data_use_terms                     TEXT,
+            ADD COLUMN IF NOT EXISTS embargo_release_date               DATE,
+            ADD COLUMN IF NOT EXISTS citation_request                   TEXT,
+            ADD COLUMN IF NOT EXISTS date_received_lab                  DATE,
+            ADD COLUMN IF NOT EXISTS date_sequence_uploaded             DATE,
+            ADD COLUMN IF NOT EXISTS date_lineage_assigned              DATE,
+            ADD COLUMN IF NOT EXISTS date_phenotype_reported            DATE;
+    """)
+
+
+def downgrade() -> None:
+    op.execute("""
+        ALTER TABLE samples
+            DROP COLUMN IF EXISTS case_id,
+            DROP COLUMN IF EXISTS case_source_system,
+            DROP COLUMN IF EXISTS case_type,
+            DROP COLUMN IF EXISTS sector,
+            DROP COLUMN IF EXISTS surveillance_relevant,
+            DROP COLUMN IF EXISTS surveillance_relevant_override,
+            DROP COLUMN IF EXISTS surveillance_override_pending,
+            DROP COLUMN IF EXISTS surveillance_override_category,
+            DROP COLUMN IF EXISTS surveillance_override_reason,
+            DROP COLUMN IF EXISTS surveillance_override_approved_by_id,
+            DROP COLUMN IF EXISTS surveillance_override_date,
+            DROP COLUMN IF EXISTS target_organisms,
+            DROP COLUMN IF EXISTS quality_status,
+            DROP COLUMN IF EXISTS date_collected_precision,
+            DROP COLUMN IF EXISTS read_type,
+            DROP COLUMN IF EXISTS assembly_type,
+            DROP COLUMN IF EXISTS mag_completeness_pct,
+            DROP COLUMN IF EXISTS mag_contamination_pct,
+            DROP COLUMN IF EXISTS mag_strain_heterogeneity_pct,
+            DROP COLUMN IF EXISTS mag_bin_count,
+            DROP COLUMN IF EXISTS originating_lab,
+            DROP COLUMN IF EXISTS submitting_lab,
+            DROP COLUMN IF EXISTS data_generator,
+            DROP COLUMN IF EXISTS ena_accession,
+            DROP COLUMN IF EXISTS data_use_terms,
+            DROP COLUMN IF EXISTS embargo_release_date,
+            DROP COLUMN IF EXISTS citation_request,
+            DROP COLUMN IF EXISTS date_received_lab,
+            DROP COLUMN IF EXISTS date_sequence_uploaded,
+            DROP COLUMN IF EXISTS date_lineage_assigned,
+            DROP COLUMN IF EXISTS date_phenotype_reported;
+    """)
+=== a7fd1fcccb77 (backend/db/migrations/versions/a7fd1fcccb77_rename_is_lab_admin_to_is_lab_director.py) ===
+"""rename_is_lab_admin_to_is_lab_director
+
+Revision ID: a7fd1fcccb77
+Revises:
+Create Date: 2026-04-06 23:03:24.934290
+
+"""
+
+from collections.abc import Sequence
+
+from alembic import op
+
+# revision identifiers, used by Alembic.
+revision: str = "a7fd1fcccb77"
+down_revision: str | None = "5adf11b77c19"
+branch_labels: str | Sequence[str] | None = None
+depends_on: str | Sequence[str] | None = None
+
+
+def upgrade() -> None:
+    # Idempotent: only rename if is_lab_admin still exists.
+    # init.sql already uses is_lab_director, so a fresh DB won't need this.
+    op.execute("""
+        DO $$
+        BEGIN
+            IF EXISTS (
+                SELECT 1 FROM information_schema.columns
+                WHERE table_name = 'lab_membership'
+                AND column_name = 'is_lab_admin'
+            ) THEN
+                ALTER TABLE lab_membership
+                RENAME COLUMN is_lab_admin TO is_lab_director;
+            END IF;
+        END
+        $$;
+    """)
+
+
+def downgrade() -> None:
+    op.execute("""
+        DO $$
+        BEGIN
+            IF EXISTS (
+                SELECT 1 FROM information_schema.columns
+                WHERE table_name = 'lab_membership'
+                AND column_name = 'is_lab_director'
+            ) THEN
+                ALTER TABLE lab_membership
+                RENAME COLUMN is_lab_director TO is_lab_admin;
+            END IF;
+        END
+        $$;
+    """)
+=== 5adf11b77c19 (backend/db/migrations/versions/5adf11b77c19_baseline_schema_from_init_sql.py) ===
+"""baseline schema from init.sql
+
+Revision ID: 5adf11b77c19
+Revises:
+Create Date: 2026-04-24 20:22:50.366819
+
+Q-9: Alembic baseline. Reproduces the v4.1 schema previously bootstrapped
+by db/init.sql via the postgres entrypoint. After this migration lands,
+`alembic upgrade head` works against an empty database in every
+deployment target. db/SCHEMA.sql is the read-only reference snapshot.
+
+The DDL below is a verbatim copy of db/init.sql at the time of this
+revision. Idempotent (CREATE TABLE IF NOT EXISTS, ON CONFLICT DO
+NOTHING) so re-running on a populated DB is safe — useful for the
+one-time `alembic stamp 5adf11b77c19` flow on environments deployed
+before Q-9 (see docs/staging_access.md §6).
+
+P0e A.3 (Critical Rule 55): the seed-data INSERTs at the bottom of the
+DDL block originally hardcoded operator-specific names (Sonora Quest /
+LabCorp / ASU / ADHS / Otero Lab / gotero@linuxprophet.com). They have
+been edited in-place to use operator-agnostic dev-fixture values
+(Example Sequencing Lab / Example Reference Lab / Example Org /
+Example Lab / admin@example.org / Example Admin). The three follow-on
+rename migrations (e5315db18d40, c1bd67369a7c, 00b4bd99ddee) become
+no-ops on fresh installs (their UPDATE WHERE clauses match no rows)
+but stay functional for any DB deployed before this edit landed.
+Operator-customized seed data goes through `jackpot init` (P0e),
+not migrations.
+"""
+
+from collections.abc import Sequence
+
+from alembic import op
+
+revision: str = "5adf11b77c19"
+down_revision: str | None = None
+branch_labels: str | Sequence[str] | None = None
+depends_on: str | Sequence[str] | None = None
+
+
+SCHEMA_DDL = r"""
+CREATE TABLE IF NOT EXISTS permission_groups (
+    id   SERIAL PRIMARY KEY,
+    name TEXT NOT NULL UNIQUE
+);
+
+INSERT INTO permission_groups (name) VALUES
+    ('Platform Admin'), ('Lab Director'), ('Lab Collaborator'),
+    ('Lab Reader'), ('Bioinformatics User'), ('Data Analyst')
+ON CONFLICT DO NOTHING;
+
+CREATE TABLE IF NOT EXISTS domain_whitelist (
+    id          SERIAL PRIMARY KEY,
+    domain      TEXT NOT NULL UNIQUE,
+    description TEXT NOT NULL DEFAULT '',
+    created_at  TIMESTAMPTZ DEFAULT NOW(),
+    updated_at  TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS sequencing_labs (
+    id           SERIAL PRIMARY KEY,
+    name         TEXT NOT NULL UNIQUE,
+    organization TEXT,
+    lab_id       INTEGER,
+    is_external  BOOLEAN NOT NULL DEFAULT TRUE,
+    is_active    BOOLEAN NOT NULL DEFAULT TRUE,
+    created_at   TIMESTAMPTZ DEFAULT NOW()
+);
+
+INSERT INTO sequencing_labs (name, organization, is_external) VALUES
+    ('Example Sequencing Lab',  'Example Sequencing Lab', TRUE),
+    ('Example Reference Lab',   'Example Reference Lab',  TRUE)
+ON CONFLICT DO NOTHING;
+
+CREATE TABLE IF NOT EXISTS sequencing_lab_requests (
+    id              SERIAL PRIMARY KEY,
+    requested_name  TEXT NOT NULL,
+    organization    TEXT,
+    requested_by_id INTEGER NOT NULL,
+    lab_id          INTEGER NOT NULL,
+    status          TEXT NOT NULL DEFAULT 'PENDING',
+    reviewed_by_id  INTEGER,
+    reviewed_at     TIMESTAMPTZ,
+    denial_reason   TEXT,
+    created_at      TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS organizations (
+    id                                          SERIAL PRIMARY KEY,
+    display_name                                TEXT NOT NULL UNIQUE,
+    default_approve_analytical_dataset_requests BOOLEAN NOT NULL DEFAULT FALSE,
+    active                                      BOOLEAN NOT NULL DEFAULT TRUE,
+    created_at                                  TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS users (
+    id                SERIAL PRIMARY KEY,
+    email             TEXT NOT NULL UNIQUE,
+    name              TEXT NOT NULL DEFAULT '',
+    organization_id   INTEGER REFERENCES organizations(id),
+    is_platform_admin BOOLEAN NOT NULL DEFAULT FALSE,
+    is_data_analyst   BOOLEAN NOT NULL DEFAULT FALSE,
+    is_active         BOOLEAN NOT NULL DEFAULT TRUE,
+    created_by_id     INTEGER REFERENCES users(id),
+    deleted_by_id     INTEGER REFERENCES users(id),
+    reactivated_by_id INTEGER REFERENCES users(id),
+    created_at        TIMESTAMPTZ DEFAULT NOW(),
+    updated_at        TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
+
+CREATE TABLE IF NOT EXISTS personal_tokens (
+    id         SERIAL PRIMARY KEY,
+    user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    name       TEXT NOT NULL,
+    token_hash TEXT NOT NULL UNIQUE,
+    scopes     TEXT[] NOT NULL DEFAULT ARRAY['read'],
+    last_used  TIMESTAMPTZ,
+    expires_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS audit_log (
+    id          BIGSERIAL PRIMARY KEY,
+    timestamp   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    user_id     INTEGER REFERENCES users(id),
+    action      TEXT NOT NULL,
+    resource    TEXT NOT NULL,
+    resource_id TEXT NOT NULL,
+    detail      JSONB,
+    ip_address  TEXT,
+    request_id  TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_audit_user     ON audit_log(user_id, timestamp DESC);
+CREATE INDEX IF NOT EXISTS idx_audit_resource ON audit_log(resource, resource_id);
+
+CREATE TABLE IF NOT EXISTS labs (
+    id              SERIAL PRIMARY KEY,
+    organization_id INTEGER NOT NULL REFERENCES organizations(id),
+    display_name    TEXT NOT NULL,
+    description     TEXT NOT NULL DEFAULT '',
+    active          BOOLEAN NOT NULL DEFAULT TRUE,
+    gcs_bucket      TEXT,
+    project_prefix  TEXT UNIQUE,
+    build_status    TEXT,
+    created_by_id   INTEGER REFERENCES users(id),
+    created_at      TIMESTAMPTZ DEFAULT NOW()
+);
+
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.table_constraints
+        WHERE constraint_name = 'fk_sequencing_labs_lab'
+    ) THEN
+        ALTER TABLE sequencing_labs
+            ADD CONSTRAINT fk_sequencing_labs_lab
+            FOREIGN KEY (lab_id) REFERENCES labs(id);
+    END IF;
+END
+$$;
+
+CREATE TABLE IF NOT EXISTS lab_membership (
+    id                  SERIAL PRIMARY KEY,
+    user_id             INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    lab_id              INTEGER NOT NULL REFERENCES labs(id) ON DELETE CASCADE,
+    permission_group_id INTEGER NOT NULL REFERENCES permission_groups(id),
+    is_lab_director     BOOLEAN NOT NULL DEFAULT FALSE,
+    granted_by_id       INTEGER REFERENCES users(id),
+    granted_at          TIMESTAMPTZ DEFAULT NOW(),
+    UNIQUE(user_id, lab_id)
+);
+
+CREATE TABLE IF NOT EXISTS projects (
+    id                    SERIAL PRIMARY KEY,
+    lab_id                INTEGER NOT NULL REFERENCES labs(id),
+    display_name          TEXT NOT NULL,
+    description           TEXT NOT NULL DEFAULT '',
+    status                TEXT NOT NULL DEFAULT 'ACTIVE',
+    gcs_bucket            TEXT,
+    project_prefix        TEXT UNIQUE,
+    pathogen_scope        TEXT[],
+    active                BOOLEAN NOT NULL DEFAULT TRUE,
+    build_status          TEXT,
+    opt_out_of_seqera     BOOLEAN NOT NULL DEFAULT FALSE,
+    seqera_workspace_id   TEXT NOT NULL DEFAULT '',
+    seqera_compute_env_id TEXT NOT NULL DEFAULT '',
+    seqera_credentials_id TEXT NOT NULL DEFAULT '',
+    created_by_id         INTEGER REFERENCES users(id),
+    deleted_by_id         INTEGER REFERENCES users(id),
+    archived_by_id        INTEGER REFERENCES users(id),
+    archived_at           TIMESTAMPTZ,
+    deleted_at            TIMESTAMPTZ,
+    deletion_justification TEXT NOT NULL DEFAULT '',
+    created_at            TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS project_membership (
+    id                  SERIAL PRIMARY KEY,
+    user_id             INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    project_id          INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+    permission_group_id INTEGER NOT NULL REFERENCES permission_groups(id),
+    granted_by_id       INTEGER REFERENCES users(id),
+    granted_at          TIMESTAMPTZ DEFAULT NOW(),
+    UNIQUE(user_id, project_id)
+);
+
+CREATE TABLE IF NOT EXISTS samples (
+    id      SERIAL PRIMARY KEY,
+
+    sample_id           TEXT NOT NULL UNIQUE,
+    jackpot_uri         TEXT UNIQUE,
+    lab_id              INTEGER NOT NULL REFERENCES labs(id),
+    project_id          INTEGER NOT NULL REFERENCES projects(id),
+    owner_id            INTEGER NOT NULL REFERENCES users(id),
+    source_type         TEXT NOT NULL,
+
+    organism_name       TEXT NOT NULL,
+    strain              TEXT,
+    isolate             TEXT,
+    serotype            TEXT,
+
+    biosample_accession TEXT,
+    sra_accession       TEXT,
+    genbank_accession   TEXT,
+    gisaid_accession    TEXT,
+    bioproject_accession TEXT,
+
+    type_of_experiment              TEXT NOT NULL,
+    nucleic_acid_extraction_method  TEXT[],
+    library_preparation_method      TEXT NOT NULL,
+    sequencing_protocol             TEXT NOT NULL,
+    sequencing_platform             TEXT NOT NULL,
+    sequencing_instrument           TEXT,
+    sequencing_lab                  TEXT NOT NULL,
+
+    date_collected                  DATE NOT NULL,
+    date_sequenced                  DATE NOT NULL,
+    collection_facility             TEXT NOT NULL,
+    purpose_for_collection          TEXT[],
+    collection_location_country     TEXT NOT NULL,
+    collection_location_state       TEXT,
+    collection_location_county      TEXT,
+    collection_location_zipcode     TEXT,
+    geo_lat                         FLOAT,
+    geo_lon                         FLOAT,
+    mmwr_year                       INTEGER,
+    mmwr_week                       INTEGER,
+    iso_year                        INTEGER,
+    iso_week                        INTEGER,
+
+    ct_value                        FLOAT,
+    other_testing_performed         TEXT[],
+    lab_of_other_testing            TEXT[],
+    intermediary_clinical_lab       TEXT,
+
+    assembly_method                 TEXT,
+    coverage_depth                  FLOAT,
+    genome_completeness             FLOAT,
+
+    pango_lineage                   TEXT,
+    pango_lineage_version           TEXT,
+    nextstrain_clade                TEXT,
+    nextclade_qc_score              FLOAT,
+    nextclade_version               TEXT,
+
+    vadr_status                     TEXT,
+    vadr_alerts                     TEXT[],
+
+    mlst_scheme                     TEXT,
+    mlst_sequence_type              TEXT,
+    amrfinder_genes                 TEXT[],
+    card_aro_terms                  TEXT[],
+
+    loinc_code                      TEXT,
+    loinc_system                    TEXT,
+    snomed_clinical_finding         TEXT,
+
+    ncbi_submission_status          TEXT NOT NULL DEFAULT 'NOT_SUBMITTED',
+    ncbi_submitted_at               TIMESTAMPTZ,
+    gisaid_submission_status        TEXT NOT NULL DEFAULT 'NOT_SUBMITTED',
+    gisaid_submitted_at             TIMESTAMPTZ,
+
+    fastq_r1_uri                    TEXT NOT NULL,
+    fastq_r2_uri                    TEXT,
+    raw_fastq_uri                   TEXT,
+    consensus_fasta_uri             TEXT,
+    assembly_uri                    TEXT,
+
+    scrub_status                    TEXT NOT NULL DEFAULT 'PENDING',
+    pii_scan_status                 TEXT NOT NULL DEFAULT 'PENDING',
+    ingest_method                   TEXT NOT NULL DEFAULT 'gui',
+    ingest_timestamp                TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    sharing_level                   TEXT NOT NULL DEFAULT 'PRIVATE',
+
+    pi_name                         TEXT,
+    grant_number                    TEXT,
+    contact_other                   TEXT,
+    comments                        TEXT,
+
+    adhs_medsis_id                  TEXT,
+    case_id                         TEXT,
+    biospecimen_type                TEXT,
+    reason_for_collection           TEXT[],
+    host_sex                        TEXT,
+    host_age                        INTEGER,
+    host_age_unit                   TEXT,
+    host_species                    TEXT,
+    host_disease                    TEXT[],
+    isolation_source                TEXT,
+    vaccination_status              TEXT,
+    clinical_outcome                TEXT,
+    underlying_conditions           TEXT[],
+
+    wildlife_subject_id             TEXT,
+    companion_subject_id            TEXT,
+    livestock_subject_id            TEXT,
+    location_type                   TEXT,
+    vaccine_status_against_pathogen TEXT,
+    symptomatic                     TEXT,
+    livestock_products              TEXT[],
+    distribution_scale              TEXT[],
+    antibiotic_use                  TEXT,
+
+    vector_species                  TEXT,
+    vector_host_species             TEXT,
+
+    wwtp_name                       TEXT,
+    sample_location_zipcode         TEXT,
+    county_names                    TEXT[],
+    population_served               INTEGER,
+    sample_type_ww                  TEXT,
+    sample_matrix                   TEXT,
+    pretreatment                    TEXT[],
+    concentration_method            TEXT,
+    flow_rate_mgd                   FLOAT,
+    sample_collect_time             TEXT,
+    pcr_target                      TEXT,
+    pcr_gene_target                 TEXT,
+    pcr_gene_target_ref             TEXT,
+    pcr_type                        TEXT,
+    quant_stan_type                 TEXT,
+    stan_ref                        TEXT,
+    lod_ref                         TEXT,
+    inhibition_method               TEXT,
+    num_no_target_control           INTEGER,
+    pasteurized                     BOOLEAN,
+
+    water_source                    TEXT,
+    water_temperature_c             FLOAT,
+    turbidity_ntu                   FLOAT,
+    ph                              FLOAT,
+    salinity_ppm                    FLOAT,
+
+    air_source                      TEXT,
+    airflow_rate_m3_s               FLOAT,
+    pm25_ug_m3                      FLOAT,
+    pm10_ug_m3                      FLOAT,
+
+    soil_site_type                  TEXT,
+    sample_depth_cm                 TEXT,
+    nitrogen_mg_kg                  FLOAT,
+    soil_temperature_c              FLOAT,
+    moisture_g_g                    FLOAT,
+    organic_carbon_g_kg             FLOAT,
+    soil_ph                         FLOAT,
+    soil_salinity_ppm               FLOAT,
+
+    indoor_space                    TEXT,
+    indoor_surface                  TEXT,
+    indoor_surface_subpart          TEXT,
+    surface_orientation             TEXT[],
+    surface_material                TEXT[],
+    surface_temperature_c           FLOAT,
+    surface_air_contaminants        TEXT[],
+    surface_moisture_qualitative    TEXT,
+    surface_moisture_cm3_cm3        FLOAT,
+    surface_moisture_ph             FLOAT,
+    surface_humidity_pct            FLOAT,
+    wall_surface_treatment          TEXT[],
+    wall_texture                    TEXT[],
+    wall_mold_signs                 TEXT,
+
+    food_location_type              TEXT,
+    storage_temperature_setting     TEXT,
+    product_temperature_c           FLOAT,
+    food_product_type               TEXT,
+    plant_species                   TEXT,
+    produce_water_source            TEXT[],
+    fertilizer_type                 TEXT[],
+    near_animal_agriculture         BOOLEAN,
+    washed_before_packing           BOOLEAN,
+
+    env_broad_scale                 TEXT,
+    env_local_scale                 TEXT,
+    env_medium                      TEXT,
+
+    is_deleted                      BOOLEAN NOT NULL DEFAULT FALSE,
+    deleted_at                      TIMESTAMPTZ,
+    deleted_by_id                   INTEGER REFERENCES users(id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_samples_lab      ON samples(lab_id);
+CREATE INDEX IF NOT EXISTS idx_samples_project  ON samples(project_id);
+CREATE INDEX IF NOT EXISTS idx_samples_organism ON samples(organism_name);
+CREATE INDEX IF NOT EXISTS idx_samples_sharing  ON samples(sharing_level);
+CREATE INDEX IF NOT EXISTS idx_samples_date     ON samples(date_collected);
+CREATE INDEX IF NOT EXISTS idx_samples_scrub    ON samples(scrub_status);
+CREATE INDEX IF NOT EXISTS idx_samples_pango    ON samples(pango_lineage);
+CREATE INDEX IF NOT EXISTS idx_samples_ncbi     ON samples(ncbi_submission_status);
+CREATE INDEX IF NOT EXISTS idx_samples_mmwr     ON samples(mmwr_year, mmwr_week);
+CREATE INDEX IF NOT EXISTS idx_samples_source   ON samples(source_type);
+
+CREATE TABLE IF NOT EXISTS sample_associations (
+    id               SERIAL PRIMARY KEY,
+    source_sample_id INTEGER NOT NULL REFERENCES samples(id),
+    target_sample_id INTEGER NOT NULL REFERENCES samples(id),
+    association_type TEXT NOT NULL,
+    notes            TEXT,
+    created_at       TIMESTAMPTZ DEFAULT NOW(),
+    UNIQUE(source_sample_id, target_sample_id)
+);
+
+CREATE TABLE IF NOT EXISTS sample_files (
+    id               SERIAL PRIMARY KEY,
+    sample_id_fk     INTEGER NOT NULL REFERENCES samples(id) ON DELETE CASCADE,
+
+    uri              TEXT NOT NULL UNIQUE,
+    raw_uri          TEXT,
+    filename         TEXT NOT NULL,
+    file_size_bytes  BIGINT,
+    md5              TEXT,
+
+    file_type        TEXT NOT NULL DEFAULT 'FASTQ',
+    library_layout   TEXT NOT NULL DEFAULT 'UNPAIRED',
+    read_direction   TEXT,
+    lane             TEXT,
+    chunk_index      INTEGER,
+
+    paired_file_id   INTEGER REFERENCES sample_files(id),
+
+    scrub_status     TEXT NOT NULL DEFAULT 'PENDING',
+    pii_scan_status  TEXT NOT NULL DEFAULT 'PENDING',
+    ingest_method    TEXT NOT NULL DEFAULT 'gui',
+    ingest_timestamp TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    is_deleted       BOOLEAN NOT NULL DEFAULT FALSE,
+    deleted_at       TIMESTAMPTZ
+);
+
+CREATE INDEX IF NOT EXISTS idx_sample_files_sample ON sample_files(sample_id_fk);
+CREATE INDEX IF NOT EXISTS idx_sample_files_uri    ON sample_files(uri);
+CREATE INDEX IF NOT EXISTS idx_sample_files_scrub  ON sample_files(scrub_status);
+
+CREATE TABLE IF NOT EXISTS metadata_tags (
+    id          SERIAL PRIMARY KEY,
+    sample_id   INTEGER NOT NULL REFERENCES samples(id) ON DELETE CASCADE,
+    key         TEXT NOT NULL,
+    value       TEXT,
+    values      TEXT[],
+    data_type   TEXT NOT NULL DEFAULT 'TEXT',
+    unit        TEXT,
+    is_required BOOLEAN NOT NULL DEFAULT FALSE,
+    sort_order  INTEGER NOT NULL DEFAULT 0,
+    source      TEXT
+);
+
+CREATE TABLE IF NOT EXISTS analytical_datasets (
+    id              SERIAL PRIMARY KEY,
+    name            TEXT NOT NULL,
+    description     TEXT NOT NULL DEFAULT '',
+    project_id      INTEGER NOT NULL REFERENCES projects(id),
+    gcs_bucket      TEXT NOT NULL DEFAULT '',
+    approval_status TEXT NOT NULL DEFAULT 'PENDING',
+    duo_codes       TEXT[] NOT NULL DEFAULT ARRAY[]::TEXT[],
+    seqera_data_link_id TEXT NOT NULL DEFAULT '',
+    created_by_id   INTEGER REFERENCES users(id),
+    created_at      TIMESTAMPTZ DEFAULT NOW(),
+    updated_at      TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS dataset_files (
+    id                    SERIAL PRIMARY KEY,
+    analytical_dataset_id INTEGER NOT NULL REFERENCES analytical_datasets(id) ON DELETE CASCADE,
+    original_sample_id    INTEGER NOT NULL REFERENCES samples(id),
+    gcs_file_path         TEXT NOT NULL,
+    file_size             BIGINT,
+    status                TEXT NOT NULL DEFAULT 'PENDING',
+    denied_by_id          INTEGER REFERENCES users(id),
+    denial_reason         TEXT,
+    copied_at             TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS dataset_access_requests (
+    id                  SERIAL PRIMARY KEY,
+    dataset_id          INTEGER NOT NULL REFERENCES analytical_datasets(id),
+    requester_id        INTEGER NOT NULL REFERENCES users(id),
+    status              TEXT NOT NULL DEFAULT 'PENDING',
+    purpose             TEXT,
+    dua_accepted        BOOLEAN NOT NULL DEFAULT FALSE,
+    requested_duo_codes TEXT[] NOT NULL DEFAULT ARRAY[]::TEXT[],
+    reviewed_by_id      INTEGER REFERENCES users(id),
+    reviewed_at         TIMESTAMPTZ,
+    denial_reason       TEXT,
+    created_at          TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS sample_access_requests (
+    id             SERIAL PRIMARY KEY,
+    sample_id      INTEGER NOT NULL REFERENCES samples(id),
+    requester_id   INTEGER NOT NULL REFERENCES users(id),
+    owner_id       INTEGER NOT NULL REFERENCES users(id),
+    status         TEXT NOT NULL DEFAULT 'PENDING',
+    dua_accepted   BOOLEAN NOT NULL DEFAULT FALSE,
+    purpose        TEXT,
+    reviewed_by_id INTEGER REFERENCES users(id),
+    reviewed_at    TIMESTAMPTZ,
+    denial_reason  TEXT,
+    requested_at   TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS archive_requests (
+    id                        SERIAL PRIMARY KEY,
+    sample_id                 INTEGER NOT NULL REFERENCES samples(id),
+    requested_by_id           INTEGER NOT NULL REFERENCES users(id),
+    justification             TEXT NOT NULL,
+    external_storage_location TEXT NOT NULL DEFAULT '',
+    external_storage_type     TEXT NOT NULL DEFAULT 'OTHER',
+    retention_requirement_met BOOLEAN NOT NULL DEFAULT FALSE,
+    status                    TEXT NOT NULL DEFAULT 'PENDING',
+    reviewed_by_id            INTEGER REFERENCES users(id),
+    reviewed_at               TIMESTAMPTZ,
+    denial_reason             TEXT NOT NULL DEFAULT '',
+    created_at                TIMESTAMPTZ DEFAULT NOW(),
+    updated_at                TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS ncbi_submissions (
+    id                     SERIAL PRIMARY KEY,
+    submission_name        TEXT NOT NULL,
+    lab_id                 INTEGER NOT NULL REFERENCES labs(id),
+    project_id             INTEGER NOT NULL REFERENCES projects(id),
+    submitted_by_id        INTEGER NOT NULL REFERENCES users(id),
+    sample_ids             INTEGER[],
+    submission_type        TEXT NOT NULL DEFAULT 'SRA',
+    tostadas_run_id        TEXT,
+    status                 TEXT NOT NULL DEFAULT 'PENDING',
+    submission_package_uri TEXT,
+    bioproject_accession   TEXT,
+    submitted_at           TIMESTAMPTZ,
+    completed_at           TIMESTAMPTZ,
+    error_detail           TEXT,
+    created_at             TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS gisaid_submissions (
+    id              SERIAL PRIMARY KEY,
+    lab_id          INTEGER NOT NULL REFERENCES labs(id),
+    submitted_by_id INTEGER NOT NULL REFERENCES users(id),
+    sample_ids      INTEGER[],
+    pathogen        TEXT NOT NULL DEFAULT 'SARS-CoV-2',
+    export_csv_uri  TEXT,
+    status          TEXT NOT NULL DEFAULT 'DRAFT',
+    submitted_at    TIMESTAMPTZ,
+    created_at      TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS notification_preferences (
+    id                         SERIAL PRIMARY KEY,
+    user_id                    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE UNIQUE,
+    email_on_upload            BOOLEAN NOT NULL DEFAULT TRUE,
+    email_on_access_request    BOOLEAN NOT NULL DEFAULT TRUE,
+    email_on_pipeline_complete BOOLEAN NOT NULL DEFAULT TRUE,
+    email_on_budget_alert      BOOLEAN NOT NULL DEFAULT TRUE,
+    email_on_ncbi_submission   BOOLEAN NOT NULL DEFAULT TRUE,
+    in_app_enabled             BOOLEAN NOT NULL DEFAULT TRUE
+);
+
+CREATE TABLE IF NOT EXISTS notifications (
+    id         SERIAL PRIMARY KEY,
+    user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    type       TEXT NOT NULL,
+    title      TEXT NOT NULL,
+    body       TEXT NOT NULL,
+    read       BOOLEAN NOT NULL DEFAULT FALSE,
+    link       TEXT,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS pipeline_runs (
+    id                  SERIAL PRIMARY KEY,
+    lab_id              INTEGER NOT NULL REFERENCES labs(id),
+    project_id          INTEGER NOT NULL REFERENCES projects(id),
+    launched_by_id      INTEGER NOT NULL REFERENCES users(id),
+    pipeline_name       TEXT NOT NULL,
+    pipeline_version    TEXT,
+    sample_ids          INTEGER[],
+    status              TEXT NOT NULL DEFAULT 'PENDING',
+    launcher_type       TEXT NOT NULL DEFAULT 'native',
+    gcp_batch_job_id    TEXT,
+    seqera_run_id       TEXT,
+    result_uri          TEXT,
+    multiqc_report_uri  TEXT,
+    nextstrain_json_uri TEXT,
+    launched_at         TIMESTAMPTZ DEFAULT NOW(),
+    completed_at        TIMESTAMPTZ
+);
+
+CREATE TABLE IF NOT EXISTS saved_searches (
+    id           SERIAL PRIMARY KEY,
+    user_id      INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    lab_id       INTEGER REFERENCES labs(id),
+    name         TEXT NOT NULL,
+    query_params JSONB NOT NULL,
+    scope        TEXT NOT NULL DEFAULT 'personal',
+    created_at   TIMESTAMPTZ DEFAULT NOW()
+);
+
+INSERT INTO domain_whitelist (domain, description)
+VALUES ('example.org', 'Example Org'),
+       ('gmail.com',   'Local dev — REMOVE IN PRODUCTION')
+ON CONFLICT DO NOTHING;
+
+INSERT INTO organizations (display_name)
+VALUES ('Example Org')
+ON CONFLICT DO NOTHING;
+
+INSERT INTO users (email, name, organization_id, is_platform_admin)
+VALUES ('admin@example.org', 'Example Admin', 1, TRUE)
+ON CONFLICT DO NOTHING;
+
+INSERT INTO labs (organization_id, display_name, description, created_by_id)
+VALUES (1, 'Example Lab', 'Local dev seed lab', 1)
+ON CONFLICT DO NOTHING;
+
+INSERT INTO lab_membership (user_id, lab_id, permission_group_id, is_lab_director, granted_by_id)
+SELECT 1, 1, pg.id, TRUE, 1
+FROM permission_groups pg WHERE pg.name = 'Lab Director'
+ON CONFLICT DO NOTHING;
+
+INSERT INTO projects (lab_id, display_name, description, created_by_id, pathogen_scope)
+VALUES (1, 'Dev Project', 'Local dev seed project', 1,
+        ARRAY['Severe acute respiratory syndrome coronavirus 2'])
+ON CONFLICT DO NOTHING;
+
+INSERT INTO sequencing_labs (name, organization, lab_id, is_external)
+VALUES ('Example Lab', 'Example Org', 1, FALSE)
+ON CONFLICT DO NOTHING;
+"""
+
+
+# Reverse FK-dependency order. Children before parents. The
+# fk_sequencing_labs_lab constraint must be dropped before labs.
+DROP_TABLES_REVERSE_ORDER = [
+    "saved_searches",
+    "pipeline_runs",
+    "notifications",
+    "notification_preferences",
+    "gisaid_submissions",
+    "ncbi_submissions",
+    "archive_requests",
+    "sample_access_requests",
+    "dataset_access_requests",
+    "dataset_files",
+    "analytical_datasets",
+    "metadata_tags",
+    "sample_files",
+    "sample_associations",
+    "samples",
+    "project_membership",
+    "projects",
+    "lab_membership",
+    "labs",
+    "audit_log",
+    "personal_tokens",
+    "users",
+    "organizations",
+    "sequencing_lab_requests",
+    "sequencing_labs",
+    "domain_whitelist",
+    "permission_groups",
+]
+
+
+def upgrade() -> None:
+    op.execute(SCHEMA_DDL)
+
+
+def downgrade() -> None:
+    op.execute(
+        "ALTER TABLE IF EXISTS sequencing_labs DROP CONSTRAINT IF EXISTS fk_sequencing_labs_lab;"
+    )
+    for table in DROP_TABLES_REVERSE_ORDER:
+        op.execute(f"DROP TABLE IF EXISTS {table} CASCADE;")
