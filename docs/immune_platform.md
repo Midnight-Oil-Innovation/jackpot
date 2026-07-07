@@ -1992,7 +1992,7 @@ Plus:
 
 Forrest's n-variant systems work, instruction-set randomization, and Crispy (CRISPR-inspired DoS defense) all rest on one thesis: **homogeneous deployments are catastrophically vulnerable**. One zero-day, every instance falls.
 
-The federation as currently designed (vision doc §6) has every member running the same JACKPOT codebase, the same NSA implementation, the same featurizers, the same Nextflow pipelines, the same Postgres schema. The diversity is in the *data*, not the *platform*. From Forrest's perspective that's a monoculture pretending to be a diverse population.
+The federation as currently designed (vision doc §6) has every member running the same JACKPOT codebase, the same detector implementations, the same featurizers, the same Nextflow pipelines, the same Postgres schema. The diversity is in the *data*, not the *platform*. From Forrest's perspective that's a monoculture pretending to be a diverse population.
 
 ### 22.2 What we ship
 
@@ -4138,7 +4138,7 @@ The demo question becomes: "Submit a synthetic sample on the laptop, watch it fl
 
 ## What this maps to in the coalition
 
-- **Forrest** — Pillar I bio-AIS work referencing `Jackpot_AIS.md` and the IM-1 plan. AMAnD-as-NSA is a natural conversation entry point.
+- **Forrest** — Pillar I bio-AIS work referencing `Jackpot_AIS.md` and the IM-1 plan. The negative-selection and danger-theory lineage as conceptual scaffold, with the AnomalyDetector Protocol and the cyber-pillar NSA bake-off as concrete entry points.
 - **Lee** — featurizer registry (`B-IMMUNE-FEAT-1`) maps to his catELMo/TCR-Gen attention-based embedding work.
 - **Pathak (STPH)** — Module 9 academy work (`B-ACADEMY-9`) maps to STPH curriculum (TPH554 AI/ML in Public Health).
 - **Scarpino** — AMAnD overlap with his wastewater metagenomics grant; cross-link via `B-IMMUNE-WW-1` (IM-2).
