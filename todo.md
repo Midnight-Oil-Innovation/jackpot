@@ -2487,11 +2487,15 @@ The consolidation rationale, full mapping of source IDs to canonical IDs, and ov
 
 - [ ] **B-IMMUNE-SCHEMA-1** Schema v6.0 stub — Alembic migration adding `detectors`, `detector_activations`, `dca_priority_scores`, `memory_cells` tables. Initial landing is empty migration with table definitions but no business logic, behind a feature flag (`IMMUNE_PILLAR_I_ENABLED=false`). Forces schema design conversation early. `[quick-win — land alongside current P0d sprint]`. (1-2 sessions, P0d or after)
 
-- [ ] **B-IMMUNE-NSA-1** Implement `backend/immune/algorithms/nsa.py` — shared Negative Selection Algorithm substrate. Used by both bio-AIS (Pillar I) and cyber-AIS (Pillar V); same code, different feature spaces. Reference: `docs/immune_platform.md` §3.1, §9.4. (3-4 sessions)
+- [ ] **B-IMMUNE-DETECT-1** [NEW per immune_detection_core_redesign.md] Implement `backend/immune/anomaly/base.py` — the `AnomalyDetector` Protocol, the real shared detection substrate (replaces the deleted "shared NSA substrate" concept). Prereq for `B-AMAND-1` (DeepSVDD) and the cyber `B-IMMUNE-NSA-1`. Reference: immune_detection_core_redesign.md. (2-3 sessions)
+
+- [ ] **B-IMMUNE-NSA-1** [REVISED per immune_detection_core_redesign.md] Implement `backend/immune/sec/nsa_cyber.py` — Negative Selection Algorithm for the CYBER path only (Pillar V) and as a teaching baseline. REMOVED from the bio detection path: real-valued NSA does not scale on k-mer/embedding feature spaces. Adoption gated on a one-class bake-off vs DeepSVDD. Depends on `B-IMMUNE-DETECT-1`. Reference: immune_detection_core_redesign.md. (2-3 sessions, cyber-only)
 
 - [ ] **B-IMMUNE-FEAT-1** Implement `backend/immune/algorithms/features.py` — k-mer featurizer for Pillar I, API-call featurizer stub for Pillar V. Plus a featurizer registry pattern (`backend/immune/algorithms/featurizers/__init__.py` per `docs/immune_platform.md` §22.2 — post-Cluster-B merge; was scaffolding §3.2.1) so the AIS-theory collaborator can plug in alternative featurizers (k-mer, ESM-small, ESM-large, DNABERT-v2) without touching core code. (2-3 sessions; the registry is what makes this collaboration-friendly per `docs/immune_platform.md` Part 2)
 
-- [ ] **B-AMAND-1** Adopt AMAnD (Price & Russell, *Frontiers in Public Health* 2023) as the canonical metagenome anomaly detector. Implementation has two layers: `backend/immune/bio/amand.py` (the bio-NSA module wrapping AMAnD's DeepSVDD model into JACKPOT's substrate) AND `pipelines/immune/amand.nf` (the Nextflow process for reproducible scans). Document the baseline-curation workflow ("what is normal for this operator's deployment context") in the Pillar IV training materials (`B-ACADEMY-9`). Detection landscape §2.c.1; `docs/immune_platform.md` §10.1 + §13. (3 sessions pipeline-zoo + 2 weeks for the baseline-curation tooling, pipeline-zoo work + Pillar I)
+- [ ] **B-AMAND-1** [REVISED per immune_detection_core_redesign.md] Implement `DeepSVDDDetector(AnomalyDetector)` directly in `backend/immune/bio/amand.py` — DeepSVDD one-class detection over genomic-FM embeddings, implementing the `B-IMMUNE-DETECT-1` Protocol. AMAnD (Price & Russell 2023) is a citable BASELINE ENSEMBLE MEMBER, not the detection spine; drop the "wrapping into NSA substrate" framing. Plus `pipelines/immune/amand.nf` for reproducible scans. Baseline-curation workflow documented in Pillar IV (`B-ACADEMY-9`). Depends on `B-IMMUNE-DETECT-1`, `B-IMMUNE-EMBED-1`. Reference: immune_detection_core_redesign.md; Detection landscape §2.c.1. (3 sessions + 2 weeks baseline-curation tooling)
+
+- [ ] **B-IMMUNE-EMBED-1** [NEW per immune_detection_core_redesign.md] Implement the genomic-foundation-model embedding substrate that `B-AMAND-1`'s DeepSVDD detector runs over. METAGENE-1 (Apache-2.0, clears `B-LICENSE-1`) is the license-cleared self-hostable candidate. This is the actual detection engine per the redesign; the chat/design-doc framing of foundation models as optional plug-ins is SUPERSEDED. Depends on `B-LICENSE-1`, `B-IMMUNE-DETECT-1`. Reference: immune_detection_core_redesign.md. (3-4 sessions)
 
 - [ ] **B-IMMUNE-API-1** Implement `backend/routers/immune_bio.py` — FastAPI surface for Pillar I. Endpoints: `GET /api/v1/immune/triage` (DCA-priority queue), `GET /api/v1/immune/detectors/` (active detectors), `GET /api/v1/immune/dca/{sample_id}` (per-sample priority breakdown). Reference: `docs/immune_platform.md` §10.1.1. (2-3 sessions)
 
@@ -2507,7 +2511,9 @@ The consolidation rationale, full mapping of source IDs to canonical IDs, and ov
 
 - [ ] **B-NFUNO-1** Adopt nf-UnO (Guzman-Cole & Huang, *Bioinformatics* 2025) as the cohort co-assembly pipeline for outbreak novel-pathogen investigations. Wire to the dataset/cohort selection UI; outputs feed `pipeline_results`. Detection landscape §2.a.3. (2 sessions, pipeline-zoo work, after `B-TAXTRIAGE-1`)
 
-- [ ] **B-DEEPAC-1** Add DeePaC (Bartoszewicz et al. 2020) pathogenicity scoring as a post-classification step in the TaxTriage pipeline-zoo entry. Output a per-sequence pathogenicity score field on `pipeline_results` JSONB. Detection landscape §2.b.1. (1-2 sessions, after `B-TAXTRIAGE-1`)
+- [ ] **B-DEEPAC-1** [REVISED per immune_detection_core_redesign.md] Add DeePaC (Bartoszewicz et al. 2020) pathogenicity scoring as a post-classification step in the TaxTriage pipeline-zoo entry. Emit the per-sequence pathogenicity result as a `functional_concern` `DangerSignal` into the DCA (`B-IMMUNE-DCA-1`), not just a `pipeline_results` JSONB field. Detection landscape §2.b.1. (1-2 sessions, after `B-TAXTRIAGE-1`)
+
+- [ ] **B-SCREEN-SCOPE-1** [NEW per immune_detection_core_redesign.md] Scope functional-concern screening (SeqScreen/FunSoCs) into the bio danger path as a `functional_concern` signal source feeding the DCA. A scoping gate that `B-IMMUNE-DCA-1` depends on. Reference: immune_detection_core_redesign.md; Detection landscape §2.c.1. (1-2 sessions scoping)
 
 - [ ] **B-MLM-1** Adopt MLM (Baugher et al., *JHU APL Technical Digest* 2025) as the unmapped-read threat-characterization stage. Wire into the TaxTriage pipeline output (post-DeePaC) for tiered threat-class assignment. Detection landscape §2.b.2. (2 sessions, after `B-TAXTRIAGE-1` + `B-DEEPAC-1`)
 
@@ -2515,7 +2521,7 @@ The consolidation rationale, full mapping of source IDs to canonical IDs, and ov
 
 - [ ] **B-INSAFLU-1** Evaluate INSaFLU-TELEVIR (Santos et al., *Genome Medicine* 2024) for adoption: viral mNGS pipeline (TELEVIR module) into pipeline zoo; INSaFLU REST API patterns as prior art for the LAPIS-compat work (`B-LAPIS-1`). Decide whether to adopt the TELEVIR pipeline directly or fork+adapt. AGPL-licensed — clean for JACKPOT. Detection landscape §2.a.4. (1 session study + 2 sessions adoption, Year 2)
 
-- [ ] **B-KOMB-1** Study KOMB/KombOver (Balaji et al. 2022; Sapoval et al. 2024) for the community-shift detection layer of Pillar I. Pairs with `B-AMAND-1` (per-sample anomaly) for two complementary signals. Detection landscape §2.c.3. (1-2 weeks study, with `B-AMAND-1`)
+- [ ] **B-KOMB-1** [REVISED per immune_detection_core_redesign.md] Adopt KOMB/KombOver (Balaji et al. 2022; Sapoval et al. 2024) as the SOURCE of the trajectory core signal for the DCA — no longer an optional study or a mere complementary pairing. Feeds the trajectory-gated core of `B-IMMUNE-DCA-1`. Depends on `B-IMMUNE-DETECT-1`. Detection landscape §2.c.3. (1-2 weeks)
 
 ### C. Phase IM-1-collab — Foundational scaffolding (interleaved with IM-1.A)
 
@@ -2553,9 +2559,13 @@ A submitted sample runs through `jackpot-amand`, produces a row in `dca_priority
 
 ### A. DCA implementation and danger signals (~3 weeks)
 
-- [ ] **B-IMMUNE-DCA-1** Implement `backend/immune/bio/dca_bio.py` — full BioDendriticCell engine. Fuses genomic anomaly score (from `B-AMAND-1`) with multi-modal danger signals (wastewater, clinical, environmental, animal). Produces `dca_priority_scores` rows with explainable contributions per Patel 2021. Reference: `docs/immune_platform.md` §10.2. (4-5 sessions)
+- [ ] **B-IMMUNE-DCA-1** [REVISED per immune_detection_core_redesign.md] Implement `backend/immune/bio/dca_bio.py` — core/danger/suppression fusion with saturating noisy-OR boosters and Greensmith-style safe-signal suppression, trajectory-gated core signal. Fuses the ensemble anomaly score with multi-modal danger signals (wastewater, clinical, environmental, animal). Fusion defaults are PROVISIONAL pending `B-IMMUNE-VAL-1`. Produces `dca_priority_scores` rows with explainable contributions. Depends on `B-AMAND-1`, `B-KOMB-1`, `B-IMMUNE-SCHEMA-2`, `B-SCREEN-SCOPE-1`, `B-DEEPAC-1`. Reference: immune_detection_core_redesign.md. (4-5 sessions)
 
-- [ ] **B-IMMUNE-SCHEMA-2** Pydantic models in `backend/schemas/immune_bio.py` — DangerSignal, DcaPriorityScore, MultiModalContext. Wire to API surface from `B-IMMUNE-API-1`. (1-2 sessions)
+- [ ] **B-IMMUNE-SCHEMA-2** [REVISED per immune_detection_core_redesign.md] Pydantic models in `backend/schemas/immune_bio.py` — DangerSignal (with signal classes: `unexplained`, `trajectory`, `functional_concern`, `known_benign_match`, `declining_trend`), DcaPriorityScore (with `core`/`danger`/`suppression` fields), MultiModalContext. Wire to API surface from `B-IMMUNE-API-1`. Reference: immune_detection_core_redesign.md. (1-2 sessions)
+
+- [ ] **B-IMMUNE-VAL-1** [NEW per immune_detection_core_redesign.md] Pre-registered validation harness gating the unknown-pathogen detection claim: leave-one-pathogen-out (LOPO) sensitivity, retrospective replay against SARS-CoV-2/mpox/H5N1 wastewater (NAO LA, O'Connor 78-week, Wyler Berlin corpora), and CAMISIM graded synthetic spike-in detection floor. Pre-register BEFORE data collection; the bar is fixed in advance. No detection-performance claim may be asserted until this clears. Depends on `B-AMAND-1`, `B-IMMUNE-DCA-1`. Reference: immune_detection_core_redesign.md. (4-5 sessions)
+
+- [ ] **B-IMMUNE-DRIFT-1** [NEW per immune_detection_core_redesign.md] Drift monitoring with gated auto-regeneration of detectors; reuses the `B-IMMUNE-VAL-1` corpus as a regression gate so regeneration cannot silently degrade detection. Depends on `B-IMMUNE-VAL-1`. Reference: immune_detection_core_redesign.md. (2-3 sessions)
 
 - [ ] **B-IMMUNE-WW-1** Wastewater signal ingestion adapter — at least one feed (NWSS or local STAB). Polls feed periodically; produces `DangerSignal` rows tagged `wastewater_concordance`. Reference: `docs/immune_platform.md` §4.3. (3-4 sessions)
 
