@@ -202,6 +202,82 @@ class OrganismNameEnum(str, Enum):
 
     novel_pathogen = "novel pathogen"
 
+    Plasmodium_falciparum = "Plasmodium falciparum"
+
+    Plasmodium_vivax = "Plasmodium vivax"
+
+    Plasmodium_malariae = "Plasmodium malariae"
+
+    Plasmodium_ovale_curtisi = "Plasmodium ovale curtisi"
+
+    Plasmodium_ovale_wallikeri = "Plasmodium ovale wallikeri"
+
+    Plasmodium_knowlesi = "Plasmodium knowlesi"
+
+    Leishmania_donovani = "Leishmania donovani"
+
+    Leishmania_major = "Leishmania major"
+
+    Leishmania_infantum = "Leishmania infantum"
+
+    Leishmania_tropica = "Leishmania tropica"
+
+    Leishmania_braziliensis = "Leishmania braziliensis"
+
+    Leishmania_mexicana = "Leishmania mexicana"
+
+    Trypanosoma_cruzi = "Trypanosoma cruzi"
+
+    Trypanosoma_brucei_gambiense = "Trypanosoma brucei gambiense"
+
+    Trypanosoma_brucei_rhodesiense = "Trypanosoma brucei rhodesiense"
+
+    Trypanosoma_congolense = "Trypanosoma congolense"
+
+    Trypanosoma_vivax = "Trypanosoma vivax"
+
+    Schistosoma_mansoni = "Schistosoma mansoni"
+
+    Schistosoma_haematobium = "Schistosoma haematobium"
+
+    Schistosoma_japonicum = "Schistosoma japonicum"
+
+    Schistosoma_mekongi = "Schistosoma mekongi"
+
+    Schistosoma_intercalatum = "Schistosoma intercalatum"
+
+    Ascaris_lumbricoides = "Ascaris lumbricoides"
+
+    Ascaris_suum = "Ascaris suum"
+
+    Trichuris_trichiura = "Trichuris trichiura"
+
+    Necator_americanus = "Necator americanus"
+
+    Ancylostoma_duodenale = "Ancylostoma duodenale"
+
+    Ancylostoma_ceylanicum = "Ancylostoma ceylanicum"
+
+    Strongyloides_stercoralis = "Strongyloides stercoralis"
+
+    Wuchereria_bancrofti = "Wuchereria bancrofti"
+
+    Brugia_malayi = "Brugia malayi"
+
+    Brugia_timori = "Brugia timori"
+
+    Cryptosporidium_parvum = "Cryptosporidium parvum"
+
+    Cryptosporidium_hominis = "Cryptosporidium hominis"
+
+    Cryptosporidium_meleagridis = "Cryptosporidium meleagridis"
+
+    Giardia_intestinalis = "Giardia intestinalis"
+
+    Entamoeba_histolytica = "Entamoeba histolytica"
+
+    Entamoeba_dispar = "Entamoeba dispar"
+
 
 
 class SourceTypeEnum(str, Enum):
@@ -883,6 +959,8 @@ class SampleAssociationTypeEnum(str, Enum):
     environmental_clinical = "environmental_clinical"
     # Serial samples from the same host over time
     longitudinal = "longitudinal"
+    # Source sample is upstream of the target sample in the sewershed (directional; B-CWB-SCHEMA-2)
+    wastewater_upstream_of = "wastewater_upstream_of"
 
     other = "other"
 
@@ -1109,6 +1187,153 @@ class ContainerEngineEnum(str, Enum):
 
 
 
+class DeletionStatusEnum(str, Enum):
+
+
+    ACTIVE = "ACTIVE"
+
+    DELETION_REQUESTED = "DELETION_REQUESTED"
+
+    TOMBSTONED = "TOMBSTONED"
+
+    VACUUMED = "VACUUMED"
+
+
+
+class PipelineEngineEnum(str, Enum):
+
+
+    nextflow = "nextflow"
+
+    snakemake = "snakemake"
+
+    wdl = "wdl"
+
+    manifest = "manifest"
+
+
+
+class PipelineSourceTypeEnum(str, Enum):
+
+
+    git = "git"
+
+    git_private = "git_private"
+
+    tarball = "tarball"
+
+    docker = "docker"
+
+
+
+class PipelineStatusEnum(str, Enum):
+
+
+    SUBMITTED = "SUBMITTED"
+
+    VALIDATING = "VALIDATING"
+
+    SANDBOX_PENDING = "SANDBOX_PENDING"
+
+    SANDBOX_RUNNING = "SANDBOX_RUNNING"
+
+    ACTIVE = "ACTIVE"
+
+    DEACTIVATED = "DEACTIVATED"
+
+    ARCHIVED = "ARCHIVED"
+
+    VALIDATION_FAILED = "VALIDATION_FAILED"
+
+    SANDBOX_FAILED = "SANDBOX_FAILED"
+
+    SANDBOX_TIMEOUT = "SANDBOX_TIMEOUT"
+
+
+
+class DataTypeEnum(str, Enum):
+
+
+    paired_end_short_read = "paired_end_short_read"
+
+    single_end_short_read = "single_end_short_read"
+
+    long_read = "long_read"
+
+    assembly = "assembly"
+
+    raw_signal = "raw_signal"
+
+    metagenomic = "metagenomic"
+
+
+
+class ParasiteDevelopmentalStageEnum(str, Enum):
+
+
+    ring = "ring"
+
+    trophozoite = "trophozoite"
+
+    schizont = "schizont"
+
+    gametocyte = "gametocyte"
+
+    sporozoite = "sporozoite"
+
+    merozoite = "merozoite"
+
+    cyst = "cyst"
+
+    trophozoite_amoebic = "trophozoite_amoebic"
+
+    egg = "egg"
+
+    miracidium = "miracidium"
+
+    cercaria = "cercaria"
+
+    adult = "adult"
+
+    larva_l1 = "larva_l1"
+
+    larva_l2 = "larva_l2"
+
+    larva_l3 = "larva_l3"
+
+    microfilaria = "microfilaria"
+
+    bradyzoite = "bradyzoite"
+
+    tachyzoite = "tachyzoite"
+
+
+
+class SamplePreservationMethodEnum(str, Enum):
+
+
+    fresh = "fresh"
+
+    frozen_minus_20 = "frozen_minus_20"
+
+    frozen_minus_80 = "frozen_minus_80"
+
+    ethanol_70 = "ethanol_70"
+
+    ethanol_95 = "ethanol_95"
+
+    rnalater = "rnalater"
+
+    whatman_card = "whatman_card"
+
+    dried_blood_spot = "dried_blood_spot"
+
+    formalin_fixed_paraffin_embedded = "formalin_fixed_paraffin_embedded"
+
+    nucleic_acid_only = "nucleic_acid_only"
+
+
+
 class Organization(ConfiguredBaseModel):
 
     display_name: str = Field(...)
@@ -1281,6 +1506,17 @@ class Sample(ConfiguredBaseModel):
     contact_other: Optional[str] = Field(None, description="""Email format. Phase 2: allow non-user contacts.
 """)
     comments: Optional[str] = Field(None, description="""Free text comments""")
+    deletion_status: Optional[DeletionStatusEnum] = Field(None)
+    deletion_requested_at: Optional[str] = Field(None)
+    deletion_requested_by_user_id: Optional[str] = Field(None)
+    deletion_reason: Optional[str] = Field(None)
+    tombstoned_at: Optional[str] = Field(None)
+    vacuumed_at: Optional[str] = Field(None)
+    parasite_developmental_stage: Optional[ParasiteDevelopmentalStageEnum] = Field(None)
+    sample_preservation_method: Optional[SamplePreservationMethodEnum] = Field(None)
+    parasitemia_percent: Optional[float] = Field(None)
+    multiplicity_of_infection: Optional[int] = Field(None)
+    coinfection_organisms: Optional[List[OrganismNameEnum]] = Field(default_factory=list)
 
 
 
@@ -1454,6 +1690,17 @@ class HumanSample(Sample):
     contact_other: Optional[str] = Field(None, description="""Email format. Phase 2: allow non-user contacts.
 """)
     comments: Optional[str] = Field(None, description="""Free text comments""")
+    deletion_status: Optional[DeletionStatusEnum] = Field(None)
+    deletion_requested_at: Optional[str] = Field(None)
+    deletion_requested_by_user_id: Optional[str] = Field(None)
+    deletion_reason: Optional[str] = Field(None)
+    tombstoned_at: Optional[str] = Field(None)
+    vacuumed_at: Optional[str] = Field(None)
+    parasite_developmental_stage: Optional[ParasiteDevelopmentalStageEnum] = Field(None)
+    sample_preservation_method: Optional[SamplePreservationMethodEnum] = Field(None)
+    parasitemia_percent: Optional[float] = Field(None)
+    multiplicity_of_infection: Optional[int] = Field(None)
+    coinfection_organisms: Optional[List[OrganismNameEnum]] = Field(default_factory=list)
 
 
 
@@ -1607,6 +1854,17 @@ class WildlifeSample(Sample):
     contact_other: Optional[str] = Field(None, description="""Email format. Phase 2: allow non-user contacts.
 """)
     comments: Optional[str] = Field(None, description="""Free text comments""")
+    deletion_status: Optional[DeletionStatusEnum] = Field(None)
+    deletion_requested_at: Optional[str] = Field(None)
+    deletion_requested_by_user_id: Optional[str] = Field(None)
+    deletion_reason: Optional[str] = Field(None)
+    tombstoned_at: Optional[str] = Field(None)
+    vacuumed_at: Optional[str] = Field(None)
+    parasite_developmental_stage: Optional[ParasiteDevelopmentalStageEnum] = Field(None)
+    sample_preservation_method: Optional[SamplePreservationMethodEnum] = Field(None)
+    parasitemia_percent: Optional[float] = Field(None)
+    multiplicity_of_infection: Optional[int] = Field(None)
+    coinfection_organisms: Optional[List[OrganismNameEnum]] = Field(default_factory=list)
 
 
 
@@ -1762,6 +2020,17 @@ class CompanionAnimalSample(Sample):
     contact_other: Optional[str] = Field(None, description="""Email format. Phase 2: allow non-user contacts.
 """)
     comments: Optional[str] = Field(None, description="""Free text comments""")
+    deletion_status: Optional[DeletionStatusEnum] = Field(None)
+    deletion_requested_at: Optional[str] = Field(None)
+    deletion_requested_by_user_id: Optional[str] = Field(None)
+    deletion_reason: Optional[str] = Field(None)
+    tombstoned_at: Optional[str] = Field(None)
+    vacuumed_at: Optional[str] = Field(None)
+    parasite_developmental_stage: Optional[ParasiteDevelopmentalStageEnum] = Field(None)
+    sample_preservation_method: Optional[SamplePreservationMethodEnum] = Field(None)
+    parasitemia_percent: Optional[float] = Field(None)
+    multiplicity_of_infection: Optional[int] = Field(None)
+    coinfection_organisms: Optional[List[OrganismNameEnum]] = Field(default_factory=list)
 
 
 
@@ -1918,6 +2187,17 @@ class LivestockSample(Sample):
     contact_other: Optional[str] = Field(None, description="""Email format. Phase 2: allow non-user contacts.
 """)
     comments: Optional[str] = Field(None, description="""Free text comments""")
+    deletion_status: Optional[DeletionStatusEnum] = Field(None)
+    deletion_requested_at: Optional[str] = Field(None)
+    deletion_requested_by_user_id: Optional[str] = Field(None)
+    deletion_reason: Optional[str] = Field(None)
+    tombstoned_at: Optional[str] = Field(None)
+    vacuumed_at: Optional[str] = Field(None)
+    parasite_developmental_stage: Optional[ParasiteDevelopmentalStageEnum] = Field(None)
+    sample_preservation_method: Optional[SamplePreservationMethodEnum] = Field(None)
+    parasitemia_percent: Optional[float] = Field(None)
+    multiplicity_of_infection: Optional[int] = Field(None)
+    coinfection_organisms: Optional[List[OrganismNameEnum]] = Field(default_factory=list)
 
 
 
@@ -2073,6 +2353,17 @@ class VectorSample(Sample):
     contact_other: Optional[str] = Field(None, description="""Email format. Phase 2: allow non-user contacts.
 """)
     comments: Optional[str] = Field(None, description="""Free text comments""")
+    deletion_status: Optional[DeletionStatusEnum] = Field(None)
+    deletion_requested_at: Optional[str] = Field(None)
+    deletion_requested_by_user_id: Optional[str] = Field(None)
+    deletion_reason: Optional[str] = Field(None)
+    tombstoned_at: Optional[str] = Field(None)
+    vacuumed_at: Optional[str] = Field(None)
+    parasite_developmental_stage: Optional[ParasiteDevelopmentalStageEnum] = Field(None)
+    sample_preservation_method: Optional[SamplePreservationMethodEnum] = Field(None)
+    parasitemia_percent: Optional[float] = Field(None)
+    multiplicity_of_infection: Optional[int] = Field(None)
+    coinfection_organisms: Optional[List[OrganismNameEnum]] = Field(default_factory=list)
 
 
 
@@ -2220,6 +2511,17 @@ class EnvironmentalSample(Sample):
     contact_other: Optional[str] = Field(None, description="""Email format. Phase 2: allow non-user contacts.
 """)
     comments: Optional[str] = Field(None, description="""Free text comments""")
+    deletion_status: Optional[DeletionStatusEnum] = Field(None)
+    deletion_requested_at: Optional[str] = Field(None)
+    deletion_requested_by_user_id: Optional[str] = Field(None)
+    deletion_reason: Optional[str] = Field(None)
+    tombstoned_at: Optional[str] = Field(None)
+    vacuumed_at: Optional[str] = Field(None)
+    parasite_developmental_stage: Optional[ParasiteDevelopmentalStageEnum] = Field(None)
+    sample_preservation_method: Optional[SamplePreservationMethodEnum] = Field(None)
+    parasitemia_percent: Optional[float] = Field(None)
+    multiplicity_of_infection: Optional[int] = Field(None)
+    coinfection_organisms: Optional[List[OrganismNameEnum]] = Field(default_factory=list)
 
 
 
@@ -2401,6 +2703,17 @@ class WastewaterSample(EnvironmentalSample):
     contact_other: Optional[str] = Field(None, description="""Email format. Phase 2: allow non-user contacts.
 """)
     comments: Optional[str] = Field(None, description="""Free text comments""")
+    deletion_status: Optional[DeletionStatusEnum] = Field(None)
+    deletion_requested_at: Optional[str] = Field(None)
+    deletion_requested_by_user_id: Optional[str] = Field(None)
+    deletion_reason: Optional[str] = Field(None)
+    tombstoned_at: Optional[str] = Field(None)
+    vacuumed_at: Optional[str] = Field(None)
+    parasite_developmental_stage: Optional[ParasiteDevelopmentalStageEnum] = Field(None)
+    sample_preservation_method: Optional[SamplePreservationMethodEnum] = Field(None)
+    parasitemia_percent: Optional[float] = Field(None)
+    multiplicity_of_infection: Optional[int] = Field(None)
+    coinfection_organisms: Optional[List[OrganismNameEnum]] = Field(default_factory=list)
 
 
 
@@ -2558,6 +2871,17 @@ class WaterSample(EnvironmentalSample):
     contact_other: Optional[str] = Field(None, description="""Email format. Phase 2: allow non-user contacts.
 """)
     comments: Optional[str] = Field(None, description="""Free text comments""")
+    deletion_status: Optional[DeletionStatusEnum] = Field(None)
+    deletion_requested_at: Optional[str] = Field(None)
+    deletion_requested_by_user_id: Optional[str] = Field(None)
+    deletion_reason: Optional[str] = Field(None)
+    tombstoned_at: Optional[str] = Field(None)
+    vacuumed_at: Optional[str] = Field(None)
+    parasite_developmental_stage: Optional[ParasiteDevelopmentalStageEnum] = Field(None)
+    sample_preservation_method: Optional[SamplePreservationMethodEnum] = Field(None)
+    parasitemia_percent: Optional[float] = Field(None)
+    multiplicity_of_infection: Optional[int] = Field(None)
+    coinfection_organisms: Optional[List[OrganismNameEnum]] = Field(default_factory=list)
 
 
 
@@ -2713,6 +3037,17 @@ class AirSample(EnvironmentalSample):
     contact_other: Optional[str] = Field(None, description="""Email format. Phase 2: allow non-user contacts.
 """)
     comments: Optional[str] = Field(None, description="""Free text comments""")
+    deletion_status: Optional[DeletionStatusEnum] = Field(None)
+    deletion_requested_at: Optional[str] = Field(None)
+    deletion_requested_by_user_id: Optional[str] = Field(None)
+    deletion_reason: Optional[str] = Field(None)
+    tombstoned_at: Optional[str] = Field(None)
+    vacuumed_at: Optional[str] = Field(None)
+    parasite_developmental_stage: Optional[ParasiteDevelopmentalStageEnum] = Field(None)
+    sample_preservation_method: Optional[SamplePreservationMethodEnum] = Field(None)
+    parasitemia_percent: Optional[float] = Field(None)
+    multiplicity_of_infection: Optional[int] = Field(None)
+    coinfection_organisms: Optional[List[OrganismNameEnum]] = Field(default_factory=list)
 
 
 
@@ -2875,6 +3210,17 @@ class SoilSample(EnvironmentalSample):
     contact_other: Optional[str] = Field(None, description="""Email format. Phase 2: allow non-user contacts.
 """)
     comments: Optional[str] = Field(None, description="""Free text comments""")
+    deletion_status: Optional[DeletionStatusEnum] = Field(None)
+    deletion_requested_at: Optional[str] = Field(None)
+    deletion_requested_by_user_id: Optional[str] = Field(None)
+    deletion_reason: Optional[str] = Field(None)
+    tombstoned_at: Optional[str] = Field(None)
+    vacuumed_at: Optional[str] = Field(None)
+    parasite_developmental_stage: Optional[ParasiteDevelopmentalStageEnum] = Field(None)
+    sample_preservation_method: Optional[SamplePreservationMethodEnum] = Field(None)
+    parasitemia_percent: Optional[float] = Field(None)
+    multiplicity_of_infection: Optional[int] = Field(None)
+    coinfection_organisms: Optional[List[OrganismNameEnum]] = Field(default_factory=list)
 
 
 
@@ -3047,6 +3393,17 @@ class SurfaceSample(EnvironmentalSample):
     contact_other: Optional[str] = Field(None, description="""Email format. Phase 2: allow non-user contacts.
 """)
     comments: Optional[str] = Field(None, description="""Free text comments""")
+    deletion_status: Optional[DeletionStatusEnum] = Field(None)
+    deletion_requested_at: Optional[str] = Field(None)
+    deletion_requested_by_user_id: Optional[str] = Field(None)
+    deletion_reason: Optional[str] = Field(None)
+    tombstoned_at: Optional[str] = Field(None)
+    vacuumed_at: Optional[str] = Field(None)
+    parasite_developmental_stage: Optional[ParasiteDevelopmentalStageEnum] = Field(None)
+    sample_preservation_method: Optional[SamplePreservationMethodEnum] = Field(None)
+    parasitemia_percent: Optional[float] = Field(None)
+    multiplicity_of_infection: Optional[int] = Field(None)
+    coinfection_organisms: Optional[List[OrganismNameEnum]] = Field(default_factory=list)
 
 
 
@@ -3203,6 +3560,17 @@ class FoodSample(EnvironmentalSample):
     contact_other: Optional[str] = Field(None, description="""Email format. Phase 2: allow non-user contacts.
 """)
     comments: Optional[str] = Field(None, description="""Free text comments""")
+    deletion_status: Optional[DeletionStatusEnum] = Field(None)
+    deletion_requested_at: Optional[str] = Field(None)
+    deletion_requested_by_user_id: Optional[str] = Field(None)
+    deletion_reason: Optional[str] = Field(None)
+    tombstoned_at: Optional[str] = Field(None)
+    vacuumed_at: Optional[str] = Field(None)
+    parasite_developmental_stage: Optional[ParasiteDevelopmentalStageEnum] = Field(None)
+    sample_preservation_method: Optional[SamplePreservationMethodEnum] = Field(None)
+    parasitemia_percent: Optional[float] = Field(None)
+    multiplicity_of_infection: Optional[int] = Field(None)
+    coinfection_organisms: Optional[List[OrganismNameEnum]] = Field(default_factory=list)
 
 
 
@@ -3360,6 +3728,17 @@ class ProduceAgSample(EnvironmentalSample):
     contact_other: Optional[str] = Field(None, description="""Email format. Phase 2: allow non-user contacts.
 """)
     comments: Optional[str] = Field(None, description="""Free text comments""")
+    deletion_status: Optional[DeletionStatusEnum] = Field(None)
+    deletion_requested_at: Optional[str] = Field(None)
+    deletion_requested_by_user_id: Optional[str] = Field(None)
+    deletion_reason: Optional[str] = Field(None)
+    tombstoned_at: Optional[str] = Field(None)
+    vacuumed_at: Optional[str] = Field(None)
+    parasite_developmental_stage: Optional[ParasiteDevelopmentalStageEnum] = Field(None)
+    sample_preservation_method: Optional[SamplePreservationMethodEnum] = Field(None)
+    parasitemia_percent: Optional[float] = Field(None)
+    multiplicity_of_infection: Optional[int] = Field(None)
+    coinfection_organisms: Optional[List[OrganismNameEnum]] = Field(default_factory=list)
 
 
 

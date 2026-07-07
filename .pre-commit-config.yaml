@@ -36,7 +36,7 @@ repos:
     hooks:
       - id: schema-regen-check
         name: Check generated schema artifacts match YAML
-        entry: python3 scripts/regen_schema.py --check --quiet
+        entry: uv run python scripts/regen_schema.py --check --quiet
         language: system
         pass_filenames: false
         files: ^schema/schema/jackpot_schema\.yaml$

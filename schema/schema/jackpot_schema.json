@@ -97,6 +97,12 @@
                     "description": "Free-text citation request from originating lab. Surfaced to data users when they access or download this sample's data. Per WHO Principle 6 \u2014 users should invite originating labs to participate in research and publications.",
                     "type": "string"
                 },
+                "coinfection_organisms": {
+                    "items": {
+                        "$ref": "#/$defs/OrganismNameEnum"
+                    },
+                    "type": "array"
+                },
                 "collection_facility": {
                     "description": "the sample was collected. Match defined allowable entries.\n",
                     "type": "string"
@@ -182,6 +188,18 @@
                     "description": "Validation: must not be future date; must not precede date_collected.\n",
                     "format": "date",
                     "type": "string"
+                },
+                "deletion_reason": {
+                    "type": "string"
+                },
+                "deletion_requested_at": {
+                    "type": "string"
+                },
+                "deletion_requested_by_user_id": {
+                    "type": "string"
+                },
+                "deletion_status": {
+                    "$ref": "#/$defs/DeletionStatusEnum"
                 },
                 "embargo_release_date": {
                     "description": "Date after which data_use_terms = embargo data becomes openly accessible. Only meaningful when data_use_terms = embargo.",
@@ -321,6 +339,9 @@
                     "description": "CDC MMWR epiweek year (computed at ingest)",
                     "type": "integer"
                 },
+                "multiplicity_of_infection": {
+                    "type": "integer"
+                },
                 "ncbi_submission_status": {
                     "$ref": "#/$defs/SubmissionStatusEnum",
                     "description": "NCBI SRA/BioSample/GenBank submission status via TOSTADAS"
@@ -383,6 +404,12 @@
                     "$ref": "#/$defs/PangoQCStatusEnum",
                     "description": "Pangolin QC status for the lineage call. A 'fail' or 'ambiguous' status means the lineage designation is uncertain and should not drive surveillance decisions without manual review. WHO and CDC both require confidence indicators in genomic surveillance reporting. Populated automatically from Pangolin output at pipeline completion."
                 },
+                "parasite_developmental_stage": {
+                    "$ref": "#/$defs/ParasiteDevelopmentalStageEnum"
+                },
+                "parasitemia_percent": {
+                    "type": "number"
+                },
                 "pi_name": {
                     "description": "Validation: must match existing user in the platform.\n",
                     "type": "string"
@@ -421,6 +448,9 @@
                 "sample_id": {
                     "description": "Unique alphanumeric identifier for this sample. Must not already be in use in the system. Portal mints persistent URI at ingest: https://data.jackpot.health/samples/{sample_id}\n",
                     "type": "string"
+                },
+                "sample_preservation_method": {
+                    "$ref": "#/$defs/SamplePreservationMethodEnum"
                 },
                 "scrub_status": {
                     "$ref": "#/$defs/ScrubStatusEnum"
@@ -508,9 +538,15 @@
                     },
                     "type": "array"
                 },
+                "tombstoned_at": {
+                    "type": "string"
+                },
                 "type_of_experiment": {
                     "$ref": "#/$defs/ExperimentTypeEnum",
                     "description": "Validation: match defined allowable entries (one only).\n"
+                },
+                "vacuumed_at": {
+                    "type": "string"
                 },
                 "vadr_alerts": {
                     "description": "VADR alert codes, e.g. CDS_HAS_STOP_CODON",
@@ -744,6 +780,12 @@
                     "description": "Free-text citation request from originating lab. Surfaced to data users when they access or download this sample's data. Per WHO Principle 6 \u2014 users should invite originating labs to participate in research and publications.",
                     "type": "string"
                 },
+                "coinfection_organisms": {
+                    "items": {
+                        "$ref": "#/$defs/OrganismNameEnum"
+                    },
+                    "type": "array"
+                },
                 "collection_facility": {
                     "description": "the sample was collected. Match defined allowable entries.\n",
                     "type": "string"
@@ -833,6 +875,18 @@
                     "description": "Validation: must not be future date; must not precede date_collected.\n",
                     "format": "date",
                     "type": "string"
+                },
+                "deletion_reason": {
+                    "type": "string"
+                },
+                "deletion_requested_at": {
+                    "type": "string"
+                },
+                "deletion_requested_by_user_id": {
+                    "type": "string"
+                },
+                "deletion_status": {
+                    "$ref": "#/$defs/DeletionStatusEnum"
                 },
                 "embargo_release_date": {
                     "description": "Date after which data_use_terms = embargo data becomes openly accessible. Only meaningful when data_use_terms = embargo.",
@@ -979,6 +1033,9 @@
                     "description": "CDC MMWR epiweek year (computed at ingest)",
                     "type": "integer"
                 },
+                "multiplicity_of_infection": {
+                    "type": "integer"
+                },
                 "ncbi_submission_status": {
                     "$ref": "#/$defs/SubmissionStatusEnum",
                     "description": "NCBI SRA/BioSample/GenBank submission status via TOSTADAS"
@@ -1041,6 +1098,12 @@
                     "$ref": "#/$defs/PangoQCStatusEnum",
                     "description": "Pangolin QC status for the lineage call. A 'fail' or 'ambiguous' status means the lineage designation is uncertain and should not drive surveillance decisions without manual review. WHO and CDC both require confidence indicators in genomic surveillance reporting. Populated automatically from Pangolin output at pipeline completion."
                 },
+                "parasite_developmental_stage": {
+                    "$ref": "#/$defs/ParasiteDevelopmentalStageEnum"
+                },
+                "parasitemia_percent": {
+                    "type": "number"
+                },
                 "pi_name": {
                     "description": "Validation: must match existing user in the platform.\n",
                     "type": "string"
@@ -1073,6 +1136,9 @@
                 "sample_id": {
                     "description": "Unique alphanumeric identifier for this sample. Must not already be in use in the system. Portal mints persistent URI at ingest: https://data.jackpot.health/samples/{sample_id}\n",
                     "type": "string"
+                },
+                "sample_preservation_method": {
+                    "$ref": "#/$defs/SamplePreservationMethodEnum"
                 },
                 "scrub_status": {
                     "$ref": "#/$defs/ScrubStatusEnum"
@@ -1164,12 +1230,18 @@
                     },
                     "type": "array"
                 },
+                "tombstoned_at": {
+                    "type": "string"
+                },
                 "type_of_experiment": {
                     "$ref": "#/$defs/ExperimentTypeEnum",
                     "description": "Validation: match defined allowable entries (one only).\n"
                 },
                 "vaccine_status_against_pathogen": {
                     "$ref": "#/$defs/VaccineStatusEnum"
+                },
+                "vacuumed_at": {
+                    "type": "string"
                 },
                 "vadr_alerts": {
                     "description": "VADR alert codes, e.g. CDS_HAS_STOP_CODON",
@@ -1240,6 +1312,19 @@
             "title": "ContainerEngineEnum",
             "type": "string"
         },
+        "DataTypeEnum": {
+            "description": "",
+            "enum": [
+                "paired_end_short_read",
+                "single_end_short_read",
+                "long_read",
+                "assembly",
+                "raw_signal",
+                "metagenomic"
+            ],
+            "title": "DataTypeEnum",
+            "type": "string"
+        },
         "DataUseTermsEnum": {
             "description": "",
             "enum": [
@@ -1259,6 +1344,17 @@
                 "year"
             ],
             "title": "DatePrecisionEnum",
+            "type": "string"
+        },
+        "DeletionStatusEnum": {
+            "description": "",
+            "enum": [
+                "ACTIVE",
+                "DELETION_REQUESTED",
+                "TOMBSTONED",
+                "VACUUMED"
+            ],
+            "title": "DeletionStatusEnum",
             "type": "string"
         },
         "DistributionScaleEnum": {
@@ -1333,6 +1429,12 @@
                 "citation_request": {
                     "description": "Free-text citation request from originating lab. Surfaced to data users when they access or download this sample's data. Per WHO Principle 6 \u2014 users should invite originating labs to participate in research and publications.",
                     "type": "string"
+                },
+                "coinfection_organisms": {
+                    "items": {
+                        "$ref": "#/$defs/OrganismNameEnum"
+                    },
+                    "type": "array"
                 },
                 "collection_facility": {
                     "description": "the sample was collected. Match defined allowable entries.\n",
@@ -1419,6 +1521,18 @@
                     "description": "Validation: must not be future date; must not precede date_collected.\n",
                     "format": "date",
                     "type": "string"
+                },
+                "deletion_reason": {
+                    "type": "string"
+                },
+                "deletion_requested_at": {
+                    "type": "string"
+                },
+                "deletion_requested_by_user_id": {
+                    "type": "string"
+                },
+                "deletion_status": {
+                    "$ref": "#/$defs/DeletionStatusEnum"
                 },
                 "embargo_release_date": {
                     "description": "Date after which data_use_terms = embargo data becomes openly accessible. Only meaningful when data_use_terms = embargo.",
@@ -1549,6 +1663,9 @@
                     "description": "CDC MMWR epiweek year (computed at ingest)",
                     "type": "integer"
                 },
+                "multiplicity_of_infection": {
+                    "type": "integer"
+                },
                 "ncbi_submission_status": {
                     "$ref": "#/$defs/SubmissionStatusEnum",
                     "description": "NCBI SRA/BioSample/GenBank submission status via TOSTADAS"
@@ -1611,6 +1728,12 @@
                     "$ref": "#/$defs/PangoQCStatusEnum",
                     "description": "Pangolin QC status for the lineage call. A 'fail' or 'ambiguous' status means the lineage designation is uncertain and should not drive surveillance decisions without manual review. WHO and CDC both require confidence indicators in genomic surveillance reporting. Populated automatically from Pangolin output at pipeline completion."
                 },
+                "parasite_developmental_stage": {
+                    "$ref": "#/$defs/ParasiteDevelopmentalStageEnum"
+                },
+                "parasitemia_percent": {
+                    "type": "number"
+                },
                 "pi_name": {
                     "description": "Validation: must match existing user in the platform.\n",
                     "type": "string"
@@ -1643,6 +1766,9 @@
                 "sample_id": {
                     "description": "Unique alphanumeric identifier for this sample. Must not already be in use in the system. Portal mints persistent URI at ingest: https://data.jackpot.health/samples/{sample_id}\n",
                     "type": "string"
+                },
+                "sample_preservation_method": {
+                    "$ref": "#/$defs/SamplePreservationMethodEnum"
                 },
                 "scrub_status": {
                     "$ref": "#/$defs/ScrubStatusEnum"
@@ -1730,9 +1856,15 @@
                     },
                     "type": "array"
                 },
+                "tombstoned_at": {
+                    "type": "string"
+                },
                 "type_of_experiment": {
                     "$ref": "#/$defs/ExperimentTypeEnum",
                     "description": "Validation: match defined allowable entries (one only).\n"
+                },
+                "vacuumed_at": {
+                    "type": "string"
                 },
                 "vadr_alerts": {
                     "description": "VADR alert codes, e.g. CDS_HAS_STOP_CODON",
@@ -1979,6 +2111,12 @@
                     "description": "Free-text citation request from originating lab. Surfaced to data users when they access or download this sample's data. Per WHO Principle 6 \u2014 users should invite originating labs to participate in research and publications.",
                     "type": "string"
                 },
+                "coinfection_organisms": {
+                    "items": {
+                        "$ref": "#/$defs/OrganismNameEnum"
+                    },
+                    "type": "array"
+                },
                 "collection_facility": {
                     "description": "the sample was collected. Match defined allowable entries.\n",
                     "type": "string"
@@ -2064,6 +2202,18 @@
                     "description": "Validation: must not be future date; must not precede date_collected.\n",
                     "format": "date",
                     "type": "string"
+                },
+                "deletion_reason": {
+                    "type": "string"
+                },
+                "deletion_requested_at": {
+                    "type": "string"
+                },
+                "deletion_requested_by_user_id": {
+                    "type": "string"
+                },
+                "deletion_status": {
+                    "$ref": "#/$defs/DeletionStatusEnum"
                 },
                 "embargo_release_date": {
                     "description": "Date after which data_use_terms = embargo data becomes openly accessible. Only meaningful when data_use_terms = embargo.",
@@ -2209,6 +2359,9 @@
                     "description": "CDC MMWR epiweek year (computed at ingest)",
                     "type": "integer"
                 },
+                "multiplicity_of_infection": {
+                    "type": "integer"
+                },
                 "ncbi_submission_status": {
                     "$ref": "#/$defs/SubmissionStatusEnum",
                     "description": "NCBI SRA/BioSample/GenBank submission status via TOSTADAS"
@@ -2271,6 +2424,12 @@
                     "$ref": "#/$defs/PangoQCStatusEnum",
                     "description": "Pangolin QC status for the lineage call. A 'fail' or 'ambiguous' status means the lineage designation is uncertain and should not drive surveillance decisions without manual review. WHO and CDC both require confidence indicators in genomic surveillance reporting. Populated automatically from Pangolin output at pipeline completion."
                 },
+                "parasite_developmental_stage": {
+                    "$ref": "#/$defs/ParasiteDevelopmentalStageEnum"
+                },
+                "parasitemia_percent": {
+                    "type": "number"
+                },
                 "pi_name": {
                     "description": "Validation: must match existing user in the platform.\n",
                     "type": "string"
@@ -2307,6 +2466,9 @@
                 "sample_id": {
                     "description": "Unique alphanumeric identifier for this sample. Must not already be in use in the system. Portal mints persistent URI at ingest: https://data.jackpot.health/samples/{sample_id}\n",
                     "type": "string"
+                },
+                "sample_preservation_method": {
+                    "$ref": "#/$defs/SamplePreservationMethodEnum"
                 },
                 "scrub_status": {
                     "$ref": "#/$defs/ScrubStatusEnum"
@@ -2398,9 +2560,15 @@
                     },
                     "type": "array"
                 },
+                "tombstoned_at": {
+                    "type": "string"
+                },
                 "type_of_experiment": {
                     "$ref": "#/$defs/ExperimentTypeEnum",
                     "description": "Validation: match defined allowable entries (one only).\n"
+                },
+                "vacuumed_at": {
+                    "type": "string"
                 },
                 "vadr_alerts": {
                     "description": "VADR alert codes, e.g. CDS_HAS_STOP_CODON",
@@ -2514,6 +2682,12 @@
                     "description": "e.g. hospitalized, ICU, deceased, outpatient, asymptomatic, unknown.\n",
                     "type": "string"
                 },
+                "coinfection_organisms": {
+                    "items": {
+                        "$ref": "#/$defs/OrganismNameEnum"
+                    },
+                    "type": "array"
+                },
                 "collection_facility": {
                     "description": "the sample was collected. Match defined allowable entries.\n",
                     "type": "string"
@@ -2608,6 +2782,18 @@
                     "description": "Validation: must not be future date; must not precede date_collected.\n",
                     "format": "date",
                     "type": "string"
+                },
+                "deletion_reason": {
+                    "type": "string"
+                },
+                "deletion_requested_at": {
+                    "type": "string"
+                },
+                "deletion_requested_by_user_id": {
+                    "type": "string"
+                },
+                "deletion_status": {
+                    "$ref": "#/$defs/DeletionStatusEnum"
                 },
                 "embargo_release_date": {
                     "description": "Date after which data_use_terms = embargo data becomes openly accessible. Only meaningful when data_use_terms = embargo.",
@@ -2773,6 +2959,9 @@
                     "description": "CDC MMWR epiweek year (computed at ingest)",
                     "type": "integer"
                 },
+                "multiplicity_of_infection": {
+                    "type": "integer"
+                },
                 "ncbi_submission_status": {
                     "$ref": "#/$defs/SubmissionStatusEnum",
                     "description": "NCBI SRA/BioSample/GenBank submission status via TOSTADAS"
@@ -2835,6 +3024,12 @@
                     "$ref": "#/$defs/PangoQCStatusEnum",
                     "description": "Pangolin QC status for the lineage call. A 'fail' or 'ambiguous' status means the lineage designation is uncertain and should not drive surveillance decisions without manual review. WHO and CDC both require confidence indicators in genomic surveillance reporting. Populated automatically from Pangolin output at pipeline completion."
                 },
+                "parasite_developmental_stage": {
+                    "$ref": "#/$defs/ParasiteDevelopmentalStageEnum"
+                },
+                "parasitemia_percent": {
+                    "type": "number"
+                },
                 "pi_name": {
                     "description": "Validation: must match existing user in the platform.\n",
                     "type": "string"
@@ -2874,6 +3069,9 @@
                 "sample_id": {
                     "description": "Unique alphanumeric identifier for this sample. Must not already be in use in the system. Portal mints persistent URI at ingest: https://data.jackpot.health/samples/{sample_id}\n",
                     "type": "string"
+                },
+                "sample_preservation_method": {
+                    "$ref": "#/$defs/SamplePreservationMethodEnum"
                 },
                 "scrub_status": {
                     "$ref": "#/$defs/ScrubStatusEnum"
@@ -2961,6 +3159,9 @@
                     },
                     "type": "array"
                 },
+                "tombstoned_at": {
+                    "type": "string"
+                },
                 "travel_history_country": {
                     "description": "Countries visited by the patient in the 14 days before symptom onset or sample collection (whichever is earlier). NCBI BioSample standard field. WHO situation reports routinely distinguish travel-linked from locally-acquired cases for internationally relevant pathogens (MPOX, Ebola, cholera, H5N1, MERS-CoV). Free text \u2014 INSDC country names preferred but not enforced here. Multiple values permitted (multiple countries in travel history).",
                     "items": {
@@ -2985,6 +3186,9 @@
                 },
                 "vaccination_status": {
                     "description": "e.g. fully vaccinated, unvaccinated, boosted, partially vaccinated, unknown.\n",
+                    "type": "string"
+                },
+                "vacuumed_at": {
                     "type": "string"
                 },
                 "vadr_alerts": {
@@ -3167,6 +3371,12 @@
                     "description": "Free-text citation request from originating lab. Surfaced to data users when they access or download this sample's data. Per WHO Principle 6 \u2014 users should invite originating labs to participate in research and publications.",
                     "type": "string"
                 },
+                "coinfection_organisms": {
+                    "items": {
+                        "$ref": "#/$defs/OrganismNameEnum"
+                    },
+                    "type": "array"
+                },
                 "collection_facility": {
                     "description": "the sample was collected. Match defined allowable entries.\n",
                     "type": "string"
@@ -3252,6 +3462,18 @@
                     "description": "Validation: must not be future date; must not precede date_collected.\n",
                     "format": "date",
                     "type": "string"
+                },
+                "deletion_reason": {
+                    "type": "string"
+                },
+                "deletion_requested_at": {
+                    "type": "string"
+                },
+                "deletion_requested_by_user_id": {
+                    "type": "string"
+                },
+                "deletion_status": {
+                    "$ref": "#/$defs/DeletionStatusEnum"
                 },
                 "distribution_scale": {
                     "items": {
@@ -3413,6 +3635,9 @@
                     "description": "CDC MMWR epiweek year (computed at ingest)",
                     "type": "integer"
                 },
+                "multiplicity_of_infection": {
+                    "type": "integer"
+                },
                 "ncbi_submission_status": {
                     "$ref": "#/$defs/SubmissionStatusEnum",
                     "description": "NCBI SRA/BioSample/GenBank submission status via TOSTADAS"
@@ -3475,6 +3700,12 @@
                     "$ref": "#/$defs/PangoQCStatusEnum",
                     "description": "Pangolin QC status for the lineage call. A 'fail' or 'ambiguous' status means the lineage designation is uncertain and should not drive surveillance decisions without manual review. WHO and CDC both require confidence indicators in genomic surveillance reporting. Populated automatically from Pangolin output at pipeline completion."
                 },
+                "parasite_developmental_stage": {
+                    "$ref": "#/$defs/ParasiteDevelopmentalStageEnum"
+                },
+                "parasitemia_percent": {
+                    "type": "number"
+                },
                 "pi_name": {
                     "description": "Validation: must match existing user in the platform.\n",
                     "type": "string"
@@ -3507,6 +3738,9 @@
                 "sample_id": {
                     "description": "Unique alphanumeric identifier for this sample. Must not already be in use in the system. Portal mints persistent URI at ingest: https://data.jackpot.health/samples/{sample_id}\n",
                     "type": "string"
+                },
+                "sample_preservation_method": {
+                    "$ref": "#/$defs/SamplePreservationMethodEnum"
                 },
                 "scrub_status": {
                     "$ref": "#/$defs/ScrubStatusEnum"
@@ -3594,9 +3828,15 @@
                     },
                     "type": "array"
                 },
+                "tombstoned_at": {
+                    "type": "string"
+                },
                 "type_of_experiment": {
                     "$ref": "#/$defs/ExperimentTypeEnum",
                     "description": "Validation: match defined allowable entries (one only).\n"
+                },
+                "vacuumed_at": {
+                    "type": "string"
                 },
                 "vadr_alerts": {
                     "description": "VADR alert codes, e.g. CDS_HAS_STOP_CODON",
@@ -3732,7 +3972,45 @@
                 "Taenia solium",
                 "Toxoplasma gondii",
                 "Trichinella spiralis",
-                "novel pathogen"
+                "novel pathogen",
+                "Plasmodium falciparum",
+                "Plasmodium vivax",
+                "Plasmodium malariae",
+                "Plasmodium ovale curtisi",
+                "Plasmodium ovale wallikeri",
+                "Plasmodium knowlesi",
+                "Leishmania donovani",
+                "Leishmania major",
+                "Leishmania infantum",
+                "Leishmania tropica",
+                "Leishmania braziliensis",
+                "Leishmania mexicana",
+                "Trypanosoma cruzi",
+                "Trypanosoma brucei gambiense",
+                "Trypanosoma brucei rhodesiense",
+                "Trypanosoma congolense",
+                "Trypanosoma vivax",
+                "Schistosoma mansoni",
+                "Schistosoma haematobium",
+                "Schistosoma japonicum",
+                "Schistosoma mekongi",
+                "Schistosoma intercalatum",
+                "Ascaris lumbricoides",
+                "Ascaris suum",
+                "Trichuris trichiura",
+                "Necator americanus",
+                "Ancylostoma duodenale",
+                "Ancylostoma ceylanicum",
+                "Strongyloides stercoralis",
+                "Wuchereria bancrofti",
+                "Brugia malayi",
+                "Brugia timori",
+                "Cryptosporidium parvum",
+                "Cryptosporidium hominis",
+                "Cryptosporidium meleagridis",
+                "Giardia intestinalis",
+                "Entamoeba histolytica",
+                "Entamoeba dispar"
             ],
             "title": "OrganismNameEnum",
             "type": "string"
@@ -3853,6 +4131,31 @@
             "title": "PangoQCStatusEnum",
             "type": "string"
         },
+        "ParasiteDevelopmentalStageEnum": {
+            "description": "",
+            "enum": [
+                "ring",
+                "trophozoite",
+                "schizont",
+                "gametocyte",
+                "sporozoite",
+                "merozoite",
+                "cyst",
+                "trophozoite_amoebic",
+                "egg",
+                "miracidium",
+                "cercaria",
+                "adult",
+                "larva_l1",
+                "larva_l2",
+                "larva_l3",
+                "microfilaria",
+                "bradyzoite",
+                "tachyzoite"
+            ],
+            "title": "ParasiteDevelopmentalStageEnum",
+            "type": "string"
+        },
         "PipelineDefaultProfile": {
             "additionalProperties": false,
             "description": "Association linking a pipeline to one or more execution profiles that the launch endpoint should consider as defaults when the request does not name a profile explicitly. A pipeline may have multiple default profiles; the launcher picks the lowest priority value (priority=1 wins over priority=100). pipeline_id is intentionally a string-typed UUID reference rather than a typed FK because the pipelines surface is not yet represented as a LinkML class \u2014 only at the SQL level via pipeline_catalog (which carries a SERIAL id, not a UUID). When the pipelines surface gets a LinkML class with a UUID PK, this field becomes a typed range. See spec.md Phase P0g and the Phase P0g G-1 prompt's \"FK fallback\" guidance.",
@@ -3877,6 +4180,17 @@
             ],
             "title": "PipelineDefaultProfile",
             "type": "object"
+        },
+        "PipelineEngineEnum": {
+            "description": "",
+            "enum": [
+                "nextflow",
+                "snakemake",
+                "wdl",
+                "manifest"
+            ],
+            "title": "PipelineEngineEnum",
+            "type": "string"
         },
         "PipelineProvenance": {
             "additionalProperties": false,
@@ -3931,6 +4245,34 @@
             ],
             "title": "PipelineProvenance",
             "type": "object"
+        },
+        "PipelineSourceTypeEnum": {
+            "description": "",
+            "enum": [
+                "git",
+                "git_private",
+                "tarball",
+                "docker"
+            ],
+            "title": "PipelineSourceTypeEnum",
+            "type": "string"
+        },
+        "PipelineStatusEnum": {
+            "description": "",
+            "enum": [
+                "SUBMITTED",
+                "VALIDATING",
+                "SANDBOX_PENDING",
+                "SANDBOX_RUNNING",
+                "ACTIVE",
+                "DEACTIVATED",
+                "ARCHIVED",
+                "VALIDATION_FAILED",
+                "SANDBOX_FAILED",
+                "SANDBOX_TIMEOUT"
+            ],
+            "title": "PipelineStatusEnum",
+            "type": "string"
         },
         "PretreatmentEnum": {
             "description": "",
@@ -4004,6 +4346,12 @@
                 "citation_request": {
                     "description": "Free-text citation request from originating lab. Surfaced to data users when they access or download this sample's data. Per WHO Principle 6 \u2014 users should invite originating labs to participate in research and publications.",
                     "type": "string"
+                },
+                "coinfection_organisms": {
+                    "items": {
+                        "$ref": "#/$defs/OrganismNameEnum"
+                    },
+                    "type": "array"
                 },
                 "collection_facility": {
                     "description": "the sample was collected. Match defined allowable entries.\n",
@@ -4090,6 +4438,18 @@
                     "description": "Validation: must not be future date; must not precede date_collected.\n",
                     "format": "date",
                     "type": "string"
+                },
+                "deletion_reason": {
+                    "type": "string"
+                },
+                "deletion_requested_at": {
+                    "type": "string"
+                },
+                "deletion_requested_by_user_id": {
+                    "type": "string"
+                },
+                "deletion_status": {
+                    "$ref": "#/$defs/DeletionStatusEnum"
                 },
                 "distribution_scale": {
                     "items": {
@@ -4241,6 +4601,9 @@
                     "description": "CDC MMWR epiweek year (computed at ingest)",
                     "type": "integer"
                 },
+                "multiplicity_of_infection": {
+                    "type": "integer"
+                },
                 "ncbi_submission_status": {
                     "$ref": "#/$defs/SubmissionStatusEnum",
                     "description": "NCBI SRA/BioSample/GenBank submission status via TOSTADAS"
@@ -4307,6 +4670,12 @@
                     "$ref": "#/$defs/PangoQCStatusEnum",
                     "description": "Pangolin QC status for the lineage call. A 'fail' or 'ambiguous' status means the lineage designation is uncertain and should not drive surveillance decisions without manual review. WHO and CDC both require confidence indicators in genomic surveillance reporting. Populated automatically from Pangolin output at pipeline completion."
                 },
+                "parasite_developmental_stage": {
+                    "$ref": "#/$defs/ParasiteDevelopmentalStageEnum"
+                },
+                "parasitemia_percent": {
+                    "type": "number"
+                },
                 "pi_name": {
                     "description": "Validation: must match existing user in the platform.\n",
                     "type": "string"
@@ -4349,6 +4718,9 @@
                 "sample_id": {
                     "description": "Unique alphanumeric identifier for this sample. Must not already be in use in the system. Portal mints persistent URI at ingest: https://data.jackpot.health/samples/{sample_id}\n",
                     "type": "string"
+                },
+                "sample_preservation_method": {
+                    "$ref": "#/$defs/SamplePreservationMethodEnum"
                 },
                 "scrub_status": {
                     "$ref": "#/$defs/ScrubStatusEnum"
@@ -4436,9 +4808,15 @@
                     },
                     "type": "array"
                 },
+                "tombstoned_at": {
+                    "type": "string"
+                },
                 "type_of_experiment": {
                     "$ref": "#/$defs/ExperimentTypeEnum",
                     "description": "Validation: match defined allowable entries (one only).\n"
+                },
+                "vacuumed_at": {
+                    "type": "string"
                 },
                 "vadr_alerts": {
                     "description": "VADR alert codes, e.g. CDS_HAS_STOP_CODON",
@@ -4640,6 +5018,12 @@
                     "description": "Free-text citation request from originating lab. Surfaced to data users when they access or download this sample's data. Per WHO Principle 6 \u2014 users should invite originating labs to participate in research and publications.",
                     "type": "string"
                 },
+                "coinfection_organisms": {
+                    "items": {
+                        "$ref": "#/$defs/OrganismNameEnum"
+                    },
+                    "type": "array"
+                },
                 "collection_facility": {
                     "description": "the sample was collected. Match defined allowable entries.\n",
                     "type": "string"
@@ -4725,6 +5109,18 @@
                     "description": "Validation: must not be future date; must not precede date_collected.\n",
                     "format": "date",
                     "type": "string"
+                },
+                "deletion_reason": {
+                    "type": "string"
+                },
+                "deletion_requested_at": {
+                    "type": "string"
+                },
+                "deletion_requested_by_user_id": {
+                    "type": "string"
+                },
+                "deletion_status": {
+                    "$ref": "#/$defs/DeletionStatusEnum"
                 },
                 "embargo_release_date": {
                     "description": "Date after which data_use_terms = embargo data becomes openly accessible. Only meaningful when data_use_terms = embargo.",
@@ -4855,6 +5251,9 @@
                     "description": "CDC MMWR epiweek year (computed at ingest)",
                     "type": "integer"
                 },
+                "multiplicity_of_infection": {
+                    "type": "integer"
+                },
                 "ncbi_submission_status": {
                     "$ref": "#/$defs/SubmissionStatusEnum",
                     "description": "NCBI SRA/BioSample/GenBank submission status via TOSTADAS"
@@ -4917,6 +5316,12 @@
                     "$ref": "#/$defs/PangoQCStatusEnum",
                     "description": "Pangolin QC status for the lineage call. A 'fail' or 'ambiguous' status means the lineage designation is uncertain and should not drive surveillance decisions without manual review. WHO and CDC both require confidence indicators in genomic surveillance reporting. Populated automatically from Pangolin output at pipeline completion."
                 },
+                "parasite_developmental_stage": {
+                    "$ref": "#/$defs/ParasiteDevelopmentalStageEnum"
+                },
+                "parasitemia_percent": {
+                    "type": "number"
+                },
                 "pi_name": {
                     "description": "Validation: must match existing user in the platform.\n",
                     "type": "string"
@@ -4949,6 +5354,9 @@
                 "sample_id": {
                     "description": "Unique alphanumeric identifier for this sample. Must not already be in use in the system. Portal mints persistent URI at ingest: https://data.jackpot.health/samples/{sample_id}\n",
                     "type": "string"
+                },
+                "sample_preservation_method": {
+                    "$ref": "#/$defs/SamplePreservationMethodEnum"
                 },
                 "scrub_status": {
                     "$ref": "#/$defs/ScrubStatusEnum"
@@ -5036,9 +5444,15 @@
                     },
                     "type": "array"
                 },
+                "tombstoned_at": {
+                    "type": "string"
+                },
                 "type_of_experiment": {
                     "$ref": "#/$defs/ExperimentTypeEnum",
                     "description": "Validation: match defined allowable entries (one only).\n"
+                },
+                "vacuumed_at": {
+                    "type": "string"
                 },
                 "vadr_alerts": {
                     "description": "VADR alert codes, e.g. CDS_HAS_STOP_CODON",
@@ -5116,6 +5530,7 @@
                 "food_source_clinical",
                 "environmental_clinical",
                 "longitudinal",
+                "wastewater_upstream_of",
                 "other"
             ],
             "title": "SampleAssociationTypeEnum",
@@ -5283,6 +5698,23 @@
             "title": "SampleMatrixEnum",
             "type": "string"
         },
+        "SamplePreservationMethodEnum": {
+            "description": "",
+            "enum": [
+                "fresh",
+                "frozen_minus_20",
+                "frozen_minus_80",
+                "ethanol_70",
+                "ethanol_95",
+                "rnalater",
+                "whatman_card",
+                "dried_blood_spot",
+                "formalin_fixed_paraffin_embedded",
+                "nucleic_acid_only"
+            ],
+            "title": "SamplePreservationMethodEnum",
+            "type": "string"
+        },
         "ScrubStatusEnum": {
             "description": "",
             "enum": [
@@ -5394,6 +5826,12 @@
                     "description": "Free-text citation request from originating lab. Surfaced to data users when they access or download this sample's data. Per WHO Principle 6 \u2014 users should invite originating labs to participate in research and publications.",
                     "type": "string"
                 },
+                "coinfection_organisms": {
+                    "items": {
+                        "$ref": "#/$defs/OrganismNameEnum"
+                    },
+                    "type": "array"
+                },
                 "collection_facility": {
                     "description": "the sample was collected. Match defined allowable entries.\n",
                     "type": "string"
@@ -5479,6 +5917,18 @@
                     "description": "Validation: must not be future date; must not precede date_collected.\n",
                     "format": "date",
                     "type": "string"
+                },
+                "deletion_reason": {
+                    "type": "string"
+                },
+                "deletion_requested_at": {
+                    "type": "string"
+                },
+                "deletion_requested_by_user_id": {
+                    "type": "string"
+                },
+                "deletion_status": {
+                    "$ref": "#/$defs/DeletionStatusEnum"
                 },
                 "embargo_release_date": {
                     "description": "Date after which data_use_terms = embargo data becomes openly accessible. Only meaningful when data_use_terms = embargo.",
@@ -5622,6 +6072,9 @@
                 "moisture_g_g": {
                     "type": "number"
                 },
+                "multiplicity_of_infection": {
+                    "type": "integer"
+                },
                 "ncbi_submission_status": {
                     "$ref": "#/$defs/SubmissionStatusEnum",
                     "description": "NCBI SRA/BioSample/GenBank submission status via TOSTADAS"
@@ -5690,6 +6143,12 @@
                     "$ref": "#/$defs/PangoQCStatusEnum",
                     "description": "Pangolin QC status for the lineage call. A 'fail' or 'ambiguous' status means the lineage designation is uncertain and should not drive surveillance decisions without manual review. WHO and CDC both require confidence indicators in genomic surveillance reporting. Populated automatically from Pangolin output at pipeline completion."
                 },
+                "parasite_developmental_stage": {
+                    "$ref": "#/$defs/ParasiteDevelopmentalStageEnum"
+                },
+                "parasitemia_percent": {
+                    "type": "number"
+                },
                 "pi_name": {
                     "description": "Validation: must match existing user in the platform.\n",
                     "type": "string"
@@ -5726,6 +6185,9 @@
                 "sample_id": {
                     "description": "Unique alphanumeric identifier for this sample. Must not already be in use in the system. Portal mints persistent URI at ingest: https://data.jackpot.health/samples/{sample_id}\n",
                     "type": "string"
+                },
+                "sample_preservation_method": {
+                    "$ref": "#/$defs/SamplePreservationMethodEnum"
                 },
                 "scrub_status": {
                     "$ref": "#/$defs/ScrubStatusEnum"
@@ -5827,9 +6289,15 @@
                     },
                     "type": "array"
                 },
+                "tombstoned_at": {
+                    "type": "string"
+                },
                 "type_of_experiment": {
                     "$ref": "#/$defs/ExperimentTypeEnum",
                     "description": "Validation: match defined allowable entries (one only).\n"
+                },
+                "vacuumed_at": {
+                    "type": "string"
                 },
                 "vadr_alerts": {
                     "description": "VADR alert codes, e.g. CDS_HAS_STOP_CODON",
@@ -5968,6 +6436,12 @@
                     "description": "Free-text citation request from originating lab. Surfaced to data users when they access or download this sample's data. Per WHO Principle 6 \u2014 users should invite originating labs to participate in research and publications.",
                     "type": "string"
                 },
+                "coinfection_organisms": {
+                    "items": {
+                        "$ref": "#/$defs/OrganismNameEnum"
+                    },
+                    "type": "array"
+                },
                 "collection_facility": {
                     "description": "the sample was collected. Match defined allowable entries.\n",
                     "type": "string"
@@ -6053,6 +6527,18 @@
                     "description": "Validation: must not be future date; must not precede date_collected.\n",
                     "format": "date",
                     "type": "string"
+                },
+                "deletion_reason": {
+                    "type": "string"
+                },
+                "deletion_requested_at": {
+                    "type": "string"
+                },
+                "deletion_requested_by_user_id": {
+                    "type": "string"
+                },
+                "deletion_status": {
+                    "$ref": "#/$defs/DeletionStatusEnum"
                 },
                 "embargo_release_date": {
                     "description": "Date after which data_use_terms = embargo data becomes openly accessible. Only meaningful when data_use_terms = embargo.",
@@ -6204,6 +6690,9 @@
                     "description": "CDC MMWR epiweek year (computed at ingest)",
                     "type": "integer"
                 },
+                "multiplicity_of_infection": {
+                    "type": "integer"
+                },
                 "ncbi_submission_status": {
                     "$ref": "#/$defs/SubmissionStatusEnum",
                     "description": "NCBI SRA/BioSample/GenBank submission status via TOSTADAS"
@@ -6266,6 +6755,12 @@
                     "$ref": "#/$defs/PangoQCStatusEnum",
                     "description": "Pangolin QC status for the lineage call. A 'fail' or 'ambiguous' status means the lineage designation is uncertain and should not drive surveillance decisions without manual review. WHO and CDC both require confidence indicators in genomic surveillance reporting. Populated automatically from Pangolin output at pipeline completion."
                 },
+                "parasite_developmental_stage": {
+                    "$ref": "#/$defs/ParasiteDevelopmentalStageEnum"
+                },
+                "parasitemia_percent": {
+                    "type": "number"
+                },
                 "pi_name": {
                     "description": "Validation: must match existing user in the platform.\n",
                     "type": "string"
@@ -6298,6 +6793,9 @@
                 "sample_id": {
                     "description": "Unique alphanumeric identifier for this sample. Must not already be in use in the system. Portal mints persistent URI at ingest: https://data.jackpot.health/samples/{sample_id}\n",
                     "type": "string"
+                },
+                "sample_preservation_method": {
+                    "$ref": "#/$defs/SamplePreservationMethodEnum"
                 },
                 "scrub_status": {
                     "$ref": "#/$defs/ScrubStatusEnum"
@@ -6421,9 +6919,15 @@
                     },
                     "type": "array"
                 },
+                "tombstoned_at": {
+                    "type": "string"
+                },
                 "type_of_experiment": {
                     "$ref": "#/$defs/ExperimentTypeEnum",
                     "description": "Validation: match defined allowable entries (one only).\n"
+                },
+                "vacuumed_at": {
+                    "type": "string"
                 },
                 "vadr_alerts": {
                     "description": "VADR alert codes, e.g. CDS_HAS_STOP_CODON",
@@ -6604,6 +7108,12 @@
                     "description": "Free-text citation request from originating lab. Surfaced to data users when they access or download this sample's data. Per WHO Principle 6 \u2014 users should invite originating labs to participate in research and publications.",
                     "type": "string"
                 },
+                "coinfection_organisms": {
+                    "items": {
+                        "$ref": "#/$defs/OrganismNameEnum"
+                    },
+                    "type": "array"
+                },
                 "collection_facility": {
                     "description": "the sample was collected. Match defined allowable entries.\n",
                     "type": "string"
@@ -6689,6 +7199,18 @@
                     "description": "Validation: must not be future date; must not precede date_collected.\n",
                     "format": "date",
                     "type": "string"
+                },
+                "deletion_reason": {
+                    "type": "string"
+                },
+                "deletion_requested_at": {
+                    "type": "string"
+                },
+                "deletion_requested_by_user_id": {
+                    "type": "string"
+                },
+                "deletion_status": {
+                    "$ref": "#/$defs/DeletionStatusEnum"
                 },
                 "embargo_release_date": {
                     "description": "Date after which data_use_terms = embargo data becomes openly accessible. Only meaningful when data_use_terms = embargo.",
@@ -6819,6 +7341,9 @@
                     "description": "CDC MMWR epiweek year (computed at ingest)",
                     "type": "integer"
                 },
+                "multiplicity_of_infection": {
+                    "type": "integer"
+                },
                 "ncbi_submission_status": {
                     "$ref": "#/$defs/SubmissionStatusEnum",
                     "description": "NCBI SRA/BioSample/GenBank submission status via TOSTADAS"
@@ -6881,6 +7406,12 @@
                     "$ref": "#/$defs/PangoQCStatusEnum",
                     "description": "Pangolin QC status for the lineage call. A 'fail' or 'ambiguous' status means the lineage designation is uncertain and should not drive surveillance decisions without manual review. WHO and CDC both require confidence indicators in genomic surveillance reporting. Populated automatically from Pangolin output at pipeline completion."
                 },
+                "parasite_developmental_stage": {
+                    "$ref": "#/$defs/ParasiteDevelopmentalStageEnum"
+                },
+                "parasitemia_percent": {
+                    "type": "number"
+                },
                 "pi_name": {
                     "description": "Validation: must match existing user in the platform.\n",
                     "type": "string"
@@ -6921,6 +7452,9 @@
                 "sample_id": {
                     "description": "Unique alphanumeric identifier for this sample. Must not already be in use in the system. Portal mints persistent URI at ingest: https://data.jackpot.health/samples/{sample_id}\n",
                     "type": "string"
+                },
+                "sample_preservation_method": {
+                    "$ref": "#/$defs/SamplePreservationMethodEnum"
                 },
                 "scrub_status": {
                     "$ref": "#/$defs/ScrubStatusEnum"
@@ -7008,9 +7542,15 @@
                     },
                     "type": "array"
                 },
+                "tombstoned_at": {
+                    "type": "string"
+                },
                 "type_of_experiment": {
                     "$ref": "#/$defs/ExperimentTypeEnum",
                     "description": "Validation: match defined allowable entries (one only).\n"
+                },
+                "vacuumed_at": {
+                    "type": "string"
                 },
                 "vadr_alerts": {
                     "description": "VADR alert codes, e.g. CDS_HAS_STOP_CODON",
@@ -7124,6 +7664,12 @@
                     "description": "Free-text citation request from originating lab. Surfaced to data users when they access or download this sample's data. Per WHO Principle 6 \u2014 users should invite originating labs to participate in research and publications.",
                     "type": "string"
                 },
+                "coinfection_organisms": {
+                    "items": {
+                        "$ref": "#/$defs/OrganismNameEnum"
+                    },
+                    "type": "array"
+                },
                 "collection_facility": {
                     "description": "the sample was collected. Match defined allowable entries.\n",
                     "type": "string"
@@ -7219,6 +7765,18 @@
                     "description": "Validation: must not be future date; must not precede date_collected.\n",
                     "format": "date",
                     "type": "string"
+                },
+                "deletion_reason": {
+                    "type": "string"
+                },
+                "deletion_requested_at": {
+                    "type": "string"
+                },
+                "deletion_requested_by_user_id": {
+                    "type": "string"
+                },
+                "deletion_status": {
+                    "$ref": "#/$defs/DeletionStatusEnum"
                 },
                 "embargo_release_date": {
                     "description": "Date after which data_use_terms = embargo data becomes openly accessible. Only meaningful when data_use_terms = embargo.",
@@ -7373,6 +7931,9 @@
                     "description": "CDC MMWR epiweek year (computed at ingest)",
                     "type": "integer"
                 },
+                "multiplicity_of_infection": {
+                    "type": "integer"
+                },
                 "ncbi_submission_status": {
                     "$ref": "#/$defs/SubmissionStatusEnum",
                     "description": "NCBI SRA/BioSample/GenBank submission status via TOSTADAS"
@@ -7442,6 +8003,12 @@
                 "pango_qc_status": {
                     "$ref": "#/$defs/PangoQCStatusEnum",
                     "description": "Pangolin QC status for the lineage call. A 'fail' or 'ambiguous' status means the lineage designation is uncertain and should not drive surveillance decisions without manual review. WHO and CDC both require confidence indicators in genomic surveillance reporting. Populated automatically from Pangolin output at pipeline completion."
+                },
+                "parasite_developmental_stage": {
+                    "$ref": "#/$defs/ParasiteDevelopmentalStageEnum"
+                },
+                "parasitemia_percent": {
+                    "type": "number"
                 },
                 "pasteurized": {
                     "description": "NWSS: Was the sample pasteurized?",
@@ -7523,6 +8090,9 @@
                 "sample_matrix": {
                     "$ref": "#/$defs/SampleMatrixEnum",
                     "description": "the sample was collected.\n"
+                },
+                "sample_preservation_method": {
+                    "$ref": "#/$defs/SamplePreservationMethodEnum"
                 },
                 "sample_type": {
                     "$ref": "#/$defs/WastewaterSampleTypeEnum"
@@ -7617,9 +8187,15 @@
                     },
                     "type": "array"
                 },
+                "tombstoned_at": {
+                    "type": "string"
+                },
                 "type_of_experiment": {
                     "$ref": "#/$defs/ExperimentTypeEnum",
                     "description": "Validation: match defined allowable entries (one only).\n"
+                },
+                "vacuumed_at": {
+                    "type": "string"
                 },
                 "vadr_alerts": {
                     "description": "VADR alert codes, e.g. CDS_HAS_STOP_CODON",
@@ -7744,6 +8320,12 @@
                     "description": "Free-text citation request from originating lab. Surfaced to data users when they access or download this sample's data. Per WHO Principle 6 \u2014 users should invite originating labs to participate in research and publications.",
                     "type": "string"
                 },
+                "coinfection_organisms": {
+                    "items": {
+                        "$ref": "#/$defs/OrganismNameEnum"
+                    },
+                    "type": "array"
+                },
                 "collection_facility": {
                     "description": "the sample was collected. Match defined allowable entries.\n",
                     "type": "string"
@@ -7829,6 +8411,18 @@
                     "description": "Validation: must not be future date; must not precede date_collected.\n",
                     "format": "date",
                     "type": "string"
+                },
+                "deletion_reason": {
+                    "type": "string"
+                },
+                "deletion_requested_at": {
+                    "type": "string"
+                },
+                "deletion_requested_by_user_id": {
+                    "type": "string"
+                },
+                "deletion_status": {
+                    "$ref": "#/$defs/DeletionStatusEnum"
                 },
                 "embargo_release_date": {
                     "description": "Date after which data_use_terms = embargo data becomes openly accessible. Only meaningful when data_use_terms = embargo.",
@@ -7968,6 +8562,9 @@
                     "description": "CDC MMWR epiweek year (computed at ingest)",
                     "type": "integer"
                 },
+                "multiplicity_of_infection": {
+                    "type": "integer"
+                },
                 "ncbi_submission_status": {
                     "$ref": "#/$defs/SubmissionStatusEnum",
                     "description": "NCBI SRA/BioSample/GenBank submission status via TOSTADAS"
@@ -8030,6 +8627,12 @@
                     "$ref": "#/$defs/PangoQCStatusEnum",
                     "description": "Pangolin QC status for the lineage call. A 'fail' or 'ambiguous' status means the lineage designation is uncertain and should not drive surveillance decisions without manual review. WHO and CDC both require confidence indicators in genomic surveillance reporting. Populated automatically from Pangolin output at pipeline completion."
                 },
+                "parasite_developmental_stage": {
+                    "$ref": "#/$defs/ParasiteDevelopmentalStageEnum"
+                },
+                "parasitemia_percent": {
+                    "type": "number"
+                },
                 "ph": {
                     "type": "number"
                 },
@@ -8068,6 +8671,9 @@
                 "sample_id": {
                     "description": "Unique alphanumeric identifier for this sample. Must not already be in use in the system. Portal mints persistent URI at ingest: https://data.jackpot.health/samples/{sample_id}\n",
                     "type": "string"
+                },
+                "sample_preservation_method": {
+                    "$ref": "#/$defs/SamplePreservationMethodEnum"
                 },
                 "scrub_status": {
                     "$ref": "#/$defs/ScrubStatusEnum"
@@ -8155,6 +8761,9 @@
                     },
                     "type": "array"
                 },
+                "tombstoned_at": {
+                    "type": "string"
+                },
                 "turbidity_ntu": {
                     "description": "Validation: range (0, 4000]; values above 4000 flagged for confirmation (possible decimal point omission). Unit: NTU.\n",
                     "type": "number"
@@ -8162,6 +8771,9 @@
                 "type_of_experiment": {
                     "$ref": "#/$defs/ExperimentTypeEnum",
                     "description": "Validation: match defined allowable entries (one only).\n"
+                },
+                "vacuumed_at": {
+                    "type": "string"
                 },
                 "vadr_alerts": {
                     "description": "VADR alert codes, e.g. CDS_HAS_STOP_CODON",
@@ -8297,6 +8909,12 @@
                     "description": "Free-text citation request from originating lab. Surfaced to data users when they access or download this sample's data. Per WHO Principle 6 \u2014 users should invite originating labs to participate in research and publications.",
                     "type": "string"
                 },
+                "coinfection_organisms": {
+                    "items": {
+                        "$ref": "#/$defs/OrganismNameEnum"
+                    },
+                    "type": "array"
+                },
                 "collection_facility": {
                     "description": "the sample was collected. Match defined allowable entries.\n",
                     "type": "string"
@@ -8382,6 +9000,18 @@
                     "description": "Validation: must not be future date; must not precede date_collected.\n",
                     "format": "date",
                     "type": "string"
+                },
+                "deletion_reason": {
+                    "type": "string"
+                },
+                "deletion_requested_at": {
+                    "type": "string"
+                },
+                "deletion_requested_by_user_id": {
+                    "type": "string"
+                },
+                "deletion_status": {
+                    "$ref": "#/$defs/DeletionStatusEnum"
                 },
                 "embargo_release_date": {
                     "description": "Date after which data_use_terms = embargo data becomes openly accessible. Only meaningful when data_use_terms = embargo.",
@@ -8525,6 +9155,9 @@
                     "description": "CDC MMWR epiweek year (computed at ingest)",
                     "type": "integer"
                 },
+                "multiplicity_of_infection": {
+                    "type": "integer"
+                },
                 "ncbi_submission_status": {
                     "$ref": "#/$defs/SubmissionStatusEnum",
                     "description": "NCBI SRA/BioSample/GenBank submission status via TOSTADAS"
@@ -8587,6 +9220,12 @@
                     "$ref": "#/$defs/PangoQCStatusEnum",
                     "description": "Pangolin QC status for the lineage call. A 'fail' or 'ambiguous' status means the lineage designation is uncertain and should not drive surveillance decisions without manual review. WHO and CDC both require confidence indicators in genomic surveillance reporting. Populated automatically from Pangolin output at pipeline completion."
                 },
+                "parasite_developmental_stage": {
+                    "$ref": "#/$defs/ParasiteDevelopmentalStageEnum"
+                },
+                "parasitemia_percent": {
+                    "type": "number"
+                },
                 "pi_name": {
                     "description": "Validation: must match existing user in the platform.\n",
                     "type": "string"
@@ -8619,6 +9258,9 @@
                 "sample_id": {
                     "description": "Unique alphanumeric identifier for this sample. Must not already be in use in the system. Portal mints persistent URI at ingest: https://data.jackpot.health/samples/{sample_id}\n",
                     "type": "string"
+                },
+                "sample_preservation_method": {
+                    "$ref": "#/$defs/SamplePreservationMethodEnum"
                 },
                 "scrub_status": {
                     "$ref": "#/$defs/ScrubStatusEnum"
@@ -8706,6 +9348,9 @@
                     },
                     "type": "array"
                 },
+                "tombstoned_at": {
+                    "type": "string"
+                },
                 "travel_origin_region": {
                     "description": "For migratory or translocated wildlife \u2014 the geographic region of origin or most recent stopover before the animal was sampled. Equivalent to travel_history for humans. Particularly relevant for migratory bird HPAI (H5N1) surveillance where flyway routes determine exposure risk. Free text. Examples: 'Atlantic Flyway', 'East Asia Pacific Flyway', 'Mongolia', 'Central Valley CA'.",
                     "type": "string"
@@ -8713,6 +9358,9 @@
                 "type_of_experiment": {
                     "$ref": "#/$defs/ExperimentTypeEnum",
                     "description": "Validation: match defined allowable entries (one only).\n"
+                },
+                "vacuumed_at": {
+                    "type": "string"
                 },
                 "vadr_alerts": {
                     "description": "VADR alert codes, e.g. CDS_HAS_STOP_CODON",
