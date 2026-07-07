@@ -1996,7 +1996,7 @@ The federation as currently designed (vision doc §6) has every member running t
 
 ### 22.2 What we ship
 
-#### 3.2.1 `backend/immune/algorithms/featurizers/__init__.py` — featurizer registry
+#### 22.2.1 `backend/immune/algorithms/featurizers/__init__.py` — featurizer registry
 
 Generalizes the single-featurizer assumption in vision doc §10.1. At `jackpot init` time, each member picks (or is randomly assigned) a featurizer from a registry. Multiple featurizer choices per detector class.
 
@@ -4049,7 +4049,7 @@ Core architectural primitives (Phase IM-1.A, all Tracked Not Scheduled):
 
 - **`B-IMMUNE-SCHEMA-1`** Schema v6.0 stub. Alembic migration adding `detectors`, `detector_activations`, `dca_priority_scores`, `memory_cells` tables. Lands behind `IMMUNE_PILLAR_I_ENABLED=false` feature flag. Forces schema design conversation early. 1-2 sessions. **Quick-win flagged for landing alongside current sprint.**
 - **`B-IMMUNE-NSA-1`** Cyber-only `NegativeSelectionDetector` at `backend/immune/sec/nsa_cyber.py`, implementing the `AnomalyDetector` Protocol, gated on a one-class-SVM bake-off (keep literal NSA only if it matches or beats one-class on held-out attack traces), plus the Module-9 teaching NSA. Not the bio path. Prereq: `B-IMMUNE-DETECT-1`. Per `immune_detection_core_redesign.md` §1.3-§1.4. 3-4 sessions.
-- **`B-IMMUNE-FEAT-1`** Featurizer registry pattern at `backend/immune/algorithms/features.py` and `backend/immune/algorithms/featurizers/__init__.py`. k-mer featurizer for Pillar I, API-call featurizer stub for Pillar V. Registry pattern lets external collaborators (e.g. AIS-theory researchers) plug in alternative featurizers — k-mer, ESM-small, ESM-large, DNABERT-v2 — without touching core code. 2-3 sessions. **This is what makes the work collaboration-friendly per `jackpot_immune_collaboration_scaffolding.md` §3.2.1.**
+- **`B-IMMUNE-FEAT-1`** Featurizer registry pattern at `backend/immune/algorithms/features.py` and `backend/immune/algorithms/featurizers/__init__.py`. k-mer featurizer for Pillar I, API-call featurizer stub for Pillar V. Registry pattern lets external collaborators (e.g. AIS-theory researchers) plug in alternative featurizers (k-mer, ESM-small, ESM-large, DNABERT-v2) without touching core code. 2-3 sessions. **This is what makes the work collaboration-friendly per `docs/immune_platform.md` §22.2.1 (originally `docs/archived/jackpot_immune_collaboration_scaffolding.md` §3.2.1).**
 - **`B-AMAND-1`** Adopt AMAnD (Price & Russell, *Frontiers in Public Health* 2023) as one citable baseline ensemble member, not the spine. `backend/immune/bio/amand.py` implements `DeepSVDDDetector(AnomalyDetector)` directly (one detector per feature space: PanGIA taxonomic + k-mer), plus `pipelines/immune/amand.nf` (the Nextflow process for reproducible scans). The bio detection core is the `AnomalyDetector` Protocol with DeepSVDD over genomic-FM embeddings; AMAnD is one baseline behind that contract. Document the baseline-curation workflow ("what is normal for this operator's deployment context") in the Pillar IV training materials. Prereq: `B-IMMUNE-DETECT-1`. Per `immune_detection_core_redesign.md` §1. 3 sessions for the pipeline + 2 weeks for the baseline-curation tooling.
 
 API and UI surfaces:
