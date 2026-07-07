@@ -2703,7 +2703,7 @@ Two JACKPOT instances on one network can: (1) share a confirmed memory cell afte
 
 ### A. Cyber-AIS implementation (~3 weeks)
 
-- [ ] **B-IMMUNE-CYBER-1** Implement `backend/immune/sec/nsa_cyber.py` — CyberNSA. Uses the same `B-IMMUNE-NSA-1` substrate, but trained on API-call featurizers from `B-IMMUNE-FEAT-1`. Reference: `docs/immune_platform.md` §10.4. (4-5 sessions)
+- [ ] **B-IMMUNE-CYBER-1** Wire the Pillar V cyber path end to end: feed the `B-IMMUNE-NSA-1` `NegativeSelectionDetector` (in `backend/immune/sec/nsa_cyber.py`) with API-call featurizers from `B-IMMUNE-FEAT-1` and telemetry from `B-IMMUNE-TELEM-1`, and expose cyber assessments. This item is assembly/wiring only; the detector and its file are implemented by `B-IMMUNE-NSA-1`, not here. Depends on `B-IMMUNE-NSA-1`, `B-IMMUNE-FEAT-1`, `B-IMMUNE-TELEM-1`. Reference: `docs/immune_platform.md` §10.4. (4-5 sessions)
 
 - [ ] **B-IMMUNE-TELEM-1** Implement `backend/middleware/api_telemetry.py` — captures `ApiCallEvent` rows. Every API call produces a telemetry event with featurizable attributes (endpoint, user, time-of-day, request size, response code, latency). Feeds the cyber-NSA. (2-3 sessions)
 
