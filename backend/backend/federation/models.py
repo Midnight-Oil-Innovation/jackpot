@@ -13,7 +13,7 @@ from __future__ import annotations
 
 from datetime import date, datetime
 from enum import Enum
-from typing import Any
+from typing import Any, Literal
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, HttpUrl
@@ -70,6 +70,20 @@ class FederatedInstance(BaseModel):
         "API key. Never the key itself — keys never live in DB rows.",
     )
     last_seen_at: datetime | None = None
+    transport_type: Literal["HTTPS", "DTN", "SNEAKERNET", "LORA"] = Field(
+        default="HTTPS",
+        description="Transport used to reach this peer. HTTPS is the only "
+        "value supporting L1 live search; DTN/SNEAKERNET/LORA are store-and-"
+        "forward. Enforced DB-side by a TEXT + CHECK constraint (not a "
+        "Postgres ENUM). Keep this Literal in sync with the CHECK in "
+        "migration 2daeecbe082d when adding transports.",
+    )
+    transport_config: dict | None = Field(
+        default=None,
+        description="Transport-specific settings. DTN: endpoint EID, lifetime. "
+        "LORA: channel, MQTT host. SNEAKERNET: bundle-store path, courier note. "
+        "Null/empty for HTTPS.",
+    )
     created_at: datetime
     updated_at: datetime
 
