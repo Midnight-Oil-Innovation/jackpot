@@ -2809,6 +2809,75 @@ A new contributor: (1) clones repo, (2) runs `jackpot init --profile academy`, (
 
 - [ ] **B-ARTIC-1** Re-evaluate ARTIC fieldbioinformatics (artic-network/fieldbioinformatics, MIT) as a dedicated ONT tiled-amplicon consensus pipeline-zoo entry for non-SARS-CoV-2 protocols (mpox / artic-inrb-mpox, EBOV, primalscheme3, Clair3 calling). NOT a deployment-footprint play — Scenario R runs Nextflow + pre-cached containers, so viralrecon's bundled ARTIC already covers the standard path. Open question: does direct fieldbioinformatics give more current primer-scheme + variant-calling coverage than the ARTIC version viralrecon bundles, enough to justify a separate entry? Compare bundled-vs-direct ARTIC versions/schemes first; wrap the `artic` CLI in a Nextflow process if adopted. Desk-eval 2026-06-19; re-eval at Phase 29. (1 session eval)
 
+## Phase 30 — Rural / Network-Denied Transport (Foundation Shipped, Rest Tracked)
+
+Network-denied and store-and-forward operation as a per-peer runtime policy on
+`federated_instances`, not a separate deployment scenario. Same architectural
+pattern as sovereignty (architecture §22.1 / §22.7). Transport is a fourth axis
+(scope / substrate / governance / transport) that composes with the L1/L2/L3
+federation levels rather than replacing them. Numbered 30 because Phase 29 is
+IM-4 (immune-platform TrustEngine). Source docs:
+`jackpot_rural_network_denied_synthesis.md`,
+`jackpot_r_field_box_system_designs.md`, architecture §22.7.
+
+### B-RURAL-SCHEMA-1: transport columns on federated_instances ✅ CLOSED
+
+Migration **`2daeecbe082d`** on head (parent `c871b28bbdab`, applied P0b v5.0).
+Additive columns; existing peers default to HTTPS, no behavior change.
+
+- [x] `transport_type` TEXT + CHECK (`HTTPS`/`DTN`/`SNEAKERNET`/`LORA`),
+      `server_default 'HTTPS'`, NOT NULL. TEXT+CHECK not Postgres ENUM —
+      transport value set is open/growing (matches the `deletion_status`
+      decision, diverges deliberately from the closed-set `role` ENUM in
+      migration `85d92864ed38`).
+- [x] `transport_config` JSONB, nullable. Empty for HTTPS; carries DTN EID /
+      lifetime, LoRa channel / broker, sneakernet bundle-store path.
+- [x] Mirrored on the `FederatedInstance` Pydantic model
+      (`backend/backend/federation/models.py`) as
+      `Literal["HTTPS","DTN","SNEAKERNET","LORA"]` defaulting to HTTPS, plus
+      `transport_config: dict | None`. Source-of-truth (models.py) kept in
+      sync in the same commit `3134bda`.
+- [x] Migration round-trips (up / down / up clean); `\d federated_instances`
+      confirms text+CHECK, jsonb, constraint.
+- [x] `spec.md` §1 updated: transport is a runtime config on A/B/C, not a
+      scenario letter. `docs/architecture.md` §22.7 written (transport-as-
+      runtime-policy); spec §1 cross-reference points at it.
+
+### Deferred — built when L2/L3 federation IO is wired (both currently stubs)
+
+The transport axis is founded but the store-and-forward transports themselves,
+the operator CLI, and the payload fork wait on the L2 (`push.py`, Year-2 early)
+and L3 (`access.py`, Year-2 late) IO layers, which are `NotImplementedError`
+stubs today. Building those transport-aware from the start is the constraint,
+not a retrofit — R transport and L2/L3 IO are one work item, not two.
+
+- [ ] **B-RURAL-SNEAKERNET-1** — signed bundle export/import (`jackpot bundle
+      export/import`). Track 1 entry point: no radios, validates the
+      reference-vs-bundle payload fork against a real bundle without a live
+      peer. Do this first.
+- [ ] **B-RURAL-PAYLOAD-1** — `FederationPushPayload` reference-vs-bundle fork:
+      `fasta_url` (`HttpUrl`, reachable-source) becomes optional alongside a
+      `fasta_bundle_ref` (inline CRAM in the signed bundle) + `payload_transport`
+      discriminator. Model-only edit (payload is API `BaseModel`, no table),
+      lands with L2 IO wire-up.
+- [ ] **B-RURAL-CLI-1** — operator CLI for setting non-HTTPS transports
+      (`jackpot peers add --transport ...`, `jackpot peers set-transport`).
+      Documented as planned in architecture §22.7; the raw INSERT at
+      `routers/federation.py:198` defaults the columns and cannot yet set them.
+- [ ] **B-RURAL-DISPATCH-1** — per-flow transport dispatch: L1 `query()`
+      (HTTPS-only, snapshot-degrade on store-and-forward), L2 `push_to_hub()`,
+      L3 copy job. Seam locations known; dispatch shape decided when IO exists.
+- [ ] **B-RURAL-DTN-1 / B-RURAL-LORA-1** — Track 2 experimental transports
+      (IBR-DTN Bundle Protocol; Meshtastic alert-class). Gated behind env flags.
+- [ ] **B-RURAL-AIRGAP-1** — air-gap mode (all peers SNEAKERNET, no outbound
+      calls, bundle-signature-gated import). Architecture §22.7 describes it.
+
+R-Field-Box hardware reference builds (Lite / Standard / Rugged / ARM-SBC) live
+in `jackpot_r_field_box_system_designs.md`; they are Scenario A commodity
+hardware with network-denied transport config, not a new scenario. Note: the
+`B-ARTIC-1` "re-eval at Phase 29" line above predates this section and refers to
+the rural work generically — that re-eval belongs with this Phase 30 cluster.
+
 ---
 
 
