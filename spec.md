@@ -15,7 +15,7 @@
 > - **C** Single-org cloud (GKE/EKS/AKS, cloud-native)
 > - **D** CI / e2e test harness
 >
-> Federation membership, hosted-SaaS multi-org tenancy, and Indigenous data sovereignty (CARE-aligned governance) are runtime configurations applied to scenarios A/B/C — not separate install scenarios. See `docs/architecture.md` §3 for scenario detail and `docs/architecture.md` §22 for sovereignty-as-runtime-policy.
+> Federation membership, hosted-SaaS multi-org tenancy, Indigenous data sovereignty (CARE-aligned governance), and network-denied / store-and-forward transport are runtime configurations applied to scenarios A/B/C — not separate install scenarios. See `docs/architecture.md` §3 for scenario detail, §22 for sovereignty-as-runtime-policy, and §23 for transport-as-runtime-policy.
 >
 >
 > **Phase chain:** Phase 21 (UI close-out) → P0d (monorepo migration, in progress) → P0e (jackpot init CLI) → Phase 24.5 (architectural design lockdown — sovereignty deletion + BYOP/eukaryotic schema decisions before P0b) → P0f (BYOP infrastructure — Phase 24.7 in todo.md) → P0b (Schema v5.0 with all 24.5 lockdowns + instances/tenants/federated_peers) → P0c (multi-tenancy middleware + sovereignty deletion implementation) → P1–P5 (operator-type configurability, federation, governance, reference deployments, new-needs integration). Tracked-but-not-scheduled: Phase 25 (Month 3 stretch — admin UI, JupyterHub, GCP prod), Phase 26 (Pathoplexus/Loculus 34-item adoption backlog), Phase 27 (CDC DMI / STLT / CARE 14-item alignment backlog), Phase 28 (10 default eukaryotic pipelines + parsers + dashboards, internally tier-prioritized).
