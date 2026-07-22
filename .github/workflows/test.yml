@@ -56,8 +56,11 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Install uv
-        uses: astral-sh/setup-uv@v3
+        uses: astral-sh/setup-uv@v7
         with:
+          # python-version was added in setup-uv v4. On v3 this input was
+          # silently ignored and CI resolved to the runner's system Python
+          # (3.12.3) instead of the declared 3.11 target.
           python-version: "3.11"
 
       - name: Install workspace dependencies
@@ -93,8 +96,11 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Install uv
-        uses: astral-sh/setup-uv@v3
+        uses: astral-sh/setup-uv@v7
         with:
+          # python-version was added in setup-uv v4. On v3 this input was
+          # silently ignored and CI resolved to the runner's system Python
+          # (3.12.3) instead of the declared 3.11 target.
           python-version: "3.11"
 
       - name: Install workspace dependencies
@@ -114,8 +120,11 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Install uv
-        uses: astral-sh/setup-uv@v3
+        uses: astral-sh/setup-uv@v7
         with:
+          # python-version was added in setup-uv v4. On v3 this input was
+          # silently ignored and CI resolved to the runner's system Python
+          # (3.12.3) instead of the declared 3.11 target.
           python-version: "3.11"
 
       - name: Install pipelines dependencies (member-local lock + dev extras)
