@@ -85,3 +85,7 @@ audit_report*.json
 cleanup_plan*.txt
 cleanup_report*.txt
 cleanup_plan*.json
+
+# Local doc bundle — a concatenation of docs/*.md produced locally.
+# Not a source document; the individual files under docs/ are canonical.
+docs/docs.md
