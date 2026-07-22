@@ -2808,3 +2808,31 @@ The PRIDE database at EBI built a directly comparable chatbot for their
 proteomics data repository — same use case (documentation Q&A + dataset
 search), same RAG architecture, published in Proteomics (2024).
 Reference: https://www.ebi.ac.uk/pride/chatbot/
+
+---
+
+## Agent skills
+
+Per-repo configuration consumed by the `mattpocock-skills` engineering
+skills. Edit these files directly to change the conventions; re-run
+`/mattpocock-skills:setup-matt-pocock-skills` only to switch issue
+trackers or start over.
+
+### Issue tracker
+
+Issues live in GitHub Issues on `Midnight-Oil-Innovation/jackpot`, via
+the `gh` CLI. PRs are not treated as a request surface. See
+`docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+The five canonical triage roles, using the default label strings
+(`needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`,
+`wontfix`). See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Single-context: `CONTEXT.md` + `docs/adr/` at the repo root, neither of
+which exists yet — `docs/domain_reference.md` and `docs/architecture.md`
+serve as the working glossary and decision record in the meantime. See
+`docs/agents/domain.md`.
