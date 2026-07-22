@@ -51,7 +51,7 @@ jobs:
       # pipelines, and cli together. The pre-P0d cross-repo checkout +
       # PAT-injected submodule init is no longer needed (P0d retired
       # the submodule layout in favour of subtree merges).
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Authenticate to GCP (Workload Identity Federation)
         id: auth
