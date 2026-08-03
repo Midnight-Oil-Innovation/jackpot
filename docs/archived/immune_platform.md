@@ -1,3 +1,5 @@
+> **Status:** Superseded by `immune_detection_core_redesign.md` (detection engine). Retained for historical context on Track 1/Track 2 seam pattern and Pillar structure. Do not cite for the detection engine.
+
 # JACKPOT Immune Platform — Strategic Vision, Implementation Plan, and Collaboration Scaffolding
 
 **Document type:** Strategic vision + comprehensive implementation plan + engineering collaboration scaffolding

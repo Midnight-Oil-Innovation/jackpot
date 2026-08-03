@@ -1,3 +1,5 @@
+> **Status:** Canonical - anchor doc defining the canonical corpus.
+
 # Domain reference notes
 
 Standalone facts and citations synthesized across the chat. Not decision documents — these are reference notes to keep handy for future grant writing, conversations, and platform documentation. Cross-referenced with the actual JACKPOT source-of-truth design documents where applicable.
@@ -12,8 +14,9 @@ The actual anchor documents in the repo (referenced throughout the other 8 docs 
 | `docs/todo.md` | Backlog (active sprint + tracked-not-scheduled phases) |
 | `docs/jackpot_session_summary_and_backlog.md` | Session history + retrospective |
 | `docs/architecture.md` v6.0 | System architecture (post-Cluster-A merge; absorbed `jackpot_architecture.md`, `JACKPOT_Architecture_Synthesis_May_2026.md`, `Core_Technical_Pillars.md`); §20 covers the federation 3-gate qualification logic (was §22 pre-merge) |
-| `docs/immune_platform.md` | Combined Immune Platform reference (post-Cluster-B merge; absorbed `Jackpot_AIS.md`, `jackpot_immune_platform_plan.md`, `jackpot_immune_collaboration_scaffolding.md`). Part 1 (§§1-15) covers AIS theory + five-pillar plan; Part 2 (§§16-29) covers Track 1 / Track 2 seam pattern and external-collaborator scaffolding |
-| `docs/detection_landscape.md` | ~85 component-tier adoption items across AMAnD/TaxTriage/MARTi/cgMSI/INSaFLU and other ecosystems |
+| `docs/immune_detection_core_redesign.md` | Frozen detection-core redesign spec. Supersedes `immune_platform.md` §§9.4/10.1/10.2 and `detection_landscape.md` on the detection engine. Establishes the `AnomalyDetector` Protocol, DeepSVDD-over-FM-embeddings engine, and danger-signal fusion architecture |
+| `docs/archived/immune_platform.md` | *Archived* (pre-redesign). Retained for historical context on Track 1/Track 2 seam pattern and Pillar structure. Do not cite for the detection engine |
+| `docs/archived/detection_landscape.md` | *Archived* (pre-redesign). Component-tier adoption catalog written before the FM-embedding engine was frozen. Adoption items still valid; framing is stale |
 | `docs/platform_landscape.md` | Comparative analysis with open-source pathogen-genomics ecosystem (post-Cluster-E consistency pass; was `jackpot_pathoplexus_loculus_overview.md` superseded by `jackpot_platform_landscape.md`) |
 | `docs/strategic_vision.md` | Strategic synthesis covering CDC DMI / North Star / STLT alignment (post-Cluster-F merge; absorbed the `jackpot_cdc_dmi_stlt_overview.md` content) |
 | `docs/governance_alignment.md` | WHO / GA4GH / North Star / FAIR+CARE alignment matrices |
@@ -70,11 +73,11 @@ Spatial Rt with state flux (Zhou 2021):
 
 Both methods MIT-licensed via WhiteLabRt R package on CRAN. Chad Milando at Boston University Laura White lab maintains. `summRt` is a companion package for summary outputs. `linelistBayes` (Milando) is a line-list-flavored alternative.
 
-## AMAnD (the canonical anomaly detector)
+## AMAnD (baseline ensemble member)
 
-Price & Russell 2023 *Frontiers in Public Health*. DeepSVDD model for metagenome anomaly detection. The canonical reference for `B-AMAND-1` in Phase IM-1.A. Wrapped by JACKPOT as both `backend/immune/bio/amand.py` (bio-NSA module) and `pipelines/immune/amand.nf` (Nextflow process for reproducible scans).
+Price & Russell 2023 *Frontiers in Public Health*. DeepSVDD model for metagenome anomaly detection over k=3-5 k-mer features. Cited as one baseline in the `B-AMAND-1` ensemble, not as the detection engine. Wrapped by JACKPOT as `backend/immune/bio/amand.py` (a `DeepSVDDDetector` binding of the `AnomalyDetector` Protocol) and `pipelines/immune/amand.nf` (Nextflow process for reproducible scans).
 
-This is what the immune platform actually uses for anomaly detection — not the Nucleotide Transformer / Evo / HyenaDNA / DNABERT-2 / ESM-2 foundation models the chat discussed. The featurizer registry pattern (`B-IMMUNE-FEAT-1`) leaves room for foundation models as plug-in alternatives without core code changes.
+The detection engine per `immune_detection_core_redesign.md` is anomaly detection over genomic foundation-model embeddings (METAGENE-1 as the license-cleared first-slice choice; DNABERT-S edge tier; NT v2, DNABERT-2, Evo 2 as tier-appropriate alternatives). AMAnD's k=3-5 composition space is dated relative to FM embeddings and is retained as a baseline for laptop and rural tiers where FM inference is impractical. The `AnomalyDetector` Protocol (`B-IMMUNE-DETECT-1`) is the shared substrate; featurizers (`B-IMMUNE-FEAT-1`) are swappable without touching detectors.
 
 ## epydemix-data citation requirements
 
@@ -175,9 +178,9 @@ The chat's Sol cluster federation simulation isn't relevant for Glen's laptop-Sc
 | If you want | Look at |
 |---|---|
 | What's actually committed and tracked | `todo.md` + `jackpot_session_summary_and_backlog.md` |
-| Why the immune platform is designed the way it is | `docs/immune_platform.md` Parts 1-2 (post-Cluster-B merge; absorbed `Jackpot_AIS.md` and `jackpot_immune_platform_plan.md`) |
-| How external collaborators plug in | `docs/immune_platform.md` Part 2 §§22-29 (post-Cluster-B merge; was `jackpot_immune_collaboration_scaffolding.md`) |
-| Pipeline-zoo adoption rationale | `docs/detection_landscape.md` |
+| Why the detection engine is designed the way it is | `docs/immune_detection_core_redesign.md` §§1-3 (`AnomalyDetector` Protocol, FM-embedding engine, danger-signal fusion) |
+| How external collaborators plug in | `docs/architecture.md` v6.0 (Track 1/Track 2 seam pattern; historical context in `docs/archived/immune_platform.md` Part 2) |
+| Pipeline-zoo adoption rationale | `docs/archived/detection_landscape.md` (adoption items still valid, framing pre-redesign) |
 | Sovereignty / CARE / STLT context | `docs/strategic_vision.md` §§3-4 + `docs/architecture.md` v6.0 §22 (sovereignty-as-runtime-policy) + `docs/architecture/sovereignty-compliant-deletion.md` |
 | Federation architecture (Track 1 + Track 2 seam) | `backend/backend/federation/README.md` + `docs/immune_platform.md` Part 1 (post-Cluster-B merge; was `Jackpot_AIS.md`) |
 | Open-source pathogen-genomics ecosystem | `docs/platform_landscape.md` (post-Cluster-E consistency pass; was `jackpot_pathoplexus_loculus_overview.md`) |

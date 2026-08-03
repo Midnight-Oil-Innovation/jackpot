@@ -1,3 +1,5 @@
+> **Status:** Superseded by `immune_detection_core_redesign.md` (detection engine). Component-tier adoption items still valid; the detection-engine framing is pre-redesign. Do not cite as current on engine architecture.
+
 # JACKPOT Detection Landscape
 
 ## Bioinformatics Tools, ML/AI Components, and Detection Frameworks for Pathogen Surveillance
