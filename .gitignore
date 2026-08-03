@@ -98,3 +98,6 @@ repomix-output.xml
 **/.DS_Store
 __pycache__/
 *.py[cod]
+
+# Skills lockfile - generated cache, not tracked
+skills-lock.json

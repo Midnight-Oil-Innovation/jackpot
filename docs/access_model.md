@@ -1,3 +1,5 @@
+> **Status:** Reference - access control model.
+
 # JACKPOT — Access Model
 
 **Document type:** Canonical authorization design.

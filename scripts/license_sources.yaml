@@ -1,0 +1,68 @@
+# scripts/license_sources.yaml — upstream LICENSE URLs for verify_licenses_assistant.py
+#
+# Rules:
+# 1. url MUST point at the raw LICENSE file (or COPYING), not the landing page.
+#    For github: https://raw.githubusercontent.com/OWNER/REPO/BRANCH/LICENSE
+#    For huggingface: model card LICENSE field, or the raw file if hosted.
+# 2. Pin the branch/tag if you care about the version you verified against.
+#    Using main/master means "whatever is HEAD today"; a tag means "this release".
+# 3. Never trust a README claim. Only trust the LICENSE file's own text.
+# 4. Some tools have their real license in COPYING, not LICENSE. Try both.
+#
+# Curated URLs are best-effort seeds; if a fetch 404s or returns a landing page,
+# open the repo in a browser and update the url here.
+
+# --- Group 1: verify now (feeds actively-scoped work) ---
+
+- name: METAGENE-1
+  url: https://huggingface.co/metagene-ai/METAGENE-1/raw/main/LICENSE
+  notes: Apache-2.0 per your notes; confirm and add release tag.
+
+- name: SeqScreen
+  url: https://gitlab.com/treangenlab/seqscreen/-/raw/master/LICENSE
+  notes: GPL-3.0 per your notes; confirm against current release.
+
+- name: DeePaC
+  url: https://gitlab.com/rki_bioinformatics/DeePaC/-/raw/master/LICENSE
+  notes: Verify — feeds functional_concern danger leg.
+
+# --- Group 2: verify when embedding-tier work starts ---
+
+- name: DNABERT-S
+  url: https://huggingface.co/zhihan1996/DNABERT-S/raw/main/LICENSE
+  notes: Edge tier for the AnomalyDetector Protocol.
+
+- name: DNABERT-2
+  url: https://raw.githubusercontent.com/MAGICS-LAB/DNABERT_2/main/LICENSE
+  notes: ICLR 2024. Repo LICENSE (not the paper).
+
+- name: Nucleotide Transformer v2
+  url: https://raw.githubusercontent.com/instadeepai/nucleotide-transformer/main/LICENSE
+  notes: InstaDeep. Verify against the model weights license separately.
+
+- name: Evo 2
+  url: https://raw.githubusercontent.com/ArcInstitute/evo2/main/LICENSE
+  notes: Cloud tier. Model weights may have a separate license — check both.
+
+# --- Group 3: verify when host-depletion / pipeline work lands ---
+
+- name: Cleanifier
+  url: https://raw.githubusercontent.com/dnanexus-rnd/cleanifier/main/LICENSE
+  notes: Verify upstream URL — placeholder from search.
+
+- name: hostile
+  url: https://raw.githubusercontent.com/bede/hostile/main/LICENSE
+  notes: Host depletion tool.
+
+- name: HRRT (sra-human-scrubber)
+  url: https://raw.githubusercontent.com/ncbi/sra-human-scrubber/master/LICENSE
+  notes: NIH work product. Expect public-domain / CC0.
+
+- name: MetagenBERT / DNABERT-MS
+  url: https://raw.githubusercontent.com/MAGICS-LAB/DNABERT_S/main/LICENSE
+  notes: Confirm the correct upstream — MetagenBERT and DNABERT-MS may differ.
+
+# --- Group 4: sentinels (already correctly rejected or normalized) ---
+# alibi-detect and PanGIA are intentionally left as failing rejections in
+# THIRD_PARTY_LICENSES.md. Do not add them here; the failing gate is the guardrail.
+# SRA is a data source, not code; normalize it in the doc directly.

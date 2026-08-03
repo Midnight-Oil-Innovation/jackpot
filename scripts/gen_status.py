@@ -18,13 +18,16 @@ def sh(cmd: str, default: str = "unknown") -> str:
 
 
 def test_count() -> str:
-    out = sh("uv run pytest --collect-only -q 2>/dev/null | tail -3", "")
-    m = re.search(r"(\d+)\s+tests?\s+collected", out) or re.search(r"^(\d+)$", out, re.M)
-    return m.group(1) if m else "unknown"
+    out = sh('uv run pytest --collect-only -q -o addopts="" 2>/dev/null', "")
+    m = re.search(r"(\d+)\s+tests?\s+collected", out)
+    if not m:
+        print("warning: could not parse test count from pytest output", file=sys.stderr)
+        return "unknown"
+    return m.group(1)
 
 
 def alembic_head() -> str:
-    versions = Path("backend/alembic/versions")
+    versions = Path("backend/db/migrations/versions")
     if not versions.is_dir():
         return "unknown"
     revs, downs = {}, set()

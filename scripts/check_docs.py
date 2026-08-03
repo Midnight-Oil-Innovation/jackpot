@@ -184,14 +184,21 @@ def check_drift(path: Path, status: dict[str, str] | None) -> list[Violation]:
 # ----------------------------------------------------------------------------- main
 
 
-def run(docs_dir: Path, status_file: Path) -> list[Violation]:
+def run(docs_dir: Path, status_file: Path, paths: list[Path] | None = None) -> list[Violation]:
     status = load_status(status_file)
     violations: list[Violation] = []
 
     if status is None:
         print(f"note: {status_file} not found; pin-mode checks (python/schema version) skipped.\n")
 
-    for md in sorted(docs_dir.rglob("*.md")):
+    # No paths => full scan (CI, Makefile). Paths given => pre-commit handed us the
+    # staged files; check only those, so a pre-existing backlog can't block every commit.
+    if paths is None:
+        targets = sorted(docs_dir.rglob("*.md"))
+    else:
+        targets = sorted(p for p in paths if p.suffix == ".md" and p.is_file())
+
+    for md in targets:
         rel = md.relative_to(docs_dir)
         in_archived = rel.parts and rel.parts[0] == EXEMPT_SUBDIR
 
@@ -224,13 +231,20 @@ def main() -> int:
     ap = argparse.ArgumentParser(description="JACKPOT documentation drift guard")
     ap.add_argument("--docs-dir", default="docs", type=Path)
     ap.add_argument("--status-file", default=Path("docs/STATUS.md"), type=Path)
+    ap.add_argument(
+        "paths",
+        nargs="*",
+        type=Path,
+        help="specific .md files to check (pre-commit passes staged files); "
+        "omit to scan the whole docs dir",
+    )
     args = ap.parse_args()
 
     if not args.docs_dir.is_dir():
         print(f"error: docs dir not found: {args.docs_dir}", file=sys.stderr)
         return 2
 
-    violations = run(args.docs_dir, args.status_file)
+    violations = run(args.docs_dir, args.status_file, args.paths or None)
 
     if violations:
         print(f"Documentation guard: {len(violations)} violation(s)\n")

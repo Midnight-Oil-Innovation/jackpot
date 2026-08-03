@@ -1,9 +1,11 @@
+> **Status:** Canonical - single source of truth for the backlog.
+
 # JACKPOT — To-Do List
 
 > **Cluster G consistency pass applied 2026-05-16.** Source-doc references throughout this file have been updated to the new canonical doc names that emerged from the May 2026 cluster-merge work (e.g. `jackpot_immune_platform_plan.md` → `docs/immune_platform.md`, `jackpot_architecture.md` → `docs/architecture.md` v6.0). Open items that referenced "Scenario T" as a separate deployment scenario have been reframed per the sovereignty-as-runtime-policy decision (per `docs/architecture.md` §22). Checked-off `[x]` items preserve their original historical text — they document completed work as of when they were checked off — but include inline parenthetical notes where the current framing has evolved (e.g. "(reframed in May 2026 Cluster A merge as sovereignty-as-runtime-policy on Scenario A — see `docs/architecture.md` §22)"). The two reconciliation docs that drove the Phase IM-1..IM-6 consolidation are now at `docs/archived/backlog_consolidation_report.md` and `docs/archived/backlog_reconciliation.md`.
 
 **Last updated:** 2026-05-08 (federation Track 1 + Track 2-seam scaffold landed; regen_schema in-repo with whitespace normalization; gac pre-fix step)
-**Baseline:** **1591 tests passing, 2 skipped** (verified 2026-05-06 via `uv run pytest --no-cov -q` against `r3-doc-and-tracking-hygiene` based at `2609a1f`). Coverage 87.85% per PR #28 closeout (re-measure with `uv run pytest --cov` if needed; CI threshold 80%). PR #28 (P0g G-3+G-4) reported 1527 passing post-merge; subsequent R-1 security fixes (PR #31) brought the count to its current state.
+**Baseline:** **1591 tests passing, 2 skipped** (verified 2026-05-06 via `uv run pytest --no-cov -q` against `r3-doc-and-tracking-hygiene` based at `2609a1f`). Coverage 87.85% per PR #28 closeout (re-measure with `uv run pytest --cov` if needed; CI threshold 80%). PR #28 (P0g G-3+G-4) reported 1527 passing post-merge; subsequent R-1 security fixes (PR #31) brought the count to its current state. drift-ok
 **Sessions 21+ deliverables:** PR #21 (P0g G-1+G-2: `ExecutionProfile` + `PipelineDefaultProfile` schema + migration with `default-local` seed; merged 2026-05-04 at `a682788`). PR #22 (P1: `/api/v1/auth/refresh` endpoint with single-use rotation, `refresh_tokens` table, replay detection with bulk-revoke, rotation-aware login/logout, daily cleanup job, six error codes; merged 2026-05-05 at `ba03143` — closes the I-track entirely). PR #23 (docs: bundle refresh to v4.0 covering Session 20 I-track close). PR #25 (chore: pin ruff at 0.11.6 across pre-commit, backend, cli, uv.lock — permanent fix for the recurring CI ruff-version mismatch that bit PRs #21 and #22 on first runs). PR #26 (docs: governance README + coi-disclosures stub on top of the 8 substantive governance docs already on origin from `f46f7ee`; merged 2026-05-05 at `2dbb839` along with an accidentally-bundled Sessions 21+ doc refresh that came along from local development state). PR #27 (docs: post-Session-21 housekeeping — `uv run pre-commit` prefix, **Critical Rule 61** worktree+branch verification, spec.md §4.1 fix #5 resolution; merged at `c7df002`). PR #28 (P0g G-3+G-4: profile templates + `nextflow.config` renderer + `pipeline_config/` package refactor + 35 new tests; merged at `544c98c` — 1527 tests, 87.85% coverage). PR #29 (docs: defer Phase 24.5 external collaborator review per option β / scope c — NPAIHB/Northwest TEC/B-CARE-6 references stripped from `todo.md` + session summary + `cdc_dmi_stlt` overview). **This session (2026-05-08):** Federation Track 1 + Track 2-seam scaffold landed at `backend/backend/federation/` (FED-A — `models.py`, `client.py`, `push.py`, `access.py`, `_ais_hooks.py` Protocol seam, README; operator-agnostic). `scripts/regen_schema.py` moved into the repo with trailing-whitespace normalization for both Python and JSON outputs (T-1). `.pre-commit-config.yaml` `schema-regen-check` hook added, fires only on schema YAML changes (T-2). `gac()` zsh function pre-fix step added (T-3, personal config in `~/.zshrc`). Federation router + tests + migration (FED-B/C/D/E) plus privacy and crypto scaffold counterparts (PRV-A, CRY-A) tracked in the new "Federation / Privacy / Crypto Scaffolds" section below. See Sessions 21+ entries in `jackpot_session_summary_and_backlog.md` and the recovery saga learnings in `learnings.md` ("Worktree contamination — Sessions 20-21" entry).
 **Session 21 deliverables (2026-05-07 → 2026-05-12):** E-1 + full P0h Slurm campaign + FIX-1/FIX-2 closeout + Phase 24.5 sovereignty-deletion design lockdown shipped. Nine PRs merged: PR #34 (E-1 end-to-end laptop UAT artifacts: ~620-line `docs/e2e_uat_plan.md`, 8 helper scripts under `tests/e2e/scripts/`, synthetic fixtures, `POST /api/v1/auth/dev-login` endpoint with 8 tests); PR #35 H-1 (Slurm template extensions); PR #36 H-2 (apptainer image manifests + per-pipeline manifests + audit doc); PR #37 H-3 (`launch_account` override + `SLURM_LAUNCH_ACCOUNT_OVERRIDE` audit row + P0c stub); PR #38 H-4 (sidecar Nextflow log poller); PR #39 PRV-A (maintainer-authored privacy scaffold, mid-campaign); PR #40 H-5 (`work_dir` validation predicate + `jackpot doctor slurm` CLI); PR #41 H-6 (pre-launch `sinfo` reachability check with 60s TTL cache); PR #42 H-10 (`docs/slurm_executor.md` operator guide + Critical Rule 60 alignment); PR #43 (FIX-1/FIX-2 doc closeout + audit-rollback regression test); PR #20 (Phase 24.5 sovereignty-deletion design lockdown, rebased + reviewed + merged); PRs #44/#45/#46/#47 (session-summary v3.4 / v3.4.1 / v3.4.2 / v3.4.3 — version-bump cadence captures the worktree-pattern post-mortems and the empirically-verified canonical merge sequence). **P0h status:** six of ten H-blocks landed (H-1, H-2, H-3, H-4, H-5, H-6, H-10); H-7 (GCP Batch staging) and H-8 (real-cluster smoke test) deferred to Phase 25 with named dependencies (F-7 STAGED staging logic, G-8 cost hook, real cluster access); H-9 (tests) interleaved per-PR throughout — 84 net new tests across the campaign. **Phase 24.5 status:** sovereignty-deletion lockdown locked solo per option β; sister BYOP/eukaryotic lockdown (`docs/byop_and_eukaryotic_design.md`) already exists and is the remaining 24.5 artifact before P0b unblocks. **Operational pattern codified:** worktree-per-PR (Session 21 §6 in session summary) plus the empirically-verified canonical merge sequence (worktree-remove FIRST, then `gh pr merge --delete-branch` — see session summary v3.4.3). Full suite at session end: **1714 passed, 2 skipped.**
 
@@ -40,14 +42,14 @@ unblocked item.
   `database`, `middleware`, `logging`, `version`.
 - **jackpot-nf:** 11 pipeline parsers (viral, bacterial, metagenomic),
   nf-jackpot plugin, shared result schemas, hamronization normalizer.
-- **Test suite:** 477 tests passing, 86.99% coverage as of Session S
+- **Test suite:** 477 tests passing, 86.99% coverage as of Session S drift-ok
   complete. Session 5 added staging infra changes without net-new test
   coverage.
 - **Local Docker Compose stack:** running cleanly — `api`, `postgres`,
   `minio`, `minio_init`, `ui` all green. `/health` returns DB-connected.
 - **GCP staging:** deployed Session 5, API live, `/health` green
   in-cluster. 6 known quirks from Session 5 debugging documented in
-  `docs/staging_access.md`.
+  `deploy/docs/staging_access.md`.
 
 **Frontend — scaffold complete, renders, authenticates:**
 
@@ -379,7 +381,7 @@ These were the blocking bugs resolved before any router session began.
 
 - [x] J-1 through J-6 — Cecret (pangolin, nextclade, freyja, consensus),
   viralrecon (consensus, pangolin, nextclade, variants, wastewater),
-  walkercreek (irma, consensus). 79/79 tests passing.
+  walkercreek (irma, consensus). 79/79 tests passing. drift-ok
 
 ## Phase 13 — Session K: Bacterial isolate parsers (COMPLETE)
 
@@ -513,7 +515,7 @@ Baseline revision: **`5adf11b77c19`** (`baseline schema from init.sql`).
       environments deployed pre-Q-9.
 - [x] `tests/conftest.py` no longer loads init.sql — runs only
       `alembic upgrade head`, exercising the same path as production.
-- [x] 549 tests passing, 87.56% coverage (above ≥477 / ≥86.99% baseline).
+- [x] 549 tests passing, 87.56% coverage (above ≥477 / ≥86.99% baseline). drift-ok
 
 ### Q-10: cors_origins validator in `backend/config.py` ✅ CLOSED
 
@@ -531,7 +533,7 @@ bumped to `>=2.3.0,<3` (resolved 2.14.0) so `NoDecode` is importable.
 - [x] Added Critical Rule 53 to `docs/CLAUDE.md`. Amended Rule 45 to
       drop the cors-specific Q-10 backlog caveat (mirrors Q-9's
       Rule 44 ↔ Rule 52 split).
-- [x] 560 tests passing, 87.62% coverage (was 549/87.56% baseline —
+- [x] 560 tests passing, 87.62% coverage (was 549/87.56% baseline — drift-ok
       +11 new config tests, no regressions).
 - [x] Compose smoke: api boots cleanly with both CSV
       (`http://localhost:8501,http://localhost:4200`) and JSON-array
@@ -565,7 +567,7 @@ package, identical layout — preserves diff-ability with the nf side).
 - [x] `docker compose down && up -d --build` brings stack up clean;
       `/health` → `{"status":"ok","database":"connected"}`.
 - [x] `jackpot-nf` submodule unchanged (SHA `a45fb13`).
-- [x] 560 tests passing, 88.34% coverage (was 560/87.62% — coverage
+- [x] 560 tests passing, 88.34% coverage (was 560/87.62% — coverage drift-ok
       ticked up because the vendored schemas count toward the
       measured surface).
 
@@ -691,7 +693,7 @@ Upload page triage". Two real backend bugs found and fixed at root.
       dumps post-fix.
 - [x] **Seed rename**: "Example Lab" → "Example Lab" via Alembic
       migration `e5315db18d40`. `db/SCHEMA.sql` snapshot updated.
-- [x] **564 tests passing, 88.22% coverage** (was 560/87.62%; +4
+- [x] **564 tests passing, 88.22% coverage** (was 560/87.62%; +4 drift-ok
       regression tests, no skips).
 - [ ] **Browser walkthrough still owed** — needs a human at the
       keyboard to confirm rendering. Steps to click through (matches
@@ -1029,9 +1031,12 @@ Driven by integration-readiness analysis vs Driver et al. 2024 *Sci Total Enviro
 
 - [x] `docs/architecture/sovereignty-compliant-deletion.md` exists, is reviewable (PR #20)
 - [x] P0b schema design has accommodated the sovereignty columns + enum extensions (see §12 of the sovereignty design doc)
-- [ ] P0b schema design has accommodated `byop_pipelines` table, `pipeline_results` FK, eukaryotic OrganismNameEnum additions, eukaryotic samples columns, 8 eukaryotic pipeline-result tables, and supporting enums (BYOP/eukaryotic block above) — sister doc `docs/byop_and_eukaryotic_design.md` is the build spec; remaining 24.5 deliverable
-- [ ] P0b schema design has accommodated `B-CWB-SCHEMA-1` through `B-CWB-SCHEMA-5` (cryptWWDB-readiness block above)
+- [x] P0b schema design has accommodated `byop_pipelines` table, `pipeline_results` BYOP linkage columns, eukaryotic OrganismNameEnum additions (38 net-new), and eukaryotic samples columns — sister doc `docs/byop_and_eukaryotic_design.md` is the build spec. NOTE: the 8 eukaryotic pipeline-result tables (§12.3) are DEFERRED to their pipelines (Phase 28), not built in P0b (spec §4).
+- [x] P0b schema design has accommodated `B-CWB-SCHEMA-1` (`wastewater_target_concentration`) and `B-CWB-SCHEMA-2` (`wastewater_upstream_of`) — two items, not five; the earlier 1-through-5 range was a miscount corrected during spec work
+- [x] **P0b MIGRATION LANDED** (2026-07-06, `c871b28bbdab`, merged to `development`): sovereignty deletion columns + CHECK + index, `byop_pipelines` table with tenancy (`owner_lab_id`/`sharing_scope`/`origin_instance_id`, copy-on-import federation), `pipeline_results.tombstoned` + BYOP columns, eukaryotic enums + samples columns + 38 OrganismNameEnum values, `wastewater_target_concentration` table, `wastewater_upstream_of` association value. Spec: `docs/architecture/p0b_schema_v5_migration_spec.md`
 - [x] Implementation tasks queued: `B-CARE-3a..g` for P0c (sovereignty deletion implementation, per §13 of the sovereignty design doc), `B-CARE-4` for P0c federation phase (federation propagation, per §9), `B-BYOP-1` through `B-BYOP-10` for P0f (BYOP infrastructure), `B-EUK-PLAS-*` through `B-EUK-TOXO-*` for Phase 28 (default eukaryotic pipelines)
+- [ ] **B-P0C-DEPRECATE-PROJPIPE** Retire `project_pipelines` in favor of `byop_pipelines`. Backfill existing rows into `byop_pipelines` (`sharing_scope='lab'`, `owner_lab_id` from project's lab), repoint `lab_pipelines.source_project_pipeline_id` FK, drop `project_pipelines`. Blocked by P0b `byop_pipelines` (landed 2026-07-06). FK repoint is load-bearing; drop is trivial after. Spec §5. (1-2 sessions)
+- [ ] **B-P0C-DELETION-RECONCILE** Define `is_deleted`/`deleted_at`/`deleted_by_id` ↔ `deletion_status` mapping. Decide equivalence, backfill target state, whether legacy soft-delete retires. Enforce no code path writes both representations until mapping defined. Blocked by P0b deletion-lifecycle columns (landed 2026-07-06). Related `B-CARE-3*`. Spec §4 dual-deletion drift note. (1-2 sessions)
 
 **Effort:** 1 session for the sovereignty design doc + 1-2 sessions for the BYOP + eukaryotic schema migration work + 1-2 sessions for the cryptWWDB-readiness schema design + half a session of P0b integration discussion. Total: 4-6 sessions for Phase 24.5 design lockdown. P0b implementation effort grows correspondingly — ~4-5 additional sessions for the cryptWWDB-readiness migration work on top of the existing sovereignty + BYOP/EUK migration scope.
 
@@ -2296,7 +2301,7 @@ The highest-leverage items have *already moved* to Phase 21.5 (governance docs, 
 
 These two items came out of a 13-platform survey on 2026-05-09 (DataSHIELD/VANTAGE6/Armadillo/CDST/Cumulus/LIT-FED-SEARCH/Sample Locator/COMBAT-TB-NeoDB/Overture/FAIR Data Pipeline/Mpox DataHarmonizer/Federated GMQL/bio-Alembic). The other 11 candidates either duplicate existing strategy (FL coordinator under `B-PRV-1`, federation transport in FED-A scaffold, Crypt4GH as `B-CRY-1`, full GA4GH adoption schedule in `JACKPOT_Architecture_Synthesis___May_2026.md`) or don't fit JACKPOT's architecture. These two are genuinely additive.
 
-- [ ] **B-DH-1** Add CIDGOH/PHA4GE Mpox (MPXV) template to DataHarmonizer router. Source: PHA4GE Mpox contextual data specification, published January 2026 by the Centre for Infectious Disease Genomics and One Health (CIDGOH). Drop the spec YAML into `backend/dataharmonizer/templates/` and register it in the dataharmonizer router's template registry. Verify roundtrip: download blank Mpox template → fill via DataHarmonizer UI → upload via `POST /api/v1/ingest/csv` → `harmonizer.py` maps MPXV-specific fields to schema columns → tier-aware validator passes. Dependencies: existing dataharmonizer router (already shipped), `harmonizer.py` mapping-config additions for any MPXV-specific fields not already in schema. License of source spec: CC-BY-4.0. (1 session, post-P0d, can land any time DataHarmonizer template work is touched)
+- [ ] **B-DH-1** Add per-pathogen DataHarmonizer template *projections* over the existing monolithic schema. **This is a generated-view layer, NOT a schema refactor** — the monolith stays the single source of truth so that CARE/sovereignty slots, the tier×sharing axis, and federation disclosure annotations remain core slots enforced uniformly across all organisms. Per-pathogen templates are *views*: an organism-discriminator filter over the monolith that hides irrelevant slots at entry time without deleting them, so every projection inherits the governance slots structurally and cannot drop them. Mechanism: extend the existing T1/T2/T3 template generator with an organism filter that emits one DataHarmonizer JSON template per pathogen from the same LinkML schema. First template: Mpox (source: CIDGOH/PHA4GE MPox Contextual Data Specification, `cidgoh/MPox_Contextual_Data_Specification`, CC-BY-4.0) to validate the projection mechanism end to end. Verify roundtrip: generate Mpox view → fill via DataHarmonizer UI → upload via `POST /api/v1/ingest/csv` → `harmonizer.py` maps fields to schema columns → tier-aware validator passes. **Rejected alternative (do not re-litigate):** factoring the monolith into independently-versioned per-pathogen specs (CIDGOH `is_a` core+extension pattern). Cross-cutting governance concerns (sovereignty/CARE, tier×sharing, federation disclosure) are horizontal aspects that must hold uniformly over the entire field space; a vertical per-organism decomposition turns each structural guarantee into a per-template invariant to audit, and adopting upstream specs means new fields arrive on someone else's release schedule without JACKPOT governance annotations. Per-pathogen as a generated *view* delivers the entry-UX benefit (analyst sees only relevant fields) at zero governance cost — strictly better than either pure option. Dependencies: existing T1/T2/T3 template generator, existing dataharmonizer router, `harmonizer.py` mapping additions for any Mpox fields not already in schema. (1-2 sessions, post-P0d, can land any time DataHarmonizer template work is touched)
 
 - [ ] **B-CDST-1** Evaluation spike: Coding-Sequence-Decentralized-Strain-Typing (CDST) as bacterial typing alternative for *Salmonella enterica*, *Listeria monocytogenes*, *Escherichia coli*. Source: 2025 publication; MD5-hash-of-coding-sequences typing approach, complementary to but distinct from cgMLST/HierCC (already in EnteroBase federation roadmap via `B-EBASE-1`/`B-EB-2`/`B-EB-3`). License: GPL-3.0 (callable as Nextflow subprocess — no AGPL contamination). **Privacy framing: privacy-by-friction (RefSeq dictionary attack is feasible), NOT cryptographic privacy — must not be marketed as such.** Spike scope: (1) wrap CDST as a `jackpot-nf` subworkflow or pipeline-zoo entry; (2) compare CDST allele calls against existing cgMLST results on a 50-isolate test panel covering all three pathogens; (3) measure runtime + memory vs cgMLST; (4) decision: adopt as zoo entry, hybrid (CDST as quick-look prefilter before cgMLST), or reject. Decision document at `docs/evaluations/cdst.md`. Dependencies: `jackpot-nf` subworkflow pattern (already established), test isolate panel from existing typing tests. (2-week spike, post-Phase 28 or operational backlog)
 
@@ -2482,13 +2487,17 @@ The consolidation rationale, full mapping of source IDs to canonical IDs, and ov
 
 ### A. Schema, NSA substrate, immune-bio core (~3 weeks)
 
-- [ ] **B-IMMUNE-SCHEMA-1** Schema v6.0 stub — Alembic migration adding `detectors`, `detector_activations`, `dca_priority_scores`, `memory_cells` tables. Initial landing is empty migration with table definitions but no business logic, behind a feature flag (`IMMUNE_PILLAR_I_ENABLED=false`). Forces schema design conversation early. `[quick-win — land alongside current P0d sprint]`. (1-2 sessions, P0d or after)
+- [ ] **B-IMMUNE-SCHEMA-1** Schema v6.0 stub — Alembic migration adding `detectors`, `detector_activations`, `dca_priority_scores`, `memory_cells` tables. Initial landing is empty migration with table definitions but no business logic, behind a feature flag (`IMMUNE_PILLAR_I_ENABLED=false`). Forces schema design conversation early. `[quick-win — land alongside current P0d sprint]`. (1-2 sessions, P0d or after) drift-ok
 
-- [ ] **B-IMMUNE-NSA-1** Implement `backend/immune/algorithms/nsa.py` — shared Negative Selection Algorithm substrate. Used by both bio-AIS (Pillar I) and cyber-AIS (Pillar V); same code, different feature spaces. Reference: `docs/immune_platform.md` §3.1, §9.4. (3-4 sessions)
+- [ ] **B-IMMUNE-DETECT-1** [NEW per immune_detection_core_redesign.md] Implement `backend/immune/algorithms/base.py` — the `AnomalyDetector` Protocol, the real shared detection substrate (replaces the deleted "shared NSA substrate" concept). Prereq for `B-AMAND-1` (DeepSVDD) and the cyber `B-IMMUNE-NSA-1`. Reference: immune_detection_core_redesign.md. (2-3 sessions)
 
-- [ ] **B-IMMUNE-FEAT-1** Implement `backend/immune/algorithms/features.py` — k-mer featurizer for Pillar I, API-call featurizer stub for Pillar V. Plus a featurizer registry pattern (`backend/immune/algorithms/featurizers/__init__.py` per `docs/immune_platform.md` §22.2 — post-Cluster-B merge; was scaffolding §3.2.1) so the AIS-theory collaborator can plug in alternative featurizers (k-mer, ESM-small, ESM-large, DNABERT-v2) without touching core code. (2-3 sessions; the registry is what makes this collaboration-friendly per `docs/immune_platform.md` Part 2)
+- [ ] **B-IMMUNE-NSA-1** [REVISED per immune_detection_core_redesign.md] Implement `backend/immune/sec/nsa_cyber.py` — Negative Selection Algorithm for the CYBER path only (Pillar V) and as a teaching baseline. REMOVED from the bio detection path: real-valued NSA does not scale on k-mer/embedding feature spaces. Adoption gated on a one-class bake-off vs DeepSVDD. Depends on `B-IMMUNE-DETECT-1`. Reference: immune_detection_core_redesign.md. (2-3 sessions, cyber-only)
 
-- [ ] **B-AMAND-1** Adopt AMAnD (Price & Russell, *Frontiers in Public Health* 2023) as the canonical metagenome anomaly detector. Implementation has two layers: `backend/immune/bio/amand.py` (the bio-NSA module wrapping AMAnD's DeepSVDD model into JACKPOT's substrate) AND `pipelines/immune/amand.nf` (the Nextflow process for reproducible scans). Document the baseline-curation workflow ("what is normal for this operator's deployment context") in the Pillar IV training materials (`B-ACADEMY-9`). Detection landscape §2.c.1; `docs/immune_platform.md` §10.1 + §13. (3 sessions pipeline-zoo + 2 weeks for the baseline-curation tooling, pipeline-zoo work + Pillar I)
+- [ ] **B-IMMUNE-FEAT-1** Implement `backend/immune/algorithms/features.py` — k-mer featurizer for Pillar I, API-call featurizer stub for Pillar V. Plus a featurizer registry pattern (`backend/immune/algorithms/featurizers/__init__.py` per `docs/immune_platform.md` §22.2.1 — post-Cluster-B merge; originally scaffolding §3.2.1, now archived) so the AIS-theory collaborator can plug in alternative featurizers (k-mer, ESM-small, ESM-large, DNABERT-v2) without touching core code. (2-3 sessions; the registry is what makes this collaboration-friendly per `docs/immune_platform.md` Part 2)
+
+- [ ] **B-AMAND-1** [REVISED per immune_detection_core_redesign.md] Implement `DeepSVDDDetector(AnomalyDetector)` directly in `backend/immune/bio/amand.py` — DeepSVDD one-class detection over genomic-FM embeddings, implementing the `B-IMMUNE-DETECT-1` Protocol. AMAnD (Price & Russell 2023) is a citable BASELINE ENSEMBLE MEMBER, not the detection spine; drop the "wrapping into NSA substrate" framing. Plus `pipelines/immune/amand.nf` for reproducible scans. Baseline-curation workflow documented in Pillar IV (`B-ACADEMY-9`). Depends on `B-IMMUNE-DETECT-1`, `B-IMMUNE-EMBED-1`. Reference: immune_detection_core_redesign.md; Detection landscape §2.c.1. (3 sessions + 2 weeks baseline-curation tooling)
+
+- [ ] **B-IMMUNE-EMBED-1** [NEW per immune_detection_core_redesign.md] Implement the genomic-foundation-model embedding substrate that `B-AMAND-1`'s DeepSVDD detector runs over. METAGENE-1 (Apache-2.0, clears `B-LICENSE-1`) is the license-cleared self-hostable candidate. This is the actual detection engine per the redesign; the chat/design-doc framing of foundation models as optional plug-ins is SUPERSEDED. Depends on `B-LICENSE-1`, `B-IMMUNE-DETECT-1`. Reference: immune_detection_core_redesign.md. (3-4 sessions)
 
 - [ ] **B-IMMUNE-API-1** Implement `backend/routers/immune_bio.py` — FastAPI surface for Pillar I. Endpoints: `GET /api/v1/immune/triage` (DCA-priority queue), `GET /api/v1/immune/detectors/` (active detectors), `GET /api/v1/immune/dca/{sample_id}` (per-sample priority breakdown). Reference: `docs/immune_platform.md` §10.1.1. (2-3 sessions)
 
@@ -2504,7 +2513,9 @@ The consolidation rationale, full mapping of source IDs to canonical IDs, and ov
 
 - [ ] **B-NFUNO-1** Adopt nf-UnO (Guzman-Cole & Huang, *Bioinformatics* 2025) as the cohort co-assembly pipeline for outbreak novel-pathogen investigations. Wire to the dataset/cohort selection UI; outputs feed `pipeline_results`. Detection landscape §2.a.3. (2 sessions, pipeline-zoo work, after `B-TAXTRIAGE-1`)
 
-- [ ] **B-DEEPAC-1** Add DeePaC (Bartoszewicz et al. 2020) pathogenicity scoring as a post-classification step in the TaxTriage pipeline-zoo entry. Output a per-sequence pathogenicity score field on `pipeline_results` JSONB. Detection landscape §2.b.1. (1-2 sessions, after `B-TAXTRIAGE-1`)
+- [ ] **B-DEEPAC-1** [REVISED per immune_detection_core_redesign.md] Add DeePaC (Bartoszewicz et al. 2020) pathogenicity scoring as a post-classification step in the TaxTriage pipeline-zoo entry. Emit the per-sequence pathogenicity result as a `functional_concern` `DangerSignal` into the DCA (`B-IMMUNE-DCA-1`), not just a `pipeline_results` JSONB field. Detection landscape §2.b.1. (1-2 sessions, after `B-TAXTRIAGE-1`)
+
+- [ ] **B-SCREEN-SCOPE-1** [NEW per immune_detection_core_redesign.md] Scope functional-concern screening (SeqScreen/FunSoCs) into the bio danger path as a `functional_concern` signal source feeding the DCA. A scoping gate that `B-IMMUNE-DCA-1` depends on. Reference: immune_detection_core_redesign.md; Detection landscape §2.c.1. (1-2 sessions scoping)
 
 - [ ] **B-MLM-1** Adopt MLM (Baugher et al., *JHU APL Technical Digest* 2025) as the unmapped-read threat-characterization stage. Wire into the TaxTriage pipeline output (post-DeePaC) for tiered threat-class assignment. Detection landscape §2.b.2. (2 sessions, after `B-TAXTRIAGE-1` + `B-DEEPAC-1`)
 
@@ -2512,7 +2523,7 @@ The consolidation rationale, full mapping of source IDs to canonical IDs, and ov
 
 - [ ] **B-INSAFLU-1** Evaluate INSaFLU-TELEVIR (Santos et al., *Genome Medicine* 2024) for adoption: viral mNGS pipeline (TELEVIR module) into pipeline zoo; INSaFLU REST API patterns as prior art for the LAPIS-compat work (`B-LAPIS-1`). Decide whether to adopt the TELEVIR pipeline directly or fork+adapt. AGPL-licensed — clean for JACKPOT. Detection landscape §2.a.4. (1 session study + 2 sessions adoption, Year 2)
 
-- [ ] **B-KOMB-1** Study KOMB/KombOver (Balaji et al. 2022; Sapoval et al. 2024) for the community-shift detection layer of Pillar I. Pairs with `B-AMAND-1` (per-sample anomaly) for two complementary signals. Detection landscape §2.c.3. (1-2 weeks study, with `B-AMAND-1`)
+- [ ] **B-KOMB-1** [REVISED per immune_detection_core_redesign.md] Adopt KOMB/KombOver (Balaji et al. 2022; Sapoval et al. 2024) as the SOURCE of the trajectory core signal for the DCA — no longer an optional study or a mere complementary pairing. Feeds the trajectory-gated core of `B-IMMUNE-DCA-1`. Depends on `B-IMMUNE-DETECT-1`. Detection landscape §2.c.3. (1-2 weeks)
 
 ### C. Phase IM-1-collab — Foundational scaffolding (interleaved with IM-1.A)
 
@@ -2550,9 +2561,13 @@ A submitted sample runs through `jackpot-amand`, produces a row in `dca_priority
 
 ### A. DCA implementation and danger signals (~3 weeks)
 
-- [ ] **B-IMMUNE-DCA-1** Implement `backend/immune/bio/dca_bio.py` — full BioDendriticCell engine. Fuses genomic anomaly score (from `B-AMAND-1`) with multi-modal danger signals (wastewater, clinical, environmental, animal). Produces `dca_priority_scores` rows with explainable contributions per Patel 2021. Reference: `docs/immune_platform.md` §10.2. (4-5 sessions)
+- [ ] **B-IMMUNE-DCA-1** [REVISED per immune_detection_core_redesign.md] Implement `backend/immune/bio/dca_bio.py` — core/danger/suppression fusion with saturating noisy-OR boosters and Greensmith-style safe-signal suppression, trajectory-gated core signal. Fuses the ensemble anomaly score with multi-modal danger signals (wastewater, clinical, environmental, animal). Fusion defaults are PROVISIONAL pending `B-IMMUNE-VAL-1`. Produces `dca_priority_scores` rows with explainable contributions. Depends on `B-AMAND-1`, `B-KOMB-1`, `B-IMMUNE-SCHEMA-2`, `B-SCREEN-SCOPE-1`, `B-DEEPAC-1`. Reference: immune_detection_core_redesign.md. (4-5 sessions)
 
-- [ ] **B-IMMUNE-SCHEMA-2** Pydantic models in `backend/schemas/immune_bio.py` — DangerSignal, DcaPriorityScore, MultiModalContext. Wire to API surface from `B-IMMUNE-API-1`. (1-2 sessions)
+- [ ] **B-IMMUNE-SCHEMA-2** [REVISED per immune_detection_core_redesign.md] Pydantic models in `backend/schemas/immune_bio.py` — DangerSignal (with signal classes: `unexplained`, `trajectory`, `functional_concern`, `known_benign_match`, `declining_trend`), DcaPriorityScore (with `core`/`danger`/`suppression` fields), MultiModalContext. Wire to API surface from `B-IMMUNE-API-1`. Reference: immune_detection_core_redesign.md. (1-2 sessions)
+
+- [ ] **B-IMMUNE-VAL-1** [NEW per immune_detection_core_redesign.md] Pre-registered validation harness gating the unknown-pathogen detection claim: leave-one-pathogen-out (LOPO) sensitivity, retrospective replay against SARS-CoV-2/mpox/H5N1 wastewater (NAO LA, O'Connor 78-week, Wyler Berlin corpora), and CAMISIM graded synthetic spike-in detection floor. Pre-register BEFORE data collection; the bar is fixed in advance. No detection-performance claim may be asserted until this clears. Depends on `B-AMAND-1`, `B-IMMUNE-DCA-1`. Reference: immune_detection_core_redesign.md. (4-5 sessions)
+
+- [ ] **B-IMMUNE-DRIFT-1** [NEW per immune_detection_core_redesign.md] Drift monitoring with gated auto-regeneration of detectors; reuses the `B-IMMUNE-VAL-1` corpus as a regression gate so regeneration cannot silently degrade detection. Depends on `B-IMMUNE-VAL-1`. Reference: immune_detection_core_redesign.md. (2-3 sessions)
 
 - [ ] **B-IMMUNE-WW-1** Wastewater signal ingestion adapter — at least one feed (NWSS or local STAB). Polls feed periodically; produces `DangerSignal` rows tagged `wastewater_concordance`. Reference: `docs/immune_platform.md` §4.3. (3-4 sessions)
 
@@ -2690,7 +2705,7 @@ Two JACKPOT instances on one network can: (1) share a confirmed memory cell afte
 
 ### A. Cyber-AIS implementation (~3 weeks)
 
-- [ ] **B-IMMUNE-CYBER-1** Implement `backend/immune/sec/nsa_cyber.py` — CyberNSA. Uses the same `B-IMMUNE-NSA-1` substrate, but trained on API-call featurizers from `B-IMMUNE-FEAT-1`. Reference: `docs/immune_platform.md` §10.4. (4-5 sessions)
+- [ ] **B-IMMUNE-CYBER-1** Wire the Pillar V cyber path end to end: feed the `B-IMMUNE-NSA-1` `NegativeSelectionDetector` (in `backend/immune/sec/nsa_cyber.py`) with API-call featurizers from `B-IMMUNE-FEAT-1` and telemetry from `B-IMMUNE-TELEM-1`, and expose cyber assessments. This item is assembly/wiring only; the detector and its file are implemented by `B-IMMUNE-NSA-1`, not here. Depends on `B-IMMUNE-NSA-1`, `B-IMMUNE-FEAT-1`, `B-IMMUNE-TELEM-1`. Reference: `docs/immune_platform.md` §10.4. (4-5 sessions)
 
 - [ ] **B-IMMUNE-TELEM-1** Implement `backend/middleware/api_telemetry.py` — captures `ApiCallEvent` rows. Every API call produces a telemetry event with featurizable attributes (endpoint, user, time-of-day, request size, response code, latency). Feeds the cyber-NSA. (2-3 sessions)
 
@@ -2793,6 +2808,77 @@ A new contributor: (1) clones repo, (2) runs `jackpot init --profile academy`, (
 - [ ] **B-PYMLST-1** Adopt pyMLST as the custom-cgMLST-scheme pipeline-zoo entry. Default schema source is pubMLST; operators can build custom schemes for non-standard organisms. Detection landscape §2.e.3. (1-2 sessions)
 
 - [ ] **B-AMRO-1** Adopt AMRomics (Le et al., *BMC Genomics* 2024) as the population-scale AMR-surveillance pipeline-zoo entry. Pairs with `B-NCBI-2` (hAMRonization output mandate) for clean cross-pipeline comparability. Detection landscape §2.e.4. (2-3 sessions, with `B-NCBI-2`)
+
+- [ ] **B-ARTIC-1** Re-evaluate ARTIC fieldbioinformatics (artic-network/fieldbioinformatics, MIT) as a dedicated ONT tiled-amplicon consensus pipeline-zoo entry for non-SARS-CoV-2 protocols (mpox / artic-inrb-mpox, EBOV, primalscheme3, Clair3 calling). NOT a deployment-footprint play — Scenario R runs Nextflow + pre-cached containers, so viralrecon's bundled ARTIC already covers the standard path. Open question: does direct fieldbioinformatics give more current primer-scheme + variant-calling coverage than the ARTIC version viralrecon bundles, enough to justify a separate entry? Compare bundled-vs-direct ARTIC versions/schemes first; wrap the `artic` CLI in a Nextflow process if adopted. Desk-eval 2026-06-19; re-eval at Phase 29. (1 session eval)
+
+## Phase 30 — Rural / Network-Denied Transport (Foundation Shipped, Rest Tracked)
+
+Network-denied and store-and-forward operation as a per-peer runtime policy on
+`federated_instances`, not a separate deployment scenario. Same architectural
+pattern as sovereignty (architecture §22.1 / §22.7). Transport is a fourth axis
+(scope / substrate / governance / transport) that composes with the L1/L2/L3
+federation levels rather than replacing them. Numbered 30 because Phase 29 is
+IM-4 (immune-platform TrustEngine). Source docs:
+`jackpot_rural_network_denied_synthesis.md`,
+`jackpot_r_field_box_system_designs.md`, architecture §22.7.
+
+### B-RURAL-SCHEMA-1: transport columns on federated_instances ✅ CLOSED
+
+Migration **`2daeecbe082d`** on head (parent `c871b28bbdab`, applied P0b v5.0).
+Additive columns; existing peers default to HTTPS, no behavior change.
+
+- [x] `transport_type` TEXT + CHECK (`HTTPS`/`DTN`/`SNEAKERNET`/`LORA`),
+      `server_default 'HTTPS'`, NOT NULL. TEXT+CHECK not Postgres ENUM —
+      transport value set is open/growing (matches the `deletion_status`
+      decision, diverges deliberately from the closed-set `role` ENUM in
+      migration `85d92864ed38`).
+- [x] `transport_config` JSONB, nullable. Empty for HTTPS; carries DTN EID /
+      lifetime, LoRa channel / broker, sneakernet bundle-store path.
+- [x] Mirrored on the `FederatedInstance` Pydantic model
+      (`backend/backend/federation/models.py`) as
+      `Literal["HTTPS","DTN","SNEAKERNET","LORA"]` defaulting to HTTPS, plus
+      `transport_config: dict | None`. Source-of-truth (models.py) kept in
+      sync in the same commit `3134bda`.
+- [x] Migration round-trips (up / down / up clean); `\d federated_instances`
+      confirms text+CHECK, jsonb, constraint.
+- [x] `spec.md` §1 updated: transport is a runtime config on A/B/C, not a
+      scenario letter. `docs/architecture.md` §22.7 written (transport-as-
+      runtime-policy); spec §1 cross-reference points at it.
+
+### Deferred — built when L2/L3 federation IO is wired (both currently stubs)
+
+The transport axis is founded but the store-and-forward transports themselves,
+the operator CLI, and the payload fork wait on the L2 (`push.py`, Year-2 early)
+and L3 (`access.py`, Year-2 late) IO layers, which are `NotImplementedError`
+stubs today. Building those transport-aware from the start is the constraint,
+not a retrofit — R transport and L2/L3 IO are one work item, not two.
+
+- [ ] **B-RURAL-SNEAKERNET-1** — signed bundle export/import (`jackpot bundle
+      export/import`). Track 1 entry point: no radios, validates the
+      reference-vs-bundle payload fork against a real bundle without a live
+      peer. Do this first.
+- [ ] **B-RURAL-PAYLOAD-1** — `FederationPushPayload` reference-vs-bundle fork:
+      `fasta_url` (`HttpUrl`, reachable-source) becomes optional alongside a
+      `fasta_bundle_ref` (inline CRAM in the signed bundle) + `payload_transport`
+      discriminator. Model-only edit (payload is API `BaseModel`, no table),
+      lands with L2 IO wire-up.
+- [ ] **B-RURAL-CLI-1** — operator CLI for setting non-HTTPS transports
+      (`jackpot peers add --transport ...`, `jackpot peers set-transport`).
+      Documented as planned in architecture §22.7; the raw INSERT at
+      `routers/federation.py:198` defaults the columns and cannot yet set them.
+- [ ] **B-RURAL-DISPATCH-1** — per-flow transport dispatch: L1 `query()`
+      (HTTPS-only, snapshot-degrade on store-and-forward), L2 `push_to_hub()`,
+      L3 copy job. Seam locations known; dispatch shape decided when IO exists.
+- [ ] **B-RURAL-DTN-1 / B-RURAL-LORA-1** — Track 2 experimental transports
+      (IBR-DTN Bundle Protocol; Meshtastic alert-class). Gated behind env flags.
+- [ ] **B-RURAL-AIRGAP-1** — air-gap mode (all peers SNEAKERNET, no outbound
+      calls, bundle-signature-gated import). Architecture §22.7 describes it.
+
+R-Field-Box hardware reference builds (Lite / Standard / Rugged / ARM-SBC) live
+in `jackpot_r_field_box_system_designs.md`; they are Scenario A commodity
+hardware with network-denied transport config, not a new scenario. Note: the
+`B-ARTIC-1` "re-eval at Phase 29" line above predates this section and refers to
+the rural work generically — that re-eval belongs with this Phase 30 cluster.
 
 ---
 

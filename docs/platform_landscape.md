@@ -1,3 +1,5 @@
+> **Status:** Reference - comparative landscape of peer platforms.
+
 # JACKPOT Platform Landscape
 
 ## Comparative Analysis: What We've Adopted, Why, and What's Next
@@ -309,7 +311,7 @@ Before getting into JACKPOT-vs-Loculus specifics, here's where the rest of the p
 | **Solu** | Proprietary | Web | Proprietary | Proprietary REST | OAuth + RBAC | SaaS (US/EU regions) | **Closed-source** |
 | **RT-MetA** | Python (Nextflow) | Limited UI | SQLite-class | Local | Local | **Offline-first** | Open (early-stage) |
 | **GISAID** | Closed | Closed | Closed | Limited/gated | Account + DAA | Closed | **Closed-source** |
-| **JACKPOT** | **Python 3.11 / FastAPI** | **Streamlit** (Month 2) → React (Year 2) | PostgreSQL | Custom REST + planned LAPIS-compat | Google OAuth + JWT | Helm/Kubernetes (cloud) + Docker Compose (local) | **AGPL-3.0** |
+| **JACKPOT** | **Python 3.12 / FastAPI** | **Streamlit** (Month 2) → React (Year 2) | PostgreSQL | Custom REST + planned LAPIS-compat | Google OAuth + JWT | Helm/Kubernetes (cloud) + Docker Compose (local) | **AGPL-3.0** |
 
 #### 5.1.4 Analysis capabilities
 
@@ -719,7 +721,7 @@ But it's not on the critical path. The four highest-volume legacy formats (legac
 
 ### 6.1 JACKPOT just changed rows
 
-Previously, when JACKPOT was an ADHS-contracted state-level deployment, the matrix positioned it as a peer to Pathoplexus, Pathogenwatch, BV-BRC — a *deployment*. With the pivot, JACKPOT is structurally a *software package* designed to power multiple deployments — same row as Loculus.
+JACKPOT is structurally a *software package* designed to power multiple deployments — same row as Loculus.
 
 The Pathoplexus-as-overlay-on-Loculus pattern is now the directly applicable reference for how `Midnight-Oil-Innovation/jackpot` could be deployed by other operators with overlay configs.
 
