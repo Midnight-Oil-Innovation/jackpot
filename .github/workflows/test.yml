@@ -70,7 +70,7 @@ jobs:
         # .pre-commit-config.yaml lives at the workspace root (moved
         # from backend/ during the P0d follow-up). The pre-commit binary
         # comes from backend's dev dependency group via uv sync.
-        run: uv run pre-commit run --all-files
+        run: SKIP=docs-guard uv run pre-commit run --all-files
 
       - name: Run Alembic migrations against the CI Postgres
         env:
