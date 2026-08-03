@@ -2836,3 +2836,18 @@ Single-context: `CONTEXT.md` + `docs/adr/` at the repo root, neither of
 which exists yet — `docs/domain_reference.md` and `docs/architecture.md`
 serve as the working glossary and decision record in the meantime. See
 `docs/agents/domain.md`.
+
+## Alembic single-flight (hard rule)
+
+Only one migration may be in flight at a time. Before writing a migration, confirm no
+other branch or open PR adds one. Never create a migration that shares a
+`down_revision` with an existing migration. Run `uv run python scripts/check_migration_heads.py`
+before committing any migration.
+
+## Dependency policy (hard rule)
+
+Every new dependency passes two gates before it lands:
+1. License compatible with AGPL-3.0 (`scripts/verify_licenses.py`). BSL, SSPL, and
+   other non-compatible licenses are rejected regardless of technical merit.
+2. No known blocking vulnerability (deptrust).
+Check both before proposing a dependency. Commit `pyproject.toml` and `uv.lock` together.

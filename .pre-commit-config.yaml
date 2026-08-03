@@ -41,3 +41,18 @@ repos:
         pass_filenames: false
         files: ^schema/schema/jackpot_schema\.yaml$
         stages: [pre-commit]
+  - repo: local
+    hooks:
+      - id: docs-guard
+        name: docs drift guard
+        entry: uv run python scripts/check_docs.py
+        language: system
+        # Only the docs touched by this commit. CI (guardrails.yml, docs.yml)
+        # and `make` still run the full scan with no filenames.
+        files: ^docs/.*\.md$
+        pass_filenames: true
+      - id: alembic-single-head
+        name: single alembic head
+        entry: uv run python scripts/check_migration_heads.py
+        language: system
+        pass_filenames: false

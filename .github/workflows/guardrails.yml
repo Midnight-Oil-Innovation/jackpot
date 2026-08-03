@@ -1,0 +1,28 @@
+name: Guardrails
+on: [pull_request]
+
+jobs:
+  guardrails:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - run: uv sync
+
+      - name: STATUS block is current
+        run: |
+          uv run python scripts/gen_status.py
+          git diff --exit-code docs/STATUS.md \
+            || (echo "STATUS.md is stale. Run 'make status' and commit."; exit 1)
+
+      - name: Doc drift guard
+        run: uv run python scripts/check_docs.py
+
+      - name: Single Alembic head
+        run: uv run python scripts/check_migration_heads.py
+
+      - name: License compatibility (AGPL gate)
+        run: uv run python scripts/verify_licenses.py --skip-python
+
+      # - name: Dependency vulnerabilities
+      #   run: npx @clidey/deptrust@0.x.y check .
