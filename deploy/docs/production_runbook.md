@@ -4,7 +4,7 @@ This runbook is a placeholder. Fill it in when the production project ID
 is assigned, the first `terraform apply` runs against production, and
 the first real users are onboarded.
 
-Sections to author (using `docs/staging_access.md` as the template):
+Sections to author (using `deploy/docs/staging_access.md` as the template):
 
 ## 1. Endpoints and access
 - Production URLs
