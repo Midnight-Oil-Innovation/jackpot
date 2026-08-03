@@ -13,7 +13,7 @@ The DDL below is a verbatim copy of db/init.sql at the time of this
 revision. Idempotent (CREATE TABLE IF NOT EXISTS, ON CONFLICT DO
 NOTHING) so re-running on a populated DB is safe — useful for the
 one-time `alembic stamp 5adf11b77c19` flow on environments deployed
-before Q-9 (see docs/staging_access.md §6).
+before Q-9 (see deploy/docs/staging_access.md, "Baseline stamp for environments deployed before Q-9").
 
 P0e A.3 (Critical Rule 55): the seed-data INSERTs at the bottom of the
 DDL block originally hardcoded operator-specific names (Sonora Quest /

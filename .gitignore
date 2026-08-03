@@ -89,3 +89,12 @@ cleanup_plan*.json
 # Local doc bundle — a concatenation of docs/*.md produced locally.
 # Not a source document; the individual files under docs/ are canonical.
 docs/docs.md
+
+
+# Generated analysis / tooling caches - never commit
+.ua/
+repomix-output.xml
+.DS_Store
+**/.DS_Store
+__pycache__/
+*.py[cod]
