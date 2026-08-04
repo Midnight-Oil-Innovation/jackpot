@@ -31,6 +31,7 @@ from __future__ import annotations
 
 import argparse
 import re
+import subprocess
 import sys
 from pathlib import Path
 
@@ -184,6 +185,26 @@ def check_drift(path: Path, status: dict[str, str] | None) -> list[Violation]:
 # ----------------------------------------------------------------------------- main
 
 
+def tracked_markdown(docs_dir: Path) -> list[Path]:
+    """Markdown files git tracks under docs_dir.
+
+    A filesystem walk also picks up untracked and gitignored local artifacts —
+    e.g. the 2 MB docs/docs.md bundle some clones carry — which produces phantom
+    violations that differ per developer. Falls back to the walk when git isn't
+    usable (no repo, git not installed), so the guard still runs in a tarball.
+    """
+    try:
+        proc = subprocess.run(
+            ["git", "ls-files", "-z", "--", str(docs_dir)],
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+    except (OSError, subprocess.CalledProcessError):
+        return sorted(docs_dir.rglob("*.md"))
+    return sorted(Path(p) for p in proc.stdout.split("\0") if p.endswith(".md"))
+
+
 def run(docs_dir: Path, status_file: Path, paths: list[Path] | None = None) -> list[Violation]:
     status = load_status(status_file)
     violations: list[Violation] = []
@@ -194,7 +215,7 @@ def run(docs_dir: Path, status_file: Path, paths: list[Path] | None = None) -> l
     # No paths => full scan (CI, Makefile). Paths given => pre-commit handed us the
     # staged files; check only those, so a pre-existing backlog can't block every commit.
     if paths is None:
-        targets = sorted(docs_dir.rglob("*.md"))
+        targets = tracked_markdown(docs_dir)
     else:
         targets = sorted(p for p in paths if p.suffix == ".md" and p.is_file())
 
