@@ -199,7 +199,16 @@ def run(docs_dir: Path, status_file: Path, paths: list[Path] | None = None) -> l
         targets = sorted(p for p in paths if p.suffix == ".md" and p.is_file())
 
     for md in targets:
-        rel = md.relative_to(docs_dir)
+        # Resolve both sides: CI passes absolute paths from `git diff` while
+        # docs_dir is relative, and relative_to raises on that mismatch even
+        # for files under docs/. Skip anything not an in-tree markdown file
+        # rather than crashing on a changed-file list.
+        if md.suffix.lower() != ".md" or not md.is_file():
+            continue
+        try:
+            rel = md.resolve().relative_to(docs_dir.resolve())
+        except (ValueError, OSError):
+            continue
         in_archived = rel.parts and rel.parts[0] == EXEMPT_SUBDIR
 
         cls = parse_header_class(md)

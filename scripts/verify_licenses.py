@@ -171,6 +171,36 @@ def check_python_deps() -> tuple[list[Finding], list[tuple[str, str, str]]]:
 
 # Row shape: `| name | license | version-or-scope | notes |`
 ROW_RE = re.compile(r"^\|\s*([^|]+?)\s*\|\s*([^|]+?)\s*\|\s*([^|]*)\s*\|\s*([^|]*)\s*\|$")
+HEADING_RE = re.compile(r"^#{2,3}\s+(.*\S)\s*$")
+
+# --- Adoption scoping --------------------------------------------------------
+# THIRD_PARTY_LICENSES.md serves two purposes: it is the inventory of what the
+# platform actually depends on, AND the record of what was evaluated and
+# rejected. Only the first is a license gate. A rejected tool documented with
+# its incompatible license is the guard working, not a violation, so gating it
+# makes the check cry wolf and trains you to ignore it.
+#
+# A row is INFORMATIONAL (recorded, never gated) when either:
+#   - it carries an explicit marker: [rejected] [candidate] [informational]
+#   - or its text says so in prose: REJECTED / do not adopt / not adopted / ...
+#   - or it sits under a section heading that scopes the whole table that way.
+# Everything else is GATED: a real dependency whose license must clear AGPL-3.0.
+
+ROW_INFORMATIONAL_RE = re.compile(
+    r"\[(?:rejected|candidate|informational|not[-\s]adopted)\]"
+    r"|\bREJECTED\b"
+    r"|\bdo not adopt\b"
+    r"|\bnot adopted\b"
+    r"|\bnot in use\b"
+    r"|\bevaluated only\b",
+    re.IGNORECASE,
+)
+
+SECTION_INFORMATIONAL_RE = re.compile(
+    r"\brejected\b|\bcandidates?\b|\bnot adopted\b|\bevaluated\b"
+    r"|\bnot licensed code\b|\binformational\b|\bconsidered\b",
+    re.IGNORECASE,
+)
 
 
 def parse_third_party() -> tuple[list[dict], list[str]]:
@@ -179,7 +209,15 @@ def parse_third_party() -> tuple[list[dict], list[str]]:
     rows: list[dict] = []
     errors: list[str] = []
     in_table = False
+    section = ""
+    section_informational = False
     for i, line in enumerate(THIRD_PARTY.read_text().splitlines(), 1):
+        h = HEADING_RE.match(line)
+        if h:
+            section = h.group(1)
+            section_informational = bool(SECTION_INFORMATIONAL_RE.search(section))
+            in_table = False
+            continue
         if line.startswith("|") and "---" in line:
             in_table = True
             continue
@@ -193,14 +231,31 @@ def parse_third_party() -> tuple[list[dict], list[str]]:
         name, lic, scope, notes = (g.strip() for g in m.groups())
         if not name or name.lower().startswith(("name", "tool", "package")):
             continue  # header row
-        rows.append({"name": name, "license": lic, "scope": scope, "notes": notes, "line": i})
+        row_text = " ".join((name, lic, scope, notes))
+        informational = section_informational or bool(ROW_INFORMATIONAL_RE.search(row_text))
+        rows.append(
+            {
+                "name": name,
+                "license": lic,
+                "scope": scope,
+                "notes": notes,
+                "line": i,
+                "section": section,
+                "informational": informational,
+            }
+        )
     return rows, errors
 
 
-def check_wrapped_tools() -> tuple[list[Finding], list[dict]]:
+def check_wrapped_tools(strict: bool = False) -> tuple[list[Finding], list[dict]]:
+    """Findings for gated rows only. Informational rows (rejected tools,
+    candidates, specs) are parsed and reported but never fail the gate, unless
+    --strict is passed to audit the whole table."""
     rows, parse_errors = parse_third_party()
     findings = [Finding("wrapped-tool", "THIRD_PARTY_LICENSES.md", "-", e) for e in parse_errors]
     for row in rows:
+        if row["informational"] and not strict:
+            continue  # a documented decision, not a dependency
         v = classify(row["license"])
         if v == "deny":
             findings.append(
@@ -236,6 +291,12 @@ def main() -> int:
         action="store_true",
         help="only check THIRD_PARTY_LICENSES.md (useful before all deps are annotated)",
     )
+    ap.add_argument(
+        "--strict",
+        action="store_true",
+        help="also gate informational rows (rejected tools, candidates, specs). "
+        "Use to audit the whole table; not for CI.",
+    )
     args = ap.parse_args()
 
     all_findings: list[Finding] = []
@@ -244,22 +305,31 @@ def main() -> int:
         py_findings, py_rows = check_python_deps()
         all_findings.extend(py_findings)
 
-    wt_findings, wt_rows = check_wrapped_tools()
+    wt_findings, wt_rows = check_wrapped_tools(strict=args.strict)
     all_findings.extend(wt_findings)
+
+    gated = [r for r in wt_rows if not r["informational"]]
+    informational = [r for r in wt_rows if r["informational"]]
 
     if args.report:
         if py_rows:
             print("\nResolved Python dependencies:")
             for name, lic, verdict in sorted(py_rows):
                 print(f"  [{verdict:7s}] {name:30s} {lic}")
-        print(f"\nWrapped tools from {THIRD_PARTY} ({len(wt_rows)} entries):")
-        for row in wt_rows:
+        print(f"\nGated dependencies from {THIRD_PARTY} ({len(gated)}):")
+        for row in gated:
             print(f"  {row['name']:30s} {row['license']}  ({row['scope']})")
+        print(f"\nInformational, not gated ({len(informational)}):")
+        for row in informational:
+            print(f"  {row['name']:30s} {row['license']}  [{row['section']}]")
         return 0
 
     if not all_findings:
         n_py = len(py_rows) if not args.skip_python else 0
-        print(f"License gate: OK ({n_py} python deps, {len(wt_rows)} wrapped tools).")
+        print(
+            f"License gate: OK ({n_py} python deps, {len(gated)} gated tools, "
+            f"{len(informational)} informational)."
+        )
         return 0
 
     print(f"License gate: {len(all_findings)} violation(s).\n")

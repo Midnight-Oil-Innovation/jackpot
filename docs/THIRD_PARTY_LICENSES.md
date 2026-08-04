@@ -19,64 +19,75 @@ license is missing or the gate incorrectly rejects a compatible one.
 4. When a row here disagrees with pip's metadata, this file wins; use the `notes`
    column to explain the discrepancy.
 
+**Adoption scoping (what the gate actually enforces).** This file is both the
+dependency inventory and the record of what was evaluated and turned down. Only
+the first is a license gate: flagging a tool we rejected *because* its license is
+incompatible would make the check cry wolf. A row is informational, and therefore
+recorded but never gated, when it carries a `[rejected]`, `[candidate]`, or
+`[informational]` marker, when its text says REJECTED / do not adopt / not
+adopted / not in use / evaluated only, or when it sits under a section heading
+scoping the whole table that way. Everything else is a real dependency and must
+clear the gate. Run `verify_licenses.py --report` to see the split, or
+`--strict` to audit every row including the informational ones.
+
 Row shape: `| name | license (SPDX) | version-or-scope | notes |`
 
 ## Wrapped tools
 
-| name                      | license                 | version-or-scope           | notes                                  |
-| ------------------------- | ----------------------- | -------------------------- | -------------------------------------- |
-| GOTTCHA2                  | GPL-3.0                 | LANL/poeli fork            | Taxonomic arm; PanGIA successor        |
-| deacon                    | MIT                     | rust minimizer             | Ingest default for host depletion      |
-| Cleanifier                | (verify)                | host depletion             | Read LICENSE before wiring             |
-| hostile                   | MIT                     |  Host depletion            | verified 2026-08-02 from pyproject.toml classifier + Bioconda recipe              |
-| HRRT (sra-human-scrubber) | public-domain (NIH)     | ingest                     | NIH work product                       |
-| SeqScreen                 | GPL-3.0                 | functional-concern channel | verified 2026-07-22 against https://gitlab.com/treangenlab/seqscreen/-/raw/master/LICENSE                |
-| DeePaC                    | MIT                     | functional-concern channel | verified 2026-07-22 against https://gitlab.com/rki_bioinformatics/DeePaC/-/raw/master/LICENSE            |
-| PyOD                      | BSD-2-Clause            | anomaly-detection deps     | Already in nf-core/adjacent ecosystems |
-| Jellyfish                 | GPL-3.0                 | k-mer counting             | GPL family; AGPL-compatible            |
-| PanGIA                    | (verify — do not adopt) | superseded by GOTTCHA2     | Do not rebuild the 2018 database       |
-| alibi-detect              | BSL-1.1                 | REJECTED                   | Not OSS; verified 2026-06              |
+| name | license | version-or-scope | notes |
+|------|---------|------------------|-------|
+| GOTTCHA2 | GPL-3.0 | LANL/poeli fork | Taxonomic arm; PanGIA successor |
+| deacon | MIT | rust minimizer | Ingest default for host depletion |
+| Cleanifier | (verify) | host depletion | Read LICENSE before wiring |
+| hostile | MIT | 2.0.2 | Host depletion; verified 2026-08-02 from pyproject.toml classifier + Bioconda recipe. Deletes rather than N-masks; `--rename` strips read-header PII |
+| HRRT (sra-human-scrubber) | public-domain (NIH) | ingest | NIH work product |
+| SeqScreen | GPL-3.0 | functional-concern channel | Confirm current release |
+| DeePaC | (verify) | functional-concern channel | Read LICENSE before wiring |
+| PyOD | BSD-2-Clause | anomaly-detection deps | Already in nf-core/adjacent ecosystems |
+| Jellyfish | GPL-3.0 | k-mer counting | GPL family; AGPL-compatible |
+| PanGIA | (verify — do not adopt) | superseded by GOTTCHA2 | Do not rebuild the 2018 database |
+| alibi-detect | BSL-1.1 | REJECTED | Not OSS; verified 2026-06 |
 
 ## Foundation models (weights + inference code)
 
-| name                      | license    | version-or-scope   | notes                                                    |
-| ------------------------- | ---------- | ------------------ | -------------------------------------------------------- |
-| METAGENE-1                | Apache-2.0 | 7B decoder-only    | verified 2026-07-22 against https://huggingface.co/datasets/choosealicense/licenses/blob/main/markdown/apache-2.0.md |
-| DNABERT-S                 | (verify)   | 117M species-aware | Verify against model card LICENSE before adoption        |
-| DNABERT-2                 | (verify)   | ICLR 2024          | Route through this gate before adoption                  |
-| Nucleotide Transformer v2 | (verify)   | InstaDeep          | Route through this gate before adoption                  |
-| Evo 2                     | (verify)   | Brixi 2025         | Route through this gate before adoption                  |
-| MetagenBERT / DNABERT-MS  | (verify)   | 2026               | Verify before continued-pretraining work                 |
+| name | license | version-or-scope | notes |
+|------|---------|------------------|-------|
+| METAGENE-1 | Apache-2.0 | 7B decoder-only | Edge/cloud tiers; wastewater-pretrained; clears the gate |
+| DNABERT-S | (verify) | 117M species-aware | Verify against model card LICENSE before adoption |
+| DNABERT-2 | (verify) | ICLR 2024 | [candidate] Route through this gate before adoption |
+| Nucleotide Transformer v2 | (verify) | InstaDeep | [candidate] Route through this gate before adoption |
+| Evo 2 | (verify) | Brixi 2025 | [candidate] Cloud tier; verify weights license separately from code license |
+| MetagenBERT / DNABERT-MS | (verify) | 2026 | [candidate] Verify before continued-pretraining work |
 
 ## Databases and references
 
-| name                           | license     | version-or-scope      | notes                  |
-| ------------------------------ | ----------- | --------------------- | ---------------------- |
+| name | license | version-or-scope | notes |
+|------|---------|------------------|-------|
 | SRA (via branchwater/sourmash) | public data | global-novelty signal | Data license, not code |
 
 ## Nextflow pipelines (Apache-2.0 CDC set, adopted)
 
-| name               | license    | version-or-scope                         | notes                                 |
-| ------------------ | ---------- | ---------------------------------------- | ------------------------------------- |
-| seqsender          | Apache-2.0 | CDC — NCBI/GISAID submission             | Adopt P0i                             |
-| MIRA-NF            | Apache-2.0 | CDC — flu/SARS/RSV via IRMA              | Adopt P0i                             |
-| PHoeNIx            | Apache-2.0 | CDC — AMR/HAI bacteria                   | Adopt P0i                             |
-| MycoSNP-NF         | Apache-2.0 | CDC — fungal (C. auris)                  | Adopt P0m                             |
-| Aquascope          | Apache-2.0 | CDC — wastewater SARS-CoV-2              | Adopt P0m                             |
-| Tostadas           | Apache-2.0 | CDC — NCBI/GISAID via Liftoff/VADR/Bakta | Adopt P0m                             |
-| MicrobeTrace       | Apache-2.0 | CDC — browser-based outbreak viz         | Adopt P0m                             |
-| MultiQC            | GPL-3.0    | Seqera                                   | Already used transitively via nf-core |
-| Wave (self-hosted) | AGPL-3.0   | Seqera — container provisioning          | AGPL-on-AGPL clean; Adopt P0l         |
+| name | license | version-or-scope | notes |
+|------|---------|------------------|-------|
+| seqsender | Apache-2.0 | CDC — NCBI/GISAID submission | Adopt P0i |
+| MIRA-NF | Apache-2.0 | CDC — flu/SARS/RSV via IRMA | Adopt P0i |
+| PHoeNIx | Apache-2.0 | CDC — AMR/HAI bacteria | Adopt P0i |
+| MycoSNP-NF | Apache-2.0 | CDC — fungal (C. auris) | Adopt P0m |
+| Aquascope | Apache-2.0 | CDC — wastewater SARS-CoV-2 | Adopt P0m |
+| Tostadas | Apache-2.0 | CDC — NCBI/GISAID via Liftoff/VADR/Bakta | Adopt P0m |
+| MicrobeTrace | Apache-2.0 | CDC — browser-based outbreak viz | Adopt P0m |
+| MultiQC | GPL-3.0 | Seqera | Already used transitively via nf-core |
+| Wave (self-hosted) | AGPL-3.0 | Seqera — container provisioning | AGPL-on-AGPL clean; Adopt P0l |
 
 ## Standards and specs (not licensed code)
 
-| name                | license         | version-or-scope      | notes                   |
-| ------------------- | --------------- | --------------------- | ----------------------- |
-| GA4GH /service-info | Apache-2.0 spec | federation discovery  | Spec, not runtime       |
-| DRS URI conventions | Apache-2.0 spec | file addressing       | Spec, not runtime       |
-| PHES-ODM            | MIT             | wastewater data model | Data model, not runtime |
-| Crypt4GH            | Apache-2.0 spec | encrypted at rest     | Year 2+                 |
-| Beacon v2           | Apache-2.0 spec | federation            | Year 2+                 |
+| name | license | version-or-scope | notes |
+|------|---------|------------------|-------|
+| GA4GH /service-info | Apache-2.0 spec | federation discovery | Spec, not runtime |
+| DRS URI conventions | Apache-2.0 spec | file addressing | Spec, not runtime |
+| PHES-ODM | MIT | wastewater data model | Data model, not runtime |
+| Crypt4GH | Apache-2.0 spec | encrypted at rest | Year 2+ |
+| Beacon v2 | Apache-2.0 spec | federation | Year 2+ |
 
 ---
 
