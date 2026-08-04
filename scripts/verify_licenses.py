@@ -21,16 +21,16 @@ Usage:
   python scripts/verify_licenses.py --report        # print the full table, exit 0
   python scripts/verify_licenses.py --skip-python   # only wrap-tool check (for early adoption)
 
-Stdlib only, no network. Reads pip metadata via `pip show`.
+Stdlib only, no network. Reads installed-distribution metadata via
+importlib.metadata (not `pip`, which uv-managed venvs do not have).
 """
 
 from __future__ import annotations
 
 import argparse
 import re
-import subprocess
-import sys
 from dataclasses import dataclass
+from importlib.metadata import PackageNotFoundError, distributions, metadata
 from pathlib import Path
 
 # --- Policy ------------------------------------------------------------------
@@ -61,9 +61,14 @@ ALLOWLIST_PATTERNS = [
     r"\bGPL(?:v?[23](?:[-.]0)?)?(?:[-\s]or[-\s]later)?\b",
     r"\bLGPL",
     r"\bApache(?:\s+License)?[-\s]?2(?:\.0)?\b",
+    r"\bApache\s+Software\s+License\b",  # trove classifier phrasing, carries no version
     r"\bMIT\b",
     r"\bBSD(?:[-\s]?[123])?(?:[-\s]clause)?\b",
+    r"\b0BSD\b",  # no word boundary between the 0 and the B, so \bBSD\b misses it
     r"\bISC\b",
+    r"\bHPND\b",
+    r"\bHistorical\s+Permission\s+Notice\b",
+    r"\bW3C\b",
     r"\bMPL[-\s]?2",
     r"\bPython\s+Software\s+Foundation\b",
     r"\bPSF\b",
@@ -91,41 +96,44 @@ class Finding:
 
 
 def resolved_packages() -> list[str]:
-    """Names of installed Python packages via `pip list`. Uses the current venv."""
-    try:
-        out = subprocess.run(
-            [sys.executable, "-m", "pip", "list", "--format=freeze"],
-            capture_output=True,
-            text=True,
-            check=True,
-            timeout=60,
-        ).stdout
-    except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as e:
-        print(f"error: pip list failed: {e}", file=sys.stderr)
-        return []
-    names = []
-    for line in out.splitlines():
-        if "==" in line and not line.startswith("-e "):
-            names.append(line.split("==", 1)[0])
-    return names
+    """Names of installed Python packages in the current venv.
+
+    Uses importlib.metadata, not `pip list` — uv-managed venvs have no pip, and
+    shelling out to a missing pip made this whole check silently return [].
+    """
+    return sorted({name for d in distributions() if (name := d.metadata["Name"])})
 
 
 def package_license(name: str) -> str:
-    """Read the License field from pip metadata. Empty when the package declares none."""
+    """Read the declared license from installed package metadata.
+
+    Checks the PEP 639 License-Expression field first (what modern packages set),
+    then the legacy free-text License field, then License :: classifiers.
+    Empty when the package declares none.
+    """
     try:
-        out = subprocess.run(
-            [sys.executable, "-m", "pip", "show", name],
-            capture_output=True,
-            text=True,
-            check=True,
-            timeout=15,
-        ).stdout
-    except (subprocess.CalledProcessError, subprocess.TimeoutExpired):
+        meta = metadata(name)
+    except PackageNotFoundError:
         return ""
-    for line in out.splitlines():
-        if line.startswith("License:"):
-            return line.split(":", 1)[1].strip()
-    return ""
+
+    def field(key: str) -> str:
+        values = meta.get_all(key, [])
+        return str(values[0]).strip() if values else ""
+
+    expression = field("License-Expression")
+    if expression:
+        return expression
+    # Classifiers before the free-text License field: the latter holds anything from
+    # a whole LICENSE file to "Dual License" to a bare copyright line.
+    classifiers = [
+        str(c).split("::")[-1].strip()
+        for c in meta.get_all("Classifier", [])
+        if str(c).startswith("License ::")
+    ]
+    if classifiers:
+        return " OR ".join(classifiers)
+    legacy = field("License")
+    return legacy if "\n" not in legacy else ""
 
 
 def classify(text: str) -> str:
@@ -143,8 +151,15 @@ def classify(text: str) -> str:
 def check_python_deps() -> tuple[list[Finding], list[tuple[str, str, str]]]:
     findings: list[Finding] = []
     rows: list[tuple[str, str, str]] = []
+    # A package that declares no usable license in its own metadata can be resolved
+    # by a row in THIRD_PARTY_LICENSES.md — which is what this check's own error
+    # message tells you to do, so it has to actually consult the file.
+    overrides = {r["name"].lower(): r["license"] for r in parse_third_party()[0]}
     for pkg in resolved_packages():
         lic = package_license(pkg)
+        override = overrides.get(pkg.lower())
+        if override and classify(lic) != "deny":
+            lic = override
         verdict = classify(lic)
         rows.append((pkg, lic or "(none declared)", verdict))
         if verdict == "deny":
