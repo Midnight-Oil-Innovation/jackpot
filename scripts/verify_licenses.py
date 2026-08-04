@@ -20,6 +20,7 @@ Usage:
   python scripts/verify_licenses.py                 # gate
   python scripts/verify_licenses.py --report        # print the full table, exit 0
   python scripts/verify_licenses.py --skip-python   # only wrap-tool check (for early adoption)
+  python scripts/verify_licenses.py --skip-wrapped-tools   # only Python deps (CI gate)
 
 Stdlib only, no network. Reads installed-distribution metadata via
 importlib.metadata (not `pip`, which uv-managed venvs do not have).
@@ -307,6 +308,12 @@ def main() -> int:
         help="only check THIRD_PARTY_LICENSES.md (useful before all deps are annotated)",
     )
     ap.add_argument(
+        "--skip-wrapped-tools",
+        action="store_true",
+        help="only check resolved Python dependencies. Mirror of --skip-python: lets "
+        "CI enforce the half that is clean while the other stays report-only.",
+    )
+    ap.add_argument(
         "--strict",
         action="store_true",
         help="also gate informational rows (rejected tools, candidates, specs). "
@@ -321,7 +328,8 @@ def main() -> int:
         all_findings.extend(py_findings)
 
     wt_findings, wt_rows = check_wrapped_tools(strict=args.strict)
-    all_findings.extend(wt_findings)
+    if not args.skip_wrapped_tools:
+        all_findings.extend(wt_findings)
 
     gated = [r for r in wt_rows if not r["informational"]]
     informational = [r for r in wt_rows if r["informational"]]

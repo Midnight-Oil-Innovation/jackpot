@@ -76,3 +76,14 @@ def test_third_party_overrides_resolve_packages_with_no_metadata():
     findings, rows = verify_licenses.check_python_deps()
     assert rows, "no packages inspected"
     assert [f.name for f in findings] == []
+
+
+def test_skip_wrapped_tools_gates_python_only(monkeypatch):
+    """CI enforces the Python half via --skip-wrapped-tools while the wrapped-tool
+    table stays report-only. If wrapped-tool findings leak into that exit code, the
+    enforcing step goes permanently red and gets disabled."""
+    monkeypatch.setattr("sys.argv", ["verify_licenses.py", "--skip-wrapped-tools"])
+    assert verify_licenses.main() == 0
+    # Same run without the flag still fails on the outstanding wrapped-tool rows.
+    monkeypatch.setattr("sys.argv", ["verify_licenses.py"])
+    assert verify_licenses.main() == 1

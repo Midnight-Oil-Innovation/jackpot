@@ -31,7 +31,13 @@ jobs:
       - name: Single Alembic head
         run: uv run python scripts/check_migration_heads.py
 
-      - name: License compatibility (AGPL gate)
+      - name: License compatibility — Python deps (AGPL gate, enforcing)
+        # Enforcing. The Python half is clean across all resolved packages, so a new
+        # AGPL-incompatible dependency fails the build here. Packages that declare no
+        # usable license metadata are resolved by a row in THIRD_PARTY_LICENSES.md.
+        run: uv run python scripts/verify_licenses.py --skip-wrapped-tools
+
+      - name: License compatibility — wrapped tools (AGPL gate, report-only)
         # REPORT-ONLY until B-LICENSE-1 foundation-model license verification is done.
         # Flip back to enforcing (drop --report) once THIRD_PARTY_LICENSES.md has real
         # SPDX ids for the (verify) placeholders. Tracked: B-LICENSE-1.
