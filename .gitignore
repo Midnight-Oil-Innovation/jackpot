@@ -94,10 +94,8 @@ docs/docs.md
 # Generated analysis / tooling caches - never commit
 .ua/
 repomix-output.xml
-.DS_Store
 **/.DS_Store
-__pycache__/
-*.py[cod]
 
 # Skills lockfile - generated cache, not tracked
 skills-lock.json
+*.bak.*

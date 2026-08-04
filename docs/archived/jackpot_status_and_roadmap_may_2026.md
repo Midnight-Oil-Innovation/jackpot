@@ -1,3 +1,5 @@
+> **Status:** Superseded — archived (directory convention). Historical; do not cite as current.
+
 # JACKPOT — Status & Roadmap
 
 **Document type:** Standalone retrospective + status + forward sequencing

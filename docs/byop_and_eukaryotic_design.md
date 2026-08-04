@@ -1,3 +1,5 @@
+> **Status:** Canonical — multi-engine BYOP + eukaryotic design.
+
 # JACKPOT — BYOP and Eukaryotic Pathogen Pipelines
 
 **Status:** Design document · 2026-04-29
@@ -1430,7 +1432,7 @@ To keep scope tractable:
 | Topic | Where developed |
 |---|---|
 | BYOP pre-design (vague stretch goal) | `spec.md` Phase 25 |
-| Pipeline-zoo pattern | `docs/architecture/jackpot_architecture.md` |
+| Pipeline-zoo pattern | `docs/architecture.md` v6.0 §989 |
 | `pipeline_results_loader.py` (existing immutable append-only loader) | Memory + project knowledge |
 | Two PII gates | `jackpot_pathoplexus_loculus_overview.md` §9 |
 | Critical Rule 55 (operator-agnostic production code) | `CLAUDE.md` |

@@ -1,3 +1,5 @@
+> **Status:** Canonical — GCP deployment guide (post-Cluster-F).
+
 # JACKPOT — Google Cloud Platform Deployment Guide
 
 **Status:** v1.1 (Cluster F filename move and cross-reference updates applied 2026-05-16) · 2026-05-09 origin
@@ -88,7 +90,7 @@ You'll need:
 - A Google account that can sign in to https://console.cloud.google.com
 - A credit card (GCP won't charge unless you exceed free credits)
 - A Mac M3 / Linux / WSL2 development environment with `bash`, `git`, `curl`
-- Python 3.11+ (for any local development work)
+- Python 3.12+ (for any local development work)
 - About 3 hours of wall time for the first deploy (most of it waiting)
 
 ### 2.1 Install the toolchain

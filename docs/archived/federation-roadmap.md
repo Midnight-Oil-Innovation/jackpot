@@ -1,3 +1,5 @@
+> **Status:** Superseded — archived (directory convention). Historical; do not cite as current.
+
 # Federation roadmap
 # Superseded 2026-05-14 by `docs/federation.md`. This file kept for history.
 

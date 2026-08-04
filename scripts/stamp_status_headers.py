@@ -41,7 +41,6 @@ HEADER_RE = re.compile(r"^\s*>\s*\*\*Status:\*\*", re.IGNORECASE)
 CANONICAL = {
     "domain_reference.md": "source-of-truth map for the doc set",
     "architecture.md": "system architecture v6.0 (post-Cluster-A)",
-    "architecture/jackpot_architecture.md": "architecture detail; see architecture.md v6.0",
     "platform_landscape.md": "OSS pathogen-genomics comparative landscape",
     "strategic_vision.md": "strategic synthesis (CDC DMI / North Star / STLT)",
     "governance_alignment.md": "WHO / GA4GH / FAIR+CARE alignment matrices",

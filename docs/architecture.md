@@ -1,3 +1,5 @@
+> **Status:** Canonical — system architecture v6.0 (post-Cluster-A).
+
 # JACKPOT Architecture
 
 **Version:** 6.0
@@ -1482,7 +1484,7 @@ pytest --cov=backend --cov-report=term-missing
 
 ### 24.1 Current state — Month 1 and Month 2
 
-Month 1 (data layer) completed: schema v4.4 shipped, core routers (orgs/labs/users/samples/datasets/pipelines) in production, six ingest methods implemented, scrubber pipeline integrated, six-role RBAC enforced via guards.
+Month 1 (data layer) completed: schema v4.4 shipped, core routers (orgs/labs/users/samples/datasets/pipelines) in production, six ingest methods implemented, scrubber pipeline integrated, six-role RBAC enforced via guards.  <!-- drift-ok -->
 
 Month 2 (pipelines, workspace, access control) completed: pipeline catalog with viralrecon + MIRA-NF + PHoeNIx, telemetry tables, JupyterHub on GKE (Scenario C), sample_access router for cross-lab access requests, dataset promotion lifecycle.
 

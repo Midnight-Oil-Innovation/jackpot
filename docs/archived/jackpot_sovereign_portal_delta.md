@@ -1,3 +1,5 @@
+> **Status:** Superseded — archived (directory convention). Historical; do not cite as current.
+
 # JACKPOT — Sovereign Portal Deployment Guide on Google Cloud
 
 ## Merged, Superseding GCP Deploy Guide for the JACKPOT Platform

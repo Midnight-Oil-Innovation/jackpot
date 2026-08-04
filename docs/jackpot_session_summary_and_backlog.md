@@ -1,3 +1,5 @@
+> **Status:** History — session history + retrospective. Point-in-time record.
+
 # JACKPOT Session Summary & Backlog
 
 > **Forward-looking note (May 2026 cluster-doc-merge refresh — 2026-05-16):** This document is a session-by-session historical log. The architectural framings used in each session reflect what was decided at that point in time — they do NOT reflect current canonical architecture. Two notable evolutions show up across sessions:

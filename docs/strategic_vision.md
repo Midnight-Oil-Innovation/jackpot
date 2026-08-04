@@ -1,3 +1,5 @@
+> **Status:** Canonical — strategic synthesis (CDC DMI / North Star / STLT).
+
 # JACKPOT — Strategic Vision Summary
 
 **Document type:** Standalone strategic synthesis — the elevator-pitch view that lives alongside the canonical reference docs

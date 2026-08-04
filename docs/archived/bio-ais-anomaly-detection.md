@@ -1,3 +1,5 @@
+> **Status:** Superseded — archived (directory convention). Historical; do not cite as current.
+
 # Bio-AIS anomaly detection
 
 The chat's ML/anomaly-detection design is reconciled against JACKPOT's existing Pillar I (bio-AIS) plan from `jackpot_immune_platform_plan.md` and the consolidated `B-IMMUNE-*` backlog under Phase IM-1.

@@ -1,3 +1,5 @@
+> **Status:** History — append-only learnings log. Point-in-time record.
+
 # JACKPOT — Implementation Learnings
 
 Auto-maintained by Claude Code. Updated after each router session.

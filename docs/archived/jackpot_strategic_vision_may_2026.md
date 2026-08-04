@@ -1,3 +1,5 @@
+> **Status:** Superseded — archived (directory convention). Historical; do not cite as current.
+
 # JACKPOT — Strategic Vision Summary
 
 **Document type:** Standalone strategic synthesis

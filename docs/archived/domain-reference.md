@@ -1,3 +1,5 @@
+> **Status:** Superseded — archived (directory convention). Historical; do not cite as current.
+
 # Domain reference notes
 
 Standalone facts and citations synthesized across the chat. Not decision documents — these are reference notes to keep handy for future grant writing, conversations, and platform documentation. Cross-referenced with the actual JACKPOT source-of-truth design documents where applicable.

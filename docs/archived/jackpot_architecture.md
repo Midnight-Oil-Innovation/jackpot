@@ -1,3 +1,5 @@
+> **Status:** Superseded by `docs/architecture.md` v6.0 on 2026-08-03. Preserved for audit trail. Federation sections renumbered in v6.0 (old §22/§23 -> v6.0 §20).
+
 # JACKPOT — Pathogen Genomics Platform
 ## Architecture & Developer Reference
 

@@ -1,3 +1,5 @@
+> **Status:** Superseded — archived (directory convention). Historical; do not cite as current.
+
 The proposed **JACKPOT** platform is designed as a proactive, real-time, and pathogen-agnostic system for **Next-Generation Biosurveillance and Genomic Epidemiology**. Based on the provided documents and similar global frameworks, the following requirements have been distilled across technical, architectural, and strategic domains.
 
 ### 1. Core Technical Pillars

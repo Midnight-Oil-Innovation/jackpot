@@ -1,3 +1,5 @@
+> **Status:** Superseded — archived (directory convention). Historical; do not cite as current.
+
 # JACKPOT Immune Platform — Strategic Vision and Implementation Plan
 
 **Document type:** Vision + comprehensive implementation plan

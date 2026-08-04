@@ -1,3 +1,5 @@
+> **Status:** Canonical — wastewater OSS comparative landscape.
+
 # Wastewater software landscape
 
 Reference catalog of open-source software, methodologies, and algorithms used for wastewater pathogen analysis. This is the broader landscape doc — for JACKPOT's specific design, current state, and implementation path, see `docs/wastewater.md`.

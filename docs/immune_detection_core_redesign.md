@@ -1,3 +1,5 @@
+> **Status:** Canonical — frozen detection-core redesign spec.
+
 # JACKPOT Bio-AIS Detection Core — Redesign Spec
 
 > Resolves the five-item todo from the strategy review. `dca_bio.py`, `nsa.py`, and

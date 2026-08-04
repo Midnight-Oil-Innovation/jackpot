@@ -1,3 +1,5 @@
+> **Status:** Superseded — archived (directory convention). Historical; do not cite as current.
+
 # JACKPOT Detection Landscape
 
 ## Bioinformatics Tools, ML/AI Components, and Detection Frameworks for Pathogen Surveillance

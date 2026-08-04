@@ -1,3 +1,5 @@
+> **Status:** Superseded — archived (directory convention). Historical; do not cite as current.
+
 # cryptWWDB Integration
 
 Architectural mapping of the cryptWWDB encrypted wastewater-based-epidemiology framework (Driver et al. 2024, *Sci Total Environ* 940:173315, NSF 2115075) onto JACKPOT's integration surface as of `development` HEAD (2026-05-12).
