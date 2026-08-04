@@ -65,6 +65,16 @@ Row shape: `| name | license (SPDX) | version-or-scope | notes |`
 |------|---------|------------------|-------|
 | SRA (via branchwater/sourmash) | public data | global-novelty signal | Data license, not code |
 
+## Python dependency overrides
+
+Only for packages whose own installed metadata declares no usable license, so the
+gate cannot read one. Verify against the `LICENSE` file in the installed
+distribution before adding a row here.
+
+| name | license | version-or-scope | notes |
+|------|---------|------------------|-------|
+| google-crc32c | Apache-2.0 | transitive via google-cloud-storage | Ships no License-Expression, License field, or trove classifier; verified 2026-08-04 from `LICENSE` in the installed dist-info (googleapis/python-crc32c) |
+
 ## Nextflow pipelines (Apache-2.0 CDC set, adopted)
 
 | name | license | version-or-scope | notes |
