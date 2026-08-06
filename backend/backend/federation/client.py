@@ -176,7 +176,12 @@ class FederationClient:
             timeout=self._timeout,
         )
         response.raise_for_status()
-        rows: list[dict] = response.json().get("results", [])
+        # Partners are JACKPOT instances, so the body is the standard
+        # envelope from backend.responses.success_list: the rows live
+        # under "data". Reading "results" here — a key no JACKPOT
+        # endpoint emits — made every federated query return silently
+        # empty, which reads as "no matches" rather than as a failure.
+        rows: list[dict] = response.json().get("data", [])
         # Stamp every row with source attribution. Never trust the partner
         # to set this themselves.
         return [

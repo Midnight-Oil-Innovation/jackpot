@@ -28,6 +28,21 @@ from backend.config import get_settings
 from backend.credentials import _reset_backend, _set_backend
 from backend.credentials.test_helpers import InMemoryBackend
 from backend.database import execute_query, execute_write
+from backend.responses import success_list
+
+
+def _partner_envelope(*rows):
+    """Response envelope a real JACKPOT peer emits for GET /samples/.
+
+    Built via ``success_list`` — the helper the samples router itself
+    uses — so partner mocks track the real contract. These previously
+    hand-wrote a ``results`` key that no endpoint emits, which is why
+    the federation client's mismatched key passed the suite.
+    """
+    import json as _json
+
+    return _json.loads(success_list(data=list(rows), page=1, per_page=50, total=len(rows)).body)
+
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -268,10 +283,10 @@ async def test_search_fans_out_to_enabled_partners(client, fed_credentials):
     }
     nm_sample = dict(sample_row, sample_id="NM-1", state="NM")
     az_route = respx.get("https://az.example.test/api/v1/samples/").mock(
-        return_value=httpx.Response(200, json={"results": [sample_row]})
+        return_value=httpx.Response(200, json=_partner_envelope(sample_row))
     )
     nm_route = respx.get("https://nm.example.test/api/v1/samples/").mock(
-        return_value=httpx.Response(200, json={"results": [nm_sample]})
+        return_value=httpx.Response(200, json=_partner_envelope(nm_sample))
     )
 
     resp = await client.post(
@@ -311,10 +326,10 @@ async def test_search_skips_disabled_partners(client, fed_credentials):
         federation_enabled=False,
     )
     on_route = respx.get("https://on.example.test/api/v1/samples/").mock(
-        return_value=httpx.Response(200, json={"results": []})
+        return_value=httpx.Response(200, json=_partner_envelope())
     )
     off_route = respx.get("https://off.example.test/api/v1/samples/").mock(
-        return_value=httpx.Response(200, json={"results": []})
+        return_value=httpx.Response(200, json=_partner_envelope())
     )
 
     resp = await client.post("/api/v1/federation/search", json={"query": {}})
