@@ -20,6 +20,7 @@ Covers:
 
 from __future__ import annotations
 
+import json
 from datetime import UTC, date, datetime
 from typing import Any
 from uuid import UUID, uuid4
@@ -38,6 +39,7 @@ from backend.federation.models import (
     FederationQuery,
     FederationRole,
 )
+from backend.responses import success_list
 
 # ---------------------------------------------------------------------------
 # Fixtures / helpers
@@ -80,6 +82,18 @@ def _sample_row(sample_id: str) -> dict[str, Any]:
     }
 
 
+def _envelope(*rows: dict[str, Any]) -> dict[str, Any]:
+    """Wrap rows in the response envelope a real JACKPOT peer emits.
+
+    Built by calling ``success_list`` — the same helper the samples
+    router uses — so these mocks track the real contract instead of
+    restating it. Hand-written payloads here previously used a
+    ``results`` key that no endpoint emits, which let the client's
+    matching bug pass the suite unnoticed.
+    """
+    return json.loads(success_list(data=list(rows), page=1, per_page=50, total=len(rows)).body)
+
+
 class RecordingHooks(NullAISFederationHooks):
     """No-op hooks that record what they were called with."""
 
@@ -113,12 +127,10 @@ async def test_client_happy_path_fanout_two_partners() -> None:
     api_keys = {az.id: "az-key", nm.id: "nm-key"}
 
     respx.get("https://az.example.test/api/v1/samples/").mock(
-        return_value=httpx.Response(
-            200, json={"results": [_sample_row("AZ-1"), _sample_row("AZ-2")]}
-        )
+        return_value=httpx.Response(200, json=_envelope(_sample_row("AZ-1"), _sample_row("AZ-2")))
     )
     respx.get("https://nm.example.test/api/v1/samples/").mock(
-        return_value=httpx.Response(200, json={"results": [_sample_row("NM-1")]})
+        return_value=httpx.Response(200, json=_envelope(_sample_row("NM-1")))
     )
 
     hooks = RecordingHooks()
@@ -150,10 +162,39 @@ async def test_client_happy_path_fanout_two_partners() -> None:
 
 
 @respx.mock
+async def test_client_parses_the_real_jackpot_response_envelope() -> None:
+    """Partners are JACKPOT instances, so the wire format is whatever
+    ``backend.responses.success_list`` emits — that is the contract,
+    not a shape chosen here.
+
+    The mock payload is therefore built by calling that helper rather
+    than hand-writing a dict. A hand-written payload can agree with a
+    wrong implementation forever; one derived from the real helper
+    cannot.
+    """
+    envelope = json.loads(
+        success_list(data=[_sample_row("AZ-1")], page=1, per_page=50, total=1).body
+    )
+    az = _make_instance("az", "https://az.example.test/")
+    respx.get("https://az.example.test/api/v1/samples/").mock(
+        return_value=httpx.Response(200, json=envelope)
+    )
+
+    async with FederationClient() as fc:
+        results = await fc.query(
+            FederationQuery(organism="SARS-CoV-2"),
+            partners=[az],
+            api_key_resolver=lambda p: "az-key",
+        )
+
+    assert [r.sample_id for r in results] == ["AZ-1"]
+
+
+@respx.mock
 async def test_client_sends_federation_key_header() -> None:
     az = _make_instance("az", "https://az.example.test/")
     route = respx.get("https://az.example.test/api/v1/samples/").mock(
-        return_value=httpx.Response(200, json={"results": []})
+        return_value=httpx.Response(200, json=_envelope())
     )
 
     async with FederationClient() as fc:
@@ -176,7 +217,7 @@ async def test_client_forces_analyzable_floor_at_wire() -> None:
     re-applies a setdefault as a belt-and-suspenders guarantee.)"""
     az = _make_instance("az", "https://az.example.test/")
     route = respx.get("https://az.example.test/api/v1/samples/").mock(
-        return_value=httpx.Response(200, json={"results": []})
+        return_value=httpx.Response(200, json=_envelope())
     )
 
     async with FederationClient() as fc:
@@ -202,7 +243,7 @@ async def test_client_isolates_partner_5xx_failure() -> None:
     bad = _make_instance("bad", "https://bad.example.test/")
 
     respx.get("https://good.example.test/api/v1/samples/").mock(
-        return_value=httpx.Response(200, json={"results": [_sample_row("G-1")]})
+        return_value=httpx.Response(200, json=_envelope(_sample_row("G-1")))
     )
     respx.get("https://bad.example.test/api/v1/samples/").mock(
         return_value=httpx.Response(503, json={"detail": "down"})
@@ -224,7 +265,7 @@ async def test_client_isolates_partner_4xx_failure() -> None:
     forbidden = _make_instance("forb", "https://forbidden.example.test/")
 
     respx.get("https://good.example.test/api/v1/samples/").mock(
-        return_value=httpx.Response(200, json={"results": [_sample_row("G-1")]})
+        return_value=httpx.Response(200, json=_envelope(_sample_row("G-1")))
     )
     respx.get("https://forbidden.example.test/api/v1/samples/").mock(
         return_value=httpx.Response(403, json={"detail": "key invalid"})
@@ -246,7 +287,7 @@ async def test_client_isolates_partner_timeout() -> None:
     slow = _make_instance("slow", "https://slow.example.test/")
 
     respx.get("https://good.example.test/api/v1/samples/").mock(
-        return_value=httpx.Response(200, json={"results": [_sample_row("G-1")]})
+        return_value=httpx.Response(200, json=_envelope(_sample_row("G-1")))
     )
     respx.get("https://slow.example.test/api/v1/samples/").mock(
         side_effect=httpx.ReadTimeout("partner timed out")
@@ -273,10 +314,10 @@ async def test_client_skips_disabled_partners() -> None:
     disabled = _make_instance("off", "https://off.example.test/", federation_enabled=False)
 
     enabled_route = respx.get("https://on.example.test/api/v1/samples/").mock(
-        return_value=httpx.Response(200, json={"results": [_sample_row("ON-1")]})
+        return_value=httpx.Response(200, json=_envelope(_sample_row("ON-1")))
     )
     disabled_route = respx.get("https://off.example.test/api/v1/samples/").mock(
-        return_value=httpx.Response(200, json={"results": [_sample_row("OFF-1")]})
+        return_value=httpx.Response(200, json=_envelope(_sample_row("OFF-1")))
     )
 
     async with FederationClient() as fc:
@@ -305,10 +346,10 @@ async def test_client_skips_partners_failing_attestation() -> None:
     b = _make_instance("b", "https://b.example.test/")
 
     a_route = respx.get("https://a.example.test/api/v1/samples/").mock(
-        return_value=httpx.Response(200, json={"results": [_sample_row("A-1")]})
+        return_value=httpx.Response(200, json=_envelope(_sample_row("A-1")))
     )
     b_route = respx.get("https://b.example.test/api/v1/samples/").mock(
-        return_value=httpx.Response(200, json={"results": [_sample_row("B-1")]})
+        return_value=httpx.Response(200, json=_envelope(_sample_row("B-1")))
     )
 
     async with FederationClient(hooks=RejectingAttestHooks({"b"})) as fc:
@@ -337,10 +378,10 @@ async def test_client_skips_partners_flagged_anomalous() -> None:
     b = _make_instance("b", "https://b.example.test/")
 
     a_route = respx.get("https://a.example.test/api/v1/samples/").mock(
-        return_value=httpx.Response(200, json={"results": [_sample_row("A-1")]})
+        return_value=httpx.Response(200, json=_envelope(_sample_row("A-1")))
     )
     b_route = respx.get("https://b.example.test/api/v1/samples/").mock(
-        return_value=httpx.Response(200, json={"results": [_sample_row("B-1")]})
+        return_value=httpx.Response(200, json=_envelope(_sample_row("B-1")))
     )
 
     async with FederationClient(hooks=FlagAnomalyHooks({"a"})) as fc:
@@ -395,7 +436,7 @@ async def test_client_accepts_injected_http_client() -> None:
     with respx.mock:
         x = _make_instance("x", "https://x.example.test/")
         respx.get("https://x.example.test/api/v1/samples/").mock(
-            return_value=httpx.Response(200, json={"results": []})
+            return_value=httpx.Response(200, json=_envelope())
         )
         await fc.query(
             FederationQuery(),

@@ -118,7 +118,14 @@ def _build_content_item(
     """
     Build a single content string from all free-text fields.
     Returns the content string and a mapping of field_name -> (start, end)
-    character offsets so findings can be mapped back to specific fields.
+    UTF-8 byte offsets so findings can be mapped back to specific fields.
+
+    The offsets MUST be byte offsets, not character offsets: Cloud DLP
+    reports findings at `location.byte_range`, which counts UTF-8 bytes.
+    A character-based table drifts behind the byte offsets by one per
+    continuation byte, so a finding near the end of one field lands in
+    the next field's range — which silently grants it that field's
+    FIELD_EXCEPTIONS entry and drops the finding.
     """
     parts: list[str] = []
     field_offsets: dict[str, tuple[int, int]] = {}
@@ -131,7 +138,7 @@ def _build_content_item(
 
         chunk = f"[{field_name}]: {value}\n"
         start = cursor
-        cursor += len(chunk)
+        cursor += len(chunk.encode("utf-8"))
         field_offsets[field_name] = (start, cursor)
         parts.append(chunk)
 
@@ -142,7 +149,7 @@ def _offset_to_field(
     offset: int,
     field_offsets: dict[str, tuple[int, int]],
 ) -> str:
-    """Map a character offset back to the field name it came from."""
+    """Map a UTF-8 byte offset back to the field name it came from."""
     for field_name, (start, end) in field_offsets.items():
         if start <= offset < end:
             return field_name

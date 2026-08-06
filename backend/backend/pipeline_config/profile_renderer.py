@@ -22,7 +22,7 @@ from typing import Any
 import fsspec
 from jinja2 import Environment, PackageLoader, StrictUndefined
 
-from backend.pipeline_config.groovy_safe import groovy_escape
+from backend.pipeline_config.groovy_safe import groovy_escape, validate_groovy_safe
 from backend.pipeline_config.types import ExecutionProfile
 
 logger = logging.getLogger(__name__)
@@ -72,6 +72,31 @@ def _template_name_for(executor_type: str) -> str:
     return f"{normalized}.config.j2"
 
 
+def _reject_unsafe_scheduler_values(profile: ExecutionProfile, work_dir: str) -> None:
+    """Reject values that Nextflow forwards to a scheduler or a shell.
+
+    Validates ``work_dir``, ``profile.name``, and **every** string
+    value in ``config_overrides`` — not just the keys known to reach a
+    shell today, so a new template interpolation can't quietly open a
+    hole. Non-string overrides (``cpus``, ``queue_size``) are skipped;
+    the templates coerce those with ``| int``.
+
+    Deliberately NOT validated here: the free-text manifest fields
+    (``description``, ``author``), which are escaped rather than
+    rejected. See ``groovy_safe``'s module docstring for why the two
+    classes of value get different treatment.
+
+    Execution profiles are DB-seeded and have no HTTP write path, so
+    this render-time check — not a Pydantic ``field_validator`` — is
+    the choke point every launch routes through.
+    """
+    validate_groovy_safe(work_dir, field_name="work_dir")
+    validate_groovy_safe(profile.name, field_name="profile.name")
+    for key, value in profile.config_overrides.items():
+        if isinstance(value, str):
+            validate_groovy_safe(value, field_name=f"config_overrides.{key}")
+
+
 def render_nextflow_config(
     *,
     profile: ExecutionProfile,
@@ -89,6 +114,7 @@ def render_nextflow_config(
     ``main_script``). The renderer pulls the manifest fields out and
     leaves the rest of the row untouched.
     """
+    _reject_unsafe_scheduler_values(profile, work_dir)
     env = _env()
     template = env.get_template(_template_name_for(profile.executor_type))
     return template.render(

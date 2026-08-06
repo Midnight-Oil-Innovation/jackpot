@@ -28,6 +28,21 @@ from backend.config import get_settings
 from backend.credentials import _reset_backend, _set_backend
 from backend.credentials.test_helpers import InMemoryBackend
 from backend.database import execute_query, execute_write
+from backend.responses import success_list
+
+
+def _partner_envelope(*rows):
+    """Response envelope a real JACKPOT peer emits for GET /samples/.
+
+    Built via ``success_list`` — the helper the samples router itself
+    uses — so partner mocks track the real contract. These previously
+    hand-wrote a ``results`` key that no endpoint emits, which is why
+    the federation client's mismatched key passed the suite.
+    """
+    import json as _json
+
+    return _json.loads(success_list(data=list(rows), page=1, per_page=50, total=len(rows)).body)
+
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -195,6 +210,56 @@ async def test_register_instance_admin_creates_row(client):
 
 
 @pytest.mark.asyncio
+async def test_register_instance_rejects_plaintext_http_peer(client):
+    """The federation API key travels as a request header to base_url
+    on every fan-out, so a plaintext peer puts the key on the wire in
+    the clear. Registration must refuse it."""
+    payload = {
+        "name": "plaintext-peer",
+        "base_url": "http://insecure.example.test/",
+        "role": "peer",
+        "api_key_secret_name": "fed/insecure/key",
+    }
+    resp = await client.post("/api/v1/federation/instances", json=payload)
+    assert resp.status_code == 422, resp.text
+    # And nothing was written.
+    rows = execute_query(
+        "SELECT * FROM federated_instances WHERE name = :n",
+        {"n": "plaintext-peer"},
+    )
+    assert rows == []
+
+
+@pytest.mark.asyncio
+async def test_register_instance_allows_loopback_over_http(client):
+    """Two JACKPOT instances on one developer machine talk over
+    http://localhost. Loopback traffic never reaches a network, so the
+    key cannot be intercepted and the https rule does not apply."""
+    payload = {
+        "name": "local-peer",
+        "base_url": "http://localhost:8001/",
+        "role": "peer",
+        "api_key_secret_name": "fed/local/key",
+    }
+    resp = await client.post("/api/v1/federation/instances", json=payload)
+    assert resp.status_code == 201, resp.text
+
+
+@pytest.mark.asyncio
+async def test_register_instance_rejects_plaintext_hub_url(client):
+    """hub_instance_url is the L2 push target and carries the same key."""
+    payload = {
+        "name": "spoke-peer",
+        "base_url": "https://spoke.example.test/",
+        "role": "spoke",
+        "hub_instance_url": "http://hub.example.test/",
+        "api_key_secret_name": "fed/spoke/key",
+    }
+    resp = await client.post("/api/v1/federation/instances", json=payload)
+    assert resp.status_code == 422, resp.text
+
+
+@pytest.mark.asyncio
 async def test_register_instance_duplicate_name_conflict(client):
     _register_instance(
         name="dup",
@@ -268,10 +333,10 @@ async def test_search_fans_out_to_enabled_partners(client, fed_credentials):
     }
     nm_sample = dict(sample_row, sample_id="NM-1", state="NM")
     az_route = respx.get("https://az.example.test/api/v1/samples/").mock(
-        return_value=httpx.Response(200, json={"results": [sample_row]})
+        return_value=httpx.Response(200, json=_partner_envelope(sample_row))
     )
     nm_route = respx.get("https://nm.example.test/api/v1/samples/").mock(
-        return_value=httpx.Response(200, json={"results": [nm_sample]})
+        return_value=httpx.Response(200, json=_partner_envelope(nm_sample))
     )
 
     resp = await client.post(
@@ -311,16 +376,69 @@ async def test_search_skips_disabled_partners(client, fed_credentials):
         federation_enabled=False,
     )
     on_route = respx.get("https://on.example.test/api/v1/samples/").mock(
-        return_value=httpx.Response(200, json={"results": []})
+        return_value=httpx.Response(200, json=_partner_envelope())
     )
     off_route = respx.get("https://off.example.test/api/v1/samples/").mock(
-        return_value=httpx.Response(200, json={"results": []})
+        return_value=httpx.Response(200, json=_partner_envelope())
     )
 
     resp = await client.post("/api/v1/federation/search", json={"query": {}})
     assert resp.status_code == 200, resp.text
     assert on_route.called
     assert not off_route.called
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_search_skips_plaintext_partner_seeded_in_db(client, fed_credentials):
+    """Registration rejects plaintext peers, but rows can be seeded straight
+    into `federated_instances` by a migration, a restore, or psql — none of
+    which pass through InstanceCreate. The fan-out attaches the federation
+    key as a header, so a plaintext peer must be skipped at dial time, and
+    skipped alone: the valid peers in the same fan-out still answer."""
+    fed_credentials.set("fed/secure/key", "secure-key")
+    fed_credentials.set("fed/plain/key", "plain-key")
+    _register_instance(
+        name="secure",
+        base_url="https://secure.example.test/",
+        api_key_secret_name="fed/secure/key",
+    )
+    _register_instance(
+        name="plaintext",
+        base_url="http://plain.example.test/",
+        api_key_secret_name="fed/plain/key",
+    )
+    secure_route = respx.get("https://secure.example.test/api/v1/samples/").mock(
+        return_value=httpx.Response(200, json=_partner_envelope())
+    )
+    plain_route = respx.get("http://plain.example.test/api/v1/samples/").mock(
+        return_value=httpx.Response(200, json=_partner_envelope())
+    )
+
+    resp = await client.post("/api/v1/federation/search", json={"query": {}})
+    assert resp.status_code == 200, resp.text
+    assert secure_route.called
+    assert not plain_route.called
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_search_dials_loopback_partner_over_http(client, fed_credentials):
+    """The loopback carve-out survives at the dial site too — a two-instance
+    developer federation on one machine must still fan out."""
+    fed_credentials.set("fed/local/key", "local-key")
+    _register_instance(
+        name="local",
+        base_url="http://localhost:8001/",
+        api_key_secret_name="fed/local/key",
+    )
+    local_route = respx.get("http://localhost:8001/api/v1/samples/").mock(
+        return_value=httpx.Response(200, json=_partner_envelope())
+    )
+
+    resp = await client.post("/api/v1/federation/search", json={"query": {}})
+    assert resp.status_code == 200, resp.text
+    assert local_route.called
 
 
 @pytest.mark.asyncio

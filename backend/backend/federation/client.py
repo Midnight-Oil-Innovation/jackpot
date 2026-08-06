@@ -28,6 +28,7 @@ from backend.federation.models import (
     FederatedInstance,
     FederationQuery,
     FederationQueryResult,
+    is_secure_url,
 )
 
 if TYPE_CHECKING:
@@ -99,6 +100,18 @@ class FederationClient:
         eligible: list[FederatedInstance] = []
         for partner in partners:
             if not partner.federation_enabled:
+                continue
+            # Registration refuses plaintext peers, but rows can be seeded
+            # into federated_instances without passing through that
+            # endpoint. _query_one puts the federation key in a header, so
+            # gate here rather than trusting the row. Skip the peer, not the
+            # fan-out — one bad row must not blind the whole federation.
+            if not is_secure_url(partner.base_url):
+                logger.warning(
+                    "federation: partner %s has a plaintext base_url; skipping "
+                    "to keep the federation key off the wire",
+                    partner.name,
+                )
                 continue
             # AIS HOOK: attest_partner — Track 2 verifies remote attestation.
             if not self._hooks.attest_partner(partner):
@@ -176,7 +189,12 @@ class FederationClient:
             timeout=self._timeout,
         )
         response.raise_for_status()
-        rows: list[dict] = response.json().get("results", [])
+        # Partners are JACKPOT instances, so the body is the standard
+        # envelope from backend.responses.success_list: the rows live
+        # under "data". Reading "results" here — a key no JACKPOT
+        # endpoint emits — made every federated query return silently
+        # empty, which reads as "no matches" rather than as a failure.
+        rows: list[dict] = response.json().get("data", [])
         # Stamp every row with source attribution. Never trust the partner
         # to set this themselves.
         return [

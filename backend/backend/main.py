@@ -274,7 +274,17 @@ async def _request_validation_to_envelope(
 ) -> JSONResponse:
     # FastAPI's auto-422 for missing/invalid request fields. Surface the first
     # validation error as the primary message so the UI gets a readable string.
-    errs = exc.errors()
+    # Pydantic v2 puts the originating exception object in ctx["error"] when a
+    # custom field_validator raises ValueError. That object is not JSON
+    # serializable, so passing errors() through verbatim turns a 422 into a 500
+    # TypeError for every endpoint with a custom validator. Stringify ctx values
+    # before they reach the envelope; built-in validators are unaffected.
+    errs = [
+        {**e, "ctx": {k: str(v) for k, v in e["ctx"].items()}}
+        if isinstance(e.get("ctx"), dict)
+        else e
+        for e in exc.errors()
+    ]
     if errs:
         first = errs[0]
         loc = ".".join(str(p) for p in first.get("loc", []) if p not in ("body",))

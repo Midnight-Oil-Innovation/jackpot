@@ -18,6 +18,51 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, HttpUrl
 
+# Hosts where http is acceptable because the traffic never reaches a
+# network. Two JACKPOT instances on one developer machine federate over
+# http://localhost; there is nothing on that path to intercept. Same rule
+# browsers use for secure contexts.
+_LOOPBACK_HOSTS: frozenset[str] = frozenset({"localhost", "127.0.0.1", "::1"})
+
+
+def is_secure_url(value: HttpUrl | None) -> bool:
+    """True if this URL may carry the federation API key.
+
+    https always qualifies. Plain http qualifies only for loopback, where
+    the request never reaches a network and cannot be intercepted.
+    """
+    if value is None:
+        return True
+    if value.scheme == "https":
+        return True
+    # HttpUrl renders IPv6 hosts bracketed; compare on the bare address.
+    return (value.host or "").strip("[]").lower() in _LOOPBACK_HOSTS
+
+
+def require_secure_url(value: HttpUrl | None, *, field_name: str) -> HttpUrl | None:
+    """Reject a plaintext federation URL unless it points at loopback.
+
+    ``HttpUrl`` accepts http and https alike. Every federation URL is
+    dialled with the federation API key in a request header
+    (``client.py`` L1 fan-out, push for the hub URL), so a plaintext
+    peer puts that key on the wire in the clear.
+
+    Applied on the registration path (``InstanceCreate``). Rows can also
+    reach ``federated_instances`` without passing through that endpoint —
+    a migration, a restore, psql — so ``FederationClient.query`` gates on
+    :func:`is_secure_url` again at dial time, which is where the key
+    actually goes on the wire.
+    """
+    if value is None:
+        return None
+    if is_secure_url(value):
+        return value
+    raise ValueError(
+        f"{field_name} must use https. The federation API key is sent as a "
+        "request header to this URL, so a plaintext peer exposes it on the "
+        "wire. http is permitted only for loopback (localhost, 127.0.0.1, ::1)."
+    )
+
 
 class FederationRole(str, Enum):
     """The role of a JACKPOT instance in a federation topology.
