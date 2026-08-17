@@ -201,14 +201,14 @@ class LaunchRequest(BaseModel):
     launch_account: str | None = None
 
 
-@router.post("/launch")
-def launch_pipeline(
-    payload: LaunchRequest,
-    request: Request,
-    db=Depends(get_db_dep),  # noqa: B008
-):
-    user = get_current_user(request)
+def _authorize_and_resolve_launch_inputs(
+    payload: LaunchRequest, user: dict, db: Any
+) -> tuple[int | None, dict | None, list[dict] | None, list[int] | None, Any]:
+    """Project/lab access, catalog lookup, sample resolution + access, broken-inputs gate.
 
+    Returns (lab_id, catalog, sample_rows, sample_pks, err). Exactly one of
+    (lab_id, catalog, sample_rows, sample_pks) vs err is populated.
+    """
     # Project + lab scope
     proj_rows = execute_query(
         "SELECT id, lab_id FROM projects WHERE id = :id LIMIT 1",
@@ -216,14 +216,26 @@ def launch_pipeline(
         conn=db,
     )
     if not proj_rows:
-        return error("NOT_FOUND", f"Project {payload.project_id} not found.", status_code=404)
+        return (
+            None,
+            None,
+            None,
+            None,
+            error("NOT_FOUND", f"Project {payload.project_id} not found.", status_code=404),
+        )
     lab_id = proj_rows[0]["lab_id"]
 
     if not _user_has_lab_access(user, lab_id, db):
-        return error(
-            "ACCESS_DENIED",
-            "You do not have access to this project's lab.",
-            status_code=403,
+        return (
+            None,
+            None,
+            None,
+            None,
+            error(
+                "ACCESS_DENIED",
+                "You do not have access to this project's lab.",
+                status_code=403,
+            ),
         )
 
     catalog_rows = execute_query(
@@ -232,10 +244,16 @@ def launch_pipeline(
         conn=db,
     )
     if not catalog_rows:
-        return error(
-            "NOT_FOUND",
-            f"Pipeline {payload.pipeline_id} not found or inactive.",
-            status_code=404,
+        return (
+            None,
+            None,
+            None,
+            None,
+            error(
+                "NOT_FOUND",
+                f"Pipeline {payload.pipeline_id} not found or inactive.",
+                status_code=404,
+            ),
         )
     catalog = catalog_rows[0]
 
@@ -248,20 +266,32 @@ def launch_pipeline(
     )
     missing = set(payload.sample_ids) - {s["sample_id"] for s in sample_rows}
     if missing:
-        return error(
-            "NOT_FOUND",
-            "One or more samples do not exist.",
-            detail={"missing_sample_ids": sorted(missing)},
-            status_code=404,
+        return (
+            None,
+            None,
+            None,
+            None,
+            error(
+                "NOT_FOUND",
+                "One or more samples do not exist.",
+                detail={"missing_sample_ids": sorted(missing)},
+                status_code=404,
+            ),
         )
 
     # Every sample must belong to a lab the caller can access
     for sample in sample_rows:
         if not _user_has_lab_access(user, sample.get("lab_id"), db):
-            return error(
-                "ACCESS_DENIED",
-                f"You do not have access to sample {sample['sample_id']}.",
-                status_code=403,
+            return (
+                None,
+                None,
+                None,
+                None,
+                error(
+                    "ACCESS_DENIED",
+                    f"You do not have access to sample {sample['sample_id']}.",
+                    status_code=403,
+                ),
             )
 
     # Phase P0f F-8: refuse the launch if any input sample_files row is
@@ -283,55 +313,75 @@ def launch_pipeline(
     )
     if broken_files:
         n = len(broken_files)
-        return error(
-            "BROKEN_INPUTS",
-            f"Cannot launch pipeline: {n} input "
-            f"file{'s' if n != 1 else ''} "
-            f"{'are' if n != 1 else 'is'} in BROKEN state.",
-            detail={
-                "broken_files": [
-                    {
-                        "sample_files_id": row["sample_files_id"],
-                        "sample_id": row["sample_id"],
-                        "uri": row["uri"],
-                        "last_verification_status": row["last_verification_status"],
-                    }
-                    for row in broken_files
-                ],
-                "suggestion": (
-                    "Re-locate or re-upload the broken files, or remove "
-                    "the affected samples from the launch request. Run "
-                    "`jackpot files verify --sample <sample_id>` to "
-                    "re-check current state."
-                ),
-            },
-            status_code=400,
+        return (
+            None,
+            None,
+            None,
+            None,
+            error(
+                "BROKEN_INPUTS",
+                f"Cannot launch pipeline: {n} input "
+                f"file{'s' if n != 1 else ''} "
+                f"{'are' if n != 1 else 'is'} in BROKEN state.",
+                detail={
+                    "broken_files": [
+                        {
+                            "sample_files_id": row["sample_files_id"],
+                            "sample_id": row["sample_id"],
+                            "uri": row["uri"],
+                            "last_verification_status": row["last_verification_status"],
+                        }
+                        for row in broken_files
+                    ],
+                    "suggestion": (
+                        "Re-locate or re-upload the broken files, or remove "
+                        "the affected samples from the launch request. Run "
+                        "`jackpot files verify --sample <sample_id>` to "
+                        "re-check current state."
+                    ),
+                },
+                status_code=400,
+            ),
         )
 
+    return lab_id, catalog, sample_rows, sample_pks, None
+
+
+def _resolve_launch_parameters(
+    catalog: dict, sample_rows: list[dict], payload: LaunchRequest, db: Any
+) -> tuple[Any, Any, Any, Any]:
+    """Compatibility gate, P0g G-4 profile resolution, P0h H-3 account override,
+    P0h H-6 reachability.
+
+    Returns (report, profile, effective_profile, err). Exactly one of
+    (report, profile, effective_profile) vs err is populated.
+    """
     report = compute_pipeline_compatibility(catalog, sample_rows)
     if report.is_hard_blocked:
-        return error(
-            "INCOMPATIBLE_SAMPLES",
-            "Pipeline is incompatible with one or more selected samples.",
-            detail=report.to_dict(),
-            status_code=422,
+        return (
+            None,
+            None,
+            None,
+            error(
+                "INCOMPATIBLE_SAMPLES",
+                "Pipeline is incompatible with one or more selected samples.",
+                detail=report.to_dict(),
+                status_code=422,
+            ),
         )
     if report.has_warnings and not payload.override_soft_warnings:
-        return error(
-            "SOFT_WARNINGS",
-            "Pipeline launch has warnings; re-submit with override_soft_warnings=true to proceed.",
-            detail=report.to_dict(),
-            status_code=202,
+        return (
+            None,
+            None,
+            None,
+            error(
+                "SOFT_WARNINGS",
+                "Pipeline launch has warnings; re-submit with "
+                "override_soft_warnings=true to proceed.",
+                detail=report.to_dict(),
+                status_code=202,
+            ),
         )
-
-    lab_rows = execute_query(
-        "SELECT project_prefix, display_name FROM labs WHERE id = :id LIMIT 1",
-        {"id": lab_id},
-        conn=db,
-    )
-    lab_slug = (
-        lab_rows[0].get("project_prefix") or lab_rows[0].get("display_name") or f"lab-{lab_id}"
-    )
 
     # ── P0g G-4: profile resolution ─────────────────────────────────────
     # The pipeline_default_profile association uses UUID pipeline_id;
@@ -348,14 +398,19 @@ def launch_pipeline(
             profile_id=payload.profile_id,
         )
     except ProfileNotFoundError as exc:
-        return error(
-            "PROFILE_NOT_FOUND",
-            str(exc),
-            detail={
-                "requested": exc.requested,
-                "available_profiles": exc.available_profile_names,
-            },
-            status_code=400,
+        return (
+            None,
+            None,
+            None,
+            error(
+                "PROFILE_NOT_FOUND",
+                str(exc),
+                detail={
+                    "requested": exc.requested,
+                    "available_profiles": exc.available_profile_names,
+                },
+                status_code=400,
+            ),
         )
     except NoProfileAvailableError:
         # Resolution chain exhausted — fall through to the legacy
@@ -373,11 +428,16 @@ def launch_pipeline(
     if payload.launch_account is not None and (
         profile is None or (profile.executor_type or "").upper() != "SLURM"
     ):
-        return error(
-            "LAUNCH_ACCOUNT_NOT_APPLICABLE",
-            "launch_account override is only valid when the resolved "
-            "execution profile uses the SLURM executor.",
-            status_code=400,
+        return (
+            None,
+            None,
+            None,
+            error(
+                "LAUNCH_ACCOUNT_NOT_APPLICABLE",
+                "launch_account override is only valid when the resolved "
+                "execution profile uses the SLURM executor.",
+                status_code=400,
+            ),
         )
     # P0c stub: per-launch override is accepted verbatim. P0c
     # multi-tenancy middleware, when it lands, will validate the
@@ -408,25 +468,48 @@ def launch_pipeline(
             partition=overrides.get("queue") or overrides.get("partition"),
         )
         if not reach.reachable:
-            return error(
-                "SLURM_UNREACHABLE",
-                "Slurm cluster is not reachable from the API host; refusing "
-                "to queue the launch. Run `jackpot doctor slurm "
-                "--check-cluster` to diagnose.",
-                detail={
-                    "code": reach.code,
-                    "detail": reach.detail,
-                },
-                status_code=400,
+            return (
+                None,
+                None,
+                None,
+                error(
+                    "SLURM_UNREACHABLE",
+                    "Slurm cluster is not reachable from the API host; refusing "
+                    "to queue the launch. Run `jackpot doctor slurm "
+                    "--check-cluster` to diagnose.",
+                    detail={
+                        "code": reach.code,
+                        "detail": reach.detail,
+                    },
+                    status_code=400,
+                ),
             )
 
-    run_id = new_run_id()
-    pipeline_token = new_pipeline_token()
-    settings = get_settings()
-    api_url = settings.jackpot_api_url
-    weblog_url = f"{api_url.rstrip('/')}/api/v1/pipelines/events"
-    result_registration_url = f"{api_url.rstrip('/')}/api/v1/pipelines/{run_id}/results"
+    return report, profile, effective_profile, None
 
+
+def _resolve_lab_slug(lab_id: int, db: Any) -> str:
+    lab_rows = execute_query(
+        "SELECT project_prefix, display_name FROM labs WHERE id = :id LIMIT 1",
+        {"id": lab_id},
+        conn=db,
+    )
+    return lab_rows[0].get("project_prefix") or lab_rows[0].get("display_name") or f"lab-{lab_id}"
+
+
+def _render_launch_config(
+    profile: Any,
+    effective_profile: Any,
+    catalog: dict,
+    run_id: str,
+    pipeline_token: str,
+    lab_slug: str,
+    weblog_url: str,
+    result_registration_url: str,
+    settings: Any,
+) -> tuple[str, str, str, dict[str, Any]]:
+    """Legacy-vs-profile-driven Nextflow config generation. Returns
+    (work_dir, result_uri, config_path, launch_metadata_extra)."""
     if profile is None:
         # Legacy path — single hardcoded GCP-Batch generator.
         work_dir = work_dir_for(run_id)
@@ -481,8 +564,22 @@ def launch_pipeline(
             "container_engine": profile.container_engine,
         }
 
-    int_ids = sample_pks
+    return work_dir, result_uri, config_path, launch_metadata_extra
 
+
+def _persist_run_row(
+    payload: LaunchRequest,
+    lab_id: int,
+    user: dict,
+    catalog: dict,
+    sample_pks: list[int],
+    run_id: str,
+    pipeline_token: str,
+    work_dir: str,
+    result_uri: str,
+    report: Any,
+    db: Any,
+) -> dict:
     insert_rows = execute_write(
         """
         INSERT INTO pipeline_runs
@@ -507,7 +604,7 @@ def launch_pipeline(
             "launched_by_id": user["id"],
             "pipeline_name": catalog["pipeline_name"],
             "pipeline_version": catalog.get("pipeline_version"),
-            "sample_ids": int_ids,
+            "sample_ids": sample_pks,
             "result_uri": result_uri,
             "work_dir": work_dir,
             "run_id": run_id,
@@ -519,18 +616,21 @@ def launch_pipeline(
         },
         conn=db,
     )
-    run = insert_rows[0]
+    return insert_rows[0]
 
-    submit_to_batch(
-        run_id=run_id,
-        pipeline_uri=catalog.get("pipeline_uri") or catalog["pipeline_name"],
-        pipeline_version=catalog.get("pipeline_version"),
-        pipeline_profile=(profile.name if profile else catalog.get("default_profile")),
-        config_path=config_path,
-        work_dir=work_dir,
-        result_uri=result_uri,
-    )
 
+def _log_launch_audit(
+    user: dict,
+    run_id: str,
+    catalog: dict,
+    payload: LaunchRequest,
+    lab_id: int,
+    report: Any,
+    profile: Any,
+    effective_profile: Any,
+    launch_metadata_extra: dict[str, Any],
+    db: Any,
+) -> None:
     log_audit(
         action=AuditActions.CREATE_PIPELINE_RUN,
         actor_id=user["id"],
@@ -596,6 +696,95 @@ def launch_pipeline(
             },
             db_conn=db,
         )
+
+
+@router.post("/launch")
+def launch_pipeline(
+    payload: LaunchRequest,
+    request: Request,
+    db=Depends(get_db_dep),  # noqa: B008
+):
+    user = get_current_user(request)
+
+    lab_id, catalog, sample_rows, sample_pks, err = _authorize_and_resolve_launch_inputs(
+        payload, user, db
+    )
+    if err is not None:
+        return err
+    # Narrowed by `err is None`: _authorize_and_resolve_launch_inputs only
+    # returns an err-less tuple when all four are populated.
+    assert lab_id is not None
+    assert catalog is not None
+    assert sample_rows is not None
+    assert sample_pks is not None
+
+    report, profile, effective_profile, err = _resolve_launch_parameters(
+        catalog, sample_rows, payload, db
+    )
+    if err is not None:
+        return err
+    # Narrowed by `err is None`; profile/effective_profile legitimately
+    # stay None on the legacy (no-profile) launch path — only report is
+    # guaranteed non-None here.
+    assert report is not None
+
+    lab_slug = _resolve_lab_slug(lab_id, db)
+
+    run_id = new_run_id()
+    pipeline_token = new_pipeline_token()
+    settings = get_settings()
+    api_url = settings.jackpot_api_url
+    weblog_url = f"{api_url.rstrip('/')}/api/v1/pipelines/events"
+    result_registration_url = f"{api_url.rstrip('/')}/api/v1/pipelines/{run_id}/results"
+
+    work_dir, result_uri, config_path, launch_metadata_extra = _render_launch_config(
+        profile,
+        effective_profile,
+        catalog,
+        run_id,
+        pipeline_token,
+        lab_slug,
+        weblog_url,
+        result_registration_url,
+        settings,
+    )
+
+    run = _persist_run_row(
+        payload,
+        lab_id,
+        user,
+        catalog,
+        sample_pks,
+        run_id,
+        pipeline_token,
+        work_dir,
+        result_uri,
+        report,
+        db,
+    )
+
+    submit_to_batch(
+        run_id=run_id,
+        pipeline_uri=catalog.get("pipeline_uri") or catalog["pipeline_name"],
+        pipeline_version=catalog.get("pipeline_version"),
+        pipeline_profile=(profile.name if profile else catalog.get("default_profile")),
+        config_path=config_path,
+        work_dir=work_dir,
+        result_uri=result_uri,
+    )
+
+    _log_launch_audit(
+        user,
+        run_id,
+        catalog,
+        payload,
+        lab_id,
+        report,
+        profile,
+        effective_profile,
+        launch_metadata_extra,
+        db,
+    )
 
     response_payload: dict[str, Any] = {
         "run_id": run_id,
