@@ -746,6 +746,40 @@ def _verify_one(row: dict, *, re_fingerprint: bool) -> str | None:
     return None
 
 
+def _stat_local(parsed, uri: str) -> int:
+    path = parsed.path if parsed.scheme.lower() == "file" else uri
+    return os.stat(path).st_size
+
+
+def _stat_gs_s3(parsed, uri: str) -> int:
+    from botocore.exceptions import ClientError
+
+    from backend.storage import _get_client
+
+    client = _get_client()
+    try:
+        head = client.head_object(Bucket=parsed.netloc, Key=parsed.path.lstrip("/"))
+    except ClientError as exc:
+        code = str(exc.response.get("Error", {}).get("Code", ""))
+        http_status = exc.response.get("ResponseMetadata", {}).get("HTTPStatusCode")
+        if code in ("NoSuchKey", "NotFound", "404") or http_status == 404:
+            raise FileNotFoundError(uri) from exc
+        raise
+    return int(head["ContentLength"])
+
+
+def _stat_http(uri: str) -> int | None:
+    import httpx
+
+    with httpx.Client(follow_redirects=True, timeout=30.0) as client:
+        resp = client.head(uri)
+        if resp.status_code == 404:
+            raise FileNotFoundError(uri)
+        resp.raise_for_status()
+        cl = resp.headers.get("Content-Length")
+        return int(cl) if cl is not None else None
+
+
 def _stat_uri(uri: str) -> int | None:
     """Return the size in bytes for ``uri``, or raise.
 
@@ -759,33 +793,11 @@ def _stat_uri(uri: str) -> int | None:
     parsed = urlparse(uri)
     scheme = parsed.scheme.lower()
     if scheme in ("", "file"):
-        path = parsed.path if scheme == "file" else uri
-        return os.stat(path).st_size
+        return _stat_local(parsed, uri)
     if scheme in ("gs", "s3"):
-        from botocore.exceptions import ClientError
-
-        from backend.storage import _get_client
-
-        client = _get_client()
-        try:
-            head = client.head_object(Bucket=parsed.netloc, Key=parsed.path.lstrip("/"))
-        except ClientError as exc:
-            code = str(exc.response.get("Error", {}).get("Code", ""))
-            http_status = exc.response.get("ResponseMetadata", {}).get("HTTPStatusCode")
-            if code in ("NoSuchKey", "NotFound", "404") or http_status == 404:
-                raise FileNotFoundError(uri) from exc
-            raise
-        return int(head["ContentLength"])
+        return _stat_gs_s3(parsed, uri)
     if scheme in ("http", "https"):
-        import httpx
-
-        with httpx.Client(follow_redirects=True, timeout=30.0) as client:
-            resp = client.head(uri)
-            if resp.status_code == 404:
-                raise FileNotFoundError(uri)
-            resp.raise_for_status()
-            cl = resp.headers.get("Content-Length")
-            return int(cl) if cl is not None else None
+        return _stat_http(uri)
     if scheme == "sra":
         return None  # archives — caller treats None as "size check skipped"
     raise ValueError(f"Unsupported URI scheme for verification: {scheme!r}")
