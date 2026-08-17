@@ -164,8 +164,12 @@ class Settings(BaseSettings):
     execution_timeout_seconds: int = 3600
     # Root scratch directory under which each execution gets a private
     # `submission_{id}_attempt_{n}` subdirectory. Preserved on failure
-    # for diagnostic inspection; deleted on success.
-    execution_working_dir_root: str = "/tmp/jackpot-executions"
+    # for diagnostic inspection; deleted on success. bandit B108 flags
+    # the hardcoded /tmp default — the actual mitigation is that
+    # jobs.py._execute_submission_locked chmods each subdirectory 0700
+    # right after creation, so other local users can't read another
+    # lab's diagnostics. Operators may still override this path.
+    execution_working_dir_root: str = "/tmp/jackpot-executions"  # nosec B108
     # Path to the Seqsender entry-point script. Default matches the
     # CDCgov/seqsender shell wrapper installed at the conventional
     # location in our api Dockerfile (/opt/seqsender/seqsender-kickoff).
