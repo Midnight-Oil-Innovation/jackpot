@@ -192,13 +192,13 @@ workaround. This permanent pin alignment (PR #N) prevents recurrence.
 
 ## Directory Structure
 
-The post-P0d monorepo lives at `~/projects/jackpot/`. It is the
+The post-P0d monorepo lives at `~/Projects/operation_jackpot/jackpot/`. It is the
 canonical layout under `Midnight-Oil-Innovation/jackpot`. The previous
 six-repo + git-submodule arrangement is gone; what used to be submodules
 (`schema/`, `nf/`) is now subtree-merged at the top level.
 
 ```
-~/projects/jackpot/                ← uv workspace root + git repository
+~/Projects/operation_jackpot/jackpot/  ← uv workspace root + git repository
 ├── backend/                       ← workspace member (jackpot-backend)
 │   ├── pyproject.toml
 │   ├── alembic.ini                Alembic config — script_location = db/migrations
@@ -1166,7 +1166,7 @@ check as its first action and refuse to proceed if either assertion fails.
 The check (with `<branch>` filled in per session):
 
 ```bash
-EXPECTED_WORKTREE="$HOME/Projects/jackpot-<branch>"
+EXPECTED_WORKTREE="$HOME/Projects/operation_jackpot/jackpot-<branch>"
 EXPECTED_BRANCH="<branch-name>"
 [ "$(pwd -P)" = "$EXPECTED_WORKTREE" ] || { echo "FATAL: wrong cwd ($(pwd -P)). Stop." >&2; exit 1; }
 [ "$(git branch --show-current)" = "$EXPECTED_BRANCH" ] || { echo "FATAL: wrong branch ($(git branch --show-current)). Stop." >&2; exit 1; }
@@ -1240,8 +1240,8 @@ full design.
 1. `git push -u origin <branch>`
 2. `gh pr create --base development --title "..." --body "..."` with the full PR body following the template at `docs/session_prompt_template.md`
 3. `gh pr merge --squash --delete-branch`
-4. `git -C ~/Projects/jackpot fetch --prune`
-5. `git -C ~/Projects/jackpot pull --ff-only origin development`
+4. `git -C ~/Projects/operation_jackpot/jackpot fetch --prune`
+5. `git -C ~/Projects/operation_jackpot/jackpot pull --ff-only origin development`
 6. Session summary reports PR URL, merge SHA, main checkout HEAD SHA after sync, and an explicit "maintainer next step: run `jackpot-finish <branch>` from outside the session to remove the worktree and delete the local branch"
 
 The session MUST NOT include `git worktree remove` of the current worktree — git refuses to remove the in-use worktree, and the maintainer's `jackpot-finish` helper handles this from outside. Out of Scope sections must include this exclusion explicitly.
