@@ -725,26 +725,12 @@ async def ingest_csv(
     return success(data=result["data"], warnings=result["warnings"])
 
 
-@router.post("/register", status_code=201)
-@limiter.limit(_INGEST_LIMIT)
-async def register_paths(
-    request: Request,
-    payload: _RegisterRequest,
-    db=Depends(get_db_dep),  # noqa: B008
-):
-    """Register a sample with one or more files at given URIs.
+def _validate_register_payload(payload: "_RegisterRequest") -> list[str]:
+    """Non-empty check, URI scheme validation, storage_intent validation.
 
-    Phase P0f F-6. No file bytes are uploaded — JACKPOT registers
-    metadata pointing at file paths/URIs the operator has already
-    placed. Per Critical Rule 57 the default ``storage_state`` is
-    ``EXTERNAL``; ``MANAGED`` and ``MIRRORED`` are accepted intents but
-    the actual byte-copy is owned by F-9 (``promote``) and only the
-    ``storage_state`` flag is set here. See ``spec.md`` Phase P0f
-    Specification, Critical Rules 57 (no copy on ingest) and 58
-    (sample_files is the dedup primitive).
+    Raises HTTPException on any invalid input. Returns the resolved
+    storage_intent for each file, in request order.
     """
-    user = get_current_user(request)
-
     if not payload.files:
         raise HTTPException(status_code=422, detail="files must be a non-empty list.")
 
@@ -771,6 +757,15 @@ async def register_paths(
             )
         resolved_intents.append(intent)
 
+    return resolved_intents
+
+
+def _build_sample_record(payload: "_RegisterRequest", user: dict, db: Any) -> tuple[dict, Any]:
+    """Metadata validation, sequencing_lab check, epiweek + tier + convenience
+    URI computation. Raises HTTPException on invalid metadata. Returns
+    (record, validation) — quality_status/surveillance_relevant are already
+    embedded in ``record`` and come back out via the inserted row's
+    RETURNING * (Critical Rule 40), so they aren't threaded separately."""
     metadata = dict(payload.sample_metadata)
     validation = validate_sample(metadata)
     if not validation.valid:
@@ -821,18 +816,19 @@ async def register_paths(
     if fastq_r2_uri is not None:
         record["fastq_r2_uri"] = fastq_r2_uri
 
-    sample = _insert_sample(record, db)
-    log_audit(
-        action=AuditActions.CREATE_SAMPLE,
-        actor_id=user["id"],
-        resource_type="sample",
-        resource_id=str(sample["id"]),
-        before=None,
-        after=_serialise(sample),
-        metadata={"ingest_method": "register", "tier": validation.tier},
-        db_conn=db,
-    )
+    return record, validation
 
+
+def _register_files_for_sample(
+    payload: "_RegisterRequest",
+    resolved_intents: list[str],
+    sample: dict,
+    user: dict,
+    db: Any,
+) -> list[dict]:
+    """Register every file against the sample, auditing each. Raises
+    HTTPException (400 FILE_UNREACHABLE / 422) on any registration failure —
+    the caller's transaction rolls back the whole sample on raise."""
     registered_files: list[dict] = []
     current_spec = None
     try:
@@ -895,12 +891,52 @@ async def register_paths(
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
+    return registered_files
+
+
+@router.post("/register", status_code=201)
+@limiter.limit(_INGEST_LIMIT)
+async def register_paths(
+    request: Request,
+    payload: _RegisterRequest,
+    db=Depends(get_db_dep),  # noqa: B008
+):
+    """Register a sample with one or more files at given URIs.
+
+    Phase P0f F-6. No file bytes are uploaded — JACKPOT registers
+    metadata pointing at file paths/URIs the operator has already
+    placed. Per Critical Rule 57 the default ``storage_state`` is
+    ``EXTERNAL``; ``MANAGED`` and ``MIRRORED`` are accepted intents but
+    the actual byte-copy is owned by F-9 (``promote``) and only the
+    ``storage_state`` flag is set here. See ``spec.md`` Phase P0f
+    Specification, Critical Rules 57 (no copy on ingest) and 58
+    (sample_files is the dedup primitive).
+    """
+    user = get_current_user(request)
+
+    resolved_intents = _validate_register_payload(payload)
+    record, validation = _build_sample_record(payload, user, db)
+
+    sample = _insert_sample(record, db)
+    log_audit(
+        action=AuditActions.CREATE_SAMPLE,
+        actor_id=user["id"],
+        resource_type="sample",
+        resource_id=str(sample["id"]),
+        before=None,
+        after=_serialise(sample),
+        metadata={"ingest_method": "register", "tier": validation.tier},
+        db_conn=db,
+    )
+
+    registered_files = _register_files_for_sample(payload, resolved_intents, sample, user, db)
+
     return success(
         data={
             "sample_id": sample["sample_id"],
             "id": sample["id"],
-            "quality_status": quality_status,
-            "surveillance_relevant": surveillance_relevant,
+            "quality_status": sample["quality_status"],
+            "surveillance_relevant": sample["surveillance_relevant"],
             "files": registered_files,
         },
         status_code=201,
