@@ -1,4 +1,5 @@
 import logging
+from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from jose import jwt
@@ -412,22 +413,9 @@ class DevLoginBody(BaseModel):
     name: str | None = None
 
 
-@router.post("/dev-login")
-def dev_login(
-    payload: DevLoginBody,
-    db=Depends(get_db_dep),  # noqa: B008
-) -> dict:
-    """LOCAL-ONLY: switch the active mock user.
-
-    Returns ``404 Not Found`` when ``settings.env`` is anything other than
-    ``"local"``. The endpoint creates the user/lab-membership rows when
-    they do not already exist so a freshly-seeded database can be driven
-    through the full RBAC matrix from a script.
-    """
-    s = get_settings()
-    if s.env != "local":
-        raise HTTPException(status_code=404, detail="Not Found")
-
+def _validate_dev_login_payload(payload: "DevLoginBody") -> tuple[str, str | None]:
+    """Email/role/lab_id validation. Raises HTTPException on any invalid input.
+    Returns (email, role)."""
     email = (payload.email or "").strip().lower()
     if "@" not in email or email.startswith("@") or email.endswith("@"):
         raise HTTPException(status_code=400, detail="email must be a valid email address.")
@@ -439,16 +427,24 @@ def dev_login(
             detail=f"role must be one of: {sorted(_DEV_LOGIN_ALL_ROLES)}",
         )
 
-    is_platform_admin = role == "Platform Admin"
-    is_data_analyst = role == "Data Analyst"
-
     # Section 7: Platform Admin and Data Analyst do NOT take lab assignments.
-    if (is_platform_admin or is_data_analyst) and payload.lab_id is not None:
+    if role in ("Platform Admin", "Data Analyst") and payload.lab_id is not None:
         raise HTTPException(
             status_code=400,
             detail=f"{role} cannot be assigned to a lab.",
         )
 
+    return email, role
+
+
+def _get_or_create_dev_user(
+    email: str, name: str | None, role: str | None, db: Any
+) -> tuple[dict, bool]:
+    """Look up the dev-login user by email, updating role flags if the
+    caller specified a role, or create one against the first organization.
+    Raises HTTPException(500) if no organization exists. Returns (user, created)."""
+    is_platform_admin = role == "Platform Admin"
+    is_data_analyst = role == "Data Analyst"
     rows = execute_query(
         "SELECT id, email, name, is_platform_admin, is_data_analyst, "
         "is_active, organization_id "
@@ -466,76 +462,103 @@ def dev_login(
             )
             user["is_platform_admin"] = is_platform_admin
             user["is_data_analyst"] = is_data_analyst
-        created = False
-    else:
-        org_rows = execute_query("SELECT id FROM organizations ORDER BY id LIMIT 1", {}, conn=db)
-        if not org_rows:
+        return user, False
+
+    org_rows = execute_query("SELECT id FROM organizations ORDER BY id LIMIT 1", {}, conn=db)
+    if not org_rows:
+        raise HTTPException(
+            status_code=500,
+            detail="No organizations exist; cannot create dev-login user.",
+        )
+    org_id = org_rows[0]["id"]
+    new_rows = execute_write(
+        "INSERT INTO users (email, name, organization_id, "
+        "is_platform_admin, is_data_analyst) "
+        "VALUES (:e, :n, :org, :pa, :da) "
+        "RETURNING id, email, name, is_platform_admin, is_data_analyst, "
+        "is_active, organization_id",
+        {
+            "e": email,
+            "n": name or email.split("@", 1)[0],
+            "org": org_id,
+            "pa": is_platform_admin,
+            "da": is_data_analyst,
+        },
+        conn=db,
+    )
+    return new_rows[0], True
+
+
+def _upsert_dev_lab_membership(
+    role: str | None, lab_id: int | None, user_id: int, db: Any
+) -> dict | None:
+    """Upsert lab_membership for a lab-scoped dev-login role. Raises
+    HTTPException on missing labs/permission_groups. Returns membership info,
+    or None when the role isn't lab-scoped."""
+    if role not in _DEV_LOGIN_LAB_ROLES:
+        return None
+
+    if lab_id is None:
+        lab_rows = execute_query("SELECT id FROM labs ORDER BY id LIMIT 1", {}, conn=db)
+        if not lab_rows:
             raise HTTPException(
-                status_code=500,
-                detail="No organizations exist; cannot create dev-login user.",
+                status_code=400,
+                detail="No labs exist; pass lab_id or create a lab first.",
             )
-        org_id = org_rows[0]["id"]
-        new_rows = execute_write(
-            "INSERT INTO users (email, name, organization_id, "
-            "is_platform_admin, is_data_analyst) "
-            "VALUES (:e, :n, :org, :pa, :da) "
-            "RETURNING id, email, name, is_platform_admin, is_data_analyst, "
-            "is_active, organization_id",
-            {
-                "e": email,
-                "n": payload.name or email.split("@", 1)[0],
-                "org": org_id,
-                "pa": is_platform_admin,
-                "da": is_data_analyst,
-            },
-            conn=db,
-        )
-        user = new_rows[0]
-        created = True
+        lab_id = lab_rows[0]["id"]
 
-    membership_info: dict | None = None
-    if role in _DEV_LOGIN_LAB_ROLES:
-        lab_id = payload.lab_id
-        if lab_id is None:
-            lab_rows = execute_query("SELECT id FROM labs ORDER BY id LIMIT 1", {}, conn=db)
-            if not lab_rows:
-                raise HTTPException(
-                    status_code=400,
-                    detail="No labs exist; pass lab_id or create a lab first.",
-                )
-            lab_id = lab_rows[0]["id"]
-
-        pg_name, is_director = _DEV_LOGIN_LAB_ROLES[role]
-        pg_rows = execute_query(
-            "SELECT id FROM permission_groups WHERE name = :n LIMIT 1",
-            {"n": pg_name},
-            conn=db,
+    pg_name, is_director = _DEV_LOGIN_LAB_ROLES[role]
+    pg_rows = execute_query(
+        "SELECT id FROM permission_groups WHERE name = :n LIMIT 1",
+        {"n": pg_name},
+        conn=db,
+    )
+    if not pg_rows:
+        raise HTTPException(
+            status_code=500,
+            detail=f"permission_groups row '{pg_name}' missing.",
         )
-        if not pg_rows:
-            raise HTTPException(
-                status_code=500,
-                detail=f"permission_groups row '{pg_name}' missing.",
-            )
-        pg_id = pg_rows[0]["id"]
+    pg_id = pg_rows[0]["id"]
 
-        execute_write(
-            """
-            INSERT INTO lab_membership
-                (user_id, lab_id, permission_group_id,
-                 is_lab_director, granted_by_id)
-            VALUES (:uid, :lid, :pg, :idir, :uid)
-            ON CONFLICT (user_id, lab_id) DO UPDATE
-            SET permission_group_id = EXCLUDED.permission_group_id,
-                is_lab_director = EXCLUDED.is_lab_director
-            """,
-            {"uid": user["id"], "lid": lab_id, "pg": pg_id, "idir": is_director},
-            conn=db,
-        )
-        membership_info = {
-            "lab_id": lab_id,
-            "permission_group": pg_name,
-            "is_lab_director": is_director,
-        }
+    execute_write(
+        """
+        INSERT INTO lab_membership
+            (user_id, lab_id, permission_group_id,
+             is_lab_director, granted_by_id)
+        VALUES (:uid, :lid, :pg, :idir, :uid)
+        ON CONFLICT (user_id, lab_id) DO UPDATE
+        SET permission_group_id = EXCLUDED.permission_group_id,
+            is_lab_director = EXCLUDED.is_lab_director
+        """,
+        {"uid": user_id, "lid": lab_id, "pg": pg_id, "idir": is_director},
+        conn=db,
+    )
+    return {
+        "lab_id": lab_id,
+        "permission_group": pg_name,
+        "is_lab_director": is_director,
+    }
+
+
+@router.post("/dev-login")
+def dev_login(
+    payload: DevLoginBody,
+    db=Depends(get_db_dep),  # noqa: B008
+) -> dict:
+    """LOCAL-ONLY: switch the active mock user.
+
+    Returns ``404 Not Found`` when ``settings.env`` is anything other than
+    ``"local"``. The endpoint creates the user/lab-membership rows when
+    they do not already exist so a freshly-seeded database can be driven
+    through the full RBAC matrix from a script.
+    """
+    s = get_settings()
+    if s.env != "local":
+        raise HTTPException(status_code=404, detail="Not Found")
+
+    email, role = _validate_dev_login_payload(payload)
+    user, created = _get_or_create_dev_user(email, payload.name, role, db)
+    membership_info = _upsert_dev_lab_membership(role, payload.lab_id, user["id"], db)
 
     log_audit(
         action=AuditActions.AUTH_DEV_LOGIN,
