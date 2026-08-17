@@ -1197,6 +1197,7 @@ Driven by integration-readiness analysis vs Driver et al. 2024 *Sci Total Enviro
 - [ ] **B-NCBI-1** BigQuery JOIN for NCBI Pathogen Detection — surface PDS# cluster IDs and MicroBIGG-E AMR results in samples table. (2 sessions, post-staging-cutover)
 - [ ] **B-NCBI-2** hAMRonization output mandate for all AMR pipelines in the zoo. (1 session per pipeline, pipeline zoo work)
 - [ ] **B-NCBI-3** Mint stable JACKPOT cluster accessions (JKPT-prefixed, versioned) for any cgMLST/SNP cluster. Persist tree representations in newick + JSON. (1 week, Year 2 with cgMLST clustering)
+- [ ] **B-GCPATH-1** Vendor gcPathogen (NMDC/CAS) static cgMLST schemas (112 species) + ARG/VF/MGE reference sets as pipeline-zoo inputs; mirror + pin. Static data only, no nmdc.cn API in production (PRC-hosted risk). (1-2 sessions, Tracked/Not Scheduled, depends B-LICENSE-1, license UNVERIFIED, ROI below B-NCBI-*)
 
 ### C. Governance & Pathoplexus UI patterns (overview §12.1)
 
@@ -2223,6 +2224,8 @@ This work is **ahead-of-schedule** relative to B-FED-1 / B-PRV-1 / B-CRY-1 in th
 
 ## cryptWWDB Integration Track — NEW 2026-05-12
 
+- [ ] **B-FEDAGENT-1** Spike: prototype cryptWWDB Tier-2 encrypted mass-balance as a 3-agent Globus Labs Academy (`academy-py`, MIT) topology (Muni A key-holder / Muni B upstream / Lab evaluator) behind `AISPrivacyHooks.he_compute`; measure whether the actor/mailbox model beats request/response FastAPI for multi-round HE and the future multi-key joint-decryption path. Throwaway worktree, no production lockfile change; deptrust pass on the Academy transitive tree first; prove the fully local (non-Globus-hosted) exchange topology; gated on the five-PR merge rule. Emits `docs/decisions/academy-coordination.md`. (~3 sessions, spike; clears B-LICENSE-1; informs B-IMMUNE-HE-2 multi-key)
+
 **Source:** Integration-readiness analysis vs Driver et al. 2024 *Sci Total Environ* 940:173315 — "Encrypted data-sharing for preserving privacy in wastewater-based epidemiology" (Driver, Ahsan, Piske, Lee, Forrest, Halden, Trieu; NSF 2115075). Full architectural mapping documented in `docs/cryptwwdb_integration.md`.
 
 **Strategic framing:** JACKPOT is positioned to be the production substrate for the cryptWWDB framework as a Track 2 extension landing under `backend/backend/immune/sec/`. Architectural fit is unusually clean — the AIS-hook design (now in `docs/immune_platform.md` Part 1, was `Jackpot_AIS.md`) and the Track 1 / Track 2 seam pattern (now in `docs/immune_platform.md` Part 2, was the standalone `jackpot_immune_collaboration_scaffolding.md`) already define `AISPrivacyHooks.he_compute(encrypted_inputs, op)` as a Protocol entry point with the Track 2 implementation site pre-allocated at `backend/backend/immune/sec/he_backend.py`. This section tracks the cryptWWDB-specific work that doesn't fit naturally inside an existing phase.
@@ -2923,7 +2926,7 @@ All permanent fixes for these are tracked in Phase 20 Q-9 through Q-18.
 **Fresh morning, 5 minutes first:** verify local development is in sync with origin and the post-merge state holds:
 
 ```bash
-cd ~/Projects/jackpot
+cd ~/Projects/operation_jackpot/jackpot
 git switch development
 git pull --ff-only
 git log --oneline -5      # should show the four most recent merges from Sessions 21+
@@ -2955,7 +2958,7 @@ My suggestion (informational, not prescriptive): Phase 24.5 design lockdown next
 **Worktree workflow lesson from Sessions 20-21:** if you start parallel-track sessions, use `git worktree add` per branch and never `git switch` inside a worktree. First message of every Claude Code session in a worktree should run the verification ritual:
 
 ```bash
-EXPECTED_WORKTREE="$HOME/Projects/jackpot-<branch>"
+EXPECTED_WORKTREE="$HOME/Projects/operation_jackpot/jackpot-<branch>"
 EXPECTED_BRANCH="<branch-name>"
 [ "$(pwd -P)" = "$EXPECTED_WORKTREE" ] || { echo "FATAL: wrong cwd ($(pwd -P)). Stop." >&2; exit 1; }
 [ "$(git branch --show-current)" = "$EXPECTED_BRANCH" ] || { echo "FATAL: wrong branch ($(git branch --show-current)). Stop." >&2; exit 1; }
