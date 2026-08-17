@@ -194,6 +194,36 @@ def _normalize(value: str) -> str:
     return value.strip().lower()
 
 
+def _exact_column_match(norm: str, target_lower: dict[str, str]) -> str | None:
+    return target_lower.get(norm)
+
+
+def _synonym_column_match(norm: str, target_set: set[str]) -> str | None:
+    for canonical, syns in COLUMN_NAME_SYNONYMS.items():
+        if canonical not in target_set:
+            continue
+        if any(_normalize(s) == norm for s in syns):
+            return canonical
+    return None
+
+
+def _fuzzy_column_match(norm: str, target_fields: list[str]) -> tuple[str | None, float]:
+    """Best fuzzy score across canonical target field names and their synonyms."""
+    best_target: str | None = None
+    best_score: float = 0.0
+    for canonical in target_fields:
+        score = SequenceMatcher(None, norm, _normalize(canonical)).ratio()
+        if score > best_score:
+            best_score = score
+            best_target = canonical
+        for syn in COLUMN_NAME_SYNONYMS.get(canonical, []):
+            score = SequenceMatcher(None, norm, _normalize(syn)).ratio()
+            if score > best_score:
+                best_score = score
+                best_target = canonical
+    return best_target, best_score
+
+
 def suggest_column_mapping(
     spreadsheet_columns: list[str],
     target_fields: list[str] | None = None,
@@ -230,51 +260,24 @@ def suggest_column_mapping(
     if target_fields is None:
         target_fields = list(COLUMN_NAME_SYNONYMS.keys())
 
-    target_set = {f for f in target_fields}
+    target_set = set(target_fields)
     target_lower = {_normalize(f): f for f in target_fields}
 
     out: dict[str, MappingSuggestion] = {}
     for raw in spreadsheet_columns:
         norm = _normalize(raw)
 
-        # Exact match (case-insensitive).
-        if norm in target_lower:
-            out[raw] = MappingSuggestion(
-                target=target_lower[norm],
-                confidence=1.0,
-                reason="exact_match",
-            )
+        exact = _exact_column_match(norm, target_lower)
+        if exact is not None:
+            out[raw] = MappingSuggestion(target=exact, confidence=1.0, reason="exact_match")
             continue
 
-        # Synonym match.
-        synonym_hit: str | None = None
-        for canonical, syns in COLUMN_NAME_SYNONYMS.items():
-            if canonical not in target_set:
-                continue
-            if any(_normalize(s) == norm for s in syns):
-                synonym_hit = canonical
-                break
+        synonym_hit = _synonym_column_match(norm, target_set)
         if synonym_hit is not None:
-            out[raw] = MappingSuggestion(
-                target=synonym_hit,
-                confidence=0.9,
-                reason="synonym",
-            )
+            out[raw] = MappingSuggestion(target=synonym_hit, confidence=0.9, reason="synonym")
             continue
 
-        # Fuzzy match — best score across canonicals and synonyms.
-        best_target: str | None = None
-        best_score: float = 0.0
-        for canonical in target_fields:
-            score = SequenceMatcher(None, norm, _normalize(canonical)).ratio()
-            if score > best_score:
-                best_score = score
-                best_target = canonical
-            for syn in COLUMN_NAME_SYNONYMS.get(canonical, []):
-                score = SequenceMatcher(None, norm, _normalize(syn)).ratio()
-                if score > best_score:
-                    best_score = score
-                    best_target = canonical
+        best_target, best_score = _fuzzy_column_match(norm, target_fields)
         if best_score >= _FUZZY_CONFIDENCE_THRESHOLD and best_target is not None:
             out[raw] = MappingSuggestion(
                 target=best_target,
