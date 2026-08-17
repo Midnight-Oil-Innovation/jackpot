@@ -428,6 +428,38 @@ class TestPipelineOutputsAreManaged:
         assert args[3] == "ASSEMBLY"  # consensus_fasta → ASSEMBLY
         assert kwargs["ingest_method"] == "pipeline_output"
 
+    def test_pipeline_files_row_stores_string_sample_id_not_pk(self):
+        """pipeline_files.sample_id is a display-only TEXT column holding the
+        business sample_id string (e.g. 'EX-001'), never the integer PK.
+        Distinct from register_file(), which correctly needs the int FK."""
+        mock_write = MagicMock()
+        with (
+            patch(
+                "backend.storage._get_client",
+                return_value=self._mock_client(self._one_output_manifest()),
+            ),
+            patch("backend.config.get_settings"),
+            patch("backend.database.execute_write", mock_write),
+            patch("backend.database.execute_query", return_value=[{"id": 42}]),
+            patch("backend.ingest_files.register_file", return_value=(101, False)),
+            patch("backend.audit.log_audit"),
+        ):
+            load_pipeline_results(
+                run_id="run-001",
+                result_uri="gs://jackpot-results/run-001/",
+                pipeline_name="nf-core/viralrecon",
+                pipeline_version="2.6.0",
+                launched_by_id=7,
+                conn=MagicMock(),
+            )
+
+        pipeline_files_calls = [
+            call for call in mock_write.call_args_list if "INSERT INTO pipeline_files" in call[0][0]
+        ]
+        assert len(pipeline_files_calls) == 1
+        params = pipeline_files_calls[0][0][1]
+        assert params["sample_id"] == "EX-001"
+
     def test_pipeline_results_loader_dedup_preserves_existing_state(self):
         """On dedup, register_file is called with MANAGED but the loader
         does not re-issue an UPDATE to transition the existing row.
