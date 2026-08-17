@@ -43,10 +43,21 @@ _ALLOWED_EXECUTOR_TYPES: frozenset[str] = frozenset(
 def _env() -> Environment:
     global _TEMPLATE_ENV
     if _TEMPLATE_ENV is None:
+        # bandit B701 flags autoescape=False as a blanket XSS risk — a false
+        # positive here. These templates render Groovy/Nextflow config text,
+        # not HTML; Jinja2's HTML-entity autoescaping would mean nothing to
+        # the Groovy parser (it doesn't protect against injection) while
+        # actively corrupting legitimate values containing &, <, or > (e.g.
+        # a pipeline description like "R&D pipeline"). The real defense is
+        # groovy_escape / validate_groovy_safe above — every interpolation
+        # point is covered by one of: an allowlist check before render
+        # (executor_type), a DB CHECK constraint (container_engine), the
+        # groovy_escape filter, or validate_groovy_safe rejection. See this
+        # module's docstring and groovy_safe.py for the full R-1 #7 design.
         _TEMPLATE_ENV = Environment(
             loader=PackageLoader("backend.pipeline_config", "profile_templates"),
             undefined=StrictUndefined,
-            autoescape=False,
+            autoescape=False,  # nosec B701 — see comment above
             keep_trailing_newline=True,
         )
         # R-1 #7: defense-in-depth Groovy injection escape. Templates
