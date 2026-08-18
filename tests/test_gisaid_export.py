@@ -70,6 +70,16 @@ def test_all_required_gisaid_columns_present():
 
 
 @pytest.mark.asyncio
+async def test_gisaid_export_unsupported_pathogen_returns_501(client):
+    resp = await client.post(
+        "/api/v1/gisaid/export/1",
+        params={"pathogen": "Influenza"},
+        json=[1],
+    )
+    assert resp.status_code == 501
+
+
+@pytest.mark.asyncio
 async def test_gisaid_export_empty_ids_returns_400(client):
     resp = await client.post(
         "/api/v1/gisaid/export/1",
