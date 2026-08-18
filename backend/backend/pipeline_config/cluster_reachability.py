@@ -39,16 +39,13 @@ explicitly via monkeypatch.
 
 from __future__ import annotations
 
-import logging
 import shutil
-import subprocess
+import subprocess  # nosec B404 — only used below for a fixed-argv sinfo probe, no shell
 import threading
 import time
 from dataclasses import dataclass
 
 from backend.config import get_settings
-
-logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -99,7 +96,10 @@ def _run_sinfo(timeout_s: float) -> SlurmReachabilityResult:
             detail="sinfo binary is not on the API host's PATH.",
         )
     try:
-        proc = subprocess.run(  # noqa: S603,S607 — fixed argv, no shell
+        # Fixed argv, no shell, no user-controlled input — bandit's
+        # partial-path warning (B607) is inherent to relying on PATH
+        # resolution (already validated above via shutil.which()).
+        proc = subprocess.run(  # noqa: S603,S607  # nosec B603 B607
             ["sinfo", "-h"],
             check=False,
             capture_output=True,
