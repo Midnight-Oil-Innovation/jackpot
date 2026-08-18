@@ -84,12 +84,14 @@ def _resolve_output_root() -> Path:
 # ── file linking ──────────────────────────────────────────────────
 
 
-def _link_or_copy(uri: str, dest_dir: Path, *, copy: bool = False) -> str:
-    """Place a file:// URI inside the package's files/ subdirectory.
+def _resolve_local_source(uri: str) -> str | Path:
+    """Classify a file URI for placement.
 
-    Returns the relative path string for embedding in the TSV. For
-    ``gs://`` and ``s3://`` URIs the function returns the URI
-    unchanged — Seqsender reads them directly.
+    Returns a ``str`` when the caller should return it immediately
+    unchanged — a passthrough for ``gs://``/``s3://``/``http(s)://``
+    URIs (Seqsender reads them directly), a passthrough-with-warning
+    for ``sra://`` URIs, or a ``# BROKEN:`` marker for a missing local
+    file. Otherwise returns the resolved on-disk ``Path`` to place.
     """
     parsed = urlparse(uri)
     scheme = parsed.scheme.lower()
@@ -106,16 +108,21 @@ def _link_or_copy(uri: str, dest_dir: Path, *, copy: bool = False) -> str:
         # Surface the broken file in the package so the operator can
         # see it; don't crash the whole package generation.
         return f"# BROKEN: {uri}"
+    return src_path
 
-    dest_dir.mkdir(parents=True, exist_ok=True)
+
+def _dedupe_destination(dest_dir: Path, src_path: Path) -> Path:
+    """Pick a non-clobbering destination path for ``src_path`` inside ``dest_dir``.
+
+    Two different source files can share a basename (e.g. R1.fastq.gz from
+    two samples). If the slot already holds a *different* file that still
+    exists, disambiguate with a short hash of the source path so the second
+    placement can't clobber the first (which would make that sample's TSV
+    row reference the wrong file's contents). Stale leftovers and
+    re-placements of the same source are simply overwritten.
+    """
     src_resolved = src_path.resolve()
     dest = dest_dir / src_path.name
-    # Two different source files can share a basename (e.g. R1.fastq.gz from
-    # two samples). If the slot already holds a *different* file that still
-    # exists, disambiguate with a short hash of the source path so the second
-    # placement can't clobber the first (which would make that sample's TSV
-    # row reference the wrong file's contents). Stale leftovers and
-    # re-placements of the same source are simply overwritten.
     if dest.exists() or dest.is_symlink():
         existing = Path(os.readlink(dest)) if dest.is_symlink() else dest
         if existing.exists() and existing.resolve() != src_resolved:
@@ -124,11 +131,28 @@ def _link_or_copy(uri: str, dest_dir: Path, *, copy: bool = False) -> str:
 
     if dest.exists() or dest.is_symlink():
         dest.unlink()
+    return dest
+
+
+def _link_or_copy(uri: str, dest_dir: Path, *, copy: bool = False) -> str:
+    """Place a file:// URI inside the package's files/ subdirectory.
+
+    Returns the relative path string for embedding in the TSV. For
+    ``gs://`` and ``s3://`` URIs the function returns the URI
+    unchanged — Seqsender reads them directly.
+    """
+    resolved = _resolve_local_source(uri)
+    if isinstance(resolved, str):
+        return resolved
+    src_path = resolved
+
+    dest_dir.mkdir(parents=True, exist_ok=True)
+    dest = _dedupe_destination(dest_dir, src_path)
 
     if copy:
         shutil.copy2(src_path, dest)
     else:
-        os.symlink(src_resolved, dest)
+        os.symlink(src_path.resolve(), dest)
 
     return str(dest.relative_to(dest_dir.parent))
 
@@ -234,43 +258,38 @@ release_date: {submission.get("release_date") or ""!r}
 # ── repository generators ─────────────────────────────────────────
 
 
-def generate_ncbi_package(
-    submission: dict,
-    samples: list[dict],
-    package_dir: Path,
-    *,
-    copy_files: bool = False,
-) -> None:
-    """Write biosample.tsv + sra.tsv + files/ + seqsender_config + README."""
-    files_dir = package_dir / "files"
+_BIOSAMPLE_COLS = [
+    "sample_name",
+    "organism",
+    "collection_date",
+    "geo_loc_name",
+    "host",
+    "isolation_source",
+    "collected_by",
+    "isolate",
+    "lat_lon",
+]
 
-    biosample_cols = [
-        "sample_name",
-        "organism",
-        "collection_date",
-        "geo_loc_name",
-        "host",
-        "isolation_source",
-        "collected_by",
-        "isolate",
-        "lat_lon",
-    ]
-    sra_cols = [
-        "sample_name",
-        "library_id",
-        "title",
-        "library_strategy",
-        "library_source",
-        "library_selection",
-        "library_layout",
-        "platform",
-        "instrument_model",
-        "filename",
-        "filename2",
-    ]
+_SRA_COLS = [
+    "sample_name",
+    "library_id",
+    "title",
+    "library_strategy",
+    "library_source",
+    "library_selection",
+    "library_layout",
+    "platform",
+    "instrument_model",
+    "filename",
+    "filename2",
+]
 
+
+def _write_biosample_tsv(package_dir: Path, samples: list[dict]) -> None:
     with open(package_dir / "biosample.tsv", "w", newline="") as f:
-        writer = csv.DictWriter(f, fieldnames=biosample_cols, delimiter="\t", extrasaction="ignore")
+        writer = csv.DictWriter(
+            f, fieldnames=_BIOSAMPLE_COLS, delimiter="\t", extrasaction="ignore"
+        )
         writer.writeheader()
         for s in samples:
             country = s.get("collection_location_country") or ""
@@ -294,8 +313,11 @@ def generate_ncbi_package(
                 }
             )
 
+
+def _write_sra_tsv(package_dir: Path, samples: list[dict], *, copy_files: bool) -> None:
+    files_dir = package_dir / "files"
     with open(package_dir / "sra.tsv", "w", newline="") as f:
-        writer = csv.DictWriter(f, fieldnames=sra_cols, delimiter="\t", extrasaction="ignore")
+        writer = csv.DictWriter(f, fieldnames=_SRA_COLS, delimiter="\t", extrasaction="ignore")
         writer.writeheader()
         for s in samples:
             uris = _sample_file_uris(s)
@@ -315,6 +337,18 @@ def generate_ncbi_package(
                     "filename2": placed[1] if len(placed) >= 2 else "",
                 }
             )
+
+
+def generate_ncbi_package(
+    submission: dict,
+    samples: list[dict],
+    package_dir: Path,
+    *,
+    copy_files: bool = False,
+) -> None:
+    """Write biosample.tsv + sra.tsv + files/ + seqsender_config + README."""
+    _write_biosample_tsv(package_dir, samples)
+    _write_sra_tsv(package_dir, samples, copy_files=copy_files)
 
     _write_seqsender_config(package_dir, submission)
     _write_readme(
