@@ -13,10 +13,55 @@ from __future__ import annotations
 
 from datetime import date, datetime
 from enum import Enum
-from typing import Any
+from typing import Any, Literal
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, HttpUrl
+
+# Hosts where http is acceptable because the traffic never reaches a
+# network. Two JACKPOT instances on one developer machine federate over
+# http://localhost; there is nothing on that path to intercept. Same rule
+# browsers use for secure contexts.
+_LOOPBACK_HOSTS: frozenset[str] = frozenset({"localhost", "127.0.0.1", "::1"})
+
+
+def is_secure_url(value: HttpUrl | None) -> bool:
+    """True if this URL may carry the federation API key.
+
+    https always qualifies. Plain http qualifies only for loopback, where
+    the request never reaches a network and cannot be intercepted.
+    """
+    if value is None:
+        return True
+    if value.scheme == "https":
+        return True
+    # HttpUrl renders IPv6 hosts bracketed; compare on the bare address.
+    return (value.host or "").strip("[]").lower() in _LOOPBACK_HOSTS
+
+
+def require_secure_url(value: HttpUrl | None, *, field_name: str) -> HttpUrl | None:
+    """Reject a plaintext federation URL unless it points at loopback.
+
+    ``HttpUrl`` accepts http and https alike. Every federation URL is
+    dialled with the federation API key in a request header
+    (``client.py`` L1 fan-out, push for the hub URL), so a plaintext
+    peer puts that key on the wire in the clear.
+
+    Applied on the registration path (``InstanceCreate``). Rows can also
+    reach ``federated_instances`` without passing through that endpoint —
+    a migration, a restore, psql — so ``FederationClient.query`` gates on
+    :func:`is_secure_url` again at dial time, which is where the key
+    actually goes on the wire.
+    """
+    if value is None:
+        return None
+    if is_secure_url(value):
+        return value
+    raise ValueError(
+        f"{field_name} must use https. The federation API key is sent as a "
+        "request header to this URL, so a plaintext peer exposes it on the "
+        "wire. http is permitted only for loopback (localhost, 127.0.0.1, ::1)."
+    )
 
 
 class FederationRole(str, Enum):
@@ -70,6 +115,20 @@ class FederatedInstance(BaseModel):
         "API key. Never the key itself — keys never live in DB rows.",
     )
     last_seen_at: datetime | None = None
+    transport_type: Literal["HTTPS", "DTN", "SNEAKERNET", "LORA"] = Field(
+        default="HTTPS",
+        description="Transport used to reach this peer. HTTPS is the only "
+        "value supporting L1 live search; DTN/SNEAKERNET/LORA are store-and-"
+        "forward. Enforced DB-side by a TEXT + CHECK constraint (not a "
+        "Postgres ENUM). Keep this Literal in sync with the CHECK in "
+        "migration 2daeecbe082d when adding transports.",
+    )
+    transport_config: dict | None = Field(
+        default=None,
+        description="Transport-specific settings. DTN: endpoint EID, lifetime. "
+        "LORA: channel, MQTT host. SNEAKERNET: bundle-store path, courier note. "
+        "Null/empty for HTTPS.",
+    )
     created_at: datetime
     updated_at: datetime
 

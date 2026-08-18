@@ -1,3 +1,5 @@
+> **Status:** Superseded — archived (directory convention). Historical; do not cite as current.
+
 # JACKPOT Immune Platform — Collaboration Scaffolding
 
 **Document type:** Companion to `jackpot_immune_platform_plan.md` — concrete software scaffolding for collaboration with the the AIS-theory collaborator/the applied-cryptography collaborator/the adversarial-security collaborator/the wet-side advisor group at the ASU Biodesign Center for Biocomputing, Security and Society

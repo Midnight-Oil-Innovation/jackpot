@@ -1,3 +1,5 @@
+> **Status:** Canonical — federation architecture (3 levels).
+
 # Federation
 
 JACKPOT's federation system enables multiple JACKPOT instances — across labs, agencies, or jurisdictions — to share pathogen genomics data and queries without each instance giving up control of its own data or operating policies. Federation is implemented as **three sibling Python packages** at `backend/backend/federation/`, `backend/backend/privacy/`, and `backend/backend/crypto/`, each shipping a **Track 1** implementation using current JACKPOT primitives plus a **Track 2** AIS-augmented hook seam where collaborator overlays plug in via dependency injection without forking the package.

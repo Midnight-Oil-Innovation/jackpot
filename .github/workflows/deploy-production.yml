@@ -53,7 +53,7 @@ jobs:
     environment: production
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       # Validate inputs FIRST. The next step echoes them via $env-vars
       # (never via `${{ }}` interpolation) so a malicious `reason` value

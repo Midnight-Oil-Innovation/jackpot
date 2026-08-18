@@ -1,3 +1,5 @@
+> **Status:** Reference - comparative landscape of peer platforms.
+
 # JACKPOT Platform Landscape
 
 ## Comparative Analysis: What We've Adopted, Why, and What's Next
@@ -72,7 +74,8 @@ This is the single comparison table for the full landscape. The original documen
 | 20 | **DataHarmonizer (Mpox package)** | Data Sharing & Harmonization Platform | Ontology-based pathogen metadata curation; PHA4GE-aligned templates | MIT | High | **Already adopted** (DataHarmonizer is JACKPOT's ingest UI; Mpox package is a worked example) |
 | 21 | **CDST (CoDing Sequence Typer)** | Decentralized / Privacy-Preserving | Decentralized hash-based bacterial typing; non-identifying outputs interoperable across labs | Open-source | Emerging | **Highest-priority adopt** (drop-in primitive for federated bacterial outbreak detection) |
 | 22 | **Alembic** | Decentralized / Privacy-Preserving | AI/NLP-driven structuring of heterogeneous biological metadata | Open-source | Emerging | **Defer** (potentially useful for legacy spreadsheet ingest; not on critical path) |
-| 23 | **JACKPOT** *(reference row)* | Genomic Surveillance Platform (operator-agnostic) | Multi-deployment-target pathogen genomics platform with two-PII-gate ingest, tier-aware validation, six ingest paths, three-level federation; AGPL-3.0 | AGPL-3.0 | Active development | n/a — *this is JACKPOT* |
+| 23 | **gcPathogen** | Vendor | gcPathogen (NMDC/CAS) static reference assets as pipeline-zoo inputs — downloadable cgMLST schema files (112 species) + ARG/VF/MGE reference sets | UNVERIFIED (download-bundle terms; chewBBACA GPL-3.0; CARD/VFDB own terms) | High | Scope: known-bacterial-isolate characterization only, not the METAGENE-1/DeepSVDD unknown core. Static NCBI-derived data only; do NOT call the nmdc.cn API from production (PRC-hosted: supply-chain/compliance liability under DARPA/BARDA/NSF posture + availability SPOF). Available to download:https://nmdc.cn/gcpathogen (NAR 2024, doi:10.1093/nar/gkad875); mirror locally, pin snapshot version. |
+| 24 | **JACKPOT** *(reference row)* | Genomic Surveillance Platform (operator-agnostic) | Multi-deployment-target pathogen genomics platform with two-PII-gate ingest, tier-aware validation, six ingest paths, three-level federation; AGPL-3.0 | AGPL-3.0 | Active development | n/a — *this is JACKPOT* |
 
 **How to read this table.** The "JACKPOT adoption status" column collapses three different relationships:
 
@@ -309,7 +312,7 @@ Before getting into JACKPOT-vs-Loculus specifics, here's where the rest of the p
 | **Solu** | Proprietary | Web | Proprietary | Proprietary REST | OAuth + RBAC | SaaS (US/EU regions) | **Closed-source** |
 | **RT-MetA** | Python (Nextflow) | Limited UI | SQLite-class | Local | Local | **Offline-first** | Open (early-stage) |
 | **GISAID** | Closed | Closed | Closed | Limited/gated | Account + DAA | Closed | **Closed-source** |
-| **JACKPOT** | **Python 3.11 / FastAPI** | **Streamlit** (Month 2) → React (Year 2) | PostgreSQL | Custom REST + planned LAPIS-compat | Google OAuth + JWT | Helm/Kubernetes (cloud) + Docker Compose (local) | **AGPL-3.0** |
+| **JACKPOT** | **Python 3.12 / FastAPI** | **Streamlit** (Month 2) → React (Year 2) | PostgreSQL | Custom REST + planned LAPIS-compat | Google OAuth + JWT | Helm/Kubernetes (cloud) + Docker Compose (local) | **AGPL-3.0** |
 
 #### 5.1.4 Analysis capabilities
 
@@ -619,20 +622,37 @@ Likely to surface differences worth understanding:
 
 **JACKPOT relevance.** **Already adopted.** JACKPOT generates DataHarmonizer-compatible templates from its LinkML schema (per `docs/architecture.md` v6.0 §11) — three template tiers (T1/T2/T3), source-type-specific combined templates, embedded version markers. The Mpox package is one of several upstream examples JACKPOT learned from.
 
-The new finding from the Mpox-package paper that's worth absorbing into JACKPOT: their **per-pathogen contextual specifications** — schema-versioned per pathogen with explicit "version 1.0 / version 1.1" markers in the template, along with curation guidance for users on edge cases. JACKPOT's schema is monolithic (one schema covers all source types and all organisms with discriminators); per-pathogen specs would be more user-friendly for lab analysts who are filling out only Salmonella forms or only TB forms.
+The Mpox-package paper surfaces a **per-pathogen contextual specification** pattern — schema-versioned per pathogen, with curation guidance per organism. The UX appeal is real: a lab analyst filling out only Salmonella forms sees only Salmonella-relevant fields rather than a wide monolith with most columns greyed out. **Decision (2026-05): adopt per-pathogen as a generated *view* layer over the monolith, NOT as a schema decomposition.** JACKPOT's schema stays monolithic — one schema covering all source types and organisms via discriminators — because that monolith is what makes JACKPOT's differentiators (CARE/sovereignty slots, tier×sharing axis, federation disclosure annotations) *structural*: those are cross-cutting horizontal concerns that must hold uniformly over the entire field space. Per-pathogen templates are generated views (an organism-discriminator filter over the monolith that hides irrelevant slots at entry time without deleting them), so every view inherits the governance slots and cannot drop them. The rejected alternative — factoring the monolith into independently-versioned per-pathogen specs (the CIDGOH `is_a` core+extension pattern) — would turn each structural governance guarantee into a per-template invariant to audit, and adopting upstream specs wholesale would mean new fields arriving on CIDGOH's release schedule without JACKPOT governance annotations. The view approach delivers the entry-UX win at zero governance cost.
 
-**Adoption shape.** Already largely adopted; modest extension worth considering.
+**Adoption shape.** Already largely adopted. Extension: per-pathogen template *views* generated from the monolith (see decision above) — entry-UX improvement, no schema change.
 
 **Backlog item:**
 ```text
-[ ] B-DH-1    Study the Mpox-package per-pathogen contextual specification
-              pattern. Decide whether to factor JACKPOT's monolithic
-              DataHarmonizer template into per-pathogen contextual specs
-              (Salmonella spec, TB spec, mpox spec, etc.) versioned
-              independently from the master schema. Effort: 1-2 sessions
-              decision + multiple weeks if implemented. Phase: when
-              schema v6.0 is on deck.
+[ ] B-DH-1    Add per-pathogen DataHarmonizer template *projections* over
+              the existing monolithic schema. Generated-view layer, NOT a
+              schema refactor: extend the T1/T2/T3 template generator with an
+              organism filter that emits one DataHarmonizer JSON template per
+              pathogen from the same LinkML schema. Governance slots
+              (CARE/sovereignty, tier×sharing, federation disclosure) stay
+              core in the monolith and are inherited by every view. First
+              template: Mpox, to validate the projection mechanism end to end.
+              REJECTED (do not re-litigate): factoring the monolith into
+              independently-versioned per-pathogen specs — sacrifices the
+              cross-cutting governance guarantees that are JACKPOT's
+              differentiators for a commodity UX win the view layer already
+              delivers. Effort: 1-2 sessions. Phase: any time DataHarmonizer
+              template work is touched.
 ```
+
+#### 5.4.5 BioGenome Portal (out of scope — biodiversity cataloging)
+
+**Function.** Web portal for organizing and displaying biodiversity genomics metadata (guigolab/biogenome-portal, CRG Barcelona). Catalogs eukaryotic species' genome-sequencing progress against target lists, tracks INSDC submission status, and presents data on a taxonomic tree plus a geographic map. Production instances back the Earth Biogenome Project, ERGA, and the Catalan Initiative.
+
+**License / stack.** MIT. Python Flask + uWSGI backend, MongoDB store, Vue.js SPA, docker-compose. Fully divergent from JACKPOT's FastAPI / PostgreSQL / SQLAlchemy / Streamlit / Helm stack — no clean code-adoption path.
+
+**Maturity.** Peer-reviewed (NAR Genomics & Bioinformatics, Mar 2025; DOI 10.1093/nargab/lqaf020). Maintained through v3.3.1 (Jul 2025), but single-maintainer and ~6 stars — low durability.
+
+**JACKPOT relevance.** Out of scope for surveillance. Same data-portal category as Overture (§5.4.2) but biodiversity-scope: no pathogen detection, SoC screening, AMR, federated query, or PII gating. Not a competitor and not an integration candidate. One reusable idea only — its INSDC import-by-BioProject-accession pattern (import everything under a BioProject umbrella, then re-sync on a schedule), captured as a UX enhancement on the external-search backlog item. Evaluated and rejected for adoption 2026-06-16.
 
 ---
 
@@ -702,7 +722,7 @@ But it's not on the critical path. The four highest-volume legacy formats (legac
 
 ### 6.1 JACKPOT just changed rows
 
-Previously, when JACKPOT was an ADHS-contracted state-level deployment, the matrix positioned it as a peer to Pathoplexus, Pathogenwatch, BV-BRC — a *deployment*. With the pivot, JACKPOT is structurally a *software package* designed to power multiple deployments — same row as Loculus.
+JACKPOT is structurally a *software package* designed to power multiple deployments — same row as Loculus.
 
 The Pathoplexus-as-overlay-on-Loculus pattern is now the directly applicable reference for how `Midnight-Oil-Innovation/jackpot` could be deployed by other operators with overlay configs.
 
@@ -2412,7 +2432,7 @@ These are deeper analyses or pattern studies that would inform major roadmap dec
 
 3. **FAIR Data Pipeline provenance audit** (B-FDP-1). Compare JACKPOT's `PipelineProvenance` + `pipeline_runs` to the FAIR Data Pipeline metadata model. Identify gaps in input-data version tracking, execution-environment snapshot, parameter immutability. Drives R1.2 from 🔶 to ✅ on the FAIR scorecard. **Section 5.4.3.**
 
-4. **Mpox-package per-pathogen contextual specification pattern** (B-DH-1). Study whether to factor JACKPOT's monolithic DataHarmonizer template into per-pathogen contextual specs (Salmonella spec, TB spec, mpox spec, etc.) versioned independently from the master schema. **Section 5.4.4.**
+4. **Per-pathogen DataHarmonizer template views** (B-DH-1). Generate per-pathogen template *projections* over the monolithic schema (organism filter in the existing T1/T2/T3 generator) for an entry-UX win, with governance slots inherited structurally. Schema-decomposition into independently-versioned per-pathogen specs was considered and **rejected** — it would scatter JACKPOT's cross-cutting governance guarantees across organism boundaries. **Section 5.4.4.**
 
 ### 19.3 Tier 2 — Strategic / Year 2 implementations
 

@@ -58,6 +58,36 @@ def download_template(source_type: str, tier: str, metagenomics: bool = False):
     )
 
 
+_META_MARKERS: frozenset[str] = frozenset({"REQUIRED", "ANALYZABLE", "SUBMITTABLE", "OPTIONAL"})
+
+
+def _find_data_start(rows: list[list[str]]) -> int:
+    """Index of the first real data row, skipping labels/tier-tag/hint rows.
+
+    Heuristic: within rows 2–4 (1-indexed), a row containing a known
+    tier marker cell is a hint row, not data — data starts after it.
+    """
+    data_start = 1
+    for i in range(1, min(len(rows), 5)):
+        if any(cell.strip() in _META_MARKERS for cell in rows[i]):
+            data_start = i + 1
+    return data_start
+
+
+def _row_to_record(header: list[str], row: list[str]) -> dict:
+    """Zip one data row against the header, splitting comma-separated values."""
+    record: dict = {}
+    for key, val in zip(header, row, strict=False):
+        val = val.strip()
+        if not val:
+            continue
+        if "," in val and not val.startswith("gs://"):
+            record[key] = [v.strip() for v in val.split(",") if v.strip()]
+        else:
+            record[key] = val
+    return record
+
+
 def _parse_csv_rows(raw: str) -> list[dict]:
     """Parse a DataHarmonizer CSV body.
 
@@ -70,26 +100,11 @@ def _parse_csv_rows(raw: str) -> list[dict]:
     if not rows:
         return []
     header = rows[0]
+    data_start = _find_data_start(rows)
 
-    meta_markers = {"REQUIRED", "ANALYZABLE", "SUBMITTABLE", "OPTIONAL"}
-    data_start = 1
-    for i in range(1, min(len(rows), 5)):
-        row = rows[i]
-        if any(cell.strip() in meta_markers for cell in row):
-            data_start = i + 1
-        elif all(not cell.strip().replace("_", "").isalnum() for cell in row if cell):
-            continue
     records: list[dict] = []
     for row in rows[data_start:]:
-        record: dict = {}
-        for key, val in zip(header, row, strict=False):
-            val = val.strip()
-            if not val:
-                continue
-            if "," in val and not val.startswith("gs://"):
-                record[key] = [v.strip() for v in val.split(",") if v.strip()]
-            else:
-                record[key] = val
+        record = _row_to_record(header, row)
         if record:
             records.append(record)
     return records

@@ -788,6 +788,102 @@ def parse_accessions_tsv(text: str) -> list[AccessionEntry]:
     return entries
 
 
+def _apply_accession_entry(submission_id: int, entry: AccessionEntry, conn) -> str | None:
+    """Register one accession entry against its sample. Returns "ACCEPTED"
+    or "REJECTED", or None when the sample isn't in this submission (skipped,
+    logged as a warning)."""
+    # Look up the sample row by user-facing sample_id within the
+    # submission. Cross-submission registration is rejected.
+    rows = execute_query(
+        """
+        SELECT ss.id, ss.sample_id_fk, s.sample_id
+          FROM submission_samples ss
+          JOIN samples s ON s.id = ss.sample_id_fk
+         WHERE ss.submission_id = :sub
+           AND s.sample_id = :sid
+        """,
+        {"sub": submission_id, "sid": entry.sample_id},
+        conn=conn,
+    )
+    if not rows:
+        logger.warning(
+            "register_accessions: sample %s not in submission %s; skipping",
+            entry.sample_id,
+            submission_id,
+        )
+        return None
+    ss_id = rows[0]["id"]
+    sample_id_fk = rows[0]["sample_id_fk"]
+    is_accepted = entry.has_any_accession and not entry.rejection_reason
+    new_status = "ACCEPTED" if is_accepted else "REJECTED"
+
+    execute_write(
+        """
+        UPDATE submission_samples
+           SET per_sample_status = :ps,
+               biosample_accession = COALESCE(:biosample, biosample_accession),
+               sra_accession = COALESCE(:sra, sra_accession),
+               genbank_accession = COALESCE(:genbank, genbank_accession),
+               gisaid_accession = COALESCE(:gisaid, gisaid_accession),
+               ena_accession = COALESCE(:ena, ena_accession),
+               ddbj_accession = COALESCE(:ddbj, ddbj_accession),
+               per_sample_rejection_reason = COALESCE(:reason, per_sample_rejection_reason)
+         WHERE id = :id
+        """,
+        {
+            "id": ss_id,
+            "ps": new_status,
+            "biosample": entry.biosample,
+            "sra": entry.sra,
+            "genbank": entry.genbank,
+            "gisaid": entry.gisaid,
+            "ena": entry.ena,
+            "ddbj": entry.ddbj,
+            "reason": entry.rejection_reason,
+        },
+        conn=conn,
+    )
+
+    # Mirror the accession columns onto the sample row for fast
+    # lookup in existing UI views. Critical Rule 58 keeps
+    # sample_files as the dedup primitive; the samples-row
+    # accession columns are convenience fields that already
+    # existed before I-2.
+    execute_write(
+        """
+        UPDATE samples
+           SET biosample_accession = COALESCE(:biosample, biosample_accession),
+               sra_accession = COALESCE(:sra, sra_accession),
+               genbank_accession = COALESCE(:genbank, genbank_accession),
+               gisaid_accession = COALESCE(:gisaid, gisaid_accession)
+         WHERE id = :sid
+        """,
+        {
+            "sid": sample_id_fk,
+            "biosample": entry.biosample,
+            "sra": entry.sra,
+            "genbank": entry.genbank,
+            "gisaid": entry.gisaid,
+        },
+        conn=conn,
+    )
+    return new_status
+
+
+def _decide_submission_status(
+    accepted_count: int, rejected_count: int, release_date: Any
+) -> tuple[str, str]:
+    """New submission status + notification event based on per-sample counts."""
+    if rejected_count and accepted_count:
+        return "PARTIAL_SUCCESS", NotificationEvents.SUBMISSION_PARTIAL_SUCCESS
+    if rejected_count and not accepted_count:
+        return "REJECTED", NotificationEvents.SUBMISSION_REJECTED
+    # Fully accepted. Embargo decision based on release_date.
+    if release_date and isinstance(release_date, date) and release_date > datetime.now(UTC).date():
+        return "EMBARGOED", NotificationEvents.SUBMISSION_ACCEPTED
+    return "RELEASED", NotificationEvents.SUBMISSION_RELEASED
+
+
 def register_accessions(
     *,
     submission_id: int,
@@ -813,85 +909,11 @@ def register_accessions(
     accepted_count = 0
     rejected_count = 0
     for entry in accessions:
-        # Look up the sample row by user-facing sample_id within the
-        # submission. Cross-submission registration is rejected.
-        rows = execute_query(
-            """
-            SELECT ss.id, ss.sample_id_fk, s.sample_id
-              FROM submission_samples ss
-              JOIN samples s ON s.id = ss.sample_id_fk
-             WHERE ss.submission_id = :sub
-               AND s.sample_id = :sid
-            """,
-            {"sub": submission_id, "sid": entry.sample_id},
-            conn=conn,
-        )
-        if not rows:
-            logger.warning(
-                "register_accessions: sample %s not in submission %s; skipping",
-                entry.sample_id,
-                submission_id,
-            )
-            continue
-        ss_id = rows[0]["id"]
-        sample_id_fk = rows[0]["sample_id_fk"]
-        is_accepted = entry.has_any_accession and not entry.rejection_reason
-        new_status = "ACCEPTED" if is_accepted else "REJECTED"
-        if is_accepted:
+        outcome = _apply_accession_entry(submission_id, entry, conn)
+        if outcome == "ACCEPTED":
             accepted_count += 1
-        else:
+        elif outcome == "REJECTED":
             rejected_count += 1
-
-        execute_write(
-            """
-            UPDATE submission_samples
-               SET per_sample_status = :ps,
-                   biosample_accession = COALESCE(:biosample, biosample_accession),
-                   sra_accession = COALESCE(:sra, sra_accession),
-                   genbank_accession = COALESCE(:genbank, genbank_accession),
-                   gisaid_accession = COALESCE(:gisaid, gisaid_accession),
-                   ena_accession = COALESCE(:ena, ena_accession),
-                   ddbj_accession = COALESCE(:ddbj, ddbj_accession),
-                   per_sample_rejection_reason = COALESCE(:reason, per_sample_rejection_reason)
-             WHERE id = :id
-            """,
-            {
-                "id": ss_id,
-                "ps": new_status,
-                "biosample": entry.biosample,
-                "sra": entry.sra,
-                "genbank": entry.genbank,
-                "gisaid": entry.gisaid,
-                "ena": entry.ena,
-                "ddbj": entry.ddbj,
-                "reason": entry.rejection_reason,
-            },
-            conn=conn,
-        )
-
-        # Mirror the accession columns onto the sample row for fast
-        # lookup in existing UI views. Critical Rule 58 keeps
-        # sample_files as the dedup primitive; the samples-row
-        # accession columns are convenience fields that already
-        # existed before I-2.
-        execute_write(
-            """
-            UPDATE samples
-               SET biosample_accession = COALESCE(:biosample, biosample_accession),
-                   sra_accession = COALESCE(:sra, sra_accession),
-                   genbank_accession = COALESCE(:genbank, genbank_accession),
-                   gisaid_accession = COALESCE(:gisaid, gisaid_accession)
-             WHERE id = :sid
-            """,
-            {
-                "sid": sample_id_fk,
-                "biosample": entry.biosample,
-                "sra": entry.sra,
-                "genbank": entry.genbank,
-                "gisaid": entry.gisaid,
-            },
-            conn=conn,
-        )
 
     # No accession row matched a sample in this submission — nothing was
     # processed. Treat as a client error rather than silently transitioning
@@ -902,22 +924,9 @@ def register_accessions(
             detail="No accession rows matched samples in this submission.",
         )
 
-    # Decide the new submission status based on per-sample counts.
-    if rejected_count and accepted_count:
-        new_status = "PARTIAL_SUCCESS"
-        notif_event = NotificationEvents.SUBMISSION_PARTIAL_SUCCESS
-    elif rejected_count and not accepted_count:
-        new_status = "REJECTED"
-        notif_event = NotificationEvents.SUBMISSION_REJECTED
-    else:
-        # Fully accepted. Embargo decision based on release_date.
-        rd = sub.get("release_date")
-        if rd and isinstance(rd, date) and rd > datetime.now(UTC).date():
-            new_status = "EMBARGOED"
-            notif_event = NotificationEvents.SUBMISSION_ACCEPTED
-        else:
-            new_status = "RELEASED"
-            notif_event = NotificationEvents.SUBMISSION_RELEASED
+    new_status, notif_event = _decide_submission_status(
+        accepted_count, rejected_count, sub.get("release_date")
+    )
 
     rows = execute_write(
         """

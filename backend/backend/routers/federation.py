@@ -49,7 +49,7 @@ from typing import Any
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Request
-from pydantic import BaseModel, Field, HttpUrl
+from pydantic import BaseModel, Field, HttpUrl, field_validator
 
 from backend.audit import log_audit
 from backend.auth.guards import (
@@ -65,6 +65,7 @@ from backend.federation.models import (
     FederationPushPayload,
     FederationQuery,
     FederationRole,
+    require_secure_url,
 )
 from backend.federation.push import FederationPushJob
 from backend.responses import error, success, success_list
@@ -101,6 +102,11 @@ class InstanceCreate(BaseModel):
     min_sharing_level_for_federation: str = Field(default="DISCOVERABLE")
     hub_instance_url: HttpUrl | None = None
     api_key_secret_name: str = Field(..., min_length=1, max_length=255)
+
+    @field_validator("base_url", "hub_instance_url")
+    @classmethod
+    def _reject_plaintext_urls(cls, v: HttpUrl | None, info) -> HttpUrl | None:
+        return require_secure_url(v, field_name=info.field_name)
 
 
 class FederationSearchRequest(BaseModel):

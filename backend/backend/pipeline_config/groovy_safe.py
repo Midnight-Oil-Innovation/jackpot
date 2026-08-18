@@ -12,13 +12,34 @@ This module provides two related defenses:
 1. :func:`groovy_escape` — a Jinja2 filter applied at render time to
    every catalog/profile field interpolation. Escapes characters
    dangerous in both single- and double-quoted Groovy string contexts.
-2. :func:`validate_groovy_safe` — a write-time validator callable from
-   Pydantic ``field_validator`` hooks (or any other pre-DB-write check)
-   that rejects values containing the same dangerous characters.
+2. :func:`validate_groovy_safe` — a validator that rejects values
+   containing those characters outright.
 
-Both ship together. Validation catches new bad values before they
-land in the database; the render-time filter is the universal defense
-against any value that pre-dated the validator.
+**What each one actually buys you.** ``groovy_escape`` guarantees the
+rendered config *parses* as intended — a value cannot break out of its
+string literal. It does not change the value the Groovy parser
+produces: ``'a\\nb'`` still yields a string containing a newline. So
+escaping alone is sufficient only for values that never leave the
+config file (manifest ``description`` / ``author``, which are also the
+fields where an apostrophe is legitimate prose and rejection would
+break valid rows).
+
+Values that Nextflow forwards onward — ``clusterOptions`` into sbatch,
+``work_dir`` into filesystem paths, ``cli_path`` / ``volumes`` into CLI
+arguments — need rejection. Those are validated at the render seam by
+``profile_renderer._reject_unsafe_scheduler_values``, which is the
+choke point every launch routes through; execution profiles are
+DB-seeded and have no HTTP write path to hang a ``field_validator``
+on.
+
+Current write-time coverage is one field: ``pipeline_name`` on
+``CustomPipelineRequest`` (``routers/pipelines.py``). Everything else
+is covered at render time.
+
+Note the deliberate asymmetry: ``;`` is rejected by
+:func:`validate_groovy_safe` but not escaped by :func:`groovy_escape`,
+because inside a correctly-quoted string a semicolon is inert. It
+matters only in the forwarded-onward case, which rejection covers.
 
 Dangerous character set (rationale per char):
 

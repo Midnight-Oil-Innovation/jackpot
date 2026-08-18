@@ -1,3 +1,5 @@
+> **Status:** Canonical — operator-facing federation reference.
+
 # Federation Operations
 
 **Document type:** Operator-facing reference for federation deployment.

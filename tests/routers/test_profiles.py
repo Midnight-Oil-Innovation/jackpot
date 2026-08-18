@@ -14,7 +14,7 @@ import uuid
 from collections.abc import Iterator
 
 import pytest
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
@@ -101,6 +101,34 @@ def test_create_profile_duplicate(app: FastAPI) -> None:
     response = _as(app, USER_A).post("/api/v1/profiles/", json={"display_name": "Alice Again"})
     assert response.status_code == 409
     assert "already exists" in response.json()["detail"].lower()
+
+
+def test_create_profile_concurrent_race_returns_409_not_500(app: FastAPI) -> None:
+    """Two overlapping requests can both pass the existence check before
+    either commits. Reproduce that interleaving directly with two
+    sessions bound to the same in-memory engine, bypassing the
+    endpoint's own (single-threaded, non-overlapping) request cycle."""
+    from backend.routers.profiles import Profile, _commit_new_profile_or_409
+
+    gen_a = app.dependency_overrides[get_db_dep]()
+    gen_b = app.dependency_overrides[get_db_dep]()
+    db_a = next(gen_a)
+    db_b = next(gen_b)
+
+    uid = str(USER_A_ID)
+    assert db_a.query(Profile).filter(Profile.user_id == uid).one_or_none() is None
+    assert db_b.query(Profile).filter(Profile.user_id == uid).one_or_none() is None
+
+    db_a.add(Profile(user_id=uid, display_name="Alice"))
+    _commit_new_profile_or_409(db_a)
+
+    db_b.add(Profile(user_id=uid, display_name="Alice (racing request)"))
+    with pytest.raises(HTTPException) as exc_info:
+        _commit_new_profile_or_409(db_b)
+    assert exc_info.value.status_code == 409
+
+    for gen in (gen_a, gen_b):
+        gen.close()
 
 
 def test_read_own_profile(app: FastAPI) -> None:

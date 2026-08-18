@@ -1,3 +1,5 @@
+> **Status:** Superseded by `immune_detection_core_redesign.md` (detection engine). Component-tier adoption items still valid; the detection-engine framing is pre-redesign. Do not cite as current on engine architecture.
+
 # JACKPOT Detection Landscape
 
 ## Bioinformatics Tools, ML/AI Components, and Detection Frameworks for Pathogen Surveillance
@@ -114,7 +116,7 @@ The "JACKPOT-current" column evaluates fit to the current P0–P5 roadmap. The "
 
 | # | Tool | Category | Function (one line) | License | Maturity | JACKPOT-current | JACKPOT-immune |
 |---|---|---|---|---|---|---|---|
-| 1 | **AMAnD** | c (anomaly) | DeepSVDD one-class metagenome anomaly detection | OSS | Production | 🟢 Adopt — `B-AMAND-1` | 🔵 Pillar I core |
+| 1 | **AMAnD** | c (anomaly) | DeepSVDD one-class metagenome anomaly detection | OSS | Production | 🟢 Adopt — `B-AMAND-1` | 🔵 Pillar I baseline |
 | 2 | **UltraSEQ** | c (anomaly) | Universal metagenomic classification + anomaly | OSS | Medium | 🟡 Pattern ref | 🔵 Pillar I |
 | 3 | **MARTi** | m (real-time) | Real-time nanopore metagenomic surveillance | OSS | Production | 🟢 Adopt — `B-MARTI-1` | 🔵 Pillar I |
 | 4 | **PhyloMagnet** | c (anomaly) | Gene-centric phylogenetic screening of meta-omics | OSS | Medium | 🟡 Pattern ref | 🔵 Pillar I (taxa-flagging layer) |
@@ -413,7 +415,7 @@ MLM (Baugher et al., *JHU APL Technical Digest* 2025) is APL's open-source machi
 
 - **Specifically targets the "what about the unmapped reads?" problem.** Standard mNGS pipelines discard reads that don't map to anything. MLM analyzes those discards — precisely where novel pathogens hide.
 - **Complements DeePaC.** DeePaC scores per-sequence pathogenic potential. MLM classifies reads into threat tiers. They operate on similar data but produce different outputs; running both gives more confident calls.
-- **From APL.** APL's threat-characterization work has direct biosecurity-domain credibility; the same lab built AMAnD (the headline anomaly-detection tool from §2.c).
+- **From APL.** APL's threat-characterization work has direct biosecurity-domain credibility; the same lab built AMAnD (a baseline anomaly-detection tool from §2.c).
 
 **Backlog:**
 
@@ -452,7 +454,7 @@ Just five tools but high-value ones — these are the closest existing analogues
 
 | Tool | Function | License | Maturity | JACKPOT-current | JACKPOT-immune |
 |---|---|---|---|---|---|
-| **AMAnD** | DeepSVDD one-class metagenome anomaly detection | OSS | Production | 🟢 Adopt — `B-AMAND-1` | 🔵 Pillar I core |
+| **AMAnD** | DeepSVDD one-class metagenome anomaly detection | OSS | Production | 🟢 Adopt — `B-AMAND-1` | 🔵 Pillar I baseline |
 | **UltraSEQ** | Universal metagenomic classification + anomaly | OSS | Medium | 🟡 Pattern ref | 🔵 Pillar I |
 | **PhyloMagnet** | Gene-centric phylogenetic screening of meta-omics | OSS | Medium | 🟡 Pattern ref | 🔵 Pillar I |
 | **KOMB / KombOver** | k-core graph-based microbiome perturbation detection | OSS | Medium | 🟡 Study | 🔵 Pillar I (community-shift detector) |
@@ -460,11 +462,11 @@ Just five tools but high-value ones — these are the closest existing analogues
 
 #### 2.c.1 AMAnD — DeepSVDD metagenome anomaly detection 🟢 ★
 
-AMAnD (Price & Russell, *Frontiers in Public Health* 2023) is the headline tool of this category. It uses Deep Support Vector Data Description (DeepSVDD) — a one-class neural network anomaly detector — to flag anomalous metagenomes. AMAnD is trained on a baseline of "normal" samples (e.g., healthy gut microbiomes) and flags samples that deviate. It explicitly handles novel anomalies — i.e., it doesn't require examples of "what bad looks like" to flag anomalous content.
+AMAnD (Price & Russell, *Frontiers in Public Health* 2023) is a well-characterized baseline in this category (one ensemble member behind the `AnomalyDetector` Protocol, not the Pillar I core; see `immune_detection_core_redesign.md` §1). It uses Deep Support Vector Data Description (DeepSVDD) — a one-class neural network anomaly detector — to flag anomalous metagenomes. AMAnD is trained on a baseline of "normal" samples (e.g., healthy gut microbiomes) and flags samples that deviate. It explicitly handles novel anomalies — i.e., it doesn't require examples of "what bad looks like" to flag anomalous content.
 
 **Why this is the highest-value adoption candidate in the entire category:**
 
-- **Direct fit for Pillar I core.** The Immune Platform plan §4 describes a metagenome-anomaly layer almost identical to AMAnD's design (one-class deep learning on metagenome features, drift-aware retraining). AMAnD is the closest existing thing to that pillar.
+- **Direct fit as a Pillar I baseline.** The Immune Platform plan §4 describes a metagenome-anomaly layer whose *detector family* (one-class deep learning, drift-aware retraining) AMAnD instantiates. AMAnD is the closest existing published baseline; the Pillar I core is the `AnomalyDetector` Protocol with DeepSVDD over genomic-FM embeddings, with AMAnD as one ensemble member.
 - **No JACKPOT equivalent.** Nothing else in the pipeline zoo or roadmap covers metagenome anomaly detection with one-class learning. Adding AMAnD doesn't duplicate any shipped functionality.
 - **From APL.** Same lab as MLM (§2.b.2); both are battle-tested in real biodefense contexts.
 - **Production-deployed.** Published 2023; available on GitHub; used in respiratory + gut + synthetic-contamination biosurveillance contexts.
@@ -474,9 +476,10 @@ AMAnD (Price & Russell, *Frontiers in Public Health* 2023) is the headline tool 
 **Backlog:**
 
 ```text
-[ ] B-AMAND-1  Adopt AMAnD (Price & Russell, 2023) as the canonical
+[ ] B-AMAND-1  Adopt AMAnD (Price & Russell, 2023) as a baseline
                metagenome anomaly detector in JACKPOT. Initially as a
-               pipeline-zoo entry; once Pillar I lands, as the core of
+               pipeline-zoo entry; once Pillar I lands, as one baseline
+               detector (behind the AnomalyDetector Protocol) in
                jackpot-immune-bio. Document the baseline-curation workflow
                (what is "normal" for this operator's deployment context)
                in the Pillar IV training materials.
@@ -1230,7 +1233,7 @@ This section evaluates the same surveyed tools against `jackpot_immune_platform_
 | **Viral recombinant detection** | OpenRecombinHunt | `B-RECOMB-1` | Periodic-scan recombinant detection |
 | **Ensemble orchestration design** | Thailand/Brazil/China EWS patterns | (design ref) | Multi-algorithm ensembles for outbreak detection |
 
-The cross-cutting recommendation: **AMAnD is the headline tool of Pillar I**. The other tools are layers around AMAnD's core anomaly-detection function. This simplifies the architectural conversation — start with AMAnD, then add layers.
+The cross-cutting recommendation: **start with the `AnomalyDetector` Protocol and the embedding substrate (DeepSVDD over genomic-FM embeddings; METAGENE-1 license-cleared)**. AMAnD is one ensemble baseline behind that contract, not the core. The other tools are additional detectors and danger-signal sources fused by the DCA, not layers around AMAnD (per `immune_detection_core_redesign.md` §1).
 
 ### 4.2 Pillar II — Platform Self-Defense AIS (`jackpot-immune-sec`)
 
@@ -1324,7 +1327,7 @@ The 5 headline recommendations from §0.3 plus 5 more that are equally important
 | Order | Backlog | Tool | Effort | Headline rationale |
 |---|---|---|---|---|
 | 1 | `B-TAXTRIAGE-1` | TaxTriage | 2-3 sessions | Untargeted novel-pathogen detection — biggest gap |
-| 2 | `B-AMAND-1` | AMAnD | 3 sessions + ongoing | Anomaly-detection layer for Pillar I core |
+| 2 | `B-AMAND-1` | AMAnD | 3 sessions + ongoing | Baseline anomaly detector (one ensemble member) for Pillar I |
 | 3 | `B-SOC-1` | SeqScreen + BLiSS | 3-4 sessions | Sequence-of-concern screening — first-of-class |
 | 4 | `B-INSAFLU-1` | INSaFLU-TELEVIR | 1 session study + 2 sessions adoption | Viral mNGS suite; AGPL-aligned |
 | 5 | `B-MARTI-1` | MARTi | 2-3 sessions | Real-time nanopore differentiator |
@@ -1377,9 +1380,10 @@ Copy-paste-ready for direct integration into `todo.md`. All items derived from t
                    pathogen-candidate output schema.
                    Effort: 2-3 sessions. Phase: pipeline-zoo work.
 
-[ ] B-AMAND-1  Adopt AMAnD (Price & Russell, 2023) as the canonical
+[ ] B-AMAND-1  Adopt AMAnD (Price & Russell, 2023) as a baseline
                metagenome anomaly detector in JACKPOT. Initially as a
-               pipeline-zoo entry; once Pillar I lands, as the core of
+               pipeline-zoo entry; once Pillar I lands, as one baseline
+               detector (behind the AnomalyDetector Protocol) in
                jackpot-immune-bio. Document the baseline-curation workflow
                (what is "normal" for this operator's deployment context)
                in the Pillar IV training materials.

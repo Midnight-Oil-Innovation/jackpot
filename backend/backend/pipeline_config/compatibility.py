@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -23,6 +24,107 @@ class CompatibilityReport:
         return {"soft_warnings": self.soft_warnings, "hard_blocks": self.hard_blocks}
 
 
+def _parse_compatibility_rules(catalog_row: dict[str, Any]) -> dict[str, Any]:
+    rules = catalog_row.get("compatibility_rules") or {}
+    if isinstance(rules, str):
+        # JSONB may round-trip as a string in some drivers; best-effort parse
+        try:
+            rules = json.loads(rules)
+        except (ValueError, TypeError):
+            rules = {}
+    return rules
+
+
+def _check_source_type(
+    sid: str, source_type: str, allowed_sources: list[str] | None
+) -> dict | None:
+    if allowed_sources and source_type and source_type not in allowed_sources:
+        return {
+            "sample_id": sid,
+            "reason": (
+                f"Pipeline accepts source_type in {allowed_sources}, but sample is {source_type!r}."
+            ),
+        }
+    return None
+
+
+def _check_scrub_status(sid: str, scrub_status: str, require_scrub: bool) -> dict | None:
+    if require_scrub and scrub_status and scrub_status not in ("COMPLETE", "SKIPPED"):
+        return {
+            "sample_id": sid,
+            "reason": (
+                f"Pipeline requires scrubbed reads but sample scrub_status is {scrub_status!r}."
+            ),
+        }
+    return None
+
+
+def _check_quality_tier(
+    sid: str, quality_status: str, min_quality: str | None, tier_rank: dict[str, int]
+) -> dict | None:
+    if (
+        min_quality
+        and quality_status in tier_rank
+        and min_quality in tier_rank
+        and tier_rank[quality_status] < tier_rank[min_quality]
+    ):
+        return {
+            "sample_id": sid,
+            "reason": (
+                f"Sample quality_status {quality_status!r} is below "
+                f"pipeline minimum {min_quality!r}."
+            ),
+        }
+    return None
+
+
+def _check_organism(sid: str, organism: str, allowed_organisms: list[str] | None) -> dict | None:
+    if allowed_organisms and organism and organism not in allowed_organisms:
+        return {
+            "sample_id": sid,
+            "reason": f"Pipeline targets {allowed_organisms}, but sample organism is {organism!r}.",
+        }
+    return None
+
+
+def _evaluate_sample(
+    sample: dict[str, Any],
+    *,
+    allowed_sources: list[str] | None,
+    require_scrub: bool,
+    min_quality: str | None,
+    allowed_organisms: list[str] | None,
+    tier_rank: dict[str, int],
+) -> tuple[list[dict], list[dict]]:
+    """Run every compatibility rule against one sample.
+
+    Returns (hard_blocks, soft_warnings) — each a list of 0-2 dicts.
+    """
+    sid = sample.get("sample_id") or str(sample.get("id") or "?")
+    source_type = (sample.get("source_type") or "").strip()
+    scrub_status = (sample.get("scrub_status") or "").strip()
+    quality_status = (sample.get("quality_status") or "").strip()
+    organism = (sample.get("organism_name") or "").strip()
+
+    hard_blocks = [
+        b
+        for b in (
+            _check_source_type(sid, source_type, allowed_sources),
+            _check_scrub_status(sid, scrub_status, require_scrub),
+        )
+        if b
+    ]
+    soft_warnings = [
+        w
+        for w in (
+            _check_quality_tier(sid, quality_status, min_quality, tier_rank),
+            _check_organism(sid, organism, allowed_organisms),
+        )
+        if w
+    ]
+    return hard_blocks, soft_warnings
+
+
 def compute_pipeline_compatibility(
     catalog_row: dict[str, Any],
     samples: list[dict[str, Any]],
@@ -40,77 +142,19 @@ def compute_pipeline_compatibility(
     in that case every sample is compatible with no warnings.
     """
     report = CompatibilityReport()
-    rules = catalog_row.get("compatibility_rules") or {}
-    if isinstance(rules, str):
-        # JSONB may round-trip as a string in some drivers; best-effort parse
-        import json
-
-        try:
-            rules = json.loads(rules)
-        except (ValueError, TypeError):
-            rules = {}
-
-    allowed_sources: list[str] | None = rules.get("source_types")
-    require_scrub: bool = bool(rules.get("required_scrub"))
-    min_quality: str | None = rules.get("min_quality_status")
-    allowed_organisms: list[str] | None = rules.get("organisms")
-
+    rules = _parse_compatibility_rules(catalog_row)
     tier_rank = {"PRELIMINARY": 1, "ANALYZABLE": 2, "SUBMITTABLE": 3}
 
     for sample in samples:
-        sid = sample.get("sample_id") or str(sample.get("id") or "?")
-        source_type = (sample.get("source_type") or "").strip()
-        scrub_status = (sample.get("scrub_status") or "").strip()
-        quality_status = (sample.get("quality_status") or "").strip()
-        organism = (sample.get("organism_name") or "").strip()
-
-        if allowed_sources and source_type and source_type not in allowed_sources:
-            report.hard_blocks.append(
-                {
-                    "sample_id": sid,
-                    "reason": (
-                        f"Pipeline accepts source_type in {allowed_sources}, "
-                        f"but sample is {source_type!r}."
-                    ),
-                }
-            )
-
-        if require_scrub and scrub_status and scrub_status not in ("COMPLETE", "SKIPPED"):
-            report.hard_blocks.append(
-                {
-                    "sample_id": sid,
-                    "reason": (
-                        "Pipeline requires scrubbed reads "
-                        f"but sample scrub_status is {scrub_status!r}."
-                    ),
-                }
-            )
-
-        if (
-            min_quality
-            and quality_status in tier_rank
-            and min_quality in tier_rank
-            and tier_rank[quality_status] < tier_rank[min_quality]
-        ):
-            report.soft_warnings.append(
-                {
-                    "sample_id": sid,
-                    "reason": (
-                        f"Sample quality_status {quality_status!r} is below "
-                        f"pipeline minimum {min_quality!r}."
-                    ),
-                }
-            )
-
-        if allowed_organisms and organism and organism not in allowed_organisms:
-            report.soft_warnings.append(
-                {
-                    "sample_id": sid,
-                    "reason": (
-                        f"Pipeline targets {allowed_organisms}, "
-                        f"but sample organism is {organism!r}."
-                    ),
-                }
-            )
+        hard_blocks, soft_warnings = _evaluate_sample(
+            sample,
+            allowed_sources=rules.get("source_types"),
+            require_scrub=bool(rules.get("required_scrub")),
+            min_quality=rules.get("min_quality_status"),
+            allowed_organisms=rules.get("organisms"),
+            tier_rank=tier_rank,
+        )
+        report.hard_blocks.extend(hard_blocks)
+        report.soft_warnings.extend(soft_warnings)
 
     return report

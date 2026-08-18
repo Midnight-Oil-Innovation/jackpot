@@ -1,3 +1,5 @@
+> **Status:** Superseded — archived (directory convention). Historical; do not cite as current.
+
 # Schema sufficiency and Observatory use cases
 
 The chat analyzed four ASU Health Observatory-shaped projects against JACKPOT's schema and proposed `OBS-1..4` schema items. The schema-sufficiency analysis stands as a useful exercise; the `OBS-*` items don't exist in `todo.md` and would be net-new if pursued.

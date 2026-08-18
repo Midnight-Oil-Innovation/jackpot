@@ -53,12 +53,15 @@ jobs:
           --health-retries 5
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Install uv
-        uses: astral-sh/setup-uv@v3
+        uses: astral-sh/setup-uv@v7
         with:
-          python-version: "3.11"
+          # python-version was added in setup-uv v4. On v3 this input was
+          # silently ignored and CI resolved to the runner's system Python
+          # (3.12.3) instead of the declared 3.11 target.
+          python-version: "3.12"
 
       - name: Install workspace dependencies
         run: uv sync --frozen
@@ -67,7 +70,7 @@ jobs:
         # .pre-commit-config.yaml lives at the workspace root (moved
         # from backend/ during the P0d follow-up). The pre-commit binary
         # comes from backend's dev dependency group via uv sync.
-        run: uv run pre-commit run --all-files
+        run: SKIP=docs-guard uv run pre-commit run --all-files
 
       - name: Run Alembic migrations against the CI Postgres
         env:
@@ -90,12 +93,15 @@ jobs:
     name: CLI tests (separate coverage scope)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Install uv
-        uses: astral-sh/setup-uv@v3
+        uses: astral-sh/setup-uv@v7
         with:
-          python-version: "3.11"
+          # python-version was added in setup-uv v4. On v3 this input was
+          # silently ignored and CI resolved to the runner's system Python
+          # (3.12.3) instead of the declared 3.11 target.
+          python-version: "3.12"
 
       - name: Install workspace dependencies
         run: uv sync --frozen
@@ -111,12 +117,15 @@ jobs:
     # the P0d plan. Run its tests in their own job so a parser change
     # does not need to flow through the backend test matrix.
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Install uv
-        uses: astral-sh/setup-uv@v3
+        uses: astral-sh/setup-uv@v7
         with:
-          python-version: "3.11"
+          # python-version was added in setup-uv v4. On v3 this input was
+          # silently ignored and CI resolved to the runner's system Python
+          # (3.12.3) instead of the declared 3.11 target.
+          python-version: "3.12"
 
       - name: Install pipelines dependencies (member-local lock + dev extras)
         working-directory: pipelines

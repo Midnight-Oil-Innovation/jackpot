@@ -309,6 +309,61 @@ def test_template_name_for_rejects_empty():
         _template_name_for("")
 
 
+# ────── R-1 #7: reject scheduler-bound values at the render seam ──────
+#
+# groovy_escape makes a value safe to *parse* inside a Groovy string,
+# but the parsed value is unchanged by design — 'a\nb' is still a
+# string containing a newline. Values that Nextflow forwards to a
+# scheduler or a shell (clusterOptions, work_dir paths) therefore need
+# rejection, not escaping. Free-text manifest fields (description,
+# author) are deliberately NOT rejected: apostrophes are legitimate
+# there and escaping is sufficient, since they never leave the config.
+
+
+def test_render_rejects_newline_in_cluster_options():
+    """cluster_options is concatenated into Slurm's clusterOptions and
+    forwarded to sbatch. A newline survives Groovy escaping and would
+    inject additional #SBATCH directives into the job script."""
+    profile = _profile("SLURM", config_overrides={"cluster_options": f"--nice=0{_NEWLINE}--uid=0"})
+    with pytest.raises(ValueError) as exc_info:
+        render_nextflow_config(profile=profile, **_RENDER_KWARGS)
+    assert "cluster_options" in str(exc_info.value)
+
+
+def test_render_rejects_semicolon_in_work_dir():
+    """work_dir is interpolated into workDir and every derived path."""
+    kwargs = {**_RENDER_KWARGS, "work_dir": f"/srv/jackpot/work{_SEMICOLON}rm -rf /"}
+    with pytest.raises(ValueError) as exc_info:
+        render_nextflow_config(profile=_profile("LOCAL"), **kwargs)
+    assert "work_dir" in str(exc_info.value)
+
+
+def test_render_rejects_backtick_in_profile_name():
+    profile = _profile("LOCAL", name=f"prod{_BACKTICK}whoami{_BACKTICK}")
+    with pytest.raises(ValueError) as exc_info:
+        render_nextflow_config(profile=profile, **_RENDER_KWARGS)
+    assert "profile.name" in str(exc_info.value)
+
+
+def test_render_allows_apostrophe_in_free_text_manifest_fields():
+    """Manifest description/author are escaped, not rejected — an
+    apostrophe is legitimate prose and never reaches a shell."""
+    pipeline = {**_PIPELINE, "description": f"Ana{_SQ}s reference pipeline"}
+    rendered = render_nextflow_config(
+        profile=_profile("LOCAL"),
+        **{**_RENDER_KWARGS, "pipeline": pipeline},
+    )
+    assert f"Ana{_BACKSLASH}{_SQ}s reference pipeline" in rendered
+
+
+def test_render_allows_non_string_overrides():
+    """Numeric overrides (cpus, queue_size) pass through untouched."""
+    profile = _profile("SLURM", config_overrides={"cpus": 4, "queue_size": 20})
+    rendered = render_nextflow_config(profile=profile, **_RENDER_KWARGS)
+    assert "cpus = 4" in rendered
+    assert "queueSize = 20" in rendered
+
+
 # ─────────────── R-1 #7: groovy_escape filter ───────────────
 
 
@@ -398,21 +453,27 @@ def test_render_template_with_malicious_pipeline_name_is_safe():
     assert f"{_BACKSLASH}{_SQ}" in rendered
 
 
-def test_render_template_with_malicious_work_dir_is_safe():
-    """work_dir is interpolated into both manifest workDir and
-    GCP-Batch resourceLabels. Both sites must escape."""
+def test_render_template_with_malicious_work_dir_is_rejected():
+    """work_dir is interpolated into manifest workDir, GCP-Batch
+    resourceLabels, and every derived run path.
+
+    This previously asserted only that the value was *escaped* at each
+    site. Escaping keeps the config parseable but leaves the parsed
+    value intact, and work_dir goes on to become a filesystem path, so
+    the render seam now rejects it outright instead."""
     malicious = f"/tmp{_SQ}{_SEMICOLON}rm -rf /{_SEMICOLON}{_SQ}"
-    rendered = render_nextflow_config(
-        profile=_profile("LOCAL"),
-        pipeline=_PIPELINE,
-        run_id="jp-r1-7-wd",
-        weblog_url="http://api.test/api/v1/pipelines/events",
-        result_registration_url="http://api.test/api/v1/pipelines/jp-r1-7-wd/results",
-        pipeline_token="pt_test",
-        work_dir=malicious,
-    )
-    assert malicious not in rendered
-    assert f"{_BACKSLASH}{_SQ}" in rendered
+    with pytest.raises(ValueError) as exc_info:
+        render_nextflow_config(
+            profile=_profile("LOCAL"),
+            pipeline=_PIPELINE,
+            run_id="jp-r1-7-wd",
+            weblog_url="http://api.test/api/v1/pipelines/events",
+            result_registration_url="http://api.test/api/v1/pipelines/jp-r1-7-wd/results",
+            pipeline_token="pt_test",
+            work_dir=malicious,
+        )
+    assert "work_dir" in str(exc_info.value)
+    assert malicious not in str(exc_info.value)
 
 
 def test_write_run_config_writes_local_path(tmp_path: Path):

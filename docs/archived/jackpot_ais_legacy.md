@@ -1,3 +1,5 @@
+> **Status:** Superseded — archived (directory convention). Historical; do not cite as current.
+
 # JACKPOT AIS — Legacy (archived)
 
 > **Superseded 2026-05-16 by `docs/immune_platform.md` and `docs/detection_landscape.md`.** This file is preserved as a historical source. Do not edit. Do not cite as current architecture.

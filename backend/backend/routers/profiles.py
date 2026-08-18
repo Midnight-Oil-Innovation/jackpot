@@ -24,6 +24,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException, Response, status
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import Column, String
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import DeclarativeBase, Session
 
 from backend.auth.guards import get_current_user
@@ -84,6 +85,26 @@ def _uid_str(user: dict) -> str:
     return str(user["id"])
 
 
+def _commit_new_profile_or_409(db: Session) -> None:
+    """Commit a freshly-``add``ed ``Profile``, translating a PK collision to 409.
+
+    The existence check in ``create_profile`` happens in its own
+    transaction, so two concurrent requests for the same user can both
+    pass it before either commits — a classic check-then-create race.
+    Whichever commits second hits the ``user_id`` primary-key
+    constraint; catching that here turns it into the same 409 the
+    check already returns for the non-concurrent case, instead of an
+    unhandled ``IntegrityError`` surfacing as a bare 500.
+    """
+    try:
+        db.commit()
+    except IntegrityError as exc:
+        db.rollback()
+        raise HTTPException(
+            status_code=409, detail="Profile already exists for this user."
+        ) from exc
+
+
 @router.post("/", response_model=ProfileRead, status_code=status.HTTP_201_CREATED)
 def create_profile(
     payload: ProfileCreate,
@@ -95,7 +116,7 @@ def create_profile(
         raise HTTPException(status_code=409, detail="Profile already exists for this user.")
     profile = Profile(user_id=uid, **payload.model_dump())
     db.add(profile)
-    db.commit()
+    _commit_new_profile_or_409(db)
     db.refresh(profile)
     return profile
 

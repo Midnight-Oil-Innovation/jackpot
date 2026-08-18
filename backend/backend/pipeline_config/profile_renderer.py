@@ -22,7 +22,7 @@ from typing import Any
 import fsspec
 from jinja2 import Environment, PackageLoader, StrictUndefined
 
-from backend.pipeline_config.groovy_safe import groovy_escape
+from backend.pipeline_config.groovy_safe import groovy_escape, validate_groovy_safe
 from backend.pipeline_config.types import ExecutionProfile
 
 logger = logging.getLogger(__name__)
@@ -43,10 +43,21 @@ _ALLOWED_EXECUTOR_TYPES: frozenset[str] = frozenset(
 def _env() -> Environment:
     global _TEMPLATE_ENV
     if _TEMPLATE_ENV is None:
+        # bandit B701 flags autoescape=False as a blanket XSS risk — a false
+        # positive here. These templates render Groovy/Nextflow config text,
+        # not HTML; Jinja2's HTML-entity autoescaping would mean nothing to
+        # the Groovy parser (it doesn't protect against injection) while
+        # actively corrupting legitimate values containing &, <, or > (e.g.
+        # a pipeline description like "R&D pipeline"). The real defense is
+        # groovy_escape / validate_groovy_safe above — every interpolation
+        # point is covered by one of: an allowlist check before render
+        # (executor_type), a DB CHECK constraint (container_engine), the
+        # groovy_escape filter, or validate_groovy_safe rejection. See this
+        # module's docstring and groovy_safe.py for the full R-1 #7 design.
         _TEMPLATE_ENV = Environment(
             loader=PackageLoader("backend.pipeline_config", "profile_templates"),
             undefined=StrictUndefined,
-            autoescape=False,
+            autoescape=False,  # nosec B701 — see comment above
             keep_trailing_newline=True,
         )
         # R-1 #7: defense-in-depth Groovy injection escape. Templates
@@ -72,6 +83,31 @@ def _template_name_for(executor_type: str) -> str:
     return f"{normalized}.config.j2"
 
 
+def _reject_unsafe_scheduler_values(profile: ExecutionProfile, work_dir: str) -> None:
+    """Reject values that Nextflow forwards to a scheduler or a shell.
+
+    Validates ``work_dir``, ``profile.name``, and **every** string
+    value in ``config_overrides`` — not just the keys known to reach a
+    shell today, so a new template interpolation can't quietly open a
+    hole. Non-string overrides (``cpus``, ``queue_size``) are skipped;
+    the templates coerce those with ``| int``.
+
+    Deliberately NOT validated here: the free-text manifest fields
+    (``description``, ``author``), which are escaped rather than
+    rejected. See ``groovy_safe``'s module docstring for why the two
+    classes of value get different treatment.
+
+    Execution profiles are DB-seeded and have no HTTP write path, so
+    this render-time check — not a Pydantic ``field_validator`` — is
+    the choke point every launch routes through.
+    """
+    validate_groovy_safe(work_dir, field_name="work_dir")
+    validate_groovy_safe(profile.name, field_name="profile.name")
+    for key, value in profile.config_overrides.items():
+        if isinstance(value, str):
+            validate_groovy_safe(value, field_name=f"config_overrides.{key}")
+
+
 def render_nextflow_config(
     *,
     profile: ExecutionProfile,
@@ -89,6 +125,7 @@ def render_nextflow_config(
     ``main_script``). The renderer pulls the manifest fields out and
     leaves the rest of the row untouched.
     """
+    _reject_unsafe_scheduler_values(profile, work_dir)
     env = _env()
     template = env.get_template(_template_name_for(profile.executor_type))
     return template.render(

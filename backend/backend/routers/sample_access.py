@@ -18,7 +18,6 @@ every authz check.
 
 from __future__ import annotations
 
-import logging
 from datetime import timedelta
 from typing import Any
 
@@ -33,7 +32,6 @@ from backend.pagination import paginate
 from backend.responses import error, success, success_list
 
 router = APIRouter(prefix="/api/v1/sample-access", tags=["sample_access"])
-logger = logging.getLogger(__name__)
 
 
 # ── Constants ─────────────────────────────────────────────────────────────────
@@ -228,6 +226,43 @@ def create_access_request(
 # ── GET /requests ─────────────────────────────────────────────────────────────
 
 
+def _resolve_requester_filter_id(requester_id: str | None, user: dict) -> int | None:
+    """Translate the ``requester_id`` query param — ``'me'`` or a numeric id."""
+    if requester_id is None:
+        return None
+    if requester_id == "me":
+        return user["id"]
+    try:
+        return int(requester_id)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=422, detail="requester_id must be an integer or 'me'."
+        ) from exc
+
+
+def _build_access_request_scope(user: dict, db) -> tuple[str, dict[str, Any]]:
+    """Non-admin visibility scope: own requests, plus requests on labs I direct.
+
+    The director_lab_ids subquery tightens the filter at the DB tier so
+    non-admins can never accidentally page through other labs' requests
+    by omitting filters.
+    """
+    director_labs = execute_query(
+        "SELECT lab_id FROM lab_membership WHERE user_id = :uid AND is_lab_director = TRUE",
+        {"uid": user["id"]},
+        conn=db,
+    )
+    director_lab_ids = [r["lab_id"] for r in director_labs]
+    params: dict[str, Any] = {"scope_uid": user["id"]}
+    if not director_lab_ids:
+        return "sar.requester_id = :scope_uid", params
+
+    placeholders = ",".join(f":dl{i}" for i in range(len(director_lab_ids)))
+    for i, lid in enumerate(director_lab_ids):
+        params[f"dl{i}"] = lid
+    return f"(sar.requester_id = :scope_uid OR s.lab_id IN ({placeholders}))", params
+
+
 @router.get("/requests")
 def list_access_requests(
     request: Request,
@@ -269,18 +304,8 @@ def list_access_requests(
         where.append("sar.sample_id = :sid")
         params["sid"] = sample_id
 
-    # requester_id=me — translate to current user.
-    requester_filter_id: int | None = None
-    if requester_id is not None:
-        if requester_id == "me":
-            requester_filter_id = user["id"]
-        else:
-            try:
-                requester_filter_id = int(requester_id)
-            except ValueError as exc:
-                raise HTTPException(
-                    status_code=422, detail="requester_id must be an integer or 'me'."
-                ) from exc
+    requester_filter_id = _resolve_requester_filter_id(requester_id, user)
+    if requester_filter_id is not None:
         where.append("sar.requester_id = :rid")
         params["rid"] = requester_filter_id
 
@@ -288,27 +313,10 @@ def list_access_requests(
         where.append("s.lab_id = :lab_id")
         params["lab_id"] = lab_id
 
-    # Role-based scope. Platform Admin sees everything; everyone else is
-    # restricted to (own requests) ∪ (requests on samples in labs where I
-    # am Lab Director). The director_lab_ids subquery tightens the
-    # filter at the DB tier so non-admins can never accidentally page
-    # through other labs' requests by omitting filters.
     if not is_admin:
-        director_labs = execute_query(
-            "SELECT lab_id FROM lab_membership WHERE user_id = :uid AND is_lab_director = TRUE",
-            {"uid": user["id"]},
-            conn=db,
-        )
-        director_lab_ids = [r["lab_id"] for r in director_labs]
-        if director_lab_ids:
-            placeholders = ",".join(f":dl{i}" for i in range(len(director_lab_ids)))
-            for i, lid in enumerate(director_lab_ids):
-                params[f"dl{i}"] = lid
-            scope = f"(sar.requester_id = :scope_uid OR s.lab_id IN ({placeholders}))"
-        else:
-            scope = "sar.requester_id = :scope_uid"
-        params["scope_uid"] = user["id"]
+        scope, scope_params = _build_access_request_scope(user, db)
         where.append(scope)
+        params.update(scope_params)
 
     where_sql = " AND ".join(where) if where else "TRUE"
     base_query = (

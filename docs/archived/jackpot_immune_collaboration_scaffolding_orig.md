@@ -1,3 +1,5 @@
+> **Status:** Superseded — archived (directory convention). Historical; do not cite as current.
+
 # JACKPOT Immune Platform — Collaboration Scaffolding- Original
 
 **Document type:** Companion to `jackpot_immune_platform_plan.md` — concrete software scaffolding for collaboration with the Forrest/Trieu/Lee/Halden group at the ASU Biodesign Center for Biocomputing, Security and Society

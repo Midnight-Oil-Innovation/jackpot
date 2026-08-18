@@ -369,6 +369,18 @@ def _build_field_list(
     return fields
 
 
+def _build_example_row(fields: list[dict], source_type: str, metagenomics: bool) -> list[str]:
+    """Merge BASE_EXAMPLE with source-type and metagenomics overlays, then
+    project onto the template's field order."""
+    example: dict = {}
+    example.update(BASE_EXAMPLE)
+    if source_type in SOURCE_TYPE_EXAMPLES:
+        example.update(SOURCE_TYPE_EXAMPLES[source_type])
+    if metagenomics:
+        example.update(METAGENOMICS_EXAMPLE)
+    return [example.get(f["field_name"], "") for f in fields]
+
+
 def generate_csv_template(
     source_type: str,
     tier: TemplateTier = TemplateTier.ANALYZABLE,
@@ -406,14 +418,7 @@ def generate_csv_template(
     writer.writerow([f["validation_hint"] for f in fields])
 
     # Row 5: Example row
-    example = {}
-    example.update(BASE_EXAMPLE)
-    if source_type in SOURCE_TYPE_EXAMPLES:
-        example.update(SOURCE_TYPE_EXAMPLES[source_type])
-    if metagenomics:
-        example.update(METAGENOMICS_EXAMPLE)
-
-    writer.writerow([example.get(f["field_name"], "") for f in fields])
+    writer.writerow(_build_example_row(fields, source_type, metagenomics))
 
     # Rows 6-15: Empty data rows
     empty_row = ["" for _ in fields]

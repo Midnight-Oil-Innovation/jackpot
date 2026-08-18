@@ -1,3 +1,5 @@
+> **Status:** Canonical - JACKPOT platform specification.
+
 # JACKPOT — Project Specification
 
 **Version:** 2.2
@@ -15,7 +17,7 @@
 > - **C** Single-org cloud (GKE/EKS/AKS, cloud-native)
 > - **D** CI / e2e test harness
 >
-> Federation membership, hosted-SaaS multi-org tenancy, and Indigenous data sovereignty (CARE-aligned governance) are runtime configurations applied to scenarios A/B/C — not separate install scenarios. See `docs/architecture.md` §3 for scenario detail and `docs/architecture.md` §22 for sovereignty-as-runtime-policy.
+> Federation membership, hosted-SaaS multi-org tenancy, Indigenous data sovereignty (CARE-aligned governance), and network-denied / store-and-forward transport are runtime configurations applied to scenarios A/B/C — not separate install scenarios. See `docs/architecture.md` §3 for scenario detail, §22 for sovereignty-as-runtime-policy, and §22.7 for transport-as-runtime-policy.
 >
 >
 > **Phase chain:** Phase 21 (UI close-out) → P0d (monorepo migration, in progress) → P0e (jackpot init CLI) → Phase 24.5 (architectural design lockdown — sovereignty deletion + BYOP/eukaryotic schema decisions before P0b) → P0f (BYOP infrastructure — Phase 24.7 in todo.md) → P0b (Schema v5.0 with all 24.5 lockdowns + instances/tenants/federated_peers) → P0c (multi-tenancy middleware + sovereignty deletion implementation) → P1–P5 (operator-type configurability, federation, governance, reference deployments, new-needs integration). Tracked-but-not-scheduled: Phase 25 (Month 3 stretch — admin UI, JupyterHub, GCP prod), Phase 26 (Pathoplexus/Loculus 34-item adoption backlog), Phase 27 (CDC DMI / STLT / CARE 14-item alignment backlog), Phase 28 (10 default eukaryotic pipelines + parsers + dashboards, internally tier-prioritized).
@@ -172,7 +174,7 @@ a peer system at a different layer (not a competitor).
 
 ### Language and Tools
 
-- Python 3.11, FastAPI, SQLAlchemy 2, Alembic, Pydantic v2
+- Python 3.12, FastAPI, SQLAlchemy 2, Alembic, Pydantic v2
 - `uv run` for all Python commands — never `pip`, never activate venv
 - `gac "type: description"` for all commits (runs ruff fix/format then commits)
 
@@ -1621,7 +1623,7 @@ After every router session, verify:
 ```bash
 # Tests pass and coverage holds
 uv run pytest
-# Expected: current baseline is 477 tests passing, 86.99% coverage
+# Expected: current baseline is 477 tests passing, 86.99% coverage drift-ok
 
 # Health check still green
 curl http://localhost:8000/health
@@ -2065,7 +2067,7 @@ deadline triggers correctly, 7-day expiry warning sent, denial blocks access.
 **Scope:** Researcher-facing pages only. Admin pages (`lab_director.py`,
 `platform_admin.py`, `archive_requests.py`, `billing.py`) deferred to Month 3.
 
-**Pages implemented** (all live in `jackpot-backend/frontend/pages/`):
+**Pages implemented** (all live in `frontend/pages/`):
 
 | Page                 | Purpose                                                      | Key API calls                                                |
 |----------------------|--------------------------------------------------------------|--------------------------------------------------------------|
@@ -2129,7 +2131,7 @@ deferred to Month 3.
 **Scope:** Staging only. Production deferred to Month 3. See Section 9 for
 the full as-built topology and cost profile.
 
-**Infrastructure (Terraform in `jackpot-iac/terraform/staging/`):**
+**Infrastructure (Terraform in `deploy/terraform/staging/`):**
 
 | Resource                       | Config                                                       |
 |--------------------------------|--------------------------------------------------------------|
@@ -2177,7 +2179,7 @@ staging deploy. Currently uses `kubectl port-forward` as a tactical
 workaround until public Ingress lands (Phase 20 Q-14).
 
 **Access control:**
-`docs/staging_access.md` (in `jackpot-iac/docs/`) documents who has access
+`deploy/docs/staging_access.md` documents who has access
 (the project owner + designated reviewers), how to reach staging URLs, how to redeploy, how to
 read Cloud Logging.
 
@@ -2206,7 +2208,7 @@ the end of Session 5. Architecture diagrams live at
 
 - **GCP project:** `jackpot-staging-project`
 - **Region:** `us-central1`
-- **IaC owner:** `jackpot-iac/terraform/staging/`
+- **IaC owner:** `deploy/terraform/staging/`
 - **Deploy trigger:** push to `staging` branch of jackpot-iac
 
 ### 9.2 Network & security
@@ -2325,15 +2327,12 @@ Reverse by setting api-pool to `--num-nodes=2` and Cloud SQL
 
 ### 10.1 Where the code lives
 
-The Streamlit UI lives **inside `jackpot-backend/frontend/`** — NOT in the
-separate `jackpot-frontend` repo. The `jackpot-frontend` repo is a
-vestigial stub; its `main.py` is literally
-`print("Hello from jackpot-frontend!")`. Retiring it is a Month 3 item.
+The Streamlit UI lives in `frontend/` at the repo root.
 
 Layout:
 
 ```
-jackpot-backend/frontend/
+frontend/
 ├── __init__.py
 ├── app.py                    # Streamlit entry point (landing + nav)
 ├── components/               # Shared widgets (tier badges, etc.)
@@ -2566,10 +2565,9 @@ These three documents are the source of truth for the post-P0d roadmap. Cross-re
 
 ### Operational runbooks
 
-- `jackpot-backend/docs/local_test_checklist.md` — pre-GCP-deploy
+- `docs/local_test_checklist.md` — pre-GCP-deploy
   validation (API + UI parts)
-- `jackpot-iac/docs/staging_access.md` — staging access + bootstrap Job +
-  troubleshooting
+- `deploy/docs/staging_access.md` — staging access and troubleshooting
 - `docs/CLAUDE.md` — 60 Critical Rules
 
 ### Code quality / CI
@@ -2577,7 +2575,7 @@ These three documents are the source of truth for the post-P0d roadmap. Cross-re
 - `gac "type: description"` for all commits — runs ruff fix + format
 - Pre-commit hooks: ruff (SIM102, E501, B008 among others)
 - Test coverage threshold 80% enforced in CI (post-P0e baseline)
-- GitHub Actions workflow `deploy-staging.yml` in `jackpot-iac/` triggers
+- GitHub Actions workflow `.github/workflows/deploy-staging.yml` triggers
   on push to `staging` branch
 
 ---
@@ -2604,8 +2602,8 @@ These three documents are the source of truth for the post-P0d roadmap. Cross-re
 
 ### Carried over
 
-- **When to retire `jackpot-frontend` repo?** Currently vestigial.
-  Tracked as Month 3 stretch goal.
+- ~~When to retire `jackpot-frontend` repo?~~ Resolved: repo archived
+  under P0d; UI consolidated into `frontend/` at the monorepo root.
 - **Option A vs Option B for Q-11** (move schemas into backend vs vendor
   nf/shared). Leaning Option A.
 - **`--atomic` vs custom pre-upgrade cleanup for Q-15.** `--atomic` loses

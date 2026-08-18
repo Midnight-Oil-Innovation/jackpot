@@ -1,3 +1,5 @@
+> **Status:** Superseded — archived (directory convention). Historical; do not cite as current.
+
 # JACKPOT Governance & Standards Alignment
 
 ## How JACKPOT maps to WHO/IPSN, WHO Guiding Principles, GA4GH, CDC North Star, and FAIR/CARE

@@ -10,6 +10,15 @@ from backend.database import execute_query
 
 router = APIRouter(prefix="/api/v1/gisaid", tags=["gisaid"])
 
+# The row-building logic below is SARS-CoV-2 (EpiCoV) specific — hardcoded
+# "Type": "betacoronavirus" and the "hCoV-19/" virus-name prefix. Influenza
+# (EpiFlu) and Mpox (EpiPox) need distinct column sets and Type values;
+# until that's implemented, reject them explicitly rather than silently
+# mislabeling their export as SARS-CoV-2 data. Tracked as I-2-followup-A,
+# matching the same minimal-scaffold-first phasing used by
+# backend.submission_packages for the newer I-2 package-generation flow.
+_SUPPORTED_PATHOGENS: frozenset[str] = frozenset({"SARS-CoV-2"})
+
 GISAID_SARS_COV2_COLUMNS: list[str] = [
     "Virus name",
     "Type",
@@ -50,12 +59,24 @@ def export_gisaid_csv(
 ) -> StreamingResponse:
     """
     Generate a GISAID-compatible CSV for the specified samples.
-    Supports SARS-CoV-2 (EpiCoV), Influenza (EpiFlu), Mpox (EpiPox).
+
+    Currently implements SARS-CoV-2 (EpiCoV) only. Influenza (EpiFlu) and
+    Mpox (EpiPox) require distinct column sets and are not yet
+    implemented — requesting them returns 501 rather than a CSV
+    mislabeled as SARS-CoV-2 data.
     """
     if not sample_ids:
         raise HTTPException(status_code=400, detail="No sample IDs provided.")
     user = get_current_user(request)
     require_lab_access(user, lab_id)
+    if pathogen not in _SUPPORTED_PATHOGENS:
+        raise HTTPException(
+            status_code=501,
+            detail=(
+                f"GISAID export for pathogen {pathogen!r} is not yet implemented. "
+                f"Currently supported: {sorted(_SUPPORTED_PATHOGENS)}."
+            ),
+        )
 
     placeholders = ",".join(f":id_{i}" for i in range(len(sample_ids)))
     params = {f"id_{i}": sid for i, sid in enumerate(sample_ids)}

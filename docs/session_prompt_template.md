@@ -1,5 +1,7 @@
 # JACKPOT session prompt template
 
+> **Status:** Canonical — source-of-truth template for every session prompt that produces a code commit.
+
 **Canonical structure for every JACKPOT session prompt that produces a code commit.** Referenced by Critical Rule N+5. All future session prompts must follow this template; chat-Claude drafting prompts and Claude Code executing them both treat this as the source of truth.
 
 ## Required sections (in order)
@@ -32,7 +34,7 @@ In addition to session-specific criteria, every prompt must include these as the
 13. `git push -u origin <branch>` succeeded
 14. `gh pr create` succeeded; PR URL captured in session summary
 15. `gh pr merge --squash --delete-branch` succeeded; merge SHA captured in session summary
-16. `git -C ~/Projects/jackpot fetch --prune` and `git -C ~/Projects/jackpot pull --ff-only origin development` succeeded; main checkout HEAD now contains the merge commit
+16. `git -C ~/Projects/operation_jackpot/jackpot fetch --prune` and `git -C ~/Projects/operation_jackpot/jackpot pull --ff-only origin development` succeeded; main checkout HEAD now contains the merge commit
 17. Session summary reports: PR URL, merge SHA, main checkout HEAD SHA after sync, and explicit "maintainer next step: run `jackpot-finish <branch>` from outside the session to remove the worktree and delete the local branch"
 ```
 
@@ -88,9 +90,9 @@ EOF
 gh pr merge --squash --delete-branch
 
 # Sync the main checkout so it has the merge commit
-git -C ~/Projects/jackpot fetch --prune
-git -C ~/Projects/jackpot pull --ff-only origin development
-git -C ~/Projects/jackpot log --oneline -3
+git -C ~/Projects/operation_jackpot/jackpot fetch --prune
+git -C ~/Projects/operation_jackpot/jackpot pull --ff-only origin development
+git -C ~/Projects/operation_jackpot/jackpot log --oneline -3
 ```
 > **`gh pr merge --delete-branch` deletes only the remote branch on GitHub (`origin/<branch>`).** The local branch ref is intentionally NOT deleted from inside the session — it's checked out in the current worktree, so git refuses to delete it anyway. The local branch is deleted by `jackpot-finish` after the worktree is removed.
 
@@ -99,7 +101,7 @@ After running the closing steps, the session summary must include:
 - **PR URL:** (captured from `gh pr create` output)
 - **Merge SHA:** (captured from `gh pr merge` output)
 - **Main checkout HEAD after sync:** (captured from `git log --oneline -3` output above)
-- **Maintainer next step:** Run `jackpot-finish <branch>` from `~/Projects/jackpot` to remove the worktree and delete the local branch
+- **Maintainer next step:** Run `jackpot-finish <branch>` from `~/Projects/operation_jackpot/jackpot` to remove the worktree and delete the local branch
 
 **Do NOT run `git worktree remove` from inside the session.** Git refuses to remove the current worktree, and the maintainer's `jackpot-finish` helper handles this from outside.
 
@@ -107,8 +109,8 @@ After running the closing steps, the session summary must include:
 
 These shell functions are prerequisites for the workflow:
 
-- **`jackpot-worktree <branch>`** — creates worktree at `~/Projects/jackpot_<branch>` branched from `origin/development`, cd's into it. Maintainer runs this before launching Claude Code.
-- **`jackpot-finish <branch>`** — post-Claude-Code cleanup: syncs `development`, removes worktree at `~/Projects/jackpot_<branch>`, deletes local branch. Maintainer runs this after the session reports success.
+- **`jackpot-worktree <branch>`** — creates worktree at `~/Projects/operation_jackpot/jackpot_<branch>` branched from `origin/development`, cd's into it. Maintainer runs this before launching Claude Code.
+- **`jackpot-finish <branch>`** — post-Claude-Code cleanup: syncs `development`, removes worktree at `~/Projects/operation_jackpot/jackpot_<branch>`, deletes local branch. Maintainer runs this after the session reports success.
 
 ## Sessions exempt from this template
 

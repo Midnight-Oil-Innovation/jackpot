@@ -1,3 +1,5 @@
+> **Status:** Canonical — wastewater surveillance schema.
+
 # Wastewater
 
 JACKPOT treats wastewater surveillance as a first-class data stream alongside clinical isolates, with its own schema requirements, its own normalization model, and its own coalition story. Wastewater samples represent a community rather than an individual — they're the cheapest population-level signal in pathogen surveillance, and the only one that doesn't require active patient encounters.

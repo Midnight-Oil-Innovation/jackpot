@@ -35,6 +35,7 @@ coverage.xml
 .mypy_cache/
 .ruff_cache/
 .hypothesis/
+report.md
 
 # Streamlit / Jupyter
 .streamlit/secrets.toml
@@ -85,3 +86,18 @@ audit_report*.json
 cleanup_plan*.txt
 cleanup_report*.txt
 cleanup_plan*.json
+coverage.xml
+
+# Local doc bundle — a concatenation of docs/*.md produced locally.
+# Not a source document; the individual files under docs/ are canonical.
+docs/docs.md
+
+
+# Generated analysis / tooling caches - never commit
+.ua/
+repomix-output.xml
+**/.DS_Store
+
+# Skills lockfile - generated cache, not tracked
+skills-lock.json
+*.bak.*

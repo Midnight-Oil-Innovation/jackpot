@@ -1,3 +1,5 @@
+> **Status:** Superseded — archived (directory convention). Historical; do not cite as current.
+
 Comprehensive inventory of everything we've discussed as potential additions to JACKPOT. Organized by domain so you can see what clusters together.
 
 ## ML and modeling infrastructure

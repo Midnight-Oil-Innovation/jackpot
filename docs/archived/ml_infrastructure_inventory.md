@@ -1,3 +1,5 @@
+> **Status:** Superseded — archived (directory convention). Historical; do not cite as current.
+
 # ML and Modeling Infrastructure — Inventory snapshot (archived)
 
 > **Superseded 2026-05-16 by multiple current docs.** This file is preserved as a working snapshot. Do not edit. Do not cite as current architecture.

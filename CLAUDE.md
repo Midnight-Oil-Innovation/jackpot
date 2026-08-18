@@ -192,13 +192,13 @@ workaround. This permanent pin alignment (PR #N) prevents recurrence.
 
 ## Directory Structure
 
-The post-P0d monorepo lives at `~/projects/jackpot/`. It is the
+The post-P0d monorepo lives at `~/Projects/operation_jackpot/jackpot/`. It is the
 canonical layout under `Midnight-Oil-Innovation/jackpot`. The previous
 six-repo + git-submodule arrangement is gone; what used to be submodules
 (`schema/`, `nf/`) is now subtree-merged at the top level.
 
 ```
-~/projects/jackpot/                ← uv workspace root + git repository
+~/Projects/operation_jackpot/jackpot/  ← uv workspace root + git repository
 ├── backend/                       ← workspace member (jackpot-backend)
 │   ├── pyproject.toml
 │   ├── alembic.ini                Alembic config — script_location = db/migrations
@@ -1166,7 +1166,7 @@ check as its first action and refuse to proceed if either assertion fails.
 The check (with `<branch>` filled in per session):
 
 ```bash
-EXPECTED_WORKTREE="$HOME/Projects/jackpot-<branch>"
+EXPECTED_WORKTREE="$HOME/Projects/operation_jackpot/jackpot-<branch>"
 EXPECTED_BRANCH="<branch-name>"
 [ "$(pwd -P)" = "$EXPECTED_WORKTREE" ] || { echo "FATAL: wrong cwd ($(pwd -P)). Stop." >&2; exit 1; }
 [ "$(git branch --show-current)" = "$EXPECTED_BRANCH" ] || { echo "FATAL: wrong branch ($(git branch --show-current)). Stop." >&2; exit 1; }
@@ -1240,8 +1240,8 @@ full design.
 1. `git push -u origin <branch>`
 2. `gh pr create --base development --title "..." --body "..."` with the full PR body following the template at `docs/session_prompt_template.md`
 3. `gh pr merge --squash --delete-branch`
-4. `git -C ~/Projects/jackpot fetch --prune`
-5. `git -C ~/Projects/jackpot pull --ff-only origin development`
+4. `git -C ~/Projects/operation_jackpot/jackpot fetch --prune`
+5. `git -C ~/Projects/operation_jackpot/jackpot pull --ff-only origin development`
 6. Session summary reports PR URL, merge SHA, main checkout HEAD SHA after sync, and an explicit "maintainer next step: run `jackpot-finish <branch>` from outside the session to remove the worktree and delete the local branch"
 
 The session MUST NOT include `git worktree remove` of the current worktree — git refuses to remove the in-use worktree, and the maintainer's `jackpot-finish` helper handles this from outside. Out of Scope sections must include this exclusion explicitly.
@@ -2808,3 +2808,46 @@ The PRIDE database at EBI built a directly comparable chatbot for their
 proteomics data repository — same use case (documentation Q&A + dataset
 search), same RAG architecture, published in Proteomics (2024).
 Reference: https://www.ebi.ac.uk/pride/chatbot/
+
+---
+
+## Agent skills
+
+Per-repo configuration consumed by the `mattpocock-skills` engineering
+skills. Edit these files directly to change the conventions; re-run
+`/mattpocock-skills:setup-matt-pocock-skills` only to switch issue
+trackers or start over.
+
+### Issue tracker
+
+Issues live in GitHub Issues on `Midnight-Oil-Innovation/jackpot`, via
+the `gh` CLI. PRs are not treated as a request surface. See
+`docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+The five canonical triage roles, using the default label strings
+(`needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`,
+`wontfix`). See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Single-context: `CONTEXT.md` + `docs/adr/` at the repo root, neither of
+which exists yet — `docs/domain_reference.md` and `docs/architecture.md`
+serve as the working glossary and decision record in the meantime. See
+`docs/agents/domain.md`.
+
+## Alembic single-flight (hard rule)
+
+Only one migration may be in flight at a time. Before writing a migration, confirm no
+other branch or open PR adds one. Never create a migration that shares a
+`down_revision` with an existing migration. Run `uv run python scripts/check_migration_heads.py`
+before committing any migration.
+
+## Dependency policy (hard rule)
+
+Every new dependency passes two gates before it lands:
+1. License compatible with AGPL-3.0 (`scripts/verify_licenses.py`). BSL, SSPL, and
+   other non-compatible licenses are rejected regardless of technical merit.
+2. No known blocking vulnerability (deptrust).
+Check both before proposing a dependency. Commit `pyproject.toml` and `uv.lock` together.

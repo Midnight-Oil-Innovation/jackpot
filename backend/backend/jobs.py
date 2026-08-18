@@ -746,6 +746,40 @@ def _verify_one(row: dict, *, re_fingerprint: bool) -> str | None:
     return None
 
 
+def _stat_local(parsed, uri: str) -> int:
+    path = parsed.path if parsed.scheme.lower() == "file" else uri
+    return os.stat(path).st_size
+
+
+def _stat_gs_s3(parsed, uri: str) -> int:
+    from botocore.exceptions import ClientError
+
+    from backend.storage import _get_client
+
+    client = _get_client()
+    try:
+        head = client.head_object(Bucket=parsed.netloc, Key=parsed.path.lstrip("/"))
+    except ClientError as exc:
+        code = str(exc.response.get("Error", {}).get("Code", ""))
+        http_status = exc.response.get("ResponseMetadata", {}).get("HTTPStatusCode")
+        if code in ("NoSuchKey", "NotFound", "404") or http_status == 404:
+            raise FileNotFoundError(uri) from exc
+        raise
+    return int(head["ContentLength"])
+
+
+def _stat_http(uri: str) -> int | None:
+    import httpx
+
+    with httpx.Client(follow_redirects=True, timeout=30.0) as client:
+        resp = client.head(uri)
+        if resp.status_code == 404:
+            raise FileNotFoundError(uri)
+        resp.raise_for_status()
+        cl = resp.headers.get("Content-Length")
+        return int(cl) if cl is not None else None
+
+
 def _stat_uri(uri: str) -> int | None:
     """Return the size in bytes for ``uri``, or raise.
 
@@ -759,33 +793,11 @@ def _stat_uri(uri: str) -> int | None:
     parsed = urlparse(uri)
     scheme = parsed.scheme.lower()
     if scheme in ("", "file"):
-        path = parsed.path if scheme == "file" else uri
-        return os.stat(path).st_size
+        return _stat_local(parsed, uri)
     if scheme in ("gs", "s3"):
-        from botocore.exceptions import ClientError
-
-        from backend.storage import _get_client
-
-        client = _get_client()
-        try:
-            head = client.head_object(Bucket=parsed.netloc, Key=parsed.path.lstrip("/"))
-        except ClientError as exc:
-            code = str(exc.response.get("Error", {}).get("Code", ""))
-            http_status = exc.response.get("ResponseMetadata", {}).get("HTTPStatusCode")
-            if code in ("NoSuchKey", "NotFound", "404") or http_status == 404:
-                raise FileNotFoundError(uri) from exc
-            raise
-        return int(head["ContentLength"])
+        return _stat_gs_s3(parsed, uri)
     if scheme in ("http", "https"):
-        import httpx
-
-        with httpx.Client(follow_redirects=True, timeout=30.0) as client:
-            resp = client.head(uri)
-            if resp.status_code == 404:
-                raise FileNotFoundError(uri)
-            resp.raise_for_status()
-            cl = resp.headers.get("Content-Length")
-            return int(cl) if cl is not None else None
+        return _stat_http(uri)
     if scheme == "sra":
         return None  # archives — caller treats None as "size check skipped"
     raise ValueError(f"Unsupported URI scheme for verification: {scheme!r}")
@@ -1821,6 +1833,39 @@ async def execute_submission(submission_id: int) -> dict[str, int]:
         )
 
 
+def _mkdir_and_secure(path: Path) -> None:
+    """Create ``path`` (and parents) then lock it to owner-only (0700).
+
+    Race-free against a symlink pre-planted at ``path`` by a local
+    attacker: ``mkdir(exist_ok=True)`` silently no-ops on an existing
+    symlink-to-directory, and plain ``os.chmod`` follows symlinks on
+    Linux — so a naive mkdir-then-chmod would happily lock down whatever
+    directory the attacker's symlink points at instead of a real,
+    freshly-owned one. Opening with ``O_NOFOLLOW`` refuses to follow a
+    symlink at the leaf and raises instead, converting a silent
+    permission-tampering primitive into a loud, safe failure.
+
+    Also refuses to adopt a pre-existing REAL directory owned by another
+    user. ``O_NOFOLLOW`` alone doesn't cover this: the API container has
+    no ``USER`` directive (runs as root), and root can chmod a directory
+    it doesn't own — so a local attacker pre-creating the real directory
+    before JACKPOT's first run at that path could otherwise have it
+    silently adopted and "secured" on their behalf.
+    """
+    path.mkdir(parents=True, exist_ok=True)
+    fd = os.open(path, os.O_DIRECTORY | os.O_NOFOLLOW)
+    try:
+        st = os.fstat(fd)
+        if st.st_uid != os.getuid():
+            raise PermissionError(
+                f"{path} exists and is owned by uid {st.st_uid}, not this "
+                f"process's uid {os.getuid()}; refusing to adopt it."
+            )
+        os.fchmod(fd, 0o700)
+    finally:
+        os.close(fd)
+
+
 async def _execute_submission_locked(
     *,
     submission_id: int,
@@ -1837,10 +1882,19 @@ async def _execute_submission_locked(
 
     started_at = datetime.now(UTC)
     wall_clock_start = monotonic()
-    working_dir = (
-        Path(settings.execution_working_dir_root) / f"submission_{submission_id}_attempt_{attempt}"
-    )
-    working_dir.mkdir(parents=True, exist_ok=True)
+    # bandit B108: execution_working_dir_root defaults to a shared /tmp
+    # location and the per-submission dir is preserved on failure for
+    # diagnostics — lock both the shared root and the leaf dir to
+    # owner-only (0700) so other local users on the host can neither
+    # list submission IDs/attempts under the root nor read a lab's
+    # submission artifacts inside a leaf dir. Mirrors
+    # write_seqsender_config's 0600 credential file. Re-securing an
+    # already-hardened root on every call is a harmless no-op — cheap
+    # and safe under concurrent executions racing to create it first.
+    working_root = Path(settings.execution_working_dir_root)
+    _mkdir_and_secure(working_root)
+    working_dir = working_root / f"submission_{submission_id}_attempt_{attempt}"
+    _mkdir_and_secure(working_dir)
 
     # Audit STARTED.
     with get_db() as db:

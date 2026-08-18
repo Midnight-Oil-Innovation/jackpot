@@ -724,6 +724,23 @@ classes:
       comments:
         description: "Free text comments"
 
+      # ── Sovereignty deletion lifecycle (P0b; sovereignty §12) ─────────────
+      # DDL stores deletion_status as TEXT + CHECK; the LinkML enum drives the
+      # Pydantic/JSON layer. See docs/architecture/p0b_schema_v5_migration_spec.md §2.1.
+      deletion_status:               { range: DeletionStatusEnum }
+      deletion_requested_at:
+      deletion_requested_by_user_id:
+      deletion_reason:
+      tombstoned_at:
+      vacuumed_at:
+
+      # ── Eukaryotic pathogen metadata (P0b; byop design §12.2) ─────────────
+      parasite_developmental_stage:  { range: ParasiteDevelopmentalStageEnum }
+      sample_preservation_method:    { range: SamplePreservationMethodEnum }
+      parasitemia_percent:           { range: float }
+      multiplicity_of_infection:     { range: integer }
+      coinfection_organisms:         { multivalued: true, range: OrganismNameEnum }
+
 # ════════════════════════════════════════════════════════════════════════════
 # HOST-SPECIFIC SUBCLASSES — HUMAN AND ANIMAL
 # ════════════════════════════════════════════════════════════════════════════
@@ -2126,6 +2143,63 @@ enums:
           Taxonomy name yet. Platform Admin assigns permanent name when
           NCBI Taxonomy provides one.
 
+      # ── Eukaryotic pathogens (P0b; byop design §12.1) ──────────────────────
+      # 38 net-new values; Toxoplasma gondii is already present above (Parasites).
+
+      # Plasmodium
+      Plasmodium falciparum:
+      Plasmodium vivax:
+      Plasmodium malariae:
+      Plasmodium ovale curtisi:
+      Plasmodium ovale wallikeri:
+      Plasmodium knowlesi:
+
+      # Leishmania
+      Leishmania donovani:
+      Leishmania major:
+      Leishmania infantum:
+      Leishmania tropica:
+      Leishmania braziliensis:
+      Leishmania mexicana:
+
+      # Trypanosoma
+      Trypanosoma cruzi:
+      Trypanosoma brucei gambiense:
+      Trypanosoma brucei rhodesiense:
+      Trypanosoma congolense:
+      Trypanosoma vivax:
+
+      # Schistosoma
+      Schistosoma mansoni:
+      Schistosoma haematobium:
+      Schistosoma japonicum:
+      Schistosoma mekongi:
+      Schistosoma intercalatum:
+
+      # Soil-transmitted helminths
+      Ascaris lumbricoides:
+      Ascaris suum:
+      Trichuris trichiura:
+      Necator americanus:
+      Ancylostoma duodenale:
+      Ancylostoma ceylanicum:
+      Strongyloides stercoralis:
+
+      # Filarial nematodes
+      Wuchereria bancrofti:
+      Brugia malayi:
+      Brugia timori:
+
+      # Waterborne protozoa
+      Cryptosporidium parvum:
+      Cryptosporidium hominis:
+      Cryptosporidium meleagridis:
+      Giardia intestinalis:
+
+      # Other protozoa
+      Entamoeba histolytica:
+      Entamoeba dispar:
+
   # ── Source and Experiment Types ────────────────────────────────────────────
 
   SourceTypeEnum:
@@ -2624,6 +2698,7 @@ enums:
       food_source_clinical:   { description: "Food sample linked to clinical case" }
       environmental_clinical: { description: "Environmental sample linked to human case" }
       longitudinal:           { description: "Serial samples from the same host over time" }
+      wastewater_upstream_of: { description: "Source sample is upstream of the target sample in the sewershed (directional; B-CWB-SCHEMA-2)" }
       other:                  {}
 
   # ── Sample File Enums ──────────────────────────────────────────────────────
@@ -2859,3 +2934,91 @@ enums:
         description: "SingularityCE — legacy HPC sites."
       NONE:
         description: "No container — processes run as native binaries."
+
+  # ── Sovereignty deletion lifecycle (P0b; sovereignty §12) ──────────────────
+  # DDL stores samples.deletion_status as TEXT + CHECK; this enum drives the
+  # Pydantic/JSON layer. See p0b_schema_v5_migration_spec.md §2.1.
+
+  DeletionStatusEnum:
+    permissible_values:
+      ACTIVE:
+      DELETION_REQUESTED:
+      TOMBSTONED:
+      VACUUMED:
+
+  # ── BYOP pipeline enums (P0b; byop design §7) ──────────────────────────────
+  # byop_pipelines is DDL-only (TEXT + CHECK); these enums give the P0c BYOP
+  # API a typed vocabulary. Note: PipelineSourceTypeEnum (code delivery) is
+  # distinct from the existing SourceTypeEnum (sample source).
+
+  PipelineEngineEnum:
+    permissible_values:
+      nextflow:
+      snakemake:
+      wdl:
+      manifest:
+
+  PipelineSourceTypeEnum:
+    permissible_values:
+      git:
+      git_private:
+      tarball:
+      docker:
+
+  PipelineStatusEnum:
+    permissible_values:
+      SUBMITTED:
+      VALIDATING:
+      SANDBOX_PENDING:
+      SANDBOX_RUNNING:
+      ACTIVE:
+      DEACTIVATED:
+      ARCHIVED:
+      VALIDATION_FAILED:
+      SANDBOX_FAILED:
+      SANDBOX_TIMEOUT:
+
+  DataTypeEnum:
+    permissible_values:
+      paired_end_short_read:
+      single_end_short_read:
+      long_read:
+      assembly:
+      raw_signal:
+      metagenomic:
+
+  # ── Eukaryotic pathogen metadata enums (P0b; byop design §12.2) ────────────
+
+  ParasiteDevelopmentalStageEnum:
+    permissible_values:
+      ring:
+      trophozoite:
+      schizont:
+      gametocyte:
+      sporozoite:
+      merozoite:
+      cyst:
+      trophozoite_amoebic:
+      egg:
+      miracidium:
+      cercaria:
+      adult:
+      larva_l1:
+      larva_l2:
+      larva_l3:
+      microfilaria:
+      bradyzoite:
+      tachyzoite:
+
+  SamplePreservationMethodEnum:
+    permissible_values:
+      fresh:
+      frozen_minus_20:
+      frozen_minus_80:
+      ethanol_70:
+      ethanol_95:
+      rnalater:
+      whatman_card:
+      dried_blood_spot:
+      formalin_fixed_paraffin_embedded:
+      nucleic_acid_only:

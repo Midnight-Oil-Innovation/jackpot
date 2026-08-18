@@ -99,6 +99,22 @@ class TestContentBuilding:
             chunk = content[start:end]
             assert f"[{field_name}]:" in chunk
 
+    def test_offsets_index_utf8_bytes_not_characters(self):
+        """Offsets must be UTF-8 byte offsets.
+
+        Cloud DLP reports findings at ``location.byte_range``, which counts
+        UTF-8 bytes. If we build the offset table in characters, every
+        offset past the first non-ASCII character is short by the number
+        of continuation bytes preceding it, and findings get attributed to
+        the wrong field.
+        """
+        sample = {"isolate": "Zoë Müller", "pi_name": "Jane Doe", "strain": "Delta"}
+        scannable = {"isolate", "pi_name", "strain"}
+        content, offsets = _build_content_item(sample, scannable)
+        encoded = content.encode("utf-8")
+        for field_name, (start, end) in offsets.items():
+            assert encoded[start:end].decode("utf-8").startswith(f"[{field_name}]:")
+
 
 class TestOffsetMapping:
     """Test mapping character offsets back to field names."""
@@ -111,6 +127,26 @@ class TestOffsetMapping:
     def test_unknown_offset(self):
         offsets = {"sample_id": (0, 25)}
         assert _offset_to_field(100, offsets) == "unknown"
+
+    def test_non_ascii_does_not_shift_a_finding_into_the_pi_name_exemption(self):
+        """A PII hit must not inherit ``pi_name``'s PERSON_NAME exemption.
+
+        Fields are emitted in sorted order, so ``isolate`` precedes
+        ``pi_name``. Byte offsets are always >= character offsets, so a
+        finding near the end of ``isolate`` shifts *forward* into
+        ``pi_name``'s range when the offset table is built in characters.
+        ``pi_name`` exempts PERSON_NAME, so the misattributed finding is
+        dropped and the PII reaches the database unflagged.
+        """
+        sample = {"isolate": "ëëëë Bob", "pi_name": "Jane Doe"}
+        scannable = {"isolate", "pi_name"}
+        content, offsets = _build_content_item(sample, scannable)
+
+        # Where Cloud DLP would report a PERSON_NAME hit on "Bob".
+        bob_offset = content.encode("utf-8").index(b"Bob")
+
+        assert _offset_to_field(bob_offset, offsets) == "isolate"
+        assert _is_exception(_offset_to_field(bob_offset, offsets), "PERSON_NAME") is False
 
 
 class TestScannableFields:

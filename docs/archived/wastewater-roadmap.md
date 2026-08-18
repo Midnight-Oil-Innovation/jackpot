@@ -1,3 +1,5 @@
+> **Status:** Superseded — archived (directory convention). Historical; do not cite as current.
+
 # Wastewater roadmap
 
 The chat went deep on a "wastewater module refactor" (chat-named `WW-1..12` schema + `WW-13..26` implementation + Phase 34 + Phase 26 subsection N + DEC-10..14). None of that is in the real backlog. What IS in the real backlog is more modest: a Freyja-output dashboard, a wastewater signal ingestion adapter under IM-2, and an advisory doc. This is the reconciled path.

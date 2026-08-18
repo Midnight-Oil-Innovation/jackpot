@@ -1,3 +1,5 @@
+> **Status:** Superseded — archived (directory convention). Historical; do not cite as current.
+
 # EPISTORM integration
 
 The chat designed a Phase 35 epidemic-modeling integration around epydemix, WhiteLabRt, RtEval, and the EPISTORM software stack. **None of it is in `todo.md`.** This entire section is net-new design work that would need a `jackpot_epidemic_modeling_design.md` anchor document and a fresh round of `B-EPY-*` backlog items before any of it ships.

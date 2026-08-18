@@ -18,6 +18,7 @@ Each test:
 from __future__ import annotations
 
 import asyncio
+import os
 from pathlib import Path
 from unittest.mock import AsyncMock, patch
 
@@ -308,6 +309,91 @@ async def test_failure_preserves_working_dir(temp_working_root, captured_uploads
         await execute_submission(sub_id)
     expected = temp_working_root / f"submission_{sub_id}_attempt_1"
     assert expected.exists(), f"working dir {expected} should be preserved on failure"
+
+
+@pytest.mark.asyncio
+async def test_working_dir_mode_is_0700(temp_working_root, captured_uploads):
+    """Bandit B108: execution_working_dir_root defaults to /tmp. The
+    per-execution dir is preserved on failure for diagnostics, so it must
+    be owner-only (0700) — other local users on a shared host must not be
+    able to read another lab's submission diagnostics."""
+    sub_id = _make_executing_submission("FAIL-MODE")
+    failed = SeqsenderRunResult(
+        exit_code=1,
+        stdout_bytes=b"",
+        stderr_bytes=b"",
+        wall_time_seconds=0.5,
+        timed_out=False,
+        invocation_command=["seqsender"],
+    )
+    with _patch_run_seqsender(failed):
+        await execute_submission(sub_id)
+    expected = temp_working_root / f"submission_{sub_id}_attempt_1"
+    mode = expected.stat().st_mode & 0o777
+    assert mode == 0o700, f"working dir mode should be 0700, got {oct(mode)}"
+
+
+@pytest.mark.asyncio
+async def test_working_root_mode_is_0700(temp_working_root, captured_uploads):
+    """The shared root (execution_working_dir_root) must also be 0700 —
+    otherwise other local users can `ls` it and enumerate every lab's
+    submission IDs/attempt counts even though each leaf dir is locked
+    down. Checked on the success path since, unlike the leaf dir, the
+    root itself is never deleted."""
+    sub_id = _make_executing_submission("OK-ROOT-MODE")
+    with _patch_run_seqsender():
+        await execute_submission(sub_id)
+    mode = temp_working_root.stat().st_mode & 0o777
+    assert mode == 0o700, f"working root mode should be 0700, got {oct(mode)}"
+
+
+@pytest.mark.asyncio
+async def test_symlinked_working_root_is_rejected(tmp_path, monkeypatch, captured_uploads):
+    """A pre-planted symlink at the configured working-dir root must not
+    be silently chmod'ed. os.chmod follows symlinks on Linux, so a naive
+    mkdir-then-chmod would lock down whatever directory an attacker's
+    symlink points at instead of a real, freshly-owned one.
+    _mkdir_and_secure must refuse (raise) rather than misdirect the
+    permission change onto the attacker-controlled target."""
+    decoy = tmp_path / "decoy"
+    decoy.mkdir()
+    root = tmp_path / "executions"
+    root.symlink_to(decoy, target_is_directory=True)
+    monkeypatch.setenv("EXECUTION_WORKING_DIR_ROOT", str(root))
+    from backend.config import get_settings
+
+    get_settings.cache_clear()
+
+    sub_id = _make_executing_submission("SYMLINK-ATTACK")
+    with _patch_run_seqsender(), pytest.raises(OSError):
+        await execute_submission(sub_id)
+
+    decoy_mode = decoy.stat().st_mode & 0o777
+    assert decoy_mode != 0o700, "decoy dir must not be chmod'ed via the symlink"
+
+
+@pytest.mark.asyncio
+async def test_working_root_owned_by_other_user_is_rejected(
+    temp_working_root, captured_uploads, monkeypatch
+):
+    """O_NOFOLLOW alone doesn't stop a local attacker from pre-creating
+    the real (non-symlink) directory before JACKPOT's first run — the
+    API container has no USER directive (runs as root), and root can
+    chmod a directory it doesn't own. _mkdir_and_secure must refuse to
+    adopt a pre-existing directory whose owner doesn't match this
+    process's uid, rather than silently locking it down on the
+    attacker's behalf. Simulated via monkeypatched os.getuid() since
+    creating a real cross-uid directory needs root."""
+    original_mode = temp_working_root.stat().st_mode & 0o777
+    real_uid = os.getuid()
+    monkeypatch.setattr("os.getuid", lambda: real_uid + 1)
+
+    sub_id = _make_executing_submission("OTHER-OWNER")
+    with _patch_run_seqsender(), pytest.raises(PermissionError):
+        await execute_submission(sub_id)
+
+    mode = temp_working_root.stat().st_mode & 0o777
+    assert mode == original_mode, "root dir must not be adopted/secured for a mismatched owner"
 
 
 # ── timeout path ─────────────────────────────────────────────────────

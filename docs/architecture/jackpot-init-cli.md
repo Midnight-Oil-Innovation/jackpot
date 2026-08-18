@@ -1,13 +1,16 @@
 # `jackpot init` CLI — Architecture & Design Lockdown
 
-**Status:** Design lockdown complete (2026-05-01). Implementation = Phase B of P0e.
+> **Status:** Canonical — `jackpot init` design lockdown; implementation shipped as Phase B of P0e.
+
 **Source:** Chat working sessions 2026-05-01 plus Phase 22 review log items 9, 10, 11
 
 ---
 
 ## Purpose
 
-`jackpot init` is JACKPOT's operator-bootstrap CLI. It turns a freshly-cloned `Midnight-Oil-Innovation/jackpot` monorepo into a configured, runnable JACKPOT deployment for one of the 7 install scenarios (A laptop / B single-org cloud / C multi-lab agency / D hosted SaaS / E federation member / F CI test / T Tribal-sovereignty).
+`jackpot init` is JACKPOT's operator-bootstrap CLI. It turns a freshly-cloned `Midnight-Oil-Innovation/jackpot` monorepo into a configured, runnable JACKPOT deployment for one of the four install scenarios (A self-hosted commodity / B HPC / C single-org cloud / D CI test), with federation, multi-tenancy, and Indigenous data sovereignty layered on as runtime policy rather than as scenarios of their own.
+
+The scenario letters below are the pre-consolidation set this document was written against (A laptop / B single-org cloud / C multi-lab agency / D hosted SaaS / E federation member / F CI test / T Tribal-sovereignty), and are what `--scenario` still accepts until the consolidation to the four-scenario taxonomy lands post-P0e. See `docs/architecture.md` §3 and §22 for the canonical taxonomy and the sovereignty-as-runtime-policy model.
 
 The CLI is **the only place** in JACKPOT where operator-specific values (host organization name, GCP project ID, OAuth client, scenario defaults, federation policy, etc.) are *learned*. Production code is operator-agnostic per Critical Rule 55; `jackpot init` learns operator values via prompts, GitHub vars detection, or scenario-default inference, and writes them into per-instance config files that production code reads at runtime.
 
@@ -399,7 +402,8 @@ include  = ["schema/**/*.yaml", "schema/**/*.json"]
 
 Current `schema/pyproject.toml` declares `dependencies = []`. `jackpot_scenarios/` will need pydantic v2 for the `ScenarioDefaults` models.
 
-**Resolution:** Add `dependencies = ["pydantic>=2"]` during B.2 step. If `versioning.py` later needs `tomli`/`tomllib` for `jackpot.toml` parsing on Python <3.11, add it then; for now Python 3.11+ ships `tomllib` in stdlib (per `requires-python = ">=3.11"`).
+**Resolution:** Add `dependencies = ["pydantic>=2"]` during B.2 step. If `versioning.py` later needs `tomli`/`tomllib` for `jackpot.toml` parsing on Python <3.11, add it then; for now Python 3.11+ ships `tomllib` in stdlib (per `requires-python = ">=3.11"`). <!-- drift-ok: floor from requires-python, not the project's current interpreter -->
+
 
 ### F3 — Compose service inventory
 

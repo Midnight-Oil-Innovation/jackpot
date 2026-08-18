@@ -1,3 +1,5 @@
+> **Status:** Superseded — archived (directory convention). Historical; do not cite as current.
+
 # JACKPOT Wastewater Surveillance Schema — Design Document
 
 **Module:** `wastewater.yaml`

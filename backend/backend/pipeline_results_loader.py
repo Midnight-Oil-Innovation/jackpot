@@ -104,23 +104,31 @@ def _infer_output_role(file_type: str) -> str:
     return _OUTPUT_ROLE_BY_FILE_TYPE.get(file_type, "OTHER")
 
 
+def _coerce_list(value: Any) -> list:
+    if isinstance(value, list):
+        return value
+    # Semicolon or comma-separated string → list
+    if isinstance(value, str):
+        sep = ";" if ";" in value else ","
+        return [v.strip() for v in value.split(sep) if v.strip()]
+    return [value]
+
+
+def _coerce_bool(value: Any) -> bool:
+    if isinstance(value, bool):
+        return value
+    return str(value).lower() in ("true", "1", "yes", "pass")
+
+
 def _coerce_value(value: Any, coercion: Any) -> Any:
     """Apply type coercion to a metadata value. Returns None on failure."""
     if value is None or value == "":
         return None
     try:
         if coercion is list:
-            if isinstance(value, list):
-                return value
-            # Semicolon or comma-separated string → list
-            if isinstance(value, str):
-                sep = ";" if ";" in value else ","
-                return [v.strip() for v in value.split(sep) if v.strip()]
-            return [value]
+            return _coerce_list(value)
         if coercion is bool:
-            if isinstance(value, bool):
-                return value
-            return str(value).lower() in ("true", "1", "yes", "pass")
+            return _coerce_bool(value)
         if coercion is not None:
             return coercion(value)
         return value
@@ -272,7 +280,6 @@ def load_pipeline_results(
                 launched_by_id=launched_by_id,
                 sample_file_list=sample_files.get(sample_id, []),
                 raw_metadata=sample_metadata.get(sample_id, {}),
-                full_manifest_metadata=sample_metadata,
                 conn=conn,
                 result=result,
             )
@@ -292,43 +299,29 @@ def load_pipeline_results(
     return result
 
 
-def _process_sample(
+def _register_sample_output_files(
     sample_id: str,
+    sample_id_fk: int,
     run_id: str,
     base_uri: str,
-    pipeline_name: str,
-    pipeline_version: str | None,
-    launched_by_id: int,
     sample_file_list: list[dict],
-    raw_metadata: dict[str, Any],
-    full_manifest_metadata: dict,
+    launched_by_id: int,
     conn: Any,
     result: LoaderResult,
 ) -> None:
-    """Process one sample from the manifest — files, results row, sample update."""
+    """Register per-sample pipeline output files and audit each.
+
+    Outputs default to MANAGED (Critical Rule 57: JACKPOT owns derived
+    data). If register_file dedups against an existing row (e.g., a user
+    pre-registered this file as EXTERNAL before running it through a
+    pipeline), keep the existing storage_state — register_file does not
+    transition state on dedup. The MANAGED intent only takes effect when
+    register_file inserts a fresh row.
+    """
     from backend.audit import AuditActions, log_audit
-    from backend.database import execute_query, execute_write
+    from backend.database import execute_write
     from backend.ingest_files import register_file
 
-    # Verify the sample exists in JACKPOT
-    rows = execute_query(
-        "SELECT id FROM samples WHERE sample_id = :sid",
-        {"sid": sample_id},
-        conn=conn,
-    )
-    if not rows:
-        logger.warning("Sample %s not found in JACKPOT — skipping", sample_id)
-        result.errors.append(f"Sample {sample_id} not found in database")
-        return
-    sample_id_fk = rows[0]["id"]
-
-    # ── 3a. Register per-sample output files ──────────────────────────────────
-    # Outputs default to MANAGED (Critical Rule 57: JACKPOT owns derived
-    # data). If register_file dedups against an existing row (e.g., a user
-    # pre-registered this file as EXTERNAL before running it through a
-    # pipeline), keep the existing storage_state — register_file does not
-    # transition state on dedup. The MANAGED intent only takes effect when
-    # register_file inserts a fresh row.
     for file_entry in sample_file_list:
         path = file_entry.get("path", "")
         if not path:
@@ -352,13 +345,14 @@ def _process_sample(
             conn=conn,
         )
         result.files_registered += 1
+        role = _infer_output_role(file_type)
 
         try:
             sf_id, was_dedup = register_file(
                 full_uri,
                 "MANAGED",
                 sample_id_fk,
-                _infer_output_role(file_type),
+                role,
                 conn=conn,
                 ingest_method="pipeline_output",
             )
@@ -389,11 +383,100 @@ def _process_sample(
             metadata={
                 "ingest_method": "pipeline_output",
                 "run_id": run_id,
-                "role": _infer_output_role(file_type),
+                "role": role,
                 "file_type": file_type,
             },
             db_conn=conn,
         )
+
+
+def _update_canonical_sample_fields(
+    sample_id: str,
+    raw_metadata: dict[str, Any],
+    run_id: str,
+    pipeline_name: str,
+    pipeline_version: str | None,
+    launched_by_id: int,
+    conn: Any,
+) -> None:
+    """Update samples-table canonical fields from pipeline metadata and
+    audit the before/after state. No-op if nothing schema-mapped changed."""
+    from backend.audit import AuditActions, log_audit
+    from backend.database import execute_query, execute_write
+
+    updates = _build_sample_updates(raw_metadata)
+    if not updates:
+        return
+
+    before_row = execute_query(
+        f"SELECT {', '.join(updates.keys())} FROM samples WHERE sample_id = :sid",
+        {"sid": sample_id},
+        conn=conn,
+    )
+    before = dict(before_row[0]) if before_row else {}
+
+    set_clause = ", ".join(f"{col} = :{col}" for col in updates)
+    updates["sid"] = sample_id
+    execute_write(
+        f"UPDATE samples SET {set_clause} WHERE sample_id = :sid",
+        updates,
+        conn=conn,
+    )
+
+    log_audit(
+        action=AuditActions.UPDATE_SAMPLE,
+        actor_id=launched_by_id,
+        resource_type="sample",
+        resource_id=sample_id,
+        before=before,
+        after={k: v for k, v in updates.items() if k != "sid"},
+        metadata={
+            "source": "pipeline_results_loader",
+            "run_id": run_id,
+            "pipeline": pipeline_name,
+            "version": pipeline_version,
+        },
+        db_conn=conn,
+    )
+
+
+def _process_sample(
+    sample_id: str,
+    run_id: str,
+    base_uri: str,
+    pipeline_name: str,
+    pipeline_version: str | None,
+    launched_by_id: int,
+    sample_file_list: list[dict],
+    raw_metadata: dict[str, Any],
+    conn: Any,
+    result: LoaderResult,
+) -> None:
+    """Process one sample from the manifest — files, results row, sample update."""
+    from backend.database import execute_query, execute_write
+
+    # Verify the sample exists in JACKPOT
+    rows = execute_query(
+        "SELECT id FROM samples WHERE sample_id = :sid",
+        {"sid": sample_id},
+        conn=conn,
+    )
+    if not rows:
+        logger.warning("Sample %s not found in JACKPOT — skipping", sample_id)
+        result.errors.append(f"Sample {sample_id} not found in database")
+        return
+    sample_id_fk = rows[0]["id"]
+
+    _register_sample_output_files(
+        sample_id,
+        sample_id_fk,
+        run_id,
+        base_uri,
+        sample_file_list,
+        launched_by_id,
+        conn,
+        result,
+    )
 
     # ── 3b. Insert immutable pipeline_results row ──────────────────────────────
     execute_write(
@@ -415,39 +498,8 @@ def _process_sample(
         conn=conn,
     )
 
-    # ── 3c. Update canonical sample fields ────────────────────────────────────
-    updates = _build_sample_updates(raw_metadata)
-    if updates:
-        # Fetch before state for audit
-        before_row = execute_query(
-            f"SELECT {', '.join(updates.keys())} FROM samples WHERE sample_id = :sid",
-            {"sid": sample_id},
-            conn=conn,
-        )
-        before = dict(before_row[0]) if before_row else {}
-
-        set_clause = ", ".join(f"{col} = :{col}" for col in updates)
-        updates["sid"] = sample_id
-        execute_write(
-            f"UPDATE samples SET {set_clause} WHERE sample_id = :sid",
-            updates,
-            conn=conn,
-        )
-
-        log_audit(
-            action=AuditActions.UPDATE_SAMPLE,
-            actor_id=launched_by_id,
-            resource_type="sample",
-            resource_id=sample_id,
-            before=before,
-            after={k: v for k, v in updates.items() if k != "sid"},
-            metadata={
-                "source": "pipeline_results_loader",
-                "run_id": run_id,
-                "pipeline": pipeline_name,
-                "version": pipeline_version,
-            },
-            db_conn=conn,
-        )
+    _update_canonical_sample_fields(
+        sample_id, raw_metadata, run_id, pipeline_name, pipeline_version, launched_by_id, conn
+    )
 
     result.samples_updated.append(sample_id)

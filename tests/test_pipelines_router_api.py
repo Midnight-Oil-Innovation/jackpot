@@ -1211,6 +1211,31 @@ async def test_custom_pipeline_duplicate_returns_409(client, as_platform_admin):
 
 
 @pytest.mark.asyncio
+async def test_custom_pipeline_groovy_unsafe_name_returns_422_not_500(client, as_platform_admin):
+    """A Groovy-unsafe pipeline_name must be a clean 422.
+
+    validate_groovy_safe raises ValueError inside a field_validator.
+    Pydantic v2 puts that exception object in ctx["error"], which is not
+    JSON serializable — so before the app's RequestValidationError
+    handler stringified ctx, this endpoint answered 500 instead of 422
+    and the caller got no usable message.
+    """
+    resp = await client.post(
+        "/api/v1/pipelines/custom",
+        json={
+            "project_id": SEED_PROJECT_ID,
+            "pipeline_name": "evil" + chr(39) + chr(59) + "whoami",
+            "github_url": "https://github.com/example/evil",
+            "revision": "v1",
+        },
+    )
+    assert resp.status_code == 422, resp.text
+    body = resp.json()
+    assert body["success"] is False
+    assert "pipeline_name" in body["error"]["message"]
+
+
+@pytest.mark.asyncio
 async def test_custom_pipeline_requires_lab_director(client, monkeypatch):
     email = _unique("collab") + "@test.com"
     _cleanup_users([email])

@@ -1,3 +1,5 @@
+> **Status:** Superseded — archived (directory convention). Historical; do not cite as current.
+
 # Backlog Consolidation Report — Audit trail (archived)
 
 > **Status: Audit trail preserved 2026-05-16.** The consolidation work this report describes has been fully executed in `docs/todo.md` (Phase IM-1 through IM-6, the `B-IMMUNE-*` / `B-COLLAB-*` / detection-landscape IDs). This file is preserved as the audit trail explaining *how* todo.md got to its current state. Do not edit. Do not treat as pending work.

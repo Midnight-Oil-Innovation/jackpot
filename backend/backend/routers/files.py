@@ -20,6 +20,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
 from backend.audit import AuditActions, log_audit
@@ -366,43 +367,42 @@ def _estimate_seconds(file_row: dict) -> int:
     return max(1, int(size // (100 * 1024 * 1024)))
 
 
-@router.post("/{file_id}/promote", status_code=202)
-def promote_file(
-    file_id: int,
-    payload: _PromoteRequest,
-    request: Request,
-    db=Depends(get_db_dep),  # noqa: B008
-):
-    """Schedule a one-shot copy job to promote a file to MANAGED/MIRRORED.
-
-    Phase P0f F-9. Returns 202 immediately with a ``job_id`` the caller
-    polls via ``GET /api/v1/files/jobs/{job_id}``. The actual byte copy
-    runs in :func:`backend.jobs.promote_file_storage` against the
-    application's APScheduler instance.
-    """
-    user = get_current_user(request)
+def _validate_promote_request(payload: _PromoteRequest) -> tuple[str, str, JSONResponse | None]:
+    """Normalise + validate ``to``/``retention_policy``. Returns (target, retention, err)."""
     target = (payload.to or "").strip().upper()
     retention = (payload.retention_policy or "STANDARD").strip().upper()
 
     if target not in _VALID_TARGET_STATES:
-        return error(
-            "INVALID_TRANSITION",
-            f"Target state must be one of {sorted(_VALID_TARGET_STATES)}; got {target!r}.",
-            status_code=422,
+        return (
+            target,
+            retention,
+            error(
+                "INVALID_TRANSITION",
+                f"Target state must be one of {sorted(_VALID_TARGET_STATES)}; got {target!r}.",
+                status_code=422,
+            ),
         )
     if retention not in _VALID_RETENTION_POLICIES:
-        return error(
-            "VALIDATION_ERROR",
-            (
-                f"Invalid retention_policy {retention!r}; must be one of "
-                f"{sorted(_VALID_RETENTION_POLICIES)}."
+        return (
+            target,
+            retention,
+            error(
+                "VALIDATION_ERROR",
+                (
+                    f"Invalid retention_policy {retention!r}; must be one of "
+                    f"{sorted(_VALID_RETENTION_POLICIES)}."
+                ),
+                status_code=422,
             ),
-            status_code=422,
         )
+    return target, retention, None
 
+
+def _authorize_promote(file_id: int, user: dict, db) -> tuple[dict | None, JSONResponse | None]:
+    """Load the file (visibility-scoped) and enforce write authority. Returns (file_row, err)."""
     file_row = _load_file_row_for_user(file_id, user, db)
     if not file_row:
-        return error("FILE_NOT_FOUND", f"File {file_id} not found.", status_code=404)
+        return None, error("FILE_NOT_FOUND", f"File {file_id} not found.", status_code=404)
 
     # Promotion triggers an expensive storage copy; gate it behind write
     # authority (Lab Director of the file's lab, or Platform Admin) rather
@@ -410,13 +410,16 @@ def promote_file(
     if not user.get("is_platform_admin"):
         member = get_user_lab_membership(user["id"], file_row["lab_id"])
         if not member or not member.get("is_lab_director"):
-            return error(
+            return None, error(
                 "ACCESS_DENIED",
                 "Lab Director or Platform Admin required to promote files.",
                 status_code=403,
             )
+    return file_row, None
 
-    current = file_row["storage_state"]
+
+def _validate_promote_transition(file_id: int, current: str, target: str) -> JSONResponse | None:
+    """Reject storage_state transitions the promote endpoint doesn't support."""
     if current == "BROKEN":
         return error(
             "INVALID_TRANSITION",
@@ -443,10 +446,13 @@ def promote_file(
             f"Cannot promote from {current} to {target}.",
             status_code=422,
         )
+    return None
 
-    job_id = _new_promote_job_id(file_id)
-    estimated_seconds = _estimate_seconds(file_row)
 
+def _schedule_promote_job(
+    file_id: int, target: str, retention: str, actor_id: int, job_id: str
+) -> None:
+    """Hand the promote job to the scheduler, or record it directly in test envs."""
     # Schedule via the application's AsyncIOScheduler. The lazy import
     # avoids a circular dependency between main.py and this router
     # (main.py imports the router at module import time).
@@ -457,7 +463,7 @@ def promote_file(
             _promote_file_storage_wrapper,
             trigger="date",
             run_date=datetime.now(UTC),
-            args=[file_id, target, retention, user["id"], job_id],
+            args=[file_id, target, retention, actor_id, job_id],
             id=job_id,
             replace_existing=False,
         )
@@ -469,6 +475,41 @@ def promote_file(
         from backend.jobs import _record_promote_job
 
         _record_promote_job(job_id, status="QUEUED", file_id=file_id, target_state=target)
+
+
+@router.post("/{file_id}/promote", status_code=202)
+def promote_file(
+    file_id: int,
+    payload: _PromoteRequest,
+    request: Request,
+    db=Depends(get_db_dep),  # noqa: B008
+):
+    """Schedule a one-shot copy job to promote a file to MANAGED/MIRRORED.
+
+    Phase P0f F-9. Returns 202 immediately with a ``job_id`` the caller
+    polls via ``GET /api/v1/files/jobs/{job_id}``. The actual byte copy
+    runs in :func:`backend.jobs.promote_file_storage` against the
+    application's APScheduler instance.
+    """
+    user = get_current_user(request)
+
+    target, retention, err = _validate_promote_request(payload)
+    if err:
+        return err
+
+    file_row, err = _authorize_promote(file_id, user, db)
+    if err:
+        return err
+    assert file_row is not None  # narrowed by `if err: return err` above
+
+    current = file_row["storage_state"]
+    err = _validate_promote_transition(file_id, current, target)
+    if err:
+        return err
+
+    job_id = _new_promote_job_id(file_id)
+    estimated_seconds = _estimate_seconds(file_row)
+    _schedule_promote_job(file_id, target, retention, user["id"], job_id)
 
     log_audit(
         action=AuditActions.PROMOTE_FILE,

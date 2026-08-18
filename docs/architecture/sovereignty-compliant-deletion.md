@@ -1,3 +1,5 @@
+> **Status:** Canonical — Phase 24.5 design lockdown (PR #20).
+
 # Sovereignty-compliant deletion — Architecture & Design Lockdown
 
 **Status:** Locked solo per option β · drafted 2026-05-04 · locked 2026-05-11

@@ -1,3 +1,5 @@
+> **Status:** Superseded — archived (directory convention). Historical; do not cite as current.
+
 # JACKPOT Platform Landscape
 
 ## Comparative Analysis: What We've Adopted, Why, and What's Next

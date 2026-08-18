@@ -1,3 +1,5 @@
+> **Status:** Canonical — WHO / GA4GH / FAIR+CARE alignment matrices.
+
 # JACKPOT Governance & Standards Alignment
 
 ## How JACKPOT maps to WHO/IPSN, WHO Guiding Principles, GA4GH, CDC North Star, and FAIR/CARE

@@ -22,6 +22,7 @@ from backend.crypto._ais_hooks import (
     ThresholdSignature,
 )
 from backend.crypto.keys import (
+    DEFAULT_FILESYSTEM_KEYSTORE_DIR,
     FilesystemKeystore,
     KeystoreBackend,
     Pkcs11Keystore,
@@ -56,6 +57,35 @@ def test_filesystem_keystore_key_file_is_0600(keystore_dir: Path) -> None:
     key_path = keystore_dir / "k.key"
     mode = stat.S_IMODE(os.stat(key_path).st_mode)
     assert mode == 0o600
+
+
+def test_filesystem_keystore_directory_is_0700(keystore_dir: Path) -> None:
+    FilesystemKeystore(directory=keystore_dir)
+    mode = stat.S_IMODE(os.stat(keystore_dir).st_mode)
+    assert mode == 0o700
+
+
+def test_filesystem_keystore_symlinked_directory_is_rejected(tmp_path: Path) -> None:
+    decoy = tmp_path / "decoy"
+    decoy.mkdir(mode=0o755)
+    keystore_link = tmp_path / "keys"
+    keystore_link.symlink_to(decoy)
+
+    with pytest.raises(OSError):
+        FilesystemKeystore(directory=keystore_link)
+
+    assert stat.S_IMODE(os.stat(decoy).st_mode) == 0o755
+
+
+def test_filesystem_keystore_directory_owned_by_other_user_is_rejected(
+    keystore_dir: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    keystore_dir.mkdir(parents=True)
+    real_uid = os.getuid()
+    monkeypatch.setattr(os, "getuid", lambda: real_uid + 1)
+
+    with pytest.raises(PermissionError):
+        FilesystemKeystore(directory=keystore_dir)
 
 
 def test_filesystem_keystore_metadata_sidecar_shape(keystore_dir: Path) -> None:
@@ -156,9 +186,13 @@ def test_filesystem_keystore_load_with_missing_meta_uses_mtime(keystore_dir: Pat
     assert ks.load_key("k") == b"\xcc" * 32
 
 
-def test_filesystem_keystore_default_hooks_is_null() -> None:
-    ks = FilesystemKeystore(directory=None)  # uses ~/.jackpot/keys default; do not store anything
+def test_filesystem_keystore_default_hooks_is_null(keystore_dir: Path) -> None:
+    ks = FilesystemKeystore(directory=keystore_dir)
     assert isinstance(ks.hooks, NullAISCryptoHooks)
+
+
+def test_filesystem_keystore_directory_defaults_to_dotjackpot_keys() -> None:
+    assert Path.home() / ".jackpot" / "keys" == DEFAULT_FILESYSTEM_KEYSTORE_DIR
 
 
 def test_secret_manager_keystore_raises_with_deferral_message() -> None:

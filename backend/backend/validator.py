@@ -175,30 +175,15 @@ def _is_absent(val: object) -> bool:
     return bool(isinstance(val, list) and not val)
 
 
-def validate_sample(data: dict) -> ValidationResult:
-    """
-    Validate a sample metadata dict against the JACKPOT schema.
-    Returns a fully populated ValidationResult.
-
-    errors       → ingest rejected; user must fix before re-submitting.
-    warnings     → ingest proceeds; user notified, no action required.
-    tier2_missing → fields needed to reach ANALYZABLE.
-    tier3_missing → fields needed to reach SUBMITTABLE.
-    tier         → highest tier achieved (1, 2, or 3).
-    sector       → auto-derived or user-supplied sector value.
-    """
-    errors: list[str] = []
-    warnings: list[str] = []
-    tier2_missing: list[str] = []
-    tier3_missing: list[str] = []
-
-    # ── Tier 1: base required fields ──────────────────────────────────────
+def _check_base_required(data: dict, errors: list[str]) -> None:
+    """Tier 1: base required fields."""
     for field_name in BASE_REQUIRED:
         if _is_absent(data.get(field_name)):
             errors.append(f"Missing required field: {field_name}")
 
-    # ── Sector: auto-derive from source_type; allow explicit override ─────
-    source_type = data.get("source_type", "")
+
+def _derive_sector(data: dict, source_type: str, errors: list[str]) -> str:
+    """Auto-derive sector from source_type; allow explicit override."""
     supplied_sector = data.get("sector", "")
     derived_sector = SECTOR_FROM_SOURCE_TYPE.get(source_type, "")
 
@@ -207,11 +192,12 @@ def validate_sample(data: dict) -> ValidationResult:
             errors.append(
                 f"Invalid sector '{supplied_sector}'. Must be one of: {sorted(VALID_SECTORS)}"
             )
-        sector = supplied_sector
-    else:
-        sector = derived_sector  # empty string if source_type not yet validated
+        return supplied_sector
+    return derived_sector  # empty string if source_type not yet validated
 
-    # ── Enum validation ───────────────────────────────────────────────────
+
+def _check_enums(data: dict, source_type: str, errors: list[str]) -> None:
+    """Enum validation for source_type, platform, experiment type, sharing, vadr."""
     if source_type and source_type not in VALID_SOURCE_TYPES:
         errors.append(
             f"Invalid source_type '{source_type}'. Must be one of: {sorted(VALID_SOURCE_TYPES)}"
@@ -242,7 +228,9 @@ def validate_sample(data: dict) -> ValidationResult:
             f"Invalid vadr_status '{vadr}'. Must be one of: {sorted(VALID_VADR_STATUSES)}"
         )
 
-    # ── Date validation ───────────────────────────────────────────────────
+
+def _check_dates(data: dict, errors: list[str], warnings: list[str]) -> None:
+    """date_collected and date_sequenced validation."""
     raw_date = data.get("date_collected")
     if raw_date:
         try:
@@ -278,23 +266,29 @@ def validate_sample(data: dict) -> ValidationResult:
         except ValueError:
             errors.append(f"date_sequenced '{raw_seq_date}' is not a valid ISO 8601 date.")
 
-    # ── Tier 1: source-type-specific required fields ───────────────────────
+
+def _check_source_specific_required(data: dict, source_type: str, errors: list[str]) -> None:
+    """Tier 1: source-type-specific required fields."""
     if source_type in SOURCE_REQUIRED:
         for field_name in SOURCE_REQUIRED[source_type]:
             if _is_absent(data.get(field_name)):
                 errors.append(f"Missing required field for {source_type} samples: {field_name}")
 
-    # ── Numeric range checks ──────────────────────────────────────────────
-    numeric_ranges: dict[str, tuple[float, float]] = {
-        "host_age": (0, 120),
-        "ct_value": (0, 50),
-        "ph": (0, 14),
-        "soil_ph": (0, 14),
-        "turbidity_ntu": (0, 4000),
-        "genome_completeness": (0, 100),
-        "nextclade_qc_score": (0, 100),
-    }
-    for field_name, (lo, hi) in numeric_ranges.items():
+
+_NUMERIC_RANGES: dict[str, tuple[float, float]] = {
+    "host_age": (0, 120),
+    "ct_value": (0, 50),
+    "ph": (0, 14),
+    "soil_ph": (0, 14),
+    "turbidity_ntu": (0, 4000),
+    "genome_completeness": (0, 100),
+    "nextclade_qc_score": (0, 100),
+}
+
+
+def _check_numeric_ranges(data: dict, errors: list[str], warnings: list[str]) -> None:
+    """Numeric range checks."""
+    for field_name, (lo, hi) in _NUMERIC_RANGES.items():
         val = data.get(field_name)
         if val is not None:
             try:
@@ -312,7 +306,9 @@ def validate_sample(data: dict) -> ValidationResult:
             except (TypeError, ValueError):
                 errors.append(f"{field_name} must be numeric, got '{val}'.")
 
-    # ── URI scheme check ──────────────────────────────────────────────────
+
+def _check_uri_schemes(data: dict, warnings: list[str]) -> None:
+    """URI scheme check."""
     for uri_field in ("fastq_r1_uri", "fastq_r2_uri", "consensus_fasta_uri"):
         uri = data.get(uri_field)
         if uri and not (
@@ -323,20 +319,22 @@ def validate_sample(data: dict) -> ValidationResult:
                 "(expected gs://, s3://, or drs://)."
             )
 
-    # ── Tier 2: ANALYZABLE missing fields ─────────────────────────────────
-    for field_name in TIER2_REQUIRED:
-        if _is_absent(data.get(field_name)):
-            tier2_missing.append(field_name)
 
-    # ── Tier 3: SUBMITTABLE missing fields ────────────────────────────────
+def _collect_tier2_missing(data: dict) -> list[str]:
+    """Tier 2: ANALYZABLE missing fields."""
+    return [f for f in TIER2_REQUIRED if _is_absent(data.get(f))]
+
+
+def _collect_tier3_missing(data: dict, source_type: str) -> list[str]:
+    """Tier 3: SUBMITTABLE missing fields."""
     t3_check = list(TIER3_REQUIRED)
     if source_type == "Human":
         t3_check.extend(TIER3_REQUIRED_HUMAN)
-    for field_name in t3_check:
-        if _is_absent(data.get(field_name)):
-            tier3_missing.append(field_name)
+    return [f for f in t3_check if _is_absent(data.get(f))]
 
-    # ── Recommended fields ────────────────────────────────────────────────
+
+def _check_recommended(data: dict, warnings: list[str]) -> None:
+    """Recommended (non-required) fields."""
     for field_name in RECOMMENDED:
         if _is_absent(data.get(field_name)):
             warnings.append(
@@ -344,22 +342,55 @@ def validate_sample(data: dict) -> ValidationResult:
                 "Consider providing it for better data quality."
             )
 
-    # ── Compute tier ──────────────────────────────────────────────────────
-    # Tier 3 (SUBMITTABLE): no hard errors, all tier2+tier3 fields present.
-    #   No date precision constraint — NCBI/GISAID accept YYYY, YYYY-MM, YYYY-MM-DD.
-    # Tier 2 (ANALYZABLE): no hard errors, all tier2 fields present,
-    #   date precision must be month or day (not year-only).
-    # Tier 1 (PRELIMINARY): any hard errors, or tier2 fields missing.
+
+def _compute_tier(
+    data: dict, errors: list[str], tier2_missing: list[str], tier3_missing: list[str]
+) -> int:
+    """
+    Tier 3 (SUBMITTABLE): no hard errors, all tier2+tier3 fields present.
+      No date precision constraint — NCBI/GISAID accept YYYY, YYYY-MM, YYYY-MM-DD.
+    Tier 2 (ANALYZABLE): no hard errors, all tier2 fields present,
+      date precision must be month or day (not year-only).
+    Tier 1 (PRELIMINARY): any hard errors, or tier2 fields missing.
+    """
+    if errors:
+        return 1
     precision = data.get("date_collected_precision", "day")
-    if not errors:
-        if not tier2_missing and not tier3_missing:
-            tier = 3
-        elif not tier2_missing and precision != "year":
-            tier = 2
-        else:
-            tier = 1
-    else:
-        tier = 1
+    if not tier2_missing and not tier3_missing:
+        return 3
+    if not tier2_missing and precision != "year":
+        return 2
+    return 1
+
+
+def validate_sample(data: dict) -> ValidationResult:
+    """
+    Validate a sample metadata dict against the JACKPOT schema.
+    Returns a fully populated ValidationResult.
+
+    errors       → ingest rejected; user must fix before re-submitting.
+    warnings     → ingest proceeds; user notified, no action required.
+    tier2_missing → fields needed to reach ANALYZABLE.
+    tier3_missing → fields needed to reach SUBMITTABLE.
+    tier         → highest tier achieved (1, 2, or 3).
+    sector       → auto-derived or user-supplied sector value.
+    """
+    errors: list[str] = []
+    warnings: list[str] = []
+
+    source_type = data.get("source_type", "")
+
+    _check_base_required(data, errors)
+    sector = _derive_sector(data, source_type, errors)
+    _check_enums(data, source_type, errors)
+    _check_dates(data, errors, warnings)
+    _check_source_specific_required(data, source_type, errors)
+    _check_numeric_ranges(data, errors, warnings)
+    _check_uri_schemes(data, warnings)
+    tier2_missing = _collect_tier2_missing(data)
+    tier3_missing = _collect_tier3_missing(data, source_type)
+    _check_recommended(data, warnings)
+    tier = _compute_tier(data, errors, tier2_missing, tier3_missing)
 
     return ValidationResult(
         valid=len(errors) == 0,

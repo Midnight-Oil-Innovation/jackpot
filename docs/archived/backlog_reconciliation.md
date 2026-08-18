@@ -1,3 +1,5 @@
+> **Status:** Superseded — archived (directory convention). Historical; do not cite as current.
+
 # Backlog Reconciliation — Chat-shorthand-to-real-backlog map (archived)
 
 > **Status: Audit trail preserved 2026-05-16.** This file is a historical reconciliation artifact, not pending work. The chat-shorthand items it describes (`WW-*`, `EPY-*`, `ML-*`, `FML-*`, `DEMO-*`, `TEST-*`, `DOC-*`) were never committed to the real backlog. The doc explains why, and what the real backlog uses instead.

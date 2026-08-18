@@ -19,9 +19,9 @@ repos:
       - id: trailing-whitespace
         # Pyright config + jackpot-course HTML use trailing whitespace
         # in <pre> blocks intentionally; don't strip those.
-        exclude: '\.(html|htm)$'
+        exclude: '\.(html|htm)$|^docs/STATUS\.md$'
       - id: end-of-file-fixer
-        exclude: '\.(html|htm)$'
+        exclude: '\.(html|htm)$|^docs/STATUS\.md$'
       - id: check-yaml
         # Helm templates use Go template syntax that isn't valid YAML
         # to a basic parser. Excluded from this hook; rely on
@@ -36,8 +36,23 @@ repos:
     hooks:
       - id: schema-regen-check
         name: Check generated schema artifacts match YAML
-        entry: python3 scripts/regen_schema.py --check --quiet
+        entry: uv run python scripts/regen_schema.py --check --quiet
         language: system
         pass_filenames: false
         files: ^schema/schema/jackpot_schema\.yaml$
         stages: [pre-commit]
+  - repo: local
+    hooks:
+      - id: docs-guard
+        name: docs drift guard
+        entry: uv run python scripts/check_docs.py
+        language: system
+        # Only the docs touched by this commit. CI (guardrails.yml, docs.yml)
+        # and `make` still run the full scan with no filenames.
+        files: ^docs/.*\.md$
+        pass_filenames: true
+      - id: alembic-single-head
+        name: single alembic head
+        entry: uv run python scripts/check_migration_heads.py
+        language: system
+        pass_filenames: false

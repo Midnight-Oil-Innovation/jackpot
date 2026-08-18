@@ -18,7 +18,6 @@ from __future__ import annotations
 import csv
 import io
 import json
-import logging
 from dataclasses import dataclass
 from datetime import UTC
 from typing import Any
@@ -27,9 +26,6 @@ from fastapi import HTTPException
 
 from backend.config import get_settings
 from backend.database import execute_query, execute_write
-
-logger = logging.getLogger(__name__)
-
 
 # Wizard step indexes are kept here as constants so the router and
 # tests can refer to them without magic numbers.
@@ -100,6 +96,33 @@ def parse_spreadsheet(file_bytes: bytes, file_format: str) -> SpreadsheetMeta:
     raise HTTPException(status_code=400, detail=f"Unsupported file_format: {file_format!r}")
 
 
+def _parse_xlsx_sheet(ws: Any) -> tuple[list[str], dict[str, list[str]], int]:
+    """Extract header columns, up-to-5 sample values per column, and row count."""
+    rows = ws.iter_rows(values_only=True)
+    try:
+        header = next(rows)
+    except StopIteration:
+        return [], {}, 0
+
+    cols = [str(c) if c is not None else "" for c in header]
+    cols = [c for c in cols if c]  # drop trailing empty header cells
+    samples: dict[str, list[str]] = {c: [] for c in cols}
+    count = 0
+    for row in rows:
+        if row is None or all(c is None for c in row):
+            continue
+        for idx, val in enumerate(row):
+            if idx >= len(cols):
+                break
+            if val is None:
+                continue
+            col = cols[idx]
+            if len(samples[col]) < 5 and str(val) not in samples[col]:
+                samples[col].append(str(val))
+        count += 1
+    return cols, samples, count
+
+
 def _parse_xlsx(file_bytes: bytes) -> SpreadsheetMeta:
     # openpyxl is heavy; import lazily so the module-level import
     # cost stays predictable for callers that don't actually parse.
@@ -122,33 +145,8 @@ def _parse_xlsx(file_bytes: bytes) -> SpreadsheetMeta:
         row_counts_by_sheet: dict[str, int] = {}
 
         for name in sheets:
-            ws = wb[name]
-            rows = ws.iter_rows(values_only=True)
-            try:
-                header = next(rows)
-            except StopIteration:
-                columns_by_sheet[name] = []
-                sample_values_by_sheet[name] = {}
-                row_counts_by_sheet[name] = 0
-                continue
-
-            cols = [str(c) if c is not None else "" for c in header]
-            cols = [c for c in cols if c]  # drop trailing empty header cells
+            cols, samples, count = _parse_xlsx_sheet(wb[name])
             columns_by_sheet[name] = cols
-            samples: dict[str, list[str]] = {c: [] for c in cols}
-            count = 0
-            for row in rows:
-                if row is None or all(c is None for c in row):
-                    continue
-                for idx, val in enumerate(row):
-                    if idx >= len(cols):
-                        break
-                    if val is None:
-                        continue
-                    col = cols[idx]
-                    if len(samples[col]) < 5 and str(val) not in samples[col]:
-                        samples[col].append(str(val))
-                count += 1
             sample_values_by_sheet[name] = samples
             row_counts_by_sheet[name] = count
 
@@ -162,6 +160,21 @@ def _parse_xlsx(file_bytes: bytes) -> SpreadsheetMeta:
         wb.close()
 
 
+def _collect_csv_samples(
+    reader: csv.DictReader, cols: list[str]
+) -> tuple[dict[str, list[str]], int]:
+    """Collect up-to-5 sample values per column and the total row count."""
+    samples: dict[str, list[str]] = {c: [] for c in cols}
+    count = 0
+    for row in reader:
+        for c in cols:
+            v = row.get(c)
+            if v and len(samples[c]) < 5 and v not in samples[c]:
+                samples[c].append(v)
+        count += 1
+    return samples, count
+
+
 def _parse_csv_like(file_bytes: bytes, delimiter: str) -> SpreadsheetMeta:
     try:
         text = file_bytes.decode("utf-8")
@@ -173,14 +186,7 @@ def _parse_csv_like(file_bytes: bytes, delimiter: str) -> SpreadsheetMeta:
     if not cols:
         raise HTTPException(status_code=400, detail="No header row detected.")
 
-    samples: dict[str, list[str]] = {c: [] for c in cols}
-    count = 0
-    for row in reader:
-        for c in cols:
-            v = row.get(c)
-            if v and len(samples[c]) < 5 and v not in samples[c]:
-                samples[c].append(v)
-        count += 1
+    samples, count = _collect_csv_samples(reader, cols)
 
     sentinel = "__single__"
     return SpreadsheetMeta(
@@ -353,6 +359,53 @@ _PATCHABLE_FIELDS: frozenset[str] = frozenset(
 )
 
 
+def _build_patch_updates(
+    session_id: int, fields: dict[str, Any]
+) -> tuple[list[str], dict[str, Any]]:
+    """Build the SQL ``SET`` clauses + bound params for a patch.
+
+    ``key`` is always drawn from ``fields``, which ``update_import_session``
+    has already validated against ``_PATCHABLE_FIELDS`` before this is
+    called — the interpolated column names are never user-supplied text.
+    """
+    sets: list[str] = []
+    params: dict[str, Any] = {"id": session_id}
+    for key, value in fields.items():
+        if key == "current_step":
+            sets.append("current_step = :current_step")
+            params["current_step"] = int(value)
+            continue
+        if key in ("column_mapping", "value_mapping", "file_reference_pattern"):
+            sets.append(f"{key} = CAST(:{key} AS JSONB)")
+            params[key] = json.dumps(value) if value is not None else None
+            continue
+        sets.append(f"{key} = :{key}")
+        params[key] = value
+    return sets, params
+
+
+def _apply_invalidation_rules(
+    sets: list[str], params: dict[str, Any], fields: dict[str, Any]
+) -> None:
+    """Append downstream-cache-clear + step-rewind clauses, mutating in place.
+
+    Compute the earliest wizard step affected by this patch and, if any,
+    clear the cached results from later steps and rewind ``current_step``
+    unless the caller explicitly bumped it past the changed step already.
+    """
+    affected_steps = [_FIELD_TO_STEP[k] for k in fields if k in _FIELD_TO_STEP]
+    earliest = min(affected_steps) if affected_steps else None
+    if earliest is None:
+        return
+
+    for cached in _DOWNSTREAM_CACHED_FIELDS:
+        sets.append(f"{cached} = NULL")
+    explicit_step = fields.get("current_step")
+    if explicit_step is None or explicit_step < earliest:
+        sets.append("current_step = :_invalidation_step")
+        params["_invalidation_step"] = earliest
+
+
 def update_import_session(
     *,
     session_id: int,
@@ -375,34 +428,8 @@ def update_import_session(
     if not fields:
         return session
 
-    # Compute the earliest step affected by this patch.
-    affected_steps = [_FIELD_TO_STEP[k] for k in fields if k in _FIELD_TO_STEP]
-    earliest = min(affected_steps) if affected_steps else None
-
-    sets: list[str] = []
-    params: dict[str, Any] = {"id": session_id}
-    for key, value in fields.items():
-        if key == "current_step":
-            sets.append("current_step = :current_step")
-            params["current_step"] = int(value)
-            continue
-        if key in ("column_mapping", "value_mapping", "file_reference_pattern"):
-            sets.append(f"{key} = CAST(:{key} AS JSONB)")
-            params[key] = json.dumps(value) if value is not None else None
-            continue
-        sets.append(f"{key} = :{key}")
-        params[key] = value
-
-    if earliest is not None:
-        # Clear downstream cached results and rewind current_step.
-        for cached in _DOWNSTREAM_CACHED_FIELDS:
-            sets.append(f"{cached} = NULL")
-        # Only rewind if the user hasn't explicitly bumped current_step
-        # past the changed step on this same patch.
-        explicit_step = fields.get("current_step")
-        if explicit_step is None or explicit_step < earliest:
-            sets.append("current_step = :_invalidation_step")
-            params["_invalidation_step"] = earliest
+    sets, params = _build_patch_updates(session_id, fields)
+    _apply_invalidation_rules(sets, params, fields)
 
     rows = execute_write(
         f"""
@@ -441,6 +468,56 @@ def abandon_session(session_id: int, user_id: int, conn) -> dict:
 # ── preview / diff / convert / execute ──────────────────────────────
 
 
+def _row_iter_from_xlsx(
+    file_bytes: bytes, selected_sheet: str | None
+) -> tuple[list[str], list[dict[str, str]]]:
+    from openpyxl import load_workbook  # noqa: PLC0415
+
+    wb = load_workbook(io.BytesIO(file_bytes), read_only=True, data_only=True)
+    # read_only workbooks hold the underlying file open; close in a
+    # finally so repeated wizard steps don't leak file descriptors.
+    try:
+        sheet_name = selected_sheet or wb.sheetnames[0]
+        ws = wb[sheet_name]
+        iter_rows = ws.iter_rows(values_only=True)
+        try:
+            header = next(iter_rows)
+        except StopIteration:
+            return [], []
+        cols = [str(c) if c is not None else "" for c in header]
+        cols = [c for c in cols if c]
+        rows_out: list[dict[str, str]] = []
+        for raw in iter_rows:
+            if raw is None or all(c is None for c in raw):
+                continue
+            entry: dict[str, str] = {}
+            for idx, c in enumerate(cols):
+                if idx < len(raw) and raw[idx] is not None:
+                    entry[c] = str(raw[idx])
+                else:
+                    entry[c] = ""
+            rows_out.append(entry)
+            if len(rows_out) >= MAX_ROWS_PER_IMPORT:
+                break
+        return cols, rows_out
+    finally:
+        wb.close()
+
+
+def _row_iter_from_csv_like(
+    file_bytes: bytes, delimiter: str
+) -> tuple[list[str], list[dict[str, str]]]:
+    text = file_bytes.decode("utf-8")
+    reader = csv.DictReader(io.StringIO(text), delimiter=delimiter)
+    cols = [c for c in (reader.fieldnames or []) if c]
+    rows_out: list[dict[str, str]] = []
+    for raw in reader:
+        rows_out.append({c: (raw.get(c) or "") for c in cols})
+        if len(rows_out) >= MAX_ROWS_PER_IMPORT:
+            break
+    return cols, rows_out
+
+
 def _row_iter_from_session(session: dict, conn) -> tuple[list[str], list[dict[str, str]]]:
     """Yield the user's spreadsheet rows back out of the session.
 
@@ -458,48 +535,10 @@ def _row_iter_from_session(session: dict, conn) -> tuple[list[str], list[dict[st
     fmt = blob["file_format"].lower()
 
     if fmt == "xlsx":
-        from openpyxl import load_workbook  # noqa: PLC0415
-
-        wb = load_workbook(io.BytesIO(file_bytes), read_only=True, data_only=True)
-        # read_only workbooks hold the underlying file open; close in a
-        # finally so repeated wizard steps don't leak file descriptors.
-        try:
-            sheet_name = blob["selected_sheet"] or wb.sheetnames[0]
-            ws = wb[sheet_name]
-            iter_rows = ws.iter_rows(values_only=True)
-            try:
-                header = next(iter_rows)
-            except StopIteration:
-                return [], []
-            cols = [str(c) if c is not None else "" for c in header]
-            cols = [c for c in cols if c]
-            rows_out: list[dict[str, str]] = []
-            for raw in iter_rows:
-                if raw is None or all(c is None for c in raw):
-                    continue
-                entry: dict[str, str] = {}
-                for idx, c in enumerate(cols):
-                    if idx < len(raw) and raw[idx] is not None:
-                        entry[c] = str(raw[idx])
-                    else:
-                        entry[c] = ""
-                rows_out.append(entry)
-                if len(rows_out) >= MAX_ROWS_PER_IMPORT:
-                    break
-            return cols, rows_out
-        finally:
-            wb.close()
+        return _row_iter_from_xlsx(file_bytes, blob["selected_sheet"])
 
     delimiter = "," if fmt == "csv" else "\t"
-    text = file_bytes.decode("utf-8")
-    reader = csv.DictReader(io.StringIO(text), delimiter=delimiter)
-    cols = [c for c in (reader.fieldnames or []) if c]
-    rows_out_csv: list[dict[str, str]] = []
-    for raw in reader:
-        rows_out_csv.append({c: (raw.get(c) or "") for c in cols})
-        if len(rows_out_csv) >= MAX_ROWS_PER_IMPORT:
-            break
-    return cols, rows_out_csv
+    return _row_iter_from_csv_like(file_bytes, delimiter)
 
 
 def _apply_row_mappings(
@@ -520,6 +559,25 @@ def _apply_row_mappings(
     return out
 
 
+def _files_from_path_columns(raw_row: dict[str, str], cfg: dict[str, Any]) -> str:
+    parts = []
+    for col in (cfg.get("r1_column"), cfg.get("r2_column")):
+        if col and raw_row.get(col):
+            parts.append(raw_row[col])
+    for extra in cfg.get("extra_columns") or []:
+        if raw_row.get(extra):
+            parts.append(raw_row[extra])
+    return ";".join(parts)
+
+
+def _files_from_filename_convention(raw_row: dict[str, str], cfg: dict[str, Any]) -> str:
+    sample_id = raw_row.get(cfg.get("sample_id_column", "sample_id"), "")
+    template = cfg.get("template") or "{sample_id}_R1.fastq.gz"
+    # Naive substitution; the template is operator-supplied so a
+    # full-fledged template engine isn't worth the dependency.
+    return template.replace("{sample_id}", sample_id)
+
+
 def _files_column_for_row(
     raw_row: dict[str, str],
     pattern: dict[str, Any] | None,
@@ -530,39 +588,19 @@ def _files_column_for_row(
     ptype = pattern.get("type")
     cfg = pattern.get("config", {}) or {}
     if ptype == "path_columns":
-        parts = []
-        for col in (cfg.get("r1_column"), cfg.get("r2_column")):
-            if col and raw_row.get(col):
-                parts.append(raw_row[col])
-        for extra in cfg.get("extra_columns") or []:
-            if raw_row.get(extra):
-                parts.append(raw_row[extra])
-        return ";".join(parts)
+        return _files_from_path_columns(raw_row, cfg)
     if ptype == "filename_convention":
-        sample_id = raw_row.get(cfg.get("sample_id_column", "sample_id"), "")
-        template = cfg.get("template") or "{sample_id}_R1.fastq.gz"
-        # Naive substitution; the template is operator-supplied so a
-        # full-fledged template engine isn't worth the dependency.
-        return template.replace("{sample_id}", sample_id)
+        return _files_from_filename_convention(raw_row, cfg)
     return ""
 
 
-def convert_to_csv(session: dict, conn) -> str:
-    """Render the wizard's mapped data as a JACKPOT-format CSV string."""
-    column_mapping = session.get("column_mapping") or {}
-    value_mapping = session.get("value_mapping") or {}
-    pattern = session.get("file_reference_pattern") or {}
+def _build_output_columns(
+    src_cols: list[str], column_mapping: dict[str, str], pattern: dict[str, Any]
+) -> list[str]:
+    """JACKPOT target columns plus the synthetic ``files``/``storage_intent`` columns.
 
-    if not column_mapping:
-        raise HTTPException(
-            status_code=422,
-            detail="column_mapping is required before converting the session.",
-        )
-
-    src_cols, rows = _row_iter_from_session(session, conn)
-
-    # Output columns: every JACKPOT target plus the synthetic ``files``
-    # column. Preserve insertion order so the CSV is deterministic.
+    Preserves source-column insertion order so the CSV is deterministic.
+    """
     targets: list[str] = []
     seen: set[str] = set()
     for col in src_cols:
@@ -578,6 +616,23 @@ def convert_to_csv(session: dict, conn) -> str:
         "MIRRORED",
     ):
         out_cols.append("storage_intent")
+    return out_cols
+
+
+def convert_to_csv(session: dict, conn) -> str:
+    """Render the wizard's mapped data as a JACKPOT-format CSV string."""
+    column_mapping = session.get("column_mapping") or {}
+    value_mapping = session.get("value_mapping") or {}
+    pattern = session.get("file_reference_pattern") or {}
+
+    if not column_mapping:
+        raise HTTPException(
+            status_code=422,
+            detail="column_mapping is required before converting the session.",
+        )
+
+    src_cols, rows = _row_iter_from_session(session, conn)
+    out_cols = _build_output_columns(src_cols, column_mapping, pattern)
 
     buf = io.StringIO()
     writer = csv.DictWriter(buf, fieldnames=out_cols, extrasaction="ignore")
@@ -647,34 +702,41 @@ def compute_diff(session: dict, conn) -> dict:
         raise HTTPException(status_code=422, detail="column_mapping is required before diff.")
 
     _src_cols, rows = _row_iter_from_session(session, conn)
-    sample_ids = []
-    by_sample_id: dict[str, dict[str, str]] = {}
-    for raw in rows:
-        mapped = _apply_row_mappings(raw, column_mapping, value_mapping)
-        sid = mapped.get("sample_id")
-        if not sid:
-            continue
-        sample_ids.append(sid)
-        by_sample_id[sid] = mapped
+    by_sample_id = _map_rows_by_sample_id(rows, column_mapping, value_mapping)
 
-    if not sample_ids:
+    if not by_sample_id:
         payload = {"new": [], "changed": [], "unchanged": [], "total": 0}
-        execute_write(
-            "UPDATE import_sessions SET diff_results = CAST(:d AS JSONB), "
-            "current_step = :step WHERE id = :id",
-            {"d": json.dumps(payload), "step": STEP_DIFF, "id": session["id"]},
-            conn=conn,
-        )
-        return payload
+        return _persist_diff_results(session["id"], payload, conn)
 
     existing_rows = execute_query(
         "SELECT sample_id, organism_name, source_type, sector "
         "FROM samples WHERE sample_id = ANY(:ids) AND is_deleted = FALSE",
-        {"ids": sample_ids},
+        {"ids": list(by_sample_id)},
         conn=conn,
     )
     existing = {r["sample_id"]: r for r in existing_rows}
 
+    payload = _classify_sample_diffs(by_sample_id, existing)
+    return _persist_diff_results(session["id"], payload, conn)
+
+
+def _map_rows_by_sample_id(
+    rows: list[dict[str, str]],
+    column_mapping: dict[str, str],
+    value_mapping: dict[str, dict[str, str]] | None,
+) -> dict[str, dict[str, str]]:
+    by_sample_id: dict[str, dict[str, str]] = {}
+    for raw in rows:
+        mapped = _apply_row_mappings(raw, column_mapping, value_mapping)
+        sid = mapped.get("sample_id")
+        if sid:
+            by_sample_id[sid] = mapped
+    return by_sample_id
+
+
+def _classify_sample_diffs(
+    by_sample_id: dict[str, dict[str, str]], existing: dict[str, dict]
+) -> dict:
     new_list: list[str] = []
     changed: list[dict] = []
     unchanged: list[str] = []
@@ -695,16 +757,19 @@ def compute_diff(session: dict, conn) -> dict:
         else:
             unchanged.append(sid)
 
-    payload = {
+    return {
         "new": new_list,
         "changed": changed,
         "unchanged": unchanged,
         "total": len(by_sample_id),
     }
+
+
+def _persist_diff_results(session_id: int, payload: dict, conn) -> dict:
     execute_write(
         "UPDATE import_sessions SET diff_results = CAST(:d AS JSONB), "
         "current_step = :step WHERE id = :id",
-        {"d": json.dumps(payload), "step": STEP_DIFF, "id": session["id"]},
+        {"d": json.dumps(payload), "step": STEP_DIFF, "id": session_id},
         conn=conn,
     )
     return payload

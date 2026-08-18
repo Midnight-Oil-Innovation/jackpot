@@ -1,3 +1,5 @@
+> **Status:** Superseded — archived (directory convention). Historical; do not cite as current.
+
 # Demo data sources
 
 Public data sources for the laptop Scenario A demo. The "Sol cluster federation simulation" framing from chat doesn't apply — Glen's demo target is laptop deployment, which means two JACKPOT instances on one laptop via Docker Compose for federation; the data sources stay the same.

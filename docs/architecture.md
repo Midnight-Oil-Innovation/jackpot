@@ -1,3 +1,5 @@
+> **Status:** Canonical — system architecture v6.0 (post-Cluster-A).
+
 # JACKPOT Architecture
 
 **Version:** 6.0
@@ -1390,7 +1392,45 @@ For v1, the authority for sovereignty configuration is the Org Admin (or Platfor
 
 JACKPOT enforces decisions made by configured authorities. It does not model the authority structure itself; that lives in operator-side governance documents and operator-side review processes.
 
+### 22.7 Transport as runtime policy
+
+JACKPOT supports network-denied and store-and-forward operation — intermittent connectivity, opportunistic satellite backhaul, and fully air-gapped sites — but as a **runtime transport-policy configuration**, not as a separate deployment scenario. This is the same architectural pattern as sovereignty (§22.1): a rural clinic and a well-connected reference lab pick the same scenario (A, B, or C) and install the same platform code; they differ only in the transport configured per federation peer. §2.3 commits the platform to operating across the full connectivity range; this subsection describes the mechanism that delivers on that commitment.
+
+The unit of transport policy is the **peer**, not the deployment. A single deployment routinely reaches different peers by different means: HTTPS to a regional hub while a link is up, signed sneakernet bundles to a sister clinic across a valley with no shared network. Transport therefore lives on each `federated_instances` row, alongside the existing role and policy fields (§20.2), rather than as a global instance setting.
+
+**Available transports.** The `transport_type` column on `federated_instances` selects how this instance reaches a given peer:
+
+- **HTTPS** (default) — synchronous request/response over TCP. The only transport that supports L1 live query federation (§20.1); a peer reachable only by store-and-forward cannot answer a live fan-out and is queried instead against the last synced snapshot.
+- **DTN** — delay-tolerant networking via the IETF Bundle Protocol (RFC 9171). Store-and-forward; supports L2 push and L3 pull with bundled payloads, not live query. Experimental.
+- **SNEAKERNET** — manual courier of signed bundles on physical media. Store-and-forward with unbounded latency; always available as a fallback and as the disaster-recovery backstop when no network path exists. Never auto-selected.
+- **LORA** — low-bandwidth Meshtastic/LoRa mesh for alert-class payloads only (case detections, sample-status changes), not full sample transfer. Experimental.
+
+`transport_type` is enforced by a TEXT + CHECK constraint rather than a PostgreSQL ENUM. The transport value set is expected to grow as new radios and protocols are adopted, and a CHECK constraint admits new values through a transactional constraint swap, unlike `ALTER TYPE ... ADD VALUE`. This deliberately diverges from the sibling `role` column, whose federation-role values are a closed set and are modeled as an ENUM (see migration `85d92864ed38`). A companion `transport_config` JSONB column carries transport-specific settings — DTN endpoint identifiers and bundle lifetime, LoRa channel and broker, sneakernet bundle-store path — and is empty for HTTPS peers.
+
+**Relationship to the three federation levels.** Transport policy composes with the federation levels of §20.1 rather than replacing them. The three levels differ in their reachability assumptions, and network-denied mode affects each differently:
+
+- **L1 query** is inherently online. Over any store-and-forward transport it degrades to snapshot search over locally-held synced data; there is no such thing as a sneakernet live query.
+- **L2 hub push** is the opportunistic-flush path — the field-deployment case where a site accumulates qualifying de-identified samples and flushes them upstream when a link appears. Its payload references sample bytes; in store-and-forward mode that reference must be a bundled artifact rather than a presigned URL that assumes the source stays reachable.
+- **L3 access pull** sources approved sample files from a presigned URL when online, or from an imported signed bundle when couriered.
+
+The delay-tolerant and file-based federation transports named in §2.3 (Google Drive, SyftBox) are the same mechanism viewed from the transport layer: file-based exchange is store-and-forward transport, and the `transport_type`/`transport_config` fields are how a deployment declares it per peer.
+
+**Air-gapped operation.** A deployment can be configured to make no outbound network calls at all, exchanging data exclusively through signed sneakernet bundles. In this mode every peer is SNEAKERNET, live query is unavailable platform-wide, and bundle import is gated by signature verification against the operator's trust store before ingest. This is the strongest form of the transport policy and is appropriate for sites operating under physical-seizure risk or political sensitivity.
+
+**Configuration mechanism.** Transport is set when a peer is registered or updated:
+
+```bash
+jackpot peers add --base-url <url> --api-key <ref> --transport https
+jackpot peers add --bundle-store <path> --transport sneakernet
+jackpot peers set-transport --peer <peer_id> --transport dtn --config <json>
+```
+
+The HTTPS default means existing peer records and existing deployments are unaffected: a peer added without a transport flag is an HTTPS peer and behaves exactly as before this capability existed.
+
+**Implementation status.** The schema foundation is shipped: `federated_instances.transport_type` (TEXT + CHECK) and `transport_config` (JSONB), mirrored on the `FederatedInstance` model, in migration `2daeecbe082d`. The store-and-forward transports themselves are staged: HTTPS is the current federation behavior; SNEAKERNET bundle export/import is near-term Track 1 work; DTN and LoRa are experimental Track 2, gated behind environment flags. The per-peer transport dispatch point and the L2 push payload's reference-vs-bundle fork are wired when the L2/L3 federation IO is built (see `docs/todo.md`, Phase 29). Full transport design lives in `docs/federation.md` and the Phase 29 rural / network-denied work.
+
 ---
+
 
 ## 23. Testing framework
 
@@ -1444,7 +1484,7 @@ pytest --cov=backend --cov-report=term-missing
 
 ### 24.1 Current state — Month 1 and Month 2
 
-Month 1 (data layer) completed: schema v4.4 shipped, core routers (orgs/labs/users/samples/datasets/pipelines) in production, six ingest methods implemented, scrubber pipeline integrated, six-role RBAC enforced via guards.
+Month 1 (data layer) completed: schema v4.4 shipped, core routers (orgs/labs/users/samples/datasets/pipelines) in production, six ingest methods implemented, scrubber pipeline integrated, six-role RBAC enforced via guards.  <!-- drift-ok -->
 
 Month 2 (pipelines, workspace, access control) completed: pipeline catalog with viralrecon + MIRA-NF + PHoeNIx, telemetry tables, JupyterHub on GKE (Scenario C), sample_access router for cross-lab access requests, dataset promotion lifecycle.
 

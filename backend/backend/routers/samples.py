@@ -192,32 +192,26 @@ def _require_readable(user: dict, sample: dict | None, conn) -> dict:
     return sample
 
 
-@router.get("/")
-def list_samples(
-    request: Request,
-    organism_name: str | None = None,
-    source_type: str | None = None,
-    sector: str | None = None,
-    quality_status: str | None = None,
-    scrub_status: str | None = None,
-    sharing_level: str | None = None,
-    lab_id: int | None = None,
-    project_id: int | None = None,
-    owner_id: int | None = None,
-    date_from: str | None = None,
-    date_to: str | None = None,
-    surveillance_relevant: bool | None = None,
-    has_broken_files: bool | None = None,
-    select_all: bool = False,
-    page: int = 1,
-    per_page: int = Query(50, ge=1, le=500),
-    sort_by: str = "ingest_timestamp",
-    sort_dir: str = "desc",
-    db=Depends(get_db_dep),  # noqa: B008
-):
-    user = get_current_user(request)
-
-    vis_clause, vis_params = visibility_sql_clause(user)
+def _build_sample_filters(
+    *,
+    vis_clause: str,
+    vis_params: dict,
+    organism_name: str | None,
+    source_type: str | None,
+    sector: str | None,
+    quality_status: str | None,
+    scrub_status: str | None,
+    sharing_level: str | None,
+    lab_id: int | None,
+    project_id: int | None,
+    owner_id: int | None,
+    date_from: str | None,
+    date_to: str | None,
+    surveillance_relevant: bool | None,
+    has_broken_files: bool | None,
+) -> tuple[list[str], dict]:
+    """Build the WHERE-clause fragments + bind params for list_samples'
+    optional filters, layered on top of the base visibility clause."""
     where: list[str] = [
         "s.is_deleted = FALSE",
         vis_clause,
@@ -270,6 +264,53 @@ def list_samples(
             "AND sf.is_deleted = FALSE)"
         )
 
+    return where, params
+
+
+@router.get("/")
+def list_samples(
+    request: Request,
+    organism_name: str | None = None,
+    source_type: str | None = None,
+    sector: str | None = None,
+    quality_status: str | None = None,
+    scrub_status: str | None = None,
+    sharing_level: str | None = None,
+    lab_id: int | None = None,
+    project_id: int | None = None,
+    owner_id: int | None = None,
+    date_from: str | None = None,
+    date_to: str | None = None,
+    surveillance_relevant: bool | None = None,
+    has_broken_files: bool | None = None,
+    select_all: bool = False,
+    page: int = 1,
+    per_page: int = Query(50, ge=1, le=500),
+    sort_by: str = "ingest_timestamp",
+    sort_dir: str = "desc",
+    db=Depends(get_db_dep),  # noqa: B008
+):
+    user = get_current_user(request)
+
+    vis_clause, vis_params = visibility_sql_clause(user)
+    where, params = _build_sample_filters(
+        vis_clause=vis_clause,
+        vis_params=vis_params,
+        organism_name=organism_name,
+        source_type=source_type,
+        sector=sector,
+        quality_status=quality_status,
+        scrub_status=scrub_status,
+        sharing_level=sharing_level,
+        lab_id=lab_id,
+        project_id=project_id,
+        owner_id=owner_id,
+        date_from=date_from,
+        date_to=date_to,
+        surveillance_relevant=surveillance_relevant,
+        has_broken_files=has_broken_files,
+    )
+
     where_sql = " AND ".join(where)
 
     if select_all:
@@ -312,27 +353,22 @@ def get_sample(
     return success(data=out)
 
 
-@router.patch("/{sample_id}")
-async def update_sample(
-    sample_id: int,
-    request: Request,
-    db=Depends(get_db_dep),  # noqa: B008
-):
-    user = get_current_user(request)
-    sample = _get_sample(sample_id, db)
-    if not sample:
-        raise HTTPException(status_code=404, detail="Sample not found.")
-
-    # Writes require lab membership (Lab Collaborator+) on the sample's lab,
-    # or Platform Admin. Lab Readers cannot write.
-    is_admin = bool(user.get("is_platform_admin"))
+def _require_sample_writable(user: dict, sample: dict) -> None:
+    """Writes require lab membership (Lab Collaborator+) on the sample's lab,
+    or Platform Admin. Lab Readers cannot write. Raises HTTPException."""
+    if user.get("is_platform_admin"):
+        return
     member = get_user_lab_membership(user["id"], sample["lab_id"])
-    if not is_admin:
-        if not member:
-            raise HTTPException(status_code=403, detail="Lab membership required to update.")
-        if member.get("permission_group_name") == "Lab Reader":
-            raise HTTPException(status_code=403, detail="Lab Reader cannot update samples.")
+    if not member:
+        raise HTTPException(status_code=403, detail="Lab membership required to update.")
+    if member.get("permission_group_name") == "Lab Reader":
+        raise HTTPException(status_code=403, detail="Lab Reader cannot update samples.")
 
+
+async def _parse_sample_update_body(request: Request) -> dict:
+    """Parse and validate a PATCH body into an editable-fields update dict.
+    Raises HTTPException on invalid JSON, locked-field attempts, or an
+    empty update."""
     try:
         body = await request.json()
     except Exception as exc:
@@ -357,16 +393,14 @@ async def update_sample(
     updates = {k: v for k, v in body.items() if v is not None and k in _EDITABLE_FIELDS}
     if not updates:
         raise HTTPException(status_code=422, detail="No updatable fields provided.")
+    return updates
 
-    set_fragments = [f"{k} = :{k}" for k in sorted(updates)]
-    query = f"UPDATE samples SET {', '.join(set_fragments)} WHERE id = :_id RETURNING *"
-    params = {**updates, "_id": sample_id}
-    rows = execute_write(query, params, conn=db)
-    updated = rows[0]
 
-    # Recompute derived fields from the post-update row. We pull the full
-    # sample shape so the validator sees all required-for-tier fields.
-    merged = {**sample, **updates}
+def _recompute_sample_derived_fields(sample_id: int, merged: dict, updated: dict, db) -> dict:
+    """Recompute quality_status/surveillance_relevant from the post-update
+    row and write them. We pull the full sample shape so the validator sees
+    all required-for-tier fields. Falls back to `updated` if the recompute
+    write returns no row."""
     validation = validate_sample(merged)
     new_quality = compute_quality_status(validation)
 
@@ -387,7 +421,33 @@ async def update_sample(
         {"q": new_quality, "s": new_surveillance, "_id": sample_id},
         conn=db,
     )
-    final = recompute[0] if recompute else updated
+    return recompute[0] if recompute else updated
+
+
+@router.patch("/{sample_id}")
+async def update_sample(
+    sample_id: int,
+    request: Request,
+    db=Depends(get_db_dep),  # noqa: B008
+):
+    user = get_current_user(request)
+    sample = _get_sample(sample_id, db)
+    if not sample:
+        raise HTTPException(status_code=404, detail="Sample not found.")
+
+    _require_sample_writable(user, sample)
+    updates = await _parse_sample_update_body(request)
+
+    set_fragments = [f"{k} = :{k}" for k in sorted(updates)]
+    query = f"UPDATE samples SET {', '.join(set_fragments)} WHERE id = :_id RETURNING *"
+    params = {**updates, "_id": sample_id}
+    rows = execute_write(query, params, conn=db)
+    updated = rows[0]
+
+    # Recompute derived fields from the post-update row. We pull the full
+    # sample shape so the validator sees all required-for-tier fields.
+    merged = {**sample, **updates}
+    final = _recompute_sample_derived_fields(sample_id, merged, updated, db)
 
     log_audit(
         action=AuditActions.UPDATE_SAMPLE,
