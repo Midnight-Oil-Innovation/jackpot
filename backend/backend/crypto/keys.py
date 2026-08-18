@@ -33,6 +33,33 @@ logger = logging.getLogger(__name__)
 DEFAULT_FILESYSTEM_KEYSTORE_DIR = Path.home() / ".jackpot" / "keys"
 
 
+def _mkdir_and_secure(path: Path) -> None:
+    """Create ``path`` (and parents) then lock it to owner-only (0700).
+
+    ``mkdir()`` followed by a separate ``os.chmod(path, ...)`` is a TOCTOU
+    race: ``chmod`` follows symlinks, so an attacker who pre-plants a
+    symlink at ``path`` before this first runs can redirect the chmod to
+    an arbitrary directory. Opening with ``O_NOFOLLOW`` and chmod-ing the
+    resulting file descriptor closes that race. Also refuses to adopt a
+    pre-existing REAL directory owned by another user, since a local
+    attacker pre-creating the real directory at this path could otherwise
+    have their directory silently "secured" and used to store this
+    process's signing/encryption key material.
+    """
+    path.mkdir(parents=True, exist_ok=True)
+    fd = os.open(path, os.O_DIRECTORY | os.O_NOFOLLOW)
+    try:
+        st = os.fstat(fd)
+        if st.st_uid != os.getuid():
+            raise PermissionError(
+                f"{path} exists and is owned by uid {st.st_uid}, not this "
+                f"process's uid {os.getuid()}; refusing to adopt it."
+            )
+        os.fchmod(fd, stat.S_IRWXU)
+    finally:
+        os.close(fd)
+
+
 class KeystoreBackend(ABC):
     """Common interface across filesystem / Secret Manager / PKCS#11 backends."""
 
@@ -68,9 +95,8 @@ class FilesystemKeystore(KeystoreBackend):
         self.directory = (
             Path(directory) if directory is not None else DEFAULT_FILESYSTEM_KEYSTORE_DIR
         )
-        self.directory.mkdir(parents=True, exist_ok=True)
         # Tighten directory perms (0700) so siblings can't list keys.
-        os.chmod(self.directory, stat.S_IRWXU)
+        _mkdir_and_secure(self.directory)
         self.hooks: AISCryptoHooks = hooks if hooks is not None else NullAISCryptoHooks()
 
     def _key_path(self, key_id: str) -> Path:
