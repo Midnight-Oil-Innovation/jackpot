@@ -295,21 +295,16 @@ class DetectionResult:
     lane_count: int = 0
 
 
-def detect_files(filenames: list[str]) -> DetectionResult:
-    """Analyse filenames for a single sample. Non-sequence files skipped."""
-    seq_files = [f for f in filenames if is_sequence_file(f)]
-    skipped = [f for f in filenames if not is_sequence_file(f)]
-    detected: list[DetectedFile] = []
-    warnings: list[str] = []
+def _match_paired_files(
+    seq_files: list[str],
+) -> tuple[dict[tuple[str, str | None], dict[str, str]], list[str], list[str]]:
+    """Group filenames by (prefix, lane), matching against PAIRED_PATTERNS.
 
-    if skipped:
-        warnings.append(
-            f"Skipped {len(skipped)} non-sequence file(s): "
-            f"{', '.join(skipped[:5])}{'...' if len(skipped) > 5 else ''}"
-        )
-
+    Returns (groups, unmatched filenames, warnings for duplicate directions).
+    """
     groups: dict[tuple[str, str | None], dict[str, str]] = {}
     unmatched: list[str] = []
+    warnings: list[str] = []
 
     for fname in seq_files:
         matched = False
@@ -334,6 +329,18 @@ def detect_files(filenames: list[str]) -> DetectionResult:
         if not matched:
             unmatched.append(fname)
 
+    return groups, unmatched, warnings
+
+
+def _classify_pair_groups(
+    groups: dict[tuple[str, str | None], dict[str, str]],
+) -> tuple[list[DetectedFile], list[str], bool, bool, set[str]]:
+    """Turn (prefix, lane) -> {direction: filename} groups into DetectedFiles.
+
+    Returns (detected, warnings, has_paired, has_unpaired, lanes).
+    """
+    detected: list[DetectedFile] = []
+    warnings: list[str] = []
     has_paired = False
     has_unpaired = False
     lanes: set[str] = set()
@@ -382,6 +389,13 @@ def detect_files(filenames: list[str]) -> DetectionResult:
                 )
             )
 
+    return detected, warnings, has_paired, has_unpaired, lanes
+
+
+def _group_chunk_candidates(
+    unmatched: list[str],
+) -> tuple[dict[str, list[tuple[int, str]]], list[str]]:
+    """Split unmatched filenames into chunk-pattern groups vs truly unmatched."""
     chunk_groups: dict[str, list[tuple[int, str]]] = {}
     truly_unmatched: list[str] = []
 
@@ -392,8 +406,23 @@ def detect_files(filenames: list[str]) -> DetectionResult:
         else:
             truly_unmatched.append(fname)
 
+    return chunk_groups, truly_unmatched
+
+
+def _build_chunk_and_unmatched_files(
+    chunk_groups: dict[str, list[tuple[int, str]]],
+    truly_unmatched: list[str],
+) -> tuple[list[DetectedFile], list[str], bool]:
+    """Build DetectedFiles for chunked and fully-unmatched filenames.
+
+    Returns (detected, warnings, has_unpaired). ``has_unpaired`` is True iff
+    at least one file was passed in (every file this helper sees is unpaired).
+    """
+    detected: list[DetectedFile] = []
+    warnings: list[str] = []
+    has_unpaired = bool(chunk_groups or truly_unmatched)
+
     for prefix, chunks in chunk_groups.items():
-        has_unpaired = True
         for idx, fname in sorted(chunks):
             detected.append(
                 DetectedFile(
@@ -406,7 +435,6 @@ def detect_files(filenames: list[str]) -> DetectionResult:
             )
 
     for fname in truly_unmatched:
-        has_unpaired = True
         detected.append(
             DetectedFile(
                 filename=fname,
@@ -415,6 +443,35 @@ def detect_files(filenames: list[str]) -> DetectionResult:
             )
         )
         warnings.append(f"'{fname}' did not match any known convention — registered as unpaired.")
+
+    return detected, warnings, has_unpaired
+
+
+def detect_files(filenames: list[str]) -> DetectionResult:
+    """Analyse filenames for a single sample. Non-sequence files skipped."""
+    seq_files = [f for f in filenames if is_sequence_file(f)]
+    skipped = [f for f in filenames if not is_sequence_file(f)]
+    warnings: list[str] = []
+
+    if skipped:
+        warnings.append(
+            f"Skipped {len(skipped)} non-sequence file(s): "
+            f"{', '.join(skipped[:5])}{'...' if len(skipped) > 5 else ''}"
+        )
+
+    groups, unmatched, dup_warnings = _match_paired_files(seq_files)
+    warnings.extend(dup_warnings)
+
+    detected, pair_warnings, has_paired, has_unpaired, lanes = _classify_pair_groups(groups)
+    warnings.extend(pair_warnings)
+
+    chunk_groups, truly_unmatched = _group_chunk_candidates(unmatched)
+    chunk_detected, chunk_warnings, chunk_has_unpaired = _build_chunk_and_unmatched_files(
+        chunk_groups, truly_unmatched
+    )
+    detected.extend(chunk_detected)
+    warnings.extend(chunk_warnings)
+    has_unpaired = has_unpaired or chunk_has_unpaired
 
     return DetectionResult(
         files=detected,
@@ -425,21 +482,24 @@ def detect_files(filenames: list[str]) -> DetectionResult:
     )
 
 
+def _first_file_by_direction(files: list[DetectedFile], direction: str) -> DetectedFile | None:
+    """Earliest (by lane, then chunk index) file matching ``direction``, if any."""
+    matches = sorted(
+        (f for f in files if f.read_direction == direction),
+        key=lambda f: (f.lane or "", f.chunk_index or 0),
+    )
+    return matches[0] if matches else None
+
+
 def get_convenience_uris(
     result: DetectionResult,
     uri_map: dict[str, str],
 ) -> tuple[str | None, str | None]:
     """Return (fastq_r1_uri, fastq_r2_uri) convenience values for samples table."""
-    r1_files = sorted(
-        [f for f in result.files if f.read_direction == "R1"],
-        key=lambda f: (f.lane or "", f.chunk_index or 0),
-    )
-    r2_files = sorted(
-        [f for f in result.files if f.read_direction == "R2"],
-        key=lambda f: (f.lane or "", f.chunk_index or 0),
-    )
-    r1_uri = uri_map.get(r1_files[0].filename) if r1_files else None
-    r2_uri = uri_map.get(r2_files[0].filename) if r2_files else None
+    r1_file = _first_file_by_direction(result.files, "R1")
+    r2_file = _first_file_by_direction(result.files, "R2")
+    r1_uri = uri_map.get(r1_file.filename) if r1_file else None
+    r2_uri = uri_map.get(r2_file.filename) if r2_file else None
     if r1_uri is None and result.files:
         r1_uri = uri_map.get(result.files[0].filename)
     return r1_uri, r2_uri
