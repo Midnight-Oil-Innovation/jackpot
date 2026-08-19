@@ -8,12 +8,14 @@ and public health research.
 **Project context (April 2026 pivot):** JACKPOT is an independent project under
 `Midnight-Oil-Innovation/jackpot`, licensed AGPL-3.0. The platform is
 multi-deployment-target by design — production code is operator-agnostic and
-serves **7** install scenarios (A laptop, B single-org cloud, C multi-lab
-agency, D hosted SaaS, E federation member, F CI test, **T Tribal-sovereignty
-deployment** — variant of A or E with sovereignty-aware defaults: deletion-
-on-request, no auto-publish, federation off-by-default, CARE Principles
-compliance documented in
-`governance/care-principles-and-tribal-data-sovereignty.md`). The
+serves **4** canonical install scenarios (A self-hosted commodity from laptop
+to multi-lab agency, B HPC with Apptainer + Slurm + institutional storage, C
+single-org cloud with Kubernetes, D CI test) with **federation, multi-tenancy,
+and Indigenous data sovereignty as runtime configurations** (not separate
+scenarios). Sovereignty-as-runtime-policy per `docs/architecture.md` §22
+provides deletion-on-request, no-auto-publish defaults, federation off-by-default,
+and CARE Principles compliance documented in
+`governance/care-principles-and-tribal-data-sovereignty.md`. The
 `jackpot init` CLI (coming in P0e) handles per-operator bootstrap. Phasing:
 cleanup phases 6.1–11 → P0d (monorepo migration, in progress) →
 P0e (install/CLI) → Phase 24.5 (architectural design lockdown) →
@@ -21,7 +23,7 @@ P0f (BYOP infrastructure) → P0b (Schema v5.0 with instances/tenants/
 federated_peers + BYOP/eukaryotic schema) → P0c (multi-tenancy middleware
 + sovereignty deletion) → P1–P5.
 
-**Forward-looking note (May 2026 cluster-doc-merge):** The "7 install scenarios" + Scenario T framing in the paragraph above reflects current *code* state — the `jackpot init` CLI accepts `--scenario A` through `F` plus `T`, the `schema/jackpot_scenarios/` defaults registry has 7 entries, and Critical Rule 56's `instances/ci/` is the committed Scenario F (CI test) artifact set. The canonical architecture in `docs/architecture.md` v6.0 §3 (post-Cluster-A merge, May 2026) consolidates these to **4 install scenarios** — A self-hosted commodity (laptop through agency multi-server), B HPC (Apptainer + Slurm + institutional storage), C single-org cloud (GKE/EKS/AKS cloud-native), D CI test — with **federation, multi-tenancy, and Indigenous data sovereignty as runtime configurations** layered on top of any scenario, not as separate install scenarios. **Sovereignty-as-runtime-policy** per `docs/architecture.md` §22 supersedes the Scenario T framing above: the four sovereignty-aware defaults (deletion-on-request, no auto-publish, federation off-by-default, CARE-Principles compliance) are now sovereignty-runtime-policy defaults that can be enabled on any scenario via `jackpot policy enable sovereignty`, not the defining characteristics of a separate deployment scenario. The code consolidation will land post-P0e as the CLI and scenarios registry catch up to the canonical architecture; until then, this file describes operational reality (what the CLI accepts today), and `docs/architecture.md` describes the architectural direction (what the CLI will accept after the post-P0e consolidation). Companion canonical reference docs from the May 2026 cluster-merge work: `docs/immune_platform.md` (post-Cluster-B; absorbed `Jackpot_AIS.md` + `jackpot_immune_platform_plan.md` + `jackpot_immune_collaboration_scaffolding.md`), `docs/platform_landscape.md` (post-Cluster-E; supersedes `jackpot_pathoplexus_loculus_overview.md`), `docs/strategic_vision.md` + `docs/governance_alignment.md` (post-Cluster-F; absorbed `jackpot_cdc_dmi_stlt_overview.md` content), `docs/detection_landscape.md`, `docs/learning_strategic_vision.md` + `docs/learning_curriculum_design.md`, `docs/federation.md` + `docs/federation_operations.md`, `docs/wastewater.md` + `docs/wastewater_software_landscape.md`, `docs/deploy/gcp.md` (post-Cluster-F; supersedes 3 predecessor GCP deploy guides). See `docs/domain_reference.md` for the full glossary + source-of-truth map.
+**Note:** Pre-P0e, the `jackpot init` CLI accepts `--scenario A` through `F` plus `T`. The canonical architecture targets 4 scenarios (A/B/C/D) with federation, multi-tenancy, and sovereignty as runtime configurations per `docs/architecture.md` §3 and §22. The code consolidation lands post-P0e.
 
 ---
 
@@ -68,7 +70,7 @@ git worktree list
 - After the maintainer runs any terminal command Claude didn't propose (especially git operations).
 - After any `git fetch` / `git pull` / `git push` / `git rebase` / `git reset`.
 - Before any merge script run, even if the script ran successfully earlier in the session — anchors may have shifted.
-- Before any `gac` invocation, to confirm only the intended files are staged.
+- Before any `git commit -a -m`, to confirm only the intended files are modified/staged.
 
 ### When the maintainer can skip it
 
@@ -83,7 +85,7 @@ If the session crosses from conversation into action — even a single edit — 
 - Cross-check it against `spec.md` before writing code
 - Write the code — no placeholders, no `# TODO`, no `# ... rest of code here`
 - Run the relevant tests: `uv run pytest tests/test_{module}.py -v`
-- If tests pass: check the item off in `todo.md`, commit with `gac`, move to the next item
+- If tests pass: check the item off in `todo.md`, commit with `git commit -a -m`, move to the next item
 - If tests fail: fix and rerun — **never mark a task complete without passing tests**
 - Every ~20 tasks: pause, review `spec.md` vs the current implementation for gaps,
   log findings to `docs/review_log.md`, and resolve all gaps before continuing
@@ -102,14 +104,15 @@ If the session crosses from conversation into action — even a single edit — 
 
 ### Commit Convention
 
-Use the `gac` alias for every commit: `gac "type: description"`
-NEVER use `git commit -m` directly — always `gac`.
-If pre-commit hooks modify files and the commit fails, just run `gac` again.
-The alias runs ruff fix + format before staging, so auto-fixed files are
-always included in the same commit.
+Use `git commit -a -m "type: description"` for every commit.
+`-a` stages all tracked, modified files; new/untracked files still need `git add` first.
+The `.pre-commit-config.yaml` ruff hooks run at commit time. If they auto-fix
+files, the commit aborts; re-stage with `git add -u` and run the same
+`git commit -a -m` again. To land fixes on the first attempt, optionally pre-run
+`uv run ruff check --fix . && uv run ruff format .` before committing.
 Valid types: `feat`, `fix`, `test`, `chore`, `refactor`
-Examples: `gac "feat: organizations router — CRUD endpoints + tests"`
-          `gac "fix: conftest alembic migration in test DB setup"`
+Examples: `git commit -a -m "feat: organizations router CRUD endpoints + tests"`
+          `git commit -a -m "fix: conftest alembic migration in test DB setup"`
 
 ---
 
@@ -1050,7 +1053,7 @@ will be removed. New code reads files via `sample_files` joined to
 The same JACKPOT instance can submit one run to local Nextflow, the
 next to a Slurm cluster, the next to GCP Batch — using the same
 pipeline definitions in the zoo. This is the architectural unlock
-that makes scenarios A through G feasible from a single codebase.
+that makes scenarios A through D (and their runtime-config variants: federation, multi-tenancy, sovereignty) feasible from a single codebase.
 
 Selection happens via `execution_profiles`. Profiles are configured
 by the operator at deployment time (`jackpot init`) or later
@@ -1135,7 +1138,7 @@ Failure surfaces as 400 `SLURM_UNREACHABLE` with a pointer to
 50 subprocesses; tests opt out via
 `settings.slurm_reachability_check_enabled = False`.
 
-**For multi-tenant scenario C deployments**, per-launch
+**For Scenario B (HPC) deployments with multi-tenancy enabled**, per-launch
 `launch_account` overrides (which Slurm account to charge) must be
 validated against the user's lab memberships via the P0c
 multi-tenancy guard. Today's launch_account flow is a P0c stub:
