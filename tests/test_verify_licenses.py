@@ -128,9 +128,35 @@ def test_third_party_overrides_resolve_packages_with_no_metadata():
 def test_skip_wrapped_tools_gates_python_only(monkeypatch):
     """CI enforces the Python half via --skip-wrapped-tools while the wrapped-tool
     table stays report-only. If wrapped-tool findings leak into that exit code, the
-    enforcing step goes permanently red and gets disabled."""
+    enforcing step goes permanently red and gets disabled.
+
+    The failing wrapped-tool row is injected rather than borrowed from the live
+    THIRD_PARTY_LICENSES.md. The original version asserted the unflagged run
+    exits 1 "on the outstanding wrapped-tool rows", which pinned the test to a
+    transient fact: it broke on 2026-08-28 the moment the last `(verify)` row
+    was resolved and the real table went clean. The invariant under test is the
+    flag's effect on the exit code, not how many unresolved rows happen to
+    exist today.
+    """
+    # Patch check_wrapped_tools, not parse_third_party: the latter also supplies
+    # the Python override table, so replacing it breaks Python resolution and the
+    # test would pass for the wrong reason.
+    bad_row = {
+        "name": "Synthetic Tool",
+        "license": "SSPL",
+        "section": "Wrapped tools",
+        "informational": False,
+        "line": 1,
+    }
+    finding = verify_licenses.Finding(
+        "wrapped-tool", "Synthetic Tool", "SSPL", "synthetic denylisted licence"
+    )
+    monkeypatch.setattr(
+        verify_licenses, "check_wrapped_tools", lambda strict=False: ([finding], [bad_row])
+    )
+
     monkeypatch.setattr("sys.argv", ["verify_licenses.py", "--skip-wrapped-tools"])
-    assert verify_licenses.main() == 0
-    # Same run without the flag still fails on the outstanding wrapped-tool rows.
+    assert verify_licenses.main() == 0, "wrapped-tool findings leaked into the Python-only gate"
+
     monkeypatch.setattr("sys.argv", ["verify_licenses.py"])
-    assert verify_licenses.main() == 1
+    assert verify_licenses.main() == 1, "an incompatible wrapped tool did not fail the full run"
