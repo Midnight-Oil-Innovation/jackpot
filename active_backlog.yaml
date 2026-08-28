@@ -1050,7 +1050,9 @@ sessions:
       Update validator.py for eukaryotic-aware tier rules.
       compute_surveillance_relevant() includes eukaryotic pathogens.
     phase: phase_24_5
-    status: open
+    status: shipped
+    merged_at: "2026-08-28"
+    merge_sha: "f83ee68"
     depends_on: []
     blocked_by_external:
     parallel_safe: true
@@ -1064,12 +1066,18 @@ sessions:
     branch_name_template:
     role_framing:
     notes: >
-      UNBLOCKED 2026-08-28 — the P0b dependency it was waiting on landed
-      2026-07-06 (c871b28bbdab) and the status was never flipped. Verified
-      2026-08-28: validator.py has zero references to parasitemia,
-      developmental_stage, preservation_method, or multiplicity_of_infection.
-      The columns exist; the tier logic does not, so no eukaryotic sample can
-      reach a tier on those fields. todo.md Phase 24.5 implied this shipped.
+      Shipped in PR #104. Was stuck blocked_external on a P0b dependency that
+      landed 2026-07-06 (c871b28bbdab); the status was never flipped, and
+      todo.md Phase 24.5 implied the work itself had shipped when only the
+      columns had. Tier rules are conditional on the organism (mirroring
+      host_age/host_sex on source_type) so bacterial and viral samples are
+      unaffected; eukaryotic organisms are surveillance_relevant by default
+      because the 62-value reportable set predates eukaryotic support.
+      Identification is by genus, pinned to the schema by a test that fails if
+      a genus is added to jackpot_schema.yaml but not to
+      EUKARYOTIC_PATHOGEN_GENERA. Open question flagged in the PR:
+      coinfection_organisms as a tier-3 requirement means "no coinfection" and
+      "no data" are indistinguishable.
 
   - id: B-CARE-3
     title: Sovereignty deletion — implementation (sub-items 3a..3g)
