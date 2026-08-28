@@ -82,6 +82,24 @@ def test_public_domain_is_allowed_however_it_is_spelled(text):
     assert verify_licenses.classify(text) == "allow"
 
 
+def test_databases_section_is_not_gated_as_code():
+    """Data sources are queried, not incorporated, so AGPL copyleft doesn't apply.
+
+    The SRA row failed the gate as though "public data" were a code licence.
+    The heading now carries the existing `(not licensed code)` marker, the same
+    mechanism that exempts the standards-and-specs table. This fails if the
+    marker is dropped or the section is renamed without it.
+    """
+    rows, errors = verify_licenses.parse_third_party()
+    assert not errors, errors
+    db_rows = [r for r in rows if "Databases and references" in r.get("section", "")]
+    assert db_rows, "Databases and references section not parsed — did the heading change?"
+    assert all(r.get("informational") for r in db_rows), (
+        "database rows are being gated as code: "
+        f"{[r.get('name') for r in db_rows if not r.get('informational')]}"
+    )
+
+
 def test_public_data_is_not_mistaken_for_public_domain():
     """ "public data" is a data-source statement, not a code licence.
 

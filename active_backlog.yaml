@@ -2291,3 +2291,47 @@ sessions:
       boolean. Sequence it with Phase 28, when the malaria dashboards define
       what they actually query. Requires gen-pydantic regeneration plus the
       boolean-keyword patch (Critical Rules 3 and 20).
+
+  - id: B-LICENSE-DATA-TERMS
+    title: Data-use terms for queried data sources (separate from code licensing)
+    short_description: |
+      Decide whether data sources need their own compliance check covering
+      redistribution rights, attribution, and publication of derived results
+      — questions AGPL-3.0 copyleft does not answer.
+    phase: p0_series
+    status: tracked_not_scheduled
+    depends_on: []
+    blocked_by_external:
+    parallel_safe: true
+    effort_sessions: 1
+    primary_files:
+      - docs/THIRD_PARTY_LICENSES.md
+      - scripts/verify_licenses.py
+    test_files:
+      - tests/test_verify_licenses.py
+    source_of_truth_views: []
+    pr_title_template:
+    branch_name_template:
+    role_framing:
+    notes: >
+      Split out 2026-08-28 when "Databases and references" was exempted from
+      the code gate. Exempting it was correct -- AGPL copyleft governs
+      distributed code, not queried data -- but it moves data sources from
+      wrongly-gated to ungated, and data-use terms are a real and different
+      compliance question.
+
+      Deliberately NOT pre-built. The section holds exactly one row (SRA, US
+      public domain, queried and never redistributed), so there is nothing to
+      check yet and no second example to design a vocabulary against. YAGNI.
+
+      The trigger to pick this up is a restricted source landing in that
+      table. GISAID is the obvious candidate for this domain: its data-use
+      terms are restrictive, JACKPOT ships a gisaid.py router, and ADR-0001
+      records an anti-GISAID-capture position. At that point the questions
+      worth automating are redistribution rights, attribution requirements,
+      and whether derived results may be published -- none of which the
+      current allowlist/denylist vocabulary can express, since it is built
+      for SPDX code identifiers.
+
+      Note the guard already refuses to conflate the two: a test pins that
+      widening the public-domain pattern must not sweep "public data" in.

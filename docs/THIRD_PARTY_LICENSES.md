@@ -59,11 +59,23 @@ Row shape: `| name | license (SPDX) | version-or-scope | notes |`
 | Evo 2 | (verify) | Brixi 2025 | [candidate] Cloud tier; verify weights license separately from code license |
 | MetagenBERT / DNABERT-MS | (verify) | 2026 | [candidate] Verify before continued-pretraining work |
 
-## Databases and references
+## Databases and references (not licensed code)
+
+Data sources JACKPOT queries, not code it incorporates. AGPL-3.0 copyleft
+governs distributed code, so these rows are recorded rather than gated — the
+`(not licensed code)` in the heading is what exempts them, matching
+`## Standards and specs (not licensed code)` below.
+
+**This section is silent on data-use terms**, which are a separate compliance
+question from licence compatibility: redistribution rights, attribution
+requirements, and whether derived results may be published. That is fine while
+the only entry is public-domain US government data. It stops being fine the
+first time a restricted source lands here — GISAID being the obvious one for
+this domain. Tracked as `B-LICENSE-DATA-TERMS`.
 
 | name | license | version-or-scope | notes |
 |------|---------|------------------|-------|
-| SRA (via branchwater/sourmash) | public data | global-novelty signal | Data license, not code |
+| SRA (via branchwater/sourmash) | public data | global-novelty signal | US public domain; queried, never redistributed |
 
 ## Python dependency overrides
 
