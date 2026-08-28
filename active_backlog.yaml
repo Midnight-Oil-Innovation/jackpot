@@ -1089,10 +1089,34 @@ sessions:
     branch_name_template:
     role_framing:
     notes: >
-      Aggregate entry covering B-CARE-3a..3g. Per ADR-0013, the
-      is_deleted -> is_archived rename (B-CARE-3i) MUST ship inside this same
-      change: renaming first would silently remove deletion from the API,
-      implementing first would leave both representations writable at once.
+      Aggregate entry covering B-CARE-3a..3g, plus two items folded in
+      2026-08-28.
+
+      (1) RENAME. Per ADR-0013 the is_deleted -> is_archived rename
+      (B-CARE-3i) MUST ship inside this same change: renaming first would
+      silently remove deletion from the API, implementing first would leave
+      both representations writable at once. 43 is_deleted reference sites in
+      backend/ plus a migration.
+
+      (2) ENFORCEMENT. The VACUUMED-means-content-gone invariant is enforced
+      here, not ahead of here. It was scoped as a standalone CHECK constraint
+      and dropped on inspection: samples.fastq_r1_uri is TEXT NOT NULL in
+      baseline 5adf11b77c19 and never altered, so a constraint requiring
+      content columns to be NULL when VACUUMED is unsatisfiable; and per
+      Critical Rule 58 sample content lives in sample_files ->
+      file_references, which a single-table CHECK on samples cannot see. This
+      implementation decides where content is at vacuum time and whether
+      fastq_r1_uri becomes nullable, so the constraint and its cross-table
+      test are written against that decision. Enforcement must be mechanical,
+      not review-based.
+
+      NOT NEEDED (closed 2026-08-28 without implementation): a migration to
+      stop deletion_status asserting ACTIVE over archived rows. Under ADR-0013
+      an archived sample has not been deletion-requested, so ACTIVE is the
+      correct value. samples.is_deleted is written by exactly one call site
+      (routers/samples.py, the archive endpoint), and no row has ever been
+      deletion-requested because no code path can do it. The column is
+      vacuously correct, not wrong.
 
   - id: B-CARE-4
     title: Sovereignty deletion — federation propagation
@@ -2116,57 +2140,6 @@ sessions:
       deletion from the API with nothing replacing it. 43 is_deleted
       reference sites in backend/ plus a migration. An archive must never be
       able to satisfy a deletion request (CARE Authority to Control).
-
-  - id: B-CARE-3-INTERIM
-    title: Stop deletion_status asserting ACTIVE over archived rows
-    short_description: |
-      samples.deletion_status is TEXT NOT NULL DEFAULT 'ACTIVE' with no
-      writer, so every soft-deleted row reports ACTIVE. Back-fill from
-      is_deleted or make the column nullable so "unknown" is representable.
-    phase: phase_24_5
-    status: open
-    depends_on: []
-    blocked_by_external:
-    parallel_safe: false
-    effort_sessions: 0.5
-    primary_files:
-      - backend/db/migrations/versions/
-    test_files: []
-    source_of_truth_views: []
-    pr_title_template:
-    branch_name_template:
-    role_framing:
-    notes: >
-      Harmless today (no readers) but the first reader is the CARE
-      compliance path. Bundle with the VACUUMED-means-gone CHECK constraint
-      in ONE migration — Alembic single-flight forbids two in parallel.
-
-  - id: B-CARE-3j
-    title: CHECK constraint + test enforcing VACUUMED-means-content-gone
-    short_description: |
-      A CHECK constraint on samples for the columns it owns, plus a pytest
-      for the cross-table half (file_references, pipeline_results JSONB)
-      that a single-table CHECK cannot see.
-    phase: phase_24_5
-    status: open
-    depends_on: []
-    blocked_by_external:
-    parallel_safe: false
-    effort_sessions: 0.5
-    primary_files:
-      - backend/db/migrations/versions/
-    test_files:
-      - tests/test_sovereignty_deletion.py
-    source_of_truth_views: []
-    pr_title_template:
-    branch_name_template:
-    role_framing:
-    notes: >
-      Enforcement must be mechanical, not editorial. Three documented-but-
-      unenforced rules already failed in this repo: spec.md section 3
-      contradicted Critical Rule 46 for months, Phase 24.5 boxes went stale
-      four months, and "no code path writes both representations" had
-      nothing checking it. Ship with B-CARE-3-INTERIM in one migration.
 
   - id: B-DOC-INGEST-PATHS
     title: Reconcile the "six ingest methods" contradiction between docs and code
