@@ -103,6 +103,15 @@ DENYLIST = (
         ),
         "message": "superseded: FM-embedding AD is the engine per the redesign",
     },
+    {
+        "regex": re.compile(
+            r"\b(?:six|6)\s+(?:low-friction\s+)?ingest\s+(?:paths|methods)\b", re.IGNORECASE
+        ),
+        "message": (
+            "superseded: there are four ingest endpoints (upload/csv/register/globus); "
+            "SRA is register with an sra:// URI, and presign/confirm/sra endpoints never existed"
+        ),
+    },
 )
 
 # ----------------------------------------------------------------------------- helpers
