@@ -1,6 +1,26 @@
-> **Status:** Canonical - single source of truth for the backlog.
+> **Status:** Reference — historical ledger of completed work and narrative record.
+> NOT the queue. `active_backlog.yaml` is canonical for what to work on next.
 
-# JACKPOT — To-Do List
+# JACKPOT — Work Ledger
+
+> **Reframed 2026-08-28.** This file is no longer the source of truth for open
+> work. It had grown to ~3000 lines in which a committed blocker was
+> indistinguishable from an unscheduled idea, which is how Phase 24.5's
+> checkboxes stayed stale for four months after the migration they described
+> had already shipped.
+>
+> `active_backlog.yaml` is now canonical for actionable work — it already
+> encodes commitment level (`open` / `blocked` / `blocked_external` /
+> `tracked_not_scheduled` / `shipped`) and dependency edges, which is exactly
+> the structure this file was being asked to carry in prose.
+>
+> What stays here: the completed record, per-phase narrative, and the
+> reasoning behind decisions as they were made. Unchecked boxes below are
+> **historical intent, not commitments** — verify against `active_backlog.yaml`
+> before acting on one.
+>
+> Current facts — test count, Python version, schema version, Alembic head —
+> live in `docs/STATUS.md` and are deliberately not restated here.
 
 > **Cluster G consistency pass applied 2026-05-16.** Source-doc references throughout this file have been updated to the new canonical doc names that emerged from the May 2026 cluster-merge work (e.g. `jackpot_immune_platform_plan.md` → `docs/immune_platform.md`, `jackpot_architecture.md` → `docs/architecture.md` v6.0). Open items that referenced "Scenario T" as a separate deployment scenario have been reframed per the sovereignty-as-runtime-policy decision (per `docs/architecture.md` §22). Checked-off `[x]` items preserve their original historical text — they document completed work as of when they were checked off — but include inline parenthetical notes where the current framing has evolved (e.g. "(reframed in May 2026 Cluster A merge as sovereignty-as-runtime-policy on Scenario A — see `docs/architecture.md` §22)"). The two reconciliation docs that drove the Phase IM-1..IM-6 consolidation are now at `docs/archived/backlog_consolidation_report.md` and `docs/archived/backlog_reconciliation.md`.
 
@@ -248,43 +268,11 @@ These items are from the /ultrareview pass and are real but not blocker-level. T
 
 ### Documentation note (informational, not action)
 
+- [ ] **Item #14** — never populated. The duplicate `/ultrareview` stub block that
+      tracked it was deleted 2026-08-28; #14 was the one finding number present there
+      and absent here, so its description was never written down. Recover it from the
+      original /ultrareview output or drop the number.
 - [ ] **Item #26** — credentials/ uses 3 coordinator modules (factory + facade + registry) vs storage/'s 1. Deliberate per session summary, not a violation, but flagged for future reviewers. Already documented in spec.md credentials section after R-3.
-
-# Performance and cleanup follow-ups (from /ultrareview Batch D)
-
-Batch D of the May 2026 /ultrareview pass — items that aren't blockers
-(R-1 PR #31 closed those) and aren't doc/tracking hygiene (R-3 closes
-findings #9, #10, #11, #25) and aren't the GISAID/ENA test/dedup pile
-(R-2 closes #5, #15). What's left: 14 items, mostly performance,
-small refactors, and minor cleanups, traceable to the original
-/ultrareview output by finding number.
-
-The descriptions below are stubs to be populated from the original
-/ultrareview output. Each item is left unchecked with its finding
-number for traceability. When a follow-up PR addresses an item, fill
-in a one-line description, mark the box, and reference the PR.
-
-- [ ] **Finding #8** — *(populate from /ultrareview output; left as a
-      tracking placeholder with the original line reference)*
-- [ ] **Finding #12** — *(populate from /ultrareview output)*
-- [ ] **Finding #13** — *(populate from /ultrareview output)*
-- [ ] **Finding #14** — *(populate from /ultrareview output)*
-- [ ] **Finding #16** — *(populate from /ultrareview output)*
-- [ ] **Finding #17** — *(populate from /ultrareview output)*
-- [ ] **Finding #18** — *(populate from /ultrareview output)*
-- [ ] **Finding #19** — *(populate from /ultrareview output)*
-- [ ] **Finding #20** — *(populate from /ultrareview output)*
-- [ ] **Finding #21** — *(populate from /ultrareview output)*
-- [ ] **Finding #22** — *(populate from /ultrareview output)*
-- [ ] **Finding #23** — *(populate from /ultrareview output)*
-- [ ] **Finding #24** — *(populate from /ultrareview output)*
-- [ ] **Finding #26** — *(populate from /ultrareview output)*
-
-These can be batched into one or more cleanup PRs after the next
-feature track ships, or interleaved as small ones whenever convenient.
-None of them blocks the development → main release.
-
----
 
 ## Phase 0 — Pre-Session Fixes (COMPLETE)
 
@@ -989,13 +977,13 @@ This is a **design + schema-spec phase**. Implementation of the deletion logic l
   - [x] Auth model (§10)
   - [x] Edge cases: deletion during pipeline run, deletion during pending submission to NCBI/GISAID, deletion of sample in active outbreak investigation, deletion of sample referenced in published report, bulk deletion, federation peer offline (§11)
 
-- [ ] **Schema constraints from this design** that P0b must honor:
-  - [ ] `samples.deletion_status` column with the 4-value enum
-  - [ ] `samples.deletion_requested_at`, `deletion_requested_by_user_id`, `deletion_reason` columns
-  - [ ] `samples.tombstoned_at`, `vacuumed_at` timestamp columns
-  - [ ] `audit_log.event_type` enum extension: `sample_deletion_requested`, `sample_tombstoned`, `sample_vacuumed`
-  - [ ] `pipeline_results` rows need a `tombstoned` boolean (cheaper than chasing every JSONB blob to mark it)
-  - [ ] Foreign key from `pipeline_results.sample_id` should NOT cascade-delete on sample deletion (we want to keep tombstone records; the actual JSONB content is what gets vacuumed)
+- [x] **Schema constraints from this design** that P0b must honor — reconciled 2026-08-28 against migration `c871b28bbdab`:
+  - [x] `samples.deletion_status` column with the 4-value enum — landed as TEXT + CHECK
+  - [x] `samples.deletion_requested_at`, `deletion_requested_by_user_id`, `deletion_reason` columns
+  - [x] `samples.tombstoned_at`, `vacuumed_at` timestamp columns
+  - [ ] `audit_log.event_type` enum extension: `sample_deletion_requested`, `sample_tombstoned`, `sample_vacuumed` — **DID NOT LAND.** Verified absent 2026-08-28: zero occurrences of any of the three values in `backend/`. This is CARE Responsibility with no implementation — the sovereignty design §5 makes the audit record the one thing that survives a vacuum, so without these a vacuum leaves no trace it occurred. Tracked in `active_backlog.yaml`.
+  - [x] `pipeline_results` rows need a `tombstoned` boolean
+  - [x] Foreign key from `pipeline_results.sample_id` does NOT cascade-delete on sample deletion
 
 - [ ] **Implementation handoff to P0c**: docs/architecture/sovereignty-compliant-deletion.md is the spec for the implementation work in P0c. Tagged in P0c work as `B-CARE-3` (the actual implementation, after schema is in place).
 
@@ -1003,29 +991,29 @@ This is a **design + schema-spec phase**. Implementation of the deletion logic l
 
 These are not separate design work — the design exists in `byop_and_eukaryotic_design.md`. They are **schema migration items** that must land in the same P0b migration cycle as the sovereignty additions and the existing v5.0 plan. Splitting them into a later migration creates double-migrate operator churn.
 
-- [ ] **B-BYOP-9** Add `byop_pipelines` table per `byop_and_eukaryotic_design.md` §7. Includes 27 columns covering manifest content, source type, lifecycle status, validation/sandbox logs, license, citation, cost estimate. Plus 4 new enums: `PipelineEngineEnum`, `PipelineSourceTypeEnum`, `PipelineStatusEnum`, `DataTypeEnum`. (1 session, P0b)
+- [x] **B-BYOP-9** Add `byop_pipelines` table **LANDED in `c871b28bbdab`.** per `byop_and_eukaryotic_design.md` §7. Includes 27 columns covering manifest content, source type, lifecycle status, validation/sandbox logs, license, citation, cost estimate. Plus 4 new enums: `PipelineEngineEnum`, `PipelineSourceTypeEnum`, `PipelineStatusEnum`, `DataTypeEnum`. (1 session, P0b)
 
-- [ ] **B-BYOP-9b** Add `byop_pipeline_id` and `byop_pipeline_version` foreign-key columns to existing `pipeline_results` table. (Half session, P0b — bundle with B-BYOP-9.)
+- [x] **B-BYOP-9b** Add `byop_pipeline_id` **LANDED in `c871b28bbdab`.** and `byop_pipeline_version` foreign-key columns to existing `pipeline_results` table. (Half session, P0b — bundle with B-BYOP-9.)
 
-- [ ] **B-EUK-1** Add ~25 OrganismNameEnum values for eukaryotic pathogens per `byop_and_eukaryotic_design.md` §12.1: 6 *Plasmodium*, 6 *Leishmania*, 5 *Trypanosoma*, 5 *Schistosoma*, 7 STH, 3 filarial, 4 protozoa (*Crypto*/*Giardia*), 3 *Toxo*/*Entamoeba*. Plus new `ParasiteDevelopmentalStageEnum` and `SamplePreservationMethodEnum`. Plus new `samples` columns: `parasite_developmental_stage`, `sample_preservation_method`, `parasitemia_percent`, `multiplicity_of_infection`, `coinfection_organisms`. (1 session, P0b)
+- [x] **B-EUK-1** Add ~25 OrganismNameEnum values **LANDED in `c871b28bbdab`.** for eukaryotic pathogens per `byop_and_eukaryotic_design.md` §12.1: 6 *Plasmodium*, 6 *Leishmania*, 5 *Trypanosoma*, 5 *Schistosoma*, 7 STH, 3 filarial, 4 protozoa (*Crypto*/*Giardia*), 3 *Toxo*/*Entamoeba*. Plus new `ParasiteDevelopmentalStageEnum` and `SamplePreservationMethodEnum`. Plus new `samples` columns: `parasite_developmental_stage`, `sample_preservation_method`, `parasitemia_percent`, `multiplicity_of_infection`, `coinfection_organisms`. (1 session, P0b)
 
-- [ ] **B-EUK-2** Add 8 new pipeline-result tables per `byop_and_eukaryotic_design.md` §12.3: `plasmodium_drug_resistance_results`, `leishmania_typing_results`, `trypanosoma_typing_results`, `schistosoma_typing_results`, `helminth_drug_resistance_results`, `filarial_typing_results`, `cryptogiardia_typing_results`, `toxo_entamoeba_typing_results`. Plus supporting enums: `TcDTUEnum`, `GiardiaAssemblageEnum`, `ToxoClonalLineageEnum`, `EhVsEdEnum`, `WolbachiaStatusEnum`, `ResistanceCallEnum`. (1-2 sessions, P0b)
+- [~] **DEFERRED to Phase 28** (per this phase's own success criterion — the 8 tables ship with their pipelines, not in P0b). **B-EUK-2** Add 8 new pipeline-result tables per `byop_and_eukaryotic_design.md` §12.3: `plasmodium_drug_resistance_results`, `leishmania_typing_results`, `trypanosoma_typing_results`, `schistosoma_typing_results`, `helminth_drug_resistance_results`, `filarial_typing_results`, `cryptogiardia_typing_results`, `toxo_entamoeba_typing_results`. Plus supporting enums: `TcDTUEnum`, `GiardiaAssemblageEnum`, `ToxoClonalLineageEnum`, `EhVsEdEnum`, `WolbachiaStatusEnum`, `ResistanceCallEnum`. (1-2 sessions, P0b)
 
-- [ ] **B-EUK-3** Update `validator.py` for eukaryotic-aware tier rules: new tier-2 fields (developmental stage, preservation method), new tier-3 fields (parasitemia, MOI, coinfection). Update `compute_surveillance_relevant()` to include eukaryotic pathogens by default. (1 session, P0b — bundle with B-EUK-1.)
+- [ ] **B-EUK-3 — NOT DONE, and not schema work.** Verified 2026-08-28: `validator.py` contains zero references to `parasitemia`, `developmental_stage`, `preservation_method`, or `multiplicity_of_infection`. The columns landed in `c871b28bbdab`; the validation logic never did, so no eukaryotic sample can reach a tier on those fields. Tracked in `active_backlog.yaml`. Original text: Update `validator.py` for eukaryotic-aware tier rules: new tier-2 fields (developmental stage, preservation method), new tier-3 fields (parasitemia, MOI, coinfection). Update `compute_surveillance_relevant()` to include eukaryotic pathogens by default. (1 session, P0b — bundle with B-EUK-1.)
 
 ### Schema additions for cryptWWDB-readiness (must land with P0b)
 
 Driven by integration-readiness analysis vs Driver et al. 2024 *Sci Total Environ* 940:173315 (NSF 2115075 — Driver, Ahsan, Piske, Lee, Forrest, Halden, Trieu). Full architectural mapping in `docs/cryptwwdb_integration.md`. These additions are required to host the cryptWWDB encrypted mass-balance framework as a Track 2 overlay without retrofit. Same gate condition as the sovereignty + BYOP/EUK additions above — splitting them into a later migration creates double-migrate operator churn.
 
-- [ ] **B-CWB-SCHEMA-1** Add `wastewater_upstream_of` and reciprocal `wastewater_downstream_of` values to `sample_associations.association_type` enum. Enables directed sewershed topology for mass-balance computation across upstream/downstream wastewater samples spanning two municipalities. cryptWWDB Use Case 1 requires this typed relationship to identify which sample's flow + concentration is subtracted from which. (0.5 session, P0b)
+- [x] **B-CWB-SCHEMA-1 — LANDED in `c871b28bbdab`.** Add `wastewater_upstream_of` and reciprocal `wastewater_downstream_of` values to `sample_associations.association_type` enum. Enables directed sewershed topology for mass-balance computation across upstream/downstream wastewater samples spanning two municipalities. cryptWWDB Use Case 1 requires this typed relationship to identify which sample's flow + concentration is subtracted from which. (0.5 session, P0b)
 
-- [ ] **B-CWB-SCHEMA-2** Add `wastewater_target_concentration` result type for non-SARS-CoV-2 quantitative targets. The existing `wastewater_lineage_abundance` is Freyja-shaped (SARS-CoV-2 lineage fractions). cryptWWDB's C1, C2 inputs are concentrations of arbitrary target chemicals — heroin and 6-acetylmorphine in Driver et al. 2024, but the framework is target-agnostic. Fields: `target_pathogen_id` FK, `assay_type` enum, `concentration_value`, `concentration_unit` enum, `concentration_lower_ci`, `concentration_upper_ci`, `normalization_target` enum (PMMoV / crAssphage / flow / none), `lod`, `loq`. Follows the existing typed-result-type-per-analysis pattern. (1-2 sessions, P0b)
+- [x] **B-CWB-SCHEMA-2 — LANDED in `c871b28bbdab`.** Add `wastewater_target_concentration` result type for non-SARS-CoV-2 quantitative targets. The existing `wastewater_lineage_abundance` is Freyja-shaped (SARS-CoV-2 lineage fractions). cryptWWDB's C1, C2 inputs are concentrations of arbitrary target chemicals — heroin and 6-acetylmorphine in Driver et al. 2024, but the framework is target-agnostic. Fields: `target_pathogen_id` FK, `assay_type` enum, `concentration_value`, `concentration_unit` enum, `concentration_lower_ci`, `concentration_upper_ci`, `normalization_target` enum (PMMoV / crAssphage / flow / none), `lod`, `loq`. Follows the existing typed-result-type-per-analysis pattern. (1-2 sessions, P0b)
 
-- [ ] **B-CWB-SCHEMA-3** Add time-varying population fields per Driver et al. 2024 Table 2. Current `WastewaterSample.population_served` is constant (US census-derived). Add: `population_served_weekday`, `population_served_weekend` (quasi-constant from employment data); plus a new `sample_population_estimate` typed table for unique daily values from wastewater population biomarkers per Choi et al. 2018. (1 session, P0b)
+- [~] **DE-SCOPED — never in P0b.** This phase's success criterion records that the 1-through-5 range was a miscount; only SCHEMA-1 and SCHEMA-2 were ever in scope. Re-scope deliberately if cryptWWDB work resumes. **B-CWB-SCHEMA-3** Add time-varying population fields per Driver et al. 2024 Table 2. Current `WastewaterSample.population_served` is constant (US census-derived). Add: `population_served_weekday`, `population_served_weekend` (quasi-constant from employment data); plus a new `sample_population_estimate` typed table for unique daily values from wastewater population biomarkers per Choi et al. 2018. (1 session, P0b)
 
-- [ ] **B-CWB-SCHEMA-4** Add `fecal_normalization_results` typed table. One row per sample per fecal-indicator-target. Fields: `sample_id` FK, `indicator_type` enum (`PMMoV` / `Bacteroides_HF183` / `coprostanol` / `other`), `indicator_concentration`, `indicator_unit`, `assay_type`. Enables PMMoV normalization for SARS-CoV-2 plus flexible per-indicator handling per Feng et al. 2021. (1 session, P0b)
+- [~] **DE-SCOPED — never in P0b.** This phase's success criterion records that the 1-through-5 range was a miscount; only SCHEMA-1 and SCHEMA-2 were ever in scope. Re-scope deliberately if cryptWWDB work resumes. **B-CWB-SCHEMA-4** Add `fecal_normalization_results` typed table. One row per sample per fecal-indicator-target. Fields: `sample_id` FK, `indicator_type` enum (`PMMoV` / `Bacteroides_HF183` / `coprostanol` / `other`), `indicator_concentration`, `indicator_unit`, `assay_type`. Enables PMMoV normalization for SARS-CoV-2 plus flexible per-indicator handling per Feng et al. 2021. (1 session, P0b)
 
-- [ ] **B-CWB-SCHEMA-5** Add per-target excretion and degradation factor lookup tables. `excretion_factors` table: `target_pathogen_id` FK, `urinary_excretion_fraction`, `fecal_excretion_fraction`, `molecular_weight`, `reference_citation`. `in_sewer_degradation_factors` table: `target_pathogen_id` FK, `degradation_coefficient_per_hour`, `temperature_dependence`, `reference_citation`. Static reference data seeded from literature per Zuccato et al. 2008 and Hart & Halden 2020. (1 session, P0b)
+- [~] **DE-SCOPED — never in P0b.** This phase's success criterion records that the 1-through-5 range was a miscount; only SCHEMA-1 and SCHEMA-2 were ever in scope. Re-scope deliberately if cryptWWDB work resumes. **B-CWB-SCHEMA-5** Add per-target excretion and degradation factor lookup tables. `excretion_factors` table: `target_pathogen_id` FK, `urinary_excretion_fraction`, `fecal_excretion_fraction`, `molecular_weight`, `reference_citation`. `in_sewer_degradation_factors` table: `target_pathogen_id` FK, `degradation_coefficient_per_hour`, `temperature_dependence`, `reference_citation`. Static reference data seeded from literature per Zuccato et al. 2008 and Hart & Halden 2020. (1 session, P0b)
 
 ### Phase 24.5 success criterion
 

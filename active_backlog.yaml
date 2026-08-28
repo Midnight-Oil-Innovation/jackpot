@@ -1,19 +1,26 @@
-# > Status: Superseded — todo.md is the source of truth for the backlog.
-# > This file is preserved for historical reference. Do not hand-edit.
-
-# JACKPOT active backlog — source of truth for currently-actionable sessions.
+# > status: canonical
 #
-# Lives at: ~/Projects/jackpot/docs/active_backlog.yaml (version-controlled)
+# JACKPOT active backlog — SOURCE OF TRUTH for currently-actionable work.
 #
-# Consumed by:
-#   - jackpot_next.py        — prints unblocked/blocked candidates
-#   - jackpot_gen_prompt.py  — emits session prompt skeletons
-#   - jackpot_finish_helper.py — auto-flips status to shipped post-merge
-#   - jackpot_backlog_check.py — validates schema + dependency graph
+# Lives at: active_backlog.yaml (repo root, version-controlled).
 #
-# Maintenance: most updates are automated by jackpot-finish. Manual edits
-# needed when scoping new entries or adjusting effort/scope mid-flight.
-# Keep ordering by phase for readability.
+# Resolved 2026-08-28: this file previously carried BOTH a "Superseded — do not
+# hand-edit" header AND a "source of truth" line, while being the thing people
+# actually edited (see 8cea892). todo.md has been reframed as the historical
+# ledger; this file is canonical for what to work on next.
+#
+# Intended consumers — NONE OF THESE SCRIPTS EXIST IN THE REPO as of
+# 2026-08-28. Treat the automation described below as aspirational, and this
+# file as hand-maintained until they are written:
+#   - jackpot_next.py          — print unblocked/blocked candidates
+#   - jackpot_gen_prompt.py    — emit session prompt skeletons
+#   - jackpot_finish_helper.py — auto-flip status to shipped post-merge
+#   - jackpot_backlog_check.py — validate schema + dependency graph
+#
+# Note: docs/pipeline_knowledge.yaml keys off the `phase` values used here,
+# so renaming a phase requires updating that file too.
+#
+# Maintenance: hand-edited. Keep ordering by phase for readability.
 #
 # Status values:
 #   shipped               PR merged on development, no further work this round
@@ -1043,19 +1050,26 @@ sessions:
       Update validator.py for eukaryotic-aware tier rules.
       compute_surveillance_relevant() includes eukaryotic pathogens.
     phase: phase_24_5
-    status: blocked_external
-    depends_on:
-      - B-EUK-1
-    blocked_by_external: "P0b (schema v5.0 migration window)"
-    parallel_safe: false
+    status: open
+    depends_on: []
+    blocked_by_external:
+    parallel_safe: true
     effort_sessions: 0.75
-    primary_files: []
-    test_files: []
+    primary_files:
+      - backend/backend/validator.py
+    test_files:
+      - tests/test_validator.py
     source_of_truth_views: []
     pr_title_template:
     branch_name_template:
     role_framing:
-    notes: ""
+    notes: >
+      UNBLOCKED 2026-08-28 — the P0b dependency it was waiting on landed
+      2026-07-06 (c871b28bbdab) and the status was never flipped. Verified
+      2026-08-28: validator.py has zero references to parasitemia,
+      developmental_stage, preservation_method, or multiplicity_of_infection.
+      The columns exist; the tier logic does not, so no eukaryotic sample can
+      reach a tier on those fields. todo.md Phase 24.5 implied this shipped.
 
   - id: B-CARE-3
     title: Sovereignty deletion — implementation (sub-items 3a..3g)
@@ -1074,7 +1088,11 @@ sessions:
     pr_title_template:
     branch_name_template:
     role_framing:
-    notes: "Aggregate entry covering B-CARE-3a..3g."
+    notes: >
+      Aggregate entry covering B-CARE-3a..3g. Per ADR-0013, the
+      is_deleted -> is_archived rename (B-CARE-3i) MUST ship inside this same
+      change: renaming first would silently remove deletion from the API,
+      implementing first would leave both representations writable at once.
 
   - id: B-CARE-4
     title: Sovereignty deletion — federation propagation
@@ -2040,3 +2058,166 @@ sessions:
     branch_name_template:
     role_framing:
     notes: "Reconciliation with M4/M5. access_model.md §4.3 / §4.6 / §6.2."
+
+  # ────────────────────────────────────────────────────────────────────────
+  # Added 2026-08-28 — grill-with-docs session (spec.md demotion + deletion
+  # model). See docs/adr/0013-archive-and-deletion-are-distinct.md.
+  # ────────────────────────────────────────────────────────────────────────
+
+  - id: B-CARE-3h
+    title: audit_log deletion event types (sample_deletion_requested / _tombstoned / _vacuumed)
+    short_description: |
+      Phase 24.5 required three audit_log.event_type values; P0b did not
+      land them. Without these a vacuum leaves no record that it happened,
+      which is the one thing the sovereignty design says must survive.
+    phase: phase_24_5
+    status: open
+    depends_on: []
+    blocked_by_external:
+    parallel_safe: true
+    effort_sessions: 0.5
+    primary_files:
+      - backend/backend/audit.py
+    test_files:
+      - tests/test_audit.py
+    source_of_truth_views: []
+    pr_title_template:
+    branch_name_template:
+    role_framing:
+    notes: >
+      Verified absent 2026-08-28 — zero occurrences of any of the three
+      values in backend/. todo.md Phase 24.5 listed this as a P0b schema
+      constraint and the success criterion implied it landed; it did not.
+      CARE Responsibility depends on it. Sovereignty design doc section 5.
+
+  - id: B-CARE-3i
+    title: Rename is_deleted -> is_archived; deletion lives only in deletion_status
+    short_description: |
+      Archive and deletion are distinct operations (ADR-0013). The archive
+      endpoint currently writes is_deleted = TRUE under audit action
+      ARCHIVE_SAMPLE, while deletion_status has no writer at all.
+    phase: phase_24_5
+    status: blocked
+    depends_on:
+      - B-CARE-3
+    blocked_by_external:
+    parallel_safe: false
+    effort_sessions: 1.5
+    primary_files:
+      - backend/backend/routers/samples.py
+      - backend/backend/submissions.py
+    test_files: []
+    source_of_truth_views: []
+    pr_title_template:
+    branch_name_template:
+    role_framing:
+    notes: >
+      MUST ship inside B-CARE-3, not before it — renaming alone would remove
+      deletion from the API with nothing replacing it. 43 is_deleted
+      reference sites in backend/ plus a migration. An archive must never be
+      able to satisfy a deletion request (CARE Authority to Control).
+
+  - id: B-CARE-3-INTERIM
+    title: Stop deletion_status asserting ACTIVE over archived rows
+    short_description: |
+      samples.deletion_status is TEXT NOT NULL DEFAULT 'ACTIVE' with no
+      writer, so every soft-deleted row reports ACTIVE. Back-fill from
+      is_deleted or make the column nullable so "unknown" is representable.
+    phase: phase_24_5
+    status: open
+    depends_on: []
+    blocked_by_external:
+    parallel_safe: false
+    effort_sessions: 0.5
+    primary_files:
+      - backend/db/migrations/versions/
+    test_files: []
+    source_of_truth_views: []
+    pr_title_template:
+    branch_name_template:
+    role_framing:
+    notes: >
+      Harmless today (no readers) but the first reader is the CARE
+      compliance path. Bundle with the VACUUMED-means-gone CHECK constraint
+      in ONE migration — Alembic single-flight forbids two in parallel.
+
+  - id: B-CARE-3j
+    title: CHECK constraint + test enforcing VACUUMED-means-content-gone
+    short_description: |
+      A CHECK constraint on samples for the columns it owns, plus a pytest
+      for the cross-table half (file_references, pipeline_results JSONB)
+      that a single-table CHECK cannot see.
+    phase: phase_24_5
+    status: open
+    depends_on: []
+    blocked_by_external:
+    parallel_safe: false
+    effort_sessions: 0.5
+    primary_files:
+      - backend/db/migrations/versions/
+    test_files:
+      - tests/test_sovereignty_deletion.py
+    source_of_truth_views: []
+    pr_title_template:
+    branch_name_template:
+    role_framing:
+    notes: >
+      Enforcement must be mechanical, not editorial. Three documented-but-
+      unenforced rules already failed in this repo: spec.md section 3
+      contradicted Critical Rule 46 for months, Phase 24.5 boxes went stale
+      four months, and "no code path writes both representations" had
+      nothing checking it. Ship with B-CARE-3-INTERIM in one migration.
+
+  - id: B-DOC-INGEST-PATHS
+    title: Reconcile the "six ingest methods" contradiction between docs and code
+    short_description: |
+      architecture.md section 14.3 and the demoted spec.md section 1.1 each
+      claim six ingest paths, and the two lists disagree. Neither matches
+      the router.
+    phase: p0_series
+    status: open
+    depends_on: []
+    blocked_by_external:
+    parallel_safe: true
+    effort_sessions: 0.5
+    primary_files:
+      - docs/architecture.md
+    test_files: []
+    source_of_truth_views: []
+    pr_title_template:
+    branch_name_template:
+    role_framing:
+    notes: >
+      Verified 2026-08-28 against backend/backend/routers/ingest.py, which
+      exposes /upload, /csv, /register, /globus — four endpoints. The
+      presign, confirm, and sra endpoints named in architecture.md 14.3 do
+      not exist. The CLI (upload, upload-dir, upload-globus) is a client of
+      /upload, not a distinct path. External-repo import lives in its own
+      imports.py router. Decide the real taxonomy, then fix 14.3.
+
+  - id: B-DOC-GUARD-SCOPE
+    title: Extend the docs drift guard to root-level markdown
+    short_description: |
+      scripts/check_docs.py scans docs/ only. CLAUDE.md, todo.md, spec.md
+      and CONTEXT.md live at the repo root and are exempt from the guard
+      built to stop exactly the drift they accumulated.
+    phase: p0_series
+    status: open
+    depends_on: []
+    blocked_by_external:
+    parallel_safe: true
+    effort_sessions: 0.5
+    primary_files:
+      - scripts/check_docs.py
+      - .pre-commit-config.yaml
+    test_files: []
+    source_of_truth_views: []
+    pr_title_template:
+    branch_name_template:
+    role_framing:
+    notes: >
+      Root cause of the 2026-08-28 demotion. spec.md drifted four months
+      with three contradictory test baselines and a section instructing
+      agents to violate Critical Rule 46, none of which the guard could
+      see. Expect an initial burst of violations on first run — triage
+      before wiring into CI.
