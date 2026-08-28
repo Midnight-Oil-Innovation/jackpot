@@ -53,6 +53,12 @@ repos:
         # were exempt from the guard built to catch exactly their drift.
         files: ^(docs/.*|[^/]+)\.md$
         pass_filenames: true
+      - id: backlog-guard
+        name: backlog consistency guard
+        entry: uv run python scripts/check_backlog.py
+        language: system
+        files: ^active_backlog\.yaml$
+        pass_filenames: false
       - id: alembic-single-head
         name: single alembic head
         entry: uv run python scripts/check_migration_heads.py

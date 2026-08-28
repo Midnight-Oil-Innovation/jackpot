@@ -9,13 +9,15 @@
 # actually edited (see 8cea892). todo.md has been reframed as the historical
 # ledger; this file is canonical for what to work on next.
 #
-# Intended consumers — NONE OF THESE SCRIPTS EXIST IN THE REPO as of
-# 2026-08-28. Treat the automation described below as aspirational, and this
-# file as hand-maintained until they are written:
+# Validated by scripts/check_backlog.py — schema, dependency graph, and stale
+# statuses. It runs in pre-commit (on changes to this file), in CI via
+# .github/workflows/guardrails.yml, and from `make guardrails`. It is the
+# jackpot_backlog_check.py this header used to promise.
+#
+# Still aspirational — THESE SCRIPTS DO NOT EXIST as of 2026-08-28:
 #   - jackpot_next.py          — print unblocked/blocked candidates
 #   - jackpot_gen_prompt.py    — emit session prompt skeletons
 #   - jackpot_finish_helper.py — auto-flip status to shipped post-merge
-#   - jackpot_backlog_check.py — validate schema + dependency graph
 #
 # Note: docs/pipeline_knowledge.yaml keys off the `phase` values used here,
 # so renaming a phase requires updating that file too.

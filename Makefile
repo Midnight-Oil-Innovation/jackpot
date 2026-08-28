@@ -5,6 +5,7 @@ status:
 
 guardrails:
 	@uv run python scripts/check_docs.py
+	@uv run python scripts/check_backlog.py
 	@uv run python scripts/check_migration_heads.py
 	@uv run python scripts/verify_licenses.py --skip-python
 
