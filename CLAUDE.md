@@ -1,3 +1,5 @@
+> **Status:** Canonical — binding operating rules and Critical Rules for this repo.
+
 # CLAUDE.md — jackpot-backend
 
 ## Project: JACKPOT
