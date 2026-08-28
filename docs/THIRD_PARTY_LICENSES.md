@@ -38,7 +38,7 @@ Row shape: `| name | license (SPDX) | version-or-scope | notes |`
 |------|---------|------------------|-------|
 | GOTTCHA2 | GPL-3.0 | LANL/poeli fork | Taxonomic arm; PanGIA successor |
 | deacon | MIT | rust minimizer | Ingest default for host depletion |
-| Cleanifier | (verify) | host depletion | Read LICENSE before wiring |
+| Cleanifier | MIT | host depletion | Reported by maintainer 2026-08-28. MIT is on the allowlist and clears the gate. If a prebuilt host index is redistributed rather than built locally, confirm the reference genomes' terms separately — code licence does not cover bundled data |
 | hostile | MIT | 2.0.2 | Host depletion; verified 2026-08-02 from pyproject.toml classifier + Bioconda recipe. Deletes rather than N-masks; `--rename` strips read-header PII |
 | HRRT (sra-human-scrubber) | public-domain (NIH) | ingest | NIH work product |
 | SeqScreen | GPL-3.0 | functional-concern channel | Confirm current release |
@@ -125,3 +125,12 @@ blog; read the repository's own `LICENSE` file, and update the row with the exac
 SPDX identifier plus the release you verified against. This is the discipline that
 prevented the alibi-detect adoption (documented as BSL-1.1 in its own LICENSE file
 despite third-party claims of Apache-2.0).
+
+**Maintainer-reported, LICENSE-file confirmation still owed (2026-08-28).**
+`Cleanifier`, `DeePaC` and `DNABERT-S` were recorded from maintainer report
+rather than from reading each repository's own `LICENSE`. They clear the gate
+today — MIT, MIT and CC-BY-4.0 — and the wrapped-tool table is green because of
+them. By the standard set directly above, each still needs the exact SPDX
+identifier and the release it was verified against. The alibi-detect precedent
+is the reason that distinction is worth keeping visible rather than quietly
+treating a green gate as settled.
