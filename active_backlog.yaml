@@ -2194,3 +2194,42 @@ sessions:
       repo front door because the guard could not see it. README scenario
       table also still carried the old A-F+T taxonomy; replaced with A/B/C/D
       per ADR-0002. Three regression tests added to tests/test_check_docs.py.
+
+  - id: B-EUK-COINFECT-SENTINEL
+    title: '"Screened, none found" sentinel for coinfection_organisms'
+    short_description: |
+      Decide how to represent "screened for coinfection, none found" so
+      coinfection_organisms can become a tier-3 requirement again without
+      forcing submitters to invent a value.
+    phase: p0_series
+    status: tracked_not_scheduled
+    depends_on: []
+    blocked_by_external: "Phase 28 (default eukaryotic pathogen pipelines)"
+    parallel_safe: true
+    effort_sessions: 1
+    primary_files:
+      - schema/schema/jackpot_schema.yaml
+      - backend/backend/validator.py
+    test_files:
+      - tests/test_validator_eukaryotic.py
+    source_of_truth_views: []
+    pr_title_template:
+    branch_name_template:
+    role_framing:
+    notes: >
+      Split out of B-EUK-3 on 2026-08-28. byop design section 15 listed
+      coinfection_organisms as a tier-3 field; it is deliberately not enforced
+      as one because _is_absent() treats [] as missing and CSV ingest
+      collapses an empty cell to [] (routers/ingest.py _split_list), making
+      "screened, no coinfection" indistinguishable from "not recorded". The
+      field is still accepted and stored.
+
+      Recording coinfection matters -- mixed-species Plasmodium infection is
+      epidemiologically significant -- so this is deferred, not dropped. The
+      schema already uses the INSDC missing-value convention (missing / not
+      applicable / not collected) for indoor_space and indoor_surface, so
+      there is house precedent for a sentinel. Open sub-decision: sentinel
+      value inside OrganismNameEnum vs a companion coinfection_screened
+      boolean. Sequence it with Phase 28, when the malaria dashboards define
+      what they actually query. Requires gen-pydantic regeneration plus the
+      boolean-keyword patch (Critical Rules 3 and 20).
