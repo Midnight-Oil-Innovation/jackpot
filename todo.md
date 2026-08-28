@@ -739,7 +739,7 @@ The items below are kept for historical record with checkboxes marked. Order was
 
 ### B-DMI-3: "Single-entry-point" framing in spec.md
 
-- [x] Add a short subsection to spec.md §1 (or §3 depending on where the ingest-paths description lives now) documenting JACKPOT's six ingest paths as "the single entry point for genomic data into a public health agency." (Landed in spec.md §1.1 in P0d.)
+- [x] Add a short subsection to spec.md §1 (or §3 depending on where the ingest-paths description lives now) documenting JACKPOT's ingest paths as "the single entry point for genomic data into a public health agency." (Landed in spec.md §1.1 in P0d.)
 - [x] Effort: half a session, ~30 min of writing.
 
 ### B-STLT-2: Layer-cake diagram in spec.md

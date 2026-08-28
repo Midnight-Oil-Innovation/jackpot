@@ -1110,6 +1110,16 @@ sessions:
       test are written against that decision. Enforcement must be mechanical,
       not review-based.
 
+      NOT NEEDED (closed 2026-08-28 without implementation): audit_log
+      deletion event names. Tracked briefly as B-CARE-3h on the belief that
+      P0b had dropped them. It had not: migration c871b28bbdab documents them
+      as a deliberate no-op close-out because audit_log.action is free TEXT --
+      there is no audit_log.event_type column and no enum to extend -- and
+      assigns the strings to B-CARE-3f in P0c. Note that the seven existing
+      deletion-adjacent AuditActions constants (REQUEST_DELETION,
+      COMPLETE_DELETION, SOFT_DELETE_SAMPLE, ...) currently have zero call
+      sites; B-CARE-3f should reconcile them rather than add a parallel set.
+
       NOT NEEDED (closed 2026-08-28 without implementation): a migration to
       stop deletion_status asserting ACTIVE over archived rows. Under ADR-0013
       an archived sample has not been deletion-requested, so ACTIVE is the
@@ -2088,32 +2098,6 @@ sessions:
   # model). See docs/adr/0013-archive-and-deletion-are-distinct.md.
   # ────────────────────────────────────────────────────────────────────────
 
-  - id: B-CARE-3h
-    title: audit_log deletion event types (sample_deletion_requested / _tombstoned / _vacuumed)
-    short_description: |
-      Phase 24.5 required three audit_log.event_type values; P0b did not
-      land them. Without these a vacuum leaves no record that it happened,
-      which is the one thing the sovereignty design says must survive.
-    phase: phase_24_5
-    status: open
-    depends_on: []
-    blocked_by_external:
-    parallel_safe: true
-    effort_sessions: 0.5
-    primary_files:
-      - backend/backend/audit.py
-    test_files:
-      - tests/test_audit.py
-    source_of_truth_views: []
-    pr_title_template:
-    branch_name_template:
-    role_framing:
-    notes: >
-      Verified absent 2026-08-28 — zero occurrences of any of the three
-      values in backend/. todo.md Phase 24.5 listed this as a P0b schema
-      constraint and the success criterion implied it landed; it did not.
-      CARE Responsibility depends on it. Sovereignty design doc section 5.
-
   - id: B-CARE-3i
     title: Rename is_deleted -> is_archived; deletion lives only in deletion_status
     short_description: |
@@ -2148,7 +2132,8 @@ sessions:
       claim six ingest paths, and the two lists disagree. Neither matches
       the router.
     phase: p0_series
-    status: open
+    status: shipped
+    merged_at: "2026-08-28"
     depends_on: []
     blocked_by_external:
     parallel_safe: true
