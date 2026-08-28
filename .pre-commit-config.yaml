@@ -47,9 +47,11 @@ repos:
         name: docs drift guard
         entry: uv run python scripts/check_docs.py
         language: system
-        # Only the docs touched by this commit. CI (guardrails.yml, docs.yml)
-        # and `make` still run the full scan with no filenames.
-        files: ^docs/.*\.md$
+        # Only the docs touched by this commit. CI (guardrails.yml) and `make`
+        # still run the full scan with no filenames. Root-level markdown is in
+        # scope as of 2026-08-28 — CLAUDE.md, README.md, todo.md and friends
+        # were exempt from the guard built to catch exactly their drift.
+        files: ^(docs/.*|[^/]+)\.md$
         pass_filenames: true
       - id: alembic-single-head
         name: single alembic head

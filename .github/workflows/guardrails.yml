@@ -20,7 +20,7 @@ jobs:
       - name: Doc drift guard
         run: |
           BASE="origin/${{ github.base_ref }}"
-          CHANGED=$(git diff --name-only "$BASE"...HEAD -- 'docs/**/*.md' 'docs/*.md')
+          CHANGED=$(git diff --name-only "$BASE"...HEAD -- 'docs/**/*.md' 'docs/*.md' '*.md')
           if [ -n "$CHANGED" ]; then
             echo "Checking changed markdown:"; echo "$CHANGED"
             uv run python scripts/check_docs.py $CHANGED

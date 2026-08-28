@@ -1,8 +1,10 @@
+> **Status:** Canonical — repository front door.
+
 # JACKPOT
 
 **Pathogen genomics platform for genomic epidemiology, bioinformatics,
 and public-health research.** AGPL-3.0. Multi-deployment-target by
-design — one codebase, seven install scenarios.
+design — one codebase, four install scenarios.
 
 This is the canonical monorepo at `Midnight-Oil-Innovation/jackpot`. It
 holds the backend, the CLI, the schema, the pipeline parsers, the
@@ -22,27 +24,40 @@ six-repo + git-submodule layout.
 | [`docs/`](./docs/) | Product docs, architecture design documents, deploy guides, FHIR mapping, learnings/review log. | Project core |
 | [`governance/`](./governance/) | Charter, COI policy, jurisdiction posture, benefits-sharing framework, grievance procedure, shutdown/portability plan, advisory board design, CARE Principles. | Project core + future advisory board |
 | [`tests/`](./tests/) | Backend's integration tests against a real Postgres testcontainer. (CLI and pipelines have their own member-local tests.) | Project core |
-| [`spec.md`](./spec.md), [`todo.md`](./todo.md) | Living project specification + rolling task list. | Project core |
+| [`CONTEXT.md`](./CONTEXT.md), [`active_backlog.yaml`](./active_backlog.yaml) | Domain glossary + the canonical list of currently-actionable work. | Project core |
+| [`todo.md`](./todo.md), [`spec.md`](./spec.md) | Historical work ledger; `spec.md` is a redirect stub since its 2026-08-28 demotion. | Project core |
 
 ## Deploy scenarios
 
-JACKPOT supports seven install scenarios — see
-[`spec.md §1`](./spec.md) for the full picture and
-[`docs/deploy/stlt/`](./docs/deploy/stlt/) for STLT-tier specific
-guides.
+JACKPOT has **four** install scenarios, each a meaningfully different
+`jackpot init` configuration path. See
+[`docs/architecture.md` §3](./docs/architecture.md) for the full picture and
+[`docs/deploy/stlt/`](./docs/deploy/stlt/) for STLT-tier specific guides.
 
-| Code | Scenario | Per-tier guide |
+| Code | Scenario | Compute target |
 |---|---|---|
-| **A** | Single academic lab on a laptop | (in P0e install/CLI work) |
-| **B** | Single org on cloud (GCP / AWS / Azure) | (in P0e install/CLI work) |
-| **C** | Multi-lab agency (typical state public-health department shape) | [state-health-department.md](./docs/deploy/stlt/state-health-department.md) |
-| **D** | Hosted multi-tenant SaaS | (in P0c multi-tenancy work) |
-| **E** | Federation member (peers with other JACKPOT instances) | [tribal-epidemiology-center.md](./docs/deploy/stlt/tribal-epidemiology-center.md) |
-| **F** | CI / e2e test harness | (in `tests/` and `.github/workflows/`) |
-| **T** | Tribal-sovereignty deployment (variant of A or E with sovereignty-aware defaults) | [tribal-authority.md](./docs/deploy/stlt/tribal-authority.md) |
+| **A** | Self-hosted commodity infrastructure (laptop through multi-lab agency datacenter) | Local Nextflow; optional Slurm or cloud-burst profiles |
+| **B** | HPC | Slurm/PBS cluster, Apptainer |
+| **C** | Single-org cloud | GKE / EKS / AKS |
+| **D** | CI / e2e test harness | Local containers |
+
+Federation membership, multi-org tenancy, Indigenous data sovereignty, and
+network-denied store-and-forward transport are **runtime configurations**
+applied to A, B, or C — not separate scenarios. A deployment turns them on
+after install without reinstalling or changing its scenario. See
+[ADR-0002](./docs/adr/0002-four-install-scenarios.md) for why the earlier
+seven-scenario taxonomy was collapsed, and
+[ADR-0006](./docs/adr/0006-sovereignty-as-runtime-policy.md) for sovereignty
+specifically.
+
+STLT-tier guides: [state health department](./docs/deploy/stlt/state-health-department.md) ·
+[local](./docs/deploy/stlt/local-health-department.md) ·
+[territorial](./docs/deploy/stlt/territorial-health-agency.md) ·
+[tribal authority](./docs/deploy/stlt/tribal-authority.md) ·
+[tribal epidemiology center](./docs/deploy/stlt/tribal-epidemiology-center.md)
 
 Production code is **operator-agnostic** (Critical Rule 55 in
-[`docs/CLAUDE.md`](./docs/CLAUDE.md)) — no organization names, email
+[`CLAUDE.md`](./CLAUDE.md)) — no organization names, email
 domains, or infrastructure identifiers are hardcoded. The `jackpot
 init` CLI is the only place where operator-specific values are learned
 at install time.
@@ -133,7 +148,7 @@ deployment specifics per operator type.
 
 For the full developer guide, the 55 Critical Rules, the testing
 philosophy, and the GCP production architecture, read
-[`docs/CLAUDE.md`](./docs/CLAUDE.md). For the rolling task list and
+[`CLAUDE.md`](./CLAUDE.md). For the rolling task list and
 the active sprint, read [`todo.md`](./todo.md). For the design
 documents driving Phase 26 / 27 / 28 and the BYOP infrastructure work,
 see:
@@ -186,7 +201,7 @@ open. See [`spec.md §13`](./spec.md) for the full rationale.
 Contribution mechanics, code of conduct, and review expectations live
 in `CONTRIBUTING.md` (forthcoming, P0e). Until that lands, the
 operating norm is: open an issue, open a PR, follow the conventional-
-commit prefixes documented in [`docs/CLAUDE.md`](./docs/CLAUDE.md),
+commit prefixes documented in [`CLAUDE.md`](./CLAUDE.md),
 and run `uv run pytest` before requesting review. For substantive
 governance or schema-shape questions, see
 [`governance/access-grievance-procedure.md`](./governance/access-grievance-procedure.md)
