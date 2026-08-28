@@ -50,10 +50,16 @@ Row shape: `| name | license (SPDX) | version-or-scope | notes |`
 
 ## Foundation models (weights + inference code)
 
+Rows marked `[candidate]` are evaluated but not adopted, so they are recorded
+rather than gated. METAGENE-1 is the adopted first-slice choice (see
+`docs/domain_reference.md`); everything else here is an alternative for a tier
+that has not been built. A row loses `[candidate]` when it is actually wired
+in — and that is the point at which its licence has to clear the gate.
+
 | name | license | version-or-scope | notes |
 |------|---------|------------------|-------|
 | METAGENE-1 | Apache-2.0 | 7B decoder-only | Edge/cloud tiers; wastewater-pretrained; clears the gate |
-| DNABERT-S | (verify) | 117M species-aware | Verify against model card LICENSE before adoption |
+| DNABERT-S | CC-BY-4.0 | 117M species-aware | [candidate] Code, data and pretrained weights all CC BY 4.0 (single licence, so no weights-vs-code split). Attribution-only, no copyleft. **CC-BY is not on the allowlist** — rule on CC-BY-for-software at adoption, per `B-LICENSE-CCBY-ADOPTION` |
 | DNABERT-2 | (verify) | ICLR 2024 | [candidate] Route through this gate before adoption |
 | Nucleotide Transformer v2 | (verify) | InstaDeep | [candidate] Route through this gate before adoption |
 | Evo 2 | (verify) | Brixi 2025 | [candidate] Cloud tier; verify weights license separately from code license |
