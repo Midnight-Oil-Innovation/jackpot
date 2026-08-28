@@ -171,6 +171,40 @@ def test_missing_eukaryotic_tier3_field_blocks_submittable(valid_human_sample, f
     assert result.tier == 2
 
 
+def test_coinfection_organisms_is_not_required_for_submittable(valid_human_sample):
+    """A monoinfection must be able to reach SUBMITTABLE.
+
+    byop design §15 lists coinfection_organisms as a tier-3 field, but
+    _is_absent() treats [] as missing and CSV ingest collapses an empty cell
+    to [], so "screened, no coinfection" is indistinguishable from "not
+    recorded". Requiring it would force submitters to invent a value. Making
+    it required again needs a "screened, none found" sentinel — a schema
+    decision deferred to Phase 28.
+    """
+    data = _eukaryotic_sample(valid_human_sample, **EUKARYOTIC_EXTRAS)
+    del data["coinfection_organisms"]
+    result = validate_sample(data)
+    assert result.tier == 3, (result.tier2_missing, result.tier3_missing)
+    assert "coinfection_organisms" not in result.tier3_missing
+
+
+@pytest.mark.parametrize("empty", [[], None])
+def test_explicitly_empty_coinfection_still_reaches_submittable(valid_human_sample, empty):
+    data = _eukaryotic_sample(valid_human_sample, **EUKARYOTIC_EXTRAS)
+    data["coinfection_organisms"] = empty
+    result = validate_sample(data)
+    assert result.tier == 3, (result.tier2_missing, result.tier3_missing)
+
+
+def test_coinfection_organisms_is_still_accepted_when_present(valid_human_sample):
+    """Dropping it from the tier gate must not make it invalid to supply."""
+    data = _eukaryotic_sample(valid_human_sample, **EUKARYOTIC_EXTRAS)
+    data["coinfection_organisms"] = ["Plasmodium vivax", "Plasmodium malariae"]
+    result = validate_sample(data)
+    assert result.valid, result.errors
+    assert result.tier == 3
+
+
 def test_non_eukaryotic_sample_is_unaffected_by_the_new_fields(valid_human_sample):
     """The regression that matters: a bacterial or viral sample must not be
     stranded at PRELIMINARY for lacking a developmental stage."""

@@ -106,10 +106,23 @@ TIER2_REQUIRED_EUKARYOTIC = [
 ]
 
 # Eukaryotic-specific additional Tier 3 fields (byop design §15).
+#
+# Deliberate deviation from §15, which also lists coinfection_organisms.
+# _is_absent() treats an empty list as missing, and CSV ingest collapses an
+# empty cell to [] (see _split_list in routers/ingest.py), so "screened, no
+# coinfection" — the ordinary case for a monoinfection — is indistinguishable
+# from "not recorded". Requiring it would force submitters to invent a value
+# to reach SUBMITTABLE.
+#
+# Recording coinfection still matters: mixed-species Plasmodium infection is
+# epidemiologically significant. Making it required needs a "screened, none
+# found" sentinel, following the INSDC missing-value convention this schema
+# already uses for indoor_space and indoor_surface (missing / not applicable /
+# not collected). That is a schema decision scoped to Phase 28, when the
+# malaria dashboards define what they actually query.
 TIER3_REQUIRED_EUKARYOTIC = [
     "parasitemia_percent",
     "multiplicity_of_infection",
-    "coinfection_organisms",
 ]
 
 
