@@ -16,14 +16,14 @@ scenarios). Sovereignty-as-runtime-policy per `docs/architecture.md` §22
 provides deletion-on-request, no-auto-publish defaults, federation off-by-default,
 and CARE Principles compliance documented in
 `governance/care-principles-and-tribal-data-sovereignty.md`. The
-`jackpot init` CLI (coming in P0e) handles per-operator bootstrap. Phasing:
-cleanup phases 6.1–11 → P0d (monorepo migration, in progress) →
-P0e (install/CLI) → Phase 24.5 (architectural design lockdown) →
-P0f (BYOP infrastructure) → P0b (Schema v5.0 with instances/tenants/
-federated_peers + BYOP/eukaryotic schema) → P0c (multi-tenancy middleware
-+ sovereignty deletion) → P1–P5.
+`jackpot init` CLI handles per-operator bootstrap (shipped in P0e).
 
-**Note:** Pre-P0e, the `jackpot init` CLI accepts `--scenario A` through `F` plus `T`. The canonical architecture targets 4 scenarios (A/B/C/D) with federation, multi-tenancy, and sovereignty as runtime configurations per `docs/architecture.md` §3 and §22. The code consolidation lands post-P0e.
+Phasing, with status as of 2026-08-28 — cleanup phases 6.1–11, P0d
+(monorepo migration), P0e (install/CLI), Phase 24.5 (architectural design
+lockdown), and P0b (Schema v5.0, migration `c871b28bbdab`, merged
+2026-07-06) are **complete**. P0f (BYOP infrastructure) is **in progress**.
+P0c (multi-tenancy middleware + sovereignty deletion) and P1–P5 remain.
+Per-item status lives in `active_backlog.yaml`, not here.
 
 ---
 
@@ -31,10 +31,13 @@ federated_peers + BYOP/eukaryotic schema) → P0c (multi-tenancy middleware
 
 ### Before Starting Any Work
 
-1. Read `spec.md` — understand the goals and constraints for the current sprint
+1. Read `active_backlog.yaml` — the canonical list of currently-actionable work.
+   For architecture read `docs/architecture.md`; for why a decision was made read
+   `docs/adr/`; for what a term means read `CONTEXT.md`. (`spec.md` was demoted to a
+   redirect stub on 2026-08-28 — it is no longer the specification.)
 2. Read `todo.md` — find the next unchecked task
 3. Re-read this file (`docs/CLAUDE.md`) — all 67 Critical Rules apply at all times
-4. Confirm the baseline is stable: `uv run pytest tests/ schema/tests/ cli/tests/` from the workspace root — **≥1591 tests passing, ≥80% coverage** (post-R-1, R-2 work in progress, R-3 doc/tracking hygiene as of 2026-05-06). Earlier baselines: 970 passing post-P0e, 1527 post-PR #28 P0g G-3+G-4. The post-P0d 39% number we carried briefly was a pytest-cov misconfiguration (omit list wasn't reaching the report-time matcher); fixed by making `--cov-config=pyproject.toml` explicit in addopts — see `docs/learnings.md` "Coverage measurement bug" entry. P0e (`docs/architecture/jackpot-init-cli.md`) shipped `jackpot init` operator-bootstrap CLI plus 13 absorbed Phase 22 cleanup items; see `docs/review_log.md` "P0e closeout" section.
+4. Confirm the baseline is stable: `uv run pytest tests/ schema/tests/ cli/tests/` from the workspace root. The expected test count is `test_count` in `docs/STATUS.md` — never a number quoted in prose here or elsewhere. Coverage must stay at or above the CI threshold of 80%. The post-P0d 39% number we carried briefly was a pytest-cov misconfiguration (omit list wasn't reaching the report-time matcher); fixed by making `--cov-config=pyproject.toml` explicit in addopts — see `docs/learnings.md` "Coverage measurement bug" entry. P0e (`docs/architecture/jackpot-init-cli.md`) shipped `jackpot init` operator-bootstrap CLI plus 13 absorbed Phase 22 cleanup items; see `docs/review_log.md` "P0e closeout" section.
 
 ## Session-start checklist
 
@@ -82,12 +85,12 @@ If the session crosses from conversation into action — even a single edit — 
 ### Work Loop
 
 - Take the **next unchecked item** from `todo.md`
-- Cross-check it against `spec.md` before writing code
+- Cross-check it against `docs/architecture.md` and the relevant `docs/adr/` entry before writing code
 - Write the code — no placeholders, no `# TODO`, no `# ... rest of code here`
 - Run the relevant tests: `uv run pytest tests/test_{module}.py -v`
 - If tests pass: check the item off in `todo.md`, commit with `git commit -a -m`, move to the next item
 - If tests fail: fix and rerun — **never mark a task complete without passing tests**
-- Every ~20 tasks: pause, review `spec.md` vs the current implementation for gaps,
+- Every ~20 tasks: pause, review `docs/architecture.md` vs the current implementation for gaps,
   log findings to `docs/review_log.md`, and resolve all gaps before continuing
 
 ### Decision Rules
@@ -97,7 +100,7 @@ If the session crosses from conversation into action — even a single edit — 
 - **Never mark a task done** without `uv run pytest` showing it pass
 - **Never write placeholder code** — every function must be fully implemented
 - **Always use `uv run python` / `uv run python3`** — never bare `python` or `python3`; the shell aliases do not apply in Claude Code sessions
-- When blocked on intent: check `spec.md`, then the relevant section of this file,
+- When blocked on intent: check `docs/architecture.md` and `docs/adr/`, then the relevant section of this file,
   then log the question to `docs/review_log.md` and continue with the next unblocked task
 - For non-trivial architectural changes: write the plan to `docs/review_log.md` and
   wait for explicit "Go" before proceeding
@@ -144,7 +147,9 @@ After completing any router session or significant fix, append a new entry to
 
 ## Tech Stack
 
-- Python 3.11, FastAPI, SQLAlchemy 2, Alembic, Pydantic v2
+- Python 3.12, FastAPI, SQLAlchemy 2, Alembic, Pydantic v2
+  (canonical version lives in `docs/STATUS.md`; both `backend/pyproject.toml`
+  and `cli/pyproject.toml` pin `requires-python = ">=3.12"`)
 - PostgreSQL (local dev) / Cloud SQL PostgreSQL (production) — operational
   database for all transactional workloads. Alembic, SQLAlchemy, and all
   queries work identically against both. Transition = connection string change.
@@ -230,12 +235,13 @@ no need to read them proactively otherwise.
 
 ## Current Baseline
 
-- **1591 tests passing, 2 skipped, 0 failed** (post-R-1 PR #31; verified
-  2026-05-06 against `r3-doc-and-tracking-hygiene` based at `2609a1f`).
-  Earlier baselines: 970 post-P0e, 944 at P0e close, 1527 post-PR #28
-  P0g G-3+G-4.
-- **Coverage: 87.85%** post-PR #28; expected to hold at the same level
-  (R-3 is doc-only; R-1 added security-correctness tests). The pre-P0d 86.99% baseline was
+- **Test count, Python version, schema version, and Alembic head are NOT
+  restated here.** `docs/STATUS.md` is the single canonical source for all
+  four, regenerated by `make status`. Read it instead of trusting a number
+  written in prose — this block previously carried a test baseline that was
+  stale by several hundred tests, and `spec.md` carried three mutually
+  contradictory ones before it was demoted on 2026-08-28.
+- **Coverage** must not fall below the CI threshold of 80%. The pre-P0d 86.99% baseline was
   briefly under-reported as 39% due to a pytest-cov misconfiguration
   (omit list wasn't reaching the report-time matcher because
   `--cov-config=pyproject.toml` wasn't explicit in addopts). Fix landed
@@ -443,8 +449,13 @@ select uses `?select_all=true` which returns IDs only, no pagination.
 
 **24. All responses use `backend/responses.py` helpers — never raw dicts.**
 See the API Response Conventions section. Every router imports `success`,
-`success_list`, and `error` from `backend/responses.py`. The response
-envelope shape is fixed — routers never construct it manually.
+`success_list`, `success_message`, and `error` from `backend/responses.py`.
+The response envelope shape is fixed — routers never construct it manually.
+
+Auth is the same story: routers take their identity and authorization from
+`get_current_user`, `require_platform_admin`, `require_lab_director`, and
+`require_lab_access` in `backend/auth/guards.py` — never by re-deriving
+membership inline.
 
 **25. Every pipeline run gets an isolated GCS work directory.**
 Format: `gs://jackpot-work/{run_id}/work/`. Never share workDir between runs.
@@ -1144,7 +1155,8 @@ Selectors live in `Settings`:
 
 Existing migrated call sites: Globus client_id/client_secret/endpoint_id,
 cloud-storage service-account credentials, JWT signing key. New code
-follows the same pattern. See `spec.md` Phase C-1 Specification for the
+follows the same pattern. See the Phase C-1 Specification in
+`docs/archived/spec_v2.2_2026-04-29.md` for the
 full design.
 
 **63 — Pre-action state verification.** Before any operation that modifies the repo (file edits, git operations, applying patches, merge-script runs), Claude must verify and report three things: (a) `git status` output for the current working tree state; (b) `git fetch && git log --oneline HEAD..origin/<current-branch>` output showing whether origin has moved since Claude's last verified context; (c) the actual current state of any file Claude is about to modify (via `view` or `cat`, not relying on prior uploads). If any check returns unexpected state — divergence, stale uploads, files modified by something other than the current Claude session — Claude pauses and asks before continuing. Operating on stale context is the most common failure mode and is preventable. Anchor session: 2026-05-12 cryptWWDB merge — ~45 minutes of git recovery from skipping this check.
@@ -1171,6 +1183,23 @@ The session MUST NOT include `git worktree remove` of the current worktree — g
 Every code-commit session prompt structure must follow `docs/session_prompt_template.md`: required sections (Operating Rules, Role, Session Task, Acceptance Criteria, Out of Scope, Closing Steps, Source-of-truth docs to verify before coding), required acceptance criteria for the push/PR/merge/sync sequence, and the PR body template.
 
 Sessions that do NOT produce a code commit (pure-research, pure-design, pure-documentation-without-commit) are exempt from Closing Steps but must explicitly state this exemption in Operating Rules.
+
+**69 — Active-flag column naming: `active` for orgs and labs, `is_active` everywhere else.**
+
+`organizations` and `labs` use a bare `active` column. Every other table
+uses `is_active`. There is no principle behind the split — it is historical —
+which is exactly why it needs writing down: the convention is undiscoverable
+from any single table, and guessing wrong produces a query that silently
+returns nothing rather than an error.
+
+```sql
+SELECT * FROM organizations WHERE active   = TRUE;   -- orgs, labs
+SELECT * FROM users         WHERE is_active = TRUE;  -- everything else
+```
+
+Do not "fix" the inconsistency by renaming one side without a migration and a
+sweep of every call site. Recorded here after it was found living only in the
+demoted `spec.md` §3.
 
 ## Local Dev Role Switching
 

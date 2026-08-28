@@ -1187,6 +1187,37 @@ Matrix summary: 7 Met, 4 Partial, 0 Gap. The four Partials are all on the active
 
 ---
 
+### 18.4 WHO Global Genomic Surveillance Strategy 2022-2032 alignment
+
+Distinct from the WHO Attributes document in §18.3, the WHO *Global Genomic
+Surveillance Strategy for Pathogens with Pandemic and Epidemic Potential
+2022-2032* defines five objectives. Each deployment scenario advances a subset:
+
+| Scenario | Description | Obj. 1 (tools) | Obj. 2 (workforce) | Obj. 3 (data utility) | Obj. 4 (connectivity) | Obj. 5 (readiness) |
+|---|---|---|---|---|---|---|
+| A | Self-hosted commodity (laptop through agency, ephemeral or persistent, single-lab to multi-org) | ✓ | ✓ | ✓ | ✓ | ✓ |
+| B | HPC (Apptainer + Slurm + institutional storage) | ✓ | ✓ | ✓ | • | ✓ |
+| C | Single-org cloud (GKE/EKS/AKS) | ✓ | ✓ | ✓ | • | ✓ |
+| D | CI test | | | | | |
+
+✓ = primary mode; • = partial / context-dependent
+
+Scenario A's range — a single-user laptop through a multi-lab agency
+datacenter — means it collectively serves all five objectives; different
+configurations within A advance different ones. Federation participation
+(Obj. 4, connectivity) is a runtime configuration available to A, B, and C
+per [ADR-0002](adr/0002-four-install-scenarios.md): the primary operating
+mode for some A deployments, a context-dependent capability for B and C.
+
+**Non-functional requirement: 7-day turnaround.** The strategy defines
+"timely" as triggering genomic sequencing within seven days of event or
+pathogen detection. Pipeline orchestration (ingest → scrub → DLP → analysis →
+result publication) must support end-to-end latency under this target for
+surge-event use. The 6-state lifecycle of `ingest_scrubber.nf` and the
+`SCRUBBER_MAX_CONCURRENT` concurrency setting are dimensioned for it.
+
+---
+
 ## 19. External integrations
 
 ### 19.1 Sequencing lab registration
