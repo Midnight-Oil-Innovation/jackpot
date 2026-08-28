@@ -63,6 +63,35 @@ def test_incompatible_licenses_still_denied(text):
     assert verify_licenses.classify(text) == "deny"
 
 
+@pytest.mark.parametrize(
+    "text",
+    [
+        "public domain",
+        "public-domain",
+        "public-domain (NIH)",
+        "Public Domain (US Government work)",
+    ],
+)
+def test_public_domain_is_allowed_however_it_is_spelled(text):
+    """The allowlist pattern was `public\\s+domain`, so the hyphenated form missed.
+
+    HRRT (sra-human-scrubber) is recorded as "public-domain (NIH)" — a US
+    federal work, uncopyrightable under 17 USC 105 — and was failing the gate
+    on the hyphen alone, not on anything about its licence.
+    """
+    assert verify_licenses.classify(text) == "allow"
+
+
+def test_public_data_is_not_mistaken_for_public_domain():
+    """ "public data" is a data-source statement, not a code licence.
+
+    The SRA row lives under "Databases and references" and says so itself.
+    Widening the public-domain pattern must not sweep it in — whether database
+    sources belong in a code-copyleft gate at all is a separate, open question.
+    """
+    assert verify_licenses.classify("public data") != "allow"
+
+
 @pytest.mark.skipif(not _installed("detect-secrets"), reason="dev dependency not installed")
 def test_classifier_wins_over_free_text_license_field():
     """detect-secrets sets License to a bare copyright line ("Copyright Yelp,
