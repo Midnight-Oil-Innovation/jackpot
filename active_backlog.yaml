@@ -30,7 +30,7 @@
 
 meta:
   version: 1
-  last_updated: "2026-05-26"
+  last_updated: "2026-08-28"
   source_documents:
     - todo.md
     - docs/jackpot_session_summary_and_backlog.md
@@ -1206,7 +1206,7 @@ sessions:
       operator permission checks. Returns structured pass/fail with
       per-check diagnostics.
     phase: p0f
-    status: open
+    status: shipped
     depends_on:
       - B-BYOP-1
     blocked_by_external:
@@ -1229,6 +1229,8 @@ sessions:
     notes: "Per docs/byop_and_eukaryotic_design.md §N. Originally tagged Phase: P1 in the design doc; reframed to P0f per
       todo.md 2026-04-29."
 
+    merged_at: '2026-08-28'
+    merge_sha: 3b35a60
   - id: B-BYOP-3
     title: BYOP Stage 2 sandbox dry-run
     short_description: |
@@ -1645,7 +1647,8 @@ sessions:
     depends_on: []
     blocked_by_external:
     parallel_safe: false
-    parallel_safe_reason: "Foundational new package + migrations; scaffolding decisions need interactive review. Manual flow per coding_scripts_howto 'first time running a new session shape'."
+    parallel_safe_reason: "Foundational new package + migrations; scaffolding decisions need interactive review. Manual flow
+      per coding_scripts_howto 'first time running a new session shape'."
     effort_sessions: 3
     primary_files:
       - backend/backend/authz/
@@ -1657,7 +1660,8 @@ sessions:
     pr_title_function:
     branch_name_template: m0-permit-engine
     role_framing:
-    notes: "authz module path is an M0 scoping decision (recommend backend/backend/authz/); primary_files lists the recommended dir and tightens once chosen. access_model.md §5 + §9 fixtures."
+    notes: "authz module path is an M0 scoping decision (recommend backend/backend/authz/); primary_files lists the recommended
+      dir and tightens once chosen. access_model.md §5 + §9 fixtures."
 
   - id: M1
     title: visibility_sql_clause companion — list-filtering, cross-checked vs permit()
@@ -1781,7 +1785,8 @@ sessions:
       - ACCESS-SEED
     blocked_by_external:
     parallel_safe: false
-    parallel_safe_reason: "Irreversible cutover touching auth, migrations, route guards, and the list path. Manual flow only; never parallel-batch."
+    parallel_safe_reason: "Irreversible cutover touching auth, migrations, route guards, and the list path. Manual flow only;
+      never parallel-batch."
     effort_sessions: 3
     primary_files:
       - backend/backend/permissions.py
@@ -1795,7 +1800,8 @@ sessions:
     pr_title_function:
     branch_name_template: m2-cutover
     role_framing:
-    notes: "IRREVERSIBLE. access_model.md §10 (greenfield, no shim) + §11.1. Verify M0/M1 proven before starting — the project-wide 'verify before operating' discipline applied to the cutover."
+    notes: "IRREVERSIBLE. access_model.md §10 (greenfield, no shim) + §11.1. Verify M0/M1 proven before starting — the project-wide
+      'verify before operating' discipline applied to the cutover."
 
   - id: M3
     title: Sovereignty policies (deletion-lifecycle guards + Scenario-T preset)
