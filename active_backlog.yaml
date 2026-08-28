@@ -396,7 +396,7 @@ sessions:
       against wastewater_target_concentration (B-CWB-SCHEMA-2) joined to
       WastewaterSample via sample_associations (B-CWB-SCHEMA-1).
     phase: cryptwwdb_track
-    status: blocked
+    status: open
     depends_on:
       - B-CWB-SCHEMA-1
       - B-CWB-SCHEMA-2
@@ -417,6 +417,9 @@ sessions:
       mass-balance module. Replaces the NotImplementedError stub from
       B-CWB-MB-1 interface-only with real SQLAlchemy queries.
     notes: "Transitively blocked on P0b via SCHEMA deps."
+    reconciliation_note: >
+      UNBLOCKED 2026-08-28: B-CWB-SCHEMA-1 and -2 both landed in P0b
+      (c871b28bbdab); neither status had been flipped.
 
   - id: B-CWB-MB-2
     title: Mass-balance QC + trigger points
@@ -480,9 +483,11 @@ sessions:
       to sample_associations.association_type enum. Directed sewershed
       topology required for cryptWWDB Use Case 1.
     phase: phase_24_5
-    status: blocked_external
+    status: shipped
+    merged_at: "2026-07-06"
+    merge_sha: "3016238"
     depends_on: []
-    blocked_by_external: "P0b (schema v5.0 migration window)"
+    blocked_by_external:
     parallel_safe: false
     effort_sessions: 0.5
     primary_files: []
@@ -492,6 +497,8 @@ sessions:
     branch_name_template:
     role_framing:
     notes: "Bundles into P0b migration."
+    reconciliation_note: >
+      RECONCILED 2026-08-28: verified present in migration c871b28bbdab (merged 2026-07-06 at 3016238); the status had never been flipped.
 
   - id: B-CWB-SCHEMA-2
     title: wastewater_target_concentration result type
@@ -500,9 +507,11 @@ sessions:
       quantitative targets. Fields: target_pathogen_id FK, assay_type,
       concentration_value/unit/CIs, normalization_target, LOD, LOQ.
     phase: phase_24_5
-    status: blocked_external
+    status: shipped
+    merged_at: "2026-07-06"
+    merge_sha: "3016238"
     depends_on: []
-    blocked_by_external: "P0b (schema v5.0 migration window)"
+    blocked_by_external:
     parallel_safe: false
     effort_sessions: 1.5
     primary_files: []
@@ -512,6 +521,8 @@ sessions:
     branch_name_template:
     role_framing:
     notes: "Critical path for cryptWWDB mass-balance integration."
+    reconciliation_note: >
+      RECONCILED 2026-08-28: verified present in migration c871b28bbdab (merged 2026-07-06 at 3016238); the status had never been flipped.
 
   - id: B-CWB-SCHEMA-3
     title: Time-varying population fields
@@ -520,9 +531,9 @@ sessions:
       sample_population_estimate typed table per Driver et al. 2024
       Table 2 + Choi et al. 2018.
     phase: phase_24_5
-    status: blocked_external
+    status: tracked_not_scheduled
     depends_on: []
-    blocked_by_external: "P0b (schema v5.0 migration window)"
+    blocked_by_external: "none - re-scope deliberately if cryptWWDB work resumes"
     parallel_safe: false
     effort_sessions: 1
     primary_files: []
@@ -532,6 +543,11 @@ sessions:
     branch_name_template:
     role_framing:
     notes: ""
+    reconciliation_note: >
+      RECONCILED 2026-08-28: never in P0b scope. Phase 24.5's success
+      criterion records that the SCHEMA-1-through-5 range was a miscount -
+      only SCHEMA-1 and SCHEMA-2 were ever in scope. Verified absent from
+      migration c871b28bbdab. Not blocked on anything; genuinely unscheduled.
 
   - id: B-CWB-SCHEMA-4
     title: fecal_normalization_results typed table
@@ -540,9 +556,9 @@ sessions:
       (PMMoV / Bacteroides_HF183 / coprostanol / other). Enables PMMoV
       normalization for SARS-CoV-2 per Feng et al. 2021.
     phase: phase_24_5
-    status: blocked_external
+    status: tracked_not_scheduled
     depends_on: []
-    blocked_by_external: "P0b (schema v5.0 migration window)"
+    blocked_by_external: "none - re-scope deliberately if cryptWWDB work resumes"
     parallel_safe: false
     effort_sessions: 1
     primary_files: []
@@ -552,6 +568,11 @@ sessions:
     branch_name_template:
     role_framing:
     notes: ""
+    reconciliation_note: >
+      RECONCILED 2026-08-28: never in P0b scope. Phase 24.5's success
+      criterion records that the SCHEMA-1-through-5 range was a miscount -
+      only SCHEMA-1 and SCHEMA-2 were ever in scope. Verified absent from
+      migration c871b28bbdab. Not blocked on anything; genuinely unscheduled.
 
   - id: B-CWB-SCHEMA-5
     title: Excretion + degradation factor lookup tables
@@ -559,9 +580,9 @@ sessions:
       excretion_factors + in_sewer_degradation_factors lookup tables.
       Static reference data per Zuccato et al. 2008 and Hart & Halden 2020.
     phase: phase_24_5
-    status: blocked_external
+    status: tracked_not_scheduled
     depends_on: []
-    blocked_by_external: "P0b (schema v5.0 migration window)"
+    blocked_by_external: "none - re-scope deliberately if cryptWWDB work resumes"
     parallel_safe: false
     effort_sessions: 1
     primary_files: []
@@ -575,6 +596,11 @@ sessions:
   # ────────────────────────────────────────────────────────────────────────
   # Wastewater Track
   # ────────────────────────────────────────────────────────────────────────
+    reconciliation_note: >
+      RECONCILED 2026-08-28: never in P0b scope. Phase 24.5's success
+      criterion records that the SCHEMA-1-through-5 range was a miscount -
+      only SCHEMA-1 and SCHEMA-2 were ever in scope. Verified absent from
+      migration c871b28bbdab. Not blocked on anything; genuinely unscheduled.
 
   - id: B-WW-1
     title: Streamlit wastewater lineage-abundance dashboard
@@ -608,7 +634,7 @@ sessions:
       (SARS-CoV-2 + RSV + Influenza A). Reads from
       wastewater_target_concentration table.
     phase: wastewater
-    status: blocked
+    status: open
     depends_on:
       - B-CWB-SCHEMA-2
     blocked_by_external:
@@ -624,6 +650,9 @@ sessions:
       Senior engineering collaborator landing the multi-target wastewater
       visualization. Transitively blocked on P0b via SCHEMA-2.
     notes: ""
+    reconciliation_note: >
+      UNBLOCKED 2026-08-28: B-CWB-SCHEMA-2 landed in P0b (c871b28bbdab);
+      the status had never been flipped.
 
   - id: B-WW-ADV-2
     title: PHES-ODM alignment
@@ -1013,9 +1042,11 @@ sessions:
       Add eukaryotic organisms to OrganismNameEnum + eukaryotic-specific
       samples columns (developmental stage, parasitemia, MOI, coinfection).
     phase: phase_24_5
-    status: blocked_external
+    status: shipped
+    merged_at: "2026-07-06"
+    merge_sha: "3016238"
     depends_on: []
-    blocked_by_external: "P0b (schema v5.0 migration window)"
+    blocked_by_external:
     parallel_safe: false
     effort_sessions: 1
     primary_files: []
@@ -1025,15 +1056,17 @@ sessions:
     branch_name_template:
     role_framing:
     notes: "Bundles into P0b migration."
+    reconciliation_note: >
+      RECONCILED 2026-08-28: verified present in migration c871b28bbdab (merged 2026-07-06 at 3016238); the status had never been flipped.
 
   - id: B-EUK-2
     title: Eukaryotic pipeline-result schemas
     short_description: |
       Eight eukaryotic pipeline-result tables + supporting enums.
     phase: phase_24_5
-    status: blocked_external
+    status: tracked_not_scheduled
     depends_on: []
-    blocked_by_external: "P0b (schema v5.0 migration window)"
+    blocked_by_external: "Phase 28 (the 8 result tables ship with their pipelines)"
     parallel_safe: false
     effort_sessions: 1.5
     primary_files: []
@@ -1043,6 +1076,11 @@ sessions:
     branch_name_template:
     role_framing:
     notes: ""
+    reconciliation_note: >
+      RECONCILED 2026-08-28: deliberately NOT built in P0b. Phase 24.5's
+      success criterion defers the 8 eukaryotic result tables to their
+      pipelines in Phase 28. Verified absent from migration c871b28bbdab.
+      Was blocked on P0b, which is the wrong blocker.
 
   - id: B-EUK-3
     title: Eukaryotic validator updates
@@ -1193,7 +1231,9 @@ sessions:
       Bundles B-CWB-SCHEMA-1..5, B-EUK-1/2/3, BYOP additions, sovereignty
       columns. Sets up multi-tenancy middleware in P0c.
     phase: p0_series
-    status: tracked_not_scheduled
+    status: shipped
+    merged_at: "2026-07-06"
+    merge_sha: "3016238"
     depends_on: []
     blocked_by_external:
     parallel_safe: false
@@ -1205,6 +1245,11 @@ sessions:
     branch_name_template:
     role_framing:
     notes: "Next major phase after federation Stage 1 closes."
+    reconciliation_note: >
+      RECONCILED 2026-08-28: P0b merged 2026-07-06 at 3016238 (migration
+      c871b28bbdab). It was still marked tracked_not_scheduled, which held
+      P0c blocked, which held B-CARE-3 and B-CARE-3i blocked - the entire
+      sovereignty chain was pinned by one unflipped status.
 
   - id: P0c
     title: Multi-tenancy middleware (major phase)
@@ -1212,7 +1257,7 @@ sessions:
       Tenant-aware middleware applying organization context to every
       request. Follows P0b schema work. Unblocks B-CARE-3 + B-CARE-4.
     phase: p0_series
-    status: blocked
+    status: open
     depends_on:
       - P0b
     blocked_by_external:
@@ -1225,6 +1270,13 @@ sessions:
     branch_name_template:
     role_framing:
     notes: ""
+    reconciliation_note: >
+      UNBLOCKED 2026-08-28: its only dependency, P0b, merged 2026-07-06 at
+      3016238 but was still marked tracked_not_scheduled. P0c has therefore
+      been sitting on the frontier for ~7 weeks while reading as blocked.
+      Shipping it unblocks B-CARE-3, and with it B-CARE-3i (the
+      is_deleted -> is_archived rename) and the CARE deletion lifecycle.
+
   - id: B-BYOP-1
     title: BYOP manifest schema (jackpot-pipeline.yaml)
     short_description: |
@@ -1585,9 +1637,11 @@ sessions:
       key. Lands with the broader P0b Schema v5.0 migration cycle (not
       standalone) per the 2026-04-29 phasing decision in todo.md.
     phase: p0b
-    status: open
+    status: shipped
+    merged_at: "2026-07-06"
+    merge_sha: "3016238"
     depends_on: []
-    blocked_by_external: "P0b (lands with P0b's combined schema migration cycle alongside sovereignty + eukaryotic items)"
+    blocked_by_external:
     parallel_safe: false
     effort_sessions: 1
     primary_files:
@@ -1610,6 +1664,8 @@ sessions:
     notes: "Per docs/byop_and_eukaryotic_design.md §7 for the 27-column schema + 4-enum detail. MUST land in the same P0b
       migration cycle as B-CWB-SCHEMA-1..5, B-EUK-1, B-EUK-2 — splitting into a later migration creates double-migrate operator
       churn (per todo.md 2026-04-29 phasing decision)."
+    reconciliation_note: >
+      RECONCILED 2026-08-28: verified present in migration c871b28bbdab (merged 2026-07-06 at 3016238); the status had never been flipped.
 
   - id: B-BYOP-10
     title: BYOP telemetry — success rate, walltime, cost
