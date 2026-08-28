@@ -23,14 +23,20 @@
   notes: GPL-3.0 per your notes; confirm against current release.
 
 - name: DeePaC
-  url: https://gitlab.com/rki_bioinformatics/DeePaC/-/raw/master/LICENSE
-  notes: Verify — feeds functional_concern danger leg.
+  url: https://gitlab.com/rki_bioinformatics/DeePaC/-/raw/0.14.1/LICENSE
+  notes: VERIFIED 2026-08-28 — MIT, pinned to release 0.14.1.
 
 # --- Group 2: verify when embedding-tier work starts ---
 
 - name: DNABERT-S
-  url: https://huggingface.co/zhihan1996/DNABERT-S/raw/main/LICENSE
-  notes: Edge tier for the AnomalyDetector Protocol.
+  url: https://huggingface.co/api/models/zhihan1996/DNABERT-S
+  notes: >
+    CHECKED 2026-08-28. No LICENSE file exists in either the HF repo or
+    github.com/MAGICS-LAB/DNABERT_S, so there is nothing for the fetcher to
+    match on — the weights licence lives in model-card metadata
+    (cardData.license = apache-2.0), which is why this url points at the API
+    rather than a raw file. The code repo carries no licence at all. Do not
+    record an SPDX id for the code without resolving that upstream.
 
 - name: DNABERT-2
   url: https://raw.githubusercontent.com/MAGICS-LAB/DNABERT_2/main/LICENSE
@@ -47,8 +53,12 @@
 # --- Group 3: verify when host-depletion / pipeline work lands ---
 
 - name: Cleanifier
-  url: https://raw.githubusercontent.com/dnanexus-rnd/cleanifier/main/LICENSE
-  notes: Verify upstream URL — placeholder from search.
+  url: https://gitlab.com/rahmannlab/cleanifier/-/raw/main/LICENSE
+  notes: >
+    VERIFIED 2026-08-28 — MIT. The previous url (dnanexus-rnd/cleanifier) was a
+    search placeholder for the wrong project and 404'd; correct upstream is the
+    Rahmann lab GitLab repo. No release tags upstream, so main HEAD is the best
+    available pin.
 
 - name: hostile
   url: https://raw.githubusercontent.com/bede/hostile/main/LICENSE

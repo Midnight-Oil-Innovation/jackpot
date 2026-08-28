@@ -38,11 +38,11 @@ Row shape: `| name | license (SPDX) | version-or-scope | notes |`
 |------|---------|------------------|-------|
 | GOTTCHA2 | GPL-3.0 | LANL/poeli fork | Taxonomic arm; PanGIA successor |
 | deacon | MIT | rust minimizer | Ingest default for host depletion |
-| Cleanifier | MIT | host depletion | Reported by maintainer 2026-08-28. MIT is on the allowlist and clears the gate. If a prebuilt host index is redistributed rather than built locally, confirm the reference genomes' terms separately — code licence does not cover bundled data |
+| Cleanifier | MIT | host depletion | Verified 2026-08-28 against `gitlab.com/rahmannlab/cleanifier` `main` LICENSE (upstream has no release tags, so branch HEAD is the best available pin). The prebuilt human index is distributed separately via Zenodo 10.5281/zenodo.15639519 — if that index is redistributed rather than built locally, the pangenome's terms need checking separately; a code licence does not cover bundled data |
 | hostile | MIT | 2.0.2 | Host depletion; verified 2026-08-02 from pyproject.toml classifier + Bioconda recipe. Deletes rather than N-masks; `--rename` strips read-header PII |
 | HRRT (sra-human-scrubber) | public-domain (NIH) | ingest | NIH work product |
 | SeqScreen | GPL-3.0 | functional-concern channel | Confirm current release |
-| DeePaC | MIT | functional-concern channel | Reported by maintainer 2026-08-28. MIT is on the allowlist and clears the gate. Ships trained models — if weights are redistributed rather than fetched at runtime, confirm they carry MIT too (the split that bit Evo 2's row) |
+| DeePaC | MIT | functional-concern channel | Verified 2026-08-28 against `gitlab.com/rki_bioinformatics/DeePaC` release `0.14.1` LICENSE. Ships trained models — if weights are redistributed rather than fetched at runtime, confirm they carry MIT too (the split that bit Evo 2's row) |
 | PyOD | BSD-2-Clause | anomaly-detection deps | Already in nf-core/adjacent ecosystems |
 | Jellyfish | GPL-3.0 | k-mer counting | GPL family; AGPL-compatible |
 | PanGIA | (verify — do not adopt) | superseded by GOTTCHA2 | Do not rebuild the 2018 database |
@@ -59,7 +59,7 @@ in — and that is the point at which its licence has to clear the gate.
 | name | license | version-or-scope | notes |
 |------|---------|------------------|-------|
 | METAGENE-1 | Apache-2.0 | 7B decoder-only | Edge/cloud tiers; wastewater-pretrained; clears the gate |
-| DNABERT-S | CC-BY-4.0 | 117M species-aware | [candidate] Code, data and pretrained weights all CC BY 4.0 (single licence, so no weights-vs-code split). Attribution-only, no copyleft. **CC-BY is not on the allowlist** — rule on CC-BY-for-software at adoption, per `B-LICENSE-CCBY-ADOPTION` |
+| DNABERT-S | Apache-2.0 (weights); code repo carries no LICENSE | 117M species-aware | [candidate] Checked 2026-08-28. Weights: HF model card `zhihan1996/DNABERT-S` declares `license: apache-2.0`. Code: `github.com/MAGICS-LAB/DNABERT_S` has **no LICENSE file** and GitHub detects none; it derives from DNABERT-2, whose LICENSE verifies as Apache-2.0, but Apache-2.0 is permissive so a derivative's own new code is not automatically covered. Resolve upstream before adoption — `B-LICENSE-DNABERTS-ADOPTION` |
 | DNABERT-2 | (verify) | ICLR 2024 | [candidate] Route through this gate before adoption |
 | Nucleotide Transformer v2 | (verify) | InstaDeep | [candidate] Route through this gate before adoption |
 | Evo 2 | (verify) | Brixi 2025 | [candidate] Cloud tier; verify weights license separately from code license |
@@ -126,11 +126,17 @@ SPDX identifier plus the release you verified against. This is the discipline th
 prevented the alibi-detect adoption (documented as BSL-1.1 in its own LICENSE file
 despite third-party claims of Apache-2.0).
 
-**Maintainer-reported, LICENSE-file confirmation still owed (2026-08-28).**
-`Cleanifier`, `DeePaC` and `DNABERT-S` were recorded from maintainer report
-rather than from reading each repository's own `LICENSE`. They clear the gate
-today — MIT, MIT and CC-BY-4.0 — and the wrapped-tool table is green because of
-them. By the standard set directly above, each still needs the exact SPDX
-identifier and the release it was verified against. The alibi-detect precedent
-is the reason that distinction is worth keeping visible rather than quietly
-treating a green gate as settled.
+**Verification pass, 2026-08-28.** `Cleanifier` and `DeePaC` were upgraded
+from maintainer report to LICENSE-file verification via
+`scripts/verify_licenses_assistant.py`; both are MIT, and DeePaC is pinned to
+release `0.14.1`. Cleanifier's upstream URL in `scripts/license_sources.yaml`
+had been a placeholder pointing at the wrong project (`dnanexus-rnd/cleanifier`,
+404) and now points at `gitlab.com/rahmannlab/cleanifier`.
+
+That pass also corrected `DNABERT-S`, which had been recorded as CC-BY-4.0 from
+report. Neither its code repo nor its model card carries CC-BY: the weights are
+declared Apache-2.0 and the code repo has no LICENSE at all. The likely source
+of the confusion is the paper's licence, which is not the software's. This is
+the alibi-detect pattern exactly — a secondhand licence claim that the primary
+source did not support — and it is why the discipline above is worth its
+friction.
