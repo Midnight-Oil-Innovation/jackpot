@@ -1062,7 +1062,7 @@ Driven by integration-readiness analysis vs Driver et al. 2024 *Sci Total Enviro
                resources, reference_data, containers, inputs, outputs,
                permissions, cost. (1-2 sessions, P0f start)
 
-[ ] B-BYOP-2   Implement backend/services/byop_validator.py — Stage 1
+[x] B-BYOP-2   Implement backend/services/byop_validator.py — Stage 1
                static validation. Per-engine syntax checks (nextflow
                inspect, snakemake --lint, miniwdl check, bash -n / python
                -c), container resolution (registry reachability, tag
@@ -1071,6 +1071,20 @@ Driven by integration-readiness analysis vs Driver et al. 2024 *Sci Total Enviro
                against operator allowlist), permissions sanity (egress
                allowlist, GPU availability, internet_required vs
                sovereignty-runtime-policy default on Scenario A per `docs/architecture.md` §22). (3-4 sessions, P0f)
+               DONE: `backend/backend/services/byop_validator.py`
+               (CheckResult / ValidationReport dataclasses, six static
+               check functions, `validate_manifest` entry point — pure
+               service module, no DB / HTTP / file I/O) and
+               `tests/services/test_byop_validator.py` (43 parametrized
+               tests against the real schema). Also lands
+               `schema/byop-pipeline-manifest.schema.json` (the B-BYOP-1
+               artefact) because Stage 1 cannot validate without it;
+               B-BYOP-1 remains open for `docs/byop/manifest.md`.
+               Network-dependent parts of this item (registry
+               reachability, tag existence, digest verification, HTTP
+               HEAD on reference URLs) are deferred to B-BYOP-3 — Stage 1
+               is presence/syntax only per
+               `docs/byop_and_eukaryotic_design.md` §5.2.
 
 [ ] B-BYOP-3   Implement backend/services/byop_sandbox.py — Stage 2
                sandbox dry-run with isolation. Per-engine dry-run

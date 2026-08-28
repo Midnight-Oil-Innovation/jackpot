@@ -1,0 +1,224 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://jackpot.io/schema/byop-pipeline-manifest.schema.json",
+  "title": "JACKPOT BYOP pipeline manifest",
+  "description": "Schema for jackpot-pipeline.yaml, the contract every Bring-Your-Own-Pipeline submission ships. Mirrors docs/byop_and_eukaryotic_design.md section 2.1.",
+  "type": "object",
+  "required": [
+    "api_version",
+    "kind",
+    "metadata",
+    "engine",
+    "applicability",
+    "resources",
+    "reference_data",
+    "containers",
+    "inputs",
+    "outputs",
+    "permissions"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "api_version": {
+      "type": "string",
+      "enum": ["jackpot.io/v1"]
+    },
+    "kind": {
+      "type": "string",
+      "enum": ["Pipeline"]
+    },
+    "metadata": {
+      "type": "object",
+      "required": ["name", "display_name", "version", "description", "authors", "license"],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string",
+          "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$"
+        },
+        "display_name": {"type": "string", "minLength": 1},
+        "version": {
+          "type": "string",
+          "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+(?:-[0-9A-Za-z.-]+)?(?:\\+[0-9A-Za-z.-]+)?$"
+        },
+        "description": {"type": "string", "minLength": 1},
+        "authors": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "required": ["name"],
+            "additionalProperties": false,
+            "properties": {
+              "name": {"type": "string", "minLength": 1},
+              "email": {"type": "string"},
+              "orcid": {"type": "string"}
+            }
+          }
+        },
+        "license": {"type": "string", "minLength": 1},
+        "homepage": {"type": "string"},
+        "citation": {"type": "string"}
+      }
+    },
+    "engine": {
+      "type": "object",
+      "required": ["type", "version", "entrypoint"],
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": ["nextflow", "snakemake", "wdl", "manifest"]
+        },
+        "version": {"type": "string", "minLength": 1},
+        "entrypoint": {"type": "string", "minLength": 1},
+        "config": {"type": "string"},
+        "schema": {"type": "string"}
+      }
+    },
+    "applicability": {
+      "type": "object",
+      "required": ["organism_names", "source_types", "data_types"],
+      "additionalProperties": false,
+      "properties": {
+        "organism_names": {
+          "type": "array",
+          "minItems": 1,
+          "items": {"type": "string", "minLength": 1}
+        },
+        "source_types": {
+          "type": "array",
+          "minItems": 1,
+          "items": {"type": "string", "minLength": 1}
+        },
+        "data_types": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string",
+            "enum": ["paired_end_short_read", "single_end_short_read", "long_read", "assembly"]
+          }
+        },
+        "surveillance_relevant_required": {"type": "boolean"}
+      }
+    },
+    "resources": {
+      "type": "object",
+      "required": [
+        "cpu_min",
+        "memory_gb_min",
+        "storage_gb_estimate",
+        "walltime_minutes_estimate",
+        "gpu_required",
+        "internet_required"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "cpu_min": {"type": "integer", "minimum": 1},
+        "cpu_max": {"type": "integer", "minimum": 1},
+        "memory_gb_min": {"type": "number", "exclusiveMinimum": 0},
+        "memory_gb_max": {"type": "number", "exclusiveMinimum": 0},
+        "storage_gb_estimate": {"type": "number", "exclusiveMinimum": 0},
+        "walltime_minutes_estimate": {"type": "number", "exclusiveMinimum": 0},
+        "gpu_required": {"type": "boolean"},
+        "internet_required": {"type": "boolean"}
+      }
+    },
+    "reference_data": {
+      "type": "object",
+      "required": ["bundled"],
+      "additionalProperties": false,
+      "properties": {
+        "bundled": {"type": "boolean"},
+        "sources": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["name", "url", "checksum"],
+            "additionalProperties": false,
+            "properties": {
+              "name": {"type": "string", "minLength": 1},
+              "url": {"type": "string", "minLength": 1},
+              "checksum": {"type": "string", "pattern": "^sha256:[0-9a-f]+$"},
+              "cached_locally_at": {"type": "string"}
+            }
+          }
+        }
+      }
+    },
+    "containers": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["image"],
+        "additionalProperties": false,
+        "properties": {
+          "image": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9._\\-/]+(?::[A-Za-z0-9._\\-]+|@sha256:[0-9a-f]{64})$"
+          },
+          "digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}
+        }
+      }
+    },
+    "inputs": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["name", "type", "source"],
+        "additionalProperties": false,
+        "properties": {
+          "name": {"type": "string", "minLength": 1},
+          "type": {"type": "string", "enum": ["string", "file", "integer", "number", "boolean"]},
+          "source": {"type": "string", "minLength": 1},
+          "required_when": {"type": "string"}
+        }
+      }
+    },
+    "outputs": {
+      "type": "object",
+      "required": [
+        "results_directory",
+        "results_schema",
+        "primary_result_file",
+        "pipeline_results_parser"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "results_directory": {"type": "string", "minLength": 1},
+        "results_schema": {"type": "string", "minLength": 1},
+        "primary_result_file": {"type": "string", "minLength": 1},
+        "multiqc_report": {"type": "string"},
+        "pipeline_results_parser": {"type": "string", "minLength": 1}
+      }
+    },
+    "permissions": {
+      "type": "object",
+      "required": ["can_write_files_to"],
+      "additionalProperties": false,
+      "properties": {
+        "can_read_metadata": {"type": "boolean"},
+        "can_write_files_to": {
+          "type": "array",
+          "items": {"type": "string", "minLength": 1}
+        },
+        "can_call_external_apis": {
+          "type": "array",
+          "items": {"type": "string", "minLength": 1}
+        },
+        "can_use_gpu": {"type": "boolean"}
+      }
+    },
+    "cost": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "cpu_cost_per_run_usd": {"type": "number", "minimum": 0},
+        "storage_cost_per_run_usd": {"type": "number", "minimum": 0},
+        "estimated_total_per_sample_usd": {"type": "number", "minimum": 0}
+      }
+    }
+  }
+}
