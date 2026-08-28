@@ -2336,13 +2336,12 @@ sessions:
       Note the guard already refuses to conflate the two: a test pins that
       widening the public-domain pattern must not sweep "public data" in.
 
-  - id: B-LICENSE-CCBY-ADOPTION
-    title: Rule on CC-BY-4.0 for software before adopting DNABERT-S
+  - id: B-LICENSE-DNABERTS-ADOPTION
+    title: Resolve DNABERT-S code licensing before adoption
     short_description: |
-      DNABERT-S is CC BY 4.0 for code, data and weights alike. CC-BY is not on
-      the license allowlist. Decide whether CC-BY-for-software clears the
-      AGPL-3.0 gate, and add the attribution plumbing it requires, at the
-      point of adoption.
+      github.com/MAGICS-LAB/DNABERT_S carries no LICENSE file. The weights are
+      declared Apache-2.0 on the HF model card; the code has no stated grant.
+      Resolve with upstream before wiring the edge tier.
     phase: p0_series
     status: tracked_not_scheduled
     depends_on: []
@@ -2351,37 +2350,34 @@ sessions:
     effort_sessions: 0.5
     primary_files:
       - docs/THIRD_PARTY_LICENSES.md
-      - scripts/verify_licenses.py
-    test_files:
-      - tests/test_verify_licenses.py
+      - scripts/license_sources.yaml
+    test_files: []
     source_of_truth_views: []
     pr_title_template:
     branch_name_template:
     role_framing:
     notes: >
-      Filed 2026-08-28 when the DNABERT-S licence was confirmed as CC BY 4.0
-      (code, data and pretrained weights under one licence, so the
-      weights-vs-code split flagged for Evo 2 does not apply here).
+      Supersedes B-LICENSE-CCBY-ADOPTION, which was filed 2026-08-28 on the
+      belief that DNABERT-S was CC BY 4.0. Verification the same day found no
+      CC-BY anywhere: the HF model card declares license apache-2.0 for the
+      weights, and the GitHub code repo has no LICENSE file at all (GitHub
+      detects none). The CC-BY claim most likely came from the paper's licence
+      rather than the software's. Recorded here because the mistake is the
+      alibi-detect pattern and worth not repeating.
 
-      Deferred deliberately: DNABERT-S is not adopted. METAGENE-1 (Apache-2.0)
-      is the license-cleared first-slice choice per docs/domain_reference.md;
-      DNABERT-S is the edge-tier alternative and nothing imports it. The row is
-      marked [candidate] to match its four siblings, which is accurate rather
-      than suppressive -- it loses the marker when something wires it in, and
-      that is when the gate must be satisfied.
+      What actually needs resolving: DNABERT-S derives from DNABERT-2, whose
+      LICENSE verifies as Apache-2.0 -- but Apache-2.0 is permissive, so a
+      derivative's own new code is not automatically covered by the parent's
+      grant. Portions copied from DNABERT-2 remain Apache-2.0 (and Apache-2.0
+      section 4 obliges a distributor to ship the licence and NOTICE, which
+      DNABERT_S does not appear to do); DNABERT-S's own additions have no
+      stated grant, which defaults to all rights reserved.
 
-      What has to be decided then, none of which is a formality:
-        - CC-BY-4.0 is attribution-only with no copyleft, so nothing conflicts
-          with distributing it inside an AGPL-3.0 work. But Creative Commons
-          themselves recommend against CC licences for software: no patent
-          grant (unlike Apache-2.0), and no source-distribution terms.
-        - CC-BY attribution is more prescriptive than MIT: retain the licence
-          URI AND indicate modifications. That is an ongoing obligation and
-          this repo has no NOTICE file to carry it. Adopting CC-BY code means
-          creating one.
-        - Whether the model is vendored or invoked as a separate process bears
-          on whether it is "incorporated" at all -- the same open question as
-          the wrapped-tool gate.
+      Options at adoption: ask upstream to add a LICENSE file (cheapest and
+      benefits everyone); or use only the weights, relying on the model card's
+      apache-2.0 declaration and avoiding the unlicensed code; or drop
+      DNABERT-S for a tier-appropriate alternative -- METAGENE-1 is already the
+      license-cleared choice, and NT v2 / Evo 2 remain unverified candidates.
 
-      Do not add CC-BY to ALLOWLIST_PATTERNS as a drive-by. It rules on a
-      licence class for the whole project, not just this model.
+      Apache-2.0 is on the allowlist, so nothing is blocked today: the row is
+      [candidate] and nothing imports it.
