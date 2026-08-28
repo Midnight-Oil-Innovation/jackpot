@@ -2175,7 +2175,9 @@ sessions:
       and CONTEXT.md live at the repo root and are exempt from the guard
       built to stop exactly the drift they accumulated.
     phase: p0_series
-    status: open
+    status: shipped
+    merged_at: "2026-08-28"
+    merge_sha: "6ca9a52"
     depends_on: []
     blocked_by_external:
     parallel_safe: true
@@ -2189,8 +2191,12 @@ sessions:
     branch_name_template:
     role_framing:
     notes: >
-      Root cause of the 2026-08-28 demotion. spec.md drifted four months
-      with three contradictory test baselines and a section instructing
-      agents to violate Critical Rule 46, none of which the guard could
-      see. Expect an initial burst of violations on first run — triage
-      before wiring into CI.
+      Shipped in PR #103. Root cause of the 2026-08-28 spec.md demotion.
+      New in_scope() covers docs/** plus repo-root markdown; markdown beside
+      source stays out. Pre-commit and guardrails.yml filters widened to
+      match. The predicted violation burst was small: four missing Status
+      headers, plus README.md claiming "seven install scenarios" in two
+      places — the denylisted superseded taxonomy, sitting unnoticed in the
+      repo front door because the guard could not see it. README scenario
+      table also still carried the old A-F+T taxonomy; replaced with A/B/C/D
+      per ADR-0002. Three regression tests added to tests/test_check_docs.py.
