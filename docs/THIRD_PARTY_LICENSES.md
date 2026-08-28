@@ -42,7 +42,7 @@ Row shape: `| name | license (SPDX) | version-or-scope | notes |`
 | hostile | MIT | 2.0.2 | Host depletion; verified 2026-08-02 from pyproject.toml classifier + Bioconda recipe. Deletes rather than N-masks; `--rename` strips read-header PII |
 | HRRT (sra-human-scrubber) | public-domain (NIH) | ingest | NIH work product |
 | SeqScreen | GPL-3.0 | functional-concern channel | Confirm current release |
-| DeePaC | (verify) | functional-concern channel | Read LICENSE before wiring |
+| DeePaC | MIT | functional-concern channel | Reported by maintainer 2026-08-28. MIT is on the allowlist and clears the gate. Ships trained models — if weights are redistributed rather than fetched at runtime, confirm they carry MIT too (the split that bit Evo 2's row) |
 | PyOD | BSD-2-Clause | anomaly-detection deps | Already in nf-core/adjacent ecosystems |
 | Jellyfish | GPL-3.0 | k-mer counting | GPL family; AGPL-compatible |
 | PanGIA | (verify — do not adopt) | superseded by GOTTCHA2 | Do not rebuild the 2018 database |
