@@ -1,3 +1,5 @@
+> **Status:** Reference — operator/researcher guide to file storage state.
+
 # JACKPOT and your files — a guide to storage state
 
 JACKPOT is a metadata database that knows where your files live. It

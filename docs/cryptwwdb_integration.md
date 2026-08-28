@@ -1,3 +1,5 @@
+> **Status:** Canonical — entry point for the cryptWWDB integration workstream (resolves B-CWB-DOC-2).
+
 # cryptWWDB integration — JACKPOT architectural mapping
 
 ## Overview

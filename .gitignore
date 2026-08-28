@@ -101,3 +101,4 @@ repomix-output.xml
 # Skills lockfile - generated cache, not tracked
 skills-lock.json
 *.bak.*
+.jackpot/

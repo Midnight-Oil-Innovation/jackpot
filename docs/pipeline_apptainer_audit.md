@@ -1,3 +1,5 @@
+> **Status:** History — point-in-time Apptainer audit of the pipeline-zoo wrappers (P0h H-2). Point-in-time record.
+
 # Pipeline-zoo Apptainer audit (P0h H-2)
 
 H-2 audits the ten pipeline wrappers under `pipelines/pipelines/` for

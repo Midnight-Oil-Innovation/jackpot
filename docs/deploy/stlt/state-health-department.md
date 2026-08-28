@@ -1,3 +1,5 @@
+> **Status:** Reference — STLT deployment guide for state health departments.
+
 # State Health Department deployment
 
 ## Who this is for

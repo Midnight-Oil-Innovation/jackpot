@@ -1,3 +1,5 @@
+> **Status:** Reference — STLT deployment guide for local health departments.
+
 # Local health department deployment
 
 ## Who this is for

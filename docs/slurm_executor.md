@@ -1,3 +1,5 @@
+> **Status:** Reference — Slurm executor operator guide.
+
 # Slurm executor — operator guide
 
 JACKPOT runs pipelines on a Slurm cluster via the same launch surface

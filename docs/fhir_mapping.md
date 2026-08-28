@@ -1,3 +1,5 @@
+> **Status:** Reference — FHIR-translatable data model mapping.
+
 # JACKPOT — FHIR-translatable data model
 
 ## Purpose

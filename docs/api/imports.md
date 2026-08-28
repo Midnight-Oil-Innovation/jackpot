@@ -1,3 +1,5 @@
+> **Status:** Reference — developer reference for the imports HTTP endpoints (Phase I-1).
+
 # Imports API Reference
 
 This document is the developer reference for the JACKPOT HTTP endpoints

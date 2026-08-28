@@ -1,3 +1,5 @@
+> **Status:** Reference — STLT deployment guide for tribal authorities.
+
 # Tribal authority deployment
 
 ## Who this is for

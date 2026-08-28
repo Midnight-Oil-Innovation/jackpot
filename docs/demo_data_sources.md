@@ -1,3 +1,5 @@
+> **Status:** Reference — public data sources for the Scenario A laptop demo.
+
 # Demo data sources
 
 Public data sources for the laptop Scenario A demo (i.e. Scenario A in its laptop-case configuration; per `docs/architecture.md` v6.0 §3, Scenario A spans laptop through agency multi-server). The "Sol cluster federation simulation" framing from chat doesn't apply — Glen's demo target is laptop deployment, which means two JACKPOT instances on one laptop via Docker Compose for federation; the data sources stay the same.

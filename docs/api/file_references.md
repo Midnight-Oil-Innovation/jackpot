@@ -1,3 +1,5 @@
+> **Status:** Reference — developer reference for the file-references HTTP endpoints (Phase P0f).
+
 # File References API Reference
 
 This document is the developer reference for the JACKPOT HTTP endpoints

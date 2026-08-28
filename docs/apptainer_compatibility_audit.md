@@ -1,3 +1,5 @@
+> **Status:** History — point-in-time Apptainer compatibility audit of Dockerfile.api/Dockerfile.ui. Point-in-time record.
+
 # Apptainer Compatibility Audit (post-monorepo housekeeping)
 
 Reviewed `Dockerfile.api` and `Dockerfile.ui` for Apptainer compatibility

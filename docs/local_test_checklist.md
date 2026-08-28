@@ -1,3 +1,5 @@
+> **Status:** Reference — pre-GCP local validation checklist.
+
 # Local Test Checklist — Pre-GCP Validation
 
 A comprehensive local-dev validation run. Execute top-to-bottom before any GCP

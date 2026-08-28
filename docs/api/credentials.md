@@ -1,3 +1,5 @@
+> **Status:** Reference — operator/developer reference for the credential abstraction (Phase C-1).
+
 # Credentials API Reference
 
 This document is the operator and developer reference for the JACKPOT

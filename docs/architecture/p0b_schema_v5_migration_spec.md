@@ -1,3 +1,5 @@
+> **Status:** History — closed-out Phase 24.5/P0b schema v5.0 migration spec. Point-in-time record.
+
 # P0b (Schema v5.0) Migration Spec — Phase 24.5 Close-out
 
 **Branch point:** new single migration off head `85d92864ed38` (FED-D, `down_revision = 591318fd3049`, Create Date 2026-05-12).
