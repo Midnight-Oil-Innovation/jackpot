@@ -1707,7 +1707,7 @@ sessions:
       FK). Exposed via B-BYOP-4 router endpoint and surfaced in the
       catalog tab (B-BYOP-8).
     phase: p0f
-    status: open
+    status: shipped
     depends_on:
       - B-BYOP-4
       - B-BYOP-5a
@@ -1732,6 +1732,8 @@ sessions:
     notes: "Per docs/byop_and_eukaryotic_design.md §N. Depends on B-BYOP-5a's launcher emitting telemetry-ready output (or
       at least its existing telemetry shape being usable)."
 
+    merged_at: '2026-08-29'
+    merge_sha: 0dec3fa
   - id: B-SANDBOX-TEST
     title: "Security sandbox micro-isolation validation challenge"
     short_description: |
