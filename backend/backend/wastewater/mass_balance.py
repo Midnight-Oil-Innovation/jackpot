@@ -43,12 +43,16 @@ keyword on the compute functions.
 
 from __future__ import annotations
 
+import logging
+import math
 from dataclasses import dataclass
 from datetime import datetime
 from enum import StrEnum
 from typing import Any, Literal
 
 from backend.database import execute_query
+
+logger = logging.getLogger(__name__)
 
 
 class FlowUnit(StrEnum):
@@ -515,3 +519,54 @@ def load_inputs_from_db(
         target_pathogen_id=target_pathogen_id,
         timestamp=downstream_row["collection_timestamp"] or downstream_row["created_at"],
     )
+
+
+# --- QC + trigger-point computations (Driver et al. 2024 Table 2, B-CWB-MB-2) ---
+
+
+def handle_non_detects(values: list[float | None], lod: float) -> list[float]:
+    """Replace non-detect (``None``) entries with ``lod / 2``.
+
+    Hornung & Reed (1990) LOD/2 substitution applied element-wise over a
+    plain list; detected values pass through unchanged.
+    """
+    return [lod / 2.0 if v is None else v for v in values]
+
+
+def clamp_negative_mb(mb: float) -> float:
+    """Clamp a negative mass-balance value to zero, logging a WARNING."""
+    if mb < 0.0:
+        logger.warning("Negative mass balance %s clamped to 0.0", mb)
+        return 0.0
+    return mb
+
+
+def propagate_error(values: list[float], rel_errors: list[float]) -> float:
+    """Propagate relative errors in quadrature: sqrt(sum((v*e)**2))."""
+    if len(values) != len(rel_errors):
+        raise ValueError(
+            f"values and rel_errors must have equal length; "
+            f"got {len(values)} and {len(rel_errors)}."
+        )
+    return math.sqrt(sum((v * e) ** 2 for v, e in zip(values, rel_errors, strict=True)))
+
+
+def rolling_average(values: list[float], window: int) -> list[float]:
+    """Positional rolling average over the trailing ``window`` points.
+
+    Positions with fewer than ``window`` prior points (including the
+    current one) average whatever prefix is available, so the output has
+    the same length as ``values``.
+    """
+    out: list[float] = []
+    for i in range(len(values)):
+        chunk = values[max(0, i - window + 1) : i + 1]
+        out.append(sum(chunk) / len(chunk))
+    return out
+
+
+def trigger_point(mb: float, population: int, threshold_per_100k: float) -> bool:
+    """Return True when the per-100k mass-balance rate meets the threshold."""
+    if population <= 0:
+        raise ValueError(f"population must be positive; got {population}.")
+    return (mb / population) * 100_000 >= threshold_per_100k
