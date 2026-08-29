@@ -1600,7 +1600,7 @@ sessions:
       validator output, Stage 2 sandbox results, and final commit to the
       byop_pipelines table via B-BYOP-4's router.
     phase: p0f
-    status: open
+    status: shipped
     depends_on:
       - B-BYOP-4
     blocked_by_external:
@@ -1622,6 +1622,8 @@ sessions:
     notes: "Per docs/byop_and_eukaryotic_design.md §N. Path under backend/frontend/pages/ matches your existing Streamlit
       page layout."
 
+    merged_at: '2026-08-29'
+    merge_sha: '590e092'
   - id: B-BYOP-8
     title: BYOP catalog tab on Pipelines page (Streamlit)
     short_description: |
