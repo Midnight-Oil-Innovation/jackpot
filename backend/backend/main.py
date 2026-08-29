@@ -63,6 +63,7 @@ from backend.routers import (
 )
 from backend.services.byop_quarterly_revalidation import register as register_byop_revalidation
 from backend.submissions import recover_interrupted_executions
+from backend.tenancy import TenancyMiddleware
 from backend.version import __version__
 
 scheduler = AsyncIOScheduler()
@@ -211,6 +212,8 @@ app.include_router(templates.router)
 app.include_router(wastewater.router)
 
 app.add_middleware(RequestIDMiddleware)
+# P0c — multi-tenancy: attach org context to every non-exempt request.
+app.add_middleware(TenancyMiddleware)
 app.add_middleware(SlowAPIMiddleware)
 app.add_middleware(
     CORSMiddleware,

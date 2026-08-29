@@ -2623,3 +2623,16 @@ documentation pattern.
 - *macOS `.DS_Store` blocks `git worktree remove`.* First attempt at removing `~/Projects/jackpot-p1` failed with "Directory not empty" because of a leftover `.DS_Store` from Finder. `--force` cleaned it up. Environmental quirk, not workflow issue, but worth knowing.
 - *Test count and coverage are reliable signals of recovery completeness.* After P1 + P0g G-1+G-2 + P0g G-3+G-4 landed via the recovery path, baseline was 1527 tests passing, 87.85% coverage. If those numbers had regressed, something went uncaptured. Always re-baseline post-recovery.
 - *Branch from `origin/<base>`, not local `<base>`, when local has unpushed commits.* The PR diff stays clean against the published state, and the unpushed commits land via their own PRs without getting bundled into unrelated work.
+
+## P0c — Multi-tenancy middleware — 2026-08-29
+**What was built:** `TenancyMiddleware` attaching org context (`request.state.org_context`) to every non-exempt request, the `get_org_context`/`require_org_access` guards, and the BYOP IDOR fix scoping all five mutating byop endpoints to owner/owner-lab/platform-admin.
+**Key decisions:**
+- Tenant identifier is `users.organization_id` from the authenticated principal — no tenant header invented; a header would be a second identity source the JWT doesn't vouch for.
+- Cross-org denial is 404, not 403 (access_model.md §3.3: a tenant must never learn another tenant's resources exist). Missing org context is 403.
+- Middleware is fail-open (resolution failure → context None, guards still refuse) so it can never 500 a request; enforcement lives in the guards.
+- No migration: `byop_pipelines.owner_lab_id` already shipped in P0b DDL (`c871b28bbdab`); the router ORM just hadn't mapped it. P0c is application-layer only.
+- BYOP list + detail reads stay unscoped per design §9 (bioinformaticians browse the catalog) — documented inline so reviewers see it's deliberate.
+**Watch out for:**
+- Middleware resolution duplicates the `get_current_user` DB lookup routes make via `Depends`; acceptable now, dedupe when M2 wires `permit()`.
+- `_user_in_lab` in byop.py wraps `get_user_lab_membership` (Postgres) so the SQLite test harness can monkeypatch it — new lab-scoped guards should use the same seam.
+- Per-endpoint capability enforcement is NOT P0c — it's the M2 cutover (access_model.md §10.3/§11); the endpoint→capability sweep lives in docs/endpoint_capability_map.md.

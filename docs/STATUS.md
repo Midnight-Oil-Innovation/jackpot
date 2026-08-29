@@ -5,5 +5,5 @@ python_version: 3.12
 schema_version: v5.0
 scenario_count: 4
 alembic_head: a7c3e91d54b0
-test_count: 2329
+test_count: 2341
 
