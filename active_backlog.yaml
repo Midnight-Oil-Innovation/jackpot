@@ -433,7 +433,7 @@ sessions:
       handling, error-bar propagation, weekly/rolling averages,
       population-threshold trigger points.
     phase: cryptwwdb_track
-    status: open
+    status: shipped
     depends_on:
       - B-CWB-MB-1-DB
     blocked_by_external:
@@ -451,6 +451,8 @@ sessions:
       QC pass and trigger-point logic from Driver et al. 2024 Table 2.
     notes: ""
 
+    merged_at: '2026-08-29'
+    merge_sha: 0f0b1f3
   - id: B-CWB-POLICY-1
     title: Encrypted-query policy checker module
     short_description: "Discrete policy-checker module sitting between federation router and HE\ncompute backend. Per Driver
