@@ -86,7 +86,7 @@ def _fetch_request(request_id: int, db) -> dict | None:
 
 def _fetch_sample(sample_id: int, db) -> dict | None:
     rows = execute_query(
-        "SELECT * FROM samples WHERE id = :id AND is_deleted = FALSE LIMIT 1",
+        "SELECT * FROM samples WHERE id = :id AND is_archived = FALSE LIMIT 1",
         {"id": sample_id},
         conn=db,
     )

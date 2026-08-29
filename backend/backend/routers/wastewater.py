@@ -48,7 +48,7 @@ def list_sites(
         f"""
         SELECT DISTINCT s.wwtp_name AS site
         FROM samples s
-        WHERE s.is_deleted = FALSE
+        WHERE s.is_archived = FALSE
           AND s.sector = 'wastewater'
           AND s.wwtp_name IS NOT NULL
           AND {vis_clause}
@@ -78,7 +78,7 @@ def list_lineage_abundance(
     vis_clause, vis_params = visibility_sql_clause(user)
 
     where = [
-        "s.is_deleted = FALSE",
+        "s.is_archived = FALSE",
         "s.sector = 'wastewater'",
         vis_clause,
     ]

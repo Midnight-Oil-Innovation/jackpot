@@ -19,6 +19,7 @@ from backend.jobs import (
     release_embargoed_submissions,
     run_access_request_job,
     run_scrubber_queue_job,
+    vacuum_tombstoned_samples_job,
     verify_file_references,
 )
 from backend.log_poller import poll_cluster_run_logs
@@ -154,6 +155,14 @@ async def lifespan(app: FastAPI):
             "interval",
             seconds=get_settings().log_poller_interval_seconds,
             id="poll_cluster_run_logs",
+            replace_existing=True,
+            max_instances=1,
+        )
+        scheduler.add_job(
+            vacuum_tombstoned_samples_job,
+            "interval",
+            seconds=get_settings().vacuum_job_interval_seconds,
+            id="vacuum_tombstoned_samples",
             replace_existing=True,
             max_instances=1,
         )

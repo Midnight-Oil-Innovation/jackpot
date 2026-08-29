@@ -89,7 +89,7 @@ def export_gisaid_csv(
         JOIN users u ON u.id = s.owner_id
         JOIN labs l  ON l.id = s.lab_id
         WHERE s.id IN ({placeholders})
-          AND s.lab_id = :lab_id AND s.is_deleted = FALSE
+          AND s.lab_id = :lab_id AND s.is_archived = FALSE
         """,
         params,
     )
