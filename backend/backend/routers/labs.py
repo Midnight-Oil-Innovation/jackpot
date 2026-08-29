@@ -5,8 +5,7 @@ from backend.audit import AuditActions, log_audit
 from backend.auth.guards import (
     get_current_user,
     get_user_lab_membership,
-    require_lab_director,
-    require_platform_admin,
+    require_capability,
 )
 from backend.database import execute_query, execute_write, get_db_dep
 from backend.pagination import paginate
@@ -68,7 +67,7 @@ def create_lab(
     db=Depends(get_db_dep),  # noqa: B008
 ):
     user = get_current_user(request)
-    require_platform_admin(user)
+    require_capability("org:manage")(user)
 
     org = execute_query(
         "SELECT id FROM organizations WHERE id = :id LIMIT 1",
@@ -192,7 +191,7 @@ def update_lab(
     db=Depends(get_db_dep),  # noqa: B008
 ):
     user = get_current_user(request)
-    require_lab_director(user, lab_id)
+    require_capability("org:manage")(user, lab_id=lab_id)
 
     current = execute_query(
         "SELECT * FROM labs WHERE id = :id LIMIT 1",
@@ -240,7 +239,7 @@ def deactivate_lab(
     db=Depends(get_db_dep),  # noqa: B008
 ):
     user = get_current_user(request)
-    require_platform_admin(user)
+    require_capability("org:manage")(user)
 
     current = execute_query(
         "SELECT * FROM labs WHERE id = :id LIMIT 1",
@@ -278,7 +277,7 @@ def list_members(
     db=Depends(get_db_dep),  # noqa: B008
 ):
     user = get_current_user(request)
-    require_lab_director(user, lab_id)
+    require_capability("user:manage")(user, lab_id=lab_id)
 
     lab = execute_query(
         "SELECT id FROM labs WHERE id = :id LIMIT 1",
@@ -315,7 +314,7 @@ def add_member(
     db=Depends(get_db_dep),  # noqa: B008
 ):
     user = get_current_user(request)
-    require_lab_director(user, lab_id)
+    require_capability("user:manage")(user, lab_id=lab_id)
 
     lab = execute_query(
         "SELECT id FROM labs WHERE id = :id LIMIT 1",
@@ -401,7 +400,7 @@ def update_member(
     db=Depends(get_db_dep),  # noqa: B008
 ):
     user = get_current_user(request)
-    require_lab_director(user, lab_id)
+    require_capability("user:manage")(user, lab_id=lab_id)
 
     current = execute_query(
         "SELECT * FROM lab_membership WHERE user_id = :uid AND lab_id = :lid LIMIT 1",
@@ -466,7 +465,7 @@ def remove_member(
     db=Depends(get_db_dep),  # noqa: B008
 ):
     user = get_current_user(request)
-    require_lab_director(user, lab_id)
+    require_capability("user:manage")(user, lab_id=lab_id)
 
     current = execute_query(
         "SELECT * FROM lab_membership WHERE user_id = :uid AND lab_id = :lid LIMIT 1",
