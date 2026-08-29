@@ -30,6 +30,7 @@ from backend.routers import (
     archive_requests,
     auth,
     billing,
+    byop,
     dataharmonizer,
     dataset_access,
     datasets,
@@ -176,6 +177,7 @@ app.state.limiter = limiter
 app.include_router(archive_requests.router)
 app.include_router(auth.router)
 app.include_router(billing.router)
+app.include_router(byop.router)
 app.include_router(dataharmonizer.router)
 app.include_router(dataset_access.router)
 app.include_router(datasets.router)
