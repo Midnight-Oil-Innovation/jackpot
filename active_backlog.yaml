@@ -1395,7 +1395,7 @@ sessions:
       table introduced in B-BYOP-9. Calls B-BYOP-2 and B-BYOP-3 for
       validation during create/update.
     phase: p0f
-    status: open
+    status: shipped
     depends_on:
       - B-BYOP-1
       - B-BYOP-2
@@ -1420,6 +1420,8 @@ sessions:
     notes: "Per docs/byop_and_eukaryotic_design.md §N. Originally tagged Phase: P1 in the design doc; reframed to P0f per
       todo.md 2026-04-29. Cross-phase dependency on B-BYOP-9 (P0b) — schedulable only after P0b's schema migration lands."
 
+    merged_at: '2026-08-29'
+    merge_sha: de02d6c
   - id: B-BYOP-5a
     title: BYOP Nextflow engine launcher (harden existing)
     short_description: |
