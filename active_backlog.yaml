@@ -1566,7 +1566,7 @@ sessions:
       conditions (deleted containers, expired licenses, vanished
       reference-data URLs).
     phase: p0f
-    status: open
+    status: shipped
     depends_on:
       - B-BYOP-2
       - B-BYOP-4
@@ -1590,6 +1590,8 @@ sessions:
     notes: "Per docs/byop_and_eukaryotic_design.md §N. Cadence (quarterly) and trigger mechanism are spec'd in the design
       doc."
 
+    merged_at: '2026-08-29'
+    merge_sha: 7e19c09
   - id: B-BYOP-7
     title: BYOP registration wizard UI (Streamlit)
     short_description: |
