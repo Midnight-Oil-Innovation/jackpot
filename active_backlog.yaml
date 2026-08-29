@@ -1134,9 +1134,9 @@ sessions:
       Implement sovereignty-deletion design per §13 of sovereignty design
       doc. Seven sub-items covering tombstone, propagation, audit, RTBF.
     phase: phase_24_5
-    status: blocked_external
+    status: open
     depends_on: []
-    blocked_by_external: "P0c (multi-tenancy middleware)"
+    blocked_by_external:
     parallel_safe: false
     effort_sessions:
     primary_files: []
@@ -1191,9 +1191,9 @@ sessions:
       Federation propagation of deletion requests per §9 of the
       sovereignty design doc.
     phase: phase_24_5
-    status: blocked_external
+    status: open
     depends_on: []
-    blocked_by_external: "P0c (multi-tenancy middleware)"
+    blocked_by_external:
     parallel_safe: false
     effort_sessions:
     primary_files: []
@@ -1268,7 +1268,7 @@ sessions:
       Tenant-aware middleware applying organization context to every
       request. Follows P0b schema work. Unblocks B-CARE-3 + B-CARE-4.
     phase: p0_series
-    status: open
+    status: shipped
     depends_on:
       - P0b
     blocked_by_external:
@@ -1293,6 +1293,8 @@ sessions:
       Shipping it unblocks B-CARE-3, and with it B-CARE-3i (the
       is_deleted -> is_archived rename) and the CARE deletion lifecycle.
 
+    merged_at: '2026-08-29'
+    merge_sha: 4f7b18b
   - id: B-BYOP-1
     title: BYOP manifest schema (jackpot-pipeline.yaml)
     short_description: |
