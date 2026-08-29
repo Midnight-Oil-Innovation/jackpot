@@ -1468,7 +1468,7 @@ sessions:
       pipelines. Mirrors the Nextflow launcher's shape (B-BYOP-5a) but
       invokes Snakemake instead.
     phase: p0f
-    status: open
+    status: shipped
     depends_on:
       - B-BYOP-4
       - B-BYOP-5a
@@ -1490,6 +1490,8 @@ sessions:
       Nextflow launcher (B-BYOP-5a). Parallel-safe with B-BYOP-5c/5d.
     notes: "Per docs/byop_and_eukaryotic_design.md §N. B-BYOP-5 decomposed; this is the snakemake variant."
 
+    merged_at: '2026-08-29'
+    merge_sha: 13888d2
   - id: B-BYOP-5c
     title: BYOP WDL engine launcher (new)
     short_description: |
