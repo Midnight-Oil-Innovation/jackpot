@@ -16,6 +16,7 @@ from backend.jobs import (
     cleanup_expired_import_sessions,
     cleanup_old_refresh_tokens,
     compute_full_content_hash,
+    propagate_federation_deletion_events_job,
     release_embargoed_submissions,
     run_access_request_job,
     run_scrubber_queue_job,
@@ -163,6 +164,16 @@ async def lifespan(app: FastAPI):
             "interval",
             seconds=get_settings().vacuum_job_interval_seconds,
             id="vacuum_tombstoned_samples",
+            replace_existing=True,
+            max_instances=1,
+        )
+        # B-CARE-4 (§9): push signed tombstone/vacuum events to federation
+        # peers, collect signed receipts, flag SLA breaches.
+        scheduler.add_job(
+            propagate_federation_deletion_events_job,
+            "interval",
+            seconds=get_settings().federation_propagation_job_interval_seconds,
+            id="propagate_federation_deletion_events",
             replace_existing=True,
             max_instances=1,
         )
