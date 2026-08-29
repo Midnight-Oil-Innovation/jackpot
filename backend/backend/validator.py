@@ -67,6 +67,78 @@ TIER3_REQUIRED_HUMAN = [
     "host_sex",
 ]
 
+# ── Eukaryotic pathogens ──────────────────────────────────────────────────
+# Matched by genus rather than by an explicit list of the 39 permissible
+# OrganismNameEnum values, so a new species (say a seventh Plasmodium) is
+# covered the day it is added to the schema without touching this module.
+# None of these genera name a bacterium or a virus, so a genus match cannot
+# collide with the rest of the enum.
+#
+# tests/test_validator_eukaryotic.py pins this set against the schema: adding
+# a new eukaryotic *genus* to jackpot_schema.yaml fails that test until the
+# genus is added here. That is the intended tripwire — the heuristic is only
+# safe while it stays in sync with the enum it approximates.
+EUKARYOTIC_PATHOGEN_GENERA = frozenset(
+    {
+        "Plasmodium",
+        "Leishmania",
+        "Trypanosoma",
+        "Schistosoma",
+        "Ascaris",
+        "Trichuris",
+        "Necator",
+        "Ancylostoma",
+        "Strongyloides",
+        "Wuchereria",
+        "Brugia",
+        "Onchocerca",
+        "Cryptosporidium",
+        "Giardia",
+        "Entamoeba",
+        "Toxoplasma",
+    }
+)
+
+# Eukaryotic-specific additional Tier 2 fields (byop design §15).
+TIER2_REQUIRED_EUKARYOTIC = [
+    "parasite_developmental_stage",
+    "sample_preservation_method",
+]
+
+# Eukaryotic-specific additional Tier 3 fields (byop design §15).
+#
+# Deliberate deviation from §15, which also lists coinfection_organisms.
+# _is_absent() treats an empty list as missing, and CSV ingest collapses an
+# empty cell to [] (see _split_list in routers/ingest.py), so "screened, no
+# coinfection" — the ordinary case for a monoinfection — is indistinguishable
+# from "not recorded". Requiring it would force submitters to invent a value
+# to reach SUBMITTABLE.
+#
+# Recording coinfection still matters: mixed-species Plasmodium infection is
+# epidemiologically significant. Making it required needs a "screened, none
+# found" sentinel, following the INSDC missing-value convention this schema
+# already uses for indoor_space and indoor_surface (missing / not applicable /
+# not collected). That is a schema decision scoped to Phase 28, when the
+# malaria dashboards define what they actually query.
+TIER3_REQUIRED_EUKARYOTIC = [
+    "parasitemia_percent",
+    "multiplicity_of_infection",
+]
+
+
+def is_eukaryotic_pathogen(organism_name: object) -> bool:
+    """True when organism_name names a eukaryotic pathogen.
+
+    Genus match on the first whitespace-delimited token. Non-string and empty
+    values are False rather than an error — validate_sample runs before the
+    enum check has necessarily passed, so this must tolerate junk.
+    """
+    if not isinstance(organism_name, str):
+        return False
+    genus, _, _ = organism_name.strip().partition(" ")
+    return genus in EUKARYOTIC_PATHOGEN_GENERA
+
+
 # ── Sector auto-derivation ─────────────────────────────────────────────────
 # sector is derived from source_type at ingest. Researchers only need to
 # explicitly supply sector when it cannot be inferred — specifically
@@ -321,8 +393,17 @@ def _check_uri_schemes(data: dict, warnings: list[str]) -> None:
 
 
 def _collect_tier2_missing(data: dict) -> list[str]:
-    """Tier 2: ANALYZABLE missing fields."""
-    return [f for f in TIER2_REQUIRED if _is_absent(data.get(f))]
+    """Tier 2: ANALYZABLE missing fields.
+
+    Eukaryotic samples carry two extra requirements. They are conditional on
+    the organism for the same reason host_age/host_sex are conditional on
+    source_type: a bacterial isolate has no developmental stage, so requiring
+    one would strand every existing sample at PRELIMINARY.
+    """
+    t2_check = list(TIER2_REQUIRED)
+    if is_eukaryotic_pathogen(data.get("organism_name")):
+        t2_check.extend(TIER2_REQUIRED_EUKARYOTIC)
+    return [f for f in t2_check if _is_absent(data.get(f))]
 
 
 def _collect_tier3_missing(data: dict, source_type: str) -> list[str]:
@@ -330,6 +411,8 @@ def _collect_tier3_missing(data: dict, source_type: str) -> list[str]:
     t3_check = list(TIER3_REQUIRED)
     if source_type == "Human":
         t3_check.extend(TIER3_REQUIRED_HUMAN)
+    if is_eukaryotic_pathogen(data.get("organism_name")):
+        t3_check.extend(TIER3_REQUIRED_EUKARYOTIC)
     return [f for f in t3_check if _is_absent(data.get(f))]
 
 
@@ -461,13 +544,25 @@ def compute_surveillance_relevant(
 
     Rules:
     - If organism_name is in reportable_organisms → True
+    - If organism_name names a eukaryotic pathogen → True (byop design §15)
     - If organism_name is 'metagenome' and any target_organism is
       reportable → True
     - If organism_name is 'metagenome' and target_organisms is empty
       → True (conservative default for untargeted metagenomics)
     - Otherwise → False
+
+    Eukaryotic pathogens default to surveillance-relevant whether or not the
+    operator listed them in reportable_organisms: the default 62-value
+    reportable set is a jurisdiction's communicable-disease list and largely
+    predates eukaryotic support, so keying off it alone would silently drop
+    malaria and leishmaniasis out of surveillance. An operator who disagrees
+    for a given sample uses the existing surveillance-override workflow
+    (REQUEST_SURVEILLANCE_OVERRIDE), which is the designed escape hatch.
     """
     if organism_name in reportable_organisms:
+        return True
+
+    if is_eukaryotic_pathogen(organism_name):
         return True
 
     if organism_name == "metagenome":

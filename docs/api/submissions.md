@@ -1,3 +1,5 @@
+> **Status:** Reference — developer reference for the submissions HTTP endpoints (Phase I-2/I-3).
+
 # Submissions API Reference
 
 This document is the developer reference for the JACKPOT HTTP endpoints

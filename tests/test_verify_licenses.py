@@ -63,6 +63,53 @@ def test_incompatible_licenses_still_denied(text):
     assert verify_licenses.classify(text) == "deny"
 
 
+@pytest.mark.parametrize(
+    "text",
+    [
+        "public domain",
+        "public-domain",
+        "public-domain (NIH)",
+        "Public Domain (US Government work)",
+    ],
+)
+def test_public_domain_is_allowed_however_it_is_spelled(text):
+    """The allowlist pattern was `public\\s+domain`, so the hyphenated form missed.
+
+    HRRT (sra-human-scrubber) is recorded as "public-domain (NIH)" — a US
+    federal work, uncopyrightable under 17 USC 105 — and was failing the gate
+    on the hyphen alone, not on anything about its licence.
+    """
+    assert verify_licenses.classify(text) == "allow"
+
+
+def test_databases_section_is_not_gated_as_code():
+    """Data sources are queried, not incorporated, so AGPL copyleft doesn't apply.
+
+    The SRA row failed the gate as though "public data" were a code licence.
+    The heading now carries the existing `(not licensed code)` marker, the same
+    mechanism that exempts the standards-and-specs table. This fails if the
+    marker is dropped or the section is renamed without it.
+    """
+    rows, errors = verify_licenses.parse_third_party()
+    assert not errors, errors
+    db_rows = [r for r in rows if "Databases and references" in r.get("section", "")]
+    assert db_rows, "Databases and references section not parsed — did the heading change?"
+    assert all(r.get("informational") for r in db_rows), (
+        "database rows are being gated as code: "
+        f"{[r.get('name') for r in db_rows if not r.get('informational')]}"
+    )
+
+
+def test_public_data_is_not_mistaken_for_public_domain():
+    """ "public data" is a data-source statement, not a code licence.
+
+    The SRA row lives under "Databases and references" and says so itself.
+    Widening the public-domain pattern must not sweep it in — whether database
+    sources belong in a code-copyleft gate at all is a separate, open question.
+    """
+    assert verify_licenses.classify("public data") != "allow"
+
+
 @pytest.mark.skipif(not _installed("detect-secrets"), reason="dev dependency not installed")
 def test_classifier_wins_over_free_text_license_field():
     """detect-secrets sets License to a bare copyright line ("Copyright Yelp,
@@ -81,9 +128,35 @@ def test_third_party_overrides_resolve_packages_with_no_metadata():
 def test_skip_wrapped_tools_gates_python_only(monkeypatch):
     """CI enforces the Python half via --skip-wrapped-tools while the wrapped-tool
     table stays report-only. If wrapped-tool findings leak into that exit code, the
-    enforcing step goes permanently red and gets disabled."""
+    enforcing step goes permanently red and gets disabled.
+
+    The failing wrapped-tool row is injected rather than borrowed from the live
+    THIRD_PARTY_LICENSES.md. The original version asserted the unflagged run
+    exits 1 "on the outstanding wrapped-tool rows", which pinned the test to a
+    transient fact: it broke on 2026-08-28 the moment the last `(verify)` row
+    was resolved and the real table went clean. The invariant under test is the
+    flag's effect on the exit code, not how many unresolved rows happen to
+    exist today.
+    """
+    # Patch check_wrapped_tools, not parse_third_party: the latter also supplies
+    # the Python override table, so replacing it breaks Python resolution and the
+    # test would pass for the wrong reason.
+    bad_row = {
+        "name": "Synthetic Tool",
+        "license": "SSPL",
+        "section": "Wrapped tools",
+        "informational": False,
+        "line": 1,
+    }
+    finding = verify_licenses.Finding(
+        "wrapped-tool", "Synthetic Tool", "SSPL", "synthetic denylisted licence"
+    )
+    monkeypatch.setattr(
+        verify_licenses, "check_wrapped_tools", lambda strict=False: ([finding], [bad_row])
+    )
+
     monkeypatch.setattr("sys.argv", ["verify_licenses.py", "--skip-wrapped-tools"])
-    assert verify_licenses.main() == 0
-    # Same run without the flag still fails on the outstanding wrapped-tool rows.
+    assert verify_licenses.main() == 0, "wrapped-tool findings leaked into the Python-only gate"
+
     monkeypatch.setattr("sys.argv", ["verify_licenses.py"])
-    assert verify_licenses.main() == 1
+    assert verify_licenses.main() == 1, "an incompatible wrapped tool did not fail the full run"

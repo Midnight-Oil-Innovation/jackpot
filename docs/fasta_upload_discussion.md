@@ -1,3 +1,5 @@
+> **Status:** History — chat transcript discussing FASTA/FASTQ upload edge cases. Point-in-time record.
+
 What happens if a user attempts to upload a fastq file and it's actually a fasta file, or vice versa?
 
 Good question, and the honest answer is: it depends on how `file_detector.py` is implemented, and I'd need to look at the actual code to be certain. But I can tell you what the two scenarios look like and which one is more likely given what we know about the architecture.

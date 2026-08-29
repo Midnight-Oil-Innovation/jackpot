@@ -1073,7 +1073,7 @@ gcloud logging read "resource.type=k8s_container" --limit=50 --project="$PROJECT
 
 Once you have a running JACKPOT staging deployment, the natural next steps:
 
-1. **Smoke-test ingest paths** — try uploading a sample via each of the six ingest paths (signed URL, URI registration, SRA accession import, workspace promotion, CSV batch, Globus deposit-first) per `docs/architecture.md` v6.0 §15 (post-Cluster-A merge).
+1. **Smoke-test ingest paths** — exercise each of the four ingest endpoints (`/ingest/upload`, `/ingest/csv`, `/ingest/register`, `/ingest/globus`) per `docs/architecture.md` §14.3. SRA import is `/ingest/register` with an `sra://` URI, not a separate endpoint. `GET /api/v1/ingest/` lists the live set.
 
 2. **Run a smoke pipeline** — pick a small viral sample, run the viralrecon pipeline, verify `pipeline_results` is populated and the Streamlit UI shows lineage assignment.
 

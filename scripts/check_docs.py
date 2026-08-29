@@ -103,6 +103,15 @@ DENYLIST = (
         ),
         "message": "superseded: FM-embedding AD is the engine per the redesign",
     },
+    {
+        "regex": re.compile(
+            r"\b(?:six|6)\s+(?:low-friction\s+)?ingest\s+(?:paths|methods)\b", re.IGNORECASE
+        ),
+        "message": (
+            "superseded: there are four ingest endpoints (upload/csv/register/globus); "
+            "SRA is register with an sra:// URI, and presign/confirm/sra endpoints never existed"
+        ),
+    },
 )
 
 # ----------------------------------------------------------------------------- helpers
@@ -185,8 +194,29 @@ def check_drift(path: Path, status: dict[str, str] | None) -> list[Violation]:
 # ----------------------------------------------------------------------------- main
 
 
+def in_scope(md: Path, docs_dir: Path) -> bool:
+    """True for markdown the guard governs: anything under docs_dir, plus
+    repo-root markdown.
+
+    Root-level docs were out of scope until 2026-08-28, which is how spec.md
+    drifted four months with three contradictory test baselines and a section
+    instructing agents to violate Critical Rule 46 — and how README.md carried
+    the superseded seven-scenario claim the denylist exists to catch. Markdown
+    living beside source (backend/README.md and friends) stays out of scope:
+    those document code, not project state, and demanding a Status header on
+    every one would block commits without catching drift.
+    """
+    try:
+        resolved = md.resolve()
+        if resolved.is_relative_to(docs_dir.resolve()):
+            return True
+        return resolved.parent == Path.cwd().resolve()
+    except (ValueError, OSError):
+        return False
+
+
 def tracked_markdown(docs_dir: Path) -> list[Path]:
-    """Markdown files git tracks under docs_dir.
+    """Markdown files git tracks under docs_dir, plus repo-root markdown.
 
     A filesystem walk also picks up untracked and gitignored local artifacts —
     e.g. the 2 MB docs/docs.md bundle some clones carry — which produces phantom
@@ -195,13 +225,13 @@ def tracked_markdown(docs_dir: Path) -> list[Path]:
     """
     try:
         proc = subprocess.run(
-            ["git", "ls-files", "-z", "--", str(docs_dir)],
+            ["git", "ls-files", "-z", "--", str(docs_dir), ":(glob)*.md"],
             capture_output=True,
             text=True,
             check=True,
         )
     except (OSError, subprocess.CalledProcessError):
-        return sorted(docs_dir.rglob("*.md"))
+        return sorted(set(docs_dir.rglob("*.md")) | set(Path().glob("*.md")))
     return sorted(Path(p) for p in proc.stdout.split("\0") if p.endswith(".md"))
 
 
@@ -222,15 +252,17 @@ def run(docs_dir: Path, status_file: Path, paths: list[Path] | None = None) -> l
     for md in targets:
         # Resolve both sides: CI passes absolute paths from `git diff` while
         # docs_dir is relative, and relative_to raises on that mismatch even
-        # for files under docs/. Skip anything not an in-tree markdown file
+        # for files under docs/. Skip anything the guard doesn't govern
         # rather than crashing on a changed-file list.
         if md.suffix.lower() != ".md" or not md.is_file():
             continue
+        if not in_scope(md, docs_dir):
+            continue
         try:
             rel = md.resolve().relative_to(docs_dir.resolve())
+            in_archived = bool(rel.parts) and rel.parts[0] == EXEMPT_SUBDIR
         except (ValueError, OSError):
-            continue
-        in_archived = rel.parts and rel.parts[0] == EXEMPT_SUBDIR
+            in_archived = False  # root-level doc; archived/ lives under docs/
 
         cls = parse_header_class(md)
         if cls is None:

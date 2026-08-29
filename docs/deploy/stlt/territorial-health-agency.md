@@ -1,3 +1,5 @@
+> **Status:** Reference — STLT deployment guide for territorial health agencies.
+
 # Territorial health agency deployment
 
 ## Who this is for

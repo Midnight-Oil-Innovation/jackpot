@@ -1,3 +1,5 @@
+> **Status:** Reference — clarifies quality_status vs sharing_level orthogonality.
+
 **PRELIMINARY / ANALYZABLE / SUBMITTABLE** describe *what the sample IS* — how complete the metadata is. That's `quality_status`, computed by the validator.
 
 **PRIVATE / LAB / DISCOVERABLE / PUBLIC** describe *who can SEE the sample* — the access control level. That's `sharing_level`, set by the submitting researcher and governed by org policy.

@@ -1,3 +1,5 @@
+> **Status:** Reference — fill_guardrails/review_patterns knowledge-routing design consumed by the fill/consult scripts.
+
 # Pipeline knowledge routing — `fill_guardrails` + `review_patterns`
 
 **tl;dr.** A new version-controlled file, `docs/pipeline_knowledge.yaml`, holds two bodies of *quality knowledge* keyed by phase: `fill_guardrails` (constraints injected into the fill prompt so the generator stops repeating mistakes) and `review_patterns` (checks injected into multi-model review so consultation catches recurring bug classes). The fill script, the consult step, and a closing `jackpot-propagate` step all read and write this one file. The mechanism that makes the pipeline *learn*: every correction a human makes at review becomes a guardrail or pattern that constrains the next session automatically.

@@ -76,7 +76,9 @@ ALLOWLIST_PATTERNS = [
     r"\bZlib\b",
     r"\bUnlicense\b",
     r"\bCC0\b",
-    r"\bpublic\s+domain\b",
+    # "public domain" and "public-domain (NIH)" are the same statement; the
+    # hyphenated form is how US federal works (17 USC 105) are usually written.
+    r"\bpublic[-\s]+domain\b",
 ]
 
 DENYLIST_RE = re.compile("|".join(DENYLIST_PATTERNS), re.IGNORECASE)

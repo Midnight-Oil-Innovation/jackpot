@@ -1,3 +1,5 @@
+> **Status:** Reference — production deploy approval-gate runbook (DEPLOY-1).
+
 # Production Deploy Runbook (DEPLOY-1)
 
 This document covers the manual approval gate that protects production

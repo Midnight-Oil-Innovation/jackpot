@@ -1,3 +1,5 @@
+> **Status:** Reference — STLT deployment guide for Tribal Epidemiology Centers.
+
 # Tribal Epidemiology Center deployment
 
 ## Who this is for

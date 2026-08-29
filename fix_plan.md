@@ -1,3 +1,7 @@
+> **Status:** History — code-quality triage snapshot from 2026-08-05. Paths predate the
+> P0d monorepo layout (`backend/main.py`, not `backend/backend/main.py`) and the linked
+> report lives outside this repo. Retained for provenance; do not action from it directly.
+
 # Fix Plan
 
 - Report: `../code_quality_backend_20260805_142334/report.md`

@@ -1198,7 +1198,19 @@ These pages follow the Phase 25 admin/dashboard pattern and link from the main r
 The existing `validator.py` tier-aware logic and `compute_surveillance_relevant()` need eukaryotic-aware extensions:
 
 - New tier-2 fields: `parasite_developmental_stage`, `sample_preservation_method`
-- New tier-3 fields: `parasitemia_percent`, `multiplicity_of_infection`, `coinfection_organisms`
+- New tier-3 fields: `parasitemia_percent`, `multiplicity_of_infection`
+- `coinfection_organisms` was originally listed here as a tier-3 field. **It
+  is deliberately not enforced as one** (B-EUK-3, PR #104 follow-up,
+  2026-08-28): `_is_absent()` treats an empty list as missing and CSV ingest
+  collapses an empty cell to `[]`, so "screened, no coinfection" — the
+  ordinary case for a monoinfection — cannot be distinguished from "not
+  recorded". Requiring it would force submitters to invent a value to reach
+  SUBMITTABLE. The field is still accepted and stored when supplied.
+  Re-instating it as a requirement needs a "screened, none found" sentinel
+  following the INSDC missing-value convention this schema already uses for
+  `indoor_space` and `indoor_surface` (`missing` / `not applicable` /
+  `not collected`); that is a schema decision scoped to Phase 28, tracked as
+  `B-EUK-COINFECT-SENTINEL`.
 - Surveillance-relevance rules expanded: any sample with organism in the eukaryotic-pathogen subset of `OrganismNameEnum` is `surveillance_relevant=TRUE` by default (operators can override per their reportable-disease list)
 
 ---

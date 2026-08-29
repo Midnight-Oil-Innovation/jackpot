@@ -52,7 +52,7 @@ Source: WHO *Essential attributes of pathogen genomic data-sharing platforms* (A
 | 2 | **Transparency** | 🔶 Partial | Public spec.md + architecture.md + assessment.md + this document; immutable audit log on every state change; governance docs missing — `B-GOV-1`. |
 | 3 | **Infrastructure & Security** | ✅ Met | GCP Workload Identity Federation; encrypted in-transit (TLS) and at-rest (Cloud SQL CMEK + GCS); secrets in Secret Manager; private VPC + Cloud SQL; six-state scrubber lifecycle; Cloud DLP for metadata; six-role RBAC. |
 | 4 | **Data Scope** | ✅ Met | Pathogen-agnostic schema (LinkML v4.4); One Health sectors (human/wildlife/livestock/wastewater/water/air/soil/surface/food/produce/vectors); metagenomic support; ADHS reportable-organism integration. |
-| 5 | **Data Submission** | ✅ Met | Six ingest paths (signed URL, URI registration, SRA accession, workspace promotion, CSV batch, Globus deposit-first); tier-aware validation (PRELIMINARY/ANALYZABLE/SUBMITTABLE); DataHarmonizer templates; CSV harmonizer for legacy formats. |
+| 5 | **Data Submission** | ✅ Met | Four ingest endpoints (GUI/API upload, CSV batch, no-copy URI registration covering cloud and `sra://` accessions, Globus deposit-first); tier-aware validation (PRELIMINARY/ANALYZABLE/SUBMITTABLE); DataHarmonizer templates; CSV harmonizer for legacy formats. |
 | 6 | **Data Curation** | ✅ Met | NCBI SRA Human Scrubber (genomic PII gate, 6-state lifecycle, skip governance); GCP Cloud DLP (metadata PII gate); content-sniffing file detection (Critical Rule 20); tier semantics surface incomplete metadata. |
 | 7 | **Data Provenance** | 🔶 Partial | Audit log on every state change; immutable append-only `pipeline_results`; `PipelineProvenance` table (FAIR R1.2 Month 3); persistent identifiers; gap on input-data version tracking and execution-environment snapshot — `B-FDP-1`. |
 | 8 | **Access** | 🔶 Partial | Sharing levels (PRIVATE/LAB/DISCOVERABLE/PUBLIC); `can_access_sample` permission cascade; access request lifecycle with 90-day passive approval; per-sample OPEN/RESTRICTED at submission UI is not wired (schema supports it) — `B-PPX-1`. |
@@ -73,12 +73,12 @@ Source: WHO *Guiding principles for pathogen genome data sharing* (`WHO_guiding_
 | 2 | **Collaboration and cooperation** | 🔶 Partial | Open-source AGPL-3.0 invites contributions; federation architecture (3-level) supports cross-institution collaboration; collaboration framework doc missing — `B-GOV-1`. |
 | 3 | **High-quality, reproducible data** | ✅ Met | Tier-aware validation (PRELIMINARY/ANALYZABLE/SUBMITTABLE) explicitly marks lower-quality data per WHO guidance; SRA Human Scrubber removes human reads pre-storage per WHO §3 ("human genomic data should be removed before submission"); content-sniffing file detection. |
 | 4 | **Global and regional representativeness** | ➖ N/A | Operator-agnostic — JACKPOT itself doesn't gate participation by geography; representativeness is determined by which operators deploy it. The architectural commitment is "any operator anywhere can run JACKPOT." |
-| 5 | **Timeliness** | ✅ Met | Tier-aware ingest accepts incomplete metadata (PRELIMINARY) immediately; pipelines launch without waiting for full metadata; six ingest paths optimize for different speed regimes (Globus deposit-first for bulk, signed URL for direct, accession for SRA pull). |
+| 5 | **Timeliness** | ✅ Met | Tier-aware ingest accepts incomplete metadata (PRELIMINARY) immediately; pipelines launch without waiting for full metadata; four ingest endpoints optimize for different speed regimes (Globus deposit-first for bulk, direct upload for single samples, CSV for batch, and URI registration for cloud-native and SRA-accession data that is never copied). |
 | 6 | **Acknowledgement and intellectual credit** | 🔶 Partial | `originating_lab`, `submitting_lab`, `data_generator`, `citation_request` fields in schema; auto-Acknowledgments block at export is missing — `B-GISAID-1`. |
 | 7 | **Equity in benefits** | 🔶 Partial | DUO codes support equitable-access framing; per-sample data-use-terms UI not wired (`B-PPX-1`); benefits-sharing framework doc missing (`B-GOV-1`). |
 | 8 | **As open as possible and as closed as necessary** | 🔶 Partial | OPEN/RESTRICTED dual-track supported in schema (`data_use_terms` enum); UI radio button at submission not wired — `B-PPX-1`. |
 | 9 | **Interoperability and relevance for decision-makers** | ✅ Met | Full ontology anchoring; TOSTADAS NCBI broker; planned LAPIS-compat; hAMRonization output (`B-NCBI-2`); NCBI BigQuery JOIN (`B-NCBI-1`). |
-| 10 | **Trustworthiness and ease of use** | 🔶 Partial | Six ingest paths with low-friction options (drag-and-drop, CSV batch, Globus deposit-first); content-sniffing prevents silent failure; trust portal doc missing — `B-SOLU-3`. |
+| 10 | **Trustworthiness and ease of use** | 🔶 Partial | Four ingest endpoints with low-friction options (drag-and-drop, CSV batch, Globus deposit-first); content-sniffing prevents silent failure; trust portal doc missing — `B-SOLU-3`. |
 | 11 | **Transparency** | 🔶 Partial | Public technical docs (`spec.md`, `architecture.md`); audit log; governance / board / COI docs missing — `B-GOV-1`. |
 | 12 | **Consistency with applicable law and ethical regulations** | 🔶 Partial | GCP DLP filters PHI/PII at ingest; data-residency commitments are operator-controlled (per `min_sharing_level_for_federation`); jurisdiction & data-residency doc missing — `B-GOV-1`. |
 | 13 | **Compliance and enforcement** | 🔶 Partial | Audit log + immutable provenance support compliance investigation; user code-of-practice + grievance procedure docs missing — `B-GOV-1`. |
@@ -108,11 +108,11 @@ Source: *Blueprint for Success: CDC's North Star Architecture* (`North_Star_CDCS
 
 | Element | Description | JACKPOT status | Evidence (one line) |
 |---|---|---|---|
-| **Principle 1: Reduce burden and friction** | Flexible, standardized, replicable tools | ✅ Met | LinkML schema generates DataHarmonizer templates; six low-friction ingest paths; tier-aware validation accepts partial submissions; `jackpot init` for one-command operator bootstrap. |
+| **Principle 1: Reduce burden and friction** | Flexible, standardized, replicable tools | ✅ Met | LinkML schema generates DataHarmonizer templates; four low-friction ingest endpoints; tier-aware validation accepts partial submissions; `jackpot init` for one-command operator bootstrap. |
 | **Principle 2: Increase interoperability** | Secure cloud environments + standards | ✅ Met | Full ontology stack (PHA4GE/GenEpiO/MIxS/ENVO/GA4GH/LOINC/SNOMED/ELR/NWSS); GCP-native; standards-based brokering (TOSTADAS, planned LAPIS); HL7 v2.5.1 ELR mappings on `HumanSample`. |
 | **Principle 3: Remove siloes** | End-to-end public health approaches | 🔶 Partial | One Health sectors in single platform; surveillance_relevant computation routes reportable organisms to ADHS-style oversight; cross-org dataset sharing model. STLT-CDC ReportStream / DEX integration not implemented. |
 | **Principle 4: Get relevant data quickly** | Range of support to STLT partners | 🔶 Partial | Tier-aware ingest enables immediate value from PRELIMINARY data; planned NCBI Pathogen Detection BigQuery JOIN (`B-NCBI-1`) for cross-platform context; CDC ReportStream / AIMS direct integration not implemented. |
-| **Principle 5: Be responsive** | User-centric design and development | 🔶 Partial | Six ingest paths optimize for different operator workflows; Streamlit UI iterates quickly; Lab Director / Platform Admin / Governance Board roles map to STLT realities; user-research framework not formalized. |
+| **Principle 5: Be responsive** | User-centric design and development | 🔶 Partial | Four ingest endpoints optimize for different operator workflows; Streamlit UI iterates quickly; Lab Director / Platform Admin / Governance Board roles map to STLT realities; user-research framework not formalized. |
 | **Component: STLT Workspaces (private)** | STLT operator-controlled environments | ✅ Met | Operator-agnostic deployment model — STLT operators get their own JACKPOT instance with full data sovereignty; `min_sharing_level_for_federation` controls outbound flow. |
 | **Component: Shared Analytics Platform** | Cross-STLT analytics | 🔶 Partial | JACKPOT federation Level 2 (hub push) is the analog; `federated_instances` table; planned BigQuery analytics layer. |
 | **Component: PH Digital Marketplace** | Modular tools and turn-key applications | 🔶 Partial | Pipeline zoo + BYOP; modular operator-agnostic codebase invites integrators; `jackpot-cli` SDK; not yet packaged as a marketplace. |
@@ -295,7 +295,7 @@ This section gives prose detail only for the eight 🔶 Partial rows in matrix 1
 
 **WHO text.** Develop and sustain trust among providers, platforms, and users; prioritize ease of submission.
 
-**JACKPOT alignment.** Six low-friction ingest paths; tier-aware validation accepts incomplete submissions (no "rejected because metadata not perfect" failure mode); content-sniffing prevents silent file-type failures; staged deletion with 72h fast-path lets users self-correct quickly.
+**JACKPOT alignment.** Four low-friction ingest endpoints; tier-aware validation accepts incomplete submissions (no "rejected because metadata not perfect" failure mode); content-sniffing prevents silent file-type failures; staged deletion with 72h fast-path lets users self-correct quickly.
 
 **Gap.** Trust portal — Solu-style explicit documentation of "here's what we do for security, data residency, encryption, audit, deletion lifecycle." Missing.
 
@@ -410,7 +410,7 @@ This section covers the six 🔶 Partial rows + one ❌ Gap row from matrix 1.4.
 
 **CDC ask.** User-centric design and development; iterate based on operator feedback.
 
-**JACKPOT alignment.** Six ingest paths optimize for different operator workflows; Streamlit UI iterates quickly; six-role RBAC maps to STLT realities (Lab Director, Researcher, Domain Specialist, Platform Admin, Org Admin, Visitor).
+**JACKPOT alignment.** Four ingest endpoints optimize for different operator workflows; Streamlit UI iterates quickly; six-role RBAC maps to STLT realities (Lab Director, Researcher, Domain Specialist, Platform Admin, Org Admin, Visitor).
 
 **Gap.** No formalized user-research framework. STLT-operator feedback collection mechanism is informal.
 

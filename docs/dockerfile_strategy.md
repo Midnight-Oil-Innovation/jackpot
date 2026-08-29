@@ -1,3 +1,5 @@
+> **Status:** Reference — current container-image build strategy.
+
 # Dockerfile strategy
 
 How the JACKPOT container images are built, what each contains, and

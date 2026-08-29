@@ -908,18 +908,42 @@ The `file_detector.py` module (the sole owner of file-type logic per Critical Ru
 
 This is one place in the codebase where file-type logic lives. Other modules call `file_detector.validate_file_type(...)`, never re-implement.
 
-### 14.3 The six ingest methods
+### 14.3 The four ingest endpoints
 
-| Method | Use case | Path |
+The ingest router exposes four POST endpoints. `GET /api/v1/ingest/` returns
+this list at runtime and is the authoritative source if this table and the
+code ever disagree.
+
+| Endpoint | Use case | Copies data? |
 |---|---|---|
-| GUI drag-and-drop | Small samples, occasional uploads | `POST /api/v1/ingest/upload` with multipart form data |
-| CSV batch + rsync/rclone | Bulk laboratory submission | `POST /api/v1/ingest/csv` with CSV manifest; files copied separately via rsync/rclone with signed credentials |
-| Presigned URL | Direct browser-to-storage for medium files | `POST /api/v1/ingest/presign` returns S3 URL; client uploads directly; client confirms with `POST /api/v1/ingest/confirm` |
-| URI registration | Cloud-native, no copy | `POST /api/v1/ingest/register` with `gs://`, `s3://`, or `https://` URI; zero copy |
-| SRA accession | External database pull | `POST /api/v1/ingest/sra` with SRR accession; `fasterq-dump` runs on compute |
-| Globus deposit-first | Bulk academic transfers | Globus collection registered; metadata catalog populated; samples reference Globus URIs |
+| `POST /api/v1/ingest/upload` | GUI drag-and-drop and direct API upload; multipart form data | Yes — into staging |
+| `POST /api/v1/ingest/csv` | Bulk laboratory submission; CSV manifest, files transferred separately | Yes — into staging |
+| `POST /api/v1/ingest/register` | Cloud-native and external-accession registration by URI | **No** — see Critical Rule 57 |
+| `POST /api/v1/ingest/globus` | Bulk academic transfers via a registered Globus collection | No — references Globus URIs |
 
-Different operators use different methods. A laptop deployment for an individual researcher mostly uses GUI drag-and-drop. An agency with many submitting labs mostly uses CSV batch. A multi-institution research consortium might use Globus.
+**`register` is the one to understand.** It accepts `gs://`, `s3://`, and
+`sra://` URIs (plus `file://` when `ENV=local`), and it registers rather than
+copies — the operator's file stays where it is and JACKPOT reads it in place.
+SRA ingest is therefore *not* a separate endpoint: an SRA accession is an
+`sra://` URI handed to `register`. The scheme allowlist is enforced in
+`_validate_register_uri_scheme` as an SSRF and local-file-read defence, so
+`http(s)` and bare paths are deliberately rejected.
+
+Two things that are often described as ingest paths but are not endpoints:
+
+- **The `jackpot` CLI** (`upload`, `upload-dir`, `upload-globus`) is a *client*
+  of the endpoints above, not a fifth path.
+- **The spreadsheet importer** (`/api/v1/imports/sessions/…`) is a stateful
+  wizard for reviewing and mapping a spreadsheet before it becomes samples. It
+  is a UI flow layered over ingest, with its own session lifecycle.
+
+> **Historical note.** This section previously described "six ingest methods"  <!-- drift-ok -->
+> including `POST /api/v1/ingest/presign`, `POST /api/v1/ingest/confirm`, and
+> `POST /api/v1/ingest/sra`. **None of those endpoints has ever existed.**
+> Several other documents also claimed six paths, each naming a different six.
+> Corrected 2026-08-28 against the router; `scripts/check_docs.py` now carries
+> a denylist entry so the claim cannot silently return. Presigned URLs do
+> exist, but for *download* (`routers/samples.py`), not ingest.
 
 ### 14.4 DataHarmonizer tiered templates
 
@@ -1175,15 +1199,46 @@ The WHO Attributes document (*Attributes and principles of genomic data-sharing 
 | 2 | Collaboration and cooperation | 🔶 Partial | Open-source AGPL-3.0 invites contributions; three-level federation architecture; governance/board docs in progress |
 | 3 | High-quality, reproducible data | ✅ Met | Tier-aware validation (PRELIMINARY/ANALYZABLE/SUBMITTABLE) marks lower-quality data per WHO guidance; SRA Human Scrubber removes human reads pre-storage per WHO §3; content-sniffing file detection |
 | 4 | Defined data scope | ✅ Met | Minimum metadata defined (sample, sequencing, attribution); optional fields for epidemic / One Health context; schema is the source of truth |
-| 5 | Submission methods | ✅ Met | Six ingest paths (GUI / CSV+rsync / presigned / URI / SRA / Globus) covering small to bulk to limited-connectivity |
+| 5 | Submission methods | ✅ Met | Four ingest endpoints (GUI/API upload, CSV batch, no-copy URI registration incl. `sra://`, Globus deposit-first) covering small to bulk to limited-connectivity |
 | 6 | Data curation | ✅ Met | Tier-aware validation; explicit annotation rather than filter-out; genomic and metadata PII gates at ingest; submission verification |
 | 7 | Attribution and credit | 🔶 Partial | `originating_lab`, `submitting_lab`, `data_generator`, `citation_request` fields in schema; auto-Acknowledgments block at export is in progress |
 | 8 | Data sharing tiers | ✅ Met | OPEN/RESTRICTED dual-track in schema; DUO codes; sharing levels (PRIVATE/LAB/DISCOVERABLE/PUBLIC) |
 | 9 | Interoperability | ✅ Met | Full ontology anchoring; TOSTADAS NCBI broker; planned LAPIS compatibility; hAMRonization output |
-| 10 | Trustworthiness and ease of use | 🔶 Partial | Six low-friction ingest paths; content-sniffing prevents silent failure; trust portal in progress |
+| 10 | Trustworthiness and ease of use | 🔶 Partial | Four low-friction ingest endpoints; content-sniffing prevents silent failure; trust portal in progress |
 | 11 | Transparency | 🔶 Partial | Public technical docs; audit log; governance / board / COI docs in progress |
 
 Matrix summary: 7 Met, 4 Partial, 0 Gap. The four Partials are all on the active roadmap.
+
+---
+
+### 18.4 WHO Global Genomic Surveillance Strategy 2022-2032 alignment
+
+Distinct from the WHO Attributes document in §18.3, the WHO *Global Genomic
+Surveillance Strategy for Pathogens with Pandemic and Epidemic Potential
+2022-2032* defines five objectives. Each deployment scenario advances a subset:
+
+| Scenario | Description | Obj. 1 (tools) | Obj. 2 (workforce) | Obj. 3 (data utility) | Obj. 4 (connectivity) | Obj. 5 (readiness) |
+|---|---|---|---|---|---|---|
+| A | Self-hosted commodity (laptop through agency, ephemeral or persistent, single-lab to multi-org) | ✓ | ✓ | ✓ | ✓ | ✓ |
+| B | HPC (Apptainer + Slurm + institutional storage) | ✓ | ✓ | ✓ | • | ✓ |
+| C | Single-org cloud (GKE/EKS/AKS) | ✓ | ✓ | ✓ | • | ✓ |
+| D | CI test | | | | | |
+
+✓ = primary mode; • = partial / context-dependent
+
+Scenario A's range — a single-user laptop through a multi-lab agency
+datacenter — means it collectively serves all five objectives; different
+configurations within A advance different ones. Federation participation
+(Obj. 4, connectivity) is a runtime configuration available to A, B, and C
+per [ADR-0002](adr/0002-four-install-scenarios.md): the primary operating
+mode for some A deployments, a context-dependent capability for B and C.
+
+**Non-functional requirement: 7-day turnaround.** The strategy defines
+"timely" as triggering genomic sequencing within seven days of event or
+pathogen detection. Pipeline orchestration (ingest → scrub → DLP → analysis →
+result publication) must support end-to-end latency under this target for
+surge-event use. The 6-state lifecycle of `ingest_scrubber.nf` and the
+`SCRUBBER_MAX_CONCURRENT` concurrency setting are dimensioned for it.
 
 ---
 

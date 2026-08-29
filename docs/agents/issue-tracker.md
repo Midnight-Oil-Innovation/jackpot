@@ -1,3 +1,5 @@
+> **Status:** Reference — issue-tracker mapping for engineering skills.
+
 # Issue tracker: GitHub
 
 Issues and PRDs for this repo live as GitHub issues on

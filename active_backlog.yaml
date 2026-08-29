@@ -1,19 +1,28 @@
-# > Status: Superseded — todo.md is the source of truth for the backlog.
-# > This file is preserved for historical reference. Do not hand-edit.
-
-# JACKPOT active backlog — source of truth for currently-actionable sessions.
+# > status: canonical
 #
-# Lives at: ~/Projects/jackpot/docs/active_backlog.yaml (version-controlled)
+# JACKPOT active backlog — SOURCE OF TRUTH for currently-actionable work.
 #
-# Consumed by:
-#   - jackpot_next.py        — prints unblocked/blocked candidates
-#   - jackpot_gen_prompt.py  — emits session prompt skeletons
-#   - jackpot_finish_helper.py — auto-flips status to shipped post-merge
-#   - jackpot_backlog_check.py — validates schema + dependency graph
+# Lives at: active_backlog.yaml (repo root, version-controlled).
 #
-# Maintenance: most updates are automated by jackpot-finish. Manual edits
-# needed when scoping new entries or adjusting effort/scope mid-flight.
-# Keep ordering by phase for readability.
+# Resolved 2026-08-28: this file previously carried BOTH a "Superseded — do not
+# hand-edit" header AND a "source of truth" line, while being the thing people
+# actually edited (see 8cea892). todo.md has been reframed as the historical
+# ledger; this file is canonical for what to work on next.
+#
+# Validated by scripts/check_backlog.py — schema, dependency graph, and stale
+# statuses. It runs in pre-commit (on changes to this file), in CI via
+# .github/workflows/guardrails.yml, and from `make guardrails`. It is the
+# jackpot_backlog_check.py this header used to promise.
+#
+# Still aspirational — THESE SCRIPTS DO NOT EXIST as of 2026-08-28:
+#   - jackpot_next.py          — print unblocked/blocked candidates
+#   - jackpot_gen_prompt.py    — emit session prompt skeletons
+#   - jackpot_finish_helper.py — auto-flip status to shipped post-merge
+#
+# Note: docs/pipeline_knowledge.yaml keys off the `phase` values used here,
+# so renaming a phase requires updating that file too.
+#
+# Maintenance: hand-edited. Keep ordering by phase for readability.
 #
 # Status values:
 #   shipped               PR merged on development, no further work this round
@@ -30,7 +39,7 @@
 
 meta:
   version: 1
-  last_updated: "2026-05-26"
+  last_updated: "2026-08-28"
   source_documents:
     - todo.md
     - docs/jackpot_session_summary_and_backlog.md
@@ -389,7 +398,9 @@ sessions:
       against wastewater_target_concentration (B-CWB-SCHEMA-2) joined to
       WastewaterSample via sample_associations (B-CWB-SCHEMA-1).
     phase: cryptwwdb_track
-    status: blocked
+    status: shipped
+    merged_at: "2026-08-28"
+    merge_sha: "bf11d2f"
     depends_on:
       - B-CWB-SCHEMA-1
       - B-CWB-SCHEMA-2
@@ -410,6 +421,9 @@ sessions:
       mass-balance module. Replaces the NotImplementedError stub from
       B-CWB-MB-1 interface-only with real SQLAlchemy queries.
     notes: "Transitively blocked on P0b via SCHEMA deps."
+    reconciliation_note: >
+      UNBLOCKED 2026-08-28: B-CWB-SCHEMA-1 and -2 both landed in P0b
+      (c871b28bbdab); neither status had been flipped.
 
   - id: B-CWB-MB-2
     title: Mass-balance QC + trigger points
@@ -419,7 +433,7 @@ sessions:
       handling, error-bar propagation, weekly/rolling averages,
       population-threshold trigger points.
     phase: cryptwwdb_track
-    status: blocked
+    status: open
     depends_on:
       - B-CWB-MB-1-DB
     blocked_by_external:
@@ -473,9 +487,11 @@ sessions:
       to sample_associations.association_type enum. Directed sewershed
       topology required for cryptWWDB Use Case 1.
     phase: phase_24_5
-    status: blocked_external
+    status: shipped
+    merged_at: "2026-07-06"
+    merge_sha: "3016238"
     depends_on: []
-    blocked_by_external: "P0b (schema v5.0 migration window)"
+    blocked_by_external:
     parallel_safe: false
     effort_sessions: 0.5
     primary_files: []
@@ -485,6 +501,8 @@ sessions:
     branch_name_template:
     role_framing:
     notes: "Bundles into P0b migration."
+    reconciliation_note: >
+      RECONCILED 2026-08-28: verified present in migration c871b28bbdab (merged 2026-07-06 at 3016238); the status had never been flipped.
 
   - id: B-CWB-SCHEMA-2
     title: wastewater_target_concentration result type
@@ -493,9 +511,11 @@ sessions:
       quantitative targets. Fields: target_pathogen_id FK, assay_type,
       concentration_value/unit/CIs, normalization_target, LOD, LOQ.
     phase: phase_24_5
-    status: blocked_external
+    status: shipped
+    merged_at: "2026-07-06"
+    merge_sha: "3016238"
     depends_on: []
-    blocked_by_external: "P0b (schema v5.0 migration window)"
+    blocked_by_external:
     parallel_safe: false
     effort_sessions: 1.5
     primary_files: []
@@ -505,6 +525,8 @@ sessions:
     branch_name_template:
     role_framing:
     notes: "Critical path for cryptWWDB mass-balance integration."
+    reconciliation_note: >
+      RECONCILED 2026-08-28: verified present in migration c871b28bbdab (merged 2026-07-06 at 3016238); the status had never been flipped.
 
   - id: B-CWB-SCHEMA-3
     title: Time-varying population fields
@@ -513,9 +535,9 @@ sessions:
       sample_population_estimate typed table per Driver et al. 2024
       Table 2 + Choi et al. 2018.
     phase: phase_24_5
-    status: blocked_external
+    status: tracked_not_scheduled
     depends_on: []
-    blocked_by_external: "P0b (schema v5.0 migration window)"
+    blocked_by_external: "none - re-scope deliberately if cryptWWDB work resumes"
     parallel_safe: false
     effort_sessions: 1
     primary_files: []
@@ -525,6 +547,11 @@ sessions:
     branch_name_template:
     role_framing:
     notes: ""
+    reconciliation_note: >
+      RECONCILED 2026-08-28: never in P0b scope. Phase 24.5's success
+      criterion records that the SCHEMA-1-through-5 range was a miscount -
+      only SCHEMA-1 and SCHEMA-2 were ever in scope. Verified absent from
+      migration c871b28bbdab. Not blocked on anything; genuinely unscheduled.
 
   - id: B-CWB-SCHEMA-4
     title: fecal_normalization_results typed table
@@ -533,9 +560,9 @@ sessions:
       (PMMoV / Bacteroides_HF183 / coprostanol / other). Enables PMMoV
       normalization for SARS-CoV-2 per Feng et al. 2021.
     phase: phase_24_5
-    status: blocked_external
+    status: tracked_not_scheduled
     depends_on: []
-    blocked_by_external: "P0b (schema v5.0 migration window)"
+    blocked_by_external: "none - re-scope deliberately if cryptWWDB work resumes"
     parallel_safe: false
     effort_sessions: 1
     primary_files: []
@@ -545,6 +572,11 @@ sessions:
     branch_name_template:
     role_framing:
     notes: ""
+    reconciliation_note: >
+      RECONCILED 2026-08-28: never in P0b scope. Phase 24.5's success
+      criterion records that the SCHEMA-1-through-5 range was a miscount -
+      only SCHEMA-1 and SCHEMA-2 were ever in scope. Verified absent from
+      migration c871b28bbdab. Not blocked on anything; genuinely unscheduled.
 
   - id: B-CWB-SCHEMA-5
     title: Excretion + degradation factor lookup tables
@@ -552,9 +584,9 @@ sessions:
       excretion_factors + in_sewer_degradation_factors lookup tables.
       Static reference data per Zuccato et al. 2008 and Hart & Halden 2020.
     phase: phase_24_5
-    status: blocked_external
+    status: tracked_not_scheduled
     depends_on: []
-    blocked_by_external: "P0b (schema v5.0 migration window)"
+    blocked_by_external: "none - re-scope deliberately if cryptWWDB work resumes"
     parallel_safe: false
     effort_sessions: 1
     primary_files: []
@@ -568,6 +600,11 @@ sessions:
   # ────────────────────────────────────────────────────────────────────────
   # Wastewater Track
   # ────────────────────────────────────────────────────────────────────────
+    reconciliation_note: >
+      RECONCILED 2026-08-28: never in P0b scope. Phase 24.5's success
+      criterion records that the SCHEMA-1-through-5 range was a miscount -
+      only SCHEMA-1 and SCHEMA-2 were ever in scope. Verified absent from
+      migration c871b28bbdab. Not blocked on anything; genuinely unscheduled.
 
   - id: B-WW-1
     title: Streamlit wastewater lineage-abundance dashboard
@@ -601,7 +638,7 @@ sessions:
       (SARS-CoV-2 + RSV + Influenza A). Reads from
       wastewater_target_concentration table.
     phase: wastewater
-    status: blocked
+    status: open
     depends_on:
       - B-CWB-SCHEMA-2
     blocked_by_external:
@@ -617,6 +654,9 @@ sessions:
       Senior engineering collaborator landing the multi-target wastewater
       visualization. Transitively blocked on P0b via SCHEMA-2.
     notes: ""
+    reconciliation_note: >
+      UNBLOCKED 2026-08-28: B-CWB-SCHEMA-2 landed in P0b (c871b28bbdab);
+      the status had never been flipped.
 
   - id: B-WW-ADV-2
     title: PHES-ODM alignment
@@ -1006,9 +1046,11 @@ sessions:
       Add eukaryotic organisms to OrganismNameEnum + eukaryotic-specific
       samples columns (developmental stage, parasitemia, MOI, coinfection).
     phase: phase_24_5
-    status: blocked_external
+    status: shipped
+    merged_at: "2026-07-06"
+    merge_sha: "3016238"
     depends_on: []
-    blocked_by_external: "P0b (schema v5.0 migration window)"
+    blocked_by_external:
     parallel_safe: false
     effort_sessions: 1
     primary_files: []
@@ -1018,15 +1060,17 @@ sessions:
     branch_name_template:
     role_framing:
     notes: "Bundles into P0b migration."
+    reconciliation_note: >
+      RECONCILED 2026-08-28: verified present in migration c871b28bbdab (merged 2026-07-06 at 3016238); the status had never been flipped.
 
   - id: B-EUK-2
     title: Eukaryotic pipeline-result schemas
     short_description: |
       Eight eukaryotic pipeline-result tables + supporting enums.
     phase: phase_24_5
-    status: blocked_external
+    status: tracked_not_scheduled
     depends_on: []
-    blocked_by_external: "P0b (schema v5.0 migration window)"
+    blocked_by_external: "Phase 28 (the 8 result tables ship with their pipelines)"
     parallel_safe: false
     effort_sessions: 1.5
     primary_files: []
@@ -1036,6 +1080,11 @@ sessions:
     branch_name_template:
     role_framing:
     notes: ""
+    reconciliation_note: >
+      RECONCILED 2026-08-28: deliberately NOT built in P0b. Phase 24.5's
+      success criterion defers the 8 eukaryotic result tables to their
+      pipelines in Phase 28. Verified absent from migration c871b28bbdab.
+      Was blocked on P0b, which is the wrong blocker.
 
   - id: B-EUK-3
     title: Eukaryotic validator updates
@@ -1043,19 +1092,34 @@ sessions:
       Update validator.py for eukaryotic-aware tier rules.
       compute_surveillance_relevant() includes eukaryotic pathogens.
     phase: phase_24_5
-    status: blocked_external
-    depends_on:
-      - B-EUK-1
-    blocked_by_external: "P0b (schema v5.0 migration window)"
-    parallel_safe: false
+    status: shipped
+    merged_at: "2026-08-28"
+    merge_sha: "f83ee68"
+    depends_on: []
+    blocked_by_external:
+    parallel_safe: true
     effort_sessions: 0.75
-    primary_files: []
-    test_files: []
+    primary_files:
+      - backend/backend/validator.py
+    test_files:
+      - tests/test_validator.py
     source_of_truth_views: []
     pr_title_template:
     branch_name_template:
     role_framing:
-    notes: ""
+    notes: >
+      Shipped in PR #104. Was stuck blocked_external on a P0b dependency that
+      landed 2026-07-06 (c871b28bbdab); the status was never flipped, and
+      todo.md Phase 24.5 implied the work itself had shipped when only the
+      columns had. Tier rules are conditional on the organism (mirroring
+      host_age/host_sex on source_type) so bacterial and viral samples are
+      unaffected; eukaryotic organisms are surveillance_relevant by default
+      because the 62-value reportable set predates eukaryotic support.
+      Identification is by genus, pinned to the schema by a test that fails if
+      a genus is added to jackpot_schema.yaml but not to
+      EUKARYOTIC_PATHOGEN_GENERA. Open question flagged in the PR:
+      coinfection_organisms as a tier-3 requirement means "no coinfection" and
+      "no data" are indistinguishable.
 
   - id: B-CARE-3
     title: Sovereignty deletion — implementation (sub-items 3a..3g)
@@ -1074,7 +1138,45 @@ sessions:
     pr_title_template:
     branch_name_template:
     role_framing:
-    notes: "Aggregate entry covering B-CARE-3a..3g."
+    notes: >
+      Aggregate entry covering B-CARE-3a..3g, plus two items folded in
+      2026-08-28.
+
+      (1) RENAME. Per ADR-0013 the is_deleted -> is_archived rename
+      (B-CARE-3i) MUST ship inside this same change: renaming first would
+      silently remove deletion from the API, implementing first would leave
+      both representations writable at once. 43 is_deleted reference sites in
+      backend/ plus a migration.
+
+      (2) ENFORCEMENT. The VACUUMED-means-content-gone invariant is enforced
+      here, not ahead of here. It was scoped as a standalone CHECK constraint
+      and dropped on inspection: samples.fastq_r1_uri is TEXT NOT NULL in
+      baseline 5adf11b77c19 and never altered, so a constraint requiring
+      content columns to be NULL when VACUUMED is unsatisfiable; and per
+      Critical Rule 58 sample content lives in sample_files ->
+      file_references, which a single-table CHECK on samples cannot see. This
+      implementation decides where content is at vacuum time and whether
+      fastq_r1_uri becomes nullable, so the constraint and its cross-table
+      test are written against that decision. Enforcement must be mechanical,
+      not review-based.
+
+      NOT NEEDED (closed 2026-08-28 without implementation): audit_log
+      deletion event names. Tracked briefly as B-CARE-3h on the belief that
+      P0b had dropped them. It had not: migration c871b28bbdab documents them
+      as a deliberate no-op close-out because audit_log.action is free TEXT --
+      there is no audit_log.event_type column and no enum to extend -- and
+      assigns the strings to B-CARE-3f in P0c. Note that the seven existing
+      deletion-adjacent AuditActions constants (REQUEST_DELETION,
+      COMPLETE_DELETION, SOFT_DELETE_SAMPLE, ...) currently have zero call
+      sites; B-CARE-3f should reconcile them rather than add a parallel set.
+
+      NOT NEEDED (closed 2026-08-28 without implementation): a migration to
+      stop deletion_status asserting ACTIVE over archived rows. Under ADR-0013
+      an archived sample has not been deletion-requested, so ACTIVE is the
+      correct value. samples.is_deleted is written by exactly one call site
+      (routers/samples.py, the archive endpoint), and no row has ever been
+      deletion-requested because no code path can do it. The column is
+      vacuously correct, not wrong.
 
   - id: B-CARE-4
     title: Sovereignty deletion — federation propagation
@@ -1133,7 +1235,9 @@ sessions:
       Bundles B-CWB-SCHEMA-1..5, B-EUK-1/2/3, BYOP additions, sovereignty
       columns. Sets up multi-tenancy middleware in P0c.
     phase: p0_series
-    status: tracked_not_scheduled
+    status: shipped
+    merged_at: "2026-07-06"
+    merge_sha: "3016238"
     depends_on: []
     blocked_by_external:
     parallel_safe: false
@@ -1145,6 +1249,11 @@ sessions:
     branch_name_template:
     role_framing:
     notes: "Next major phase after federation Stage 1 closes."
+    reconciliation_note: >
+      RECONCILED 2026-08-28: P0b merged 2026-07-06 at 3016238 (migration
+      c871b28bbdab). It was still marked tracked_not_scheduled, which held
+      P0c blocked, which held B-CARE-3 and B-CARE-3i blocked - the entire
+      sovereignty chain was pinned by one unflipped status.
 
   - id: P0c
     title: Multi-tenancy middleware (major phase)
@@ -1152,7 +1261,7 @@ sessions:
       Tenant-aware middleware applying organization context to every
       request. Follows P0b schema work. Unblocks B-CARE-3 + B-CARE-4.
     phase: p0_series
-    status: blocked
+    status: open
     depends_on:
       - P0b
     blocked_by_external:
@@ -1165,6 +1274,13 @@ sessions:
     branch_name_template:
     role_framing:
     notes: ""
+    reconciliation_note: >
+      UNBLOCKED 2026-08-28: its only dependency, P0b, merged 2026-07-06 at
+      3016238 but was still marked tracked_not_scheduled. P0c has therefore
+      been sitting on the frontier for ~7 weeks while reading as blocked.
+      Shipping it unblocks B-CARE-3, and with it B-CARE-3i (the
+      is_deleted -> is_archived rename) and the CARE deletion lifecycle.
+
   - id: B-BYOP-1
     title: BYOP manifest schema (jackpot-pipeline.yaml)
     short_description: |
@@ -1206,7 +1322,7 @@ sessions:
       operator permission checks. Returns structured pass/fail with
       per-check diagnostics.
     phase: p0f
-    status: open
+    status: shipped
     depends_on:
       - B-BYOP-1
     blocked_by_external:
@@ -1229,6 +1345,8 @@ sessions:
     notes: "Per docs/byop_and_eukaryotic_design.md §N. Originally tagged Phase: P1 in the design doc; reframed to P0f per
       todo.md 2026-04-29."
 
+    merged_at: '2026-08-28'
+    merge_sha: 3b35a60
   - id: B-BYOP-3
     title: BYOP Stage 2 sandbox dry-run
     short_description: |
@@ -1523,9 +1641,11 @@ sessions:
       key. Lands with the broader P0b Schema v5.0 migration cycle (not
       standalone) per the 2026-04-29 phasing decision in todo.md.
     phase: p0b
-    status: open
+    status: shipped
+    merged_at: "2026-07-06"
+    merge_sha: "3016238"
     depends_on: []
-    blocked_by_external: "P0b (lands with P0b's combined schema migration cycle alongside sovereignty + eukaryotic items)"
+    blocked_by_external:
     parallel_safe: false
     effort_sessions: 1
     primary_files:
@@ -1548,6 +1668,8 @@ sessions:
     notes: "Per docs/byop_and_eukaryotic_design.md §7 for the 27-column schema + 4-enum detail. MUST land in the same P0b
       migration cycle as B-CWB-SCHEMA-1..5, B-EUK-1, B-EUK-2 — splitting into a later migration creates double-migrate operator
       churn (per todo.md 2026-04-29 phasing decision)."
+    reconciliation_note: >
+      RECONCILED 2026-08-28: verified present in migration c871b28bbdab (merged 2026-07-06 at 3016238); the status had never been flipped.
 
   - id: B-BYOP-10
     title: BYOP telemetry — success rate, walltime, cost
@@ -1645,7 +1767,8 @@ sessions:
     depends_on: []
     blocked_by_external:
     parallel_safe: false
-    parallel_safe_reason: "Foundational new package + migrations; scaffolding decisions need interactive review. Manual flow per coding_scripts_howto 'first time running a new session shape'."
+    parallel_safe_reason: "Foundational new package + migrations; scaffolding decisions need interactive review. Manual flow
+      per coding_scripts_howto 'first time running a new session shape'."
     effort_sessions: 3
     primary_files:
       - backend/backend/authz/
@@ -1657,7 +1780,8 @@ sessions:
     pr_title_function:
     branch_name_template: m0-permit-engine
     role_framing:
-    notes: "authz module path is an M0 scoping decision (recommend backend/backend/authz/); primary_files lists the recommended dir and tightens once chosen. access_model.md §5 + §9 fixtures."
+    notes: "authz module path is an M0 scoping decision (recommend backend/backend/authz/); primary_files lists the recommended
+      dir and tightens once chosen. access_model.md §5 + §9 fixtures."
 
   - id: M1
     title: visibility_sql_clause companion — list-filtering, cross-checked vs permit()
@@ -1781,7 +1905,8 @@ sessions:
       - ACCESS-SEED
     blocked_by_external:
     parallel_safe: false
-    parallel_safe_reason: "Irreversible cutover touching auth, migrations, route guards, and the list path. Manual flow only; never parallel-batch."
+    parallel_safe_reason: "Irreversible cutover touching auth, migrations, route guards, and the list path. Manual flow only;
+      never parallel-batch."
     effort_sessions: 3
     primary_files:
       - backend/backend/permissions.py
@@ -1795,7 +1920,8 @@ sessions:
     pr_title_function:
     branch_name_template: m2-cutover
     role_framing:
-    notes: "IRREVERSIBLE. access_model.md §10 (greenfield, no shim) + §11.1. Verify M0/M1 proven before starting — the project-wide 'verify before operating' discipline applied to the cutover."
+    notes: "IRREVERSIBLE. access_model.md §10 (greenfield, no shim) + §11.1. Verify M0/M1 proven before starting — the project-wide
+      'verify before operating' discipline applied to the cutover."
 
   - id: M3
     title: Sovereignty policies (deletion-lifecycle guards + Scenario-T preset)
@@ -2034,3 +2160,226 @@ sessions:
     branch_name_template:
     role_framing:
     notes: "Reconciliation with M4/M5. access_model.md §4.3 / §4.6 / §6.2."
+
+  # ────────────────────────────────────────────────────────────────────────
+  # Added 2026-08-28 — grill-with-docs session (spec.md demotion + deletion
+  # model). See docs/adr/0013-archive-and-deletion-are-distinct.md.
+  # ────────────────────────────────────────────────────────────────────────
+
+  - id: B-CARE-3i
+    title: Rename is_deleted -> is_archived; deletion lives only in deletion_status
+    short_description: |
+      Archive and deletion are distinct operations (ADR-0013). The archive
+      endpoint currently writes is_deleted = TRUE under audit action
+      ARCHIVE_SAMPLE, while deletion_status has no writer at all.
+    phase: phase_24_5
+    status: blocked
+    depends_on:
+      - B-CARE-3
+    blocked_by_external:
+    parallel_safe: false
+    effort_sessions: 1.5
+    primary_files:
+      - backend/backend/routers/samples.py
+      - backend/backend/submissions.py
+    test_files: []
+    source_of_truth_views: []
+    pr_title_template:
+    branch_name_template:
+    role_framing:
+    notes: >
+      MUST ship inside B-CARE-3, not before it — renaming alone would remove
+      deletion from the API with nothing replacing it. 43 is_deleted
+      reference sites in backend/ plus a migration. An archive must never be
+      able to satisfy a deletion request (CARE Authority to Control).
+
+  - id: B-DOC-INGEST-PATHS
+    title: Reconcile the "six ingest methods" contradiction between docs and code
+    short_description: |
+      architecture.md section 14.3 and the demoted spec.md section 1.1 each
+      claim six ingest paths, and the two lists disagree. Neither matches
+      the router.
+    phase: p0_series
+    status: shipped
+    merged_at: "2026-08-28"
+    merge_sha: "3eddbf8"
+    depends_on: []
+    blocked_by_external:
+    parallel_safe: true
+    effort_sessions: 0.5
+    primary_files:
+      - docs/architecture.md
+    test_files: []
+    source_of_truth_views: []
+    pr_title_template:
+    branch_name_template:
+    role_framing:
+    notes: >
+      Verified 2026-08-28 against backend/backend/routers/ingest.py, which
+      exposes /upload, /csv, /register, /globus — four endpoints. The
+      presign, confirm, and sra endpoints named in architecture.md 14.3 do
+      not exist. The CLI (upload, upload-dir, upload-globus) is a client of
+      /upload, not a distinct path. External-repo import lives in its own
+      imports.py router. Decide the real taxonomy, then fix 14.3.
+
+  - id: B-DOC-GUARD-SCOPE
+    title: Extend the docs drift guard to root-level markdown
+    short_description: |
+      scripts/check_docs.py scans docs/ only. CLAUDE.md, todo.md, spec.md
+      and CONTEXT.md live at the repo root and are exempt from the guard
+      built to stop exactly the drift they accumulated.
+    phase: p0_series
+    status: shipped
+    merged_at: "2026-08-28"
+    merge_sha: "6ca9a52"
+    depends_on: []
+    blocked_by_external:
+    parallel_safe: true
+    effort_sessions: 0.5
+    primary_files:
+      - scripts/check_docs.py
+      - .pre-commit-config.yaml
+    test_files: []
+    source_of_truth_views: []
+    pr_title_template:
+    branch_name_template:
+    role_framing:
+    notes: >
+      Shipped in PR #103. Root cause of the 2026-08-28 spec.md demotion.
+      New in_scope() covers docs/** plus repo-root markdown; markdown beside
+      source stays out. Pre-commit and guardrails.yml filters widened to
+      match. The predicted violation burst was small: four missing Status
+      headers, plus README.md claiming "seven install scenarios" in two
+      places — the denylisted superseded taxonomy, sitting unnoticed in the
+      repo front door because the guard could not see it. README scenario
+      table also still carried the old A-F+T taxonomy; replaced with A/B/C/D
+      per ADR-0002. Three regression tests added to tests/test_check_docs.py.
+
+  - id: B-EUK-COINFECT-SENTINEL
+    title: '"Screened, none found" sentinel for coinfection_organisms'
+    short_description: |
+      Decide how to represent "screened for coinfection, none found" so
+      coinfection_organisms can become a tier-3 requirement again without
+      forcing submitters to invent a value.
+    phase: p0_series
+    status: tracked_not_scheduled
+    depends_on: []
+    blocked_by_external: "Phase 28 (default eukaryotic pathogen pipelines)"
+    parallel_safe: true
+    effort_sessions: 1
+    primary_files:
+      - schema/schema/jackpot_schema.yaml
+      - backend/backend/validator.py
+    test_files:
+      - tests/test_validator_eukaryotic.py
+    source_of_truth_views: []
+    pr_title_template:
+    branch_name_template:
+    role_framing:
+    notes: >
+      Split out of B-EUK-3 on 2026-08-28. byop design section 15 listed
+      coinfection_organisms as a tier-3 field; it is deliberately not enforced
+      as one because _is_absent() treats [] as missing and CSV ingest
+      collapses an empty cell to [] (routers/ingest.py _split_list), making
+      "screened, no coinfection" indistinguishable from "not recorded". The
+      field is still accepted and stored.
+
+      Recording coinfection matters -- mixed-species Plasmodium infection is
+      epidemiologically significant -- so this is deferred, not dropped. The
+      schema already uses the INSDC missing-value convention (missing / not
+      applicable / not collected) for indoor_space and indoor_surface, so
+      there is house precedent for a sentinel. Open sub-decision: sentinel
+      value inside OrganismNameEnum vs a companion coinfection_screened
+      boolean. Sequence it with Phase 28, when the malaria dashboards define
+      what they actually query. Requires gen-pydantic regeneration plus the
+      boolean-keyword patch (Critical Rules 3 and 20).
+
+  - id: B-LICENSE-DATA-TERMS
+    title: Data-use terms for queried data sources (separate from code licensing)
+    short_description: |
+      Decide whether data sources need their own compliance check covering
+      redistribution rights, attribution, and publication of derived results
+      — questions AGPL-3.0 copyleft does not answer.
+    phase: p0_series
+    status: tracked_not_scheduled
+    depends_on: []
+    blocked_by_external:
+    parallel_safe: true
+    effort_sessions: 1
+    primary_files:
+      - docs/THIRD_PARTY_LICENSES.md
+      - scripts/verify_licenses.py
+    test_files:
+      - tests/test_verify_licenses.py
+    source_of_truth_views: []
+    pr_title_template:
+    branch_name_template:
+    role_framing:
+    notes: >
+      Split out 2026-08-28 when "Databases and references" was exempted from
+      the code gate. Exempting it was correct -- AGPL copyleft governs
+      distributed code, not queried data -- but it moves data sources from
+      wrongly-gated to ungated, and data-use terms are a real and different
+      compliance question.
+
+      Deliberately NOT pre-built. The section holds exactly one row (SRA, US
+      public domain, queried and never redistributed), so there is nothing to
+      check yet and no second example to design a vocabulary against. YAGNI.
+
+      The trigger to pick this up is a restricted source landing in that
+      table. GISAID is the obvious candidate for this domain: its data-use
+      terms are restrictive, JACKPOT ships a gisaid.py router, and ADR-0001
+      records an anti-GISAID-capture position. At that point the questions
+      worth automating are redistribution rights, attribution requirements,
+      and whether derived results may be published -- none of which the
+      current allowlist/denylist vocabulary can express, since it is built
+      for SPDX code identifiers.
+
+      Note the guard already refuses to conflate the two: a test pins that
+      widening the public-domain pattern must not sweep "public data" in.
+
+  - id: B-LICENSE-DNABERTS-ADOPTION
+    title: Resolve DNABERT-S code licensing before adoption
+    short_description: |
+      github.com/MAGICS-LAB/DNABERT_S carries no LICENSE file. The weights are
+      declared Apache-2.0 on the HF model card; the code has no stated grant.
+      Resolve with upstream before wiring the edge tier.
+    phase: p0_series
+    status: tracked_not_scheduled
+    depends_on: []
+    blocked_by_external: "DNABERT-S adoption (edge-tier detection work)"
+    parallel_safe: true
+    effort_sessions: 0.5
+    primary_files:
+      - docs/THIRD_PARTY_LICENSES.md
+      - scripts/license_sources.yaml
+    test_files: []
+    source_of_truth_views: []
+    pr_title_template:
+    branch_name_template:
+    role_framing:
+    notes: >
+      Supersedes B-LICENSE-CCBY-ADOPTION, which was filed 2026-08-28 on the
+      belief that DNABERT-S was CC BY 4.0. Verification the same day found no
+      CC-BY anywhere: the HF model card declares license apache-2.0 for the
+      weights, and the GitHub code repo has no LICENSE file at all (GitHub
+      detects none). The CC-BY claim most likely came from the paper's licence
+      rather than the software's. Recorded here because the mistake is the
+      alibi-detect pattern and worth not repeating.
+
+      What actually needs resolving: DNABERT-S derives from DNABERT-2, whose
+      LICENSE verifies as Apache-2.0 -- but Apache-2.0 is permissive, so a
+      derivative's own new code is not automatically covered by the parent's
+      grant. Portions copied from DNABERT-2 remain Apache-2.0 (and Apache-2.0
+      section 4 obliges a distributor to ship the licence and NOTICE, which
+      DNABERT_S does not appear to do); DNABERT-S's own additions have no
+      stated grant, which defaults to all rights reserved.
+
+      Options at adoption: ask upstream to add a LICENSE file (cheapest and
+      benefits everyone); or use only the weights, relying on the model card's
+      apache-2.0 declaration and avoiding the unlicensed code; or drop
+      DNABERT-S for a tier-appropriate alternative -- METAGENE-1 is already the
+      license-cleared choice, and NT v2 / Evo 2 remain unverified candidates.
+
+      Apache-2.0 is on the allowlist, so nothing is blocked today: the row is
+      [candidate] and nothing imports it.

@@ -1,3 +1,5 @@
+> **Status:** Reference — PITR restore drill runbook (DEPLOY-2).
+
 # PITR Restore Drill (DEPLOY-2)
 
 This document is a runbook for the **point-in-time recovery (PITR)
