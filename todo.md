@@ -1109,11 +1109,14 @@ Driven by integration-readiness analysis vs Driver et al. 2024 *Sci Total Enviro
                    Read Snakefile, resolve singularity:/container:/
                    conda: directives, wrap with event-streaming script
                    that polls --report JSON every 30s.
-               (c) backend/services/wdl_launcher.py — new. Support
-                   both Cromwell (heavyweight) and miniwdl (lightweight)
-                   via JACKPOT_WDL_BACKEND. Populate inputs.json from
-                   manifest. Poll Cromwell metadata API or parse
-                   miniwdl structured logs.
+               (c) [x] B-BYOP-5c shipped —
+                   backend/backend/services/launchers/wdl_launcher.py
+                   (EngineLauncher-conformant; miniwdl default backend,
+                   cromwell via JACKPOT_WDL_BACKEND; inputs.json passed
+                   as params_file; tests/services/launchers/
+                   test_wdl_launcher.py). Event polling (Cromwell
+                   metadata API / miniwdl log parse) deferred to the
+                   BYOP launch-dispatch integration.
                (d) backend/services/manifest_launcher.py — new.
                    Docker run wrapper for the manifest engine. Single
                    container, single command, structured timing and
