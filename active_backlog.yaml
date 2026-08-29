@@ -642,7 +642,7 @@ sessions:
       (SARS-CoV-2 + RSV + Influenza A). Reads from
       wastewater_target_concentration table.
     phase: wastewater
-    status: open
+    status: shipped
     depends_on:
       - B-CWB-SCHEMA-2
     blocked_by_external:
@@ -662,6 +662,8 @@ sessions:
       UNBLOCKED 2026-08-28: B-CWB-SCHEMA-2 landed in P0b (c871b28bbdab);
       the status had never been flipped.
 
+    merged_at: '2026-08-29'
+    merge_sha: 706a19b
   - id: B-WW-ADV-2
     title: PHES-ODM alignment
     short_description: |
