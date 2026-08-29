@@ -1276,7 +1276,12 @@ sessions:
     pr_title_template:
     branch_name_template:
     role_framing:
-    notes: ""
+    notes: |
+      2026-08-29 (B-BYOP-5a security hook): byop.py `_get_or_404` has an
+      IDOR-shape — any authenticated user can read/mutate any BYOP pipeline
+      by id. List-all is intentional per design §9 (bioinformaticians browse
+      the catalog), but per-lab scoping of mutating endpoints belongs to the
+      P0c tenancy guard. Include byop.py in the endpoint→capability sweep.
     reconciliation_note: >
       UNBLOCKED 2026-08-28: its only dependency, P0b, merged 2026-07-06 at
       3016238 but was still marked tracked_not_scheduled. P0c has therefore
