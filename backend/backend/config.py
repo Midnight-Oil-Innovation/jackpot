@@ -134,6 +134,11 @@ class Settings(BaseSettings):
     # and is fast enough that a 5-minute pipeline lands its
     # COMPLETED/FAILED state-shift inside the same business minute.
     log_poller_interval_seconds: int = 30
+    # B-CARE-3c vacuum cadence: retention window between tombstone and
+    # vacuum (operator policy, design doc §6; 30-day default) and the
+    # scheduled-job interval (daily).
+    vacuum_retention_seconds: int = 2592000
+    vacuum_job_interval_seconds: int = 86400
 
     # P0h H-6: pre-launch Slurm reachability check.
     # Refines F-8: when a launch's resolved profile is SLURM, fire

@@ -478,6 +478,24 @@ def add_samples_to_submission(
             detail=(f"Can only add samples in DRAFT status; this submission is {sub['status']!r}."),
         )
 
+    # B-CARE-3e: sovereignty pre-publish gate — a sample anywhere in the
+    # deletion lifecycle must never gain new external-repository footprint.
+    blocked = execute_query(
+        "SELECT sample_id, deletion_status FROM samples "
+        "WHERE id = ANY(:ids) AND deletion_status <> 'ACTIVE'",
+        {"ids": sample_ids},
+        conn=conn,
+    )
+    if blocked:
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                "Samples with a pending or completed deletion cannot be "
+                "submitted to external repositories: "
+                + ", ".join(f"{b['sample_id']} ({b['deletion_status']})" for b in blocked)
+            ),
+        )
+
     inserted: list[dict] = []
     for sid in sample_ids:
         # ON CONFLICT DO NOTHING keeps the call idempotent.
@@ -625,6 +643,7 @@ def validate_submission_readiness(submission_id: int, conn) -> SubmissionValidat
           JOIN submission_samples ss ON ss.sample_id_fk = s.id
          WHERE ss.submission_id = :id
            AND s.is_archived = FALSE
+           AND s.deletion_status = 'ACTIVE'
         """,
         {"id": submission_id},
         conn=conn,

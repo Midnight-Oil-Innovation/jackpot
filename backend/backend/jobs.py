@@ -2148,3 +2148,32 @@ __all__ = [
     "verify_sample_file",
     "FULL_HASH_CHUNK_SIZE",
 ]
+
+
+def vacuum_tombstoned_samples_job() -> dict:
+    """B-CARE-3c: vacuum tombstoned samples past their retention window.
+
+    Idempotent — VACUUMED rows are never re-selected; a partial failure
+    leaves ``vacuum_retry_at`` set and the next run retries only the
+    failed storage deletes.
+    """
+    from backend.deletion import retry_failed_storage_deletes, vacuum_sample
+
+    retention = get_settings().vacuum_retention_seconds
+    rows = execute_query(
+        "SELECT * FROM samples WHERE deletion_status = 'TOMBSTONED' "
+        "AND tombstoned_at < NOW() - (:retention || ' seconds')::interval "
+        "ORDER BY tombstoned_at",
+        {"retention": retention},
+    )
+    vacuumed = 0
+    for sample in rows:
+        try:
+            vacuum_sample(sample, None, None, trigger="scheduled")
+            vacuumed += 1
+        except Exception:
+            logger.exception("vacuum job failed for sample %s", sample["id"])
+    retried = retry_failed_storage_deletes(None)
+    if vacuumed or retried:
+        logger.info("vacuum job: %s vacuumed, %s retries cleared", vacuumed, retried)
+    return {"vacuumed": vacuumed, "retries_cleared": retried}

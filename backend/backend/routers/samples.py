@@ -1,7 +1,9 @@
 import logging
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from pydantic import BaseModel
 
+from backend import deletion
 from backend.audit import AuditActions, log_audit
 from backend.auth.guards import get_current_user, get_user_lab_membership
 from backend.database import execute_query, execute_write, get_db_dep
@@ -37,6 +39,13 @@ _LOCKED_FIELDS: frozenset[str] = frozenset(
         "ingest_timestamp",
         "ingest_method",
         "is_archived",
+        "deletion_status",
+        "deletion_requested_at",
+        "deletion_requested_by_user_id",
+        "deletion_reason",
+        "tombstoned_at",
+        "vacuumed_at",
+        "vacuum_retry_at",
         "deleted_at",
         "deleted_by_id",
         "owner_id",
@@ -167,7 +176,8 @@ def _serialise(row: dict) -> dict:
 
 def _get_sample(sample_id: int, conn) -> dict | None:
     rows = execute_query(
-        "SELECT * FROM samples WHERE id = :id AND is_archived = FALSE LIMIT 1",
+        "SELECT * FROM samples WHERE id = :id AND is_archived = FALSE "
+        "AND deletion_status NOT IN ('TOMBSTONED', 'VACUUMED') LIMIT 1",
         {"id": sample_id},
         conn=conn,
     )
@@ -214,6 +224,7 @@ def _build_sample_filters(
     optional filters, layered on top of the base visibility clause."""
     where: list[str] = [
         "s.is_archived = FALSE",
+        "s.deletion_status NOT IN ('TOMBSTONED', 'VACUUMED')",
         vis_clause,
     ]
     params: dict = dict(vis_params)
@@ -581,3 +592,171 @@ def download_sample(
         raise HTTPException(status_code=500, detail=str(exc)) from exc
 
     return success(data={"url": url, "expires_in": ttl, "file_type": file_type})
+
+
+# ── Sovereignty deletion lifecycle (B-CARE-3a..3g) ──────────────────────────
+# Authorization per sovereignty design §10; state machine + effects live in
+# backend/deletion.py. Tombstoned/vacuumed rows are invisible to the normal
+# sample surfaces, so these endpoints fetch without the visibility filter.
+
+
+class DeletionRequestBody(BaseModel):
+    reason: str
+
+
+class ApproveDeletionBody(BaseModel):
+    platform_admin_self_approve: bool = False
+
+
+class VacuumNowBody(BaseModel):
+    justification: str
+
+
+class RetractionRequestBody(BaseModel):
+    repository: str
+    accession: str | None = None
+    retraction_protocol: str | None = None
+
+
+def _get_sample_any_or_404(sample_id: int, db) -> dict:
+    sample = deletion.get_sample_any_state(sample_id, db)
+    if not sample:
+        raise HTTPException(status_code=404, detail="Sample not found.")
+    return sample
+
+
+def _require_lab_tie(user: dict, sample: dict) -> None:
+    """Requester authorization (§10): platform admin, owner, or lab member."""
+    if user.get("is_platform_admin") or sample.get("owner_id") == user["id"]:
+        return
+    if get_user_lab_membership(user["id"], sample["lab_id"]):
+        return
+    raise HTTPException(status_code=403, detail="Not authorized for this sample.")
+
+
+def _require_approval_authority(user: dict, sample: dict) -> None:
+    """Approver authorization (§10): platform admin or own-lab Lab Director."""
+    if user.get("is_platform_admin"):
+        return
+    member = get_user_lab_membership(user["id"], sample["lab_id"])
+    if member and member.get("is_lab_director"):
+        return
+    raise HTTPException(
+        status_code=403,
+        detail="Lab Director or Platform Admin required to approve deletions.",
+    )
+
+
+@router.post("/{sample_id}/request-deletion")
+def request_sample_deletion(
+    sample_id: int,
+    payload: DeletionRequestBody,
+    request: Request,
+    db=Depends(get_db_dep),  # noqa: B008
+):
+    user = get_current_user(request)
+    sample = _get_sample_any_or_404(sample_id, db)
+    _require_lab_tie(user, sample)
+    row = deletion.request_deletion(sample, user, payload.reason, db)
+    return success(data=_serialise(row))
+
+
+@router.post("/{sample_id}/cancel-deletion")
+def cancel_sample_deletion(
+    sample_id: int,
+    request: Request,
+    db=Depends(get_db_dep),  # noqa: B008
+):
+    user = get_current_user(request)
+    sample = _get_sample_any_or_404(sample_id, db)
+    if sample.get("deletion_requested_by_user_id") != user["id"]:
+        _require_approval_authority(user, sample)
+    row = deletion.cancel_deletion(sample, user, db)
+    return success(data=_serialise(row))
+
+
+@router.post("/{sample_id}/approve-deletion")
+def approve_sample_deletion(
+    sample_id: int,
+    request: Request,
+    payload: ApproveDeletionBody | None = None,
+    db=Depends(get_db_dep),  # noqa: B008
+):
+    user = get_current_user(request)
+    sample = _get_sample_any_or_404(sample_id, db)
+    _require_approval_authority(user, sample)
+    row = deletion.approve_deletion(
+        sample,
+        user,
+        db,
+        self_approve=bool(payload and payload.platform_admin_self_approve),
+    )
+    return success(data=_serialise(row))
+
+
+@router.post("/{sample_id}/reverse-tombstone")
+def reverse_sample_tombstone(
+    sample_id: int,
+    request: Request,
+    db=Depends(get_db_dep),  # noqa: B008
+):
+    user = get_current_user(request)
+    if not user.get("is_platform_admin"):
+        raise HTTPException(
+            status_code=403, detail="Platform Admin required to reverse a tombstone."
+        )
+    sample = _get_sample_any_or_404(sample_id, db)
+    row = deletion.reverse_tombstone(sample, user, db)
+    return success(data=_serialise(row))
+
+
+@router.post("/{sample_id}/vacuum-now")
+def vacuum_sample_now(
+    sample_id: int,
+    payload: VacuumNowBody,
+    request: Request,
+    db=Depends(get_db_dep),  # noqa: B008
+):
+    user = get_current_user(request)
+    if not user.get("is_platform_admin"):
+        raise HTTPException(status_code=403, detail="Platform Admin required to vacuum.")
+    if not payload.justification.strip():
+        raise HTTPException(status_code=422, detail="A justification is required.")
+    sample = _get_sample_any_or_404(sample_id, db)
+    row = deletion.vacuum_sample(
+        sample, user["id"], db, trigger="vacuum-now", justification=payload.justification
+    )
+    return success(data=_serialise(row))
+
+
+@router.get("/{sample_id}/deletion-report")
+def sample_deletion_report(
+    sample_id: int,
+    request: Request,
+    db=Depends(get_db_dep),  # noqa: B008
+):
+    user = get_current_user(request)
+    sample = _get_sample_any_or_404(sample_id, db)
+    _require_lab_tie(user, sample)
+    return success(data=deletion.deletion_report(sample, db))
+
+
+@router.post("/{sample_id}/retraction-requests", status_code=201)
+def create_retraction_request(
+    sample_id: int,
+    payload: RetractionRequestBody,
+    request: Request,
+    db=Depends(get_db_dep),  # noqa: B008
+):
+    user = get_current_user(request)
+    sample = _get_sample_any_or_404(sample_id, db)
+    _require_approval_authority(user, sample)
+    row = deletion.record_retraction_request(
+        sample,
+        user,
+        db,
+        repository=payload.repository,
+        accession=payload.accession,
+        retraction_protocol=payload.retraction_protocol,
+    )
+    return success(data=_serialise(row), status_code=201)
