@@ -1796,7 +1796,7 @@ sessions:
       not jackpot-batch: this is a new session shape and the scaffolding
       decisions want turn-by-turn eyes.
     phase: access_model_redesign
-    status: open
+    status: shipped
     depends_on: []
     blocked_by_external:
     parallel_safe: false
@@ -1816,6 +1816,8 @@ sessions:
     notes: "authz module path is an M0 scoping decision (recommend backend/backend/authz/); primary_files lists the recommended
       dir and tightens once chosen. access_model.md §5 + §9 fixtures."
 
+    merged_at: '2026-08-29'
+    merge_sha: a1b5943
   - id: M1
     title: visibility_sql_clause companion — list-filtering, cross-checked vs permit()
     short_description: |
@@ -1829,7 +1831,7 @@ sessions:
       logic that must not diverge), which is why it is its own phase. Still
       dark — no route uses it yet. No ORM; raw SQL via text().
     phase: access_model_redesign
-    status: blocked
+    status: open
     depends_on:
       - M0
     blocked_by_external:
@@ -1896,7 +1898,7 @@ sessions:
       the M2 cutover PR but is scoped here so it can be written and tested
       against M0's grants table ahead of the cutover.
     phase: access_model_redesign
-    status: blocked
+    status: open
     depends_on:
       - M0
     blocked_by_external:
