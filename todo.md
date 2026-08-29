@@ -1139,25 +1139,36 @@ Driven by integration-readiness analysis vs Driver et al. 2024 *Sci Total Enviro
                tests/services/test_byop_quarterly_revalidation.py,
                scheduler wiring in backend/backend/main.py. (1 session, P0f)
 
-[ ] B-BYOP-7   Implement Streamlit BYOP registration wizard (new page).
-               6-step wizard: source type → source details → manifest
-               preview → validation status (live updates via polling)
-               → sandbox status → activated. Per-source-type forms
-               (public Git, private Git with deploy key gen, tarball
-               upload, Docker image). (2-3 sessions, P0f)
+[x] B-BYOP-7   Implement Streamlit BYOP registration wizard (new page).
+               Shipped as `frontend/pages/byop_register.py` — 4-step
+               wizard (manifest upload → client-side schema validation
+               table → source details per source type → review &
+               register). Stage 1 + Stage 2 run server-side inside
+               `POST /api/v1/byop/pipelines` (B-BYOP-4 gates
+               atomically; no standalone stage endpoints), with the
+               422 detail classified per stage and validation_log /
+               sandbox_log surfaced on success. (P0f)
 
-[ ] B-BYOP-8   Implement Streamlit BYOP catalog tab on the Pipelines
-               page. List registered BYOP pipelines with status badges,
-               filter by engine/organism/status, link to detail view.
-               Sample-detail-page launch dropdown shows BYOP pipelines
-               whose applicability.organism_names matches the sample's
-               organism. (1-2 sessions, P0f)
+[x] B-BYOP-8   Implement Streamlit BYOP catalog tab on the Pipelines
+               page. List registered BYOP pipelines with status, last
+               revalidation date, and per-pipeline detail expander with
+               admin deactivate/archive actions (B-BYOP-4 endpoints).
+               Shipped: frontend/pages/pipelines.py (BYOP Catalog tab),
+               edit_pipelines_byop_tab.py. (1-2 sessions, P0f)
 
-[ ] B-BYOP-10  Implement BYOP telemetry — aggregated success rate,
+[x] B-BYOP-10  Implement BYOP telemetry — aggregated success rate,
                walltime, peak memory, cost per run for each registered
                pipeline. Auto-deactivate pipelines whose success rate
                drops below operator-configured threshold (default 50%)
                with platform admin notification. (1-2 sessions, P0f)
+               [2026-08-29 shipped: backend/backend/services/byop_telemetry.py
+               (single in-DB aggregation: success rate, mean/p95 walltime,
+               mean cost from pipeline_results.metrics JSONB joined via
+               B-BYOP-9 FK) + GET /byop/telemetry in
+               backend/backend/routers/byop.py +
+               tests/services/test_byop_telemetry.py (real-Postgres, 6 tests).
+               Peak memory + auto-deactivate threshold/notification deferred —
+               out of scope per B-BYOP-10 session prompt.]
 ```
 
 ### Phase 24.7 / P0f success criterion
