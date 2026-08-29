@@ -1863,7 +1863,7 @@ sessions:
       This is a prerequisite for M2, not part of it, so the cutover session is
       not also doing discovery.
     phase: access_model_redesign
-    status: open
+    status: shipped
     depends_on: []
     blocked_by_external:
     parallel_safe: false
@@ -1880,6 +1880,8 @@ sessions:
     role_framing:
     notes: "Independent of M0/M1 (pure discovery over current guards); blocks M2. access_model.md §10.3."
 
+    merged_at: '2026-08-29'
+    merge_sha: 088901f
   - id: ACCESS-SEED
     title: Reseed script — stored APGAP roles become preset grants
     short_description: |
