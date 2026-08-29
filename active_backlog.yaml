@@ -1533,7 +1533,7 @@ sessions:
       engine — i.e., users supply pre-rendered command sequences. Mirrors
       the launcher interface from B-BYOP-5a but bypasses engine invocation.
     phase: p0f
-    status: open
+    status: shipped
     depends_on:
       - B-BYOP-4
       - B-BYOP-5a
@@ -1555,6 +1555,8 @@ sessions:
       manifests without a native engine. Smallest of the four launchers.
     notes: "Per docs/byop_and_eukaryotic_design.md §N. B-BYOP-5 decomposed; this is the manifest-only variant."
 
+    merged_at: '2026-08-29'
+    merge_sha: 67af650
   - id: B-BYOP-6
     title: BYOP quarterly revalidation background job
     short_description: |
