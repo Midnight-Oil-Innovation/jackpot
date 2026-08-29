@@ -1128,12 +1128,16 @@ Driven by integration-readiness analysis vs Driver et al. 2024 *Sci Total Enviro
                    tests/services/launchers/test_manifest_launcher.py).
                (2-3 sessions per launcher = 1.5-2 weeks total, P0f)
 
-[ ] B-BYOP-6   Implement backend/services/byop_quarterly_revalidation.py
-               background job. Re-runs Stage 1 + Stage 2 against
-               registered pipelines on configurable cadence (default
-               90 days) to catch silently-broken upstream containers
-               or moved Git refs. Failed re-validation transitions
-               pipeline to DEACTIVATED with notification. (1 session, P0f)
+[x] B-BYOP-6   Implement backend/services/byop_quarterly_revalidation.py
+               background job. Re-runs Stage 1 against ACTIVE pipelines
+               on configurable cadence (default 90 days) to catch
+               upstream rot (deleted containers, expired licenses,
+               vanished reference-data URLs). Failed re-validation
+               transitions pipeline to DEACTIVATED with registrar
+               notification. Shipped: backend/backend/services/
+               byop_quarterly_revalidation.py,
+               tests/services/test_byop_quarterly_revalidation.py,
+               scheduler wiring in backend/backend/main.py. (1 session, P0f)
 
 [ ] B-BYOP-7   Implement Streamlit BYOP registration wizard (new page).
                6-step wizard: source type → source details → manifest

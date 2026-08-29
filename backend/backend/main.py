@@ -61,6 +61,7 @@ from backend.routers import (
 from backend.routers import (
     settings as settings_router,
 )
+from backend.services.byop_quarterly_revalidation import register as register_byop_revalidation
 from backend.submissions import recover_interrupted_executions
 from backend.version import __version__
 
@@ -155,6 +156,9 @@ async def lifespan(app: FastAPI):
             replace_existing=True,
             max_instances=1,
         )
+        # P0f B-BYOP-6: quarterly Stage 1 revalidation of ACTIVE BYOP
+        # pipelines (design doc §5.4 — upstream-rot detection).
+        register_byop_revalidation(scheduler)
         scheduler.start()
     yield
     if scheduler.running:
