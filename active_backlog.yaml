@@ -398,7 +398,9 @@ sessions:
       against wastewater_target_concentration (B-CWB-SCHEMA-2) joined to
       WastewaterSample via sample_associations (B-CWB-SCHEMA-1).
     phase: cryptwwdb_track
-    status: open
+    status: shipped
+    merged_at: "2026-08-28"
+    merge_sha: "bf11d2f"
     depends_on:
       - B-CWB-SCHEMA-1
       - B-CWB-SCHEMA-2
@@ -431,7 +433,7 @@ sessions:
       handling, error-bar propagation, weekly/rolling averages,
       population-threshold trigger points.
     phase: cryptwwdb_track
-    status: blocked
+    status: open
     depends_on:
       - B-CWB-MB-1-DB
     blocked_by_external:
