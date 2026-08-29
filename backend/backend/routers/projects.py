@@ -5,7 +5,7 @@ from backend.audit import AuditActions, log_audit
 from backend.auth.guards import (
     get_current_user,
     get_user_lab_membership,
-    require_lab_director,
+    require_capability,
 )
 from backend.database import execute_query, execute_write, get_db_dep
 from backend.pagination import paginate
@@ -62,7 +62,7 @@ def create_project(
     db=Depends(get_db_dep),  # noqa: B008
 ):
     user = get_current_user(request)
-    require_lab_director(user, payload.lab_id)
+    require_capability("org:manage")(user, lab_id=payload.lab_id)
 
     lab = execute_query(
         "SELECT id FROM labs WHERE id = :id LIMIT 1",
@@ -213,7 +213,7 @@ def update_project(
         return error("NOT_FOUND", f"Project {project_id} not found.", status_code=404)
     before = current[0]
 
-    require_lab_director(user, before["lab_id"])
+    require_capability("org:manage")(user, lab_id=before["lab_id"])
 
     updates = payload.model_dump(exclude_none=True)
     if not updates:
