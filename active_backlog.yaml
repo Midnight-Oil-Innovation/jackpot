@@ -433,7 +433,7 @@ sessions:
       handling, error-bar propagation, weekly/rolling averages,
       population-threshold trigger points.
     phase: cryptwwdb_track
-    status: open
+    status: shipped
     depends_on:
       - B-CWB-MB-1-DB
     blocked_by_external:
@@ -451,6 +451,8 @@ sessions:
       QC pass and trigger-point logic from Driver et al. 2024 Table 2.
     notes: ""
 
+    merged_at: '2026-08-29'
+    merge_sha: 0f0b1f3
   - id: B-CWB-POLICY-1
     title: Encrypted-query policy checker module
     short_description: "Discrete policy-checker module sitting between federation router and HE\ncompute backend. Per Driver
@@ -640,7 +642,7 @@ sessions:
       (SARS-CoV-2 + RSV + Influenza A). Reads from
       wastewater_target_concentration table.
     phase: wastewater
-    status: open
+    status: shipped
     depends_on:
       - B-CWB-SCHEMA-2
     blocked_by_external:
@@ -660,6 +662,8 @@ sessions:
       UNBLOCKED 2026-08-28: B-CWB-SCHEMA-2 landed in P0b (c871b28bbdab);
       the status had never been flipped.
 
+    merged_at: '2026-08-29'
+    merge_sha: 706a19b
   - id: B-WW-ADV-2
     title: PHES-ODM alignment
     short_description: |
@@ -1859,7 +1863,7 @@ sessions:
       This is a prerequisite for M2, not part of it, so the cutover session is
       not also doing discovery.
     phase: access_model_redesign
-    status: open
+    status: shipped
     depends_on: []
     blocked_by_external:
     parallel_safe: false
@@ -1876,6 +1880,8 @@ sessions:
     role_framing:
     notes: "Independent of M0/M1 (pure discovery over current guards); blocks M2. access_model.md §10.3."
 
+    merged_at: '2026-08-29'
+    merge_sha: 088901f
   - id: ACCESS-SEED
     title: Reseed script — stored APGAP roles become preset grants
     short_description: |

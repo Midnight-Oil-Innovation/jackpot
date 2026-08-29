@@ -50,7 +50,8 @@ def main() -> None:
         "- **Broken files** — operator triage for unreachable file references (P0f)\n"
         "- **Import spreadsheet** — interactive xlsx/csv/tsv import wizard (I-1)\n"
         "- **Submissions** — generate NCBI/GISAID/ENA/DDBJ packages, track lifecycle (I-2)\n"
-        "- **Wastewater** — Freyja lineage-abundance time-series per sewershed (B-WW-1)"
+        "- **Wastewater** — Freyja lineage-abundance time-series per sewershed (B-WW-1)\n"
+        "- **Multi-target panel** — SARS-CoV-2 / RSV / Influenza A side-by-side (B-WW-ADV-1)"
     )
 
 

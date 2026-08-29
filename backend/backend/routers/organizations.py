@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, EmailStr, Field
 
 from backend.audit import AuditActions, log_audit
-from backend.auth.guards import get_current_user, require_platform_admin
+from backend.auth.guards import get_current_user, require_capability
 from backend.database import execute_query, execute_write, get_db_dep
 from backend.pagination import paginate
 from backend.responses import error, success, success_list, success_message
@@ -33,7 +33,7 @@ def create_organization(
     db=Depends(get_db_dep),  # noqa: B008
 ):
     user = get_current_user(request)
-    require_platform_admin(user)
+    require_capability("org:manage")(user)
 
     existing = execute_query(
         "SELECT id FROM organizations WHERE display_name = :n LIMIT 1",
@@ -85,7 +85,7 @@ def list_organizations(
     db=Depends(get_db_dep),  # noqa: B008
 ):
     user = get_current_user(request)
-    require_platform_admin(user)
+    require_capability("org:manage")(user)
 
     base_query = "SELECT * FROM organizations"
     params: dict = {}
@@ -141,7 +141,7 @@ def update_organization(
     db=Depends(get_db_dep),  # noqa: B008
 ):
     user = get_current_user(request)
-    require_platform_admin(user)
+    require_capability("org:manage")(user)
 
     current = execute_query(
         "SELECT * FROM organizations WHERE id = :id LIMIT 1",
@@ -189,7 +189,7 @@ def deactivate_organization(
     db=Depends(get_db_dep),  # noqa: B008
 ):
     user = get_current_user(request)
-    require_platform_admin(user)
+    require_capability("org:manage")(user)
 
     current = execute_query(
         "SELECT * FROM organizations WHERE id = :id LIMIT 1",

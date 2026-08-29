@@ -3,11 +3,7 @@ from unittest.mock import patch
 import pytest
 from fastapi import HTTPException
 
-from backend.auth.guards import (
-    require_lab_access,
-    require_lab_director,
-    require_platform_admin,
-)
+from backend.auth.guards import require_capability
 
 
 def make_user(is_platform_admin=False, is_data_analyst=False, uid=1):
@@ -22,32 +18,32 @@ def make_user(is_platform_admin=False, is_data_analyst=False, uid=1):
 
 
 def test_platform_admin_passes():
-    require_platform_admin(make_user(is_platform_admin=True))
+    require_capability("org:manage")(make_user(is_platform_admin=True))
 
 
 def test_non_admin_denied():
     with pytest.raises(HTTPException) as exc:
-        require_platform_admin(make_user())
+        require_capability("org:manage")(make_user())
     assert exc.value.status_code == 403
 
 
 def test_data_analyst_not_platform_admin():
     with pytest.raises(HTTPException):
-        require_platform_admin(make_user(is_data_analyst=True))
+        require_capability("org:manage")(make_user(is_data_analyst=True))
 
 
-def test_lab_director_passes():
+def test_lab_director_passes_directorship_capability():
     membership = {"lab_id": 5, "is_lab_director": True, "permission_group_name": "Lab Director"}
     with patch("backend.auth.guards.get_user_lab_membership", return_value=membership):
-        require_lab_director(make_user(uid=2), lab_id=5)
+        require_capability("user:manage")(make_user(uid=2), lab_id=5)
 
 
-def test_platform_admin_bypasses_director_check():
+def test_platform_admin_bypasses_lab_check():
     with patch("backend.auth.guards.get_user_lab_membership", return_value=None):
-        require_lab_director(make_user(is_platform_admin=True), lab_id=5)
+        require_capability("user:manage")(make_user(is_platform_admin=True), lab_id=5)
 
 
-def test_lab_collaborator_not_director():
+def test_lab_collaborator_denied_directorship_capability():
     membership = {
         "lab_id": 5,
         "is_lab_director": False,
@@ -55,7 +51,7 @@ def test_lab_collaborator_not_director():
     }
     with patch("backend.auth.guards.get_user_lab_membership", return_value=membership):
         with pytest.raises(HTTPException) as exc:
-            require_lab_director(make_user(uid=3), lab_id=5)
+            require_capability("user:manage")(make_user(uid=3), lab_id=5)
         assert exc.value.status_code == 403
 
 
@@ -68,21 +64,29 @@ def test_lab_collaborator_not_director():
         "Bioinformatics User",
     ],
 )
-def test_all_lab_roles_have_access(role):
+def test_all_lab_members_pass_member_level_capability(role):
     membership = {
         "lab_id": 5,
         "is_lab_director": role == "Lab Director",
         "permission_group_name": role,
     }
     with patch("backend.auth.guards.get_user_lab_membership", return_value=membership):
-        require_lab_access(make_user(uid=5), lab_id=5)
+        require_capability("sample:read_detail")(make_user(uid=5), lab_id=5)
 
 
-def test_non_member_denied_lab_access():
+def test_non_member_denied_member_level_capability():
     with (
         pytest.raises(HTTPException) as exc,
         patch("backend.auth.guards.get_user_lab_membership", return_value=None),
         patch("backend.auth.guards.execute_query", return_value=[]),
     ):
-        require_lab_access(make_user(uid=7), lab_id=5)
+        require_capability("sample:read_detail")(make_user(uid=7), lab_id=5)
     assert exc.value.status_code == 403
+
+
+def test_project_member_passes_member_level_capability():
+    with (
+        patch("backend.auth.guards.get_user_lab_membership", return_value=None),
+        patch("backend.auth.guards.execute_query", return_value=[{"1": 1}]),
+    ):
+        require_capability("sample:read_detail")(make_user(uid=8), lab_id=5)

@@ -14,7 +14,7 @@ Exposes the FED-A federation package over HTTP as
 Auth model:
 
   * Admin endpoints (``GET/POST /instances``) use the standard JWT-cookie
-    + ``require_platform_admin`` guard already wired into the rest of
+    + ``require_capability`` guard already wired into the rest of
     the API.
   * The ``/search`` endpoint is internal-user-facing and requires a
     normal authenticated user. Federation results are
@@ -55,7 +55,7 @@ from backend.audit import log_audit
 from backend.auth.guards import (
     authenticate_federation_peer,
     get_current_user,
-    require_platform_admin,
+    require_capability,
 )
 from backend.credentials import credentials
 from backend.database import execute_query, execute_write, get_db_dep
@@ -164,7 +164,7 @@ def list_instances(
     db=Depends(get_db_dep),  # noqa: B008
 ):
     user = get_current_user(request)
-    require_platform_admin(user)
+    require_capability("federation:configure_peer")(user)
 
     rows = execute_query(
         "SELECT * FROM federated_instances ORDER BY name ASC",
@@ -185,7 +185,7 @@ def register_instance(
     db=Depends(get_db_dep),  # noqa: B008
 ):
     user = get_current_user(request)
-    require_platform_admin(user)
+    require_capability("federation:configure_peer")(user)
 
     existing = execute_query(
         "SELECT id FROM federated_instances WHERE name = :n LIMIT 1",

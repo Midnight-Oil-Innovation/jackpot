@@ -80,32 +80,51 @@ def get_user_lab_membership(user_id: int, lab_id: int) -> dict | None:
     return rows[0] if rows else None
 
 
-def require_platform_admin(current_user: dict) -> None:
-    if not current_user.get("is_platform_admin"):
-        raise HTTPException(status_code=403, detail="Platform Admin required.")
+# Capabilities whose lab-scoped check accepts any lab or project membership
+# (read plane); everything else lab-scoped requires lab directorship.
+_MEMBER_LEVEL_CAPABILITIES = frozenset({"sample:read", "sample:read_detail"})
 
 
-def require_lab_director(current_user: dict, lab_id: int) -> None:
-    if current_user.get("is_platform_admin"):
-        return
-    m = get_user_lab_membership(current_user["id"], lab_id)
-    if not m or not m.get("is_lab_director"):
-        raise HTTPException(status_code=403, detail="Lab Director required.")
+def require_capability(capability: str):
+    """Guard factory: returns a callable raising HTTP 403 unless the current
+    user may exercise ``capability`` (an access_model.md §4 ``domain:action``
+    string, recorded in docs/endpoint_capability_map.md).
 
+    Transitional M2-prerequisite implementation (access_model.md §10.3): the
+    capability string at the call site is the single source of truth for what
+    each route requires, but enforcement still runs the legacy structural
+    checks until M2 wires in the permit() engine:
 
-def require_lab_access(current_user: dict, lab_id: int) -> None:
-    if current_user.get("is_platform_admin"):
-        return
-    if get_user_lab_membership(current_user["id"], lab_id):
-        return
-    rows = execute_query(
-        "SELECT 1 FROM project_membership pm "
-        "JOIN projects p ON p.id = pm.project_id "
-        "WHERE pm.user_id = :uid AND p.lab_id = :lid LIMIT 1",
-        {"uid": current_user["id"], "lid": lab_id},
-    )
-    if not rows:
-        raise HTTPException(status_code=403, detail="Lab access required.")
+    - no authenticated principal            -> 403
+    - platform admin                        -> pass (Instance-scope grant)
+    - ``lab_id`` given, member-level cap    -> lab or project membership
+    - ``lab_id`` given, any other cap       -> lab directorship
+    - otherwise                             -> 403
+    """
+
+    def _guard(current_user: dict | None, lab_id: int | None = None) -> dict:
+        if current_user is None:
+            raise HTTPException(status_code=403, detail=f"capability '{capability}' required")
+        if current_user.get("is_platform_admin"):
+            return current_user
+        if lab_id is not None:
+            membership = get_user_lab_membership(current_user["id"], lab_id)
+            if capability in _MEMBER_LEVEL_CAPABILITIES:
+                if membership:
+                    return current_user
+                rows = execute_query(
+                    "SELECT 1 FROM project_membership pm "
+                    "JOIN projects p ON p.id = pm.project_id "
+                    "WHERE pm.user_id = :uid AND p.lab_id = :lid LIMIT 1",
+                    {"uid": current_user["id"], "lid": lab_id},
+                )
+                if rows:
+                    return current_user
+            elif membership and membership.get("is_lab_director"):
+                return current_user
+        raise HTTPException(status_code=403, detail=f"capability '{capability}' required")
+
+    return _guard
 
 
 def authenticate_federation_peer(request: Request, conn: Any = None) -> dict[str, Any] | None:
