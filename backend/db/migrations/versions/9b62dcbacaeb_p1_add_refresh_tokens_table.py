@@ -25,6 +25,7 @@ Revises:    bac8dbb11c0b
 from __future__ import annotations
 
 import sqlalchemy as sa
+
 from alembic import op
 
 # revision identifiers, used by Alembic.
