@@ -310,7 +310,7 @@ def test_verify_skips_managed_and_broken_via_where_clause():
         asyncio.run(verify_file_references())
 
     assert "storage_state IN ('EXTERNAL', 'MIRRORED')" in captured[0]
-    assert "is_deleted" in captured[0]
+    assert "is_archived" in captured[0]
 
 
 # ─── Per-tick limit ────────────────────────────────────────────────────────
@@ -770,7 +770,7 @@ def test_lab_directors_for_sample_file_query_shape():
 
     assert ids == [5, 7]
     assert "JOIN samples s" in captured_sql[0]
-    assert "is_deleted = FALSE" in captured_sql[0]
+    assert "is_archived = FALSE" in captured_sql[0]
     assert "is_lab_director = TRUE" in captured_sql[0]
     assert captured_params[0] == {"sfid": 123}
 

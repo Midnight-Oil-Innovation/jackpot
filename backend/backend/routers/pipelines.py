@@ -29,8 +29,7 @@ from backend.audit import AuditActions, log_audit
 from backend.auth.guards import (
     get_current_user,
     get_user_lab_membership,
-    require_lab_director,
-    require_platform_admin,
+    require_capability,
 )
 from backend.config import get_settings
 from backend.database import execute_query, execute_write, get_db_dep
@@ -305,7 +304,7 @@ def _authorize_and_resolve_launch_inputs(
         "FROM sample_files sf "
         "JOIN samples s ON s.id = sf.sample_id_fk "
         "WHERE sf.sample_id_fk = ANY(:sids) "
-        "  AND sf.is_deleted = FALSE "
+        "  AND sf.is_archived = FALSE "
         "  AND sf.storage_state = 'BROKEN' "
         "ORDER BY s.sample_id, sf.id",
         {"sids": sample_pks},
@@ -1266,7 +1265,7 @@ def register_custom_pipeline(
     )
     if not proj_rows:
         return error("NOT_FOUND", f"Project {payload.project_id} not found.", status_code=404)
-    require_lab_director(user, proj_rows[0]["lab_id"])
+    require_capability("pipeline:register_custom")(user, lab_id=proj_rows[0]["lab_id"])
 
     if not (payload.github_url.startswith("https://") or payload.github_url.startswith("git@")):
         return error(
@@ -1374,7 +1373,7 @@ def promote_pipeline(
                 "lab_id required when promoting project → lab.",
                 status_code=422,
             )
-        require_lab_director(user, target_lab_id)
+        require_capability("pipeline:promote")(user, lab_id=target_lab_id)
 
         execute_write(
             """
@@ -1404,7 +1403,7 @@ def promote_pipeline(
                 f"current tier is {current_tier!r}.",
                 status_code=400,
             )
-        require_platform_admin(user)
+        require_capability("pipeline:promote")(user)
         execute_write(
             """
             UPDATE pipeline_catalog

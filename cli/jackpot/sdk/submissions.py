@@ -106,7 +106,7 @@ class SubmissionsModule:
         return result if isinstance(result, dict) else {}
 
     def delete(self, submission_id: int) -> dict:
-        """Soft-delete the submission (marks ``is_deleted=TRUE``)."""
+        """Soft-delete the submission (marks ``is_archived=TRUE``)."""
         result = self._client.delete(f"{self._BASE}/{submission_id}")
         return result if isinstance(result, dict) else {}
 

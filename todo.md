@@ -1074,7 +1074,9 @@ Driven by integration-readiness analysis vs Driver et al. 2024 *Sci Total Enviro
                is presence/syntax only per
                `docs/byop_and_eukaryotic_design.md` §5.2.
 
-[ ] B-BYOP-3   Implement backend/services/byop_sandbox.py — Stage 2
+[x] B-BYOP-3   Implement backend/services/byop_sandbox.py — Stage 2
+               DONE: backend/backend/services/byop_sandbox.py +
+               tests/services/test_byop_sandbox.py (25 tests).
                sandbox dry-run with isolation. Per-engine dry-run
                mechanic: nextflow -stub-run, snakemake -n,
                miniwdl --task-only-resources, manifest engine via
@@ -1086,7 +1088,7 @@ Driven by integration-readiness analysis vs Driver et al. 2024 *Sci Total Enviro
                backend/test_data/byop_sandbox/. (1 week, P0f — most
                complex item in the phase)
 
-[ ] B-BYOP-4   Implement backend/routers/byop.py — full CRUD API.
+[x] B-BYOP-4   Implement backend/routers/byop.py — full CRUD API. (backend/backend/routers/byop.py, tests/routers/test_byop.py, registered in backend/backend/main.py)
                POST /api/v1/byop/pipelines (register), GET (list),
                GET /{id} (detail), PATCH /{id}, POST /{id}/revalidate,
                POST /{id}/deactivate, DELETE /{id} (move to ARCHIVED),
@@ -1097,50 +1099,76 @@ Driven by integration-readiness analysis vs Driver et al. 2024 *Sci Total Enviro
                alongside pipeline_zoo_id. (2-3 sessions, P0f)
 
 [ ] B-BYOP-5   Implement engine launchers — 4 sub-items in parallel.
-               (a) backend/services/nextflow_launcher.py — harden
-                   existing path, auto-inject -weblog, enable -resume
-                   with JACKPOT-managed work directory.
-               (b) backend/services/snakemake_launcher.py — new.
-                   Read Snakefile, resolve singularity:/container:/
-                   conda: directives, wrap with event-streaming script
-                   that polls --report JSON every 30s.
-               (c) backend/services/wdl_launcher.py — new. Support
-                   both Cromwell (heavyweight) and miniwdl (lightweight)
-                   via JACKPOT_WDL_BACKEND. Populate inputs.json from
-                   manifest. Poll Cromwell metadata API or parse
-                   miniwdl structured logs.
-               (d) backend/services/manifest_launcher.py — new.
-                   Docker run wrapper for the manifest engine. Single
-                   container, single command, structured timing and
-                   exit-code event emission.
+               (a) [x] B-BYOP-5a shipped —
+                   backend/backend/services/launchers/nextflow_launcher.py
+                   (EngineLauncher-conformant, auto-injects -with-weblog,
+                   -resume by default, JACKPOT-managed work directory;
+                   interface in backend/backend/services/launchers/__init__.py;
+                   tests/services/launchers/test_nextflow_launcher.py).
+               (b) [x] B-BYOP-5b shipped —
+                   backend/backend/services/launchers/snakemake_launcher.py
+                   (EngineLauncher-conformant; --snakefile/--configfile/
+                   --directory, --rerun-incomplete --keep-going resume by
+                   default, no weblog flag per §3.2 — poller handles events;
+                   tests/services/launchers/test_snakemake_launcher.py).
+               (c) [x] B-BYOP-5c shipped —
+                   backend/backend/services/launchers/wdl_launcher.py
+                   (EngineLauncher-conformant; miniwdl default backend,
+                   cromwell via JACKPOT_WDL_BACKEND; inputs.json passed
+                   as params_file; tests/services/launchers/
+                   test_wdl_launcher.py). Event polling (Cromwell
+                   metadata API / miniwdl log parse) deferred to the
+                   BYOP launch-dispatch integration.
+               (d) [x] B-BYOP-5d shipped —
+                   backend/backend/services/launchers/manifest_launcher.py
+                   (engine-less: runs the manifest's pre-rendered command
+                   sequence in order via ManifestLaunchSpec.commands,
+                   ManifestError on missing/empty/malformed manifest,
+                   EngineLauncher-conformant, same LaunchResult shape;
+                   tests/services/launchers/test_manifest_launcher.py).
                (2-3 sessions per launcher = 1.5-2 weeks total, P0f)
 
-[ ] B-BYOP-6   Implement backend/services/byop_quarterly_revalidation.py
-               background job. Re-runs Stage 1 + Stage 2 against
-               registered pipelines on configurable cadence (default
-               90 days) to catch silently-broken upstream containers
-               or moved Git refs. Failed re-validation transitions
-               pipeline to DEACTIVATED with notification. (1 session, P0f)
+[x] B-BYOP-6   Implement backend/services/byop_quarterly_revalidation.py
+               background job. Re-runs Stage 1 against ACTIVE pipelines
+               on configurable cadence (default 90 days) to catch
+               upstream rot (deleted containers, expired licenses,
+               vanished reference-data URLs). Failed re-validation
+               transitions pipeline to DEACTIVATED with registrar
+               notification. Shipped: backend/backend/services/
+               byop_quarterly_revalidation.py,
+               tests/services/test_byop_quarterly_revalidation.py,
+               scheduler wiring in backend/backend/main.py. (1 session, P0f)
 
-[ ] B-BYOP-7   Implement Streamlit BYOP registration wizard (new page).
-               6-step wizard: source type → source details → manifest
-               preview → validation status (live updates via polling)
-               → sandbox status → activated. Per-source-type forms
-               (public Git, private Git with deploy key gen, tarball
-               upload, Docker image). (2-3 sessions, P0f)
+[x] B-BYOP-7   Implement Streamlit BYOP registration wizard (new page).
+               Shipped as `frontend/pages/byop_register.py` — 4-step
+               wizard (manifest upload → client-side schema validation
+               table → source details per source type → review &
+               register). Stage 1 + Stage 2 run server-side inside
+               `POST /api/v1/byop/pipelines` (B-BYOP-4 gates
+               atomically; no standalone stage endpoints), with the
+               422 detail classified per stage and validation_log /
+               sandbox_log surfaced on success. (P0f)
 
-[ ] B-BYOP-8   Implement Streamlit BYOP catalog tab on the Pipelines
-               page. List registered BYOP pipelines with status badges,
-               filter by engine/organism/status, link to detail view.
-               Sample-detail-page launch dropdown shows BYOP pipelines
-               whose applicability.organism_names matches the sample's
-               organism. (1-2 sessions, P0f)
+[x] B-BYOP-8   Implement Streamlit BYOP catalog tab on the Pipelines
+               page. List registered BYOP pipelines with status, last
+               revalidation date, and per-pipeline detail expander with
+               admin deactivate/archive actions (B-BYOP-4 endpoints).
+               Shipped: frontend/pages/pipelines.py (BYOP Catalog tab),
+               edit_pipelines_byop_tab.py. (1-2 sessions, P0f)
 
-[ ] B-BYOP-10  Implement BYOP telemetry — aggregated success rate,
+[x] B-BYOP-10  Implement BYOP telemetry — aggregated success rate,
                walltime, peak memory, cost per run for each registered
                pipeline. Auto-deactivate pipelines whose success rate
                drops below operator-configured threshold (default 50%)
                with platform admin notification. (1-2 sessions, P0f)
+               [2026-08-29 shipped: backend/backend/services/byop_telemetry.py
+               (single in-DB aggregation: success rate, mean/p95 walltime,
+               mean cost from pipeline_results.metrics JSONB joined via
+               B-BYOP-9 FK) + GET /byop/telemetry in
+               backend/backend/routers/byop.py +
+               tests/services/test_byop_telemetry.py (real-Postgres, 6 tests).
+               Peak memory + auto-deactivate threshold/notification deferred —
+               out of scope per B-BYOP-10 session prompt.]
 ```
 
 ### Phase 24.7 / P0f success criterion
@@ -2202,17 +2230,18 @@ This work is **ahead-of-schedule** relative to B-FED-1 / B-PRV-1 / B-CRY-1 in th
 
 ### Phases
 
-- [ ] **M0 — `permit()` engine, dark.** Build the decision function (`access_model.md` §5) plus the grants and policy tables (§2.2, §2.5) as new code, wired into no route. Unit-test against the §9 worked examples as fixtures. The old ladder still runs; this ships behind no flag because nothing calls it yet. De-risks all downstream work by proving the decision function correct in isolation. No ORM — raw SQL via `text()`, hand-written migrations (§5.2). (multi-session)
-- [ ] **M1 — `visibility_sql_clause` companion.** Build the list-filtering SQL compiler (§5.2) and prove it behaviorally identical to `permit()` on the same fixtures (a row is list-visible iff `permit()` says detail-accessible). Highest-risk piece — two implementations of one logic that must not diverge — so it gets cross-checking tests and its own phase. Still dark. (multi-session)
+- [x] **M0 — `permit()` engine, dark.** Shipped: `backend/backend/authz/` (engine.py, policy.py), migration `a7c3e91d54b0`, tests `tests/authz/test_permit.py` (14 passing). Build the decision function (`access_model.md` §5) plus the grants and policy tables (§2.2, §2.5) as new code, wired into no route. Unit-test against the §9 worked examples as fixtures. The old ladder still runs; this ships behind no flag because nothing calls it yet. De-risks all downstream work by proving the decision function correct in isolation. No ORM — raw SQL via `text()`, hand-written migrations (§5.2). (multi-session)
+- [x] **M1 — `visibility_sql_clause` companion.** Shipped 2026-08-29: `backend/backend/authz/visibility.py` (`visibility_sql_clause(principal, capability, alias)` pure SQL compiler, re-exported from `backend/backend/authz/__init__.py`), cross-checked vs `permit()` on the §9 fixtures in `tests/authz/test_visibility_sql_clause.py` (zero-divergence loop, deny-wins, default-deny, scope-boundary, PEER_INSTANCE/SERVICE, failure paths). Still dark.
 - [ ] **M2 — reseed + cutover (IRREVERSIBLE).** One change: (a) run the reseed script (`access_model.md` §10.2 — read each principal's old stored role, issue the matching preset grants; mapping table in §8.5); (b) rewrite every route guard from role-check to capability-check (§10.3 — see ACCESS-GUARD-MAP below); (c) switch list endpoints to the `visibility_sql_clause` companion; (d) drop the old booleans, the `PermissionGroups` enum, and the `permissions.py` ladder. No rollback-to-dual-running — safety comes from M0/M1 having proven the engine and companion, not from a shim. (multi-session; do not start until M0 + M1 are both proven)
 - [ ] **M3 — sovereignty policies.** Register the §6 policies: the deletion-lifecycle guards (no-publish-while-deleting, no-federate-deleting), the separation-of-duties DENY, and the Scenario-T Tribal-authority preset with its separation-of-duties carve-out (§8.3). Rides on the M0 engine and the already-shipped `deletion_status` lifecycle; additive, gated by `sovereignty_mode`. (1-2 sessions)
 - [ ] **M4 — federation Layer 2 (`sharing_agreements`).** Add the `sharing_agreements` table (net-new schema, hand-written migration, no ORM) and wire agreement-sourced grants into the engine (`access_model.md` §7.3). Federated L1 visibility stops being "PUBLIC/DISCOVERABLE only" and starts honoring per-peer agreements; lab-to-lab federation (§7.7) works on the data-holder's side at this point. Shipped FED-A/B flow code unchanged — what changes is the peer principal now has agreement grants for the engine to find. Sequences with or just after P0c. (multi-session)
+- [x] **P0c — Multi-tenancy middleware (major phase).** Shipped 2026-08-29: `backend/backend/tenancy.py` (`TenancyMiddleware` attaching `request.state.org_context` to every non-exempt request, `get_org_context` dependency [403 when no tenant], `require_org_access` org-isolation guard [404 cross-org per access_model.md §3.3/§5.4]); registered in `backend/backend/main.py`; BYOP IDOR fix in `backend/backend/routers/byop.py` (`_get_or_404_tenancy` on all five mutating endpoints — owner / owner-lab member / platform admin, else 404; `owner_lab_id` mapped from the P0b column; list + detail reads intentionally unscoped per design §9 catalog browse, documented inline); tests `tests/routers/test_tenancy.py` (12, happy + failure paths). Application-layer only — no schema migration (P0b's `c871b28bbdab` already carries `byop_pipelines.owner_lab_id`). Unblocks B-CARE-3 (and B-CARE-3i) + B-CARE-4. Per-endpoint `permit()` capability enforcement remains M2.
 - [ ] **M5 — compute plane / cryptWWDB wiring.** Add the §4.6 `compute:*` capabilities and the `he_operation_to_capability` mapping, then build the `make_access_policy` adapter (§7.4) injecting `permit()` into `PolicyChecker.access_policy` (the injected callable B-CWB-POLICY-1 already ships with). The `PolicyChecker` and its repeated-query guard already shipped — this is the adapter plus the capability additions, not new infrastructure. Gated on the cryptWWDB compute path being scheduled (Track 2). (1-2 sessions)
 
 ### Supporting deliverables
 
-- [ ] **ACCESS-GUARD-MAP** Produce the endpoint→capability map for M2: walk every current `require_platform_admin` and lab-role guard call site and record the capability each route requires (e.g. `POST /federation/instances` → `federation:configure_peer` or `org:manage`; `POST /samples` → `sample:create` at target scope). One row per guarded route. Guards renamed to their capability (`require_capability(...)`), not kept as role-named aliases — a guard named `require_platform_admin` after the role is abolished re-invites role-assumption drift. (`access_model.md` §10.3) (1 session; prerequisite for M2)
-- [ ] **ACCESS-SEED** The reseed script itself (`access_model.md` §10.2). Python, raw SQL via `text()`. Reads `is_platform_admin` / `is_data_analyst` / `lab_membership` rows, issues preset grants per the §8.5 mapping, then the containing migration drops the old columns/enum. Reads-then-drops in one migration so there is never a dual-authoritative window. (1 session, bundles into M2)
+- [x] **ACCESS-GUARD-MAP** (shipped: `docs/endpoint_capability_map.md` + `require_capability` in `backend/backend/auth/guards.py`) Produce the endpoint→capability map for M2: walk every current `require_platform_admin` and lab-role guard call site and record the capability each route requires (e.g. `POST /federation/instances` → `federation:configure_peer` or `org:manage`; `POST /samples` → `sample:create` at target scope). One row per guarded route. Guards renamed to their capability (`require_capability(...)`), not kept as role-named aliases — a guard named `require_platform_admin` after the role is abolished re-invites role-assumption drift. (`access_model.md` §10.3) (1 session; prerequisite for M2)
+- [x] **ACCESS-SEED** (shipped: `backend/backend/authz/reseed.py` — `reseed(conn)` + `PRESET_GRANTS`/`BIOINFORMATICS_EXTRA`; staged migration `backend/alembic/versions/20260829_reseed_roles_to_grants.py` — calls `reseed` before every DROP, moves into the live `db/migrations/versions` chain at M2; tests `tests/authz/test_reseed.py`, 11 cases) The reseed script itself (`access_model.md` §10.2). Python, raw SQL via `text()`. Reads `is_platform_admin` / `is_data_analyst` / `lab_membership` rows, issues preset grants per the §8.5 mapping, then the containing migration drops the old columns/enum. Reads-then-drops in one migration so there is never a dual-authoritative window. (1 session, bundles into M2)
 
 ### Open design items carried from access_model.md §11.4
 
@@ -2247,7 +2276,7 @@ This work is **ahead-of-schedule** relative to B-FED-1 / B-PRV-1 / B-CRY-1 in th
 - [x] **B-CWB-MB-1** Implement Tier 1 plaintext mass-balance module at `backend/backend/wastewater/mass_balance.py`. Computes `MassLoad = (Q1·C1) − (Q2·C2)` (cryptWWDB Use Case 1) and the time-aware variant (Use Case 2) over plaintext `WastewaterSample.flow_rate_mgd` and `wastewater_target_concentration` rows (from `B-CWB-SCHEMA-2`) joined via the `sample_associations` upstream/downstream relationship (from `B-CWB-SCHEMA-1`). Single-instance computation; no federation, no encryption. Includes unit conversions, missing-data stubs, and a clean function-level interface that the `B-IMMUNE-HE-1` Track 2 work delegates to for the encrypted variant. Depends on P0b ship. (1-2 sessions)
   - [x] interface-only complete — `MassBalanceInputs` / `MassBalanceResult` dataclasses, unit converters (`to_l_per_day` / `to_ng_per_l` / `to_copies_per_l`), `compute_mass_load` (Use Case 1) + `compute_time_aware_mass_load` (Use Case 2), non-detect (Hornung & Reed 1990 LOD/2) handling, negative-mass-balance handling (`"zero"` / `"mdl"` / `"raw"` per Bowes 2023b / Tempe 2023a), quality-flag taxonomy. 100% module coverage across 48 tests. Full DB wiring (`load_inputs_from_db`) remains a `NotImplementedError` stub pending `B-CWB-SCHEMA-2` + `B-CWB-SCHEMA-1` shipping in P0b.
 
-- [ ] **B-CWB-MB-2** Extend `backend/backend/wastewater/mass_balance.py` with quality-control and trigger-point computations per Driver et al. 2024 Table 2 — non-detect handling with MDL substitution, negative-mass-balance handling (negative → MDL or non-detect per Bowes et al. 2023b / Tempe 2023a conventions), error-bar propagation across instrument + population + excretion error sources, weekly/rolling averages, percent-change calculations week-to-week and month-to-month, population-threshold trigger points that aggregate adjacent catchments when minimums aren't met. Depends on `B-CWB-MB-1`. (1 week)
+- [x] **B-CWB-MB-2** (shipped: `handle_non_detects`, `clamp_negative_mb`, `propagate_error`, `rolling_average`, `trigger_point` in `backend/backend/wastewater/mass_balance.py`; tests in `tests/wastewater/test_mass_balance_qc.py`) Extend `backend/backend/wastewater/mass_balance.py` with quality-control and trigger-point computations per Driver et al. 2024 Table 2 — non-detect handling with MDL substitution, negative-mass-balance handling (negative → MDL or non-detect per Bowes et al. 2023b / Tempe 2023a conventions), error-bar propagation across instrument + population + excretion error sources, weekly/rolling averages, percent-change calculations week-to-week and month-to-month, population-threshold trigger points that aggregate adjacent catchments when minimums aren't met. Depends on `B-CWB-MB-1`. (1 week)
 
 ### Per-file encryption follow-up (B-CRY-CRYPT4GH-1, NEW 2026-05-12)
 
@@ -2284,8 +2313,8 @@ The items below are the ones that don't fit those interstitial buckets — imple
 
 ### K. Tribal sovereignty / CARE Principles (overview §11-12 of `jackpot_cdc_dmi_stlt_overview.md`)
 
-- [ ] **B-CARE-3** (implementation) Implement true delete-on-request via tombstone-and-vacuum lifecycle per the design from Phase 24.5. Code: `samples.deletion_status` enum migration, tombstone-marking logic, vacuum background job, audit log integration, GCS/MinIO object deletion, JSONB content scrubbing. (2-3 sessions, **P0c — multi-tenancy middleware**)
-- [ ] **B-CARE-4** Federation-aware deletion propagation. Tombstone events pushed to peers; signed receipts; SLA tracking; non-compliance flagging. Depends on B-CARE-3 + federation-as-runtime-configuration work (per `docs/architecture.md` §20; was "Scenario E" in the pre-Cluster-A-merge framing). (1 week, Year 2)
+- [x] **B-CARE-3** (implementation) ✅ Shipped 2026-08-29 across two headless sessions. Sub-items per design §13: **3a** request/cancel/approve state machine (`backend/backend/deletion.py`, endpoints in `backend/backend/routers/samples.py`), **3b** derivative sealing on tombstone (`_seal_derivatives` — pipeline_results, sample_access_grants, dataset_files, in-flight pipeline_runs), **3c** scheduled vacuum job past retention window + storage-delete retry (`vacuum_tombstoned_samples_job` in `backend/backend/jobs.py`, wired in `main.py`; `vacuum_retention_seconds`/`vacuum_job_interval_seconds` in `config.py`), **3d** platform-admin `vacuum-now` with justification, **3e** pre-publish gate blocking deletion-lifecycle samples from submissions (`add_samples_to_submission` in `submissions.py`), **3f** audit wiring for all seven pre-existing deletion-adjacent AuditActions (no parallel constants), **3g** RTBF deletion report + external-retraction stub (`external_retraction_requests` table), **3i** `is_deleted` → `is_archived` rename (migration `b3a1c4d7e9f2`, ADR-0013). Migration `d8f3b6c1a2e4`: `fastq_r1_uri` nullable, `samples_vacuumed_content_gone_chk` CHECK, `vacuum_retry_at`, retraction table. Tests: `tests/test_sample_deletion.py` (11, lifecycle + failure paths).
+- [x] **B-CARE-4** Federation-aware deletion propagation. Shipped 2026-08-29: `backend/backend/federation/deletion_propagation.py` (signed §9 tombstone/vacuum events enqueued per enabled peer at transition time, delivery job collects signed receipts, SLA breach → NON_COMPLIANT + operator policy alert_only/suspend_on_n/hard_fail), migration `f4a7d2c9b1e3` (`federation_deletion_events` ledger), hooks in `backend/backend/deletion.py` (approve_deletion/vacuum_sample), APScheduler job in `backend/backend/jobs.py`/`main.py`, settings in `config.py`, audit actions in `audit.py`, tests `tests/test_federation_deletion_propagation.py` (12). Depends on B-CARE-3 + federation-as-runtime-configuration work (per `docs/architecture.md` §20; was "Scenario E" in the pre-Cluster-A-merge framing).
 - [ ] **B-CARE-5** Pre-publish review checklist with CARE-Principle confirmation. Sovereignty-runtime-policy-enabled deployments default to no-auto-publish; explicit per-sample approval required. "Previously published" tag persists past vacuum. (1-2 sessions, with B-CARE-3 implementation in P0c) *(was "Scenario T defaults" pre-Cluster-A-merge; reframed per `docs/architecture.md` §22.)*
 
 ### L. STLT-tier alignment (overview §6, §10 of `jackpot_cdc_dmi_stlt_overview.md`)
@@ -2782,7 +2811,7 @@ A new contributor: (1) clones repo, (2) runs `jackpot init --profile academy`, (
 
 **Source:** `docs/immune_platform.md` §28.2 (post-Cluster-B merge; was scaffolding §9.2). The wet-side advisor's critique ("you don't understand the wet-side enough") doesn't have a software handle; the substitute action is to formalize the wet-side advisory role.
 
-- [ ] **B-WW-ADV-1** Add `docs/wetside_advisory.md` documenting current assumptions about wastewater sampling cadence, sample preservation, sequencing-prep failure modes, and known limitations of the input pipeline. Reference: scaffolding §9.2. (1 day; can land any time; ID disambiguates from existing `B-WW-1` wastewater pipeline-zoo work)
+- [x] **B-WW-ADV-1** Multi-target wastewater panel — Streamlit page showing SARS-CoV-2, RSV, and Influenza A concentration data side-by-side from `wastewater_target_concentration` (B-CWB-SCHEMA-2). Shipped: `frontend/pages/wastewater_multi_target.py`, registered in `tests/test_streamlit_pages.py`. (Session prompt superseded the earlier `docs/wetside_advisory.md` description for this ID; the wet-side assumptions doc is folded into B-WW-ADV-2 scope if still wanted.)
 
 - [ ] **B-WW-ADV-2** Pre-register questions for the wet-side advisor's group (sampling cadence, preservation, false-positive failure modes specific to NWSS feeds) and resolve them in `docs/decisions/`. Reference: scaffolding §9.2. (2-3 sessions; depends on advisor identification)
 

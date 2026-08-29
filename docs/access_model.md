@@ -1049,3 +1049,5 @@ Collected from the inline flags, so they aren't lost:
 ---
 
 *End of the JACKPOT access-control model. §1–§11 complete: the why (§1), the abstractions (§2–§3), the catalog and engine (§4–§5), sovereignty and federation as first-class policy/grant concerns (§6–§7), the human and machine presets (§8), worked traces across all deployment shapes (§9), and the greenfield migration and phasing (§10–§11).*
+
+**M0 scoping note (2026-08-29):** authz module location decided: `backend/backend/authz/` (engine.py + policy.py); migrations follow repo convention at `backend/db/migrations/versions/`.

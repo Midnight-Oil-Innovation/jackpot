@@ -2,8 +2,9 @@ import os
 import sys
 from logging.config import fileConfig
 
-from alembic import context
 from sqlalchemy import engine_from_config, pool
+
+from alembic import context
 
 # Add backend/ to path so config.py is importable
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "backend"))

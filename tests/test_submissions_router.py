@@ -270,7 +270,7 @@ async def test_delete_submission_only_in_draft(client):
     sid_sub = create.json()["data"]["id"]
     resp = await client.delete(f"/api/v1/submissions/{sid_sub}")
     assert resp.status_code == 200
-    assert resp.json()["data"]["is_deleted"] is True
+    assert resp.json()["data"]["is_archived"] is True
     _cleanup_submissions()
     _cleanup_samples()
 

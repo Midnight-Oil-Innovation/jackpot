@@ -14,7 +14,7 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, Uplo
 from pydantic import BaseModel
 
 from backend.audit import AuditActions, log_audit
-from backend.auth.guards import get_current_user, require_platform_admin
+from backend.auth.guards import get_current_user, require_capability
 from backend.config import get_settings
 from backend.database import execute_query, execute_write, get_db_dep
 from backend.epiweek import compute_epiweeks
@@ -968,7 +968,7 @@ async def ingest_globus(
     ``cheap_fingerprint``).
     """
     user = get_current_user(request)
-    require_platform_admin(user)
+    require_capability("sample:create")(user)
 
     try:
         body = await request.json()

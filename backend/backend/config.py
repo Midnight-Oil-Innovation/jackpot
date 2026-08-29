@@ -134,6 +134,25 @@ class Settings(BaseSettings):
     # and is fast enough that a 5-minute pipeline lands its
     # COMPLETED/FAILED state-shift inside the same business minute.
     log_poller_interval_seconds: int = 30
+    # B-CARE-3c vacuum cadence: retention window between tombstone and
+    # vacuum (operator policy, design doc §6; 30-day default) and the
+    # scheduled-job interval (daily).
+    vacuum_retention_seconds: int = 2592000
+    vacuum_job_interval_seconds: int = 86400
+
+    # B-CARE-4 federation deletion propagation (design doc §9).
+    # SLA within which peers must acknowledge tombstone events (vacuum
+    # events auto-flag at 2× this value). 24h default; Scenario T
+    # operators set 3600 (1h) per §9.
+    federation_propagation_sla_seconds: int = 86400
+    # Non-compliance policy: alert_only | suspend_on_n | hard_fail.
+    federation_noncompliance_policy: str = "alert_only"
+    federation_suspend_after_n_failures: int = 3
+    federation_propagation_job_interval_seconds: int = 300
+    # Ed25519 event-signing key (backend.crypto). Events are enqueued
+    # unsigned and delivery is withheld until the key is configured.
+    federation_signing_key_id: str = "federation-signing"
+    federation_keystore_backend: str = "filesystem"
 
     # P0h H-6: pre-launch Slurm reachability check.
     # Refines F-8: when a launch's resolved profile is SLURM, fire

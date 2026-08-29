@@ -39,7 +39,7 @@
 
 meta:
   version: 1
-  last_updated: "2026-08-28"
+  last_updated: "2026-08-29"
   source_documents:
     - todo.md
     - docs/jackpot_session_summary_and_backlog.md
@@ -433,7 +433,7 @@ sessions:
       handling, error-bar propagation, weekly/rolling averages,
       population-threshold trigger points.
     phase: cryptwwdb_track
-    status: open
+    status: shipped
     depends_on:
       - B-CWB-MB-1-DB
     blocked_by_external:
@@ -451,6 +451,8 @@ sessions:
       QC pass and trigger-point logic from Driver et al. 2024 Table 2.
     notes: ""
 
+    merged_at: '2026-08-29'
+    merge_sha: 0f0b1f3
   - id: B-CWB-POLICY-1
     title: Encrypted-query policy checker module
     short_description: "Discrete policy-checker module sitting between federation router and HE\ncompute backend. Per Driver
@@ -502,7 +504,8 @@ sessions:
     role_framing:
     notes: "Bundles into P0b migration."
     reconciliation_note: >
-      RECONCILED 2026-08-28: verified present in migration c871b28bbdab (merged 2026-07-06 at 3016238); the status had never been flipped.
+      RECONCILED 2026-08-28: verified present in migration c871b28bbdab (merged 2026-07-06 at 3016238); the status had never
+      been flipped.
 
   - id: B-CWB-SCHEMA-2
     title: wastewater_target_concentration result type
@@ -526,7 +529,8 @@ sessions:
     role_framing:
     notes: "Critical path for cryptWWDB mass-balance integration."
     reconciliation_note: >
-      RECONCILED 2026-08-28: verified present in migration c871b28bbdab (merged 2026-07-06 at 3016238); the status had never been flipped.
+      RECONCILED 2026-08-28: verified present in migration c871b28bbdab (merged 2026-07-06 at 3016238); the status had never
+      been flipped.
 
   - id: B-CWB-SCHEMA-3
     title: Time-varying population fields
@@ -638,7 +642,7 @@ sessions:
       (SARS-CoV-2 + RSV + Influenza A). Reads from
       wastewater_target_concentration table.
     phase: wastewater
-    status: open
+    status: shipped
     depends_on:
       - B-CWB-SCHEMA-2
     blocked_by_external:
@@ -658,6 +662,8 @@ sessions:
       UNBLOCKED 2026-08-28: B-CWB-SCHEMA-2 landed in P0b (c871b28bbdab);
       the status had never been flipped.
 
+    merged_at: '2026-08-29'
+    merge_sha: 706a19b
   - id: B-WW-ADV-2
     title: PHES-ODM alignment
     short_description: |
@@ -1061,7 +1067,8 @@ sessions:
     role_framing:
     notes: "Bundles into P0b migration."
     reconciliation_note: >
-      RECONCILED 2026-08-28: verified present in migration c871b28bbdab (merged 2026-07-06 at 3016238); the status had never been flipped.
+      RECONCILED 2026-08-28: verified present in migration c871b28bbdab (merged 2026-07-06 at 3016238); the status had never
+      been flipped.
 
   - id: B-EUK-2
     title: Eukaryotic pipeline-result schemas
@@ -1127,9 +1134,9 @@ sessions:
       Implement sovereignty-deletion design per §13 of sovereignty design
       doc. Seven sub-items covering tombstone, propagation, audit, RTBF.
     phase: phase_24_5
-    status: blocked_external
+    status: shipped
     depends_on: []
-    blocked_by_external: "P0c (multi-tenancy middleware)"
+    blocked_by_external:
     parallel_safe: false
     effort_sessions:
     primary_files: []
@@ -1178,15 +1185,17 @@ sessions:
       deletion-requested because no code path can do it. The column is
       vacuously correct, not wrong.
 
+    merged_at: '2026-08-29'
+    merge_sha: 93f39fd
   - id: B-CARE-4
     title: Sovereignty deletion — federation propagation
     short_description: |
       Federation propagation of deletion requests per §9 of the
       sovereignty design doc.
     phase: phase_24_5
-    status: blocked_external
+    status: shipped
     depends_on: []
-    blocked_by_external: "P0c (multi-tenancy middleware)"
+    blocked_by_external:
     parallel_safe: false
     effort_sessions:
     primary_files: []
@@ -1201,6 +1210,8 @@ sessions:
   # P0 series — major phases (informational)
   # ────────────────────────────────────────────────────────────────────────
 
+    merged_at: '2026-08-29'
+    merge_sha: a086490
   - id: P0g
     title: G-5 profiles CRUD
     short_description: |
@@ -1261,7 +1272,7 @@ sessions:
       Tenant-aware middleware applying organization context to every
       request. Follows P0b schema work. Unblocks B-CARE-3 + B-CARE-4.
     phase: p0_series
-    status: open
+    status: shipped
     depends_on:
       - P0b
     blocked_by_external:
@@ -1273,7 +1284,12 @@ sessions:
     pr_title_template:
     branch_name_template:
     role_framing:
-    notes: ""
+    notes: |
+      2026-08-29 (B-BYOP-5a security hook): byop.py `_get_or_404` has an
+      IDOR-shape — any authenticated user can read/mutate any BYOP pipeline
+      by id. List-all is intentional per design §9 (bioinformaticians browse
+      the catalog), but per-lab scoping of mutating endpoints belongs to the
+      P0c tenancy guard. Include byop.py in the endpoint→capability sweep.
     reconciliation_note: >
       UNBLOCKED 2026-08-28: its only dependency, P0b, merged 2026-07-06 at
       3016238 but was still marked tracked_not_scheduled. P0c has therefore
@@ -1281,6 +1297,8 @@ sessions:
       Shipping it unblocks B-CARE-3, and with it B-CARE-3i (the
       is_deleted -> is_archived rename) and the CARE deletion lifecycle.
 
+    merged_at: '2026-08-29'
+    merge_sha: 4f7b18b
   - id: B-BYOP-1
     title: BYOP manifest schema (jackpot-pipeline.yaml)
     short_description: |
@@ -1345,7 +1363,7 @@ sessions:
     notes: "Per docs/byop_and_eukaryotic_design.md §N. Originally tagged Phase: P1 in the design doc; reframed to P0f per
       todo.md 2026-04-29."
 
-    merged_at: '2026-08-28'
+    merged_at: '2026-08-29'
     merge_sha: 3b35a60
   - id: B-BYOP-3
     title: BYOP Stage 2 sandbox dry-run
@@ -1357,7 +1375,7 @@ sessions:
       data binds correctly. Stage 1 (B-BYOP-2) catches static problems;
       Stage 2 catches runtime ones.
     phase: p0f
-    status: open
+    status: shipped
     depends_on:
       - B-BYOP-1
       - B-BYOP-2
@@ -1381,6 +1399,8 @@ sessions:
     notes: "Per docs/byop_and_eukaryotic_design.md §N. Originally tagged Phase: P1 in the design doc; reframed to P0f per
       todo.md 2026-04-29. Design-doc effort was '1 week'; modeled here as 5 sessions."
 
+    merged_at: '2026-08-29'
+    merge_sha: e12a553
   - id: B-BYOP-4
     title: BYOP CRUD router + lifecycle endpoints
     short_description: |
@@ -1390,7 +1410,7 @@ sessions:
       table introduced in B-BYOP-9. Calls B-BYOP-2 and B-BYOP-3 for
       validation during create/update.
     phase: p0f
-    status: open
+    status: shipped
     depends_on:
       - B-BYOP-1
       - B-BYOP-2
@@ -1415,6 +1435,8 @@ sessions:
     notes: "Per docs/byop_and_eukaryotic_design.md §N. Originally tagged Phase: P1 in the design doc; reframed to P0f per
       todo.md 2026-04-29. Cross-phase dependency on B-BYOP-9 (P0b) — schedulable only after P0b's schema migration lands."
 
+    merged_at: '2026-08-29'
+    merge_sha: de02d6c
   - id: B-BYOP-5a
     title: BYOP Nextflow engine launcher (harden existing)
     short_description: |
@@ -1423,7 +1445,7 @@ sessions:
       pluggable launcher consumable by B-BYOP-4's router. Smallest of the
       4 launcher sub-items since the Nextflow code already exists.
     phase: p0f
-    status: open
+    status: shipped
     depends_on:
       - B-BYOP-4
     blocked_by_external:
@@ -1446,6 +1468,8 @@ sessions:
     notes: "Per docs/byop_and_eukaryotic_design.md §N. B-BYOP-5 decomposed into 5a/5b/5c/5d per the per-engine effort estimate
       (2-3 sessions each) in the design doc and the 4-parallel annotation in the dependency tree."
 
+    merged_at: '2026-08-29'
+    merge_sha: 9eb5e71
   - id: B-BYOP-5b
     title: BYOP Snakemake engine launcher (new)
     short_description: |
@@ -1454,7 +1478,7 @@ sessions:
       pipelines. Mirrors the Nextflow launcher's shape (B-BYOP-5a) but
       invokes Snakemake instead.
     phase: p0f
-    status: open
+    status: shipped
     depends_on:
       - B-BYOP-4
       - B-BYOP-5a
@@ -1476,6 +1500,8 @@ sessions:
       Nextflow launcher (B-BYOP-5a). Parallel-safe with B-BYOP-5c/5d.
     notes: "Per docs/byop_and_eukaryotic_design.md §N. B-BYOP-5 decomposed; this is the snakemake variant."
 
+    merged_at: '2026-08-29'
+    merge_sha: 13888d2
   - id: B-BYOP-5c
     title: BYOP WDL engine launcher (new)
     short_description: |
@@ -1484,7 +1510,7 @@ sessions:
       Mirrors the Nextflow launcher's shape (B-BYOP-5a) but invokes a
       WDL execution engine (Cromwell or miniWDL).
     phase: p0f
-    status: open
+    status: shipped
     depends_on:
       - B-BYOP-4
       - B-BYOP-5a
@@ -1507,6 +1533,8 @@ sessions:
     notes: "Per docs/byop_and_eukaryotic_design.md §N. B-BYOP-5 decomposed; this is the WDL variant. Sub-item engine choice
       (Cromwell vs miniWDL) is the first AC."
 
+    merged_at: '2026-08-29'
+    merge_sha: 5616f2d
   - id: B-BYOP-5d
     title: BYOP manifest-only (no-engine) launcher (new)
     short_description: |
@@ -1515,7 +1543,7 @@ sessions:
       engine — i.e., users supply pre-rendered command sequences. Mirrors
       the launcher interface from B-BYOP-5a but bypasses engine invocation.
     phase: p0f
-    status: open
+    status: shipped
     depends_on:
       - B-BYOP-4
       - B-BYOP-5a
@@ -1537,6 +1565,8 @@ sessions:
       manifests without a native engine. Smallest of the four launchers.
     notes: "Per docs/byop_and_eukaryotic_design.md §N. B-BYOP-5 decomposed; this is the manifest-only variant."
 
+    merged_at: '2026-08-29'
+    merge_sha: 67af650
   - id: B-BYOP-6
     title: BYOP quarterly revalidation background job
     short_description: |
@@ -1546,7 +1576,7 @@ sessions:
       conditions (deleted containers, expired licenses, vanished
       reference-data URLs).
     phase: p0f
-    status: open
+    status: shipped
     depends_on:
       - B-BYOP-2
       - B-BYOP-4
@@ -1570,6 +1600,8 @@ sessions:
     notes: "Per docs/byop_and_eukaryotic_design.md §N. Cadence (quarterly) and trigger mechanism are spec'd in the design
       doc."
 
+    merged_at: '2026-08-29'
+    merge_sha: 7e19c09
   - id: B-BYOP-7
     title: BYOP registration wizard UI (Streamlit)
     short_description: |
@@ -1578,7 +1610,7 @@ sessions:
       validator output, Stage 2 sandbox results, and final commit to the
       byop_pipelines table via B-BYOP-4's router.
     phase: p0f
-    status: open
+    status: shipped
     depends_on:
       - B-BYOP-4
     blocked_by_external:
@@ -1600,6 +1632,8 @@ sessions:
     notes: "Per docs/byop_and_eukaryotic_design.md §N. Path under backend/frontend/pages/ matches your existing Streamlit
       page layout."
 
+    merged_at: '2026-08-29'
+    merge_sha: '590e092'
   - id: B-BYOP-8
     title: BYOP catalog tab on Pipelines page (Streamlit)
     short_description: |
@@ -1608,7 +1642,7 @@ sessions:
       revalidation date, and per-pipeline detail drawer. Read-only for
       most operators; admin actions deactivate/archive via B-BYOP-4.
     phase: p0f
-    status: open
+    status: shipped
     depends_on:
       - B-BYOP-4
     blocked_by_external:
@@ -1630,6 +1664,8 @@ sessions:
     notes: "Per docs/byop_and_eukaryotic_design.md §N. Caveat: edits backend/frontend/pages/pipelines.py which exists today,
       so file overlap with any concurrent session touching that file would block the parallel run."
 
+    merged_at: '2026-08-29'
+    merge_sha: 1a8aabb
   - id: B-BYOP-9
     title: BYOP schema migration — byop_pipelines table + pipeline_results FK
     short_description: |
@@ -1669,7 +1705,8 @@ sessions:
       migration cycle as B-CWB-SCHEMA-1..5, B-EUK-1, B-EUK-2 — splitting into a later migration creates double-migrate operator
       churn (per todo.md 2026-04-29 phasing decision)."
     reconciliation_note: >
-      RECONCILED 2026-08-28: verified present in migration c871b28bbdab (merged 2026-07-06 at 3016238); the status had never been flipped.
+      RECONCILED 2026-08-28: verified present in migration c871b28bbdab (merged 2026-07-06 at 3016238); the status had never
+      been flipped.
 
   - id: B-BYOP-10
     title: BYOP telemetry — success rate, walltime, cost
@@ -1680,7 +1717,7 @@ sessions:
       FK). Exposed via B-BYOP-4 router endpoint and surfaced in the
       catalog tab (B-BYOP-8).
     phase: p0f
-    status: open
+    status: shipped
     depends_on:
       - B-BYOP-4
       - B-BYOP-5a
@@ -1705,6 +1742,8 @@ sessions:
     notes: "Per docs/byop_and_eukaryotic_design.md §N. Depends on B-BYOP-5a's launcher emitting telemetry-ready output (or
       at least its existing telemetry shape being usable)."
 
+    merged_at: '2026-08-29'
+    merge_sha: 0dec3fa
   - id: B-SANDBOX-TEST
     title: "Security sandbox micro-isolation validation challenge"
     short_description: |
@@ -1763,7 +1802,7 @@ sessions:
       not jackpot-batch: this is a new session shape and the scaffolding
       decisions want turn-by-turn eyes.
     phase: access_model_redesign
-    status: open
+    status: shipped
     depends_on: []
     blocked_by_external:
     parallel_safe: false
@@ -1783,6 +1822,8 @@ sessions:
     notes: "authz module path is an M0 scoping decision (recommend backend/backend/authz/); primary_files lists the recommended
       dir and tightens once chosen. access_model.md §5 + §9 fixtures."
 
+    merged_at: '2026-08-29'
+    merge_sha: a1b5943
   - id: M1
     title: visibility_sql_clause companion — list-filtering, cross-checked vs permit()
     short_description: |
@@ -1796,7 +1837,7 @@ sessions:
       logic that must not diverge), which is why it is its own phase. Still
       dark — no route uses it yet. No ORM; raw SQL via text().
     phase: access_model_redesign
-    status: blocked
+    status: shipped
     depends_on:
       - M0
     blocked_by_external:
@@ -1815,6 +1856,8 @@ sessions:
     role_framing:
     notes: "Behavioral-equivalence tests vs M0 are the acceptance gate. access_model.md §5.2."
 
+    merged_at: '2026-08-29'
+    merge_sha: c948b6c
   - id: ACCESS-GUARD-MAP
     title: Endpoint→capability map for the M2 guard rewrite
     short_description: |
@@ -1830,7 +1873,7 @@ sessions:
       This is a prerequisite for M2, not part of it, so the cutover session is
       not also doing discovery.
     phase: access_model_redesign
-    status: open
+    status: shipped
     depends_on: []
     blocked_by_external:
     parallel_safe: false
@@ -1847,6 +1890,8 @@ sessions:
     role_framing:
     notes: "Independent of M0/M1 (pure discovery over current guards); blocks M2. access_model.md §10.3."
 
+    merged_at: '2026-08-29'
+    merge_sha: 088901f
   - id: ACCESS-SEED
     title: Reseed script — stored APGAP roles become preset grants
     short_description: |
@@ -1861,7 +1906,7 @@ sessions:
       the M2 cutover PR but is scoped here so it can be written and tested
       against M0's grants table ahead of the cutover.
     phase: access_model_redesign
-    status: blocked
+    status: shipped
     depends_on:
       - M0
     blocked_by_external:
@@ -1880,6 +1925,8 @@ sessions:
     role_framing:
     notes: "Depends on M0's grants table existing; lands as part of M2. access_model.md §10.2 + §8.5."
 
+    merged_at: '2026-08-29'
+    merge_sha: b7509b5
   - id: M2
     title: Reseed + cutover (IRREVERSIBLE — manual flow only)
     short_description: |
@@ -1897,7 +1944,7 @@ sessions:
       start until M0 and M1 are both shipped and ACCESS-GUARD-MAP + ACCESS-SEED
       are ready.
     phase: access_model_redesign
-    status: blocked
+    status: open
     depends_on:
       - M0
       - M1
@@ -2173,7 +2220,7 @@ sessions:
       endpoint currently writes is_deleted = TRUE under audit action
       ARCHIVE_SAMPLE, while deletion_status has no writer at all.
     phase: phase_24_5
-    status: blocked
+    status: open
     depends_on:
       - B-CARE-3
     blocked_by_external:

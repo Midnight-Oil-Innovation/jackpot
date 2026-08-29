@@ -616,7 +616,7 @@ async def verify_file_references() -> dict[str, int]:
                last_verification_status, storage_state
         FROM sample_files
         WHERE storage_state IN ('EXTERNAL', 'MIRRORED')
-          AND COALESCE(is_deleted, FALSE) = FALSE
+          AND COALESCE(is_archived, FALSE) = FALSE
         ORDER BY last_verified_at ASC NULLS FIRST
         LIMIT :limit
         """,
@@ -840,7 +840,7 @@ def _lab_directors_for_sample_file(sample_file_id: int, db) -> list[int]:
     """Distinct user_ids of all lab directors of all live samples
     referencing this ``sample_files`` row.
 
-    Soft-deleted samples (``is_deleted=TRUE``) are excluded. If every
+    Soft-deleted samples (``is_archived=TRUE``) are excluded. If every
     referencing sample is deleted, returns ``[]`` — caller treats as
     orphan and logs a WARNING rather than emitting silent BROKEN
     transitions.
@@ -849,7 +849,7 @@ def _lab_directors_for_sample_file(sample_file_id: int, db) -> list[int]:
         """
         SELECT DISTINCT lm.user_id
         FROM sample_files sf
-        JOIN samples s ON s.id = sf.sample_id_fk AND s.is_deleted = FALSE
+        JOIN samples s ON s.id = sf.sample_id_fk AND s.is_archived = FALSE
         JOIN lab_membership lm ON lm.lab_id = s.lab_id
         WHERE sf.id = :sfid
           AND lm.is_lab_director = TRUE
@@ -1270,7 +1270,7 @@ async def promote_file_storage(
         SELECT id, sample_id_fk, uri, storage_state, file_size_bytes
         FROM sample_files
         WHERE id = :id
-          AND COALESCE(is_deleted, FALSE) = FALSE
+          AND COALESCE(is_archived, FALSE) = FALSE
         LIMIT 1
         """,
         {"id": file_id},
@@ -1455,7 +1455,7 @@ def verify_sample_file(file_id: int) -> dict:
                last_verification_status, storage_state, original_uri
         FROM sample_files
         WHERE id = :id
-          AND COALESCE(is_deleted, FALSE) = FALSE
+          AND COALESCE(is_archived, FALSE) = FALSE
         LIMIT 1
         """,
         {"id": file_id},
@@ -1593,7 +1593,7 @@ async def release_embargoed_submissions() -> dict[str, int]:
             SELECT id, created_by_user_id, title FROM submissions
              WHERE status = 'EMBARGOED'
                AND release_date <= CURRENT_DATE
-               AND is_deleted = FALSE
+               AND is_archived = FALSE
             """,
             conn=db,
         )
@@ -2064,7 +2064,7 @@ def _load_submission_for_execution(submission_id: int) -> dict | None:
         SELECT id, status, target_repository, package_path,
                execution_attempt_count, execution_started_at
           FROM submissions
-         WHERE id = :id AND is_deleted = FALSE
+         WHERE id = :id AND is_archived = FALSE
          LIMIT 1
         """,
         {"id": submission_id},
@@ -2138,6 +2138,7 @@ __all__ = [
     "cleanup_expired_import_sessions",
     "cleanup_old_refresh_tokens",
     "compute_full_content_hash",
+    "propagate_federation_deletion_events_job",
     "execute_submission",
     "get_promote_job_status",
     "promote_file_storage",
@@ -2148,3 +2149,58 @@ __all__ = [
     "verify_sample_file",
     "FULL_HASH_CHUNK_SIZE",
 ]
+
+
+def propagate_federation_deletion_events_job() -> dict:
+    """B-CARE-4 (§9): deliver pending federation deletion events, collect
+    signed receipts, and flag SLA-breached events non-compliant.
+
+    Idempotent — ACKNOWLEDGED and NON_COMPLIANT rows are never
+    re-selected; a failed delivery leaves the event PENDING for the next
+    run until its ``flag_after`` deadline passes.
+    """
+    from backend.federation.deletion_propagation import (
+        deliver_pending_events,
+        flag_noncompliant_events,
+    )
+
+    delivery = deliver_pending_events(None)
+    flags = flag_noncompliant_events(None)
+    if delivery["delivered"] or flags["flagged"]:
+        logger.info(
+            "federation propagation job: %s delivered, %s flagged non-compliant, "
+            "suspended peers: %s",
+            delivery["delivered"],
+            flags["flagged"],
+            flags["suspended"],
+        )
+    return {**delivery, **flags}
+
+
+def vacuum_tombstoned_samples_job() -> dict:
+    """B-CARE-3c: vacuum tombstoned samples past their retention window.
+
+    Idempotent — VACUUMED rows are never re-selected; a partial failure
+    leaves ``vacuum_retry_at`` set and the next run retries only the
+    failed storage deletes.
+    """
+    from backend.deletion import retry_failed_storage_deletes, vacuum_sample
+
+    retention = get_settings().vacuum_retention_seconds
+    rows = execute_query(
+        "SELECT * FROM samples WHERE deletion_status = 'TOMBSTONED' "
+        "AND tombstoned_at < NOW() - (:retention || ' seconds')::interval "
+        "ORDER BY tombstoned_at",
+        {"retention": retention},
+    )
+    vacuumed = 0
+    for sample in rows:
+        try:
+            vacuum_sample(sample, None, None, trigger="scheduled")
+            vacuumed += 1
+        except Exception:
+            logger.exception("vacuum job failed for sample %s", sample["id"])
+    retried = retry_failed_storage_deletes(None)
+    if vacuumed or retried:
+        logger.info("vacuum job: %s vacuumed, %s retries cleared", vacuumed, retried)
+    return {"vacuumed": vacuumed, "retries_cleared": retried}

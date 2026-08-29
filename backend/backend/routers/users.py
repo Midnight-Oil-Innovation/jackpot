@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, Field
 
 from backend.audit import AuditActions, log_audit
-from backend.auth.guards import get_current_user, require_platform_admin
+from backend.auth.guards import get_current_user, require_capability
 from backend.database import execute_query, execute_write, get_db_dep
 from backend.pagination import paginate
 from backend.responses import error, success, success_list, success_message
@@ -79,7 +79,7 @@ def list_users(
     db=Depends(get_db_dep),  # noqa: B008
 ):
     user = get_current_user(request)
-    require_platform_admin(user)
+    require_capability("user:manage")(user)
 
     base_query = "SELECT * FROM users"
     params: dict = {}
@@ -196,7 +196,7 @@ def deactivate_user(
     db=Depends(get_db_dep),  # noqa: B008
 ):
     current = get_current_user(request)
-    require_platform_admin(current)
+    require_capability("user:manage")(current)
 
     before_rows = execute_query(
         "SELECT * FROM users WHERE id = :id LIMIT 1",

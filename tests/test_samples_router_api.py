@@ -484,7 +484,7 @@ async def test_archive_as_lab_director_soft_deletes(client, as_platform_admin):
     s = _insert_sample(sid)
     resp = await client.delete(f"/api/v1/samples/{s['id']}")
     assert resp.status_code == 200, resp.text
-    assert resp.json()["data"]["is_deleted"] is True
+    assert resp.json()["data"]["is_archived"] is True
 
     # Deleted rows should now be invisible to GET /{id}
     resp2 = await client.get(f"/api/v1/samples/{s['id']}")

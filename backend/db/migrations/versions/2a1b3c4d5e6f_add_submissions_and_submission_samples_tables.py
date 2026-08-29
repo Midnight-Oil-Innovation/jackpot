@@ -22,6 +22,7 @@ Revises:    9a1b2c3d4e5f
 from __future__ import annotations
 
 import sqlalchemy as sa
+
 from alembic import op
 
 # revision identifiers, used by Alembic.
@@ -53,7 +54,7 @@ def upgrade() -> None:
             withdrawal_reason        TEXT,
             created_at               TIMESTAMPTZ NOT NULL DEFAULT NOW(),
             updated_at               TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-            is_deleted               BOOLEAN NOT NULL DEFAULT FALSE,
+            is_archived               BOOLEAN NOT NULL DEFAULT FALSE,
             CONSTRAINT submissions_target_repository_valid CHECK (
                 target_repository IN (
                     'NCBI', 'GISAID_EPICOV', 'GISAID_EPIFLU',
@@ -75,21 +76,21 @@ def upgrade() -> None:
         sa.text("""
         CREATE INDEX submissions_lab_status_idx
             ON submissions (lab_id, status)
-            WHERE is_deleted = FALSE;
+            WHERE is_archived = FALSE;
     """)
     )
     op.execute(
         sa.text("""
         CREATE INDEX submissions_creator_idx
             ON submissions (created_by_user_id)
-            WHERE is_deleted = FALSE;
+            WHERE is_archived = FALSE;
     """)
     )
     op.execute(
         sa.text("""
         CREATE INDEX submissions_embargoed_release_idx
             ON submissions (status, release_date)
-            WHERE status = 'EMBARGOED' AND is_deleted = FALSE;
+            WHERE status = 'EMBARGOED' AND is_archived = FALSE;
     """)
     )
 

@@ -16,9 +16,11 @@ from backend.jobs import (
     cleanup_expired_import_sessions,
     cleanup_old_refresh_tokens,
     compute_full_content_hash,
+    propagate_federation_deletion_events_job,
     release_embargoed_submissions,
     run_access_request_job,
     run_scrubber_queue_job,
+    vacuum_tombstoned_samples_job,
     verify_file_references,
 )
 from backend.log_poller import poll_cluster_run_logs
@@ -30,6 +32,7 @@ from backend.routers import (
     archive_requests,
     auth,
     billing,
+    byop,
     dataharmonizer,
     dataset_access,
     datasets,
@@ -60,7 +63,9 @@ from backend.routers import (
 from backend.routers import (
     settings as settings_router,
 )
+from backend.services.byop_quarterly_revalidation import register as register_byop_revalidation
 from backend.submissions import recover_interrupted_executions
+from backend.tenancy import TenancyMiddleware
 from backend.version import __version__
 
 scheduler = AsyncIOScheduler()
@@ -154,6 +159,27 @@ async def lifespan(app: FastAPI):
             replace_existing=True,
             max_instances=1,
         )
+        scheduler.add_job(
+            vacuum_tombstoned_samples_job,
+            "interval",
+            seconds=get_settings().vacuum_job_interval_seconds,
+            id="vacuum_tombstoned_samples",
+            replace_existing=True,
+            max_instances=1,
+        )
+        # B-CARE-4 (§9): push signed tombstone/vacuum events to federation
+        # peers, collect signed receipts, flag SLA breaches.
+        scheduler.add_job(
+            propagate_federation_deletion_events_job,
+            "interval",
+            seconds=get_settings().federation_propagation_job_interval_seconds,
+            id="propagate_federation_deletion_events",
+            replace_existing=True,
+            max_instances=1,
+        )
+        # P0f B-BYOP-6: quarterly Stage 1 revalidation of ACTIVE BYOP
+        # pipelines (design doc §5.4 — upstream-rot detection).
+        register_byop_revalidation(scheduler)
         scheduler.start()
     yield
     if scheduler.running:
@@ -176,6 +202,7 @@ app.state.limiter = limiter
 app.include_router(archive_requests.router)
 app.include_router(auth.router)
 app.include_router(billing.router)
+app.include_router(byop.router)
 app.include_router(dataharmonizer.router)
 app.include_router(dataset_access.router)
 app.include_router(datasets.router)
@@ -205,6 +232,8 @@ app.include_router(templates.router)
 app.include_router(wastewater.router)
 
 app.add_middleware(RequestIDMiddleware)
+# P0c — multi-tenancy: attach org context to every non-exempt request.
+app.add_middleware(TenancyMiddleware)
 app.add_middleware(SlowAPIMiddleware)
 app.add_middleware(
     CORSMiddleware,

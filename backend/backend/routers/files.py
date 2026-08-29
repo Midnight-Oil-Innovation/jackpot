@@ -98,8 +98,8 @@ def _load_file_row_for_user(file_id: int, user: dict, db) -> dict | None:
           FROM sample_files sf
           JOIN samples s ON s.id = sf.sample_id_fk
          WHERE sf.id = :id
-           AND COALESCE(sf.is_deleted, FALSE) = FALSE
-           AND COALESCE(s.is_deleted, FALSE) = FALSE
+           AND COALESCE(sf.is_archived, FALSE) = FALSE
+           AND COALESCE(s.is_archived, FALSE) = FALSE
            AND {vis_clause}
          LIMIT 1
         """,
@@ -125,7 +125,7 @@ def _samples_for_file(file_id: int, user: dict, db) -> list[dict]:
           FROM samples s
           JOIN sample_files sf ON sf.sample_id_fk = s.id
          WHERE sf.id = :id
-           AND COALESCE(s.is_deleted, FALSE) = FALSE
+           AND COALESCE(s.is_archived, FALSE) = FALSE
            AND {vis_clause}
         """,
         params,
@@ -160,9 +160,9 @@ def list_broken_files(
 
     vis_clause, vis_params = visibility_sql_clause(user)
     where: list[str] = [
-        "sf.is_deleted = FALSE",
+        "sf.is_archived = FALSE",
         "sf.storage_state = 'BROKEN'",
-        "s.is_deleted = FALSE",
+        "s.is_archived = FALSE",
         vis_clause,
     ]
     params: dict = dict(vis_params)
@@ -260,8 +260,8 @@ def list_files(
 
     vis_clause, vis_params = visibility_sql_clause(user)
     where: list[str] = [
-        "sf.is_deleted = FALSE",
-        "s.is_deleted = FALSE",
+        "sf.is_archived = FALSE",
+        "s.is_archived = FALSE",
         vis_clause,
     ]
     params: dict = dict(vis_params)

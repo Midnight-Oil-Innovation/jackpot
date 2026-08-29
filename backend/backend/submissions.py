@@ -179,7 +179,7 @@ def _require_repository(repository: str) -> None:
 
 def _get_submission(submission_id: int, conn) -> dict | None:
     rows = execute_query(
-        "SELECT * FROM submissions WHERE id = :id AND is_deleted = FALSE LIMIT 1",
+        "SELECT * FROM submissions WHERE id = :id AND is_archived = FALSE LIMIT 1",
         {"id": submission_id},
         conn=conn,
     )
@@ -315,10 +315,10 @@ def list_submissions(
     All filters are optional. ``status`` is validated against
     :data:`VALID_STATUSES` (422 on unknown); ``target_repository`` is
     validated against :data:`VALID_REPOSITORIES`. Results are ordered
-    ``created_at DESC`` so the most recent shows first. ``is_deleted``
+    ``created_at DESC`` so the most recent shows first. ``is_archived``
     rows are always excluded.
     """
-    where = ["is_deleted = FALSE"]
+    where = ["is_archived = FALSE"]
     params: dict[str, Any] = {}
     if lab_id is not None:
         where.append("lab_id = :lab_id")
@@ -406,7 +406,7 @@ def update_submission(
 
 
 def soft_delete_submission(*, submission_id: int, actor_id: int | None, conn) -> dict:
-    """Mark a ``DRAFT`` submission ``is_deleted = TRUE``.
+    """Mark a ``DRAFT`` submission ``is_archived = TRUE``.
 
     Refuses with 422 outside ``DRAFT`` — once a submission has moved
     past DRAFT, the row is part of an audit trail and must be
@@ -419,7 +419,7 @@ def soft_delete_submission(*, submission_id: int, actor_id: int | None, conn) ->
             detail=f"Can only delete DRAFT submissions; this one is {sub['status']!r}.",
         )
     rows = execute_write(
-        "UPDATE submissions SET is_deleted = TRUE WHERE id = :id RETURNING *",
+        "UPDATE submissions SET is_archived = TRUE WHERE id = :id RETURNING *",
         {"id": submission_id},
         conn=conn,
     )
@@ -476,6 +476,24 @@ def add_samples_to_submission(
         raise HTTPException(
             status_code=422,
             detail=(f"Can only add samples in DRAFT status; this submission is {sub['status']!r}."),
+        )
+
+    # B-CARE-3e: sovereignty pre-publish gate — a sample anywhere in the
+    # deletion lifecycle must never gain new external-repository footprint.
+    blocked = execute_query(
+        "SELECT sample_id, deletion_status FROM samples "
+        "WHERE id = ANY(:ids) AND deletion_status <> 'ACTIVE'",
+        {"ids": sample_ids},
+        conn=conn,
+    )
+    if blocked:
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                "Samples with a pending or completed deletion cannot be "
+                "submitted to external repositories: "
+                + ", ".join(f"{b['sample_id']} ({b['deletion_status']})" for b in blocked)
+            ),
         )
 
     inserted: list[dict] = []
@@ -624,7 +642,8 @@ def validate_submission_readiness(submission_id: int, conn) -> SubmissionValidat
         SELECT s.* FROM samples s
           JOIN submission_samples ss ON ss.sample_id_fk = s.id
          WHERE ss.submission_id = :id
-           AND s.is_deleted = FALSE
+           AND s.is_archived = FALSE
+           AND s.deletion_status = 'ACTIVE'
         """,
         {"id": submission_id},
         conn=conn,
@@ -1419,7 +1438,7 @@ def recover_interrupted_executions(conn) -> dict[str, int]:
     rows = execute_query(
         """
         SELECT id FROM submissions
-         WHERE status = 'EXECUTING' AND is_deleted = FALSE
+         WHERE status = 'EXECUTING' AND is_archived = FALSE
         """,
         conn=conn,
     )

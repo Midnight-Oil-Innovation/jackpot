@@ -95,7 +95,7 @@ def register_file(
          WHERE file_size_bytes = :sz
            AND head64k_hash = :hh
            AND tail64k_hash = :th
-           AND is_deleted = FALSE
+           AND is_archived = FALSE
          ORDER BY id ASC
          LIMIT 1
         """,
