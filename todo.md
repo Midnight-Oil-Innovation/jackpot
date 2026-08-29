@@ -1111,11 +1111,14 @@ Driven by integration-readiness analysis vs Driver et al. 2024 *Sci Total Enviro
                    --directory, --rerun-incomplete --keep-going resume by
                    default, no weblog flag per §3.2 — poller handles events;
                    tests/services/launchers/test_snakemake_launcher.py).
-               (c) backend/services/wdl_launcher.py — new. Support
-                   both Cromwell (heavyweight) and miniwdl (lightweight)
-                   via JACKPOT_WDL_BACKEND. Populate inputs.json from
-                   manifest. Poll Cromwell metadata API or parse
-                   miniwdl structured logs.
+               (c) [x] B-BYOP-5c shipped —
+                   backend/backend/services/launchers/wdl_launcher.py
+                   (EngineLauncher-conformant; miniwdl default backend,
+                   cromwell via JACKPOT_WDL_BACKEND; inputs.json passed
+                   as params_file; tests/services/launchers/
+                   test_wdl_launcher.py). Event polling (Cromwell
+                   metadata API / miniwdl log parse) deferred to the
+                   BYOP launch-dispatch integration.
                (d) backend/services/manifest_launcher.py — new.
                    Docker run wrapper for the manifest engine. Single
                    container, single command, structured timing and
