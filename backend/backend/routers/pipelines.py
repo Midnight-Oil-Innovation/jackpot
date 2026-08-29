@@ -304,7 +304,7 @@ def _authorize_and_resolve_launch_inputs(
         "FROM sample_files sf "
         "JOIN samples s ON s.id = sf.sample_id_fk "
         "WHERE sf.sample_id_fk = ANY(:sids) "
-        "  AND sf.is_deleted = FALSE "
+        "  AND sf.is_archived = FALSE "
         "  AND sf.storage_state = 'BROKEN' "
         "ORDER BY s.sample_id, sf.id",
         {"sids": sample_pks},

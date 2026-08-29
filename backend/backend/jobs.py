@@ -616,7 +616,7 @@ async def verify_file_references() -> dict[str, int]:
                last_verification_status, storage_state
         FROM sample_files
         WHERE storage_state IN ('EXTERNAL', 'MIRRORED')
-          AND COALESCE(is_deleted, FALSE) = FALSE
+          AND COALESCE(is_archived, FALSE) = FALSE
         ORDER BY last_verified_at ASC NULLS FIRST
         LIMIT :limit
         """,
@@ -840,7 +840,7 @@ def _lab_directors_for_sample_file(sample_file_id: int, db) -> list[int]:
     """Distinct user_ids of all lab directors of all live samples
     referencing this ``sample_files`` row.
 
-    Soft-deleted samples (``is_deleted=TRUE``) are excluded. If every
+    Soft-deleted samples (``is_archived=TRUE``) are excluded. If every
     referencing sample is deleted, returns ``[]`` — caller treats as
     orphan and logs a WARNING rather than emitting silent BROKEN
     transitions.
@@ -849,7 +849,7 @@ def _lab_directors_for_sample_file(sample_file_id: int, db) -> list[int]:
         """
         SELECT DISTINCT lm.user_id
         FROM sample_files sf
-        JOIN samples s ON s.id = sf.sample_id_fk AND s.is_deleted = FALSE
+        JOIN samples s ON s.id = sf.sample_id_fk AND s.is_archived = FALSE
         JOIN lab_membership lm ON lm.lab_id = s.lab_id
         WHERE sf.id = :sfid
           AND lm.is_lab_director = TRUE
@@ -1270,7 +1270,7 @@ async def promote_file_storage(
         SELECT id, sample_id_fk, uri, storage_state, file_size_bytes
         FROM sample_files
         WHERE id = :id
-          AND COALESCE(is_deleted, FALSE) = FALSE
+          AND COALESCE(is_archived, FALSE) = FALSE
         LIMIT 1
         """,
         {"id": file_id},
@@ -1455,7 +1455,7 @@ def verify_sample_file(file_id: int) -> dict:
                last_verification_status, storage_state, original_uri
         FROM sample_files
         WHERE id = :id
-          AND COALESCE(is_deleted, FALSE) = FALSE
+          AND COALESCE(is_archived, FALSE) = FALSE
         LIMIT 1
         """,
         {"id": file_id},
@@ -1593,7 +1593,7 @@ async def release_embargoed_submissions() -> dict[str, int]:
             SELECT id, created_by_user_id, title FROM submissions
              WHERE status = 'EMBARGOED'
                AND release_date <= CURRENT_DATE
-               AND is_deleted = FALSE
+               AND is_archived = FALSE
             """,
             conn=db,
         )
@@ -2064,7 +2064,7 @@ def _load_submission_for_execution(submission_id: int) -> dict | None:
         SELECT id, status, target_repository, package_path,
                execution_attempt_count, execution_started_at
           FROM submissions
-         WHERE id = :id AND is_deleted = FALSE
+         WHERE id = :id AND is_archived = FALSE
          LIMIT 1
         """,
         {"id": submission_id},

@@ -36,7 +36,7 @@ _LOCKED_FIELDS: frozenset[str] = frozenset(
         "iso_year",
         "ingest_timestamp",
         "ingest_method",
-        "is_deleted",
+        "is_archived",
         "deleted_at",
         "deleted_by_id",
         "owner_id",
@@ -167,7 +167,7 @@ def _serialise(row: dict) -> dict:
 
 def _get_sample(sample_id: int, conn) -> dict | None:
     rows = execute_query(
-        "SELECT * FROM samples WHERE id = :id AND is_deleted = FALSE LIMIT 1",
+        "SELECT * FROM samples WHERE id = :id AND is_archived = FALSE LIMIT 1",
         {"id": sample_id},
         conn=conn,
     )
@@ -176,7 +176,7 @@ def _get_sample(sample_id: int, conn) -> dict | None:
 
 def _get_sample_files(sample_id: int, conn) -> list[dict]:
     return execute_query(
-        "SELECT * FROM sample_files WHERE sample_id_fk = :sid AND is_deleted = FALSE "
+        "SELECT * FROM sample_files WHERE sample_id_fk = :sid AND is_archived = FALSE "
         "ORDER BY id ASC",
         {"sid": sample_id},
         conn=conn,
@@ -213,7 +213,7 @@ def _build_sample_filters(
     """Build the WHERE-clause fragments + bind params for list_samples'
     optional filters, layered on top of the base visibility clause."""
     where: list[str] = [
-        "s.is_deleted = FALSE",
+        "s.is_archived = FALSE",
         vis_clause,
     ]
     params: dict = dict(vis_params)
@@ -261,7 +261,7 @@ def _build_sample_filters(
             "EXISTS (SELECT 1 FROM sample_files sf "
             "WHERE sf.sample_id_fk = s.id "
             "AND sf.storage_state = 'BROKEN' "
-            "AND sf.is_deleted = FALSE)"
+            "AND sf.is_archived = FALSE)"
         )
 
     return where, params
@@ -482,7 +482,7 @@ def archive_sample(
             )
 
     rows = execute_write(
-        "UPDATE samples SET is_deleted = TRUE, deleted_at = NOW(), "
+        "UPDATE samples SET is_archived = TRUE, deleted_at = NOW(), "
         "deleted_by_id = :uid WHERE id = :_id RETURNING *",
         {"uid": user["id"], "_id": sample_id},
         conn=db,
@@ -499,7 +499,7 @@ def archive_sample(
         metadata=None,
         db_conn=db,
     )
-    return success(data={"id": sample_id, "is_deleted": True})
+    return success(data={"id": sample_id, "is_archived": True})
 
 
 @router.get("/{sample_id}/files")

@@ -260,7 +260,7 @@ def test_skips_soft_deleted_executing_rows():
     """Soft-deleted submissions in EXECUTING (an unlikely but
     well-formed state) are NOT touched by the recovery hook."""
     sub_id = _make_executing("SOFT-DEL")
-    execute_write("UPDATE submissions SET is_deleted = TRUE WHERE id = :id", {"id": sub_id})
+    execute_write("UPDATE submissions SET is_archived = TRUE WHERE id = :id", {"id": sub_id})
     with get_db() as db:
         result = recover_interrupted_executions(db)
     assert result == {"recovered": 0}

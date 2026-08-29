@@ -169,13 +169,13 @@ def _fetch_samples_for_submission(submission_id: int, conn) -> list[dict]:
                    SELECT row_to_json(sf)::text
                      FROM sample_files sf
                     WHERE sf.sample_id_fk = s.id
-                      AND sf.is_deleted = FALSE
+                      AND sf.is_archived = FALSE
                     ORDER BY sf.id ASC
                ) AS files
           FROM samples s
           JOIN submission_samples ss ON ss.sample_id_fk = s.id
          WHERE ss.submission_id = :id
-           AND s.is_deleted = FALSE
+           AND s.is_archived = FALSE
          ORDER BY s.sample_id ASC
         """,
         {"id": submission_id},

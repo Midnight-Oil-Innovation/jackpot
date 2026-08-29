@@ -548,7 +548,7 @@ def test_soft_delete_only_drafts():
             conn=db,
         )
         out = soft_delete_submission(submission_id=sub["id"], actor_id=SEED_USER_ID, conn=db)
-        assert out["is_deleted"] is True
+        assert out["is_archived"] is True
 
         # Create another, advance status, ensure delete is rejected.
         sub2 = create_submission(

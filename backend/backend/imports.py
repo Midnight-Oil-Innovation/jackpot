@@ -710,7 +710,7 @@ def compute_diff(session: dict, conn) -> dict:
 
     existing_rows = execute_query(
         "SELECT sample_id, organism_name, source_type, sector "
-        "FROM samples WHERE sample_id = ANY(:ids) AND is_deleted = FALSE",
+        "FROM samples WHERE sample_id = ANY(:ids) AND is_archived = FALSE",
         {"ids": list(by_sample_id)},
         conn=conn,
     )

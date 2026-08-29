@@ -601,7 +601,7 @@ async def test_launch_broken_input_lists_every_broken_row(client, as_platform_ad
 
 @pytest.mark.asyncio
 async def test_launch_ignores_deleted_broken_rows(client, as_platform_admin):
-    """F-8: soft-deleted (is_deleted=TRUE) BROKEN rows must not block launch."""
+    """F-8: soft-deleted (is_archived=TRUE) BROKEN rows must not block launch."""
     prefix = _unique("DBR")
     _cleanup_samples(prefix)
     sample = _insert_sample(f"{prefix}-A")
@@ -612,7 +612,7 @@ async def test_launch_ignores_deleted_broken_rows(client, as_platform_admin):
         last_verification_status="MISSING_3",
     )
     execute_write(
-        "UPDATE sample_files SET is_deleted = TRUE WHERE id = :id",
+        "UPDATE sample_files SET is_archived = TRUE WHERE id = :id",
         {"id": sf_id},
     )
     _insert_sample_file(

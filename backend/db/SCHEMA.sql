@@ -432,7 +432,7 @@ CREATE TABLE IF NOT EXISTS samples (
     env_medium                      TEXT,
 
     -- Soft delete
-    is_deleted                      BOOLEAN NOT NULL DEFAULT FALSE,
+    is_archived                      BOOLEAN NOT NULL DEFAULT FALSE,
     deleted_at                      TIMESTAMPTZ,
     deleted_by_id                   INTEGER REFERENCES users(id)
 );
@@ -518,7 +518,7 @@ CREATE TABLE IF NOT EXISTS sample_files (
     pii_scan_status  TEXT NOT NULL DEFAULT 'PENDING',
     ingest_method    TEXT NOT NULL DEFAULT 'gui',
     ingest_timestamp TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    is_deleted       BOOLEAN NOT NULL DEFAULT FALSE,
+    is_archived       BOOLEAN NOT NULL DEFAULT FALSE,
     deleted_at       TIMESTAMPTZ
 );
 
