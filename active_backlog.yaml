@@ -1904,7 +1904,7 @@ sessions:
       the M2 cutover PR but is scoped here so it can be written and tested
       against M0's grants table ahead of the cutover.
     phase: access_model_redesign
-    status: open
+    status: shipped
     depends_on:
       - M0
     blocked_by_external:
@@ -1923,6 +1923,8 @@ sessions:
     role_framing:
     notes: "Depends on M0's grants table existing; lands as part of M2. access_model.md §10.2 + §8.5."
 
+    merged_at: '2026-08-29'
+    merge_sha: b7509b5
   - id: M2
     title: Reseed + cutover (IRREVERSIBLE — manual flow only)
     short_description: |
@@ -1940,7 +1942,7 @@ sessions:
       start until M0 and M1 are both shipped and ACCESS-GUARD-MAP + ACCESS-SEED
       are ready.
     phase: access_model_redesign
-    status: blocked
+    status: open
     depends_on:
       - M0
       - M1
