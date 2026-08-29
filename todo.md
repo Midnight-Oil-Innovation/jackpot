@@ -1074,7 +1074,9 @@ Driven by integration-readiness analysis vs Driver et al. 2024 *Sci Total Enviro
                is presence/syntax only per
                `docs/byop_and_eukaryotic_design.md` §5.2.
 
-[ ] B-BYOP-3   Implement backend/services/byop_sandbox.py — Stage 2
+[x] B-BYOP-3   Implement backend/services/byop_sandbox.py — Stage 2
+               DONE: backend/backend/services/byop_sandbox.py +
+               tests/services/test_byop_sandbox.py (25 tests).
                sandbox dry-run with isolation. Per-engine dry-run
                mechanic: nextflow -stub-run, snakemake -n,
                miniwdl --task-only-resources, manifest engine via
