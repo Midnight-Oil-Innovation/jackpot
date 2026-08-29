@@ -1500,7 +1500,7 @@ sessions:
       Mirrors the Nextflow launcher's shape (B-BYOP-5a) but invokes a
       WDL execution engine (Cromwell or miniWDL).
     phase: p0f
-    status: open
+    status: shipped
     depends_on:
       - B-BYOP-4
       - B-BYOP-5a
@@ -1523,6 +1523,8 @@ sessions:
     notes: "Per docs/byop_and_eukaryotic_design.md §N. B-BYOP-5 decomposed; this is the WDL variant. Sub-item engine choice
       (Cromwell vs miniWDL) is the first AC."
 
+    merged_at: '2026-08-29'
+    merge_sha: 5616f2d
   - id: B-BYOP-5d
     title: BYOP manifest-only (no-engine) launcher (new)
     short_description: |
