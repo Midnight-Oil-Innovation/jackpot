@@ -1632,7 +1632,7 @@ sessions:
       revalidation date, and per-pipeline detail drawer. Read-only for
       most operators; admin actions deactivate/archive via B-BYOP-4.
     phase: p0f
-    status: open
+    status: shipped
     depends_on:
       - B-BYOP-4
     blocked_by_external:
@@ -1654,6 +1654,8 @@ sessions:
     notes: "Per docs/byop_and_eukaryotic_design.md §N. Caveat: edits backend/frontend/pages/pipelines.py which exists today,
       so file overlap with any concurrent session touching that file would block the parallel run."
 
+    merged_at: '2026-08-29'
+    merge_sha: 1a8aabb
   - id: B-BYOP-9
     title: BYOP schema migration — byop_pipelines table + pipeline_results FK
     short_description: |
