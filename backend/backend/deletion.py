@@ -29,6 +29,7 @@ from fastapi import HTTPException
 
 from backend.audit import AuditActions, log_audit
 from backend.database import execute_query, execute_write
+from backend.federation.deletion_propagation import enqueue_deletion_events
 from backend.notifications import create_notification
 from backend.storage import StorageError, delete_file
 
@@ -212,6 +213,10 @@ def approve_deletion(sample: dict, actor: dict, conn, *, self_approve: bool = Fa
         conn=conn,
     )[0]
     _seal_derivatives(row, actor, conn)
+    # B-CARE-4 (§9): tombstone events MUST reach all federation peers
+    # within the SLA. Enqueued here in the same transaction; the
+    # propagation job delivers and collects signed receipts.
+    enqueue_deletion_events(row, "TOMBSTONE", conn)
     _audit(
         AuditActions.APPROVE_DELETION,
         actor["id"],
@@ -473,6 +478,10 @@ def vacuum_sample(
         {"trigger": trigger, "storage_deleted": deleted, "storage_failed": failed},
         conn,
     )
+    # B-CARE-4 (§9): vacuum events follow the same propagation pattern as
+    # tombstone events; peers that fail to acknowledge within 2× the SLA
+    # are auto-flagged for operator intervention.
+    enqueue_deletion_events(row, "VACUUM", conn)
     return row
 
 

@@ -2138,6 +2138,7 @@ __all__ = [
     "cleanup_expired_import_sessions",
     "cleanup_old_refresh_tokens",
     "compute_full_content_hash",
+    "propagate_federation_deletion_events_job",
     "execute_submission",
     "get_promote_job_status",
     "promote_file_storage",
@@ -2148,6 +2149,32 @@ __all__ = [
     "verify_sample_file",
     "FULL_HASH_CHUNK_SIZE",
 ]
+
+
+def propagate_federation_deletion_events_job() -> dict:
+    """B-CARE-4 (§9): deliver pending federation deletion events, collect
+    signed receipts, and flag SLA-breached events non-compliant.
+
+    Idempotent — ACKNOWLEDGED and NON_COMPLIANT rows are never
+    re-selected; a failed delivery leaves the event PENDING for the next
+    run until its ``flag_after`` deadline passes.
+    """
+    from backend.federation.deletion_propagation import (
+        deliver_pending_events,
+        flag_noncompliant_events,
+    )
+
+    delivery = deliver_pending_events(None)
+    flags = flag_noncompliant_events(None)
+    if delivery["delivered"] or flags["flagged"]:
+        logger.info(
+            "federation propagation job: %s delivered, %s flagged non-compliant, "
+            "suspended peers: %s",
+            delivery["delivered"],
+            flags["flagged"],
+            flags["suspended"],
+        )
+    return {**delivery, **flags}
 
 
 def vacuum_tombstoned_samples_job() -> dict:
