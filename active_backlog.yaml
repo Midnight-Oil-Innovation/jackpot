@@ -1430,7 +1430,7 @@ sessions:
       pluggable launcher consumable by B-BYOP-4's router. Smallest of the
       4 launcher sub-items since the Nextflow code already exists.
     phase: p0f
-    status: open
+    status: shipped
     depends_on:
       - B-BYOP-4
     blocked_by_external:
@@ -1453,6 +1453,8 @@ sessions:
     notes: "Per docs/byop_and_eukaryotic_design.md §N. B-BYOP-5 decomposed into 5a/5b/5c/5d per the per-engine effort estimate
       (2-3 sessions each) in the design doc and the 4-parallel annotation in the dependency tree."
 
+    merged_at: '2026-08-29'
+    merge_sha: 9eb5e71
   - id: B-BYOP-5b
     title: BYOP Snakemake engine launcher (new)
     short_description: |
