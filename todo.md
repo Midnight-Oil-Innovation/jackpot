@@ -1099,9 +1099,12 @@ Driven by integration-readiness analysis vs Driver et al. 2024 *Sci Total Enviro
                alongside pipeline_zoo_id. (2-3 sessions, P0f)
 
 [ ] B-BYOP-5   Implement engine launchers — 4 sub-items in parallel.
-               (a) backend/services/nextflow_launcher.py — harden
-                   existing path, auto-inject -weblog, enable -resume
-                   with JACKPOT-managed work directory.
+               (a) [x] B-BYOP-5a shipped —
+                   backend/backend/services/launchers/nextflow_launcher.py
+                   (EngineLauncher-conformant, auto-injects -with-weblog,
+                   -resume by default, JACKPOT-managed work directory;
+                   interface in backend/backend/services/launchers/__init__.py;
+                   tests/services/launchers/test_nextflow_launcher.py).
                (b) backend/services/snakemake_launcher.py — new.
                    Read Snakefile, resolve singularity:/container:/
                    conda: directives, wrap with event-streaming script
