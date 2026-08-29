@@ -86,6 +86,17 @@ class SimpleStreamlit:
 
     # Most Streamlit APIs just take positional args we can ignore.
     def __getattr__(self, name: str):
+        # Caching decorators must return the wrapped function unchanged,
+        # whether used bare (@st.cache_resource) or called (@st.cache_data(ttl=...)).
+        if name in {"cache_data", "cache_resource"}:
+
+            def _cache(*ca, **ckw):
+                if ca and callable(ca[0]):
+                    return ca[0]
+                return lambda f: f
+
+            return _cache
+
         def _fn(*a, **kw):
             self._record(name, *a, **kw)
             # Mimic the widgets that return values.
@@ -260,6 +271,7 @@ PAGE_MODULES = [
     "frontend.pages.import_spreadsheet",
     "frontend.pages.submissions",
     "frontend.pages.wastewater",
+    "frontend.pages.wastewater_multi_target",
 ]
 
 

@@ -2810,7 +2810,7 @@ A new contributor: (1) clones repo, (2) runs `jackpot init --profile academy`, (
 
 **Source:** `docs/immune_platform.md` §28.2 (post-Cluster-B merge; was scaffolding §9.2). The wet-side advisor's critique ("you don't understand the wet-side enough") doesn't have a software handle; the substitute action is to formalize the wet-side advisory role.
 
-- [ ] **B-WW-ADV-1** Add `docs/wetside_advisory.md` documenting current assumptions about wastewater sampling cadence, sample preservation, sequencing-prep failure modes, and known limitations of the input pipeline. Reference: scaffolding §9.2. (1 day; can land any time; ID disambiguates from existing `B-WW-1` wastewater pipeline-zoo work)
+- [x] **B-WW-ADV-1** Multi-target wastewater panel — Streamlit page showing SARS-CoV-2, RSV, and Influenza A concentration data side-by-side from `wastewater_target_concentration` (B-CWB-SCHEMA-2). Shipped: `frontend/pages/wastewater_multi_target.py`, registered in `tests/test_streamlit_pages.py`. (Session prompt superseded the earlier `docs/wetside_advisory.md` description for this ID; the wet-side assumptions doc is folded into B-WW-ADV-2 scope if still wanted.)
 
 - [ ] **B-WW-ADV-2** Pre-register questions for the wet-side advisor's group (sampling cadence, preservation, false-positive failure modes specific to NWSS feeds) and resolve them in `docs/decisions/`. Reference: scaffolding §9.2. (2-3 sessions; depends on advisor identification)
 
