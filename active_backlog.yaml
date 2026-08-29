@@ -39,7 +39,7 @@
 
 meta:
   version: 1
-  last_updated: "2026-08-28"
+  last_updated: "2026-08-29"
   source_documents:
     - todo.md
     - docs/jackpot_session_summary_and_backlog.md
@@ -502,7 +502,8 @@ sessions:
     role_framing:
     notes: "Bundles into P0b migration."
     reconciliation_note: >
-      RECONCILED 2026-08-28: verified present in migration c871b28bbdab (merged 2026-07-06 at 3016238); the status had never been flipped.
+      RECONCILED 2026-08-28: verified present in migration c871b28bbdab (merged 2026-07-06 at 3016238); the status had never
+      been flipped.
 
   - id: B-CWB-SCHEMA-2
     title: wastewater_target_concentration result type
@@ -526,7 +527,8 @@ sessions:
     role_framing:
     notes: "Critical path for cryptWWDB mass-balance integration."
     reconciliation_note: >
-      RECONCILED 2026-08-28: verified present in migration c871b28bbdab (merged 2026-07-06 at 3016238); the status had never been flipped.
+      RECONCILED 2026-08-28: verified present in migration c871b28bbdab (merged 2026-07-06 at 3016238); the status had never
+      been flipped.
 
   - id: B-CWB-SCHEMA-3
     title: Time-varying population fields
@@ -1061,7 +1063,8 @@ sessions:
     role_framing:
     notes: "Bundles into P0b migration."
     reconciliation_note: >
-      RECONCILED 2026-08-28: verified present in migration c871b28bbdab (merged 2026-07-06 at 3016238); the status had never been flipped.
+      RECONCILED 2026-08-28: verified present in migration c871b28bbdab (merged 2026-07-06 at 3016238); the status had never
+      been flipped.
 
   - id: B-EUK-2
     title: Eukaryotic pipeline-result schemas
@@ -1345,7 +1348,7 @@ sessions:
     notes: "Per docs/byop_and_eukaryotic_design.md §N. Originally tagged Phase: P1 in the design doc; reframed to P0f per
       todo.md 2026-04-29."
 
-    merged_at: '2026-08-28'
+    merged_at: '2026-08-29'
     merge_sha: 3b35a60
   - id: B-BYOP-3
     title: BYOP Stage 2 sandbox dry-run
@@ -1669,7 +1672,8 @@ sessions:
       migration cycle as B-CWB-SCHEMA-1..5, B-EUK-1, B-EUK-2 — splitting into a later migration creates double-migrate operator
       churn (per todo.md 2026-04-29 phasing decision)."
     reconciliation_note: >
-      RECONCILED 2026-08-28: verified present in migration c871b28bbdab (merged 2026-07-06 at 3016238); the status had never been flipped.
+      RECONCILED 2026-08-28: verified present in migration c871b28bbdab (merged 2026-07-06 at 3016238); the status had never
+      been flipped.
 
   - id: B-BYOP-10
     title: BYOP telemetry — success rate, walltime, cost
