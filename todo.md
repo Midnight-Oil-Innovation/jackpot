@@ -1088,7 +1088,7 @@ Driven by integration-readiness analysis vs Driver et al. 2024 *Sci Total Enviro
                backend/test_data/byop_sandbox/. (1 week, P0f — most
                complex item in the phase)
 
-[ ] B-BYOP-4   Implement backend/routers/byop.py — full CRUD API.
+[x] B-BYOP-4   Implement backend/routers/byop.py — full CRUD API. (backend/backend/routers/byop.py, tests/routers/test_byop.py, registered in backend/backend/main.py)
                POST /api/v1/byop/pipelines (register), GET (list),
                GET /{id} (detail), PATCH /{id}, POST /{id}/revalidate,
                POST /{id}/deactivate, DELETE /{id} (move to ARCHIVED),
