@@ -7,6 +7,7 @@ from .engine import (
     Resource,
     permit,
 )
+from .visibility import visibility_sql_clause
 
 __all__ = [
     "Decision",
@@ -16,4 +17,5 @@ __all__ = [
     "Resource",
     "Context",
     "permit",
+    "visibility_sql_clause",
 ]
