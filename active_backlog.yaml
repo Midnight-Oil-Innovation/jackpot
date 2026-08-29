@@ -1833,7 +1833,7 @@ sessions:
       logic that must not diverge), which is why it is its own phase. Still
       dark — no route uses it yet. No ORM; raw SQL via text().
     phase: access_model_redesign
-    status: open
+    status: shipped
     depends_on:
       - M0
     blocked_by_external:
@@ -1852,6 +1852,8 @@ sessions:
     role_framing:
     notes: "Behavioral-equivalence tests vs M0 are the acceptance gate. access_model.md §5.2."
 
+    merged_at: '2026-08-29'
+    merge_sha: c948b6c
   - id: ACCESS-GUARD-MAP
     title: Endpoint→capability map for the M2 guard rewrite
     short_description: |
