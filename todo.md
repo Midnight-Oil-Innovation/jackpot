@@ -1149,11 +1149,19 @@ Driven by integration-readiness analysis vs Driver et al. 2024 *Sci Total Enviro
                whose applicability.organism_names matches the sample's
                organism. (1-2 sessions, P0f)
 
-[ ] B-BYOP-10  Implement BYOP telemetry — aggregated success rate,
+[x] B-BYOP-10  Implement BYOP telemetry — aggregated success rate,
                walltime, peak memory, cost per run for each registered
                pipeline. Auto-deactivate pipelines whose success rate
                drops below operator-configured threshold (default 50%)
                with platform admin notification. (1-2 sessions, P0f)
+               [2026-08-29 shipped: backend/backend/services/byop_telemetry.py
+               (single in-DB aggregation: success rate, mean/p95 walltime,
+               mean cost from pipeline_results.metrics JSONB joined via
+               B-BYOP-9 FK) + GET /byop/telemetry in
+               backend/backend/routers/byop.py +
+               tests/services/test_byop_telemetry.py (real-Postgres, 6 tests).
+               Peak memory + auto-deactivate threshold/notification deferred —
+               out of scope per B-BYOP-10 session prompt.]
 ```
 
 ### Phase 24.7 / P0f success criterion
