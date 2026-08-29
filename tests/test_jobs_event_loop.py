@@ -84,9 +84,10 @@ async def test_promote_file_storage_does_not_block_event_loop(monkeypatch):
     await asyncio.gather(promote_task, fast_task)
     fast_elapsed = elapsed_at_done[0]
     # The fast task should have completed essentially immediately,
-    # well before the 0.5s sync sleep. <100ms is the loose bound;
+    # well before the 0.5s sync sleep. <350ms is the loose bound (a
+    # blocked loop waits the full 0.5s; loaded CI runners have hit 0.18s);
     # the actual interleave runs in microseconds when offloaded.
-    assert fast_elapsed < 0.1, (
+    assert fast_elapsed < 0.35, (
         f"Fast task waited {fast_elapsed:.3f}s — sync I/O is blocking the event loop."
     )
 
@@ -125,7 +126,7 @@ async def test_compute_full_content_hash_does_not_block_event_loop(monkeypatch):
     fast_task = asyncio.create_task(_fast_marker(elapsed_at_done, started))
     await asyncio.gather(hash_task, fast_task)
     fast_elapsed = elapsed_at_done[0]
-    assert fast_elapsed < 0.1, (
+    assert fast_elapsed < 0.35, (
         f"Fast task waited {fast_elapsed:.3f}s — sync I/O is blocking the event loop."
     )
 
@@ -172,6 +173,6 @@ async def test_verify_file_references_does_not_block_event_loop(monkeypatch):
     fast_task = asyncio.create_task(_fast_marker(elapsed_at_done, started))
     await asyncio.gather(verify_task, fast_task)
     fast_elapsed = elapsed_at_done[0]
-    assert fast_elapsed < 0.1, (
+    assert fast_elapsed < 0.35, (
         f"Fast task waited {fast_elapsed:.3f}s — sync I/O is blocking the event loop."
     )
