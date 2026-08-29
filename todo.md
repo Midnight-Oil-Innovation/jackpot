@@ -1105,10 +1105,12 @@ Driven by integration-readiness analysis vs Driver et al. 2024 *Sci Total Enviro
                    -resume by default, JACKPOT-managed work directory;
                    interface in backend/backend/services/launchers/__init__.py;
                    tests/services/launchers/test_nextflow_launcher.py).
-               (b) backend/services/snakemake_launcher.py — new.
-                   Read Snakefile, resolve singularity:/container:/
-                   conda: directives, wrap with event-streaming script
-                   that polls --report JSON every 30s.
+               (b) [x] B-BYOP-5b shipped —
+                   backend/backend/services/launchers/snakemake_launcher.py
+                   (EngineLauncher-conformant; --snakefile/--configfile/
+                   --directory, --rerun-incomplete --keep-going resume by
+                   default, no weblog flag per §3.2 — poller handles events;
+                   tests/services/launchers/test_snakemake_launcher.py).
                (c) [x] B-BYOP-5c shipped —
                    backend/backend/services/launchers/wdl_launcher.py
                    (EngineLauncher-conformant; miniwdl default backend,
