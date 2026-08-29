@@ -21,13 +21,12 @@ delegates to the function-level interface defined here so the
 encrypted variant stays bit-for-bit faithful to the plaintext one
 when evaluated over RLWE-encrypted operands.
 
-DB integration is intentionally stubbed (``load_inputs_from_db``)
-pending Phase 24.5 schema work: B-CWB-SCHEMA-2 lands the
-``wastewater_target_concentration`` typed result-row and
-B-CWB-SCHEMA-1 lands the ``wastewater_upstream_of`` association
-type. Both gate the P0b ship. Until they are merged this module
-operates exclusively on ``MassBalanceInputs`` instances assembled by
-callers.
+``load_inputs_from_db`` resolves ``MassBalanceInputs`` from the
+``wastewater_target_concentration`` result table (B-CWB-SCHEMA-2) and
+the ``wastewater_upstream_of`` value on ``sample_associations``
+(B-CWB-SCHEMA-1), both shipped in the P0b migration
+(``c871b28bbdab``). Callers may still assemble ``MassBalanceInputs``
+directly when data doesn't come from those tables.
 
 Citation:
     Driver, A., Ahsan, A., Piske, M., Lee, K., Forrest, S.,
@@ -48,6 +47,8 @@ from dataclasses import dataclass
 from datetime import datetime
 from enum import StrEnum
 from typing import Any, Literal
+
+from backend.database import execute_query
 
 
 class FlowUnit(StrEnum):
@@ -410,6 +411,84 @@ def compute_time_aware_mass_load(
     )
 
 
+def _resolve_upstream_sample_id(sample_id: str, conn: Any) -> str:
+    """Return the ``samples.sample_id`` upstream of ``sample_id`` in its sewershed.
+
+    Follows the ``wastewater_upstream_of`` value on ``sample_associations``
+    (source = upstream, target = downstream).
+    """
+    rows = execute_query(
+        "SELECT id FROM samples WHERE sample_id = :sample_id",
+        {"sample_id": sample_id},
+        conn=conn,
+    )
+    if not rows:
+        raise ValueError(f"No samples row found for sample_id={sample_id!r}.")
+    downstream_id = rows[0]["id"]
+
+    rows = execute_query(
+        """
+        SELECT s.sample_id
+        FROM sample_associations sa
+        JOIN samples s ON s.id = sa.source_sample_id
+        WHERE sa.target_sample_id = :downstream_id
+          AND sa.association_type = 'wastewater_upstream_of'
+        """,
+        {"downstream_id": downstream_id},
+        conn=conn,
+    )
+    if not rows:
+        raise ValueError(
+            f"No wastewater_upstream_of association found for downstream sample_id={sample_id!r}."
+        )
+    return rows[0]["sample_id"]
+
+
+def _fetch_latest_concentration_row(
+    sample_id: str, target_pathogen_id: str, conn: Any
+) -> dict[str, Any]:
+    rows = execute_query(
+        """
+        SELECT * FROM wastewater_target_concentration
+        WHERE sample_id = :sample_id AND target = :target
+        ORDER BY collection_timestamp DESC NULLS LAST, created_at DESC
+        LIMIT 1
+        """,
+        {"sample_id": sample_id, "target": target_pathogen_id},
+        conn=conn,
+    )
+    if not rows:
+        raise ValueError(
+            f"No wastewater_target_concentration row found for "
+            f"sample_id={sample_id!r}, target={target_pathogen_id!r}."
+        )
+    return rows[0]
+
+
+def _row_to_flow(row: dict[str, Any]) -> FlowRate:
+    flow = row["flow_rate_mgd"]
+    if flow is None:
+        raise ValueError(
+            f"wastewater_target_concentration row {row['id']} has no "
+            "flow_rate_mgd; cannot build FlowRate."
+        )
+    return FlowRate(value=flow, unit=FlowUnit.MGD)
+
+
+def _row_to_concentration(row: dict[str, Any]) -> Concentration:
+    try:
+        unit = ConcentrationUnit(row["concentration_unit"])
+    except ValueError as exc:
+        raise ValueError(
+            f"Unrecognized concentration_unit {row['concentration_unit']!r} on "
+            f"wastewater_target_concentration row {row['id']}."
+        ) from exc
+    # below_lod rows may carry a NULL concentration; 0.0 lets
+    # _resolve_concentration's non-detect path apply LOD/2 substitution.
+    value = row["concentration"] if row["concentration"] is not None else 0.0
+    return Concentration(value=value, unit=unit, lod=row["lod_value"])
+
+
 def load_inputs_from_db(
     sample_id: str,
     target_pathogen_id: str,
@@ -417,14 +496,22 @@ def load_inputs_from_db(
 ) -> MassBalanceInputs:
     """Assemble ``MassBalanceInputs`` from the database.
 
-    Stub. DB integration is gated on the Phase 24.5 schema items and the
-    P0b ship; see the module docstring and the NotImplementedError
-    message for the blocking backlog items.
+    ``sample_id`` identifies the downstream sample. The upstream sample is
+    resolved via the ``wastewater_upstream_of`` association
+    (B-CWB-SCHEMA-1); each side's flow and concentration come from its most
+    recent ``wastewater_target_concentration`` row for ``target_pathogen_id``
+    (B-CWB-SCHEMA-2). ``session`` is a SQLAlchemy connection/session, passed
+    through to ``execute_query`` as ``conn``.
     """
-    del sample_id, target_pathogen_id, session
-    raise NotImplementedError(
-        "DB integration is blocked on B-CWB-SCHEMA-2 (wastewater_target_concentration "
-        "result type) and B-CWB-SCHEMA-1 (wastewater_upstream_of association_type). "
-        "See todo.md Phase 24.5. This module operates on MassBalanceInputs directly "
-        "until those schema items ship in P0b."
+    upstream_sample_id = _resolve_upstream_sample_id(sample_id, session)
+    downstream_row = _fetch_latest_concentration_row(sample_id, target_pathogen_id, session)
+    upstream_row = _fetch_latest_concentration_row(upstream_sample_id, target_pathogen_id, session)
+
+    return MassBalanceInputs(
+        upstream_flow=_row_to_flow(upstream_row),
+        upstream_concentration=_row_to_concentration(upstream_row),
+        downstream_flow=_row_to_flow(downstream_row),
+        downstream_concentration=_row_to_concentration(downstream_row),
+        target_pathogen_id=target_pathogen_id,
+        timestamp=downstream_row["collection_timestamp"] or downstream_row["created_at"],
     )
