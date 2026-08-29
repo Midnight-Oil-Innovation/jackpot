@@ -42,7 +42,7 @@ fill_guardrails:
   # SYSTEM_PROMPT (point 1b: convention moves from code to data).
   global:
     - rule: "Python and Bash only. No other languages. No placeholder code — write full implementations always."
-    - rule: "File edits use Python scripts with str.replace() and an `assert count == 1` guard; never sed. Write to /tmp first, then mv into place."
+    - rule: "File edits use Python scripts with str.replace() and an `assert count == 1` guard; never sed. Edit files in place inside the worktree (no /tmp staging — the sandbox denies writes outside the worktree)."
     - rule: "Never use `status` as a bash variable name (zsh collision)."
     - rule: "Every test file includes at least one failure-path test, not only the happy path."
     - rule: "Out-of-Scope items use the 'X (because Y)' pattern so the reason is explicit."
