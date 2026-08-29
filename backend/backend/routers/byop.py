@@ -45,6 +45,7 @@ from backend.services.byop_sandbox import (
     TEST_DATA_DIR,
     run_sandbox,
 )
+from backend.services.byop_telemetry import get_pipeline_telemetry
 from backend.services.byop_validator import validate_manifest
 
 MANIFEST_SCHEMA_PATH = Path("schema/byop-pipeline-manifest.schema.json")
@@ -267,6 +268,16 @@ def _get_or_404(db: Session, pipeline_id: int) -> ByopPipeline:
     if pipeline is None:
         raise HTTPException(status_code=404, detail=f"BYOP pipeline {pipeline_id} not found.")
     return pipeline
+
+
+@router.get("/telemetry")
+def get_telemetry(
+    db: Annotated[Session, Depends(get_db_dep)],
+    current_user: Annotated[dict, Depends(get_current_user)],
+    pipeline_id: int | None = None,
+) -> list[dict]:
+    """B-BYOP-10 — aggregated success rate / walltime / cost per pipeline."""
+    return get_pipeline_telemetry(db, pipeline_id)
 
 
 @router.post("/pipelines", response_model=ByopPipelineRead, status_code=status.HTTP_201_CREATED)
