@@ -38,7 +38,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import DateTime, Float, Integer, String, Text
 from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column
 
-from backend.auth.guards import get_current_user
+from backend.auth.guards import get_current_user, get_user_lab_membership
 from backend.database import get_db_dep
 from backend.services.byop_sandbox import (
     OUTCOME_PASSED,
@@ -101,11 +101,15 @@ class ByopPipeline(Base):
     license_spdx: Mapped[str] = mapped_column(String(64))
     citation: Mapped[str | None] = mapped_column(Text, nullable=True)
     cost_estimate_usd: Mapped[float | None] = mapped_column(Float, nullable=True)
+    # P0c tenancy — column shipped in the P0b DDL (migration c871b28bbdab);
+    # mapped here so the tenancy guard can scope mutations to the owning lab.
+    owner_lab_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
 
 class ByopPipelineCreate(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
+    owner_lab_id: int | None = None
     source_type: str = Field(...)
     source_url: str | None = None
     source_ref: str | None = None
@@ -155,6 +159,7 @@ class ByopPipelineRead(BaseModel):
     license_spdx: str
     citation: str | None = None
     cost_estimate_usd: float | None = None
+    owner_lab_id: int | None = None
 
 
 router = APIRouter(prefix="/api/v1/byop", tags=["byop"])
@@ -270,6 +275,32 @@ def _get_or_404(db: Session, pipeline_id: int) -> ByopPipeline:
     return pipeline
 
 
+def _user_in_lab(user_id: int, lab_id: int) -> bool:
+    """Lab-membership lookup, isolated so the SQLite test harness can patch it."""
+    return get_user_lab_membership(user_id, lab_id) is not None
+
+
+def _get_or_404_tenancy(db: Session, pipeline_id: int, current_user: dict) -> ByopPipeline:
+    """P0c tenancy guard for mutating endpoints (IDOR fix, 2026-08-29 entry note).
+
+    A caller may mutate a BYOP pipeline only if they are a platform admin
+    (Instance scope contains everything, access_model.md §3.1), the
+    registering user, or a member of the pipeline's ``owner_lab_id`` lab.
+    Cross-tenant callers get 404, not 403 — access_model.md §3.3: another
+    tenant must never learn the resource exists.
+    """
+    pipeline = _get_or_404(db, pipeline_id)
+    if current_user.get("is_platform_admin"):
+        return pipeline
+    if pipeline.registered_by_user_id == str(current_user["id"]):
+        return pipeline
+    if pipeline.owner_lab_id is not None and _user_in_lab(
+        current_user["id"], pipeline.owner_lab_id
+    ):
+        return pipeline
+    raise HTTPException(status_code=404, detail=f"BYOP pipeline {pipeline_id} not found.")
+
+
 @router.get("/telemetry")
 def get_telemetry(
     db: Annotated[Session, Depends(get_db_dep)],
@@ -291,6 +322,16 @@ def create_pipeline(
             status_code=422,
             detail=f"source_type must be one of {sorted(SOURCE_TYPES)}.",
         )
+    # P0c tenancy: registering into a lab requires membership in that lab.
+    if (
+        payload.owner_lab_id is not None
+        and not current_user.get("is_platform_admin")
+        and not _user_in_lab(current_user["id"], payload.owner_lab_id)
+    ):
+        raise HTTPException(
+            status_code=403,
+            detail=f"Not a member of lab {payload.owner_lab_id}.",
+        )
     manifest = _parse_manifest(payload.manifest_yaml)
     metadata = manifest.get("metadata") or {}
     pipeline_key = f"{metadata.get('name', 'unnamed')}-{metadata.get('version', '0')}"
@@ -298,6 +339,7 @@ def create_pipeline(
 
     now = _now()
     pipeline = ByopPipeline(
+        owner_lab_id=payload.owner_lab_id,
         source_type=payload.source_type,
         source_url=payload.source_url,
         source_ref=payload.source_ref,
@@ -328,6 +370,8 @@ def list_pipelines(
     pipeline_status: str | None = None,
     engine_type: str | None = None,
 ) -> list[ByopPipeline]:
+    # P0c: list-all is INTENTIONALLY unscoped per design §9 — bioinformaticians
+    # browse the whole pipeline catalog. Only mutations are tenancy-guarded.
     query = db.query(ByopPipeline)
     if pipeline_status is not None:
         query = query.filter(ByopPipeline.pipeline_status == pipeline_status)
@@ -342,6 +386,8 @@ def get_pipeline(
     db: Annotated[Session, Depends(get_db_dep)],
     current_user: Annotated[dict, Depends(get_current_user)],
 ) -> ByopPipeline:
+    # P0c: detail read is INTENTIONALLY unscoped per design §9 (catalog browse);
+    # mutations go through _get_or_404_tenancy instead.
     return _get_or_404(db, pipeline_id)
 
 
@@ -353,7 +399,7 @@ def update_pipeline(
     db: Annotated[Session, Depends(get_db_dep)],
     current_user: Annotated[dict, Depends(get_current_user)],
 ) -> ByopPipeline:
-    pipeline = _get_or_404(db, pipeline_id)
+    pipeline = _get_or_404_tenancy(db, pipeline_id, current_user)
     if pipeline.pipeline_status == "ARCHIVED":
         raise HTTPException(status_code=409, detail="Archived pipelines are immutable.")
 
@@ -390,7 +436,7 @@ def delete_pipeline(
     current_user: Annotated[dict, Depends(get_current_user)],
 ) -> ByopPipeline:
     """§8 — DELETE moves to ARCHIVED; there is no hard delete."""
-    pipeline = _get_or_404(db, pipeline_id)
+    pipeline = _get_or_404_tenancy(db, pipeline_id, current_user)
     if pipeline.pipeline_status == "ARCHIVED":
         raise HTTPException(status_code=409, detail="Pipeline is already archived.")
     pipeline.pipeline_status = "ARCHIVED"
@@ -410,7 +456,7 @@ def revalidate_pipeline(
     Failure does not 422: per the design doc, failed re-validation
     transitions the pipeline to DEACTIVATED and the row records why.
     """
-    pipeline = _get_or_404(db, pipeline_id)
+    pipeline = _get_or_404_tenancy(db, pipeline_id, current_user)
     if pipeline.pipeline_status == "ARCHIVED":
         raise HTTPException(status_code=409, detail="Archived pipelines cannot be revalidated.")
 
@@ -447,7 +493,7 @@ def deactivate_pipeline(
     db: Annotated[Session, Depends(get_db_dep)],
     current_user: Annotated[dict, Depends(get_current_user)],
 ) -> ByopPipeline:
-    pipeline = _get_or_404(db, pipeline_id)
+    pipeline = _get_or_404_tenancy(db, pipeline_id, current_user)
     if pipeline.pipeline_status not in DEACTIVATABLE_STATES:
         raise HTTPException(
             status_code=409,
@@ -466,7 +512,7 @@ def archive_pipeline(
     db: Annotated[Session, Depends(get_db_dep)],
     current_user: Annotated[dict, Depends(get_current_user)],
 ) -> ByopPipeline:
-    pipeline = _get_or_404(db, pipeline_id)
+    pipeline = _get_or_404_tenancy(db, pipeline_id, current_user)
     if pipeline.pipeline_status not in ARCHIVABLE_STATES:
         raise HTTPException(
             status_code=409,
