@@ -24,7 +24,6 @@ from backend.wastewater.mass_balance import (
     QualityFlag,
     compute_mass_load,
     compute_time_aware_mass_load,
-    load_inputs_from_db,
     to_copies_per_l,
     to_l_per_day,
     to_ng_per_l,
@@ -459,12 +458,3 @@ def test_time_aware_merges_per_endpoint_flags() -> None:
     )
     result = compute_time_aware_mass_load(t1, t2)
     assert QualityFlag.NON_DETECT_UPSTREAM in result.quality_flags
-
-
-def test_load_inputs_from_db_raises_not_implemented_with_schema_refs() -> None:
-    with pytest.raises(NotImplementedError) as excinfo:
-        load_inputs_from_db("sample-1", "sars-cov-2", session=None)
-    msg = str(excinfo.value)
-    assert "B-CWB-SCHEMA-2" in msg
-    assert "B-CWB-SCHEMA-1" in msg
-    assert "P0b" in msg
