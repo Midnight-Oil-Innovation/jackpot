@@ -1142,12 +1142,12 @@ Driven by integration-readiness analysis vs Driver et al. 2024 *Sci Total Enviro
                (public Git, private Git with deploy key gen, tarball
                upload, Docker image). (2-3 sessions, P0f)
 
-[ ] B-BYOP-8   Implement Streamlit BYOP catalog tab on the Pipelines
-               page. List registered BYOP pipelines with status badges,
-               filter by engine/organism/status, link to detail view.
-               Sample-detail-page launch dropdown shows BYOP pipelines
-               whose applicability.organism_names matches the sample's
-               organism. (1-2 sessions, P0f)
+[x] B-BYOP-8   Implement Streamlit BYOP catalog tab on the Pipelines
+               page. List registered BYOP pipelines with status, last
+               revalidation date, and per-pipeline detail expander with
+               admin deactivate/archive actions (B-BYOP-4 endpoints).
+               Shipped: frontend/pages/pipelines.py (BYOP Catalog tab),
+               edit_pipelines_byop_tab.py. (1-2 sessions, P0f)
 
 [ ] B-BYOP-10  Implement BYOP telemetry — aggregated success rate,
                walltime, peak memory, cost per run for each registered
