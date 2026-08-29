@@ -215,8 +215,20 @@ def teardown_isolation(pipeline_id: str, isolation: str, timeout: int) -> StepRe
     )
 
 
+def _flag_like(value: str) -> bool:
+    """True when a manifest-supplied value could smuggle an argv flag into
+    a docker/kubectl command line (argument injection guard)."""
+    return value.startswith("-")
+
+
 def check_container_pull(image: str, timeout: int) -> StepResult:
     """Dry-run step 1 — the declared container image actually pulls."""
+    if _flag_like(image):
+        return StepResult(
+            step_name="container_pull",
+            passed=False,
+            message=f"Rejected flag-like container image reference {image!r}.",
+        )
     proc = _run(["docker", "pull", image], timeout)
     if proc.returncode != 0:
         return StepResult(
@@ -250,6 +262,13 @@ def check_engine_dry_run(
             step_name="engine_dry_run",
             passed=False,
             message=f"Unknown engine type: {engine_type!r}.",
+        )
+    if _flag_like(image) or _flag_like(entrypoint):
+        return StepResult(
+            step_name="engine_dry_run",
+            passed=False,
+            message="Rejected flag-like image or entrypoint value "
+            f"(image={image!r}, entrypoint={entrypoint!r}).",
         )
     engine_cmd = [
         part.format(entrypoint=entrypoint, sandbox=sandbox_dir, test_inputs=sandbox_dir)
@@ -293,6 +312,12 @@ def check_engine_dry_run(
 def check_reference_data_bind(pipeline_id: str, image: str, timeout: int) -> StepResult:
     """Dry-run step 3 — the §5.3c synthetic test inputs mount into the
     sandbox and are readable from inside the container."""
+    if _flag_like(image):
+        return StepResult(
+            step_name="reference_data_bind",
+            passed=False,
+            message=f"Rejected flag-like container image reference {image!r}.",
+        )
     network = DOCKER_NETWORK_TEMPLATE.format(pipeline_id=pipeline_id)
     mount = f"{TEST_DATA_DIR.resolve()}:/jackpot/test_data:ro"
     proc = _run(

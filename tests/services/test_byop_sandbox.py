@@ -293,3 +293,18 @@ def test_create_isolation_kubernetes_failure():
         step = sbx.create_isolation("42", "kubernetes", 300)
     assert not step.passed
     assert "jackpot-byop-sandbox-42" in step.message
+
+
+# ------------------------------------------------ argv injection guard
+
+
+def test_flag_like_image_rejected_without_subprocess():
+    with patch(f"{MODULE}._run") as run:
+        pull = sbx.check_container_pull("--privileged", 300)
+        engine = sbx.check_engine_dry_run("42", "--privileged", "nextflow", "main.nf", "/sbx", 300)
+        bind = sbx.check_reference_data_bind("42", "--privileged", 300)
+        entry = sbx.check_engine_dry_run("42", "img", "nextflow", "--bad-entry", "/sbx", 300)
+    for step in (pull, engine, bind, entry):
+        assert not step.passed
+        assert "flag-like" in step.message
+    run.assert_not_called()
