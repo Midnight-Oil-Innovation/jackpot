@@ -269,8 +269,12 @@ no need to read them proactively otherwise.
   - **`main`** represents released code. `development` → `main` is a
     deliberate release act — open a PR from `development` to `main`
     when a coherent batch of features is ready to ship, review the
-    aggregate diff, squash- or merge-commit. CI runs on PRs to
-    `main` as a safety net.
+    aggregate diff, **merge-commit — never squash**. Squashing a
+    release orphans `main`'s history from `development` and makes
+    every subsequent release PR conflict on any file both sides
+    touched since (release #99 did this; #118 required a
+    reconnecting back-merge to fix). CI runs on PRs to `main` as a
+    safety net.
   - **`staging`** is push-triggered for the GCP staging deploy
     (`.github/workflows/deploy-staging.yml`). Promote
     `development` → `staging` to test the integrated stack in cloud,
