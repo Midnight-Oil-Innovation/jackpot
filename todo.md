@@ -1119,10 +1119,13 @@ Driven by integration-readiness analysis vs Driver et al. 2024 *Sci Total Enviro
                    test_wdl_launcher.py). Event polling (Cromwell
                    metadata API / miniwdl log parse) deferred to the
                    BYOP launch-dispatch integration.
-               (d) backend/services/manifest_launcher.py — new.
-                   Docker run wrapper for the manifest engine. Single
-                   container, single command, structured timing and
-                   exit-code event emission.
+               (d) [x] B-BYOP-5d shipped —
+                   backend/backend/services/launchers/manifest_launcher.py
+                   (engine-less: runs the manifest's pre-rendered command
+                   sequence in order via ManifestLaunchSpec.commands,
+                   ManifestError on missing/empty/malformed manifest,
+                   EngineLauncher-conformant, same LaunchResult shape;
+                   tests/services/launchers/test_manifest_launcher.py).
                (2-3 sessions per launcher = 1.5-2 weeks total, P0f)
 
 [ ] B-BYOP-6   Implement backend/services/byop_quarterly_revalidation.py
