@@ -2636,3 +2636,15 @@ documentation pattern.
 - Middleware resolution duplicates the `get_current_user` DB lookup routes make via `Depends`; acceptable now, dedupe when M2 wires `permit()`.
 - `_user_in_lab` in byop.py wraps `get_user_lab_membership` (Postgres) so the SQLite test harness can monkeypatch it — new lab-scoped guards should use the same seam.
 - Per-endpoint capability enforcement is NOT P0c — it's the M2 cutover (access_model.md §10.3/§11); the endpoint→capability sweep lives in docs/endpoint_capability_map.md.
+
+## M2 pre-cutover verification harness — 2026-08-29
+**What was built:** Dark equivalence harness proving M0 permit() / M1 visibility / ACCESS-SEED reseed on real PostgreSQL before the irreversible M2 cutover (tests/authz/preflight.py + test_cutover_preflight.py, scripts/m2_preflight_report.py, docs/m2_preflight_report.md; PR #140).
+**Key decisions:**
+- Divergences legacy-vs-new are registered, not hidden: `EXPECTED_DIVERGENCES` maps each class to a predicate + rationale; tests assert zero unregistered divergences AND that every registered class still fires (stale-expectation check).
+- Visibility safety invariant is unconditional: new clause must never over-grant (new ⊆ legacy per persona); narrowing is allowed and documented, widening fails the build.
+- Report generator imports the registry by file path so rationales cannot drift from the tests.
+**Watch out for:**
+- `instance://self` does NOT contain `lab://N` (_scope_contains is URI-prefix) — reseeded admin grants match no lab resources. M2 blocker: scope redesign or admin ALLOW policy.
+- Live chain lacks the grants unique index; reseed idempotency exists only after the staged migration creates it. Ordering pinned by test_reseed_duplicates_without_index.
+- `tests` dotted imports are shadowed by cli/tests (regular package from the editable cli install); use `authz.preflight` under pytest, file-path import in scripts.
+- Repo-wide gotcha: `git stash pop` in a worktree can pop ANOTHER session's stash — stashes are shared across worktrees. Check `git stash list` before pop.
