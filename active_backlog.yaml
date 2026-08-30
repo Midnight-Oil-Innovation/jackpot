@@ -2220,7 +2220,8 @@ sessions:
       endpoint currently writes is_deleted = TRUE under audit action
       ARCHIVE_SAMPLE, while deletion_status has no writer at all.
     phase: phase_24_5
-    status: open
+    status: shipped
+    merged_at: '2026-08-29'  # shipped inside B-CARE-3 (merge 93f39fd) per its own MUST-ship-inside note
     depends_on:
       - B-CARE-3
     blocked_by_external:
