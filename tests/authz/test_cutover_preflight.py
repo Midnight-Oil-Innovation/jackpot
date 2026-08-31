@@ -348,6 +348,18 @@ class TestPreflightReport:
             assert reason, f"{r.method} {r.path} carries the marker with no reason"
             assert r.capability == "—", "a by-design row cannot also name a capability"
 
+        # PUBLIC sign-off complete: nothing pending intent verification, and the
+        # two pipeline callbacks are token-authenticated, not public.
+        assert not [r for r in rows if r.verify_intent]
+        service_routes = {
+            ("POST", "/api/v1/pipelines/events"),
+            ("POST", "/api/v1/pipelines/{run_id}/results/{result_type}"),
+        }
+        for r in rows:
+            if (r.method, r.path) in service_routes:
+                assert r.klass != "public", f"{r.path} is token-authenticated, not PUBLIC"
+                assert r.capability == "pipeline:write_results"
+
         # Split routes (self path ungated, cross-principal path guarded) keep
         # their capability and stay ROUTE_LOCAL — the guard still gets written.
         split = [r for r in rows if "AUTH-ONLY BY DESIGN" in r.notes and r.capability != "—"]

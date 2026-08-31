@@ -35,7 +35,7 @@ All catalog gaps were resolved in the M2 pre-cutover review (see
 | POST | `/api/v1/auth/google/login` | — | Instance | PUBLIC (intentional — OAuth login entry) |
 | POST | `/api/v1/auth/refresh` | — | Instance | PUBLIC (intentional — token refresh via cookie) |
 | POST | `/api/v1/auth/logout` | — | Instance | PUBLIC (intentional — clears cookies) |
-| POST | `/api/v1/auth/dev-login` | — | Instance | PUBLIC (verify intent — must be ENV=local only) |
+| POST | `/api/v1/auth/dev-login` | — | Instance | PUBLIC — intent VERIFIED: `env != "local"` returns 404 before any work (`routers/auth.py:557`); pinned by `test_dev_login_returns_404_outside_local_mode` |
 | GET | `/api/v1/byop/telemetry` | `pipeline:read` | Lab | auth-only today; BYOP registry read |
 | POST | `/api/v1/byop/pipelines` | `pipeline:register_custom` | Lab | auth-only today |
 | GET | `/api/v1/byop/pipelines` | `pipeline:read` | Lab | auth-only today; registry read |
@@ -94,14 +94,14 @@ All catalog gaps were resolved in the M2 pre-cutover review (see
 | DELETE | `/api/v1/organizations/{org_id}` | `org:manage` | Instance | `require_capability("org:manage")` |
 | GET | `/api/v1/pipelines/` | `pipeline:read` | Instance | auth-only today; pipeline zoo read |
 | POST | `/api/v1/pipelines/launch` | `pipeline:run` | Project | auth-only today; in-route sample-access checks |
-| POST | `/api/v1/pipelines/events` | `pipeline:write_results` | Instance | PUBLIC (verify intent — weblog receiver is best-effort by design, Rule 60; SERVICE-principal capability at M2) |
+| POST | `/api/v1/pipelines/events` | `pipeline:write_results` | Instance | SERVICE-authenticated (NOT public): per-run `X-Pipeline-Token`, `hmac.compare_digest`, 401 on mismatch (`routers/pipelines.py:903`). Rule 60's never-raises applies to weblog delivery, not auth. M2 adds the SERVICE-principal `permit()` call |
 | GET | `/api/v1/pipelines/{run_id}` | `pipeline:run` | Project | auth-only today; run-status read |
 | GET | `/api/v1/pipelines/{run_id}/tasks` | `pipeline:run` | Project | auth-only today |
 | GET | `/api/v1/pipelines/{run_id}/events` | `pipeline:run` | Project | auth-only today |
 | POST | `/api/v1/pipelines/{run_id}/resume` | `pipeline:run` | Project | auth-only today |
 | POST | `/api/v1/pipelines/custom` | `pipeline:register_custom` | Lab | `require_capability("pipeline:register_custom")` |
 | POST | `/api/v1/pipelines/{catalog_id}/promote` | `pipeline:promote` | Lab or Instance | `require_capability("pipeline:promote")` — lab scope for lab-tier target, instance scope for global tier |
-| POST | `/api/v1/pipelines/{run_id}/results/{result_type}` | `pipeline:write_results` | Project | PUBLIC (verify intent — pipeline-token path; SERVICE-principal capability at M2) |
+| POST | `/api/v1/pipelines/{run_id}/results/{result_type}` | `pipeline:write_results` | Project | SERVICE-authenticated (NOT public): same per-run token check, `INVALID_TOKEN` 401 (`routers/pipelines.py:1495`). M2 adds the SERVICE-principal `permit()` call |
 | POST | `/api/v1/profiles/` | — | Instance | AUTH-ONLY BY DESIGN — creates the caller's own USER profile (not an execution profile) |
 | GET | `/api/v1/profiles/me` | — | Instance | AUTH-ONLY BY DESIGN — caller's own USER profile |
 | GET | `/api/v1/profiles/{user_id}` | `user:manage` | Org | auth-only today; self OR user:manage at M2 |
@@ -165,12 +165,39 @@ audited platform-admin self-approve flag is set).
 
 ## Gaps
 
-Routes with no authentication at all, flagged `PUBLIC (verify intent)`
-unless intentionally public:
+Routes with no user JWT. All three rows previously flagged
+`PUBLIC (verify intent)` were reviewed against the handlers; the
+outcome is one confirmation and two corrections:
 
-- `POST /api/v1/auth/dev-login` — PUBLIC (verify intent): must be gated to `ENV=local`; confirm it 404s/403s in production.
-- `POST /api/v1/pipelines/events` — PUBLIC (verify intent): Nextflow weblog receiver; deliberately never raises (Rule 60), but should authenticate the pipeline token as a SERVICE principal holding `pipeline:write_results` at M2.
-- `POST /api/v1/pipelines/{run_id}/results/{result_type}` — PUBLIC (verify intent): result registration path; same SERVICE-principal treatment as the weblog receiver.
+- `POST /api/v1/auth/dev-login` — **PUBLIC, verified.** `settings.env != "local"`
+  returns 404 as the first statement of the handler (`routers/auth.py:557`),
+  before any lookup or write, and 404 rather than 403 so the route's existence
+  is not confirmed in non-local deployments. Pinned by
+  `tests/test_dev_login_endpoint.py::test_dev_login_returns_404_outside_local_mode`.
+  Behavioral note, unchanged and intended: on success it mutates the cached
+  `settings.mock_user_email`, switching identity process-wide for subsequent
+  requests — the mechanism the UAT role-switch scripts rely on, unreachable
+  outside local.
+- `POST /api/v1/pipelines/events` — **not public.** Authenticates the per-run
+  `X-Pipeline-Token` minted at launch, compared with `hmac.compare_digest`,
+  401 on missing or wrong token (`routers/pipelines.py:903`). Both failure
+  modes pinned (`tests/test_pipelines_router_api.py:892,908`). Rule 60's
+  "receiver never raises" governs weblog *delivery* errors; a rejected token
+  is a deliberate 401, and the H-4 log poller covers anything lost.
+- `POST /api/v1/pipelines/{run_id}/results/{result_type}` — **not public.**
+  Same per-run token check returning `INVALID_TOKEN` 401
+  (`routers/pipelines.py:1495`); pinned by
+  `tests/test_pipelines_registration_api.py:92,111`.
+
+**M2 work on the two token routes.** The token today collapses authentication
+and authorization: holding the run's token *is* the permission, because the
+token is per-run. M2 keeps the token as authentication and adds a `permit()`
+call with a SERVICE principal holding `pipeline:write_results` at the run's
+project scope. The point is not that the token check is weak — it is that
+separating the two is what makes the cryptWWDB property structural (§4.6,
+§9.4): a `data_source_lab` principal holds `pipeline:write_results` and not
+`sample:read_detail`, and `permit()` is where that becomes enforceable rather
+than a consequence of how tokens happen to be minted.
 - `GET /api/v1/settings/public`, `GET /api/v1/templates/*`, `GET /api/v1/dataharmonizer/templates/*`, `POST /api/v1/auth/{google/login,refresh,logout}` — intentionally public (login flow, public settings, Rule 42 public templates).
 - Stub routers returning `{"status": "not implemented"}` (no auth, no data): `archive_requests`, `billing`, `dataset_access`, `datasets`, `ncbi_submissions`, `notifications`, `saved_searches`, `GET /api/v1/ingest/`. Guard when implemented; excluded from the table above.
 

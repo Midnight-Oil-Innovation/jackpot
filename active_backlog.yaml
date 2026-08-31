@@ -1935,6 +1935,13 @@ sessions:
         (b) rewrite every route guard role-check -> capability-check using
             ACCESS-GUARD-MAP;
         (c) switch list endpoints to the M1 visibility_sql_clause companion;
+            and wire the two per-run-token callbacks (pipelines/events,
+            pipelines/{run_id}/results/{result_type}) to permit() with a
+            SERVICE principal holding pipeline:write_results at the run's
+            project scope — the token stays as authentication, permit()
+            becomes the authorization, which is what makes the cryptWWDB
+            compute-without-read property structural (access_model.md §4.6,
+            §9.4) rather than a side effect of per-run token minting;
         (d) drop users.is_platform_admin, users.is_data_analyst, the
             PermissionGroups enum, and the permissions.py _base_access ladder;
         (e) give reseed() a pre-flight guard that counts the three

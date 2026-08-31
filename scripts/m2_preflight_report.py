@@ -163,8 +163,20 @@ def generate_report(rows: list[MapRow]) -> str:
 
     out.append("## 2. PUBLIC rows pending intent verification")
     out.append("")
-    for r in verify:
-        out.append(f"- ☐ **{r.method} `{r.path}`** — {r.notes}")
+    if not verify:
+        out.append("None. The three rows previously pending were reviewed against")
+        out.append("the handlers: `auth/dev-login` is confirmed PUBLIC and gated")
+        out.append('(`env != "local"` returns 404 as the handler\'s first statement),')
+        out.append("and the two pipeline callbacks were **misclassified** — both")
+        out.append("authenticate a per-run `X-Pipeline-Token` with")
+        out.append("`hmac.compare_digest` and 401 on mismatch, with wrong-token and")
+        out.append("missing-token cases already pinned by tests. They are now")
+        out.append("SERVICE-authenticated rows carrying `pipeline:write_results`,")
+        out.append("and M2 adds the SERVICE-principal `permit()` call that separates")
+        out.append("authentication from authorization on them (§4.6, §9.4).")
+    else:
+        for r in verify:
+            out.append(f"- ☐ **{r.method} `{r.path}`** — {r.notes}")
     out.append("")
 
     out.append("## 3. ROUTE_LOCAL rows (auth-only today)")
@@ -172,6 +184,9 @@ def generate_report(rows: list[MapRow]) -> str:
     out.append(f"{len(auth_only)} routes carry `get_current_user` plus in-route ad-hoc")
     out.append("checks and a target capability the map names but no guard enforces yet")
     out.append(f"(a further {len(by_design)} are AUTH-ONLY BY DESIGN and stay that way).")
+    out.append("Two of them authenticate a per-run pipeline token rather than a user")
+    out.append("JWT — the weblog receiver and the result-registration callback — and")
+    out.append("take a SERVICE principal at M2 rather than a human one.")
     out.append("checks (ownership, visibility, director-or-admin). No single legacy")
     out.append("decision function exists per route, so they are NOT machine-comparable")
     out.append("pre-cutover; the preflight equivalence matrix covers only the wired")
