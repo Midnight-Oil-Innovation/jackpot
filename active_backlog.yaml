@@ -1982,7 +1982,7 @@ sessions:
       validate it is one of the known builders' output, do not just drop
       the isidentifier check). Still dark.
     phase: access_model_redesign
-    status: open
+    status: shipped
     depends_on:
       - M2-PRE-1
     blocked_by_external:
@@ -1998,7 +1998,9 @@ sessions:
     pr_title_template: "feat(authz): M2-PRE-2 — visibility_sql_clause takes a scope expression"
     branch_name_template: m2-pre-2-scope-expr
     role_framing:
-    notes: "Expression index on the computed scope is a follow-up if the list path measures slow — do not add it speculatively."
+    notes: "Shipped inside the M2-PRE-3 PR (#148, merge 87e7101): PRE-2's signature change breaks preflight.py's synthesized 'lab://' scope column, and repairing it needs PRE-3's canonical grants — the two are one unit, not the independent items this entry assumed. scope_expr is validated by re-derivation (is_canonical_scope_sql), not trusted, because it is interpolated rather than bound."
+    merged_at: '2026-08-31'
+    merge_sha: 87e7101
 
   - id: M2-PRE-3
     title: reseed emits path scopes — and the admin divergence disappears
@@ -2015,7 +2017,7 @@ sessions:
       real PostgreSQL. If the class still fires, the serialization is
       wrong and M2 must not proceed.
     phase: access_model_redesign
-    status: open
+    status: shipped
     depends_on:
       - M2-PRE-1
     blocked_by_external:
@@ -2034,7 +2036,9 @@ sessions:
     pr_title_template: "feat(authz): M2-PRE-3 — reseed emits path scopes"
     branch_name_template: m2-pre-3-reseed-scopes
     role_framing:
-    notes: "Best evidence available before the irreversible step. Do not skip the matrix re-run to save a session."
+    notes: "Shipped with M2-PRE-2 (#148, merge 87e7101). ACCEPTANCE SIGNAL came back HALF: every lab-scoped cell for an in-preset capability now allows by plain containment (test_admin_reaches_lab_scope_structurally, on PG), but admin-bypass-vs-scoped-grants still fires for capabilities outside the 13-verb §8.2 instance_administrator preset — intentional narrowing, same family as director-passes-all-lab-caps, so the class was re-scoped rather than deleted. Also fixed impossible PRE-1 fixtures (lab 1 under four orgs; reused sample ids); fixtures now shared via tests/authz/scopes.py."
+    merged_at: '2026-08-31'
+    merge_sha: 87e7101
 
   - id: M2-PRE-4
     title: reseed pre-flight guard — the three data-quality divergences
@@ -2053,7 +2057,7 @@ sessions:
       Lab Director, so a sweep passes vacuously. The check ships with the
       code and runs wherever it is applied (Rule 55).
     phase: access_model_redesign
-    status: blocked
+    status: open
     depends_on:
       - M2-PRE-3
     blocked_by_external:
