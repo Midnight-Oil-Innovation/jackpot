@@ -968,7 +968,9 @@ async def ingest_globus(
     ``cheap_fingerprint``).
     """
     user = get_current_user(request)
-    require_capability("sample:create")(user)
+    # deposit:record, not sample:create — this endpoint creates no samples
+    # (see the docstring); it records a deposit and notifies directors.
+    require_capability("deposit:record")(user)
 
     try:
         body = await request.json()

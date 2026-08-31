@@ -1,4 +1,5 @@
 import pytest
+from authz_helpers import sync_grants_from_legacy_roles
 
 from backend.config import get_settings
 from backend.database import execute_query, execute_write
@@ -20,6 +21,8 @@ def _ensure_user(email: str, *, is_platform_admin: bool = False) -> int:
         {"e": email, "a": is_platform_admin},
     )
     row = execute_query("SELECT id FROM users WHERE email = :e", {"e": email})
+    # Guards decide on grants since M2-B1; translate the role flags.
+    sync_grants_from_legacy_roles()
     return row[0]["id"]
 
 
@@ -58,6 +61,8 @@ def _add_lab_membership(user_id: int, lab_id: int, pg_name: str, *, director: bo
         """,
         {"uid": user_id, "lid": lab_id, "pg": _pg_id(pg_name), "d": director},
     )
+    # A membership is only access once grants exist for it (M2-B1).
+    sync_grants_from_legacy_roles()
 
 
 def _cleanup_project_by_name(name: str) -> None:

@@ -77,7 +77,7 @@ All catalog gaps were resolved in the M2 pre-cutover review (see
 | POST | `/api/v1/ingest/upload` | `sample:create` | Lab | auth-only today |
 | POST | `/api/v1/ingest/csv` | `sample:create` | Lab | auth-only today |
 | POST | `/api/v1/ingest/register` | `sample:create` | Lab | auth-only today (BYOP no-copy registration, Rule 57) |
-| POST | `/api/v1/ingest/globus` | `sample:create` | Instance | `require_capability("sample:create")` — admin-triggered Globus sweep |
+| POST | `/api/v1/ingest/globus` | `deposit:record` | Instance | `require_capability("deposit:record")` — records a deposit and notifies directors; creates no samples, so it is not `sample:create` (corrected in M2-B1). A SERVICE principal is the better long-term fit if the facility calls it directly (cf. M2-B6) |
 | POST | `/api/v1/labs/` | `org:manage` | Instance | `require_capability("org:manage")` |
 | GET | `/api/v1/labs/` | `lab:read` | Org | auth-only today; lab directory read |
 | GET | `/api/v1/labs/{lab_id}` | `lab:read` | Lab | auth-only today |

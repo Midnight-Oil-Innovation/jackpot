@@ -23,6 +23,7 @@ from __future__ import annotations
 import httpx
 import pytest
 import respx
+from authz_helpers import sync_grants_from_legacy_roles
 
 from backend.config import get_settings
 from backend.credentials import _reset_backend, _set_backend
@@ -65,6 +66,8 @@ def _ensure_user(email: str, *, is_platform_admin: bool = False) -> int:
         {"e": email, "a": is_platform_admin},
     )
     row = execute_query("SELECT id FROM users WHERE email = :e", {"e": email})
+    # Guards decide on grants since M2-B1; translate the role flags.
+    sync_grants_from_legacy_roles()
     return row[0]["id"]
 
 

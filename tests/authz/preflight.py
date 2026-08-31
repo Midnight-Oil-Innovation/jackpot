@@ -23,7 +23,7 @@ from dataclasses import dataclass
 
 from fastapi import HTTPException
 
-from backend.auth.guards import require_capability
+from backend.auth.guards import get_user_lab_membership, require_capability
 from backend.authz import (
     CapabilityGrant,
     Context,
@@ -242,8 +242,14 @@ def seed_world() -> SeededWorld:
 
 def teardown_world(world: SeededWorld) -> None:
     ids = [p.user_id for p in world.personas.values()]
-    # authz_capability_grants is dark — nothing but reseed writes it; clear all.
-    execute_write("DELETE FROM authz_capability_grants", {})
+    # Only this world's principals. The old blanket DELETE was written when
+    # authz_capability_grants was dark; since M2-B1 the route guards READ it,
+    # so wiping the table removed the baseline admin's grants and every
+    # guarded-route test that ran after this suite got a 403.
+    execute_write(
+        "DELETE FROM authz_capability_grants WHERE principal_id = ANY(:ids)",
+        {"ids": [str(i) for i in ids]},
+    )
     execute_write(
         "DELETE FROM sample_access_grants WHERE sample_id IN "
         "(SELECT id FROM samples WHERE sample_id LIKE :p)",
@@ -301,7 +307,49 @@ def user_dict(p: Persona) -> dict:
     }
 
 
+# The APGAP ladder exactly as auth/guards.py ran it before M2-B1 replaced the
+# body of require_capability with permit(). Frozen here on purpose: once the
+# real guard IS the new model, comparing it against itself proves nothing, and
+# the divergence registry below stops documenting anything. Keeping a
+# reference copy is what lets the matrix keep asserting the useful claim —
+# that the new model differs from the old in exactly the ways recorded in
+# EXPECTED_DIVERGENCES, and nowhere else.
+#
+# Do not "fix" this to match new behavior. It is a historical record; when it
+# and the new model disagree, that disagreement is the output.
+_LEGACY_MEMBER_LEVEL_CAPABILITIES = frozenset({"sample:read", "sample:read_detail"})
+
+
+def legacy_ladder(user: dict, capability: str, lab_id: int | None) -> bool:
+    """Pre-M2-B1 require_capability, verbatim in behavior."""
+    if user is None:
+        return False
+    if user.get("is_platform_admin"):  # unconditional bypass
+        return True
+    if lab_id is not None:
+        membership = get_user_lab_membership(user["id"], lab_id)
+        if capability in _LEGACY_MEMBER_LEVEL_CAPABILITIES:
+            if membership:
+                return True
+            rows = execute_query(
+                "SELECT 1 FROM project_membership pm "
+                "JOIN projects p ON p.id = pm.project_id "
+                "WHERE pm.user_id = :uid AND p.lab_id = :lid LIMIT 1",
+                {"uid": user["id"], "lid": lab_id},
+            )
+            if rows:
+                return True
+        elif membership and membership.get("is_lab_director"):
+            return True
+    return False
+
+
 def legacy_guard(p: Persona, capability: str, lab_id: int | None) -> bool:
+    return legacy_ladder(user_dict(p), capability, lab_id)
+
+
+def real_guard(p: Persona, capability: str, lab_id: int | None) -> bool:
+    """The guard as production now runs it — permit()-backed since M2-B1."""
     try:
         require_capability(capability)(user_dict(p), lab_id=lab_id)
         return True
