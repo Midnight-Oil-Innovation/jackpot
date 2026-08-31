@@ -16,6 +16,11 @@ from backend.authz.reseed import (
     PRESET_GRANTS,
     reseed,
 )
+from backend.authz.scope import scope_uri
+
+ORG_ID = 4
+LAB_ID = 7
+LAB_SCOPE = scope_uri(org=ORG_ID, lab=LAB_ID)
 
 _DDL = [
     """
@@ -30,6 +35,12 @@ _DDL = [
     CREATE TABLE permission_groups (
         id INTEGER PRIMARY KEY,
         name TEXT NOT NULL UNIQUE
+    )
+    """,
+    """
+    CREATE TABLE labs (
+        id INTEGER PRIMARY KEY,
+        organization_id INTEGER NOT NULL
     )
     """,
     """
@@ -88,7 +99,15 @@ def _add_user(conn, user_id, *, admin=False, analyst=False):
     )
 
 
+def _add_lab(conn, lab_id, org_id=ORG_ID):
+    conn.execute(
+        text("INSERT OR IGNORE INTO labs (id, organization_id) VALUES (:id, :org)"),
+        {"id": lab_id, "org": org_id},
+    )
+
+
 def _add_membership(conn, user_id, lab_id, group_name):
+    _add_lab(conn, lab_id)
     conn.execute(
         text(
             "INSERT INTO lab_membership (user_id, lab_id, permission_group_id) "
@@ -156,7 +175,7 @@ def test_lab_lead_gets_lab_lead_grants(conn):
     reseed(conn)
     grants = _grants(conn, "4")
     assert {g.capability for g in grants} == set(PRESET_GRANTS["lab_lead"])
-    assert all(g.scope_ref == "lab://7" and g.source == GRANT_SOURCE for g in grants)
+    assert all(g.scope_ref == LAB_SCOPE and g.source == GRANT_SOURCE for g in grants)
 
 
 def test_lab_member_rw_grants(conn):
@@ -165,7 +184,7 @@ def test_lab_member_rw_grants(conn):
     reseed(conn)
     grants = _grants(conn, "5")
     assert {g.capability for g in grants} == set(PRESET_GRANTS["lab_member_rw"])
-    assert all(g.scope_ref == "lab://7" for g in grants)
+    assert all(g.scope_ref == LAB_SCOPE for g in grants)
 
 
 def test_lab_member_ro_grants(conn):

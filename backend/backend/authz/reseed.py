@@ -24,6 +24,8 @@ import logging
 from sqlalchemy import text
 from sqlalchemy.engine import Connection
 
+from backend.authz.scope import scope_uri
+
 logger = logging.getLogger(__name__)
 
 # Capability lists verbatim from access_model.md §8.2 preset definitions,
@@ -89,7 +91,7 @@ MEMBERSHIP_PRESETS: dict[str, str] = {
     "Bioinformatics User": "lab_member_rw",
 }
 
-INSTANCE_SCOPE = "instance://self"
+INSTANCE_SCOPE = scope_uri()
 GRANT_SOURCE = "reseed"
 
 _INSERT_GRANT = text(
@@ -101,8 +103,16 @@ _INSERT_GRANT = text(
 )
 
 
-def _lab_scope(lab_id: int) -> str:
-    return f"lab://{lab_id}"
+def _lab_scope(org_id: int, lab_id: int) -> str:
+    """Canonical lab path (§3.1.1, ADR 0015).
+
+    The org segment is why the membership query joins ``labs``: a lab scope
+    that did not run through its org would not be contained by an org-scoped
+    grant, and — the reason the cutover was blocked — the old ``lab://{id}``
+    form shared no root with ``instance://self``, so an instance-scoped admin
+    grant contained nothing.
+    """
+    return scope_uri(org=org_id, lab=lab_id)
 
 
 def _grant_rows(principal_id: str, capabilities: list[str], scope_ref: str) -> list[dict]:
@@ -141,13 +151,14 @@ def reseed(conn: Connection) -> None:
 
     memberships = conn.execute(
         text(
-            "SELECT lm.user_id, lm.lab_id, pg.name "
+            "SELECT lm.user_id, lm.lab_id, l.organization_id, pg.name "
             "FROM lab_membership lm "
-            "JOIN permission_groups pg ON pg.id = lm.permission_group_id"
+            "JOIN permission_groups pg ON pg.id = lm.permission_group_id "
+            "JOIN labs l ON l.id = lm.lab_id"
         )
     ).fetchall()
     skipped = 0
-    for user_id, lab_id, group_name in memberships:
+    for user_id, lab_id, org_id, group_name in memberships:
         preset = MEMBERSHIP_PRESETS.get(group_name)
         if preset is None:
             skipped += 1
@@ -159,7 +170,7 @@ def reseed(conn: Connection) -> None:
                 group_name,
             )
             continue
-        scope = _lab_scope(lab_id)
+        scope = _lab_scope(org_id, lab_id)
         capabilities = list(PRESET_GRANTS[preset])
         if group_name == "Bioinformatics User":
             capabilities.extend(BIOINFORMATICS_EXTRA)
