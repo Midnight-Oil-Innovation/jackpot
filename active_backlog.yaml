@@ -2078,49 +2078,277 @@ sessions:
     merged_at: '2026-08-31'
     merge_sha: 664e0db
 
+  # ── M2 guard-rewrite batches (cutover step (b), carved) ─────────────────
+  # 108 routes need a guard: 28 already name a capability via
+  # require_capability, 80 are ROUTE_LOCAL. Batched by risk class per the
+  # order pinned in M2, not by file. Every batch is landable while the legacy
+  # columns still exist, so only the final drop is irreversible.
+  - id: M2-B1
+    title: require_capability calls permit() — flips all 28 wired routes at once
+    short_description: |
+      The highest-leverage single change in the cutover, and the one with the
+      most evidence behind it. auth/guards.py's require_capability currently
+      runs the legacy ladder inline (platform-admin bypass, then lab
+      membership, then the project->lab join, then the director flag).
+      Rewrite its body to load the principal's grants and call permit(); the
+      28 routes that already pass through it flip together, with no per-route
+      edits.
+      Acceptance evidence already exists: the preflight matrix compares
+      legacy_guard against new_guard over 12 personas x 13 capabilities x 3
+      scopes and asserts zero unexpected divergences against the registered
+      classes. After this batch that comparison stops being a simulation —
+      new_guard IS the guard — so the matrix must be re-pointed at the real
+      require_capability rather than its stand-in, and any divergence that
+      moves is a behavior change to explain, not a fixture to adjust.
+      Principal loading is the new work: one query joining
+      authz_capability_grants for the user, cached per request. Do NOT
+      re-derive membership inline (Critical Rule 24).
+    phase: access_model_redesign
+    status: open
+    depends_on:
+      - M2-PRE-4
+    blocked_by_external:
+    parallel_safe: false
+    parallel_safe_reason: "Rewrites the guard every other batch builds on; auth-adjacent, never parallel-batch."
+    effort_sessions: 2
+    primary_files:
+      - backend/backend/auth/guards.py
+      - backend/backend/authz/
+    test_files:
+      - tests/authz/test_cutover_preflight.py
+      - tests/test_auth_guards.py
+    source_of_truth_views:
+      - docs/access_model.md
+      - docs/endpoint_capability_map.md
+    pr_title_template: "feat(authz): M2-B1 — require_capability calls permit()"
+    branch_name_template: m2-b1-guard-permit
+    role_framing:
+    notes: "Flips 28 routes with no route edits. The preflight matrix stops being a simulation here — re-point it at the
+      real guard. Legacy columns still exist, so this batch is revertible."
+
+  - id: M2-B2
+    title: Sample-plane route guards (27 routes)
+    short_description: |
+      samples 6, files 6, imports 6, sample-access 4, ingest 3, wastewater 2.
+      Rewrite each route's in-route ad-hoc check (ownership, visibility,
+      director-or-admin) into a require_capability call at the scope the
+      endpoint-capability map declares authoritative.
+      This batch first because it is the only one the pre-cutover harness
+      actually covers: the visibility equivalence suite proves new ⊆ legacy
+      per row on PostgreSQL, and every legacy-only row is attributed to a
+      registered divergence class. Route-level tests are still required per
+      route — the harness covers the decision, not the wiring.
+    phase: access_model_redesign
+    status: blocked
+    depends_on:
+      - M2-B1
+    blocked_by_external:
+    parallel_safe: false
+    parallel_safe_reason: "Auth-adjacent route rewrites; never parallel-batch."
+    effort_sessions: 2
+    primary_files:
+      - backend/backend/routers/
+    test_files:
+      - tests/test_samples_router.py
+      - tests/test_files_router.py
+    source_of_truth_views:
+      - docs/endpoint_capability_map.md
+    pr_title_template: "feat(authz): M2-B2 — sample-plane route guards"
+    branch_name_template: m2-b2-sample-plane
+    role_framing:
+    notes: "Best-evidenced batch: visibility equivalence + the never-over-grants invariant already run on PG."
+
+  - id: M2-B3
+    title: Pipeline and BYOP route guards (16 routes)
+    short_description: |
+      byop 10, pipelines 6 (the two per-run-token callbacks are M2-B6, not
+      here). Uses pipeline:read, which M2 adds to the §4 catalog — the verb
+      does not exist yet, so this batch lands the catalog entry with its
+      first consumers.
+      Watch the launch path: pipelines/launch takes pipeline:run at PROJECT
+      scope, and today it performs in-route sample-access checks that must
+      become capability checks rather than being dropped. Rule 60's
+      launch_account override is a P0c stub whose audit row exists precisely
+      so this rewrite can decide whether to keep trusting the request body.
+    phase: access_model_redesign
+    status: blocked
+    depends_on:
+      - M2-B1
+    blocked_by_external:
+    parallel_safe: false
+    parallel_safe_reason: "Auth-adjacent route rewrites; never parallel-batch."
+    effort_sessions: 1.5
+    primary_files:
+      - backend/backend/routers/pipelines.py
+      - backend/backend/routers/byop.py
+    test_files:
+      - tests/test_pipelines_router_api.py
+    source_of_truth_views:
+      - docs/endpoint_capability_map.md
+      - docs/access_model.md
+    pr_title_template: "feat(authz): M2-B3 — pipeline and BYOP route guards"
+    branch_name_template: m2-b3-pipeline-plane
+    role_framing:
+    notes: "Lands pipeline:read in §4. Do not drop the in-route sample-access checks on launch — convert them."
+
+  - id: M2-B4
+    title: Submission and import-mapping route guards (21 routes)
+    short_description: |
+      submissions 16, import_mappings 5. Lands three new §4 verbs with their
+      first consumers: submission:prepare (pairs with the existing
+      submission:approve), import:read, import:manage.
+      submissions/{id}/generate builds the BioSample XML and optionally
+      copies files — heavier than the CRUD routes, but the authorization
+      question is identical, so it takes the same verb. The separation that
+      matters is prepare vs approve, and that boundary already exists.
+    phase: access_model_redesign
+    status: blocked
+    depends_on:
+      - M2-B1
+    blocked_by_external:
+    parallel_safe: false
+    parallel_safe_reason: "Auth-adjacent route rewrites; never parallel-batch."
+    effort_sessions: 1.5
+    primary_files:
+      - backend/backend/routers/submissions.py
+      - backend/backend/routers/import_mappings.py
+    test_files:
+      - tests/test_submissions_router.py
+    source_of_truth_views:
+      - docs/endpoint_capability_map.md
+    pr_title_template: "feat(authz): M2-B4 — submission and import-mapping guards"
+    branch_name_template: m2-b4-submission-plane
+    role_framing:
+    notes: "Three new §4 verbs land here. prepare vs approve is the boundary that matters, not CRUD vs generate."
+
+  - id: M2-B5
+    title: Governance route guards (14 routes)
+    short_description: |
+      federation 3, labs 2, projects 2, profiles 2, tokens 2, users 2,
+      organizations 1. Lands lab:read, org:read and token:manage.
+      Two care points. tokens GET and DELETE are split routes: the self path
+      stays ungated (AUTH-ONLY BY DESIGN) and token:manage gates only
+      reaching another principal's tokens — do not gate the whole route.
+      The federation rows use peer-key auth, not a user JWT; leave that path
+      alone and rewrite only the capability half.
+    phase: access_model_redesign
+    status: blocked
+    depends_on:
+      - M2-B1
+    blocked_by_external:
+    parallel_safe: false
+    parallel_safe_reason: "Auth-adjacent route rewrites; never parallel-batch."
+    effort_sessions: 1
+    primary_files:
+      - backend/backend/routers/
+    test_files:
+      - tests/test_tokens_router.py
+      - tests/test_labs_router.py
+    source_of_truth_views:
+      - docs/endpoint_capability_map.md
+    pr_title_template: "feat(authz): M2-B5 — governance route guards"
+    branch_name_template: m2-b5-governance
+    role_framing:
+    notes: "Split routes: gating the whole tokens route would break every user's access to their own tokens."
+
+  - id: M2-B6
+    title: SERVICE-principal callbacks (2 routes)
+    short_description: |
+      pipelines/events and pipelines/{run_id}/results/{result_type}. Last,
+      because PrincipalKind.SERVICE has no route precedent — every other
+      guarded route resolves a HUMAN principal from a user JWT.
+      The per-run X-Pipeline-Token stays as AUTHENTICATION (hmac.compare_digest,
+      401, already tested both ways). What this batch adds is AUTHORIZATION: a
+      SERVICE principal holding pipeline:write_results at the run's project
+      scope. Today the token collapses the two, since holding it IS the
+      permission. Separating them is what makes the cryptWWDB
+      compute-without-read property structural (§4.6, §9.4) instead of a
+      consequence of how tokens are minted — a data_source_lab principal holds
+      pipeline:write_results and not sample:read_detail, and permit() is where
+      that becomes enforceable.
+    phase: access_model_redesign
+    status: blocked
+    depends_on:
+      - M2-B1
+    blocked_by_external:
+    parallel_safe: false
+    parallel_safe_reason: "New principal kind on the auth surface; never parallel-batch."
+    effort_sessions: 1
+    primary_files:
+      - backend/backend/routers/pipelines.py
+      - backend/backend/authz/
+    test_files:
+      - tests/test_pipelines_router_api.py
+      - tests/test_pipelines_registration_api.py
+    source_of_truth_views:
+      - docs/access_model.md
+      - docs/endpoint_capability_map.md
+    pr_title_template: "feat(authz): M2-B6 — SERVICE-principal pipeline callbacks"
+    branch_name_template: m2-b6-service-principals
+    role_framing:
+    notes: "Do not weaken the token check while adding permit() — it is the authentication half and stays."
+
+  - id: M2-B7
+    title: List endpoints onto visibility_sql_clause (cutover step (c))
+    short_description: |
+      Switch the sample list path from permissions.py's legacy
+      visibility_sql_clause to the M1 companion, using the scope expression
+      M2-PRE-2 landed (samples JOIN labs, scope derived not stored).
+      Highest-risk single change after M2-B1: a list that over-grants leaks
+      rows silently, with no error and no audit entry. The invariant to hold
+      is the one the preflight suite already asserts —
+      new_visible ⊆ legacy_visible for every persona — plus permit() and the
+      SQL fragment agreeing per row on PostgreSQL. Both tests exist; this
+      batch makes them describe production rather than a comparison harness.
+      Measure the list query afterwards: prefix LIKE over a computed
+      expression is a sequential scan, and an expression index is the fix if
+      it matters. Do not add one speculatively.
+    phase: access_model_redesign
+    status: blocked
+    depends_on:
+      - M2-B1
+      - M2-B2
+    blocked_by_external:
+    parallel_safe: false
+    parallel_safe_reason: "The list path is where an over-grant is silent; never parallel-batch."
+    effort_sessions: 1
+    primary_files:
+      - backend/backend/routers/samples.py
+      - backend/backend/authz/visibility.py
+    test_files:
+      - tests/authz/test_cutover_preflight.py
+      - tests/test_samples_router.py
+    source_of_truth_views:
+      - docs/access_model.md
+      - docs/adr/0015-single-rooted-scope-uri.md
+    pr_title_template: "feat(authz): M2-B7 — list endpoints onto visibility_sql_clause"
+    branch_name_template: m2-b7-list-visibility
+    role_framing:
+    notes: "An over-granting list is silent — no error, no audit row. never_over_grants is the invariant, not a nicety."
+
   - id: M2
     title: Reseed + cutover (IRREVERSIBLE — manual flow only)
     short_description: |
-      The one irreversible step (access_model.md §10, §11.1). Per ADR 0016
-      the reseed and the column drop are TWO migrations: an additive
-      migration issues the grants (inert — permissions.py still decides
-      every request, so there is no dual-authoritative window), and this
-      cutover migration does the rest. In ONE change:
-        (a) re-run reseed as an idempotent catch-up for rows created
-            through the old paths since the additive migration;
-        (b) rewrite every route guard role-check -> capability-check using
-            ACCESS-GUARD-MAP;
-        (c) switch list endpoints to the M1 visibility_sql_clause companion;
-            and wire the two per-run-token callbacks (pipelines/events,
-            pipelines/{run_id}/results/{result_type}) to permit() with a
-            SERVICE principal holding pipeline:write_results at the run's
-            project scope — the token stays as authentication, permit()
-            becomes the authorization, which is what makes the cryptWWDB
-            compute-without-read property structural (access_model.md §4.6,
-            §9.4) rather than a side effect of per-run token minting;
-        (d) drop users.is_platform_admin, users.is_data_analyst, the
-            PermissionGroups enum, and the permissions.py _base_access ladder;
-        (e) run the M2-PRE-4 pre-flight guard before the catch-up reseed
-            and surface its three counts; the guard itself ships in
-            M2-PRE-4, this step is wiring it into the migration.
-      ORDER IS LOAD-BEARING: create the (principal_id, capability,
-      scope_ref) unique index (the live chain lacks it and reseed's
-      ON CONFLICT dedup depends on it) → pre-flight guard → catch-up
-      reseed → (b) guards → (c) lists → (d) drop columns LAST, so a
-      failure at any earlier step rolls back with the old model intact.
-      Route rewrites go by risk class, not by file: the 28 already-wired
-      require_capability routes first (mechanical rewiring), then the
-      sample-plane routes the preflight matrix and permit-vs-SQL
-      equivalence actually cover, then governance, then the two SERVICE
-      callbacks last (PrincipalKind.SERVICE has no route precedent).
-      No rollback-to-dual-running — greenfield (§10), so safety comes from M0
-      and M1 having proven the engine and companion, NOT from a shim. Run as
-      MANUAL flow, single session, high attention — this is on the
-      do-NOT-parallel-batch list (auth + migrations + route guards). Do not
-      start until M0 and M1 are both shipped and ACCESS-GUARD-MAP + ACCESS-SEED
-      are ready.
+      The irreversible remainder, after the additive migration (b2f47c1a9e30,
+      shipped) and the seven guard-rewrite batches (M2-B1..B7). Everything
+      reversible has already landed; what is left cannot be undone:
+        (a) catch-up reseed — idempotent, covers rows created through the old
+            paths between the additive migration and this one, with the
+            M2-PRE-4 pre-flight guard run first and its counts surfaced;
+        (b) drop users.is_platform_admin, users.is_data_analyst, the
+            PermissionGroups enum, and the permissions.py _base_access ladder.
+      ORDER: pre-flight guard -> catch-up reseed -> drop, and the drop LAST so
+      a failure earlier rolls back with the old model intact. Nothing reads
+      the legacy columns by this point — B1..B7 moved every guard and the list
+      path onto permit() — so the drop is bookkeeping that happens to be
+      permanent. That is the whole design: make the irreversible step small
+      and boring by doing everything else first.
+      Wire the migration to read the operator override
+      (JACKPOT_RESEED_ACCEPT_DATA_LOSS) rather than hardcoding force.
+      Run as MANUAL flow, single session. Verify B1..B7 are all shipped and
+      the preflight matrix is green before starting.
     phase: access_model_redesign
-    status: open
+    status: blocked
     depends_on:
       - M0
       - M1
@@ -2130,11 +2358,18 @@ sessions:
       - M2-PRE-2
       - M2-PRE-3
       - M2-PRE-4
+      - M2-B1
+      - M2-B2
+      - M2-B3
+      - M2-B4
+      - M2-B5
+      - M2-B6
+      - M2-B7
     blocked_by_external:
     parallel_safe: false
     parallel_safe_reason: "Irreversible cutover touching auth, migrations, route guards, and the list path. Manual flow only;
       never parallel-batch."
-    effort_sessions: 3
+    effort_sessions: 1
     primary_files:
       - backend/backend/permissions.py
       - backend/backend/auth/guards.py
@@ -2147,7 +2382,9 @@ sessions:
     pr_title_function:
     branch_name_template: m2-cutover
     role_framing:
-    notes: "IRREVERSIBLE. Two migrations, not one: ADR 0016. Scope serialization decided ahead of the session: ADR 0015 (single rooted instance://self path) + access_model.md §3.1.1 — M2 lands the scope-URI builder, reseed's labs join, and the fixture rewrite. access_model.md §10 (greenfield, no shim) + §11.1. Verify M0/M1 proven before starting — the project-wide
+    notes: "IRREVERSIBLE, and now small: the guard rewrites were carved out into M2-B1..B7 and the additive
+      migration b2f47c1a9e30 already shipped, leaving only the catch-up reseed and the legacy drop. Two migrations,
+      not one: ADR 0016. Scope serialization decided ahead of the session: ADR 0015 (single rooted instance://self path) + access_model.md §3.1.1 — M2 lands the scope-URI builder, reseed's labs join, and the fixture rewrite. access_model.md §10 (greenfield, no shim) + §11.1. Verify M0/M1 proven before starting — the project-wide
       'verify before operating' discipline applied to the cutover."
 
   - id: M3
