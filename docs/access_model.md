@@ -198,6 +198,44 @@ Each level contains the levels beneath it. A capability granted at a level appli
 | **Project** | A grouping of samples within a lab (the Seqera-derived org/lab/project hierarchy). | Samples | Project-scoped collaboration; per-project federation agreements |
 | **Sample** | The leaf data resource. | — | Per-sample access grants (the existing `sample_access_grants` mechanism) |
 
+#### 3.1.1 Scope URI serialization
+
+A scope reference serializes as a path under one root. There is exactly one
+root per deployment, spelled `instance://self` — an instance names itself
+`self` because a scope ref is only ever interpreted inside the instance that
+stores it (peers are principals, never branches of the tree; §3.3).
+
+```
+instance://self
+instance://self/org/3
+instance://self/org/3/lab/7
+instance://self/org/3/lab/7/project/12
+instance://self/org/3/lab/7/project/12/sample/55
+```
+
+Each level is the level name followed by that row's primary key. Containment
+is equality or a prefix match at a segment boundary — `_scope_contains` in
+`backend/backend/authz/engine.py`, mirrored as `= OR LIKE ... ESCAPE` by
+`visibility_sql_clause`. The segment boundary is what keeps
+`.../lab/7` from containing `.../lab/70`.
+
+Consequences worth stating where the scheme is defined:
+
+- **Instance-scope grants reach everything.** The Instance Administrator preset
+  holds its capabilities at `instance://self`, which prefixes every resource, so
+  administrative reach is ordinary structural containment rather than a bypass
+  branch. Deny-wins still applies on top (§5.1): a sovereignty DENY beats a root
+  grant.
+- **A resource's scope is derived, not stored.** It is built from the row's
+  existing lineage columns (`samples.lab_id`, `samples.project_id`, and
+  `labs.organization_id` via the join the list query already makes). Nothing is
+  denormalized onto `samples`.
+- **Grant scope refs embed lineage.** Moving a lab between orgs invalidates the
+  grants written against its old path; repair is an `UPDATE` over
+  `authz_capability_grants`. This is the price of prefix containment and is
+  accepted deliberately — see `docs/adr/0015-single-rooted-scope-uri.md` for the
+  alternative (ancestry resolution over short refs) and why it was not taken.
+
 ### 3.2 Why Tenant and Org are the same concept
 
 Earlier drafts of this model treated "tenant" (the multi-tenancy isolation boundary) and "org" (the ownership entity) as separate layers. They are collapsed into one: **the Org *is* the isolation boundary.** "Multi-tenancy" means one Instance hosts multiple Orgs, each walled off from the others; the P0c multi-tenancy middleware enforces that wall at the Org level.

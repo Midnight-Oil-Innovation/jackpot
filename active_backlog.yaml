@@ -1967,7 +1967,7 @@ sessions:
     pr_title_function:
     branch_name_template: m2-cutover
     role_framing:
-    notes: "IRREVERSIBLE. access_model.md §10 (greenfield, no shim) + §11.1. Verify M0/M1 proven before starting — the project-wide
+    notes: "IRREVERSIBLE. Scope serialization decided ahead of the session: ADR 0015 (single rooted instance://self path) + access_model.md §3.1.1 — M2 lands the scope-URI builder, reseed's labs join, and the fixture rewrite. access_model.md §10 (greenfield, no shim) + §11.1. Verify M0/M1 proven before starting — the project-wide
       'verify before operating' discipline applied to the cutover."
 
   - id: M3
