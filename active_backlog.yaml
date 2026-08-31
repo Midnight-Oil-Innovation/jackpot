@@ -2130,6 +2130,121 @@ sessions:
     merge_sha: cd94b28
       real guard. Legacy columns still exist, so this batch is revertible."
 
+  # ── B2 prerequisites — found when B2 started (2026-08-31) ───────────────
+  # The carve assumed the sample plane was structural like the others. It is
+  # not: 12 of its 27 rows are Sample-scoped, and its read routes decide on
+  # resource ATTRIBUTES (sharing_level, surveillance_relevant) that the engine
+  # cannot currently see. Each item below is small; together they are what
+  # makes a faithful B2 possible instead of one that quietly removes access.
+  - id: M2-B2-PRE-A
+    title: Resource carries attributes — attribute-policies become expressible
+    short_description: |
+      access_model.md §2.4 gives a Resource `attributes` alongside its scope,
+      and §2.5 builds the whole attribute-policy half of the model on reading
+      them. M0 shipped `Resource` with `scope` only, and `policy._matches`
+      compares capability + scope + grant conditions against the request
+      context — never resource attributes. So the three permissive rungs of
+      the legacy ladder cannot be written as policies at all:
+        PUBLIC sharing_level readable by anyone (§5 names this as THE example
+        of an ALLOW policy), DISCOVERABLE list-visible, and
+        surveillance_relevant readable by a sample:read_surveillance holder.
+      Add `attributes: dict` to Resource, extend `_matches` to evaluate a
+      policy's resource predicate, and mirror it in visibility_sql_clause so
+      the row-wise and SQL paths stay equivalent (the M1 property).
+      Ship the three rungs as a static policy set — they are fixed today, not
+      operator-configurable — and leave DB-backed loading to M3. Without this
+      B2's read routes would deny PUBLIC samples to non-members: a silent
+      access REMOVAL, closed rather than open, but a functional break.
+    phase: access_model_redesign
+    status: open
+    depends_on:
+      - M2-B1
+    blocked_by_external:
+    parallel_safe: false
+    parallel_safe_reason: "Authorization decision path, serialized (CLAUDE.md, Authorization-path serialization)."
+    effort_sessions: 1.5
+    primary_files:
+      - backend/backend/authz/engine.py
+      - backend/backend/authz/policy.py
+      - backend/backend/authz/visibility.py
+    test_files:
+      - tests/authz/test_permit.py
+      - tests/authz/test_visibility_sql_clause.py
+    source_of_truth_views:
+      - docs/access_model.md
+    pr_title_template: "feat(authz): M2-B2-PRE-A — resource attributes and attribute-policies"
+    branch_name_template: m2-b2-pre-a-resource-attributes
+    role_framing:
+    notes: "The permit()/SQL equivalence must survive: a policy that reads attributes needs both a Python and a SQL form,
+      cross-checked on the same fixtures as M1."
+
+  - id: M2-B2-PRE-B
+    title: Guards can name a Sample-scoped resource
+    short_description: |
+      require_capability takes `lab_id` and otherwise decides at the instance
+      root, so it can express two of the five scope levels. 12 of B2's 27 rows
+      are Sample-scoped (sample detail/update/archive, file detail, promote,
+      verify, access approve/deny).
+      Checking those at lab scope is not a safe approximation: a grant issued
+      AT sample scope does not contain the lab, so per-sample access — the
+      mechanism §3.1 lists for the Sample level — would be invisible and
+      approved requests would stop working. Add sample_id resolution
+      (samples JOIN labs, mirroring lab_resource_scope) and let the guard take
+      exactly one of lab_id / sample_id.
+    phase: access_model_redesign
+    status: open
+    depends_on:
+      - M2-B1
+    blocked_by_external:
+    parallel_safe: false
+    parallel_safe_reason: "Authorization decision path, serialized (CLAUDE.md, Authorization-path serialization)."
+    effort_sessions: 0.5
+    primary_files:
+      - backend/backend/auth/guards.py
+      - backend/backend/authz/principal.py
+    test_files:
+      - tests/test_permissions.py
+    source_of_truth_views:
+      - docs/access_model.md
+      - docs/adr/0015-single-rooted-scope-uri.md
+    pr_title_template: "feat(authz): M2-B2-PRE-B — sample-scoped guard resolution"
+    branch_name_template: m2-b2-pre-b-sample-scope
+    role_framing:
+    notes: "Unknown sample_id must answer exactly as a denied one does, for the reason M2-B1 established for labs."
+
+  - id: M2-B2-PRE-C
+    title: Reseed approved access requests into sample-scoped grants
+    short_description: |
+      `sample_access_grants` rows are a rung of the legacy ladder
+      (permissions.py:67) and §5 maps them explicitly: "approved access
+      request/grant -> a structural grant at Sample scope, source=direct,
+      time-bounded via the grant's conditions + context.now". reseed() does not
+      read that table — zero references — so at cutover every approved access
+      request silently stops granting access.
+      Issue one sample-scoped grant per live row, carrying the expiry as a
+      grant condition, and add the count to the pre-flight guard so an
+      operator sees how many are in flight before the migration runs.
+    phase: access_model_redesign
+    status: open
+    depends_on:
+      - M2-B1
+    blocked_by_external:
+    parallel_safe: false
+    parallel_safe_reason: "Authorization decision path, serialized (CLAUDE.md, Authorization-path serialization)."
+    effort_sessions: 1
+    primary_files:
+      - backend/backend/authz/reseed.py
+    test_files:
+      - tests/authz/test_reseed.py
+      - tests/authz/test_cutover_preflight.py
+    source_of_truth_views:
+      - docs/access_model.md
+    pr_title_template: "feat(authz): M2-B2-PRE-C — reseed per-sample access grants"
+    branch_name_template: m2-b2-pre-c-sample-grants
+    role_framing:
+    notes: "Time-bounded grants need context.now at the guard, which no route passes yet — check that before assuming
+      expiry is enforced."
+
   - id: M2-B2
     title: Sample-plane route guards (27 routes)
     short_description: |
@@ -2143,9 +2258,12 @@ sessions:
       registered divergence class. Route-level tests are still required per
       route — the harness covers the decision, not the wiring.
     phase: access_model_redesign
-    status: open
+    status: blocked
     depends_on:
       - M2-B1
+      - M2-B2-PRE-A
+      - M2-B2-PRE-B
+      - M2-B2-PRE-C
     blocked_by_external:
     parallel_safe: false
     parallel_safe_reason: "Auth-adjacent route rewrites; the authorization decision path serializes (CLAUDE.md)."
@@ -2160,7 +2278,11 @@ sessions:
     pr_title_template: "feat(authz): M2-B2 — sample-plane route guards"
     branch_name_template: m2-b2-sample-plane
     role_framing:
-    notes: "Best-evidenced batch: visibility equivalence + the never-over-grants invariant already run on PG."
+    notes: "Sequenced first for its evidence, but it is the most BLOCKED batch — found on starting it 2026-08-31.
+      Its read routes decide on resource attributes the engine cannot see (PRE-A), 12 of 27 rows are Sample-scoped
+      and the guard cannot name that scope (PRE-B), and approved access requests are never reseeded (PRE-C).
+      Doing B2 without these would silently REMOVE access — PUBLIC samples to non-members, and every approved
+      access request. Fails closed, so not a security hole, but a functional break with no error to notice."
 
   - id: M2-B3
     title: Pipeline and BYOP route guards (16 routes)
