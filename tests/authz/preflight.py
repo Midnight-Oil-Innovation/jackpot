@@ -357,9 +357,11 @@ EXPECTED_DIVERGENCES: dict[str, tuple[Callable[[Cell], bool], str]] = {
         "instance://self, and _scope_contains is pure URI-prefix, so "
         "instance://self does NOT contain lab://N. Every lab-scoped admin "
         "cell, and every instance cell for a capability outside the §8.2 "
-        "admin preset, denies under the new model. CUTOVER BLOCKER: needs a "
-        "scope-URI redesign (labs rooted under the instance) or an admin "
-        "ALLOW policy before guards flip to permit().",
+        "admin preset, denies under the new model. RESOLVED by ADR 0015 "
+        "(docs/adr/0015-single-rooted-scope-uri.md): every scope becomes a "
+        "path under instance://self, so the admin grant prefixes lab scopes "
+        "structurally. This class disappears once M2 lands the canonical "
+        "serialization; until then the divergence stands and is asserted.",
     ),
     "surveillance-cap-new-only": (
         lambda c: c.persona == "P2"
