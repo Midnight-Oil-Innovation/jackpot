@@ -21,7 +21,7 @@ skipping them per row.
 
 import re
 
-from backend.authz.engine import Context, Principal, Resource
+from backend.authz.engine import Context, Principal, Resource, _unexpired
 from backend.authz.policy import _DB_NOT_WIRED, PRINCIPAL_ID, _principal_holds
 from backend.authz.scope import is_canonical_scope_sql
 
@@ -156,7 +156,7 @@ def visibility_sql_clause(
     allow_terms = [
         _scope_term(column, g.scope_ref, f"vis_g{i}", params)
         for i, g in enumerate(principal.grants)
-        if g.capability == capability and _live(g.conditions)
+        if g.capability == capability and _live(g.conditions) and _unexpired(g, context)
     ]
     allow_terms += [
         term

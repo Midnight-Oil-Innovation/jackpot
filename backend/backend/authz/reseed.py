@@ -125,11 +125,44 @@ GRANT_SOURCE = "reseed"
 
 _INSERT_GRANT = text(
     """
-    INSERT INTO authz_capability_grants (principal_id, capability, scope_ref, source)
-    VALUES (:principal_id, :capability, :scope_ref, :source)
+    INSERT INTO authz_capability_grants
+        (principal_id, capability, scope_ref, source, not_after)
+    VALUES (:principal_id, :capability, :scope_ref, :source, :not_after)
     ON CONFLICT DO NOTHING
     """
 )
+
+# Per-sample access, from both places the legacy ladder reads it
+# (permissions.py:67). The grants table is the canonical artefact; APPROVED
+# requests without a grant row are the documented fallback for pre-grants-table
+# data, and the expiry job transitions a request to EXPIRED when its grant
+# lapses, so an APPROVED row still present is necessarily still active.
+_SAMPLE_ACCESS_SQL = text(
+    """
+    SELECT sag.requester_id AS user_id, s.id AS sample_id, s.lab_id, s.project_id,
+           l.organization_id, sag.access_expires_at AS not_after
+    FROM sample_access_grants sag
+    JOIN samples s ON s.id = sag.sample_id
+    JOIN labs l ON l.id = s.lab_id
+    WHERE sag.revoked = FALSE
+      AND (sag.access_expires_at IS NULL OR sag.access_expires_at > CURRENT_TIMESTAMP)
+    UNION
+    SELECT sar.requester_id, s.id, s.lab_id, s.project_id,
+           l.organization_id, NULL
+    FROM sample_access_requests sar
+    JOIN samples s ON s.id = sar.sample_id
+    JOIN labs l ON l.id = s.lab_id
+    WHERE sar.status = 'APPROVED'
+      AND NOT EXISTS (
+        SELECT 1 FROM sample_access_grants g
+        WHERE g.requester_id = sar.requester_id AND g.sample_id = sar.sample_id
+      )
+    """
+)
+
+# What an approved request conveys: read the sample, in a list and in detail.
+SAMPLE_ACCESS_CAPABILITIES = ["sample:read", "sample:read_detail"]
+DIRECT_SOURCE = "direct"
 
 
 # ── Pre-flight data-quality guard (M2-PRE-4) ─────────────────────────────
@@ -214,16 +247,51 @@ def _lab_scope(org_id: int, lab_id: int) -> str:
     return scope_uri(org=org_id, lab=lab_id)
 
 
-def _grant_rows(principal_id: str, capabilities: list[str], scope_ref: str) -> list[dict]:
+def _grant_rows(
+    principal_id: str,
+    capabilities: list[str],
+    scope_ref: str,
+    *,
+    source: str = GRANT_SOURCE,
+    not_after=None,
+) -> list[dict]:
     return [
         {
             "principal_id": principal_id,
             "capability": cap,
             "scope_ref": scope_ref,
-            "source": GRANT_SOURCE,
+            "source": source,
+            "not_after": not_after,
         }
         for cap in capabilities
     ]
+
+
+def _sample_access_rows(conn: Connection) -> list[dict]:
+    """Approved per-sample access → Sample-scoped grants (§5's mapping table).
+
+    Without this, every approved access request stops granting anything at
+    cutover: the legacy ladder reads these tables directly and reseed did not
+    look at them at all.
+    """
+    rows: list[dict] = []
+    for r in conn.execute(_SAMPLE_ACCESS_SQL).mappings():
+        scope = scope_uri(
+            org=r["organization_id"],
+            lab=r["lab_id"],
+            project=r["project_id"],
+            sample=r["sample_id"],
+        )
+        rows.extend(
+            _grant_rows(
+                str(r["user_id"]),
+                SAMPLE_ACCESS_CAPABILITIES,
+                scope,
+                source=DIRECT_SOURCE,
+                not_after=r["not_after"],
+            )
+        )
+    return rows
 
 
 def reseed(conn: Connection, *, force: bool = False) -> None:
@@ -291,11 +359,19 @@ def reseed(conn: Connection, *, force: bool = False) -> None:
             capabilities.extend(BIOINFORMATICS_EXTRA)
         rows.extend(_grant_rows(str(user_id), capabilities, scope))
 
+    access_rows = _sample_access_rows(conn)
+    rows.extend(access_rows)
+
     before = conn.execute(text("SELECT COUNT(*) FROM authz_capability_grants")).scalar_one()
     if rows:  # executemany rejects an empty parameter list
         conn.execute(_INSERT_GRANT, rows)
     after = conn.execute(text("SELECT COUNT(*) FROM authz_capability_grants")).scalar_one()
 
+    logger.info(
+        "reseed: %d per-sample access grants issued from approved requests (source=%s)",
+        len(access_rows),
+        DIRECT_SOURCE,
+    )
     logger.info(
         "reseed: %d platform admins, %d data analysts, %d lab memberships "
         "(%d skipped/unmapped) read; %d grants attempted, %d inserted",

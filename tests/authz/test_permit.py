@@ -6,6 +6,8 @@ The §9 worked examples from docs/access_model.md as fixtures:
 and deny-wins.
 """
 
+from datetime import UTC, datetime
+
 import pytest
 
 from authz.scopes import (
@@ -161,3 +163,43 @@ def test_policies_none_raises_not_implemented():
     r = Resource(scope=ACME_L1_SAMPLE)
     with pytest.raises(NotImplementedError):
         permit(p, "sample:read_detail", r, Context(), policies=None)
+
+
+# ── Grant expiry (M2-B2-PRE-C) ──────────────────────────────────────────
+
+_PAST = datetime(2000, 1, 1, tzinfo=UTC)
+_FUTURE = datetime(2999, 1, 1, tzinfo=UTC)
+_NOW = datetime(2026, 8, 31, tzinfo=UTC)
+
+
+def _timed(not_after):
+    return _human([CapabilityGrant("sample:read_detail", ACME, not_after=not_after)])
+
+
+def test_unexpired_grant_allows():
+    r = Resource(scope=ACME_L1_SAMPLE)
+    assert (
+        permit(_timed(_FUTURE), "sample:read_detail", r, Context(now=_NOW), policies=[])
+        == Decision.ALLOW
+    )
+
+
+def test_expired_grant_denies():
+    """Enforced at decision time, not left to the nightly expiry job."""
+    r = Resource(scope=ACME_L1_SAMPLE)
+    assert (
+        permit(_timed(_PAST), "sample:read_detail", r, Context(now=_NOW), policies=[])
+        == Decision.DENY
+    )
+
+
+def test_time_bounded_grant_without_a_clock_denies():
+    """Fails closed: a caller that forgets the clock must lose access, never
+    keep expired access."""
+    r = Resource(scope=ACME_L1_SAMPLE)
+    assert permit(_timed(_FUTURE), "sample:read_detail", r, Context(), policies=[]) == Decision.DENY
+
+
+def test_unbounded_grant_needs_no_clock():
+    r = Resource(scope=ACME_L1_SAMPLE)
+    assert permit(_timed(None), "sample:read_detail", r, Context(), policies=[]) == Decision.ALLOW

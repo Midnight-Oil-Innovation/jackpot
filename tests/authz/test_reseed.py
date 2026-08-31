@@ -69,6 +69,30 @@ _DDL = [
     )
     """,
     """
+    CREATE TABLE samples (
+        id INTEGER PRIMARY KEY,
+        lab_id INTEGER NOT NULL,
+        project_id INTEGER NOT NULL
+    )
+    """,
+    """
+    CREATE TABLE sample_access_grants (
+        id INTEGER PRIMARY KEY,
+        requester_id INTEGER NOT NULL,
+        sample_id INTEGER NOT NULL,
+        revoked BOOLEAN NOT NULL DEFAULT FALSE,
+        access_expires_at TIMESTAMP
+    )
+    """,
+    """
+    CREATE TABLE sample_access_requests (
+        id INTEGER PRIMARY KEY,
+        requester_id INTEGER NOT NULL,
+        sample_id INTEGER NOT NULL,
+        status TEXT NOT NULL
+    )
+    """,
+    """
     CREATE TABLE authz_capability_grants (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         principal_id TEXT NOT NULL,
@@ -76,6 +100,7 @@ _DDL = [
         scope_ref TEXT NOT NULL,
         conditions TEXT NOT NULL DEFAULT '{}',
         source TEXT NOT NULL DEFAULT '',
+        not_after TIMESTAMP,
         UNIQUE (principal_id, capability, scope_ref)
     )
     """,
@@ -338,3 +363,100 @@ class TestPreflightGuard:
         # The operator sees which kinds, not just that something failed.
         for kind in exc.value.counts:
             assert kind in str(exc.value)
+
+
+class TestSampleAccessGrants:
+    """M2-B2-PRE-C — approved per-sample access survives the cutover."""
+
+    def _sample(self, conn, sample_id=500, lab_id=7, project_id=3):
+        _add_lab(conn, lab_id)
+        conn.execute(
+            text("INSERT INTO samples (id, lab_id, project_id) VALUES (:s, :l, :p)"),
+            {"s": sample_id, "l": lab_id, "p": project_id},
+        )
+        return scope_uri(org=ORG_ID, lab=lab_id, project=project_id, sample=sample_id)
+
+    def test_live_grant_becomes_a_sample_scoped_grant(self, conn):
+        _add_user(conn, 20)
+        scope = self._sample(conn)
+        conn.execute(
+            text(
+                "INSERT INTO sample_access_grants (requester_id, sample_id, revoked) "
+                "VALUES (20, 500, FALSE)"
+            )
+        )
+        reseed(conn)
+        grants = _grants(conn, "20")
+        assert {g.capability for g in grants} == {"sample:read", "sample:read_detail"}
+        assert all(g.scope_ref == scope and g.source == "direct" for g in grants)
+
+    def test_revoked_grant_is_not_reseeded(self, conn):
+        _add_user(conn, 21)
+        self._sample(conn, sample_id=501)
+        conn.execute(
+            text(
+                "INSERT INTO sample_access_grants (requester_id, sample_id, revoked) "
+                "VALUES (21, 501, TRUE)"
+            )
+        )
+        reseed(conn)
+        assert _grants(conn, "21") == []
+
+    def test_expired_grant_is_not_reseeded(self, conn):
+        _add_user(conn, 22)
+        self._sample(conn, sample_id=502)
+        conn.execute(
+            text(
+                "INSERT INTO sample_access_grants "
+                "(requester_id, sample_id, revoked, access_expires_at) "
+                "VALUES (22, 502, FALSE, '2000-01-01 00:00:00')"
+            )
+        )
+        reseed(conn)
+        assert _grants(conn, "22") == []
+
+    def test_expiry_is_carried_onto_the_grant(self, conn):
+        _add_user(conn, 23)
+        self._sample(conn, sample_id=503)
+        conn.execute(
+            text(
+                "INSERT INTO sample_access_grants "
+                "(requester_id, sample_id, revoked, access_expires_at) "
+                "VALUES (23, 503, FALSE, '2999-01-01 00:00:00')"
+            )
+        )
+        reseed(conn)
+        rows = conn.execute(
+            text("SELECT not_after FROM authz_capability_grants WHERE principal_id = '23'")
+        ).fetchall()
+        assert rows and all(r[0] is not None for r in rows), (
+            "an unbounded grant would outlive its expiry"
+        )
+
+    def test_approved_request_without_a_grant_row_is_covered(self, conn):
+        """The documented fallback rung — pre-grants-table data."""
+        _add_user(conn, 24)
+        self._sample(conn, sample_id=504)
+        conn.execute(
+            text(
+                "INSERT INTO sample_access_requests (requester_id, sample_id, status) "
+                "VALUES (24, 504, 'APPROVED')"
+            )
+        )
+        reseed(conn)
+        assert {g.capability for g in _grants(conn, "24")} == {
+            "sample:read",
+            "sample:read_detail",
+        }
+
+    def test_pending_request_grants_nothing(self, conn):
+        _add_user(conn, 25)
+        self._sample(conn, sample_id=505)
+        conn.execute(
+            text(
+                "INSERT INTO sample_access_requests (requester_id, sample_id, status) "
+                "VALUES (25, 505, 'PENDING')"
+            )
+        )
+        reseed(conn)
+        assert _grants(conn, "25") == []

@@ -1,5 +1,6 @@
 import hmac
 import logging
+from datetime import UTC, datetime
 from typing import Any
 
 from fastapi import HTTPException, Request
@@ -100,7 +101,10 @@ def _allows(principal, capability: str, scope: str) -> bool:
             principal,
             capability,
             Resource(scope=scope),
-            Context(conditions={}),
+            # A real clock, so a lapsed grant is refused at decision time —
+            # the legacy ladder compared access_expires_at against NOW() and
+            # did not wait for the nightly expiry job (M2-B2-PRE-C).
+            Context(conditions={}, now=datetime.now(UTC)),
             policies=[],
         )
         is Decision.ALLOW

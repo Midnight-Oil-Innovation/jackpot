@@ -7,6 +7,7 @@ decision deterministic and testable against the §9 worked examples.
 """
 
 from dataclasses import dataclass, field
+from datetime import datetime
 from enum import Enum
 from typing import Any
 
@@ -30,6 +31,11 @@ class CapabilityGrant:
     scope_ref: str  # scope URI, e.g. "instance://acme" or "org://acme/path-lab"
     conditions: dict[str, Any] = field(default_factory=dict)
     source: str = ""  # "role:lab_member", "direct", "federation:push", etc.
+    # Wall-clock expiry (§5: approved access requests are "time-bounded").
+    # None means the grant does not expire. Checked against ``context.now``,
+    # which is a compile-time fact — expiry does not vary per row — so the SQL
+    # compiler drops an expired grant exactly as permit() skips one.
+    not_after: datetime | None = None
 
 
 @dataclass
@@ -53,6 +59,11 @@ class Resource:
 @dataclass
 class Context:
     conditions: dict[str, Any] = field(default_factory=dict)
+    # Decision time. Required to evaluate a grant's ``not_after``; leaving it
+    # None means "no time known", and a time-bounded grant is then refused
+    # rather than assumed live — a caller that forgets to pass a clock must
+    # lose access, never keep expired access.
+    now: datetime | None = None
 
 
 def _scope_contains(grant_scope: str, resource_scope: str) -> bool:
@@ -69,6 +80,18 @@ def _scope_contains(grant_scope: str, resource_scope: str) -> bool:
 def _conditions_satisfied(conditions: dict[str, Any], context: Context) -> bool:
     """Every key in the grant's conditions must appear in context with equal value."""
     return all(context.conditions.get(k) == v for k, v in conditions.items())
+
+
+def _unexpired(grant: "CapabilityGrant", context: Context) -> bool:
+    """False once a time-bounded grant has lapsed.
+
+    Deliberately fails closed on a missing clock: `not_after` set with
+    `context.now` unset means the decision cannot be made safely, and the
+    safe answer for an expiring grant is no.
+    """
+    if grant.not_after is None:
+        return True
+    return context.now is not None and context.now < grant.not_after
 
 
 def permit(
@@ -89,6 +112,7 @@ def permit(
         grant.capability == capability
         and _scope_contains(grant.scope_ref, resource.scope)
         and _conditions_satisfied(grant.conditions, context)
+        and _unexpired(grant, context)
         for grant in principal.grants
     )
 

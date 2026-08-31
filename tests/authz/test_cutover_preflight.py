@@ -49,6 +49,7 @@ from backend.authz import Context, Decision, Resource, permit, sample_resource_s
 from backend.authz.engine import _scope_contains
 from backend.authz.reseed import (
     PRESET_GRANTS,
+    SAMPLE_ACCESS_CAPABILITIES,
     ReseedPreflightError,
     preflight_counts,
     reseed,
@@ -120,7 +121,11 @@ EXPECTED_GRANT_SHAPE = {
     "P7": {"lab_a": len(PRESET_GRANTS["lab_member_rw"]) + 1},  # + pipeline:run
     "P8": {"lab_a": len(PRESET_GRANTS["lab_lead"]), "lab_b": len(PRESET_GRANTS["lab_member_ro"])},
     "P9": {},
-    "P10": {},
+    # P10 reaches two samples by per-sample access — one through
+    # sample_access_grants, one through an APPROVED request with no grant row
+    # (the documented fallback) — and M2-B2-PRE-C reseeds both as Sample-scoped
+    # grants carrying sample:read + sample:read_detail.
+    "P10": {"sample": 2 * len(SAMPLE_ACCESS_CAPABILITIES)},
     "P11": {"lab_a": len(PRESET_GRANTS["lab_member_rw"])},  # group name wins over flag
     "P12": {},
 }
@@ -136,6 +141,8 @@ class TestReseedOnPostgres:
                     kind = "instance"
                 elif r["scope_ref"] == lab_scope(world.org_id, world.lab_a):
                     kind = "lab_a"
+                elif r["scope_ref"].count("/sample/") == 1:
+                    kind = "sample"
                 elif r["scope_ref"] == lab_scope(world.org_id, world.lab_b):
                     kind = "lab_b"
                 else:
@@ -143,7 +150,12 @@ class TestReseedOnPostgres:
                 by_scope[kind] = by_scope.get(kind, 0) + 1
             assert by_scope == expected, f"{pkey}: {by_scope} != {expected}"
             for r in rows:
-                assert r["source"] == "reseed"
+                # Provenance distinguishes the two kinds: role-derived grants
+                # carry 'reseed', per-sample access carries 'direct' (§5), so
+                # a later revoke can target the second without disturbing the
+                # first.
+                expected_source = "direct" if "/sample/" in r["scope_ref"] else "reseed"
+                assert r["source"] == expected_source, r
                 # JSONB round-trip default — a shape SQLite never exercised.
                 assert r["conditions"] in (None, {}), r
                 assert r["id"] is not None
@@ -492,7 +504,7 @@ class TestVisibilityEquivalence:
         allows sample:read on that row's scope."""
 
         samples = execute_query(
-            "SELECT sample_id, lab_id FROM samples WHERE sample_id LIKE :p",
+            "SELECT id, sample_id, lab_id FROM samples WHERE sample_id LIKE :p",
             {"p": f"{SAMPLE_PREFIX}%"},
         )
         for pkey, persona in world.personas.items():
@@ -503,7 +515,10 @@ class TestVisibilityEquivalence:
                     permit(
                         principal,
                         "sample:read",
-                        Resource(scope=lab_scope(world.org_id, row["lab_id"])),
+                        # The row's own scope. Comparing at lab scope would
+                        # hide exactly the sample-scoped grants PRE-C issues —
+                        # the approximation PRE-B exists to remove.
+                        Resource(scope=sample_resource_scope(row["id"])),
                         Context(conditions={}),
                         policies=[],
                     )
