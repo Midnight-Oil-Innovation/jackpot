@@ -1927,11 +1927,156 @@ sessions:
 
     merged_at: '2026-08-29'
     merge_sha: b7509b5
+  # ── M2 pre-work (ADR 0015) — dark and additive, each independently
+  # revertible. Lands the scope-URI scheme and the pre-flight guard BEFORE
+  # the irreversible cutover, so M2 is guard-rewrite work rather than
+  # guard-rewrite plus a serialization change plus a new guard.
+  - id: M2-PRE-1
+    title: Canonical scope-URI builder + M0/M1 fixture rewrite
+    short_description: |
+      Land the ADR 0015 serialization as code. One builder module producing
+      the canonical path (instance://self/org/{id}/lab/{id}/project/{id}/
+      sample/{id}) for grants, policies, and resources; _scope_contains
+      stays exactly as it is (prefix + segment boundary), which is the
+      point of the ADR. Rewrite the M0/M1 fixtures off the four ad-hoc
+      shapes they invented (instance://field-laptop/org-x/..., org://acme/
+      lab-1/..., instance://self, lab://N) onto the real one.
+      Everything downstream depends on this shape, and it is the cheapest
+      piece to verify in isolation — if the serialization is wrong, that
+      must surface here rather than with route guards already flipped.
+      Dark: nothing calls permit() from a route.
+    phase: access_model_redesign
+    status: open
+    depends_on: []
+    blocked_by_external:
+    parallel_safe: false
+    parallel_safe_reason: "Authz-adjacent; every later M2 pre-work item depends on the shape this lands."
+    effort_sessions: 1
+    primary_files:
+      - backend/backend/authz/
+    test_files:
+      - tests/authz/test_permit.py
+      - tests/authz/test_visibility_sql_clause.py
+    source_of_truth_views:
+      - docs/adr/0015-single-rooted-scope-uri.md
+      - docs/access_model.md
+    pr_title_template: "feat(authz): M2-PRE-1 — canonical scope-URI builder"
+    branch_name_template: m2-pre-1-scope-uri
+    role_framing:
+    notes: "access_model.md §3.1.1 is the spec. _scope_contains must NOT change — if it needs to, the ADR was wrong."
+
+  - id: M2-PRE-2
+    title: visibility_sql_clause accepts a scope expression
+    short_description: |
+      visibility_sql_clause hardcodes `<alias>.scope` and rejects any alias
+      that is not a bare identifier. samples has no scope column and is not
+      getting one (ADR 0015): the resource scope is computed from the
+      samples JOIN labs the list query already performs. Widen the
+      signature to take a scope expression, keeping the injection guard
+      meaningful (the expression is caller-supplied SQL, not user input —
+      validate it is one of the known builders' output, do not just drop
+      the isidentifier check). Still dark.
+    phase: access_model_redesign
+    status: blocked
+    depends_on:
+      - M2-PRE-1
+    blocked_by_external:
+    parallel_safe: false
+    parallel_safe_reason: "Depends on M2-PRE-1's scope shape; touches the list-filtering compiler."
+    effort_sessions: 0.5
+    primary_files:
+      - backend/backend/authz/visibility.py
+    test_files:
+      - tests/authz/test_visibility_sql_clause.py
+    source_of_truth_views:
+      - docs/adr/0015-single-rooted-scope-uri.md
+    pr_title_template: "feat(authz): M2-PRE-2 — visibility_sql_clause takes a scope expression"
+    branch_name_template: m2-pre-2-scope-expr
+    role_framing:
+    notes: "Expression index on the computed scope is a follow-up if the list path measures slow — do not add it speculatively."
+
+  - id: M2-PRE-3
+    title: reseed emits path scopes — and the admin divergence disappears
+    short_description: |
+      Point reseed() at the canonical builder: instance grants keep
+      instance://self (now genuinely a root), membership grants join labs
+      for organization_id and become
+      instance://self/org/{org}/lab/{lab}. Then re-run the preflight
+      matrix. ACCEPTANCE SIGNAL: the admin-bypass-vs-scoped-grants class
+      must stop firing, which turns test_expected_divergences red because
+      EXPECTED_DIVERGENCES asserts every registered class DOES fire.
+      Removing that class from the registry is the deliverable — it is the
+      moment ADR 0015 stops being a claim and becomes a measured result on
+      real PostgreSQL. If the class still fires, the serialization is
+      wrong and M2 must not proceed.
+    phase: access_model_redesign
+    status: blocked
+    depends_on:
+      - M2-PRE-1
+    blocked_by_external:
+    parallel_safe: false
+    parallel_safe_reason: "Rewrites reseed and the divergence registry; auth-adjacent, never parallel-batch."
+    effort_sessions: 1
+    primary_files:
+      - backend/backend/authz/reseed.py
+    test_files:
+      - tests/authz/test_reseed.py
+      - tests/authz/test_cutover_preflight.py
+      - tests/authz/preflight.py
+    source_of_truth_views:
+      - docs/adr/0015-single-rooted-scope-uri.md
+      - docs/m2_preflight_report.md
+    pr_title_template: "feat(authz): M2-PRE-3 — reseed emits path scopes"
+    branch_name_template: m2-pre-3-reseed-scopes
+    role_framing:
+    notes: "Best evidence available before the irreversible step. Do not skip the matrix re-run to save a session."
+
+  - id: M2-PRE-4
+    title: reseed pre-flight guard — the three data-quality divergences
+    short_description: |
+      M2 deliverable (e), landed early. A pre-flight function that counts,
+      before reseed inserts anything: lab_membership rows where
+      is_lab_director=TRUE but the permission group disagrees; memberships
+      whose group name is absent from MEMBERSHIP_PRESETS; project-only
+      members with no lab_membership row. Non-zero aborts with the counts
+      and requires an explicit operator override to proceed. Test it
+      against the preflight harness's deliberately-broken worlds, which
+      already seed the flag/group mismatch (P11) and the unmapped group
+      (P9) — the fixtures exist, so this is guard plus assertions, not new
+      scaffolding. Cannot be reconciled ahead of time on any DB we have:
+      instances/ holds only ci and the baseline seeds one admin plus one
+      Lab Director, so a sweep passes vacuously. The check ships with the
+      code and runs wherever it is applied (Rule 55).
+    phase: access_model_redesign
+    status: blocked
+    depends_on:
+      - M2-PRE-3
+    blocked_by_external:
+    parallel_safe: false
+    parallel_safe_reason: "Guards the reseed path; auth/migration-adjacent."
+    effort_sessions: 1
+    primary_files:
+      - backend/backend/authz/reseed.py
+    test_files:
+      - tests/authz/test_reseed.py
+    source_of_truth_views:
+      - docs/m2_preflight_report.md
+      - docs/access_model.md
+    pr_title_template: "feat(authz): M2-PRE-4 — reseed pre-flight data-quality guard"
+    branch_name_template: m2-pre-4-preflight-guard
+    role_framing:
+    notes: "Depends on M2-PRE-3 so the guard is written against the final scope shape, not rewritten after it."
+
   - id: M2
     title: Reseed + cutover (IRREVERSIBLE — manual flow only)
     short_description: |
-      The one irreversible step (access_model.md §10, §11.1). In ONE change:
-        (a) run ACCESS-SEED (read old roles, issue preset grants);
+      The one irreversible step (access_model.md §10, §11.1). Per ADR 0016
+      the reseed and the column drop are TWO migrations: an additive
+      migration issues the grants (inert — permissions.py still decides
+      every request, so there is no dual-authoritative window), and this
+      cutover migration does the rest. In ONE change:
+        (a) re-run reseed as an idempotent catch-up for rows created
+            through the old paths since the additive migration;
         (b) rewrite every route guard role-check -> capability-check using
             ACCESS-GUARD-MAP;
         (c) switch list endpoints to the M1 visibility_sql_clause companion;
@@ -1944,15 +2089,19 @@ sessions:
             §9.4) rather than a side effect of per-run token minting;
         (d) drop users.is_platform_admin, users.is_data_analyst, the
             PermissionGroups enum, and the permissions.py _base_access ladder;
-        (e) give reseed() a pre-flight guard that counts the three
-            data-quality divergences (director-flag vs permission-group
-            mismatch, memberships whose group is absent from
-            MEMBERSHIP_PRESETS, project-only members with no lab_membership
-            row) before inserting anything, aborts with the counts, and
-            requires an explicit operator override to proceed. These cannot
-            be reconciled ahead of M2 — no deployment holds real membership
-            rows yet, so a pre-cutover sweep passes vacuously — so the check
-            ships inside the migration and runs wherever it is applied.
+        (e) run the M2-PRE-4 pre-flight guard before the catch-up reseed
+            and surface its three counts; the guard itself ships in
+            M2-PRE-4, this step is wiring it into the migration.
+      ORDER IS LOAD-BEARING: create the (principal_id, capability,
+      scope_ref) unique index (the live chain lacks it and reseed's
+      ON CONFLICT dedup depends on it) → pre-flight guard → catch-up
+      reseed → (b) guards → (c) lists → (d) drop columns LAST, so a
+      failure at any earlier step rolls back with the old model intact.
+      Route rewrites go by risk class, not by file: the 28 already-wired
+      require_capability routes first (mechanical rewiring), then the
+      sample-plane routes the preflight matrix and permit-vs-SQL
+      equivalence actually cover, then governance, then the two SERVICE
+      callbacks last (PrincipalKind.SERVICE has no route precedent).
       No rollback-to-dual-running — greenfield (§10), so safety comes from M0
       and M1 having proven the engine and companion, NOT from a shim. Run as
       MANUAL flow, single session, high attention — this is on the
@@ -1966,6 +2115,10 @@ sessions:
       - M1
       - ACCESS-GUARD-MAP
       - ACCESS-SEED
+      - M2-PRE-1
+      - M2-PRE-2
+      - M2-PRE-3
+      - M2-PRE-4
     blocked_by_external:
     parallel_safe: false
     parallel_safe_reason: "Irreversible cutover touching auth, migrations, route guards, and the list path. Manual flow only;
@@ -1983,7 +2136,7 @@ sessions:
     pr_title_function:
     branch_name_template: m2-cutover
     role_framing:
-    notes: "IRREVERSIBLE. Scope serialization decided ahead of the session: ADR 0015 (single rooted instance://self path) + access_model.md §3.1.1 — M2 lands the scope-URI builder, reseed's labs join, and the fixture rewrite. access_model.md §10 (greenfield, no shim) + §11.1. Verify M0/M1 proven before starting — the project-wide
+    notes: "IRREVERSIBLE. Two migrations, not one: ADR 0016. Scope serialization decided ahead of the session: ADR 0015 (single rooted instance://self path) + access_model.md §3.1.1 — M2 lands the scope-URI builder, reseed's labs join, and the fixture rewrite. access_model.md §10 (greenfield, no shim) + §11.1. Verify M0/M1 proven before starting — the project-wide
       'verify before operating' discipline applied to the cutover."
 
   - id: M3

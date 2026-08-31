@@ -1038,7 +1038,11 @@ The reseed is a one-time script (Python, per the no-`sed`/no-ORM conventions —
 | `lab_membership` = Bioinformatics User | apply **Lab Member (read-write)** preset at `lab:<id>` **+** the `pipeline:run` capability |
 | `lab_membership` = Platform Admin (group) | apply scope-appropriate admin preset (usually folds into the principal's Lab Lead / Instance Administrator grants) |
 
-After the reseed runs and is verified, the old columns and enum are dropped in the same migration. The reseed reads them; the migration that contains the reseed removes them; there is never a window where both the boolean and the grants are authoritative.
+**Amended (ADR 0016): the reseed and the column drop are two migrations, not one.** The original plan put both in a single migration so that "there is never a window where both the boolean and the grants are authoritative." That property is preserved by the split, because it was never the migration boundary that provided it — it is provided by *nothing reading the grants until the guards flip*. An additive reseed migration issues grants while `permissions.py` still decides every request: the grants exist and are inert, which is one authority, not two.
+
+What the split buys is the ability to inspect real grant rows — counts per preset, the pre-flight guard's three divergence counts, spot-checks against known users — before the irreversible step, rather than discovering a bad reseed with the old columns already dropped. Rows created through the old paths between the two migrations are covered by re-running `reseed()` inside the cutover migration; it is idempotent by construction (`ON CONFLICT DO NOTHING` against the unique index its own migration creates).
+
+The cutover migration therefore runs: re-run reseed (idempotent catch-up) → flip guards → flip list endpoints → drop the columns and enum **last**, so a failure at any earlier step rolls back with the old model intact.
 
 ### 10.3 The guard rewrite — role-checks become capability-checks
 
