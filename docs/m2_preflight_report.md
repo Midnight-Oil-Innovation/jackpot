@@ -87,12 +87,14 @@ Memberships with a permission-group name absent from MEMBERSHIP_PRESETS ('Data A
 
 ## 5. Additional preflight findings
 
-- **Unique-index ordering is load-bearing**: the live chain's
-  `authz_capability_grants` has no `(principal_id, capability,
-  scope_ref)` unique index; `reseed()`'s `ON CONFLICT DO NOTHING`
-  only dedupes once the staged migration creates it (it does, before
-  calling reseed). Pinned by
-  `test_reseed_duplicates_without_index`.
+- **Unique-index ordering is load-bearing**: `reseed()`'s
+  `ON CONFLICT DO NOTHING` dedupes nothing without
+  `(principal_id, capability, scope_ref)`. The M2 additive migration
+  `b2f47c1a9e30` creates it immediately before calling reseed; M0's
+  `a7c3e91d54b0` did not. `test_reseed_duplicates_without_index`
+  drops it deliberately to keep the ordering pinned as load-bearing,
+  and `test_additive_reseed_migration` asserts the migrated chain
+  really carries it.
 - **Federation PEER_INSTANCE principals** have no reseed source —
   peer-key routes keep their own auth path; out of the matrix.
 - **`require_capability` call sites that never pass `lab_id`** are

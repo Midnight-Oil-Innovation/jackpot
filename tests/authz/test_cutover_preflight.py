@@ -176,9 +176,11 @@ class TestReseedOnPostgres:
                     text("SELECT COUNT(*) FROM authz_capability_grants")
                 ).scalar_one()
                 assert after > before, (
-                    "expected duplicate grants without the unique index — if this "
-                    "now fails, the live chain gained the index and the staged "
-                    "migration's ordering note can be relaxed"
+                    "expected duplicate grants once the unique index is dropped. "
+                    "This test drops it deliberately, so a failure means reseed "
+                    "stopped depending on it for dedup — not that the chain "
+                    "gained the index (b2f47c1a9e30 creates it). The point is "
+                    "that create-index-before-reseed is load-bearing ordering."
                 )
             finally:
                 trans.rollback()

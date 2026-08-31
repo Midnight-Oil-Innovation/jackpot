@@ -45,11 +45,19 @@ PROJECT_NAME = "Preflight Project A1"
 
 INSTANCE_SCOPE = scope_uri()
 
-# DDL verbatim from backend/alembic/versions/20260829_reseed_roles_to_grants.py —
-# the uniqueness arbiter reseed()'s ON CONFLICT DO NOTHING requires. The live
-# chain (a7c3e91d54b0) does NOT create it; without it a second reseed silently
-# duplicates every grant. Creating it here mirrors cutover conditions and pins
-# the migration's create-index-before-reseed ordering as load-bearing.
+# The uniqueness arbiter reseed()'s ON CONFLICT DO NOTHING requires. As of
+# b2f47c1a9e30 (the M2 additive migration) the live chain DOES create it, so
+# these constants are no longer what establishes it — CREATE ... IF NOT EXISTS
+# is a no-op against a migrated database. They stay because
+# test_reseed_duplicates_without_index drops the index deliberately to prove
+# the create-index-before-reseed ordering is load-bearing rather than
+# incidental: without it a second reseed silently duplicates every grant.
+#
+# (An earlier version of this comment cited
+# backend/alembic/versions/20260829_reseed_roles_to_grants.py as the DDL
+# source. That file was planned during ACCESS-SEED and never committed; the
+# real migration is backend/db/migrations/versions/
+# b2f47c1a9e30_m2_additive_reseed_grants.py.)
 UNIQUE_INDEX_DDL = (
     "CREATE UNIQUE INDEX IF NOT EXISTS "
     "authz_capability_grants_principal_capability_scope_uniq "
