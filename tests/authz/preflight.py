@@ -401,9 +401,12 @@ EXPECTED_DIVERGENCES: dict[str, tuple[Callable[[Cell], bool], str]] = {
         lambda c: c.persona == "P11" and c.lab_key == "A" and c.legacy and not c.new,
         "lab_membership rows where is_lab_director=TRUE but the permission "
         "group says Collaborator: legacy trusts the flag (all caps pass), "
-        "reseed trusts the group name (member-RW grants only). Data-quality "
-        "reconciliation required before cutover: flag and group must agree "
-        "or the cutover changes these users' effective access.",
+        "reseed trusts the group name (member-RW grants only), so these "
+        "users lose director-level access at cutover. Detected at migration "
+        "time by reseed's pre-flight guard, not reconciled ahead of it: no "
+        "deployment holds real membership rows yet, so a pre-M2 sweep would "
+        "pass vacuously. The guard aborts with counts on any operator DB "
+        "where the flag and the group disagree.",
     ),
     "project-membership-no-grants": (
         lambda c: c.persona == "P12"
@@ -414,8 +417,10 @@ EXPECTED_DIVERGENCES: dict[str, tuple[Callable[[Cell], bool], str]] = {
         "Legacy member-level checks accept project membership via the "
         "project→lab join (guards.py:115-122); reseed reads only "
         "lab_membership, so project-only users lose guarded read access. "
-        "Cutover must either reseed project memberships or accept the "
-        "narrowing explicitly.",
+        "Cutover either reseeds project memberships or accepts the "
+        "narrowing explicitly; reseed's pre-flight guard reports the count "
+        "at migration time so the choice is made against real numbers "
+        "rather than assumed to be zero.",
     ),
     "unmapped-group-skipped": (
         lambda c: c.persona == "P9"
@@ -426,8 +431,10 @@ EXPECTED_DIVERGENCES: dict[str, tuple[Callable[[Cell], bool], str]] = {
         "Memberships with a permission-group name absent from "
         "MEMBERSHIP_PRESETS ('Data Analyst' as a lab membership) are "
         "skipped with a warning by reseed — those users lose all guarded "
-        "access at cutover. The reseed run's warnings must be triaged to "
-        "zero before M2.",
+        "access at cutover. Reseed's pre-flight guard counts them before "
+        "inserting anything and aborts unless the operator has explicitly "
+        "accepted the loss; triage happens at migration time on the DB that "
+        "actually has the rows, not ahead of M2 on one that does not.",
     ),
 }
 

@@ -1936,7 +1936,16 @@ sessions:
             ACCESS-GUARD-MAP;
         (c) switch list endpoints to the M1 visibility_sql_clause companion;
         (d) drop users.is_platform_admin, users.is_data_analyst, the
-            PermissionGroups enum, and the permissions.py _base_access ladder.
+            PermissionGroups enum, and the permissions.py _base_access ladder;
+        (e) give reseed() a pre-flight guard that counts the three
+            data-quality divergences (director-flag vs permission-group
+            mismatch, memberships whose group is absent from
+            MEMBERSHIP_PRESETS, project-only members with no lab_membership
+            row) before inserting anything, aborts with the counts, and
+            requires an explicit operator override to proceed. These cannot
+            be reconciled ahead of M2 — no deployment holds real membership
+            rows yet, so a pre-cutover sweep passes vacuously — so the check
+            ships inside the migration and runs wherever it is applied.
       No rollback-to-dual-running — greenfield (§10), so safety comes from M0
       and M1 having proven the engine and companion, NOT from a shim. Run as
       MANUAL flow, single session, high attention — this is on the
