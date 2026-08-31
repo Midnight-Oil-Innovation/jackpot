@@ -7,7 +7,7 @@ from .engine import (
     Resource,
     permit,
 )
-from .principal import lab_resource_scope, load_principal
+from .principal import lab_resource_scope, load_principal, sample_resource_scope
 from .scope import ROOT, scope_uri
 from .visibility import visibility_sql_clause
 
@@ -24,4 +24,5 @@ __all__ = [
     "ROOT",
     "load_principal",
     "lab_resource_scope",
+    "sample_resource_scope",
 ]
