@@ -43,7 +43,11 @@ class Principal:
 
 @dataclass
 class Resource:
-    scope: str  # scope URI locating this resource, e.g. "org://acme/path-lab/proj-x"
+    scope: str  # canonical scope URI locating this resource (§3.1.1)
+    # Attributes the attribute-policies read (§2.4): sharing_level,
+    # surveillance_relevant, owner_id, deletion_status, contains_pii… The
+    # engine never enumerates them — policies declare what they read.
+    attributes: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass

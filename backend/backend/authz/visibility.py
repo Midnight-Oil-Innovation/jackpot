@@ -21,8 +21,8 @@ skipping them per row.
 
 import re
 
-from backend.authz.engine import Context, Principal
-from backend.authz.policy import _DB_NOT_WIRED
+from backend.authz.engine import Context, Principal, Resource
+from backend.authz.policy import _DB_NOT_WIRED, PRINCIPAL_ID, _principal_holds
 from backend.authz.scope import is_canonical_scope_sql
 
 _CAPABILITY_RE = re.compile(r"^[a-z_]+:[a-z_]+$")
@@ -32,6 +32,49 @@ def _like_prefix(scope_ref: str) -> str:
     """LIKE pattern matching strict descendants of ``scope_ref`` (segment boundary)."""
     escaped = scope_ref.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
     return escaped.rstrip("/") + "/%"
+
+
+_COLUMN_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*\.[A-Za-z_][A-Za-z0-9_]*$")
+
+
+def _attr_sql(
+    predicate: dict,
+    columns: dict[str, str],
+    principal_id: str,
+    prefix: str,
+    params: dict,
+) -> str:
+    """Compile a policy's resource predicate into SQL.
+
+    ``columns`` maps attribute name -> qualified column ("s.sharing_level").
+    An attribute with no column mapping RAISES rather than being skipped: a
+    dropped term silently widens an ALLOW policy and — worse — would neuter a
+    DENY, which is the one thing deny-wins must never permit (§5.4).
+    """
+    terms = []
+    for i, (attr, expected) in enumerate(sorted(predicate.items())):
+        column = columns.get(attr)
+        if column is None:
+            raise ValueError(
+                f"policy reads resource attribute {attr!r} with no column mapping; "
+                f"known: {sorted(columns)}"
+            )
+        if not _COLUMN_RE.match(column):
+            raise ValueError(f"column for {attr!r} must be table.column, got {column!r}")
+        key = f"{prefix}_{i}"
+        if expected == PRINCIPAL_ID:
+            params[key] = principal_id
+            terms.append(f"CAST({column} AS TEXT) = :{key}")
+        elif isinstance(expected, dict) and "in" in expected:
+            names = []
+            for j, v in enumerate(expected["in"]):
+                params[f"{key}_{j}"] = v
+                names.append(f":{key}_{j}")
+            terms.append(f"{column} IN ({', '.join(names)})")
+        else:
+            params[key] = expected
+            terms.append(f"{column} = :{key}")
+    return " AND ".join(terms) if terms else "1 = 1"
 
 
 def _scope_term(column: str, scope_ref: str, param: str, params: dict) -> str:
@@ -48,6 +91,7 @@ def visibility_sql_clause(
     *,
     context: Context | None = None,
     policies: list[dict] | None = None,
+    attribute_columns: dict[str, str] | None = None,
 ) -> tuple[str, dict]:
     """Compile a WHERE fragment behaviorally identical to per-row permit().
 
@@ -83,24 +127,50 @@ def visibility_sql_clause(
     def _live(conditions: dict) -> bool:
         return all(context.conditions.get(k) == v for k, v in conditions.items())
 
+    columns = attribute_columns or {}
+
+    def _policy_term(pol: dict, prefix: str, index: int) -> str | None:
+        """One policy as SQL, or None when it cannot apply to any row.
+
+        Compile-time facts are settled here exactly as permit() settles them
+        per row: an unsatisfied ``conditions`` or an unheld
+        ``requires_capability`` removes the policy entirely, because neither
+        varies row to row.
+        """
+        if not _live(pol.get("conditions", {})):
+            return None
+        required = pol.get("requires_capability")
+        if required and not _principal_holds(
+            principal, required, Resource(scope=pol["scope_ref"]), context
+        ):
+            return None
+        scope_sql_term = _scope_term(column, pol["scope_ref"], f"{prefix}{index}", params)
+        attr = pol.get("resource")
+        if not attr:
+            return scope_sql_term
+        return (
+            f"({scope_sql_term} AND "
+            f"{_attr_sql(attr, columns, principal.id, f'{prefix}{index}_a', params)})"
+        )
+
     allow_terms = [
         _scope_term(column, g.scope_ref, f"vis_g{i}", params)
         for i, g in enumerate(principal.grants)
         if g.capability == capability and _live(g.conditions)
     ]
     allow_terms += [
-        _scope_term(column, p["scope_ref"], f"vis_pa{i}", params)
+        term
         for i, p in enumerate(policies)
-        if p["effect"] == "ALLOW"
-        and p["capability"] == capability
-        and _live(p.get("conditions", {}))
+        if p["effect"] == "ALLOW" and p["capability"] == capability
+        for term in [_policy_term(p, "vis_pa", i)]
+        if term is not None
     ]
     deny_terms = [
-        _scope_term(column, p["scope_ref"], f"vis_pd{i}", params)
+        term
         for i, p in enumerate(policies)
-        if p["effect"] == "DENY"
-        and p["capability"] == capability
-        and _live(p.get("conditions", {}))
+        if p["effect"] == "DENY" and p["capability"] == capability
+        for term in [_policy_term(p, "vis_pd", i)]
+        if term is not None
     ]
 
     allow_sql = " OR ".join(allow_terms) if allow_terms else "1 = 0"  # default-deny
