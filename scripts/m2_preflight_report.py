@@ -36,6 +36,13 @@ class MapRow:
     def klass(self) -> str:
         if "PUBLIC" in self.notes:
             return "public"
+        if "AUTH-ONLY BY DESIGN" in self.notes and self.capability == "—":
+            # Authentication suffices: the resource is the caller, or there is
+            # no resource. Not a gap — a decision. See the map's header.
+            # A row carrying BOTH the marker and a capability is a split route
+            # (self path ungated, cross-principal path guarded) and belongs in
+            # ROUTE_LOCAL — it still needs a guard written.
+            return "auth_only_by_design"
         if self.capability == "—":
             return "catalog_gap"
         if "require_capability" in self.notes:
@@ -73,43 +80,7 @@ def parse_map(path: Path) -> list[MapRow]:
 # domain:action convention and reusing existing verbs where one fits.
 # These are proposals only — the maintainer reviews/edits this table, and
 # the M2 cutover session writes the agreed values into the map + catalog.
-PROPOSED_CAPABILITIES: dict[tuple[str, str], str] = {
-    ("GET", "/api/v1/byop/telemetry"): "pipeline:read",
-    ("GET", "/api/v1/byop/pipelines"): "pipeline:read",
-    ("GET", "/api/v1/byop/pipelines/{pipeline_id}"): "pipeline:read",
-    (
-        "POST",
-        "/api/v1/dataharmonizer/validate",
-    ): "metadata:validate (new verb — stateless utility; or keep auth-only)",
-    ("GET", "/api/v1/import_mappings/"): "import:read (new domain)",
-    ("GET", "/api/v1/import_mappings/{mapping_id}"): "import:read (new domain)",
-    ("POST", "/api/v1/import_mappings/"): "import:manage (new domain)",
-    ("PATCH", "/api/v1/import_mappings/{mapping_id}"): "import:manage (new domain)",
-    ("DELETE", "/api/v1/import_mappings/{mapping_id}"): "import:manage (new domain)",
-    ("GET", "/api/v1/labs/"): "lab:read (new verb)",
-    ("GET", "/api/v1/labs/{lab_id}"): "lab:read (new verb)",
-    ("GET", "/api/v1/organizations/{org_id}"): "org:read (new verb)",
-    ("GET", "/api/v1/pipelines/"): "pipeline:read",
-    ("POST", "/api/v1/profiles/"): "profile:manage (new domain — execution profiles)",
-    ("GET", "/api/v1/profiles/me"): "user:read_self (new verb — self-scope)",
-    (
-        "POST",
-        "/api/v1/sample-access/requests",
-    ): "access:request (new verb, pairs with access:approve_request)",
-    ("GET", "/api/v1/sequencing-labs/"): "sequencing_lab:read (new domain)",
-    ("GET", "/api/v1/sequencing-labs/{seq_lab_id}"): "sequencing_lab:read (new domain)",
-    ("POST", "/api/v1/submissions/"): "submission:prepare (new verb)",
-    ("PATCH", "/api/v1/submissions/{submission_id}"): "submission:prepare (new verb)",
-    ("DELETE", "/api/v1/submissions/{submission_id}"): "submission:prepare (new verb)",
-    ("POST", "/api/v1/submissions/{submission_id}/samples"): "submission:prepare (new verb)",
-    ("DELETE", "/api/v1/submissions/{submission_id}/samples"): "submission:prepare (new verb)",
-    ("POST", "/api/v1/submissions/{submission_id}/validate"): "submission:prepare (new verb)",
-    ("POST", "/api/v1/submissions/{submission_id}/generate"): "submission:prepare (new verb)",
-    ("GET", "/api/v1/tokens/"): "token:manage (new domain — self-scope resource)",
-    ("POST", "/api/v1/tokens/"): "token:manage (new domain — self-scope resource)",
-    ("DELETE", "/api/v1/tokens/{token_id}"): "token:manage (new domain — self-scope resource)",
-    ("GET", "/api/v1/users/me"): "user:read_self (new verb — self-scope)",
-}
+PROPOSED_CAPABILITIES: dict[tuple[str, str], str] = {}
 
 
 # Rationales mirrored from tests/authz/preflight.py::EXPECTED_DIVERGENCES —
@@ -137,6 +108,7 @@ def generate_report(rows: list[MapRow]) -> str:
     gaps = [r for r in rows if r.klass == "catalog_gap"]
     verify = [r for r in rows if r.verify_intent]
     auth_only = [r for r in rows if r.klass == "auth_only"]
+    by_design = [r for r in rows if r.klass == "auth_only_by_design"]
     public = [r for r in rows if r.klass == "public" and not r.verify_intent]
     wired = [r for r in rows if r.klass == "require_capability"]
 
@@ -149,26 +121,44 @@ def generate_report(rows: list[MapRow]) -> str:
     out.append("")
     out.append(
         f"Map totals: {len(rows)} endpoints — {len(wired)} already wired to "
-        f"`require_capability`, {len(auth_only)} auth-only (ROUTE_LOCAL), "
+        f"`require_capability`, {len(auth_only)} carrying a target capability "
+        f"but not yet guarded (ROUTE_LOCAL), {len(by_design)} AUTH-ONLY BY "
+        f"DESIGN (permanently ungated — authentication is the whole decision), "
         f"{len(gaps)} catalog gaps, {len(public) + len(verify)} PUBLIC "
         f"({len(verify)} pending intent verification)."
     )
     out.append("")
 
-    out.append("## 1. Catalog gaps — proposed capabilities (maintainer review required)")
+    out.append("## 1. Catalog gaps")
     out.append("")
-    out.append("Proposals follow the §4 `domain:action` convention; existing verbs")
-    out.append("reused where one fits. Edit the proposal column in review; the M2")
-    out.append("cutover session writes the agreed values into the map and the §4")
-    out.append("catalog. The map file itself is deliberately untouched until then.")
-    out.append("")
-    out.append("| ✓ | Method | Path | Scope | Proposed capability |")
-    out.append("|---|--------|------|-------|---------------------|")
-    for r in gaps:
-        proposal = PROPOSED_CAPABILITIES.get(
-            (r.method, r.path), "(no proposal — resolve in review)"
-        )
-        out.append(f"| ☐ | {r.method} | `{r.path}` | {r.scope} | `{proposal}` |")
+    if not gaps:
+        out.append("None. Every gap the ACCESS-GUARD-MAP pass found was resolved in")
+        out.append("review and written into `docs/endpoint_capability_map.md`. Most")
+        out.append("took a capability, adding `pipeline:read`, `lab:read`,")
+        out.append("`org:read`, `import:read`, `import:manage`,")
+        out.append("`submission:prepare`, `access:request`, and `token:manage` to")
+        out.append(f"the §4 catalog. The remaining {len(by_design)} were marked")
+        out.append("AUTH-ONLY BY DESIGN — self-scope routes, the stateless")
+        out.append("validation utility, and the sequencing-lab registry, where")
+        out.append("authentication is the whole decision (§4.7). Those stay ungated")
+        out.append("after M2 and are covered by route-level tests rather than the")
+        out.append("capability matrix. The two personal-token routes carry both a")
+        out.append("capability and the marker: the self path is ungated, and")
+        out.append("`token:manage` gates only reaching another principal's tokens,")
+        out.append("so they remain ROUTE_LOCAL work.")
+    else:
+        out.append("Proposals follow the §4 `domain:action` convention; existing verbs")
+        out.append("reused where one fits. Edit the proposal column in review; the M2")
+        out.append("cutover session writes the agreed values into the map and the §4")
+        out.append("catalog.")
+        out.append("")
+        out.append("| ✓ | Method | Path | Scope | Proposed capability |")
+        out.append("|---|--------|------|-------|---------------------|")
+        for r in gaps:
+            proposal = PROPOSED_CAPABILITIES.get(
+                (r.method, r.path), "(no proposal — resolve in review)"
+            )
+            out.append(f"| ☐ | {r.method} | `{r.path}` | {r.scope} | `{proposal}` |")
     out.append("")
 
     out.append("## 2. PUBLIC rows pending intent verification")
@@ -180,6 +170,8 @@ def generate_report(rows: list[MapRow]) -> str:
     out.append("## 3. ROUTE_LOCAL rows (auth-only today)")
     out.append("")
     out.append(f"{len(auth_only)} routes carry `get_current_user` plus in-route ad-hoc")
+    out.append("checks and a target capability the map names but no guard enforces yet")
+    out.append(f"(a further {len(by_design)} are AUTH-ONLY BY DESIGN and stay that way).")
     out.append("checks (ownership, visibility, director-or-admin). No single legacy")
     out.append("decision function exists per route, so they are NOT machine-comparable")
     out.append("pre-cutover; the preflight equivalence matrix covers only the wired")

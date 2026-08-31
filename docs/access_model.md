@@ -317,6 +317,7 @@ Each capability is `domain:action`. Where a capability mutates state, the table 
 
 | Capability | Meaning | Audit action |
 |---|---|---|
+| `pipeline:read` | Read the pipeline zoo, the BYOP registry, and run status | — |
 | `pipeline:run` | Launch a pipeline run | `CREATE_PIPELINE_RUN` |
 | `pipeline:write_results` | Write pipeline results (held by the Nextflow weblog poster and the cryptWWDB third-party lab) | `REGISTER_PIPELINE_RESULT` |
 | `pipeline:register_custom` | Register a custom (BYOP) pipeline | `REGISTER_CUSTOM_PIPELINE` |
@@ -354,16 +355,23 @@ The category-defining absence: **there is no `anomaly:emit`.** The immune subsys
 
 | Capability | Meaning | Audit action |
 |---|---|---|
+| `access:request` | Request access to a `DISCOVERABLE` sample | `CREATE_ACCESS_REQUEST` |
 | `access:approve_request` | Approve a sample access request | `APPROVE_ACCESS_REQUEST` |
 | `access:revoke` | Revoke an access grant | `REVOKE_ACCESS` |
 | `deletion:request` | Request deletion of a sample — drives the `ACTIVE → DELETION_REQUESTED` transition (see §6) | `sample_deletion_requested` |
 | `deletion:approve` | Approve a deletion request (sovereignty-sensitive — see §6) | `APPROVE_DELETION` |
+| `submission:prepare` | Build and edit an outbound submission — create, amend, add/remove samples, validate readiness, generate the package | `CREATE_SUBMISSION` / `UPDATE_SUBMISSION` |
 | `submission:approve` | Approve an outbound submission | `SUBMISSION_MARKED_SUBMITTED` |
 | `scrub:approve_skip` | Approve a scrubber-skip request | `APPROVE_SCRUB_SKIP` |
 | `key:rotate` | Rotate signing/federation keys | `ROTATE_KEY` |
 | `whitelist:manage` | Manage the domain whitelist | `ADD_WHITELIST_DOMAIN` / `REMOVE_WHITELIST_DOMAIN` |
 | `user:manage` | Create/modify/deactivate users, assign capabilities | `UPDATE_USER` / `CHANGE_MEMBER_ROLE` |
 | `org:manage` | Create/modify orgs, labs, projects | `CREATE_ORG` / `CREATE_LAB` / `CREATE_PROJECT` |
+| `org:read` | Read org detail | — |
+| `lab:read` | Read the lab directory and lab detail | — |
+| `import:read` | Read reusable column-mapping configs | — |
+| `import:manage` | Create/amend/deactivate mapping configs | `CREATE_IMPORT_MAPPING` / `UPDATE_IMPORT_MAPPING` |
+| `token:manage` | Act on **another principal's** personal API tokens (the caller's own are auth-only — §4.7) | `REVOKE_API_TOKEN` |
 | `audit:read` | Read the audit log | — |
 
 These map almost one-to-one onto existing `audit.py` actions — the governance plane is the most stable because it is the part of the system APGAP already modeled well. The redesign mostly preserves these; what changes is that they become capabilities granted at a scope rather than implied by a role.
@@ -390,6 +398,10 @@ To make the boundary explicit, the following are **automation behaviors**, not c
 - The PII gates (SRA scrubber, GCP DLP) running at ingest
 
 These are things the *system does on a schedule or in response to data*, not things a *principal is authorized to do*. They emit audit actions (e.g. `AUTO_APPROVE_ACCESS_REQUEST`, `EXPIRE_ACCESS_GRANT`, `SYSTEM_SKIP_SCRUB`) with a system actor rather than a principal actor, but they are never gated by `permit()`. Conflating automation with capability is the category error §2.2 warns against; this list is the catalog's statement of where that line falls.
+
+There is a second class that is not a capability, for a different reason: **routes whose resource is definitionally the caller.** `GET /users/me`, the caller's own user profile, and minting or listing one's own API tokens all need authentication and no authorization decision — there is no other principal whose data is reachable, so a capability check has nothing to decide. Modelling these would mean either issuing every principal a grant that is never absent (ceremony that enlarges the grants table and changes no verdict) or adding a user level to the §3.1 scope tree solely to express "you are yourself". Neither earns its keep. The same reasoning covers routes with no resource at all: a stateless validation utility, and the registry of physical sequencing facilities every ingesting user must be able to read.
+
+The boundary is *reachability of another principal's data*, not sensitivity. `token:manage` exists precisely because one token route does cross it — an administrator listing or revoking another user's tokens. The self path stays ungated; the cross-principal path needs the capability. Rows decided this way are marked **AUTH-ONLY BY DESIGN** in `docs/endpoint_capability_map.md` and are verified by route-level tests rather than the capability matrix.
 
 ---
 
