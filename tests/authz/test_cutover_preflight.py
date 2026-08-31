@@ -307,10 +307,11 @@ class TestPreflightReport:
 
         rows = parse_map(REPO_ROOT / "docs" / "endpoint_capability_map.md")
         assert len(rows) == 124
-        # Every row classifiable — parser guarantees the four classes.
+        # Every row classifiable — parser guarantees the five classes.
         assert {r.klass for r in rows} <= {
             "require_capability",
             "auth_only",
+            "auth_only_by_design",
             "public",
             "catalog_gap",
         }
@@ -333,5 +334,39 @@ class TestPreflightReport:
 
         rows = parse_map(REPO_ROOT / "docs" / "endpoint_capability_map.md")
         gaps = [r for r in rows if r.klass == "catalog_gap"]
-        assert len(gaps) == 29
-        # M2: flip to assert not gaps
+        assert not gaps, f"unresolved catalog gaps: {[(r.method, r.path) for r in gaps]}"
+
+        # The 29 gaps the ACCESS-GUARD-MAP pass found were resolved in review:
+        # 20 took a capability, 9 were marked AUTH-ONLY BY DESIGN (self-scope,
+        # stateless utility, public registry — see access_model.md §4.7).
+        by_design = [r for r in rows if r.klass == "auth_only_by_design"]
+        assert len(by_design) == 7
+        # Every by-design row must justify itself in the notes, not just carry
+        # the marker — the marker is a decision, and decisions carry reasons.
+        for r in by_design:
+            reason = r.notes.split("AUTH-ONLY BY DESIGN", 1)[1].strip(" —-")
+            assert reason, f"{r.method} {r.path} carries the marker with no reason"
+            assert r.capability == "—", "a by-design row cannot also name a capability"
+
+        # Split routes (self path ungated, cross-principal path guarded) keep
+        # their capability and stay ROUTE_LOCAL — the guard still gets written.
+        split = [r for r in rows if "AUTH-ONLY BY DESIGN" in r.notes and r.capability != "—"]
+        assert {(r.method, r.path) for r in split} == {
+            ("GET", "/api/v1/tokens/"),
+            ("DELETE", "/api/v1/tokens/{token_id}"),
+        }
+        assert all(r.klass == "auth_only" for r in split)
+
+        # Verbs the resolution added to the §4 catalog must actually be there.
+        catalog = (REPO_ROOT / "docs" / "access_model.md").read_text()
+        for verb in (
+            "pipeline:read",
+            "lab:read",
+            "org:read",
+            "import:read",
+            "import:manage",
+            "submission:prepare",
+            "access:request",
+            "token:manage",
+        ):
+            assert f"`{verb}`" in catalog, f"{verb} used in the map but absent from §4"

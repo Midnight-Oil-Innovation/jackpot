@@ -4,46 +4,24 @@
 
 # M2 Pre-Cutover Report
 
-Map totals: 124 endpoints — 28 already wired to `require_capability`, 56 auth-only (ROUTE_LOCAL), 29 catalog gaps, 11 PUBLIC (3 pending intent verification).
+Map totals: 124 endpoints — 28 already wired to `require_capability`, 78 carrying a target capability but not yet guarded (ROUTE_LOCAL), 7 AUTH-ONLY BY DESIGN (permanently ungated — authentication is the whole decision), 0 catalog gaps, 11 PUBLIC (3 pending intent verification).
 
-## 1. Catalog gaps — proposed capabilities (maintainer review required)
+## 1. Catalog gaps
 
-Proposals follow the §4 `domain:action` convention; existing verbs
-reused where one fits. Edit the proposal column in review; the M2
-cutover session writes the agreed values into the map and the §4
-catalog. The map file itself is deliberately untouched until then.
-
-| ✓ | Method | Path | Scope | Proposed capability |
-|---|--------|------|-------|---------------------|
-| ☐ | GET | `/api/v1/byop/telemetry` | Lab | `pipeline:read` |
-| ☐ | GET | `/api/v1/byop/pipelines` | Lab | `pipeline:read` |
-| ☐ | GET | `/api/v1/byop/pipelines/{pipeline_id}` | Lab | `pipeline:read` |
-| ☐ | POST | `/api/v1/dataharmonizer/validate` | Instance | `metadata:validate (new verb — stateless utility; or keep auth-only)` |
-| ☐ | GET | `/api/v1/import_mappings/` | Lab | `import:read (new domain)` |
-| ☐ | GET | `/api/v1/import_mappings/{mapping_id}` | Lab | `import:read (new domain)` |
-| ☐ | POST | `/api/v1/import_mappings/` | Lab | `import:manage (new domain)` |
-| ☐ | PATCH | `/api/v1/import_mappings/{mapping_id}` | Lab | `import:manage (new domain)` |
-| ☐ | DELETE | `/api/v1/import_mappings/{mapping_id}` | Lab | `import:manage (new domain)` |
-| ☐ | GET | `/api/v1/labs/` | Org | `lab:read (new verb)` |
-| ☐ | GET | `/api/v1/labs/{lab_id}` | Lab | `lab:read (new verb)` |
-| ☐ | GET | `/api/v1/organizations/{org_id}` | Org | `org:read (new verb)` |
-| ☐ | GET | `/api/v1/pipelines/` | Instance | `pipeline:read` |
-| ☐ | POST | `/api/v1/profiles/` | Instance | `profile:manage (new domain — execution profiles)` |
-| ☐ | GET | `/api/v1/profiles/me` | Instance | `user:read_self (new verb — self-scope)` |
-| ☐ | POST | `/api/v1/sample-access/requests` | Sample | `access:request (new verb, pairs with access:approve_request)` |
-| ☐ | GET | `/api/v1/sequencing-labs/` | Instance | `sequencing_lab:read (new domain)` |
-| ☐ | GET | `/api/v1/sequencing-labs/{seq_lab_id}` | Instance | `sequencing_lab:read (new domain)` |
-| ☐ | POST | `/api/v1/submissions/` | Lab | `submission:prepare (new verb)` |
-| ☐ | PATCH | `/api/v1/submissions/{submission_id}` | Lab | `submission:prepare (new verb)` |
-| ☐ | DELETE | `/api/v1/submissions/{submission_id}` | Lab | `submission:prepare (new verb)` |
-| ☐ | POST | `/api/v1/submissions/{submission_id}/samples` | Lab | `submission:prepare (new verb)` |
-| ☐ | DELETE | `/api/v1/submissions/{submission_id}/samples` | Lab | `submission:prepare (new verb)` |
-| ☐ | POST | `/api/v1/submissions/{submission_id}/validate` | Lab | `submission:prepare (new verb)` |
-| ☐ | POST | `/api/v1/submissions/{submission_id}/generate` | Lab | `submission:prepare (new verb)` |
-| ☐ | GET | `/api/v1/tokens/` | Instance | `token:manage (new domain — self-scope resource)` |
-| ☐ | POST | `/api/v1/tokens/` | Instance | `token:manage (new domain — self-scope resource)` |
-| ☐ | DELETE | `/api/v1/tokens/{token_id}` | Instance | `token:manage (new domain — self-scope resource)` |
-| ☐ | GET | `/api/v1/users/me` | Instance | `user:read_self (new verb — self-scope)` |
+None. Every gap the ACCESS-GUARD-MAP pass found was resolved in
+review and written into `docs/endpoint_capability_map.md`. Most
+took a capability, adding `pipeline:read`, `lab:read`,
+`org:read`, `import:read`, `import:manage`,
+`submission:prepare`, `access:request`, and `token:manage` to
+the §4 catalog. The remaining 7 were marked
+AUTH-ONLY BY DESIGN — self-scope routes, the stateless
+validation utility, and the sequencing-lab registry, where
+authentication is the whole decision (§4.7). Those stay ungated
+after M2 and are covered by route-level tests rather than the
+capability matrix. The two personal-token routes carry both a
+capability and the marker: the self path is ungated, and
+`token:manage` gates only reaching another principal's tokens,
+so they remain ROUTE_LOCAL work.
 
 ## 2. PUBLIC rows pending intent verification
 
@@ -53,7 +31,9 @@ catalog. The map file itself is deliberately untouched until then.
 
 ## 3. ROUTE_LOCAL rows (auth-only today)
 
-56 routes carry `get_current_user` plus in-route ad-hoc
+78 routes carry `get_current_user` plus in-route ad-hoc
+checks and a target capability the map names but no guard enforces yet
+(a further 7 are AUTH-ONLY BY DESIGN and stay that way).
 checks (ownership, visibility, director-or-admin). No single legacy
 decision function exists per route, so they are NOT machine-comparable
 pre-cutover; the preflight equivalence matrix covers only the wired
