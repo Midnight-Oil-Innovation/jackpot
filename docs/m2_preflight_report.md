@@ -4,7 +4,7 @@
 
 # M2 Pre-Cutover Report
 
-Map totals: 124 endpoints — 28 already wired to `require_capability`, 78 carrying a target capability but not yet guarded (ROUTE_LOCAL), 7 AUTH-ONLY BY DESIGN (permanently ungated — authentication is the whole decision), 0 catalog gaps, 11 PUBLIC (3 pending intent verification).
+Map totals: 124 endpoints — 28 already wired to `require_capability`, 80 carrying a target capability but not yet guarded (ROUTE_LOCAL), 7 AUTH-ONLY BY DESIGN (permanently ungated — authentication is the whole decision), 0 catalog gaps, 9 PUBLIC (0 pending intent verification).
 
 ## 1. Catalog gaps
 
@@ -25,15 +25,25 @@ so they remain ROUTE_LOCAL work.
 
 ## 2. PUBLIC rows pending intent verification
 
-- ☐ **POST `/api/v1/auth/dev-login`** — PUBLIC (verify intent — must be ENV=local only)
-- ☐ **POST `/api/v1/pipelines/events`** — PUBLIC (verify intent — weblog receiver is best-effort by design, Rule 60; SERVICE-principal capability at M2)
-- ☐ **POST `/api/v1/pipelines/{run_id}/results/{result_type}`** — PUBLIC (verify intent — pipeline-token path; SERVICE-principal capability at M2)
+None. The three rows previously pending were reviewed against
+the handlers: `auth/dev-login` is confirmed PUBLIC and gated
+(`env != "local"` returns 404 as the handler's first statement),
+and the two pipeline callbacks were **misclassified** — both
+authenticate a per-run `X-Pipeline-Token` with
+`hmac.compare_digest` and 401 on mismatch, with wrong-token and
+missing-token cases already pinned by tests. They are now
+SERVICE-authenticated rows carrying `pipeline:write_results`,
+and M2 adds the SERVICE-principal `permit()` call that separates
+authentication from authorization on them (§4.6, §9.4).
 
 ## 3. ROUTE_LOCAL rows (auth-only today)
 
-78 routes carry `get_current_user` plus in-route ad-hoc
+80 routes carry `get_current_user` plus in-route ad-hoc
 checks and a target capability the map names but no guard enforces yet
 (a further 7 are AUTH-ONLY BY DESIGN and stay that way).
+Two of them authenticate a per-run pipeline token rather than a user
+JWT — the weblog receiver and the result-registration callback — and
+take a SERVICE principal at M2 rather than a human one.
 checks (ownership, visibility, director-or-admin). No single legacy
 decision function exists per route, so they are NOT machine-comparable
 pre-cutover; the preflight equivalence matrix covers only the wired
