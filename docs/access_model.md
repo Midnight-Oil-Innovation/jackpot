@@ -372,6 +372,7 @@ The category-defining absence: **there is no `anomaly:emit`.** The immune subsys
 | `import:read` | Read reusable column-mapping configs | — |
 | `import:manage` | Create/amend/deactivate mapping configs | `CREATE_IMPORT_MAPPING` / `UPDATE_IMPORT_MAPPING` |
 | `token:manage` | Act on **another principal's** personal API tokens (the caller's own are auth-only — §4.7) | `REVOKE_API_TOKEN` |
+| `deposit:record` | Record a sequencing-facility deposit and notify the assigned Lab Directors (`POST /ingest/globus`) — creates no sample rows | `CREATE_SAMPLE` today, which is inaccurate for a route that creates none; a `GLOBUS_DEPOSIT_RECORDED` action is proposed and belongs with M2-B2's ingest work |
 | `audit:read` | Read the audit log | — |
 
 These map almost one-to-one onto existing `audit.py` actions — the governance plane is the most stable because it is the part of the system APGAP already modeled well. The redesign mostly preserves these; what changes is that they become capabilities granted at a scope rather than implied by a role.

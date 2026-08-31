@@ -32,6 +32,8 @@ from sqlalchemy import text
 # making `authz.preflight` the resolvable name.
 from authz.preflight import (
     EXPECTED_DIVERGENCES,
+    INSTANCE_SCOPE,
+    MATRIX_CAPABILITIES,
     SAMPLE_PREFIX,
     UNIQUE_INDEX_DDL,
     classify_legacy_only_visibility,
@@ -42,6 +44,8 @@ from authz.preflight import (
     teardown_world,
     user_dict,
 )
+from backend.auth.guards import require_capability
+from backend.authz import Context, Decision, Resource, permit
 from backend.authz.reseed import (
     PRESET_GRANTS,
     ReseedPreflightError,
@@ -238,6 +242,88 @@ class TestReseedPreflightGuard:
         assert counts["director_flag_group_mismatch"] == 1  # P11
         assert counts["unmapped_permission_group"] == 1  # P9
         assert counts["project_only_membership"] == 1  # P12
+
+
+class TestRealGuardIsPermitBacked:
+    """M2-B1 — the shipped guard and the engine must not diverge.
+
+    The matrix below compares the new model against a frozen copy of the old
+    ladder, which says what CHANGED. This says the change actually reached
+    production: require_capability's verdict equals permit()'s on the same
+    principal, capability and scope, for every cell. Without it the matrix
+    could stay green while the guard quietly ran something else.
+    """
+
+    def test_guard_matches_permit_on_every_cell(self, world):
+        from authz.preflight import real_guard
+
+        principals = {k: load_principal(p.user_id) for k, p in world.personas.items()}
+        lab_ids = {"A": world.lab_a, "B": world.lab_b, None: None}
+        mismatches = []
+        for pkey, persona in world.personas.items():
+            for cap in MATRIX_CAPABILITIES:
+                for lab_key, lab_id in lab_ids.items():
+                    scope = (
+                        lab_scope(world.org_id, lab_id) if lab_id is not None else INSTANCE_SCOPE
+                    )
+                    engine = (
+                        permit(
+                            principals[pkey],
+                            cap,
+                            Resource(scope=scope),
+                            Context(conditions={}),
+                            policies=[],
+                        )
+                        is Decision.ALLOW
+                    )
+                    if real_guard(persona, cap, lab_id) != engine:
+                        mismatches.append((pkey, cap, lab_key, engine))
+        assert not mismatches, f"guard/engine divergence: {mismatches}"
+
+    def test_unknown_lab_is_indistinguishable_from_a_denied_lab(self, world):
+        """Existence must not be observable through the status code.
+
+        Answering 404 for an unknown lab and 403 for a known-but-denied one
+        lets any authenticated caller enumerate lab ids. Under org isolation
+        that is the secret itself — §3.2: another org must not learn of a
+        lab's data, users, "or existence".
+        """
+        from fastapi import HTTPException
+
+        reader = user_dict(world.personas["P6"])  # holds no org:manage anywhere
+
+        with pytest.raises(HTTPException) as unknown:
+            require_capability("org:manage")(reader, lab_id=987654321)
+        with pytest.raises(HTTPException) as denied:
+            require_capability("org:manage")(reader, lab_id=world.lab_a)
+
+        assert unknown.value.status_code == denied.value.status_code == 403
+        assert unknown.value.detail == denied.value.detail
+
+    def test_instance_wide_caller_passes_through_to_the_route_on_unknown_lab(self, world):
+        """Enumeration is only a leak for someone who could not already do it.
+
+        A principal holding the capability instance-wide can list every lab
+        anyway, so withholding a 404 from them protects nothing and turns an
+        ordinary bad request into a confusing permission error. The guard lets
+        them through and the route answers 404.
+        """
+        admin = user_dict(world.personas["P1"])
+        assert require_capability("org:manage")(admin, lab_id=987654321) is admin
+
+    def test_platform_admin_has_no_bypass_branch(self, world):
+        """The admin passes on grants, not on is_platform_admin.
+
+        Stripping the flag must change nothing: if it does, a bypass survived.
+        """
+        from authz.preflight import real_guard
+
+        admin = world.personas["P1"]
+        assert real_guard(admin, "org:manage", None)
+
+        flagless = dict(user_dict(admin))
+        flagless["is_platform_admin"] = False
+        require_capability("org:manage")(flagless)  # grants alone must carry it
 
 
 class TestGuardEquivalenceMatrix:

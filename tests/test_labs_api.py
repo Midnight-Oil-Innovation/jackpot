@@ -1,4 +1,5 @@
 import pytest
+from authz_helpers import sync_grants_from_legacy_roles
 
 from backend.config import get_settings
 from backend.database import execute_query, execute_write
@@ -20,6 +21,8 @@ def _ensure_user(email: str, *, is_platform_admin: bool = False) -> int:
         {"e": email, "a": is_platform_admin},
     )
     row = execute_query("SELECT id FROM users WHERE email = :e", {"e": email})
+    # Guards decide on grants since M2-B1; translate the role flags.
+    sync_grants_from_legacy_roles()
     return row[0]["id"]
 
 
@@ -199,6 +202,11 @@ async def test_patch_lab_by_director(client, monkeypatch):
         },
     )
     assert resp.status_code == 201
+    # The membership was created after _ensure_user ran, so re-sync: a
+    # membership only becomes access once grants exist for it. In production
+    # M2-B5 makes POST /labs/{id}/members issue the grants directly — until
+    # then a new member holds nothing until a reseed runs.
+    sync_grants_from_legacy_roles()
 
     _switch_user(monkeypatch, director_email)
     resp = await client.patch(

@@ -5,6 +5,9 @@ from typing import Any
 from fastapi import HTTPException, Request
 from jose import jwt
 
+from backend.authz.engine import Context, Decision, Resource, permit
+from backend.authz.principal import lab_resource_scope, load_principal
+from backend.authz.scope import scope_uri
 from backend.config import get_settings
 from backend.credentials import CredentialError, CredentialNotFoundError, credentials
 from backend.database import execute_query
@@ -80,48 +83,87 @@ def get_user_lab_membership(user_id: int, lab_id: int) -> dict | None:
     return rows[0] if rows else None
 
 
-# Capabilities whose lab-scoped check accepts any lab or project membership
-# (read plane); everything else lab-scoped requires lab directorship.
-_MEMBER_LEVEL_CAPABILITIES = frozenset({"sample:read", "sample:read_detail"})
-
-
 def require_capability(capability: str):
     """Guard factory: returns a callable raising HTTP 403 unless the current
-    user may exercise ``capability`` (an access_model.md §4 ``domain:action``
-    string, recorded in docs/endpoint_capability_map.md).
+    user holds ``capability`` at a scope covering the resource.
 
-    Transitional M2-prerequisite implementation (access_model.md §10.3): the
-    capability string at the call site is the single source of truth for what
-    each route requires, but enforcement still runs the legacy structural
-    checks until M2 wires in the permit() engine:
+    M2-B1: enforcement is ``permit()`` (access_model.md §5). The legacy
+    structural ladder — platform-admin bypass, lab membership, the
+    project→lab join, the director flag — is gone from this function. What
+    replaces each rung:
 
-    - no authenticated principal            -> 403
-    - platform admin                        -> pass (Instance-scope grant)
-    - ``lab_id`` given, member-level cap    -> lab or project membership
-    - ``lab_id`` given, any other cap       -> lab directorship
-    - otherwise                             -> 403
+    - platform admin        -> an ``instance://self`` grant from the §8.2
+                               Instance Administrator preset, which contains
+                               every lab path by ordinary prefix containment
+                               (ADR 0015). No bypass branch.
+    - lab membership        -> lab-scoped grants from the member presets
+    - directorship          -> the Lab Lead preset's enumerated capabilities
+    - project→lab join      -> nothing. Project-only members hold no grants;
+                               reseed's pre-flight guard counts them so an
+                               operator sees the loss before it happens
+                               (``project_only_membership``).
+
+    ``policies=[]`` is passed deliberately, not as a placeholder: DB-backed
+    policy loading is not wired until M3, and the engine raises on ``None``
+    rather than silently treating "no policies" as "policies not loaded".
+    Every route reaching this guard is decided by structural grants alone;
+    the attribute-policy paths (PUBLIC samples, sovereignty DENY) belong to
+    the sample-visibility plane, which M2-B7 moves onto
+    ``visibility_sql_clause``.
     """
 
     def _guard(current_user: dict | None, lab_id: int | None = None) -> dict:
         if current_user is None:
             raise HTTPException(status_code=403, detail=f"capability '{capability}' required")
-        if current_user.get("is_platform_admin"):
-            return current_user
-        if lab_id is not None:
-            membership = get_user_lab_membership(current_user["id"], lab_id)
-            if capability in _MEMBER_LEVEL_CAPABILITIES:
-                if membership:
-                    return current_user
-                rows = execute_query(
-                    "SELECT 1 FROM project_membership pm "
-                    "JOIN projects p ON p.id = pm.project_id "
-                    "WHERE pm.user_id = :uid AND p.lab_id = :lid LIMIT 1",
-                    {"uid": current_user["id"], "lid": lab_id},
+
+        principal = load_principal(current_user["id"])
+
+        try:
+            scope = lab_resource_scope(lab_id) if lab_id is not None else scope_uri()
+        except ValueError:
+            # No such lab. Whether the caller may learn that depends on their
+            # reach: someone holding the capability instance-wide can already
+            # enumerate labs, so let them through and let the route answer 404.
+            # For everyone else the answer is the same 403 a real-but-denied
+            # lab produces — under org isolation, existence is itself the
+            # secret (§3.2: another org must not learn of a lab's data, users,
+            # "or existence"), so the two cases must be indistinguishable.
+            if (
+                permit(
+                    principal,
+                    capability,
+                    Resource(scope=scope_uri()),
+                    Context(conditions={}),
+                    policies=[],
                 )
-                if rows:
-                    return current_user
-            elif membership and membership.get("is_lab_director"):
+                is Decision.ALLOW
+            ):
                 return current_user
+            logger.info(
+                "authz: DENY user=%s capability=%s unknown lab_id=%s",
+                current_user.get("id"),
+                capability,
+                lab_id,
+            )
+            raise HTTPException(
+                status_code=403, detail=f"capability '{capability}' required"
+            ) from None
+        decision = permit(
+            principal,
+            capability,
+            Resource(scope=scope),
+            Context(conditions={}),
+            policies=[],
+        )
+        if decision is Decision.ALLOW:
+            return current_user
+
+        logger.info(
+            "authz: DENY user=%s capability=%s scope=%s",
+            current_user.get("id"),
+            capability,
+            scope,
+        )
         raise HTTPException(status_code=403, detail=f"capability '{capability}' required")
 
     return _guard

@@ -45,6 +45,21 @@ PRESET_GRANTS: dict[str, list[str]] = {
         "federation:approve_request",
         "anomaly:configure_detector",
         "sample:read_surveillance",
+        # POST /ingest/globus records a sequencing-facility deposit and
+        # notifies the assigned Lab Directors — it creates no samples. It was
+        # mapped to sample:create from its router rather than its behavior,
+        # and since it passes no lab_id it needed sample:create at INSTANCE
+        # scope, which no preset grants: the route was reachable by nobody.
+        # A narrow verb keeps the §8.2 governance/data-plane split intact
+        # instead of making the admin a data-plane superuser (M2-B1).
+        "deposit:record",
+        # M2-B1: both verbs are used by wired routes but appeared in no
+        # preset, so after reseed nobody could hold them and
+        # pipelines/{id}/promote and the custom-pipeline registration route
+        # were unreachable by every principal. Promotion is a
+        # deployment-lifecycle act, so it sits with the instance admin.
+        "pipeline:promote",
+        "pipeline:register_custom",
     ],
     "surveillance_officer": [
         "sample:read_surveillance",
@@ -64,6 +79,20 @@ PRESET_GRANTS: dict[str, list[str]] = {
         "access:revoke",
         "pipeline:run",
         "submission:approve",
+        # BYOP registration is lab-level work — the endpoint-capability map
+        # scopes every byop route at Lab — so a Lab Lead registers their own
+        # pipelines without an instance admin in the loop (M2-B1).
+        "pipeline:register_custom",
+        # PATCH /labs/{id} and POST /projects both require org:manage, so
+        # without this a Lab Lead could not rename their own lab or create a
+        # project in it — work the legacy director flag allowed and nobody
+        # intended to remove. Safe because grants are SCOPED: this one is
+        # issued at lab://<their lab>, so it authorizes org:manage only within
+        # that subtree, never on the org or on another lab (§5 containment).
+        # The verb reads oddly at lab scope; a narrower lab:manage /
+        # project:create pair is the tidier vocabulary and is M2-B5's call,
+        # not a reason to leave directors locked out now.
+        "org:manage",
     ],
     "lab_member_rw": [
         "sample:read",
