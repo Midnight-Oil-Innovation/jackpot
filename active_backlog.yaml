@@ -2156,7 +2156,7 @@ sessions:
       B2's read routes would deny PUBLIC samples to non-members: a silent
       access REMOVAL, closed rather than open, but a functional break.
     phase: access_model_redesign
-    status: open
+    status: shipped
     depends_on:
       - M2-B1
     blocked_by_external:
@@ -2175,7 +2175,9 @@ sessions:
     pr_title_template: "feat(authz): M2-B2-PRE-A — resource attributes and attribute-policies"
     branch_name_template: m2-b2-pre-a-resource-attributes
     role_framing:
-    notes: "The permit()/SQL equivalence must survive: a policy that reads attributes needs both a Python and a SQL form,
+    notes: "Shipped #158 (merge f1dcfe2). Predicates kept declarative (equality, in, PRINCIPAL_ID) so both the Python and SQL halves can evaluate them — a lambda would have been unimplementable in SQL. requires_capability added for the principal half of the surveillance rung. Ownership shipped as a POLICY, deviating from §5's mapping table which calls it a Sample-scope grant: as a grant it would need a row written per sample creation and deleted per transfer. Unmapped attribute RAISES — a dropped term widens an ALLOW and neuters a DENY."
+    merged_at: '2026-08-31'
+    merge_sha: f1dcfe2
       cross-checked on the same fixtures as M1."
 
   - id: M2-B2-PRE-B
@@ -2192,7 +2194,7 @@ sessions:
       (samples JOIN labs, mirroring lab_resource_scope) and let the guard take
       exactly one of lab_id / sample_id.
     phase: access_model_redesign
-    status: open
+    status: shipped
     depends_on:
       - M2-B1
     blocked_by_external:
@@ -2210,7 +2212,9 @@ sessions:
     pr_title_template: "feat(authz): M2-B2-PRE-B — sample-scoped guard resolution"
     branch_name_template: m2-b2-pre-b-sample-scope
     role_framing:
-    notes: "Unknown sample_id must answer exactly as a denied one does, for the reason M2-B1 established for labs."
+    notes: "Shipped #159 (merge 2a5ccf1). Guard takes sample_id; both identifiers raises rather than picking one. Lab and sample paths share one _allows() helper so the unknown-resource rule cannot drift between them."
+    merged_at: '2026-08-31'
+    merge_sha: 2a5ccf1
 
   - id: M2-B2-PRE-C
     title: Reseed approved access requests into sample-scoped grants
@@ -2225,7 +2229,7 @@ sessions:
       grant condition, and add the count to the pre-flight guard so an
       operator sees how many are in flight before the migration runs.
     phase: access_model_redesign
-    status: open
+    status: shipped
     depends_on:
       - M2-B1
     blocked_by_external:
@@ -2242,7 +2246,9 @@ sessions:
     pr_title_template: "feat(authz): M2-B2-PRE-C — reseed per-sample access grants"
     branch_name_template: m2-b2-pre-c-sample-grants
     role_framing:
-    notes: "Time-bounded grants need context.now at the guard, which no route passes yet — check that before assuming
+    notes: "Shipped #160 (merge 8470010). Reseeds per-sample access from BOTH legacy sources (grants table + APPROVED requests with no grant row). Expiry became an engine concept: grants gained not_after, Context gained now, and a time-bounded grant with NO clock denies. Stored as a column, not a conditions key, since conditions mean equality and expiry is a comparison. Exposed the real coupling hazard of a migration calling app code — not deleting reseed() but CHANGING ITS SHAPE, which broke b2f47c1a9e30 on a fresh DB; fixed with an idempotent ALTER there plus c93e1f5a7b02 for already-migrated databases."
+    merged_at: '2026-08-31'
+    merge_sha: 8470010
       expiry is enforced."
 
   - id: M2-B2
@@ -2258,7 +2264,7 @@ sessions:
       registered divergence class. Route-level tests are still required per
       route — the harness covers the decision, not the wiring.
     phase: access_model_redesign
-    status: blocked
+    status: open
     depends_on:
       - M2-B1
       - M2-B2-PRE-A
