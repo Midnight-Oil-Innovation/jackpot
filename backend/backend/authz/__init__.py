@@ -7,6 +7,7 @@ from .engine import (
     Resource,
     permit,
 )
+from .scope import ROOT, scope_uri
 from .visibility import visibility_sql_clause
 
 __all__ = [
@@ -18,4 +19,6 @@ __all__ = [
     "Context",
     "permit",
     "visibility_sql_clause",
+    "scope_uri",
+    "ROOT",
 ]
