@@ -16,7 +16,7 @@ from backend.authz.scope import scope_uri
 from backend.database import execute_query
 
 _GRANTS_SQL = (
-    "SELECT capability, scope_ref, conditions, source "
+    "SELECT capability, scope_ref, conditions, source, not_after "
     "FROM authz_capability_grants WHERE principal_id = :pid"
 )
 
@@ -51,6 +51,7 @@ def load_principal(
                 scope_ref=r["scope_ref"],
                 conditions=r["conditions"] or {},
                 source=r["source"] or "",
+                not_after=r["not_after"],
             )
             for r in rows
         ],

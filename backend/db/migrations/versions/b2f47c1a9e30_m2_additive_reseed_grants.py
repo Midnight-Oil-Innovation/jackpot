@@ -31,8 +31,10 @@ docs/m2_preflight_report.md §4.
 safe in one direction only: ``reseed()`` reads ``users.is_platform_admin``,
 ``users.is_data_analyst`` and the permission-group enum, which the cutover
 migration drops afterwards, so this migration can only ever run against a
-schema where they still exist. It is not safe to delete or repurpose
-``reseed()`` while this migration is in the chain — ``tests/conftest.py`` runs
+schema where they still exist. It is not safe to delete, repurpose, **or change the
+shape of** ``reseed()`` while this migration is in the chain — M2-B2-PRE-C
+proved the second case by adding a column to its INSERT, which broke this
+migration on a fresh database until the ALTER above was added — ``tests/conftest.py`` runs
 ``alembic upgrade head`` against an empty container every session, so doing so
 fails the whole suite rather than failing quietly (Critical Rule 44).
 
@@ -78,6 +80,23 @@ def upgrade() -> None:
             f"CREATE UNIQUE INDEX IF NOT EXISTS {_UNIQUE_INDEX} "
             "ON authz_capability_grants (principal_id, capability, scope_ref)"
         )
+    )
+
+    # reseed() writes not_after (M2-B2-PRE-C). This migration calls shared
+    # application code, so when that code gains a column the column must exist
+    # by the time this point in the chain is reached — on a fresh database
+    # nothing later has run yet. c93e1f5a7b02 adds the same column for
+    # databases already migrated past this revision; both are IF NOT EXISTS,
+    # so whichever runs first wins and the other is a no-op.
+    #
+    # Editing a merged migration is normally forbidden. It is done here because
+    # the alternative is worse — making reseed()'s INSERT column-adaptive to
+    # keep a historical caller working — and because this chain has never been
+    # applied outside CI and local dev (instances/ holds only ci). The general
+    # lesson is recorded in this file's header: a migration that calls
+    # application code is coupled to that code's future, not just its present.
+    conn.execute(
+        text("ALTER TABLE authz_capability_grants ADD COLUMN IF NOT EXISTS not_after TIMESTAMPTZ")
     )
 
     force = os.getenv(_OVERRIDE_ENV, "").strip() == "1"

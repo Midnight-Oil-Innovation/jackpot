@@ -339,3 +339,27 @@ def test_fixture_rows_match_scopes():
     # And the SQL expression must agree with the Python builder on every row —
     # the equivalence M1 exists to protect, at the serialization level.
     assert sql_all_scopes() == set(FIXTURE_SCOPES)
+
+
+# ── Grant expiry in the SQL half (M2-B2-PRE-C) ──────────────────────────
+
+
+def test_expired_grant_is_dropped_from_the_fragment():
+    """The compiler must agree with permit(): an expired grant contributes
+    nothing, so its rows are not listed."""
+    from datetime import UTC, datetime
+
+    past = datetime(2000, 1, 1, tzinfo=UTC)
+    now = datetime(2026, 8, 31, tzinfo=UTC)
+    p = _human([CapabilityGrant("sample:read_detail", ACME, not_after=past)])
+    assert sql_visible(p, "sample:read_detail", context=Context(now=now), policies=[]) == set()
+
+
+def test_unexpired_grant_still_lists_its_rows():
+    from datetime import UTC, datetime
+
+    future = datetime(2999, 1, 1, tzinfo=UTC)
+    now = datetime(2026, 8, 31, tzinfo=UTC)
+    p = _human([CapabilityGrant("sample:read_detail", ACME, not_after=future)])
+    visible = sql_visible(p, "sample:read_detail", context=Context(now=now), policies=[])
+    assert ACME_L1_SAMPLE in visible
