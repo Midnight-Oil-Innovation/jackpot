@@ -22,6 +22,11 @@ _GRANTS_SQL = (
 
 _LAB_ORG_SQL = "SELECT organization_id FROM labs WHERE id = :lid"
 
+_SAMPLE_LINEAGE_SQL = (
+    "SELECT l.organization_id, s.lab_id, s.project_id "
+    "FROM samples s JOIN labs l ON l.id = s.lab_id WHERE s.id = :sid"
+)
+
 
 def load_principal(
     user_id: int | str,
@@ -65,3 +70,27 @@ def lab_resource_scope(lab_id: int, *, conn: Any = None) -> str:
     if not rows:
         raise ValueError(f"unknown lab_id {lab_id!r} — cannot build a resource scope")
     return scope_uri(org=rows[0]["organization_id"], lab=lab_id)
+
+
+def sample_resource_scope(sample_id: int, *, conn: Any = None) -> str:
+    """Canonical scope URI for a sample, resolving its full lineage (§3.1.1).
+
+    A sample must be named at Sample scope, not approximated by its lab: a
+    grant issued AT sample scope — the per-sample access mechanism §3.1 lists
+    for that level, and what an approved access request becomes — does not
+    contain the lab, so checking a lab scope instead would make those grants
+    invisible while appearing to work for lab members.
+
+    Raises ``ValueError`` for an unknown sample; the guard turns that into the
+    same answer a denied sample gets.
+    """
+    rows = execute_query(_SAMPLE_LINEAGE_SQL, {"sid": sample_id}, conn=conn)
+    if not rows:
+        raise ValueError(f"unknown sample id {sample_id!r} — cannot build a resource scope")
+    row = rows[0]
+    return scope_uri(
+        org=row["organization_id"],
+        lab=row["lab_id"],
+        project=row["project_id"],
+        sample=sample_id,
+    )

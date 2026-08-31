@@ -45,16 +45,20 @@ def principal_with(*grants: tuple[str, str], uid=1) -> Principal:
     )
 
 
-def guard(capability, user, *, grants=(), lab_id=None, lab_org=1):
-    """Run the guard with a stubbed principal and lab lookup."""
+def guard(capability, user, *, grants=(), lab_id=None, sample_id=None, lab_org=1):
+    """Run the guard with a stubbed principal and resource lookups."""
     with (
         patch("backend.auth.guards.load_principal", return_value=principal_with(*grants)),
         patch(
             "backend.auth.guards.lab_resource_scope",
             side_effect=lambda lid: scope_uri(org=lab_org, lab=lid),
         ),
+        patch(
+            "backend.auth.guards.sample_resource_scope",
+            side_effect=lambda sid: scope_uri(org=lab_org, lab=5, project=2, sample=sid),
+        ),
     ):
-        return require_capability(capability)(user, lab_id=lab_id)
+        return require_capability(capability)(user, lab_id=lab_id, sample_id=sample_id)
 
 
 class TestDecisionMapping:
@@ -121,3 +125,64 @@ class TestScopeSelection:
                 grants=[("user:manage", scope_uri(org=1, lab=6))],
                 lab_id=5,
             )
+
+
+SAMPLE_SCOPE = scope_uri(org=1, lab=5, project=2, sample=42)
+
+
+class TestSampleScope:
+    """M2-B2-PRE-B — the guard can name a Sample-scoped resource."""
+
+    def test_sample_scoped_grant_authorizes_that_sample(self):
+        user = make_user()
+        assert (
+            guard(
+                "sample:read_detail",
+                user,
+                grants=[("sample:read_detail", SAMPLE_SCOPE)],
+                sample_id=42,
+            )
+            is user
+        )
+
+    def test_sample_scoped_grant_does_not_reach_another_sample(self):
+        with pytest.raises(HTTPException):
+            guard(
+                "sample:read_detail",
+                make_user(),
+                grants=[("sample:read_detail", SAMPLE_SCOPE)],
+                sample_id=43,
+            )
+
+    def test_lab_grant_covers_a_sample_in_that_lab(self):
+        """Containment downward: the ordinary lab-member case."""
+        user = make_user()
+        assert (
+            guard(
+                "sample:read_detail",
+                user,
+                grants=[("sample:read_detail", scope_uri(org=1, lab=5))],
+                sample_id=42,
+            )
+            is user
+        )
+
+    def test_sample_grant_is_invisible_when_checked_at_lab_scope(self):
+        """Why sample scope had to exist rather than being approximated.
+
+        A per-sample grant — what an approved access request becomes (§5) —
+        does not contain the lab. Checking the lab instead would deny the
+        holder while appearing to work for everyone with lab membership, so
+        the bug would look like "that one user's access is broken".
+        """
+        with pytest.raises(HTTPException):
+            guard(
+                "sample:read_detail",
+                make_user(),
+                grants=[("sample:read_detail", SAMPLE_SCOPE)],
+                lab_id=5,
+            )
+
+    def test_both_identifiers_is_a_programming_error(self):
+        with pytest.raises(ValueError, match="not both"):
+            guard("sample:read_detail", make_user(), lab_id=5, sample_id=42)

@@ -6,7 +6,11 @@ from fastapi import HTTPException, Request
 from jose import jwt
 
 from backend.authz.engine import Context, Decision, Resource, permit
-from backend.authz.principal import lab_resource_scope, load_principal
+from backend.authz.principal import (
+    lab_resource_scope,
+    load_principal,
+    sample_resource_scope,
+)
 from backend.authz.scope import scope_uri
 from backend.config import get_settings
 from backend.credentials import CredentialError, CredentialNotFoundError, credentials
@@ -83,6 +87,26 @@ def get_user_lab_membership(user_id: int, lab_id: int) -> dict | None:
     return rows[0] if rows else None
 
 
+def _allows(principal, capability: str, scope: str) -> bool:
+    """One place where a decision is made, so the guard cannot drift from it.
+
+    ``policies=[]`` for the structural routes this guard serves; the
+    attribute-policy set (PRE-A's LADDER_POLICIES) belongs to the sample
+    plane, which B2 wires per route along with the resource attributes those
+    policies read.
+    """
+    return (
+        permit(
+            principal,
+            capability,
+            Resource(scope=scope),
+            Context(conditions={}),
+            policies=[],
+        )
+        is Decision.ALLOW
+    )
+
+
 def require_capability(capability: str):
     """Guard factory: returns a callable raising HTTP 403 unless the current
     user holds ``capability`` at a scope covering the resource.
@@ -112,50 +136,50 @@ def require_capability(capability: str):
     ``visibility_sql_clause``.
     """
 
-    def _guard(current_user: dict | None, lab_id: int | None = None) -> dict:
+    def _guard(
+        current_user: dict | None,
+        lab_id: int | None = None,
+        sample_id: int | None = None,
+    ) -> dict:
         if current_user is None:
             raise HTTPException(status_code=403, detail=f"capability '{capability}' required")
+        if lab_id is not None and sample_id is not None:
+            # Ambiguous: the two would produce different scopes, and silently
+            # preferring one would make the route's check quietly weaker or
+            # stronger than it reads.
+            raise ValueError("pass lab_id or sample_id, not both")
 
         principal = load_principal(current_user["id"])
 
         try:
-            scope = lab_resource_scope(lab_id) if lab_id is not None else scope_uri()
+            if sample_id is not None:
+                scope = sample_resource_scope(sample_id)
+            elif lab_id is not None:
+                scope = lab_resource_scope(lab_id)
+            else:
+                scope = scope_uri()
         except ValueError:
-            # No such lab. Whether the caller may learn that depends on their
-            # reach: someone holding the capability instance-wide can already
-            # enumerate labs, so let them through and let the route answer 404.
-            # For everyone else the answer is the same 403 a real-but-denied
-            # lab produces — under org isolation, existence is itself the
-            # secret (§3.2: another org must not learn of a lab's data, users,
-            # "or existence"), so the two cases must be indistinguishable.
-            if (
-                permit(
-                    principal,
-                    capability,
-                    Resource(scope=scope_uri()),
-                    Context(conditions={}),
-                    policies=[],
-                )
-                is Decision.ALLOW
-            ):
+            # No such lab/sample. Whether the caller may learn that depends on
+            # their reach: someone holding the capability instance-wide can
+            # already enumerate, so let them through and let the route answer
+            # 404. For everyone else the answer is the same 403 a real-but-
+            # denied resource produces — under org isolation existence is
+            # itself the secret (§3.2: another org must not learn of a lab's
+            # data, users, "or existence").
+            if _allows(principal, capability, scope_uri()):
                 return current_user
             logger.info(
-                "authz: DENY user=%s capability=%s unknown lab_id=%s",
+                "authz: DENY user=%s capability=%s unknown lab_id=%s sample_id=%s",
                 current_user.get("id"),
                 capability,
                 lab_id,
+                sample_id,
             )
             raise HTTPException(
                 status_code=403, detail=f"capability '{capability}' required"
             ) from None
-        decision = permit(
-            principal,
-            capability,
-            Resource(scope=scope),
-            Context(conditions={}),
-            policies=[],
-        )
-        if decision is Decision.ALLOW:
+
+        if _allows(principal, capability, scope):
             return current_user
 
         logger.info(

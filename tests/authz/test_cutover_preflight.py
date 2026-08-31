@@ -45,14 +45,15 @@ from authz.preflight import (
     user_dict,
 )
 from backend.auth.guards import require_capability
-from backend.authz import Context, Decision, Resource, permit
+from backend.authz import Context, Decision, Resource, permit, sample_resource_scope
+from backend.authz.engine import _scope_contains
 from backend.authz.reseed import (
     PRESET_GRANTS,
     ReseedPreflightError,
     preflight_counts,
     reseed,
 )
-from backend.authz.scope import scope_sql
+from backend.authz.scope import scope_sql, scope_uri
 from backend.authz.visibility import visibility_sql_clause as new_visibility_sql_clause
 from backend.database import _get_engine, execute_query
 from backend.permissions import visibility_sql_clause as legacy_visibility_sql_clause
@@ -326,6 +327,37 @@ class TestRealGuardIsPermitBacked:
         require_capability("org:manage")(flagless)  # grants alone must carry it
 
 
+class TestSampleScopeResolution:
+    """M2-B2-PRE-B on PostgreSQL — the lineage query the unit tests stub out."""
+
+    def test_scope_matches_the_row_lineage(self, world):
+        sample_pk = world.sample_ids["A-PRIV"]
+        row = execute_query(
+            "SELECT s.lab_id, s.project_id, l.organization_id "
+            "FROM samples s JOIN labs l ON l.id = s.lab_id WHERE s.id = :sid",
+            {"sid": sample_pk},
+        )[0]
+        assert sample_resource_scope(sample_pk) == scope_uri(
+            org=row["organization_id"],
+            lab=row["lab_id"],
+            project=row["project_id"],
+            sample=sample_pk,
+        )
+
+    def test_lab_grant_contains_the_sample_scope(self, world):
+        """The lab-member path, end to end against real rows."""
+        sample_pk = world.sample_ids["A-PRIV"]
+        assert _scope_contains(
+            lab_scope(world.org_id, world.lab_a), sample_resource_scope(sample_pk)
+        )
+
+    def test_unknown_sample_raises_rather_than_inventing_a_scope(self):
+        """An invented scope would be contained by the instance grant and
+        quietly authorize an admin against a sample that does not exist."""
+        with pytest.raises(ValueError, match="unknown sample"):
+            sample_resource_scope(987654321)
+
+
 class TestGuardEquivalenceMatrix:
     def test_admin_reaches_lab_scope_structurally(self, world):
         """ADR 0015's payoff, measured on PostgreSQL.
@@ -458,7 +490,6 @@ class TestVisibilityEquivalence:
         """Extends the M1 SQLite zero-divergence proof to PG semantics
         (LIKE ... ESCAPE '\\'): a row is fragment-visible iff permit()
         allows sample:read on that row's scope."""
-        from backend.authz import Context, Decision, Resource, permit
 
         samples = execute_query(
             "SELECT sample_id, lab_id FROM samples WHERE sample_id LIKE :p",
