@@ -2104,7 +2104,7 @@ sessions:
       authz_capability_grants for the user, cached per request. Do NOT
       re-derive membership inline (Critical Rule 24).
     phase: access_model_redesign
-    status: open
+    status: shipped
     depends_on:
       - M2-PRE-4
     blocked_by_external:
@@ -2123,7 +2123,9 @@ sessions:
     pr_title_template: "feat(authz): M2-B1 — require_capability calls permit()"
     branch_name_template: m2-b1-guard-permit
     role_framing:
-    notes: "Flips 28 routes with no route edits. The preflight matrix stops being a simulation here — re-point it at the
+    notes: "Shipped #154 (merge cd94b28). Exposed three preset gaps that each made a route unreachable: pipeline:promote + pipeline:register_custom were in NO preset; lab_lead lacked org:manage so a director could not rename their own lab or create a project in it; and POST /ingest/globus was mapped to sample:create from its router rather than its behavior (it creates no samples) — new deposit:record verb. Unknown lab_id now answers as a denied lab does (403) since 404-vs-403 leaks lab existence, which org isolation treats as the secret (§3.2). preflight.py froze the old ladder as legacy_ladder() so the divergence registry keeps meaning something; TestRealGuardIsPermitBacked asserts guard == permit() per cell. Also fixed two pre-existing test-hygiene bugs the change surfaced: the preflight teardown deleted ALL grants, and fixtures must materialize grants after creating a user or membership."
+    merged_at: '2026-08-31'
+    merge_sha: cd94b28
       real guard. Legacy columns still exist, so this batch is revertible."
 
   - id: M2-B2
@@ -2139,7 +2141,7 @@ sessions:
       registered divergence class. Route-level tests are still required per
       route — the harness covers the decision, not the wiring.
     phase: access_model_redesign
-    status: blocked
+    status: open
     depends_on:
       - M2-B1
     blocked_by_external:
@@ -2171,7 +2173,7 @@ sessions:
       launch_account override is a P0c stub whose audit row exists precisely
       so this rewrite can decide whether to keep trusting the request body.
     phase: access_model_redesign
-    status: blocked
+    status: open
     depends_on:
       - M2-B1
     blocked_by_external:
@@ -2202,7 +2204,7 @@ sessions:
       question is identical, so it takes the same verb. The separation that
       matters is prepare vs approve, and that boundary already exists.
     phase: access_model_redesign
-    status: blocked
+    status: open
     depends_on:
       - M2-B1
     blocked_by_external:
@@ -2232,7 +2234,7 @@ sessions:
       The federation rows use peer-key auth, not a user JWT; leave that path
       alone and rewrite only the capability half.
     phase: access_model_redesign
-    status: blocked
+    status: open
     depends_on:
       - M2-B1
     blocked_by_external:
@@ -2249,7 +2251,10 @@ sessions:
     pr_title_template: "feat(authz): M2-B5 — governance route guards"
     branch_name_template: m2-b5-governance
     role_framing:
-    notes: "Split routes: gating the whole tokens route would break every user's access to their own tokens."
+    notes: "Split routes: gating the whole tokens route would break every user's access to their own tokens.
+      M2-B1 finding: POST /labs/{id}/members must ISSUE grants when it creates a membership. Today a new member
+      holds nothing until a reseed runs — membership is not access under the new model, and §4.5 already scopes
+      user:manage as 'create/modify/deactivate users, assign capabilities'."
 
   - id: M2-B6
     title: SERVICE-principal callbacks (2 routes)
@@ -2267,7 +2272,7 @@ sessions:
       pipeline:write_results and not sample:read_detail, and permit() is where
       that becomes enforceable.
     phase: access_model_redesign
-    status: blocked
+    status: open
     depends_on:
       - M2-B1
     blocked_by_external:
