@@ -1877,7 +1877,8 @@ sessions:
     depends_on: []
     blocked_by_external:
     parallel_safe: false
-    parallel_safe_reason: "Touches the auth guard surface; do not parallel-batch auth-adjacent work (coding_scripts_howto)."
+    parallel_safe_reason: "Touches the auth guard surface — the authorization decision path serializes (CLAUDE.md,
+      Authorization-path serialization)."
     effort_sessions: 1
     primary_files:
       - backend/backend/auth/guards.py
@@ -1911,7 +1912,8 @@ sessions:
       - M0
     blocked_by_external:
     parallel_safe: false
-    parallel_safe_reason: "Writes into M0's grants table; auth/migration-adjacent."
+    parallel_safe_reason: "Writes into M0's grants table — authorization decision path, serialized (CLAUDE.md,
+      Authorization-path serialization)."
     effort_sessions: 1
     primary_files:
       - backend/backend/authz/
@@ -2022,7 +2024,7 @@ sessions:
       - M2-PRE-1
     blocked_by_external:
     parallel_safe: false
-    parallel_safe_reason: "Rewrites reseed and the divergence registry; auth-adjacent, never parallel-batch."
+    parallel_safe_reason: "Rewrites reseed and the divergence registry; auth-adjacent, the authorization decision path serializes (CLAUDE.md)."
     effort_sessions: 1
     primary_files:
       - backend/backend/authz/reseed.py
@@ -2109,7 +2111,7 @@ sessions:
       - M2-PRE-4
     blocked_by_external:
     parallel_safe: false
-    parallel_safe_reason: "Rewrites the guard every other batch builds on; auth-adjacent, never parallel-batch."
+    parallel_safe_reason: "Rewrites the guard every other batch builds on; auth-adjacent, the authorization decision path serializes (CLAUDE.md)."
     effort_sessions: 2
     primary_files:
       - backend/backend/auth/guards.py
@@ -2146,7 +2148,7 @@ sessions:
       - M2-B1
     blocked_by_external:
     parallel_safe: false
-    parallel_safe_reason: "Auth-adjacent route rewrites; never parallel-batch."
+    parallel_safe_reason: "Auth-adjacent route rewrites; the authorization decision path serializes (CLAUDE.md)."
     effort_sessions: 2
     primary_files:
       - backend/backend/routers/
@@ -2178,7 +2180,7 @@ sessions:
       - M2-B1
     blocked_by_external:
     parallel_safe: false
-    parallel_safe_reason: "Auth-adjacent route rewrites; never parallel-batch."
+    parallel_safe_reason: "Auth-adjacent route rewrites; the authorization decision path serializes (CLAUDE.md)."
     effort_sessions: 1.5
     primary_files:
       - backend/backend/routers/pipelines.py
@@ -2209,7 +2211,7 @@ sessions:
       - M2-B1
     blocked_by_external:
     parallel_safe: false
-    parallel_safe_reason: "Auth-adjacent route rewrites; never parallel-batch."
+    parallel_safe_reason: "Auth-adjacent route rewrites; the authorization decision path serializes (CLAUDE.md)."
     effort_sessions: 1.5
     primary_files:
       - backend/backend/routers/submissions.py
@@ -2239,7 +2241,7 @@ sessions:
       - M2-B1
     blocked_by_external:
     parallel_safe: false
-    parallel_safe_reason: "Auth-adjacent route rewrites; never parallel-batch."
+    parallel_safe_reason: "Auth-adjacent route rewrites; the authorization decision path serializes (CLAUDE.md)."
     effort_sessions: 1
     primary_files:
       - backend/backend/routers/
@@ -2277,7 +2279,7 @@ sessions:
       - M2-B1
     blocked_by_external:
     parallel_safe: false
-    parallel_safe_reason: "New principal kind on the auth surface; never parallel-batch."
+    parallel_safe_reason: "New principal kind on the auth surface; the authorization decision path serializes (CLAUDE.md)."
     effort_sessions: 1
     primary_files:
       - backend/backend/routers/pipelines.py
@@ -2315,7 +2317,7 @@ sessions:
       - M2-B2
     blocked_by_external:
     parallel_safe: false
-    parallel_safe_reason: "The list path is where an over-grant is silent; never parallel-batch."
+    parallel_safe_reason: "The list path is where an over-grant is silent; the authorization decision path serializes (CLAUDE.md)."
     effort_sessions: 1
     primary_files:
       - backend/backend/routers/samples.py
@@ -2373,7 +2375,7 @@ sessions:
     blocked_by_external:
     parallel_safe: false
     parallel_safe_reason: "Irreversible cutover touching auth, migrations, route guards, and the list path. Manual flow only;
-      never parallel-batch."
+      the authorization decision path serializes (CLAUDE.md)."
     effort_sessions: 1
     primary_files:
       - backend/backend/permissions.py

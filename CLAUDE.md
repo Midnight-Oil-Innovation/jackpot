@@ -1497,6 +1497,44 @@ other branch or open PR adds one. Never create a migration that shares a
 `down_revision` with an existing migration. Run `uv run python scripts/check_migration_heads.py`
 before committing any migration.
 
+## Authorization-path serialization (hard rule)
+
+Work on the **authorization decision path** runs one session at a time. Never
+parallel-batch it, never run two such branches concurrently.
+
+The path is:
+
+- `backend/backend/auth/guards.py` — `require_capability`, `get_current_user`,
+  the federation peer authenticator
+- `backend/backend/authz/**` — the `permit()` engine, `visibility_sql_clause`,
+  scope construction, principal loading, the reseed
+- `backend/backend/permissions.py` — the legacy ladder, until M2 deletes it
+- migrations that create or populate `authz_capability_grants` /
+  `authz_policies`
+- any route change that adds, removes, or moves a permission check
+- `tests/authz/**`, especially `preflight.py` and its divergence registry
+
+**Why, and it is not merge friction.** Authorization failures fail *open*. A
+bad merge in most code throws, 500s, or fails a test; a bad merge here returns
+200 to a request that should have been refused, and nothing in the response,
+the logs, or the audit trail says so. The cost of catching it late is not a
+rollback — it is not knowing who saw what in the meantime. Serial review is
+cheap against that.
+
+Secondary: every batch touches `tests/authz/preflight.py`, which encodes what
+"correct" means. Two branches editing it produce a conflict resolved by
+whoever merges second, in the file that would otherwise have caught the error.
+
+**In practice:** `parallel_safe: false` on the backlog entry, one open PR at a
+time across these files, and a full `uv run pytest tests/authz/` before each
+merge — not just the tests the change touched.
+
+**Provenance:** the phrase "auth-adjacent, do not parallel-batch" appeared in
+backlog `parallel_safe_reason` fields from May 2026, citing
+`scripts_jackpot/coding_scripts_howto.md`. That document describes the batch
+tooling and contains no such rule — the citation never resolved. This section
+is the rule the entries were reaching for, written down (2026-08-31).
+
 ## Dependency policy (hard rule)
 
 Every new dependency passes two gates before it lands:
