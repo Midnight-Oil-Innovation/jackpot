@@ -59,11 +59,11 @@ Lift this section into the M2 cutover PR body.
 
 ### `admin-bypass-vs-scoped-grants`
 
-Legacy platform-admin bypass (guards.py:108) allows every capability everywhere; reseeded instance_administrator grants are scoped to instance://self, and _scope_contains is pure URI-prefix, so instance://self does NOT contain lab://N. Every lab-scoped admin cell, and every instance cell for a capability outside the §8.2 admin preset, denies under the new model. RESOLVED by ADR 0015 (docs/adr/0015-single-rooted-scope-uri.md): every scope becomes a path under instance://self, so the admin grant prefixes lab scopes structurally. This class disappears once M2 lands the canonical serialization; until then the divergence stands and is asserted.
+Legacy platform-admin bypass (guards.py:108) allows every capability everywhere; reseeded instance_administrator grants are scoped to instance://self, and _scope_contains is pure URI-prefix, so instance://self does NOT contain lab://N. Every lab-scoped admin cell, and every instance cell for a capability outside the §8.2 admin preset, denies under the new model. HALF RESOLVED by ADR 0015, landed in M2-PRE-1/3: every scope is now a path under instance://self, so the admin grant prefixes lab scopes structurally and every lab-scoped cell for an in-preset capability now ALLOWS — no bypass branch, no wildcard policy (test_admin_reaches_lab_scope_structurally pins it on PG). What still fires is the other half, and it is intentional: the §8.2 instance_administrator preset enumerates 13 capabilities rather than granting everything, so cells for capabilities outside it (sample:create, pipeline:run, deletion:approve...) deny where the legacy bypass allowed. Same family as director-passes-all-lab-caps: a deliberate narrowing to document per-route in the cutover PR, not a scope defect. test_admin_divergence_is_now_only_the_preset_narrowing asserts nothing in the preset appears here.
 
 ### `surveillance-cap-new-only`
 
-Data analysts gain an explicit instance-scoped sample:read_surveillance grant from the surveillance_officer preset; the legacy guard has no analyst branch at all (analyst rights lived only in the visibility ladder). New model intentionally allows.
+Data analysts gain an explicit instance-scoped sample:read_surveillance grant from the surveillance_officer preset; the legacy guard has no analyst branch at all (analyst rights lived only in the visibility ladder). New model intentionally allows. The class covers lab-scoped cells as well as instance-scoped ones since M2-PRE-1: the predicate was previously restricted to lab_key is None only because instance://self did not contain lab://N, so the grant stopped at the instance row. Under the canonical path scheme an instance-scoped grant reaches every lab, which is what 'instance-wide surveillance oversight' was always supposed to mean (§8.2).
 
 ### `director-passes-all-lab-caps`
 
@@ -98,6 +98,15 @@ Memberships with a permission-group name absent from MEMBERSHIP_PRESETS ('Data A
 - **`require_capability` call sites that never pass `lab_id`** are
   admin-only in practice regardless of the declared Scope column;
   the cutover rewrite must take the map's Scope as authoritative.
+- **The scope-containment blocker is closed** (ADR 0015, landed in
+  M2-PRE-1 and M2-PRE-3): `instance://self` now prefixes every lab
+  path, so instance-scoped admin grants reach lab-scoped resources
+  by plain containment. Measured on PostgreSQL by
+  `test_admin_reaches_lab_scope_structurally`. The residual
+  `admin-bypass-vs-scoped-grants` divergence is now only the §8.2
+  preset narrowing — capabilities outside the 13-verb
+  instance_administrator preset — which is intentional and shares a
+  family with `director-passes-all-lab-caps`.
 - **Data-quality divergences are guarded at migration time, not
   reconciled ahead of M2**: `flag-group-mismatch`,
   `unmapped-group-skipped`, and `project-membership-no-grants` all

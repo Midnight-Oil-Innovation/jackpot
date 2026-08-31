@@ -7,7 +7,7 @@ parameterized WHERE fragment (``:name`` bind convention, ready for
 ``permit()`` would ALLOW. It executes nothing itself.
 
 The fragment mirrors permit()'s decision shape over the row's scope
-column (``<alias>.scope``):
+expression (``scope.scope_sql(...)``):
 
     NOT (any DENY policy covers the row)          -- strict deny-wins
     AND (any grant or ALLOW policy covers the row) -- either path suffices
@@ -23,6 +23,7 @@ import re
 
 from backend.authz.engine import Context, Principal
 from backend.authz.policy import _DB_NOT_WIRED
+from backend.authz.scope import is_canonical_scope_sql
 
 _CAPABILITY_RE = re.compile(r"^[a-z_]+:[a-z_]+$")
 
@@ -43,7 +44,7 @@ def _scope_term(column: str, scope_ref: str, param: str, params: dict) -> str:
 def visibility_sql_clause(
     principal: Principal,
     capability: str,
-    alias: str,
+    scope_expr: str,
     *,
     context: Context | None = None,
     policies: list[dict] | None = None,
@@ -54,20 +55,29 @@ def visibility_sql_clause(
     satisfies the fragment iff ``permit(principal, capability,
     Resource(scope=row.scope), context, policies=policies)`` is ALLOW.
 
+    ``scope_expr`` is the SQL computing each row's scope URI — build it with
+    ``scope.scope_sql(samples=..., labs=...)``. A sample's scope is derived
+    from the lineage columns the query already joins rather than stored
+    (ADR 0015), so there is no scope column to name.
+
     Raises ``ValueError`` on a malformed capability string (must be
-    ``domain:action`` per §4) or a non-identifier alias. Raises
-    ``NotImplementedError`` when ``policies`` is None — DB-backed policy
-    loading is not wired in M1; inject the policy list, as permit() does.
+    ``domain:action`` per §4) or a scope expression this module did not
+    generate. Raises ``NotImplementedError`` when ``policies`` is None —
+    DB-backed policy loading is not wired in M1; inject the policy list, as
+    permit() does.
     """
     if not _CAPABILITY_RE.match(capability):
         raise ValueError(f"malformed capability string: {capability!r} (expected domain:action)")
-    if not alias.isidentifier():
-        raise ValueError(f"alias must be a SQL identifier, got {alias!r}")
+    if not is_canonical_scope_sql(scope_expr):
+        # The expression is interpolated into the fragment, so it is only ever
+        # accepted when byte-identical to scope_sql() output — see
+        # scope.is_canonical_scope_sql for why the caller is not trusted.
+        raise ValueError(f"scope_expr must be scope.scope_sql(...) output, got {scope_expr!r}")
     if policies is None:
         raise NotImplementedError(_DB_NOT_WIRED)
     context = context or Context()
 
-    column = f"{alias}.scope"
+    column = scope_expr
     params: dict = {}
 
     def _live(conditions: dict) -> bool:

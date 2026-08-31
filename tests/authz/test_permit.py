@@ -8,6 +8,15 @@ and deny-wins.
 
 import pytest
 
+from authz.scopes import (
+    ACME,
+    ACME_L1_SAMPLE,
+    ACME_LAB1,
+    INSTANCE,
+    RIVAL_SAMPLE,
+    WWDB,
+    WWDB_SAMPLE,
+)
 from backend.authz import (
     CapabilityGrant,
     Context,
@@ -17,22 +26,6 @@ from backend.authz import (
     Resource,
     permit,
 )
-from backend.authz.scope import scope_uri
-
-# ── Canonical scope fixtures (§3.1.1, ADR 0015) ─────────────────────────
-# One rooted path per deployment. Ids are database ids, so the §9 examples'
-# names become numbers: acme=1, rival=2, wwdb=9, and org 11 is the
-# segment-boundary trap against org 1.
-
-INSTANCE = scope_uri()
-ACME = scope_uri(org=1)
-ACME_LAB1 = scope_uri(org=1, lab=1)
-ACME_L1_SAMPLE = scope_uri(org=1, lab=1, project=2, sample=3)
-ACME_L2_SAMPLE = scope_uri(org=1, lab=2, project=9, sample=7)
-RIVAL_SAMPLE = scope_uri(org=2, lab=1, project=2, sample=3)
-TRAP_SAMPLE = scope_uri(org=11, lab=1, project=2, sample=3)
-WWDB = scope_uri(org=9)
-WWDB_SAMPLE = scope_uri(org=9, lab=1, project=1, sample=1)
 
 
 def _human(grants: list[CapabilityGrant] | None = None) -> Principal:

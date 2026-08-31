@@ -13,6 +13,20 @@ import sqlite3
 
 import pytest
 
+from authz.scopes import (
+    ACME,
+    ACME_L1_SAMPLE,
+    ACME_L2_SAMPLE,
+    ACME_LAB1,
+    FIXTURE_ROWS,
+    FIXTURE_SCOPES,
+    INSTANCE,
+    RIVAL_SAMPLE,
+    SCOPE_EXPR,
+    TRAP_SAMPLE,
+    WWDB,
+    WWDB_SAMPLE,
+)
 from backend.authz import (
     CapabilityGrant,
     Context,
@@ -23,32 +37,7 @@ from backend.authz import (
     permit,
     visibility_sql_clause,
 )
-from backend.authz.scope import scope_uri
-
-# ── Canonical scope fixtures (§3.1.1, ADR 0015) ─────────────────────────
-# One rooted path per deployment; ids are database ids. acme=1, rival=2,
-# wwdb=9, org 11 is the segment-boundary trap against org 1. The old
-# "wrong instance" row is gone: under one root a resource cannot name
-# another deployment, so the case it tested cannot arise (see
-# test_permit.py::test_91_instance_grant_reaches_every_level).
-
-INSTANCE = scope_uri()
-ACME = scope_uri(org=1)
-ACME_LAB1 = scope_uri(org=1, lab=1)
-ACME_L1_SAMPLE = scope_uri(org=1, lab=1, project=2, sample=3)
-ACME_L2_SAMPLE = scope_uri(org=1, lab=2, project=9, sample=7)
-RIVAL_SAMPLE = scope_uri(org=2, lab=1, project=2, sample=3)
-TRAP_SAMPLE = scope_uri(org=11, lab=1, project=2, sample=3)
-WWDB = scope_uri(org=9)
-WWDB_SAMPLE = scope_uri(org=9, lab=1, project=1, sample=1)
-
-FIXTURE_SCOPES = [
-    ACME_L1_SAMPLE,  # §9.2 own org
-    ACME_L2_SAMPLE,  # §9.2 own org, other lab
-    RIVAL_SAMPLE,  # §9.2 cross-org
-    TRAP_SAMPLE,  # segment-boundary trap (org 11 vs org 1)
-    WWDB_SAMPLE,  # §9.4
-]
+from backend.authz.scope import scope_sql, scope_uri
 
 
 def _human(grants: list[CapabilityGrant] | None = None) -> Principal:
@@ -61,18 +50,51 @@ def sql_visible(
     *,
     context: Context | None = None,
     policies: list[dict],
-    scopes: list[str] = FIXTURE_SCOPES,
+    rows: list[tuple[int, int, int, int]] = FIXTURE_ROWS,
 ) -> set[str]:
-    """Execute the compiled fragment against SQLite; return visible scopes."""
+    """Execute the compiled fragment against SQLite; return visible scopes.
+
+    The harness builds the real shape — ``samples JOIN labs`` with lineage
+    columns — rather than a synthetic scope column, so the fragment under test
+    is the one production will run (ADR 0015).
+    """
     frag, params = visibility_sql_clause(
-        principal, capability, "s", context=context, policies=policies
+        principal, capability, SCOPE_EXPR, context=context, policies=policies
     )
     conn = sqlite3.connect(":memory:")
-    conn.execute("CREATE TABLE samples (scope TEXT NOT NULL)")
-    conn.executemany("INSERT INTO samples (scope) VALUES (?)", [(s,) for s in scopes])
-    rows = conn.execute(f"SELECT s.scope FROM samples s WHERE {frag}", params).fetchall()
+    conn.execute("CREATE TABLE labs (id INTEGER PRIMARY KEY, organization_id INTEGER NOT NULL)")
+    conn.execute(
+        "CREATE TABLE samples (id INTEGER PRIMARY KEY, lab_id INTEGER NOT NULL, "
+        "project_id INTEGER NOT NULL)"
+    )
+    # labs.id and samples.id are globally unique SERIAL keys, so each lab
+    # belongs to exactly one org and no sample id repeats — INSERT OR IGNORE
+    # covers labs shared by several samples, and a PK collision here means the
+    # fixture rows describe a database state that cannot exist.
+    for org_id, lab_id, project_id, sample_id in rows:
+        conn.execute(
+            "INSERT OR IGNORE INTO labs (id, organization_id) VALUES (?, ?)", (lab_id, org_id)
+        )
+        conn.execute(
+            "INSERT INTO samples (id, lab_id, project_id) VALUES (?, ?, ?)",
+            (sample_id, lab_id, project_id),
+        )
+    got = conn.execute(
+        f"SELECT {SCOPE_EXPR} FROM samples s JOIN labs l ON l.id = s.lab_id WHERE {frag}",
+        params,
+    ).fetchall()
     conn.close()
-    return {r[0] for r in rows}
+    return {r[0] for r in got}
+
+
+def sql_all_scopes(rows: list[tuple[int, int, int, int]] = FIXTURE_ROWS) -> set[str]:
+    """Every scope the SQL expression derives from the fixture rows."""
+    return sql_visible(
+        _human([CapabilityGrant("sample:read_detail", INSTANCE)]),
+        "sample:read_detail",
+        policies=[],
+        rows=rows,
+    )
 
 
 def assert_equivalent(
@@ -81,11 +103,12 @@ def assert_equivalent(
     *,
     context: Context | None = None,
     policies: list[dict],
-    scopes: list[str] = FIXTURE_SCOPES,
+    rows: list[tuple[int, int, int, int]] = FIXTURE_ROWS,
 ) -> set[str]:
     """Assert permit() == (row in sql_results) for every fixture row."""
-    visible = sql_visible(principal, capability, context=context, policies=policies, scopes=scopes)
+    visible = sql_visible(principal, capability, context=context, policies=policies, rows=rows)
     ctx = context or Context()
+    scopes = [scope_uri(org=o, lab=lb, project=pr, sample=sm) for o, lb, pr, sm in rows]
     for scope in scopes:
         decision = permit(principal, capability, Resource(scope=scope), ctx, policies=policies)
         assert (decision == Decision.ALLOW) == (scope in visible), (
@@ -276,14 +299,43 @@ def test_cross_check_all_pairs_zero_divergence():
 )
 def test_malformed_capability_raises(bad):
     with pytest.raises(ValueError, match="malformed capability"):
-        visibility_sql_clause(_human([]), bad, "s", policies=[])
+        visibility_sql_clause(_human([]), bad, SCOPE_EXPR, policies=[])
 
 
-def test_bad_alias_raises():
-    with pytest.raises(ValueError, match="alias"):
-        visibility_sql_clause(_human([]), "sample:read_detail", "s; DROP TABLE", policies=[])
+@pytest.mark.parametrize(
+    "bad_expr",
+    [
+        "s.scope",  # the old alias form — no longer accepted
+        "s; DROP TABLE samples",  # statement injection
+        SCOPE_EXPR + " OR 1=1",  # appended clause on a genuine expression
+        SCOPE_EXPR.replace("s.id", "s.id) OR (1=1"),  # spliced inside it
+        "",
+    ],
+)
+def test_non_canonical_scope_expr_raises(bad_expr):
+    # The expression is interpolated, not bound, so anything that is not
+    # byte-identical to scope_sql() output must be refused.
+    with pytest.raises(ValueError, match="scope_expr"):
+        visibility_sql_clause(_human([]), "sample:read_detail", bad_expr, policies=[])
+
+
+def test_scope_expr_from_scope_sql_is_accepted():
+    frag, _ = visibility_sql_clause(
+        _human([]), "sample:read_detail", scope_sql(samples="smp", labs="lb"), policies=[]
+    )
+    assert isinstance(frag, str)
 
 
 def test_policies_none_raises_not_implemented():
     with pytest.raises(NotImplementedError):
-        visibility_sql_clause(_human([]), "sample:read_detail", "s", policies=None)
+        visibility_sql_clause(_human([]), "sample:read_detail", SCOPE_EXPR, policies=None)
+
+
+def test_fixture_rows_match_scopes():
+    """The lineage rows and the scope strings must describe the same world."""
+    derived = [scope_uri(org=o, lab=lb, project=pr, sample=sm) for o, lb, pr, sm in FIXTURE_ROWS]
+    assert derived == FIXTURE_SCOPES
+
+    # And the SQL expression must agree with the Python builder on every row —
+    # the equivalence M1 exists to protect, at the serialization level.
+    assert sql_all_scopes() == set(FIXTURE_SCOPES)

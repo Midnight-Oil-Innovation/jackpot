@@ -43,6 +43,7 @@ from authz.preflight import (
     user_dict,
 )
 from backend.authz.reseed import PRESET_GRANTS, reseed
+from backend.authz.scope import scope_sql
 from backend.authz.visibility import visibility_sql_clause as new_visibility_sql_clause
 from backend.database import _get_engine, execute_query
 from backend.permissions import visibility_sql_clause as legacy_visibility_sql_clause
@@ -115,9 +116,9 @@ class TestReseedOnPostgres:
             for r in rows:
                 if r["scope_ref"] == "instance://self":
                     kind = "instance"
-                elif r["scope_ref"] == lab_scope(world.lab_a):
+                elif r["scope_ref"] == lab_scope(world.org_id, world.lab_a):
                     kind = "lab_a"
-                elif r["scope_ref"] == lab_scope(world.lab_b):
+                elif r["scope_ref"] == lab_scope(world.org_id, world.lab_b):
                     kind = "lab_b"
                 else:
                     pytest.fail(f"{pkey}: unexpected scope_ref {r['scope_ref']!r}")
@@ -186,6 +187,51 @@ class TestReseedOnPostgres:
 
 
 class TestGuardEquivalenceMatrix:
+    def test_admin_reaches_lab_scope_structurally(self, world):
+        """ADR 0015's payoff, measured on PostgreSQL.
+
+        Before the canonical path scheme, ``instance://self`` did not contain
+        ``lab://N``, so every lab-scoped admin cell denied under the new model
+        while the legacy platform-admin bypass allowed it — the
+        ``admin-bypass-vs-scoped-grants`` divergence that blocked the cutover.
+        The admin's reseeded grants are unchanged; only their scope shape is.
+        In-preset capabilities must now reach lab scope by plain containment,
+        with no admin bypass and no wildcard policy.
+        """
+        cells, _, _ = run_matrix(world)
+        admin_preset = set(PRESET_GRANTS["instance_administrator"])
+        lab_cells = [
+            c
+            for c in cells
+            if c.persona == "P1" and c.lab_key is not None and c.capability in admin_preset
+        ]
+        assert lab_cells, "matrix no longer covers admin × lab scope"
+        denied = [c for c in lab_cells if not c.new]
+        assert not denied, (
+            "instance-scoped admin grants must contain lab scopes: "
+            f"{[(c.capability, c.scope) for c in denied]}"
+        )
+
+    def test_admin_divergence_is_now_only_the_preset_narrowing(self, world):
+        """What survives of admin-bypass-vs-scoped-grants after ADR 0015.
+
+        The class had two halves: lab-scoped cells denying because the scopes
+        shared no root, and instance-scoped cells denying because the §8.2
+        preset enumerates capabilities rather than granting everything. The
+        first half is gone by construction; the second is the intended
+        narrowing and still fires. Pinned so a regression in either direction
+        is visible.
+        """
+        cells, _, _ = run_matrix(world)
+        admin_preset = set(PRESET_GRANTS["instance_administrator"])
+        diverging = [c for c in cells if c.persona in {"P1", "P3"} and c.legacy and not c.new]
+        assert diverging, "expected the preset-narrowing half to still fire"
+        for c in diverging:
+            assert c.capability not in admin_preset, (
+                f"{c.capability} is in the admin preset but still denies at "
+                f"{c.scope} — containment regression"
+            )
+
     def test_matrix_zero_unexpected_and_all_registry_keys_fire(self, world):
         cells, unexpected, fired = run_matrix(world)
         assert len(cells) == 12 * 13 * 3
@@ -223,12 +269,20 @@ def _legacy_visible(persona) -> set[str]:
     return {r["sample_id"] for r in rows}
 
 
+_SCOPE_EXPR = scope_sql(samples="s", labs="l")
+
+
 def _new_visible(persona) -> set[str]:
+    """Rows the new model lists, via the production shape.
+
+    No synthesized scope column: the scope is derived from the
+    ``samples JOIN labs`` the real list query performs (ADR 0015), which is
+    also what puts ``organization_id`` in reach for the org segment.
+    """
     principal = load_principal(persona.user_id)
-    fragment, params = new_visibility_sql_clause(principal, "sample:read", "s", policies=[])
+    fragment, params = new_visibility_sql_clause(principal, "sample:read", _SCOPE_EXPR, policies=[])
     rows = execute_query(
-        "SELECT s.sample_id FROM "
-        "(SELECT samples.*, 'lab://' || samples.lab_id AS scope FROM samples) s "
+        "SELECT s.sample_id FROM samples s JOIN labs l ON l.id = s.lab_id "
         f"WHERE {fragment} AND s.sample_id LIKE :prefix",  # noqa: S608
         {**params, "prefix": f"{SAMPLE_PREFIX}%"},
     )
@@ -278,7 +332,7 @@ class TestVisibilityEquivalence:
                     permit(
                         principal,
                         "sample:read",
-                        Resource(scope=lab_scope(row["lab_id"])),
+                        Resource(scope=lab_scope(world.org_id, row["lab_id"])),
                         Context(conditions={}),
                         policies=[],
                     )

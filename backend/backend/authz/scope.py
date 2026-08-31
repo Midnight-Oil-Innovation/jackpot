@@ -20,6 +20,8 @@ prefix relation meaningful — the four hand-written shapes that preceded this
 ``instance://self``, ``lab://7``) could not contain one another at all.
 """
 
+import re
+
 ROOT = "instance://self"
 
 # Ordered outermost-first; a level may only be given when every level above it
@@ -63,3 +65,52 @@ def scope_uri(
             raise ValueError(f"{level} id must be a positive database id, got {value}")
         parts.append(f"{level}/{value}")
     return "/".join(parts)
+
+
+# ── SQL form (M2-PRE-2) ──────────────────────────────────────────────────
+#
+# A sample's scope is DERIVED, not stored (ADR 0015): it is computed from the
+# lineage columns the list query already joins, so ``samples`` needs no scope
+# column, no backfill, and no trigger that could drift. ``||`` is the string
+# concatenation operator in both PostgreSQL and SQLite, so the same expression
+# serves production and the in-process test harness.
+
+_ALIAS_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
+
+
+def scope_sql(*, samples: str, labs: str) -> str:
+    """SQL expression computing a sample row's canonical scope URI.
+
+    ``samples`` and ``labs`` are the query's table aliases; the caller is
+    responsible for the ``samples JOIN labs ON labs.id = samples.lab_id`` that
+    puts ``organization_id`` in reach.
+    """
+    for name, alias in (("samples", samples), ("labs", labs)):
+        if not _ALIAS_RE.match(alias):
+            raise ValueError(f"{name} alias must be a SQL identifier, got {alias!r}")
+    return (
+        f"('{ROOT}/org/' || {labs}.organization_id"
+        f" || '/lab/' || {samples}.lab_id"
+        f" || '/project/' || {samples}.project_id"
+        f" || '/sample/' || {samples}.id)"
+    )
+
+
+def is_canonical_scope_sql(expr: str) -> bool:
+    """True when ``expr`` is exactly what :func:`scope_sql` produces.
+
+    ``visibility_sql_clause`` interpolates the expression into a WHERE
+    fragment, so it is SQL the caller supplies rather than user input — but
+    "not user input today" is how injection sinks are born. Rather than trust
+    the caller, the expression is re-derived from the aliases it names and
+    compared: anything that is not byte-identical to a generated expression is
+    rejected, which admits no room for an appended clause.
+    """
+    m = re.match(
+        r"^\('[^']*/org/' \|\| ([A-Za-z_][A-Za-z0-9_]*)\.organization_id"
+        r" \|\| '/lab/' \|\| ([A-Za-z_][A-Za-z0-9_]*)\.lab_id",
+        expr,
+    )
+    if not m:
+        return False
+    return expr == scope_sql(labs=m.group(1), samples=m.group(2))
