@@ -21,7 +21,7 @@ so ``PRESET_GRANTS["lab_member_rw"]`` deliberately excludes it —
 
 import logging
 
-from sqlalchemy import text
+from sqlalchemy import bindparam, text
 from sqlalchemy.engine import Connection
 
 from backend.authz.scope import scope_uri
@@ -103,6 +103,76 @@ _INSERT_GRANT = text(
 )
 
 
+# ── Pre-flight data-quality guard (M2-PRE-4) ─────────────────────────────
+
+
+class ReseedPreflightError(RuntimeError):
+    """Raised when the source data would change users' effective access.
+
+    Carries ``counts`` so the migration can print them; the message is what an
+    operator sees when ``alembic upgrade head`` stops.
+    """
+
+    def __init__(self, counts: dict[str, int]):
+        self.counts = counts
+        super().__init__(
+            "reseed pre-flight found rows whose access changes at cutover: "
+            + ", ".join(f"{k}={v}" for k, v in sorted(counts.items()) if v)
+            + ". Reconcile them, or re-run with force=True to accept the "
+            "change deliberately. See docs/m2_preflight_report.md §4."
+        )
+
+
+# Each query counts rows whose effective access CHANGES at cutover. They are
+# separate rather than one UNION so the operator sees which kind, and so a
+# zero for one does not hide a non-zero for another.
+_PREFLIGHT_COUNTS: dict[str, str] = {
+    # Legacy trusts lab_membership.is_lab_director for every non-member-level
+    # capability; reseed trusts the permission group. Where they disagree the
+    # user silently drops from lab_lead to whatever the group says.
+    "director_flag_group_mismatch": (
+        "SELECT COUNT(*) FROM lab_membership lm "
+        "JOIN permission_groups pg ON pg.id = lm.permission_group_id "
+        "WHERE lm.is_lab_director = TRUE AND pg.name <> 'Lab Director'"
+    ),
+    # A group absent from MEMBERSHIP_PRESETS is skipped with a warning, so the
+    # user ends the cutover holding no grants at all.
+    "unmapped_permission_group": (
+        "SELECT COUNT(*) FROM lab_membership lm "
+        "JOIN permission_groups pg ON pg.id = lm.permission_group_id "
+        "WHERE pg.name NOT IN :preset_names"
+    ),
+    # Legacy member-level checks accept project membership via the
+    # project->lab join (guards.py); reseed reads lab_membership only, so a
+    # project-only member loses guarded read access.
+    "project_only_membership": (
+        "SELECT COUNT(DISTINCT pm.user_id) FROM project_membership pm "
+        "JOIN projects p ON p.id = pm.project_id "
+        "WHERE NOT EXISTS ("
+        "  SELECT 1 FROM lab_membership lm "
+        "  WHERE lm.user_id = pm.user_id AND lm.lab_id = p.lab_id"
+        ")"
+    ),
+}
+
+
+def preflight_counts(conn: Connection) -> dict[str, int]:
+    """Count rows whose effective access would change at cutover.
+
+    Read-only. Runs before any INSERT so the numbers describe the source data,
+    not the result of a partial reseed.
+    """
+    counts: dict[str, int] = {}
+    for name, sql in _PREFLIGHT_COUNTS.items():
+        stmt = text(sql)
+        params: dict[str, object] = {}
+        if ":preset_names" in sql:
+            stmt = stmt.bindparams(bindparam("preset_names", expanding=True))
+            params["preset_names"] = list(MEMBERSHIP_PRESETS)
+        counts[name] = conn.execute(stmt, params).scalar_one()
+    return counts
+
+
 def _lab_scope(org_id: int, lab_id: int) -> str:
     """Canonical lab path (§3.1.1, ADR 0015).
 
@@ -127,12 +197,28 @@ def _grant_rows(principal_id: str, capabilities: list[str], scope_ref: str) -> l
     ]
 
 
-def reseed(conn: Connection) -> None:
+def reseed(conn: Connection, *, force: bool = False) -> None:
     """Translate every stored APGAP role into preset grants (§8.5 mapping).
 
     Runs inside the caller's transaction (the migration provides it).
     Re-entrant: duplicate grants are skipped via ON CONFLICT DO NOTHING.
+
+    Refuses to run when :func:`preflight_counts` finds rows whose effective
+    access changes at cutover, unless ``force=True``. The check ships here
+    rather than being performed once by a maintainer beforehand because no
+    deployment we can inspect holds real membership rows — a pre-cutover sweep
+    would pass vacuously — and because it must run for operators we never meet
+    (Critical Rule 55).
     """
+    counts = preflight_counts(conn)
+    if any(counts.values()):
+        if not force:
+            raise ReseedPreflightError(counts)
+        logger.warning(
+            "reseed: proceeding with force=True over pre-flight findings: %s",
+            {k: v for k, v in counts.items() if v},
+        )
+
     rows: list[dict] = []
 
     admins = conn.execute(text("SELECT id FROM users WHERE is_platform_admin = TRUE")).fetchall()

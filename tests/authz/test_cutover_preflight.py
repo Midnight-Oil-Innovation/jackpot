@@ -42,11 +42,24 @@ from authz.preflight import (
     teardown_world,
     user_dict,
 )
-from backend.authz.reseed import PRESET_GRANTS, reseed
+from backend.authz.reseed import (
+    PRESET_GRANTS,
+    ReseedPreflightError,
+    preflight_counts,
+    reseed,
+)
 from backend.authz.scope import scope_sql
 from backend.authz.visibility import visibility_sql_clause as new_visibility_sql_clause
 from backend.database import _get_engine, execute_query
 from backend.permissions import visibility_sql_clause as legacy_visibility_sql_clause
+
+# The seeded world deliberately contains every condition the M2-PRE-4
+# pre-flight guard aborts on — P9 (unmapped group), P11 (director flag vs
+# Collaborator group), P12 (project-only membership) exist to MEASURE those
+# divergences, so the harness opts past the guard rather than being blocked by
+# the thing it is here to observe. TestReseedPreflightGuard covers the refusal
+# path on the same world.
+_FORCE_REASON = True
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
@@ -70,7 +83,7 @@ def world(test_db_url):
         conn.execute(text(UNIQUE_INDEX_DDL))
     w = seed_world()
     with engine.begin() as conn:
-        reseed(conn)
+        reseed(conn, force=_FORCE_REASON)
     yield w
     teardown_world(w)
     mp.undo()
@@ -140,7 +153,7 @@ class TestReseedOnPostgres:
         engine, _ = _get_engine()
         before = execute_query("SELECT COUNT(*) AS c FROM authz_capability_grants", {})[0]["c"]
         with engine.begin() as conn:
-            reseed(conn)
+            reseed(conn, force=_FORCE_REASON)
         after = execute_query("SELECT COUNT(*) AS c FROM authz_capability_grants", {})[0]["c"]
         assert after == before, "second reseed inserted rows — ON CONFLICT arbiter missing"
 
@@ -158,7 +171,7 @@ class TestReseedOnPostgres:
                 before = conn.execute(
                     text("SELECT COUNT(*) FROM authz_capability_grants")
                 ).scalar_one()
-                reseed(conn)
+                reseed(conn, force=_FORCE_REASON)
                 after = conn.execute(
                     text("SELECT COUNT(*) FROM authz_capability_grants")
                 ).scalar_one()
@@ -176,7 +189,7 @@ class TestReseedOnPostgres:
             caplog.at_level(logging.WARNING, logger="backend.authz.reseed"),
             engine.begin() as conn,
         ):
-            reseed(conn)
+            reseed(conn, force=_FORCE_REASON)
         assert any("unmapped" in rec.message for rec in caplog.records)
         assert _grants(world, "P9") == []
 
@@ -184,6 +197,45 @@ class TestReseedOnPostgres:
 # ──────────────────────────────────────────────────────────────────────────
 # 2b — guard equivalence matrix
 # ──────────────────────────────────────────────────────────────────────────
+
+
+class TestReseedPreflightGuard:
+    """M2-PRE-4 on PostgreSQL, against the world that really has the rows.
+
+    The SQLite suite covers each condition in isolation; this asserts the
+    guard fires on the seeded world — the closest thing available to a real
+    operator database, since no deployment holds membership rows yet
+    (instances/ contains only ci, and the baseline migration seeds one admin
+    plus one Lab Director).
+    """
+
+    def test_guard_refuses_the_seeded_world(self, world):
+        engine, _ = _get_engine()
+        with engine.begin() as conn:
+            trans = conn.begin_nested()
+            try:
+                with pytest.raises(ReseedPreflightError) as exc:
+                    reseed(conn)
+            finally:
+                trans.rollback()
+
+        # P11 director-flag mismatch, P9 unmapped group, P12 project-only.
+        assert exc.value.counts["director_flag_group_mismatch"] >= 1
+        assert exc.value.counts["unmapped_permission_group"] >= 1
+        assert exc.value.counts["project_only_membership"] >= 1
+
+    def test_guard_counts_match_the_divergence_classes(self, world):
+        """The guard must find exactly the personas the matrix diverges on.
+
+        If a persona diverges but the guard cannot see it, the migration would
+        run silently on data the report says is broken.
+        """
+        engine, _ = _get_engine()
+        with engine.begin() as conn:
+            counts = preflight_counts(conn)
+        assert counts["director_flag_group_mismatch"] == 1  # P11
+        assert counts["unmapped_permission_group"] == 1  # P9
+        assert counts["project_only_membership"] == 1  # P12
 
 
 class TestGuardEquivalenceMatrix:

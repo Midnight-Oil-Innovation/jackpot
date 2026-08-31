@@ -14,6 +14,8 @@ from backend.authz.reseed import (
     GRANT_SOURCE,
     INSTANCE_SCOPE,
     PRESET_GRANTS,
+    ReseedPreflightError,
+    preflight_counts,
     reseed,
 )
 from backend.authz.scope import scope_uri
@@ -48,6 +50,21 @@ _DDL = [
         id INTEGER PRIMARY KEY,
         user_id INTEGER NOT NULL,
         lab_id INTEGER NOT NULL,
+        permission_group_id INTEGER NOT NULL,
+        is_lab_director BOOLEAN NOT NULL DEFAULT FALSE
+    )
+    """,
+    """
+    CREATE TABLE projects (
+        id INTEGER PRIMARY KEY,
+        lab_id INTEGER NOT NULL
+    )
+    """,
+    """
+    CREATE TABLE project_membership (
+        id INTEGER PRIMARY KEY,
+        user_id INTEGER NOT NULL,
+        project_id INTEGER NOT NULL,
         permission_group_id INTEGER NOT NULL
     )
     """,
@@ -106,14 +123,31 @@ def _add_lab(conn, lab_id, org_id=ORG_ID):
     )
 
 
-def _add_membership(conn, user_id, lab_id, group_name):
+def _add_project_membership(conn, *, user_id, project_id, lab_id):
+    _add_lab(conn, lab_id)
+    conn.execute(
+        text("INSERT OR IGNORE INTO projects (id, lab_id) VALUES (:p, :l)"),
+        {"p": project_id, "l": lab_id},
+    )
+    conn.execute(
+        text(
+            "INSERT INTO project_membership (user_id, project_id, permission_group_id) "
+            "SELECT :u, :p, id FROM permission_groups WHERE name = 'Lab Reader'"
+        ),
+        {"u": user_id, "p": project_id},
+    )
+
+
+def _add_membership(conn, user_id, lab_id, group_name, director=False):
     _add_lab(conn, lab_id)
     conn.execute(
         text(
-            "INSERT INTO lab_membership (user_id, lab_id, permission_group_id) "
-            "SELECT :user_id, :lab_id, id FROM permission_groups WHERE name = :name"
+            "INSERT INTO lab_membership "
+            "(user_id, lab_id, permission_group_id, is_lab_director) "
+            "SELECT :user_id, :lab_id, id, :director FROM permission_groups "
+            "WHERE name = :name"
         ),
-        {"user_id": user_id, "lab_id": lab_id, "name": group_name},
+        {"user_id": user_id, "lab_id": lab_id, "name": group_name, "director": director},
     )
 
 
@@ -226,7 +260,81 @@ def test_reseed_is_idempotent(conn):
 def test_unknown_membership_role_skips_and_warns(conn, caplog):
     _add_user(conn, 10)
     _add_membership(conn, 10, 2, "Data Analyst")  # boolean-carried role, not a lab preset
+    # force=True: the pre-flight guard refuses this row (that is
+    # TestPreflightGuard's subject); this test is about what the reseed body
+    # does once an operator has accepted the loss.
     with caplog.at_level("WARNING", logger="backend.authz.reseed"):
-        reseed(conn)
+        reseed(conn, force=True)
     assert "unmapped" in caplog.text
     assert _grants(conn, "10") == []
+
+
+class TestPreflightGuard:
+    """M2-PRE-4 — refuse to reseed data whose effective access would change."""
+
+    def test_clean_data_passes(self, conn):
+        _add_user(conn, 1)
+        _add_membership(conn, 1, 7, "Lab Director", director=True)
+        assert not any(preflight_counts(conn).values())
+        reseed(conn)  # no force needed
+        assert _grants(conn, "1")
+
+    def test_director_flag_group_mismatch_aborts(self, conn):
+        _add_user(conn, 2)
+        # Legacy trusts the flag (all capabilities); reseed trusts the group
+        # (member-RW only), so this user silently loses director access.
+        _add_membership(conn, 2, 7, "Lab Collaborator", director=True)
+        with pytest.raises(ReseedPreflightError) as exc:
+            reseed(conn)
+        assert exc.value.counts["director_flag_group_mismatch"] == 1
+        assert _grants(conn, "2") == [], "must abort before inserting anything"
+
+    def test_unmapped_group_aborts(self, conn):
+        _add_user(conn, 3)
+        _add_membership(conn, 3, 7, "Data Analyst")
+        with pytest.raises(ReseedPreflightError) as exc:
+            reseed(conn)
+        assert exc.value.counts["unmapped_permission_group"] == 1
+
+    def test_project_only_membership_aborts(self, conn):
+        _add_user(conn, 4)
+        _add_project_membership(conn, user_id=4, project_id=1, lab_id=7)
+        with pytest.raises(ReseedPreflightError) as exc:
+            reseed(conn)
+        assert exc.value.counts["project_only_membership"] == 1
+
+    def test_project_member_who_also_has_lab_membership_is_not_counted(self, conn):
+        # Only members who would LOSE access count: a project member who also
+        # holds lab_membership is reseeded normally.
+        _add_user(conn, 5)
+        _add_membership(conn, 5, 7, "Lab Reader")
+        _add_project_membership(conn, user_id=5, project_id=1, lab_id=7)
+        assert preflight_counts(conn)["project_only_membership"] == 0
+        reseed(conn)
+
+    def test_force_proceeds_and_warns(self, conn, caplog):
+        _add_user(conn, 6)
+        _add_membership(conn, 6, 7, "Lab Collaborator", director=True)
+        with caplog.at_level("WARNING", logger="backend.authz.reseed"):
+            reseed(conn, force=True)
+        assert "force=True" in caplog.text
+        assert _grants(conn, "6"), "force must still perform the reseed"
+
+    def test_counts_are_reported_together(self, conn):
+        """All three surface at once — fixing one must not hide the others."""
+        _add_user(conn, 7)
+        _add_membership(conn, 7, 7, "Lab Collaborator", director=True)
+        _add_user(conn, 8)
+        _add_membership(conn, 8, 7, "Data Analyst")
+        _add_user(conn, 9)
+        _add_project_membership(conn, user_id=9, project_id=2, lab_id=8)
+        with pytest.raises(ReseedPreflightError) as exc:
+            reseed(conn)
+        assert exc.value.counts == {
+            "director_flag_group_mismatch": 1,
+            "unmapped_permission_group": 1,
+            "project_only_membership": 1,
+        }
+        # The operator sees which kinds, not just that something failed.
+        for kind in exc.value.counts:
+            assert kind in str(exc.value)

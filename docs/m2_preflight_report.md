@@ -107,13 +107,16 @@ Memberships with a permission-group name absent from MEMBERSHIP_PRESETS ('Data A
   preset narrowing — capabilities outside the 13-verb
   instance_administrator preset — which is intentional and shares a
   family with `director-passes-all-lab-caps`.
-- **Data-quality divergences are guarded at migration time, not
-  reconciled ahead of M2**: `flag-group-mismatch`,
-  `unmapped-group-skipped`, and `project-membership-no-grants` all
-  depend on membership rows no deployment holds yet (`instances/`
-  contains only `ci`; the baseline migration seeds one admin and one
-  Lab Director). A pre-M2 sweep would pass vacuously. M2 must give
-  `reseed()` a pre-flight guard that counts all three conditions
-  before inserting, aborts with the counts, and takes an explicit
-  operator override to proceed — so the check runs on whichever DB
-  actually has the rows, including operators we never meet.
+- **Data-quality divergences are guarded at migration time** (M2-PRE-4,
+  shipped): `flag-group-mismatch`, `unmapped-group-skipped`, and
+  `project-membership-no-grants` all depend on membership rows no
+  deployment holds yet (`instances/` contains only `ci`; the baseline
+  migration seeds one admin and one Lab Director), so a pre-M2 sweep
+  would pass vacuously. Instead `reseed()` calls
+  `preflight_counts()` before inserting anything and raises
+  `ReseedPreflightError` with the per-kind counts unless the operator
+  passes `force=True` — the check travels with the code and runs on
+  whichever database it is applied to, including operators we never
+  meet (Critical Rule 55). M2 wires the migration to surface the
+  counts and to read the override from the operator, not from a
+  hardcoded flag.
