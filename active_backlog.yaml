@@ -2057,7 +2057,7 @@ sessions:
       Lab Director, so a sweep passes vacuously. The check ships with the
       code and runs wherever it is applied (Rule 55).
     phase: access_model_redesign
-    status: open
+    status: shipped
     depends_on:
       - M2-PRE-3
     blocked_by_external:
@@ -2074,7 +2074,9 @@ sessions:
     pr_title_template: "feat(authz): M2-PRE-4 — reseed pre-flight data-quality guard"
     branch_name_template: m2-pre-4-preflight-guard
     role_framing:
-    notes: "Depends on M2-PRE-3 so the guard is written against the final scope shape, not rewritten after it."
+    notes: "Shipped #150 (merge 664e0db). preflight_counts() + ReseedPreflightError, force=True to override. Two deliberate force call sites: the preflight harness (P9/P11/P12 exist to MEASURE these divergences, so it must not be blocked by them) and the skip-and-warn body test. PG test asserts the guard finds exactly the personas the divergence matrix diverges on — a persona the guard cannot see would mean the migration runs silently on data the report calls broken. M2 still wires the migration to surface the counts and read the override from the operator rather than a hardcoded flag."
+    merged_at: '2026-08-31'
+    merge_sha: 664e0db
 
   - id: M2
     title: Reseed + cutover (IRREVERSIBLE — manual flow only)
