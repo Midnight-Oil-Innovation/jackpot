@@ -2889,8 +2889,8 @@ sessions:
       still stubbed — it is the decision function that stub will call. Resource predicates gained {'not': v} (and _attr_sql
       gained IS DISTINCT FROM, not <>, so a NULL column cannot silently drop a DENY term). AM-OPEN-2 still unpinned; it belongs
       with push IO."
-    merged_at:
-    merge_sha:
+    merged_at: '2026-09-01'
+    merge_sha: '2223890'
   - id: M3-SCENARIO-T
     title: Scenario-T Tribal Authority Designee preset (blocked on AM-OPEN-1)
     short_description: |
