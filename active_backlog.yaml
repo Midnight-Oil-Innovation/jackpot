@@ -2752,6 +2752,12 @@ sessions:
       backlog briefly said the irreversible column drop was ready to start while 31 legacy-column readers were
       still live. Reopened by hand. The helper keys on branch name, so a multi-slice entry must not reuse its own
       id as a branch name; name future slices m2-drop-pre-slice2 or similar.
+      Concern 2 step 1 SHIPPED (branch fix/instance-grant-sync): sync_instance_grants() is the Instance-scope twin
+      of M2-B5's sync_membership_grants(), wired into PATCH /users/{id} and both halves of POST /auth/dev-login.
+      Writing users.is_platform_admin had changed nobody's authorization since M2-B1 while arming the next reseed
+      to make it real later. M2-B5 had also missed the identical lab_membership INSERT in auth.py, so dev-login
+      lab roles granted nothing either; fixed in the same pass. Step 2 (the flags become a preset name) belongs to
+      M2-DROP itself, and is mechanical now that grant issuance is the thing that happens.
       Slice 2's review turned up an M3 defect on a route it did not touch: request-deletion's comment claimed
       ownership survived as a LADDER_POLICIES owner_id rung and no such rung existed, so an owner holding no grant
       over the sample could not request deletion of their own row. Fixed separately (branch

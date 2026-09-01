@@ -441,19 +441,23 @@ def reseed(conn: Connection, *, force: bool = False) -> None:
 
     rows: list[dict] = []
 
-    admins = conn.execute(text("SELECT id FROM users WHERE is_platform_admin = TRUE")).fetchall()
-    for (user_id,) in admins:
-        rows.extend(
-            _grant_rows(str(user_id), PRESET_GRANTS["instance_administrator"], INSTANCE_SCOPE)
+    # One query and one precedence rule, shared with sync_instance_grants: the
+    # cutover and the live path must not be able to disagree about what a
+    # user carrying both flags holds (see instance_preset).
+    flagged = conn.execute(
+        text(
+            "SELECT id, is_platform_admin, is_data_analyst FROM users "
+            "WHERE is_platform_admin = TRUE OR is_data_analyst = TRUE"
         )
-
-    analysts = conn.execute(
-        text("SELECT id FROM users WHERE is_data_analyst = TRUE AND is_platform_admin = FALSE")
     ).fetchall()
-    for (user_id,) in analysts:
-        rows.extend(
-            _grant_rows(str(user_id), PRESET_GRANTS["surveillance_officer"], INSTANCE_SCOPE)
-        )
+    admins: list[int] = []
+    analysts: list[int] = []
+    for user_id, is_admin, is_analyst in flagged:
+        preset = instance_preset(is_platform_admin=bool(is_admin), is_data_analyst=bool(is_analyst))
+        if preset is None:
+            continue
+        (admins if preset == "instance_administrator" else analysts).append(user_id)
+        rows.extend(_grant_rows(str(user_id), list(PRESET_GRANTS[preset]), INSTANCE_SCOPE))
 
     memberships = conn.execute(
         text(
@@ -523,6 +527,69 @@ _DELETE_MEMBERSHIP_GRANTS = text(
        AND source = :source
     """
 )
+
+
+_DELETE_INSTANCE_GRANTS = text(
+    """
+    DELETE FROM authz_capability_grants
+     WHERE principal_id = :principal_id
+       AND scope_ref = :scope_ref
+       AND source = :source
+    """
+)
+
+
+def instance_preset(*, is_platform_admin: bool, is_data_analyst: bool) -> str | None:
+    """Which Instance-scope preset a user's stored flags map to, or None.
+
+    The precedence is not cosmetic: :func:`reseed` reads analysts as
+    ``is_data_analyst AND NOT is_platform_admin``, so a user carrying both
+    flags gets the admin preset and only that. This function exists so the
+    cutover path and the live path cannot answer that differently — a
+    principal's grants must not depend on whether a PATCH or a reseed wrote
+    them last.
+    """
+    if is_platform_admin:
+        return "instance_administrator"
+    if is_data_analyst:
+        return "surveillance_officer"
+    return None
+
+
+def sync_instance_grants(
+    conn: Connection, *, user_id: int, is_platform_admin: bool, is_data_analyst: bool
+) -> int:
+    """Make one user's Instance-scope grants match their stored role flags.
+
+    The twin of :func:`sync_membership_grants`, for the roles that are not
+    lab-scoped. Without it, writing ``users.is_platform_admin`` changes no
+    one's authorization — nothing has decided on that column since M2-B1 — but
+    the next ``reseed()`` translates it, so the write lands as a delayed effect
+    with no signal at the time it is made. That is worse than either a working
+    write or a rejected one.
+
+    Delete-then-insert and ``source = 'reseed'``-scoped for the same reasons
+    given on the membership twin: the point is that the row and the grants
+    agree afterwards, and a per-sample ``source = 'direct'`` grant on the same
+    principal must survive untouched.
+
+    Returns the number of grants issued.
+    """
+    conn.execute(
+        _DELETE_INSTANCE_GRANTS,
+        {
+            "principal_id": str(user_id),
+            "scope_ref": INSTANCE_SCOPE,
+            "source": GRANT_SOURCE,
+        },
+    )
+    preset = instance_preset(is_platform_admin=is_platform_admin, is_data_analyst=is_data_analyst)
+    if preset is None:
+        return 0
+    rows = _grant_rows(str(user_id), list(PRESET_GRANTS[preset]), INSTANCE_SCOPE)
+    for row in rows:
+        conn.execute(_INSERT_GRANT, row)
+    return len(rows)
 
 
 def _membership_capabilities(group_name: str) -> list[str] | None:

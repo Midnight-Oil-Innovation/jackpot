@@ -3541,3 +3541,42 @@ ownership roster and `tests/authz/test_ownership_rung.py` enforcing it.
 - **Verify a new guard by breaking it.** Flipping the roster's
   `deletion:request` row to `no` must fail two of the four tests. A guard that
   has never been seen to fail is not known to be a guard.
+
+## Instance-scope grant sync — role assignment that assigns something — 2026-09-01
+
+**What was built:** `sync_instance_grants()`, the Instance-scope twin of M2-B5's
+`sync_membership_grants()`, wired into the three sites that assign a role and
+issued no grants: `PATCH /users/{id}`, and both halves of `POST /auth/dev-login`.
+
+**Key decisions:**
+
+- **The precedence rule moved into `instance_preset()` and is shared with
+  `reseed()`.** `reseed()` read analysts as `is_data_analyst AND NOT
+  is_platform_admin`; a live path restating that in a second place would let a
+  principal's grants depend on whether a PATCH or a reseed wrote them last.
+  One function, two callers, and `reseed()` refactored to a single query so it
+  cannot drift.
+- **Assertions go through routes, not the grants table.** "Promote a user, then
+  have that user do the thing the role names" is what the change is for; the
+  grants table is how. The two came apart in the first place because nothing
+  was standing at the route end.
+- **`sample:update`-style narrowings need a probe that discriminates.** The
+  dev-login lab test first probed `GET /labs/{id}/members`, which needs
+  `user:manage`; it failed for a Lab Director holding correct grants. Switched
+  to `PATCH /labs/{id}` (`org:manage`), held by `lab_lead` and no other lab
+  preset, so a 200 means *these* grants landed rather than any grants at all.
+
+**Watch out for:**
+
+- **A write to a decommissioned decision input is worse than a no-op.** Nothing
+  has read `users.is_platform_admin` for a decision since M2-B1, so PATCHing it
+  returned 200, changed the field, changed nobody's access — and armed the next
+  `reseed()` to make it real later, with no signal at the time of the write.
+  When a column stops being authoritative, every writer of it becomes a bug.
+- **M2-B5 fixed `labs.py` and missed the identical code in `auth.py`.** Same
+  membership INSERT, same missing sync, one file over. When wiring a
+  cross-cutting call, grep for the *write*, not for the route.
+- **`GET /labs/{id}/members` and the three sibling member routes require
+  `user:manage` at Lab scope, which no lab preset holds.** So a Lab Lead cannot
+  list or manage their own lab's membership — only an instance admin can. Found
+  by accident here; not fixed, and not obviously intentional.
