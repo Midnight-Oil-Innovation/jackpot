@@ -45,6 +45,15 @@ def _attr_matches(predicate: dict[str, Any], resource: "Resource", principal: "P
         elif isinstance(expected, dict) and "in" in expected:
             if actual not in expected["in"]:
                 return False
+        elif isinstance(expected, dict) and "not" in expected:
+            # Absent counts as "not equal", deliberately. Used by
+            # sovereignty.no_federate_deleting, where the attribute missing
+            # means the caller did not establish the sample is ACTIVE — and
+            # the safe answer for an export is no. Note this is the opposite
+            # of what the same form would mean on a permissive rule, which is
+            # why the DENY invariant in DELETION_POLICIES exists.
+            if actual == expected["not"]:
+                return False
         elif actual != expected:
             return False
     return True
@@ -271,6 +280,35 @@ DELETION_POLICIES: list[dict[str, Any]] = [
     },
 ]
 
-# What guards.py evaluates. Kept as one name so a policy added to either
-# family reaches the decision path without a second edit somewhere else.
-ACTIVE_POLICIES: list[dict[str, Any]] = LADDER_POLICIES + DELETION_POLICIES
+# ── Sovereignty (§6.2-3, M3-FEDERATION-DELETION-GUARD) ───────────────────
+
+SOVEREIGNTY_POLICIES: list[dict[str, Any]] = [
+    {
+        # A sample in the deletion lifecycle must never leave via federation,
+        # regardless of any sharing agreement. This is §5.4's
+        # unconditionally-unoverridable property made concrete: an agreement
+        # produces a structural ALLOW for the peer principal, and deny-wins
+        # beats it here and nowhere else.
+        #
+        # Deferred out of M3 because federation:push had no call site —
+        # it existed only as an example string in an engine.py comment.
+        # M4-B's FederationPushJob.may_push_sample is that call site.
+        #
+        # Not gated on sovereignty_mode. A non-ACTIVE sample should never
+        # federate out whether or not sovereignty policy is on: tombstone
+        # propagation (B-CARE-4) is a push of the deletion EVENT, and closing
+        # the data path is what forces those to stay separate channels.
+        "id": "sovereignty.no_federate_deleting",
+        "effect": "DENY",
+        "capability": "federation:push",
+        "scope_ref": _ROOT,
+        # Absent reads as "not ACTIVE" and therefore DENIES. That is the safe
+        # direction for an export: a caller that did not establish the
+        # sample's deletion state does not get to push it.
+        "resource": {"deletion_status": {"not": "ACTIVE"}},
+    },
+]
+
+# What guards.py evaluates. Kept as one name so a policy added to any family
+# reaches the decision path without a second edit somewhere else.
+ACTIVE_POLICIES: list[dict[str, Any]] = LADDER_POLICIES + DELETION_POLICIES + SOVEREIGNTY_POLICIES

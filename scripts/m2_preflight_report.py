@@ -43,6 +43,16 @@ class MapRow:
             # (self path ungated, cross-principal path guarded) and belongs in
             # ROUTE_LOCAL — it still needs a guard written.
             return "auth_only_by_design"
+        if "PEER-AUTHENTICATED" in self.notes and self.capability == "—":
+            # M4-B. Neither a gap nor auth-only-by-design. The caller is a
+            # federated peer, not a user, so no user capability applies — but
+            # authorization very much happens: the peer principal's
+            # agreement-sourced grants decide what the reply contains, through
+            # the same visibility compiler local lists use. Calling this
+            # "authentication is the whole decision" would understate a
+            # data-egress route, and calling it a catalog gap would say a verb
+            # is missing when none should exist.
+            return "peer_authenticated"
         if self.capability == "—":
             return "catalog_gap"
         if "require_capability" in self.notes:
@@ -109,6 +119,7 @@ def generate_report(rows: list[MapRow]) -> str:
     verify = [r for r in rows if r.verify_intent]
     auth_only = [r for r in rows if r.klass == "auth_only"]
     by_design = [r for r in rows if r.klass == "auth_only_by_design"]
+    peer_auth = [r for r in rows if r.klass == "peer_authenticated"]
     public = [r for r in rows if r.klass == "public" and not r.verify_intent]
     wired = [r for r in rows if r.klass == "require_capability"]
 
@@ -124,6 +135,8 @@ def generate_report(rows: list[MapRow]) -> str:
         f"`require_capability`, {len(auth_only)} carrying a target capability "
         f"but not yet guarded (ROUTE_LOCAL), {len(by_design)} AUTH-ONLY BY "
         f"DESIGN (permanently ungated — authentication is the whole decision), "
+        f"{len(peer_auth)} PEER-AUTHENTICATED (federated callers; the peer's "
+        f"agreement grants decide, not a user capability), "
         f"{len(gaps)} catalog gaps, {len(public) + len(verify)} PUBLIC "
         f"({len(verify)} pending intent verification)."
     )

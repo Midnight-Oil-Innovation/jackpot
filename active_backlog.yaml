@@ -2862,7 +2862,7 @@ sessions:
       Pin AM-OPEN-2 (org floor vs peer floor vs stricter-of-two) when L2 push
       IO is wired, per §7.6-1 — not required for the decision wiring itself.
     phase: access_model_redesign
-    status: open
+    status: shipped
     depends_on:
       - M4
     blocked_by_external:
@@ -2881,9 +2881,19 @@ sessions:
     pr_title_function:
     branch_name_template: m4b-federation-visibility
     role_framing:
-    notes: "Carved out of M4 so the schema could land reversibly first. §7.4's three integration points; (c) the
-      cryptWWDB access_policy adapter is a separate concern and not in scope here."
-
+    notes: "Shipped both halves. The L1 inbound path was not merely unwired \u2014 it did not exist: client._query_one
+      called GET /api/v1/samples/ on the partner, which authenticates a JWT cookie and nothing else, so a real
+      federated query would have 401'd. No test caught it because every federation-key test hit /api/v1/federation/*
+      and the client tests mocked the partner. Added POST /api/v1/federation/query beside the two routes that already
+      authenticate peers, rather than a second auth mode on the most-read endpoint in the system; \u00a77.4's actual
+      requirement \u2014 that federated visibility be the same DECISION as local visibility \u2014 is preserved, since the
+      filtering is sample_list_clause. Repointed client._query_one and 27 respx mocks that had encoded the old target.
+      L2: may_push_sample() composes permit() for federation:push with the three gates; is_qualifying_sample keeps its
+      own function and meaning. Not yet reached by push_to_hub, whose IO is still stubbed \u2014 it is the decision
+      function that stub will call. Resource predicates gained {'not': v} (and _attr_sql gained IS DISTINCT FROM, not
+      <>, so a NULL column cannot silently drop a DENY term). AM-OPEN-2 still unpinned; it belongs with push IO."
+    merged_at:
+    merge_sha:
   - id: M3-SCENARIO-T
     title: Scenario-T Tribal Authority Designee preset (blocked on AM-OPEN-1)
     short_description: |
@@ -2939,7 +2949,7 @@ sessions:
       attributes SAMPLE_ATTRIBUTE_COLUMNS loads, and may only key on a
       capability whose routes resolve a Sample resource.
     phase: access_model_redesign
-    status: blocked
+    status: shipped
     depends_on:
       - M3
       - M4-B
@@ -2957,10 +2967,15 @@ sessions:
     pr_title_function:
     branch_name_template: sovereignty-no-federate-deleting
     role_framing:
-    notes: "Found during M3: the policy §6.2-3 describes has no call site until M4. tests/authz/
-      test_sovereignty_policies.py::test_no_policy_keys_on_the_deferred_capabilities guards against it being added
-      early, since a DENY on a Lab-scoped capability reads an absent deletion_status and denies everything."
-
+    notes: "Shipped on M4-B's call site. sovereignty.no_federate_deleting DENYs federation:push where
+      deletion_status is not ACTIVE, beating a valid sharing agreement by deny-precedence \u2014 \u00a75.4's
+      unconditionally-unoverridable property made concrete. Absent deletion_status reads as not-ACTIVE and therefore
+      DENIES: fail-closed is the safe direction for an export, and is exactly why the same {'not': v} form would be
+      catastrophic on a Lab-scoped capability like submission:approve (there absence would deny every approval).
+      Tested through may_push_sample, not permit() alone \u2014 asserting against the engine would prove nothing about
+      whether any code path consults the policy, which is why M3 deferred it in the first place."
+    merged_at:
+    merge_sha:
   - id: M4
     title: Federation Layer 2 — sharing_agreements table + agreement-sourced grants
     short_description: |

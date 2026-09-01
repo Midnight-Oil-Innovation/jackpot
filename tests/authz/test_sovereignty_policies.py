@@ -20,7 +20,7 @@ import pytest
 
 from backend.authz import Context, Decision, Resource, permit
 from backend.authz.engine import CapabilityGrant, Principal, PrincipalKind
-from backend.authz.policy import ACTIVE_POLICIES, DELETION_POLICIES
+from backend.authz.policy import ACTIVE_POLICIES, DELETION_POLICIES, SOVEREIGNTY_POLICIES
 from backend.authz.scope import scope_uri
 
 REQUESTER = "77"
@@ -139,17 +139,72 @@ def test_every_deny_reads_only_loaded_attributes():
 
 def test_sovereignty_policies_are_auditable_by_id():
     """§6.3: 'a sovereignty audit is a policy audit' — which needs ids."""
-    for policy in DELETION_POLICIES:
+    for policy in DELETION_POLICIES + SOVEREIGNTY_POLICIES:
         assert policy.get("id"), "every governance policy needs an id to be auditable"
         assert policy["id"].startswith(("deletion.", "sovereignty."))
+    # §6.3's audit query must actually select something.
+    assert [p for p in ACTIVE_POLICIES if str(p.get("id", "")).startswith("sovereignty.")]
 
 
-@pytest.mark.parametrize("capability", ["submission:approve", "federation:push"])
+@pytest.mark.parametrize("capability", ["submission:approve"])
 def test_no_policy_keys_on_the_deferred_capabilities(capability):
-    """Guards the two §6.2 policies deliberately not implemented.
+    """§6.2-2 is still deliberately not a policy.
 
-    If one is later added, it must come with the route work that makes it
-    meaningful — a DENY on submission:approve evaluated at Lab scope reads an
-    absent deletion_status and denies every submission approval.
+    ``submission:approve`` is checked once at Lab scope while the rule is
+    per-sample across the submission's whole set, so a DENY here would read an
+    absent deletion_status and deny every submission approval.
+    ``submissions.py`` enforces it correctly as a set-level 422.
+
+    ``federation:push`` was in this list until M4-B gave it a call site
+    (``FederationPushJob.may_push_sample``); the policy it was holding a place
+    for is now ``sovereignty.no_federate_deleting``, tested below.
     """
     assert not [p for p in ACTIVE_POLICIES if p["capability"] == capability]
+
+
+# ── §6.2-3 — the tombstone guard on federation ───────────────────────────
+
+
+def _push_principal(scope: str) -> Principal:
+    """A peer holding federation:push by agreement — a legitimate ALLOW."""
+    return Principal(
+        kind=PrincipalKind.PEER_INSTANCE,
+        id="peer-1",
+        on_behalf_of=None,
+        grants=[CapabilityGrant(capability="federation:push", scope_ref=scope, source="agreement")],
+    )
+
+
+def _push_decision(deletion_status) -> Decision:
+    attributes = {} if deletion_status is _ABSENT else {"deletion_status": deletion_status}
+    return permit(
+        _push_principal(scope_uri()),
+        "federation:push",
+        Resource(scope=SAMPLE_SCOPE, attributes=attributes),
+        Context(conditions={}),
+        policies=ACTIVE_POLICIES,
+    )
+
+
+_ABSENT = object()
+
+
+def test_an_active_sample_may_federate(world_free=None):
+    assert _push_decision("ACTIVE") is Decision.ALLOW
+
+
+@pytest.mark.parametrize("state", ["DELETION_REQUESTED", "TOMBSTONED", "VACUUMED"])
+def test_a_sample_in_the_deletion_lifecycle_may_not_federate(state):
+    """Deny-wins over a valid agreement — the §5.4 property made concrete."""
+    assert _push_decision(state) is Decision.DENY
+
+
+def test_absent_deletion_status_denies_the_push():
+    """Fail closed, and deliberately the opposite of the ALLOW-rule reading.
+
+    A caller that did not establish the sample's deletion state does not get
+    to export it. This is why the {"not": v} form is safe on THIS policy and
+    would be catastrophic on a Lab-scoped one: here the attribute's absence
+    blocks an export, there it would block every approval.
+    """
+    assert _push_decision(_ABSENT) is Decision.DENY

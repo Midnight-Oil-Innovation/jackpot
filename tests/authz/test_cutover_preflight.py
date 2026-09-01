@@ -572,16 +572,22 @@ class TestPreflightReport:
             sys.path.pop(0)
 
         rows = parse_map(REPO_ROOT / "docs" / "endpoint_capability_map.md")
-        # 127 since M3 added the three deletion-lifecycle routes. They existed
+        # 128: M3 added three deletion-lifecycle routes, M4-B added the
+        # peer-authenticated inbound federation query. They existed
         # in samples.py all along; the map said "no deletion-approval route
         # exists yet" because it was written from the phase plan rather than
         # from the router, which is exactly the drift this row count catches.
-        assert len(rows) == 127
+        assert len(rows) == 128
         # Every row classifiable — parser guarantees the five classes.
         assert {r.klass for r in rows} <= {
             "require_capability",
             "auth_only",
             "auth_only_by_design",
+            # M4-B. A federated caller: no user capability applies, but the
+            # peer's agreement grants decide the reply. Distinct from
+            # auth_only_by_design, where authentication really is the whole
+            # decision.
+            "peer_authenticated",
             "public",
             "catalog_gap",
         }

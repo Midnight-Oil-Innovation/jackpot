@@ -162,7 +162,7 @@ class FederationClient:
         query: FederationQuery,
         api_key_resolver,  # callable: FederatedInstance -> str
     ) -> list[FederationQueryResult]:
-        """Issue the GET /api/v1/samples/ call to a single partner."""
+        """Issue the POST /api/v1/federation/query call to a single partner."""
         if self._http is None:  # pragma: no cover — guarded by query()
             raise RuntimeError("http client unavailable")
 
@@ -182,9 +182,15 @@ class FederationClient:
         # bare authorities, so a base_url with a path component (e.g.
         # https://host/jackpot) would otherwise run straight into "api/...".
         base = str(partner.base_url).rstrip("/")
-        response = await self._http.get(
-            f"{base}/api/v1/samples/",
-            params=params,
+        # POST /api/v1/federation/query, not GET /api/v1/samples/. The
+        # samples list authenticates a JWT cookie and nothing else, so the
+        # original target would have 401'd against a real peer — the inbound
+        # half was never built (M4-B). The peer-facing route lives beside the
+        # other two that authenticate peers; the filtering it performs is the
+        # same sample_list_clause every local list uses.
+        response = await self._http.post(
+            f"{base}/api/v1/federation/query",
+            json=params,
             headers=headers,
             timeout=self._timeout,
         )

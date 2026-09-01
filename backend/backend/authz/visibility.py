@@ -77,6 +77,12 @@ def _attr_sql(
         if expected == PRINCIPAL_ID:
             params[key] = principal_id
             terms.append(f"CAST({column} AS TEXT) = :{key}")
+        elif isinstance(expected, dict) and "not" in expected:
+            # IS DISTINCT FROM, not <>: a NULL column with <> yields NULL,
+            # which is falsy, so the term would silently drop and a DENY
+            # would stop firing on exactly the rows it exists to catch.
+            params[key] = expected["not"]
+            terms.append(f"{column} IS DISTINCT FROM :{key}")
         elif isinstance(expected, dict) and "in" in expected:
             names = []
             for j, v in enumerate(expected["in"]):
