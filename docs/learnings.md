@@ -3349,3 +3349,57 @@ tables, `sync_agreement_grants()` projecting them into
   cannot collide today. The delete predicate is `principal_id AND source`
   anyway, and only the source half is what keeps that from being a landmine if
   the namespaces ever meet.
+
+## M4-B — the inbound half that was never built — 2026-09-01
+
+**What was built:** `POST /api/v1/federation/query` (peer-authenticated,
+agreement-filtered), `client._query_one` repointed at it,
+`FederationPushJob.may_push_sample()` composing `permit()` with the three
+gates, and — on that call site — `sovereignty.no_federate_deleting`.
+
+**Key decisions:**
+
+- **§7.4 described an integration that did not exist.** It reads as though the
+  inbound query already landed on the partner's `GET /api/v1/samples/`,
+  filtered by the peer principal — "not a separate code path". In fact
+  `/api/v1/samples/` authenticates a JWT cookie and nothing else, so a real
+  federated query would have **401'd**. This is the third time in this run of
+  work that a design document described a wired integration point ahead of the
+  code (M3's `federation:push`, M3's `no_publish_while_deleting` shape, this).
+  The pattern is worth naming: **a spec section written from the plan reads
+  identically to one written from the code.** Only grep tells them apart.
+- **The gap was invisible because the only tests were on the calling side.**
+  Every federation-key test hit `/api/v1/federation/*`; the client tests
+  mocked the partner with `respx.get(".../api/v1/samples/")`. So the suite
+  asserted the client called a URL, and nothing asserted anyone answered it.
+  Repointing the client turned 27 mocks red — which is the first time the
+  inbound contract was ever expressed as a test.
+- **Peer auth went beside the routes that already have it, not onto the
+  samples list.** The alternative was a second authentication mode on the
+  most-read endpoint in the system. What §7.4 actually cares about — that
+  federated visibility is the same *decision* as local visibility rather than
+  a parallel implementation — is preserved either way, because the filtering
+  is `sample_list_clause`, the identical compiler every local list uses.
+- **`may_push_sample` composes rather than absorbs.** `is_qualifying_sample`
+  kept its own function, its own name, and its six tests; the new function
+  adds the `permit()` half in front of it. Order is a cost decision, not a
+  correctness one — but a peer with no agreement should not have its rows
+  inspected at all.
+
+**Watch out for:**
+
+- **`{"not": v}` means opposite things on a DENY and on an ALLOW, and the
+  difference is whether absence is safe.** On `sovereignty.no_federate_deleting`
+  a missing `deletion_status` denies an export — fail closed, correct. The
+  same form on a Lab-scoped `submission:approve` would deny every approval.
+  The invariant in `DELETION_POLICIES` is what keeps them apart, and it is
+  tested rather than merely written down.
+- **`IS DISTINCT FROM`, never `<>`, when compiling a negation to SQL.** A NULL
+  column with `<>` yields NULL, which is falsy, so the term silently drops and
+  the DENY stops firing on exactly the rows it exists to catch. The per-row
+  and SQL halves would then disagree — and only on NULLs.
+- **`samples_deletion_active_requested_chk` couples status and timestamp:**
+  `(deletion_status = 'ACTIVE') = (deletion_requested_at IS NULL)`. A fixture
+  inserting a non-ACTIVE row without the timestamp is not merely rejected — it
+  was never a state the system could reach, so a test built on one would prove
+  nothing.

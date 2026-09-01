@@ -335,10 +335,10 @@ async def test_search_fans_out_to_enabled_partners(client, fed_credentials):
         "surveillance_relevant": True,
     }
     nm_sample = dict(sample_row, sample_id="NM-1", state="NM")
-    az_route = respx.get("https://az.example.test/api/v1/samples/").mock(
+    az_route = respx.post("https://az.example.test/api/v1/federation/query").mock(
         return_value=httpx.Response(200, json=_partner_envelope(sample_row))
     )
-    nm_route = respx.get("https://nm.example.test/api/v1/samples/").mock(
+    nm_route = respx.post("https://nm.example.test/api/v1/federation/query").mock(
         return_value=httpx.Response(200, json=_partner_envelope(nm_sample))
     )
 
@@ -378,10 +378,10 @@ async def test_search_skips_disabled_partners(client, fed_credentials):
         api_key_secret_name="fed/off/key",
         federation_enabled=False,
     )
-    on_route = respx.get("https://on.example.test/api/v1/samples/").mock(
+    on_route = respx.post("https://on.example.test/api/v1/federation/query").mock(
         return_value=httpx.Response(200, json=_partner_envelope())
     )
-    off_route = respx.get("https://off.example.test/api/v1/samples/").mock(
+    off_route = respx.post("https://off.example.test/api/v1/federation/query").mock(
         return_value=httpx.Response(200, json=_partner_envelope())
     )
 
@@ -411,10 +411,10 @@ async def test_search_skips_plaintext_partner_seeded_in_db(client, fed_credentia
         base_url="http://plain.example.test/",
         api_key_secret_name="fed/plain/key",
     )
-    secure_route = respx.get("https://secure.example.test/api/v1/samples/").mock(
+    secure_route = respx.post("https://secure.example.test/api/v1/federation/query").mock(
         return_value=httpx.Response(200, json=_partner_envelope())
     )
-    plain_route = respx.get("http://plain.example.test/api/v1/samples/").mock(
+    plain_route = respx.post("http://plain.example.test/api/v1/federation/query").mock(
         return_value=httpx.Response(200, json=_partner_envelope())
     )
 
@@ -435,7 +435,7 @@ async def test_search_dials_loopback_partner_over_http(client, fed_credentials):
         base_url="http://localhost:8001/",
         api_key_secret_name="fed/local/key",
     )
-    local_route = respx.get("http://localhost:8001/api/v1/samples/").mock(
+    local_route = respx.post("http://localhost:8001/api/v1/federation/query").mock(
         return_value=httpx.Response(200, json=_partner_envelope())
     )
 
@@ -625,3 +625,67 @@ async def test_access_request_missing_key_returns_401(client, fed_credentials):
     }
     resp = await client.post("/api/v1/federation/access-requests", json=payload)
     assert resp.status_code == 401, resp.text
+
+
+# ---------------------------------------------------------------------------
+# Inbound L1 query (M4-B)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_inbound_query_missing_federation_key_returns_401(client, fed_credentials):
+    """The peer-authentication boundary on the new inbound route.
+
+    Worth its own test rather than trusting the shared helper: this is the
+    only route where an unauthenticated caller would otherwise reach a
+    visibility clause built from an empty principal, and "returns []" and
+    "returns 401" are very different answers to give a stranger.
+    """
+    fed_credentials.set("fed/peer/key", "peer-secret")
+    _register_instance(
+        name="peer",
+        base_url="https://peer.example.test/",
+        api_key_secret_name="fed/peer/key",
+    )
+    resp = await client.post("/api/v1/federation/query", json={})
+    assert resp.status_code == 401, resp.text
+    assert resp.json()["error"]["code"] == "UNAUTHORIZED"
+
+
+@pytest.mark.asyncio
+async def test_inbound_query_invalid_federation_key_returns_401(client, fed_credentials):
+    fed_credentials.set("fed/peer/key", "peer-secret")
+    _register_instance(
+        name="peer",
+        base_url="https://peer.example.test/",
+        api_key_secret_name="fed/peer/key",
+    )
+    resp = await client.post(
+        "/api/v1/federation/query",
+        json={},
+        headers={"X-JACKPOT-Federation-Key": "wrong-key"},
+    )
+    assert resp.status_code == 401, resp.text
+
+
+@pytest.mark.asyncio
+async def test_inbound_query_with_no_agreement_returns_empty(client, fed_credentials):
+    """Authenticated, authorized for nothing — §7.3's default-deny.
+
+    The distinction this pins: a valid peer key gets a 200 with no rows, not a
+    403 and not somebody else's data. Peering authenticates; agreements
+    authorize.
+    """
+    fed_credentials.set("fed/peer/key", "peer-secret")
+    _register_instance(
+        name="peer",
+        base_url="https://peer.example.test/",
+        api_key_secret_name="fed/peer/key",
+    )
+    resp = await client.post(
+        "/api/v1/federation/query",
+        json={},
+        headers={"X-JACKPOT-Federation-Key": "peer-secret"},
+    )
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["data"] == []

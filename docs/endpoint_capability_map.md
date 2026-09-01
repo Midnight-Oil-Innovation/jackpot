@@ -248,6 +248,25 @@ check working.
   are admin-only and have no §4 verb. Same treatment as the raw_fastq residue
   above: they need a catalog addition, not a guess.
 
+### Federation plane after M4-B
+
+| Method | Path | Capability | Scope | Note |
+|---|---|---|---|---|
+| POST | `/api/v1/federation/query` | — | Instance | PEER-AUTHENTICATED (M4-B). `authenticate_federation_peer` resolves the key to a `federated_instances` row; the reply is filtered by `sample_list_clause` over a `PEER_INSTANCE` principal whose grants come from sharing agreements. No user capability — the peer's own grants ARE the authorization, and a peer with no agreement gets `[]` by default-deny |
+
+**This route is new because the inbound half was never built.**
+`client._query_one` called `GET /api/v1/samples/` on the partner, which
+authenticates a JWT cookie and nothing else — a real federated query would
+have 401'd. §7.4 describes that integration as though it were shipped. Peer
+authentication now lives beside `/federation/push` and
+`/federation/access-requests`, the two routes that already do it, rather than
+becoming a second authentication mode on the samples list.
+
+`FederationPushJob.may_push_sample` is the `federation:push` decision point
+(`permit()` plus the three qualification gates). It is not yet reached by
+`push_to_hub`, whose IO is still stubbed — it is the decision function that
+stub will call, and `sovereignty.no_federate_deleting` attaches to it.
+
 ### Known divergence from the legacy ladder
 
 Project-only membership. `permissions._base_access` admitted a project

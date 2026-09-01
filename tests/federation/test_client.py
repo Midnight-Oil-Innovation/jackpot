@@ -126,10 +126,10 @@ async def test_client_happy_path_fanout_two_partners() -> None:
     nm = _make_instance("nm", "https://nm.example.test/")
     api_keys = {az.id: "az-key", nm.id: "nm-key"}
 
-    respx.get("https://az.example.test/api/v1/samples/").mock(
+    respx.post("https://az.example.test/api/v1/federation/query").mock(
         return_value=httpx.Response(200, json=_envelope(_sample_row("AZ-1"), _sample_row("AZ-2")))
     )
-    respx.get("https://nm.example.test/api/v1/samples/").mock(
+    respx.post("https://nm.example.test/api/v1/federation/query").mock(
         return_value=httpx.Response(200, json=_envelope(_sample_row("NM-1")))
     )
 
@@ -176,7 +176,7 @@ async def test_client_parses_the_real_jackpot_response_envelope() -> None:
         success_list(data=[_sample_row("AZ-1")], page=1, per_page=50, total=1).body
     )
     az = _make_instance("az", "https://az.example.test/")
-    respx.get("https://az.example.test/api/v1/samples/").mock(
+    respx.post("https://az.example.test/api/v1/federation/query").mock(
         return_value=httpx.Response(200, json=envelope)
     )
 
@@ -193,7 +193,7 @@ async def test_client_parses_the_real_jackpot_response_envelope() -> None:
 @respx.mock
 async def test_client_sends_federation_key_header() -> None:
     az = _make_instance("az", "https://az.example.test/")
-    route = respx.get("https://az.example.test/api/v1/samples/").mock(
+    route = respx.post("https://az.example.test/api/v1/federation/query").mock(
         return_value=httpx.Response(200, json=_envelope())
     )
 
@@ -216,7 +216,7 @@ async def test_client_forces_analyzable_floor_at_wire() -> None:
     set ANALYZABLE. (FederationQuery defaults to ANALYZABLE, but the client
     re-applies a setdefault as a belt-and-suspenders guarantee.)"""
     az = _make_instance("az", "https://az.example.test/")
-    route = respx.get("https://az.example.test/api/v1/samples/").mock(
+    route = respx.post("https://az.example.test/api/v1/federation/query").mock(
         return_value=httpx.Response(200, json=_envelope())
     )
 
@@ -228,8 +228,10 @@ async def test_client_forces_analyzable_floor_at_wire() -> None:
         )
 
     assert route.called
-    qs = dict(route.calls.last.request.url.params)
-    assert qs["quality_tier_min"] == "ANALYZABLE"
+    # The wire-level floor now travels in the POST body rather than the query
+    # string: the inbound route takes a FederationQuery, not GET filters.
+    body = json.loads(route.calls.last.request.content)
+    assert body["quality_tier_min"] == "ANALYZABLE"
 
 
 # ---------------------------------------------------------------------------
@@ -242,10 +244,10 @@ async def test_client_isolates_partner_5xx_failure() -> None:
     good = _make_instance("good", "https://good.example.test/")
     bad = _make_instance("bad", "https://bad.example.test/")
 
-    respx.get("https://good.example.test/api/v1/samples/").mock(
+    respx.post("https://good.example.test/api/v1/federation/query").mock(
         return_value=httpx.Response(200, json=_envelope(_sample_row("G-1")))
     )
-    respx.get("https://bad.example.test/api/v1/samples/").mock(
+    respx.post("https://bad.example.test/api/v1/federation/query").mock(
         return_value=httpx.Response(503, json={"detail": "down"})
     )
 
@@ -264,10 +266,10 @@ async def test_client_isolates_partner_4xx_failure() -> None:
     good = _make_instance("good", "https://good.example.test/")
     forbidden = _make_instance("forb", "https://forbidden.example.test/")
 
-    respx.get("https://good.example.test/api/v1/samples/").mock(
+    respx.post("https://good.example.test/api/v1/federation/query").mock(
         return_value=httpx.Response(200, json=_envelope(_sample_row("G-1")))
     )
-    respx.get("https://forbidden.example.test/api/v1/samples/").mock(
+    respx.post("https://forbidden.example.test/api/v1/federation/query").mock(
         return_value=httpx.Response(403, json={"detail": "key invalid"})
     )
 
@@ -286,10 +288,10 @@ async def test_client_isolates_partner_timeout() -> None:
     good = _make_instance("good", "https://good.example.test/")
     slow = _make_instance("slow", "https://slow.example.test/")
 
-    respx.get("https://good.example.test/api/v1/samples/").mock(
+    respx.post("https://good.example.test/api/v1/federation/query").mock(
         return_value=httpx.Response(200, json=_envelope(_sample_row("G-1")))
     )
-    respx.get("https://slow.example.test/api/v1/samples/").mock(
+    respx.post("https://slow.example.test/api/v1/federation/query").mock(
         side_effect=httpx.ReadTimeout("partner timed out")
     )
 
@@ -313,10 +315,10 @@ async def test_client_skips_disabled_partners() -> None:
     enabled = _make_instance("on", "https://on.example.test/")
     disabled = _make_instance("off", "https://off.example.test/", federation_enabled=False)
 
-    enabled_route = respx.get("https://on.example.test/api/v1/samples/").mock(
+    enabled_route = respx.post("https://on.example.test/api/v1/federation/query").mock(
         return_value=httpx.Response(200, json=_envelope(_sample_row("ON-1")))
     )
-    disabled_route = respx.get("https://off.example.test/api/v1/samples/").mock(
+    disabled_route = respx.post("https://off.example.test/api/v1/federation/query").mock(
         return_value=httpx.Response(200, json=_envelope(_sample_row("OFF-1")))
     )
 
@@ -345,10 +347,10 @@ async def test_client_skips_partners_failing_attestation() -> None:
     a = _make_instance("a", "https://a.example.test/")
     b = _make_instance("b", "https://b.example.test/")
 
-    a_route = respx.get("https://a.example.test/api/v1/samples/").mock(
+    a_route = respx.post("https://a.example.test/api/v1/federation/query").mock(
         return_value=httpx.Response(200, json=_envelope(_sample_row("A-1")))
     )
-    b_route = respx.get("https://b.example.test/api/v1/samples/").mock(
+    b_route = respx.post("https://b.example.test/api/v1/federation/query").mock(
         return_value=httpx.Response(200, json=_envelope(_sample_row("B-1")))
     )
 
@@ -377,10 +379,10 @@ async def test_client_skips_partners_flagged_anomalous() -> None:
     a = _make_instance("a", "https://a.example.test/")
     b = _make_instance("b", "https://b.example.test/")
 
-    a_route = respx.get("https://a.example.test/api/v1/samples/").mock(
+    a_route = respx.post("https://a.example.test/api/v1/federation/query").mock(
         return_value=httpx.Response(200, json=_envelope(_sample_row("A-1")))
     )
-    b_route = respx.get("https://b.example.test/api/v1/samples/").mock(
+    b_route = respx.post("https://b.example.test/api/v1/federation/query").mock(
         return_value=httpx.Response(200, json=_envelope(_sample_row("B-1")))
     )
 
@@ -435,7 +437,7 @@ async def test_client_accepts_injected_http_client() -> None:
     # No context entry; query should still work because http is preset.
     with respx.mock:
         x = _make_instance("x", "https://x.example.test/")
-        respx.get("https://x.example.test/api/v1/samples/").mock(
+        respx.post("https://x.example.test/api/v1/federation/query").mock(
             return_value=httpx.Response(200, json=_envelope())
         )
         await fc.query(

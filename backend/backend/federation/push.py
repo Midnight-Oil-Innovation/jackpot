@@ -64,6 +64,58 @@ class FederationPushJob:
             return False
         return _quality_status_ge(quality_status, "ANALYZABLE")
 
+    @staticmethod
+    def may_push_sample(
+        principal,
+        resource,
+        *,
+        surveillance_relevant: bool,
+        sharing_level: str,
+        quality_status: str,
+        min_sharing_level_for_federation: str,
+        context=None,
+    ) -> bool:
+        """The full L2 push decision: authorization AND the three gates.
+
+        §7.4 splits this in two and both halves are required. The agreement
+        grants ``federation:push`` at a scope — that is the authorization, and
+        it is what ``permit()`` answers. The three qualification gates are the
+        operational floor on top, and they are not expressible as a grant
+        because two of them (quality, sharing level) are properties of the row
+        rather than of the relationship.
+
+        Order matters for what it costs, not for what it decides: ``permit()``
+        runs first because a peer with no agreement should not have its rows
+        inspected at all.
+
+        **Deny-wins is why this function is the point of the exercise.** A
+        DENY policy on ``federation:push`` — §6.2-3's tombstone guard, which
+        stops a sample mid-deletion from ever federating out — beats a valid
+        agreement here and nowhere else. Calling the gates without
+        ``permit()`` would leave that policy with nothing to attach to.
+
+        Not yet reached by ``push_to_hub``, whose IO is still stubbed. This is
+        the decision function that stub will call, and it is tested as such.
+        """
+        from backend.authz import Context, Decision, permit
+        from backend.authz.policy import ACTIVE_POLICIES
+
+        decision = permit(
+            principal,
+            "federation:push",
+            resource,
+            context or Context(conditions={}),
+            policies=ACTIVE_POLICIES,
+        )
+        if decision is not Decision.ALLOW:
+            return False
+        return FederationPushJob.is_qualifying_sample(
+            surveillance_relevant=surveillance_relevant,
+            sharing_level=sharing_level,
+            quality_status=quality_status,
+            min_sharing_level_for_federation=min_sharing_level_for_federation,
+        )
+
     def build_payload(
         self,
         *,
