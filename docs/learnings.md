@@ -3300,3 +3300,52 @@ describes did not ship, for different and specific reasons.
   not a live view of the preset. Any future preset edit needs a reseed
   migration to reach existing deployments — the one written for this change
   was deleted along with it, but the requirement stands.
+
+## M4-A — sharing agreements, landed dark — 2026-09-01
+
+**What was built:** the `sharing_agreements` / `sharing_agreement_grants`
+tables, `sync_agreement_grants()` projecting them into
+`authz_capability_grants` with `source='agreement'`, and
+`load_peer_principal()`. Wired into no request path.
+
+**Key decisions:**
+
+- **The third sync, and deliberately the same shape as the first two.**
+  `sync_membership_grants` (M2-B5) and `sync_sample_access_grants`
+  (M2-SAMPLE-ACCESS-SYNC) both take an operator-facing source table with its
+  own lifecycle and project it into `authz_capability_grants`, delete-then-
+  insert, scoped by `source`. Agreements are the same problem a third time.
+  Following the existing shape rather than inventing a fourth is most of what
+  made this small: `permit()` keeps one place to look, and a reviewer who
+  understands one sync understands all three.
+- **`load_peer_principal` is four lines and worth having anyway.**
+  `load_principal` was already kind-agnostic — grants are keyed by principal
+  id, and kind is an argument — so a peer needed no new loading path, and
+  building one would have been the second decision point §2.1 warns about. The
+  wrapper exists to be *findable*: someone asking "how does a peer get its
+  grants" should not have to already know the answer is the human loader with
+  a different enum.
+- **Reconciles per peer, not per agreement.** A peer may hold several
+  agreements, and the question the decision path asks is "what does this peer
+  hold" — which no single agreement can answer. Deactivating one must withdraw
+  exactly its grants and leave the siblings; a per-agreement sync would have
+  to diff across them to get that right.
+- **Two tables, not one with a JSONB `grants` blob.** The grants have the same
+  shape as every other grant in the system, so the sync is a projection rather
+  than a JSON parse whose schema drifts silently against the column it feeds.
+
+**Watch out for:**
+
+- **`federation_role` enum values are lowercase** (`'hub'`, `'spoke'`,
+  `'peer'`, `'data_source_lab'`) while the sharing-level and deletion-status
+  columns are TEXT+CHECK in upper case. A fixture inserting `'SPOKE'` fails
+  with `invalid input value for enum federation_role`. The house style moved
+  to TEXT+CHECK after that table was written; both conventions are live.
+- **`conditions` must be `json.dumps`'d on a `text()` insert.** The column is
+  JSONB and the driver will not adapt a bare dict through a textual statement.
+  A condition that does not survive the projection is a grant with no filter —
+  which is a silent widening, not an error.
+- **The peer id namespace is a UUID string, user ids are integers.** They
+  cannot collide today. The delete predicate is `principal_id AND source`
+  anyway, and only the source half is what keeps that from being a landmine if
+  the namespaces ever meet.
