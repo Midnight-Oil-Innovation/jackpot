@@ -20,7 +20,8 @@ from pydantic import BaseModel
 
 from backend.auth.guards import (
     get_current_user,
-    get_user_lab_membership,
+    permits,
+    require_capability,
 )
 from backend.config import get_settings
 from backend.credentials import credentials
@@ -98,33 +99,45 @@ class _AccessionsBody(BaseModel):
 # ── helpers ───────────────────────────────────────────────────────
 
 
-def _ensure_lab_access(user: dict, lab_id: int) -> None:
-    if user.get("is_platform_admin"):
-        return
-    if not get_user_lab_membership(user["id"], lab_id):
-        raise HTTPException(
-            status_code=403,
-            detail="Lab membership required to access this submission.",
-        )
+def _ensure_lab_access(user: dict, lab_id: int, capability: str) -> None:
+    """The submission's lab, and the verb this route needs (M2-B4).
+
+    The platform-admin branch is gone: an instance-scoped grant contains every
+    lab path (ADR 0015), so the admin passes on the same rung as everyone else.
+    """
+    require_capability(capability)(user, lab_id=lab_id)
 
 
 def _ensure_can_read(user: dict, submission: dict) -> None:
-    _ensure_lab_access(user, submission["lab_id"])
+    """Reads take ``sample:read`` at the submission's lab, per the map — a
+    submission is a view onto samples, and every lab preset holds it."""
+    _ensure_lab_access(user, submission["lab_id"], "sample:read")
 
 
-def _ensure_can_write(user: dict, submission: dict) -> None:
-    """Writes are allowed for the creator and for lab directors."""
-    if user.get("is_platform_admin"):
-        return
-    if submission["created_by_user_id"] == user["id"]:
-        return
-    member = get_user_lab_membership(user["id"], submission["lab_id"])
-    if member and member.get("is_lab_director"):
-        return
-    raise HTTPException(
-        status_code=403,
-        detail="Only the submission's creator or a lab director can modify it.",
-    )
+def _ensure_can_prepare(user: dict, submission: dict) -> None:
+    """Building and editing: ``submission:prepare`` (§4.5).
+
+    Replaces "the creator, or a lab director, or an admin". The creator rung
+    is subsumed rather than dropped: creating a submission already requires
+    ``submission:prepare`` at that lab, so anyone who could have created one
+    holds the verb that now lets them edit it. What changes is that a creator
+    who has since lost the capability stops being able to edit — which is the
+    point of checking a capability rather than a stored user id.
+    """
+    _ensure_lab_access(user, submission["lab_id"], "submission:prepare")
+
+
+def _ensure_can_approve(user: dict, submission: dict) -> None:
+    """Publishing and its consequences: ``submission:approve`` (§4.5).
+
+    This is the separation the batch exists for, and it is a real narrowing.
+    The old check let a submission's *creator* mark it submitted, execute it,
+    or register accessions — the same person who built the package could send
+    it. ``submission:approve`` sits in ``lab_lead`` and nowhere else, so those
+    six routes now need a Lab Lead. §8.2's Lab Member RW note already said as
+    much: "can run pipelines but not approve submissions or access requests."
+    """
+    _ensure_lab_access(user, submission["lab_id"], "submission:approve")
 
 
 # ── endpoints ─────────────────────────────────────────────────────
@@ -137,7 +150,7 @@ def create_submission_endpoint(
     db=Depends(get_db_dep),  # noqa: B008
 ):
     user = get_current_user(request)
-    _ensure_lab_access(user, body.lab_id)
+    _ensure_lab_access(user, body.lab_id, "submission:prepare")
     sub = create_submission(
         user_id=user["id"],
         lab_id=body.lab_id,
@@ -164,8 +177,11 @@ def list_submissions_endpoint(
 ):
     user = get_current_user(request)
     if lab_id is not None:
-        _ensure_lab_access(user, lab_id)
-    elif not user.get("is_platform_admin"):
+        _ensure_lab_access(user, lab_id, "sample:read")
+    elif not permits(user, "sample:read"):
+        # Unfiltered means every lab, so it takes the capability at the
+        # instance root rather than the is_platform_admin flag, which has
+        # authorized nothing since M2-B1.
         # Non-admins must be scoped to their labs explicitly. We could
         # implement a "show all my labs" flow but the simpler v1
         # contract is "ask for a lab_id."
@@ -205,7 +221,7 @@ def patch_submission_endpoint(
 ):
     user = get_current_user(request)
     sub = get_submission(submission_id, db)
-    _ensure_can_write(user, sub)
+    _ensure_can_prepare(user, sub)
     fields = body.model_dump(exclude_none=True)
     return success(
         data=update_submission(
@@ -225,7 +241,7 @@ def delete_submission_endpoint(
 ):
     user = get_current_user(request)
     sub = get_submission(submission_id, db)
-    _ensure_can_write(user, sub)
+    _ensure_can_prepare(user, sub)
     return success(
         data=soft_delete_submission(submission_id=submission_id, actor_id=user["id"], conn=db)
     )
@@ -240,7 +256,7 @@ def add_samples_endpoint(
 ):
     user = get_current_user(request)
     sub = get_submission(submission_id, db)
-    _ensure_can_write(user, sub)
+    _ensure_can_prepare(user, sub)
     inserted = add_samples_to_submission(
         submission_id=submission_id,
         sample_ids=body.sample_ids,
@@ -259,7 +275,7 @@ def remove_samples_endpoint(
 ):
     user = get_current_user(request)
     sub = get_submission(submission_id, db)
-    _ensure_can_write(user, sub)
+    _ensure_can_prepare(user, sub)
     removed = remove_samples_from_submission(
         submission_id=submission_id,
         sample_ids=body.sample_ids,
@@ -277,7 +293,11 @@ def validate_endpoint(
 ):
     user = get_current_user(request)
     sub = get_submission(submission_id, db)
-    _ensure_can_read(user, sub)
+    # submission:prepare, not sample:read: the map groups validate with the
+    # build routes because it answers "is this package ready to send", which
+    # is a question only the person assembling it needs. A narrowing from the
+    # read check that was here before.
+    _ensure_can_prepare(user, sub)
     result = validate_submission_readiness(submission_id, db)
     return success(
         data={
@@ -298,7 +318,7 @@ def generate_endpoint(
 ):
     user = get_current_user(request)
     sub = get_submission(submission_id, db)
-    _ensure_can_write(user, sub)
+    _ensure_can_prepare(user, sub)
     path = generate_package(
         submission_id=submission_id,
         actor_id=user["id"],
@@ -316,7 +336,7 @@ def mark_submitted_endpoint(
 ):
     user = get_current_user(request)
     sub = get_submission(submission_id, db)
-    _ensure_can_write(user, sub)
+    _ensure_can_approve(user, sub)
     return success(data=mark_submitted(submission_id=submission_id, actor_id=user["id"], conn=db))
 
 
@@ -330,7 +350,7 @@ async def register_accessions_endpoint(
     """Accept either a TSV upload or a JSON body of accession entries."""
     user = get_current_user(request)
     sub = get_submission(submission_id, db)
-    _ensure_can_write(user, sub)
+    _ensure_can_approve(user, sub)
 
     entries: list[AccessionEntry]
     if file is not None and file.filename:
@@ -368,7 +388,7 @@ def mark_rejected_endpoint(
 ):
     user = get_current_user(request)
     sub = get_submission(submission_id, db)
-    _ensure_can_write(user, sub)
+    _ensure_can_approve(user, sub)
     return success(
         data=mark_rejected(
             submission_id=submission_id,
@@ -388,7 +408,7 @@ def withdraw_endpoint(
 ):
     user = get_current_user(request)
     sub = get_submission(submission_id, db)
-    _ensure_can_write(user, sub)
+    _ensure_can_approve(user, sub)
     return success(
         data=withdraw_submission(
             submission_id=submission_id,
@@ -585,7 +605,7 @@ def execute_endpoint(
     """
     user = get_current_user(request)
     sub = get_submission(submission_id, db)
-    _ensure_can_write(user, sub)
+    _ensure_can_approve(user, sub)
     _enforce_execution_gates(sub, allowed_statuses=frozenset({"READY_TO_SUBMIT"}))
 
     executor_backend = (body.executor_backend if body else None) or "seqsender_subprocess"
@@ -613,7 +633,7 @@ def retry_execution_endpoint(
     """
     user = get_current_user(request)
     sub = get_submission(submission_id, db)
-    _ensure_can_write(user, sub)
+    _ensure_can_approve(user, sub)
     _enforce_execution_gates(
         sub,
         allowed_statuses=frozenset({"EXECUTION_FAILED", "EXECUTION_INTERRUPTED"}),

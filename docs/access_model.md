@@ -790,7 +790,10 @@ Preset "Instance Administrator":
                 audit:read, access:approve_request, access:revoke,
                 federation:configure_peer, federation:write_agreement,
                 federation:review_request, federation:approve_request,
-                anomaly:configure_detector, sample:read_surveillance
+                anomaly:configure_detector, sample:read_surveillance,
+                lab:read, org:read, import:read, token:manage,
+                deposit:record, pipeline:read, pipeline:promote,
+                pipeline:register_custom
   note: Does NOT implicitly include deletion:approve over sovereignty-governed
         samples on Scenario T — that path is gated by the separation-of-duties
         DENY (§6.2 1b) and, where a Tribal authority exists, sits with that
@@ -805,7 +808,9 @@ Preset "Lab Lead":
   capabilities: sample:read, sample:read_detail, sample:create, sample:update,
                 sample:archive, sample:soft_delete, deletion:request,
                 deletion:approve, access:approve_request, access:revoke,
-                pipeline:run, submission:approve
+                pipeline:run, submission:approve, submission:prepare,
+                pipeline:read, pipeline:register_custom, org:manage,
+                lab:read, org:read, import:read, import:manage
   note: deletion:approve here is the ordinary intra-lab path; the §6.2 1b
         separation-of-duties DENY still forbids approving one's own request.
 ```
@@ -816,10 +821,14 @@ Preset "Lab Lead":
 Preset "Lab Member (read-write)":
   scope-template: Lab
   capabilities: sample:read, sample:read_detail, sample:create, sample:update,
-                deletion:request, pipeline:run
+                deletion:request, pipeline:run, pipeline:read,
+                submission:prepare, lab:read, org:read,
+                import:read, import:manage
   note: Can request deletion but not approve it; can run pipelines but not
         approve submissions or access requests. The read-write/governance
-        split is the main line between this and Lab Lead.
+        split is the main line between this and Lab Lead — note that it runs
+        between preparing a submission and approving one, not around
+        submissions entirely.
 ```
 
 **Lab Member (read-only)** — replaces Lab Reader. Sees, does not touch.
@@ -827,8 +836,23 @@ Preset "Lab Member (read-write)":
 ```
 Preset "Lab Member (read-only)":
   scope-template: Lab
-  capabilities: sample:read, sample:read_detail
+  capabilities: sample:read, sample:read_detail, pipeline:read,
+                lab:read, org:read, import:read
+  note: Every addition beyond the original two is a read. Watching a pipeline
+        run, seeing the lab directory, and reading a mapping config are all
+        things a read-only member needs and none of them writes.
 ```
+
+**Keeping this section and `reseed.py` in agreement.** The blocks above were
+written before the M2 catalog review added eight verbs to §4, and nothing
+noticed: `pipeline:promote`, `pipeline:register_custom` and `pipeline:read`
+each reached a route that no principal could call, and `submission:prepare`,
+`lab:read`, `org:read`, `import:read`, `import:manage` and `token:manage`
+were heading the same way. §4 and these presets are two lists that must agree,
+and until M2-B4 nothing made them.
+`tests/authz/test_catalog_preset_coverage.py` now does, in both directions —
+every catalog verb has a preset, a policy, or a written reason it has none,
+and no preset names a verb the catalog does not define.
 
 **Surveillance Officer** — *not* a scope-bound lab role; this is the capability-bundle that replaces the global `is_data_analyst` flag, and §4.1 already isolated its core capability. It is the cross-scope surveillance-read grant, applied at Instance (or Org) scope.
 

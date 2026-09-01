@@ -4,7 +4,7 @@
 
 # M2 Pre-Cutover Report
 
-Map totals: 124 endpoints — 48 already wired to `require_capability`, 56 carrying a target capability but not yet guarded (ROUTE_LOCAL), 10 AUTH-ONLY BY DESIGN (permanently ungated — authentication is the whole decision), 0 catalog gaps, 10 PUBLIC (0 pending intent verification).
+Map totals: 124 endpoints — 68 already wired to `require_capability`, 36 carrying a target capability but not yet guarded (ROUTE_LOCAL), 10 AUTH-ONLY BY DESIGN (permanently ungated — authentication is the whole decision), 0 catalog gaps, 10 PUBLIC (0 pending intent verification).
 
 ## 1. Catalog gaps
 
@@ -38,7 +38,7 @@ authentication from authorization on them (§4.6, §9.4).
 
 ## 3. ROUTE_LOCAL rows (auth-only today)
 
-56 routes carry `get_current_user` plus in-route ad-hoc
+36 routes carry `get_current_user` plus in-route ad-hoc
 checks and a target capability the map names but no guard enforces yet
 (a further 10 are AUTH-ONLY BY DESIGN and stay that way).
 Two of them authenticate a per-run pipeline token rather than a user
