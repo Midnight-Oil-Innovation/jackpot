@@ -56,8 +56,8 @@ All catalog gaps were resolved in the M2 pre-cutover review (see
 | POST | `/api/v1/federation/search` | `sample:read` | Instance | auth-only today; L1 federated query fan-out (§7.4) |
 | POST | `/api/v1/federation/push` | `federation:push` | Lab | peer-key auth (`authenticate_federation_peer`); §6.2-3 `sovereignty.no_federate_deleting` DENY applies on the sender |
 | POST | `/api/v1/federation/access-requests` | `access:approve_request` | Sample | peer-key auth + anti-spoofing body cross-check (403 on mismatch, §7.6-Q2); brokers into `sample_access` workflow (L3) |
-| GET | `/api/v1/files/broken` | `sample:read` | Lab | **M2-B7**, not B2 — row-filtered |
-| GET | `/api/v1/files/` | `sample:read` | Lab | **M2-B7**, not B2 — row-filtered |
+| GET | `/api/v1/files/broken` | `sample:read` | Lab | `sample_list_clause` (M2-B7) — a broken file lists exactly when its sample lists |
+| GET | `/api/v1/files/` | `sample:read` | Lab | `sample_list_clause` (M2-B7) |
 | GET | `/api/v1/files/{file_id}` | `sample:read_detail` | Sample | `require_capability("sample:read_detail", sample_id=…)` on the referencing sample (M2-B2); a 403 is collapsed into FILE_NOT_FOUND so existence is not leaked |
 | POST | `/api/v1/files/{file_id}/promote` | `sample:update` | Sample | `require_capability("sample:update", sample_id=…)` (M2-B2). WIDENED deliberately: the legacy branch required a Lab Director, the map's verb is also held by lab_member_rw |
 | GET | `/api/v1/files/jobs/{job_id}` | `sample:read` | Sample | `require_capability("sample:read", sample_id=…)` on the job's file (M2-B2). Decided at **Sample** scope, not Lab: the job names one file, so its sample is resolvable and the narrower scope is the honest one |
@@ -69,7 +69,7 @@ All catalog gaps were resolved in the M2 pre-cutover review (see
 | PATCH | `/api/v1/import_mappings/{mapping_id}` | `import:manage` | Lab | auth-only today |
 | DELETE | `/api/v1/import_mappings/{mapping_id}` | `import:manage` | Lab | auth-only today; soft-delete (is_active=false) |
 | POST | `/api/v1/imports/sessions/` | `sample:create` | Lab | `require_capability("sample:create", lab_id=…)` (M2-B2); narrower than the membership test it replaced — a Lab Reader is a member but holds no `sample:create` |
-| GET | `/api/v1/imports/sessions/` | `sample:read` | Lab | **M2-B7**, not B2 — the caller's own sessions, filtered per row by owner |
+| GET | `/api/v1/imports/sessions/` | `sample:read` | Lab | `lab_list_clause("sample:read")` (M2-B7), on top of the owner filter — a session stops listing when the caller loses access to its lab |
 | GET | `/api/v1/imports/sessions/{session_id}` | `sample:read` | Lab | `require_capability("sample:read", lab_id=…)` on the session's lab (M2-B2), after the owner filter |
 | PATCH | `/api/v1/imports/sessions/{session_id}` | `sample:create` | Lab | `require_capability("sample:create", lab_id=…)` (M2-B2) |
 | POST | `/api/v1/imports/sessions/{session_id}/import` | `sample:create` | Lab | `require_capability("sample:create", lab_id=…)` (M2-B2); re-checked here, not trusted from session-creation time |
@@ -92,7 +92,7 @@ All catalog gaps were resolved in the M2 pre-cutover review (see
 | GET | `/api/v1/organizations/{org_id}` | `org:read` | Org | auth-only today |
 | PATCH | `/api/v1/organizations/{org_id}` | `org:manage` | Instance | `require_capability("org:manage")` |
 | DELETE | `/api/v1/organizations/{org_id}` | `org:manage` | Instance | `require_capability("org:manage")` |
-| GET | `/api/v1/pipelines/` | `pipeline:read` | Instance | auth-only today; pipeline zoo read |
+| GET | `/api/v1/pipelines/` | `pipeline:read` | Project | `project_list_clause("pipeline:read")` OR launched-by (M2-B7) — same verb and scope the per-run status routes check, so the list cannot show a run those routes would refuse |
 | POST | `/api/v1/pipelines/launch` | `pipeline:run` | Project | `permits("pipeline:run", project_id=…)` (M2-B3). §8.2 puts the verb in Lab Lead and Lab Member RW, so who can launch is unchanged except that read-only members no longer can. The in-route per-sample checks were CONVERTED, not dropped — each input now takes `sample:read_detail` at its own sample scope, which also picks up PUBLIC, owned and per-sample-granted inputs the lab test could not see |
 | POST | `/api/v1/pipelines/events` | `pipeline:write_results` | Instance | SERVICE-authenticated (NOT public): per-run `X-Pipeline-Token`, `hmac.compare_digest`, 401 on mismatch (`routers/pipelines.py:903`). Rule 60's never-raises applies to weblog delivery, not auth. M2 adds the SERVICE-principal `permit()` call |
 | GET | `/api/v1/pipelines/{run_id}` | `pipeline:read` | Project | `_may_read_run` -> `permits("pipeline:read", project_id=…)` (M2-B3). Capability corrected from `pipeline:run` in M2-B3-PRE — §4 defines `pipeline:read` as covering run status, and the old reading would have hidden a lab's own runs from its Collaborators and Readers |
@@ -111,10 +111,10 @@ All catalog gaps were resolved in the M2 pre-cutover review (see
 | GET | `/api/v1/projects/{project_id}` | `sample:read` | Project | auth-only today |
 | PATCH | `/api/v1/projects/{project_id}` | `org:manage` | Lab | `require_capability("org:manage")` at lab scope |
 | POST | `/api/v1/sample-access/requests` | `access:request` | Sample | `require_capability("access:request", sample_id=…)` (M2-B2). Carried by an ALLOW **policy** on DISCOVERABLE, not a grant: the requester is by definition not a member of the sample's lab, so no preset could hold it at a covering scope |
-| GET | `/api/v1/sample-access/requests` | `sample:read` | Lab | **M2-B7**, not B2 — row-filtered by requester/director scope |
+| GET | `/api/v1/sample-access/requests` | `sample:read` | Lab | `sample_list_clause("access:approve_request")` OR requester (M2-B7). Replaces the platform-admin bypass and the `is_lab_director` subquery; a director whose grant sits at org scope now sees their org's requests, which `lab_id IN (…)` could not express |
 | POST | `/api/v1/sample-access/requests/{request_id}/approve` | `access:approve_request` | Sample | `require_capability("access:approve_request", sample_id=…)` (M2-B2); scoped, so a director of another lab no longer passes |
 | POST | `/api/v1/sample-access/requests/{request_id}/deny` | `access:approve_request` | Sample | `require_capability("access:approve_request", sample_id=…)` (M2-B2) |
-| GET | `/api/v1/samples/` | `sample:read` | Lab | **M2-B7**, not B2 — row-filtered; `visibility_sql_clause` list filter |
+| GET | `/api/v1/samples/` | `sample:read` | Lab | `sample_list_clause` (M2-B7) — compiled from the same grants and LADDER_POLICIES `permit()` reads; `select_all` uses the identical fragment |
 | GET | `/api/v1/samples/{sample_id}` | `sample:read_detail` | Sample | `require_capability("sample:read_detail", sample_id=…)` (M2-B2); fetch stays ahead of the guard so 404 semantics are unchanged |
 | PATCH | `/api/v1/samples/{sample_id}` | `sample:update` | Sample | `require_capability("sample:update", sample_id=…)` (M2-B2); Lab Reader excluded by preset, not by a branch |
 | DELETE | `/api/v1/samples/{sample_id}` | `sample:archive` | Sample | `require_capability("sample:archive", sample_id=…)` (M2-B2); `sample:archive` is lab_lead + instance_administrator only. Archive-vs-soft_delete semantics still open (M3) |
@@ -154,8 +154,8 @@ All catalog gaps were resolved in the M2 pre-cutover review (see
 | GET | `/api/v1/users/{user_id}` | `user:manage` | Org | auth-only today; self OR user:manage at M2 |
 | PATCH | `/api/v1/users/{user_id}` | `user:manage` | Org | auth-only today; self OR user:manage in-route |
 | DELETE | `/api/v1/users/{user_id}` | `user:manage` | Instance | `require_capability("user:manage")` |
-| GET | `/api/v1/wastewater/sites` | `sample:read_surveillance` | Org | **M2-B7**, not B2 — row-filtered |
-| GET | `/api/v1/wastewater/lineage-abundance` | `sample:read_surveillance` | Org | **M2-B7**, not B2 — row-filtered |
+| GET | `/api/v1/wastewater/sites` | `sample:read_surveillance` | Org | `sample_list_clause` (M2-B7) |
+| GET | `/api/v1/wastewater/lineage-abundance` | `sample:read_surveillance` | Org | `sample_list_clause` (M2-B7) |
 
 ## Sample plane after M2-B2
 
@@ -183,8 +183,8 @@ invariant:
 | GET | `/api/v1/wastewater/sites` |
 | GET | `/api/v1/wastewater/lineage-abundance` |
 
-Until B7 lands these still run on `permissions.visibility_sql_clause`, the
-legacy ladder. They are not unguarded; they are guarded by the old model.
+**M2-B7 landed these**, plus `GET /api/v1/pipelines/`. They no longer run on
+`permissions.visibility_sql_clause`; see "List plane after M2-B7" below.
 
 ### What the guard gained
 
@@ -289,11 +289,100 @@ only.
 - **Project-only membership** loses launch, as it lost sample access in B2.
   Same registered divergence (`project_only_membership`).
 
-### Still on the legacy path
+### The run list
 
-`GET /api/v1/pipelines/` is a B7-class list — runs the caller can see, filtered
-per row, with no single resource to scope against. It keeps its inline
-`launched_by_id OR lab_membership` filter until B7.
+`GET /api/v1/pipelines/` was a B7-class list and landed there: `pipeline:read`
+at the run's project scope, OR the caller launched it.
+
+## List plane after M2-B7
+
+All 8 list endpoints now compile their filter from the same grants and
+policies `permit()` reads. `backend/permissions.py` has **no production
+callers left** — only the equivalence harness that compares against it.
+
+### Why one builder, not eight call sites
+
+Three things have to match the row-wise guard exactly: the scope expression,
+the policy set, and the attribute-column mapping. Assembling them per call
+site is how the two halves drift, and a list that drifts *wider* leaks rows
+with no error and no audit entry. So they are assembled once —
+`authz.visibility.sample_list_clause` — and the routes pass table aliases.
+
+Three levels exist because not every list is sample-rooted:
+
+| Builder | Scope SQL | Used by |
+|---|---|---|
+| `sample_list_clause` | `scope_sql` | samples, files ×2, wastewater ×2, sample-access |
+| `lab_list_clause` | `lab_scope_sql` | import sessions |
+| `project_list_clause` | `project_scope_sql` | pipeline runs |
+
+The lab and project builders pass **no policies**, deliberately: every entry
+in `LADDER_POLICIES` reads a *sample* attribute, so passing them would
+compile predicates against columns those rows do not have. Rows at those
+levels are decided by structural grants alone, which is what `permit()` does
+for them too.
+
+`is_canonical_scope_sql` accepts all three by re-deriving each candidate and
+comparing bytes, rather than by loosening its regex — adding a level cannot
+accidentally widen what it admits.
+
+### Two ownership rungs kept
+
+`sample-access/requests` and `pipelines/` each keep an OR on "rows you
+created". No grant expresses "the request you filed" or "the run you
+started", the legacy filters admitted both, and removing them would narrow
+access this batch was not asked to narrow.
+
+Their *other* rung replaced a legacy bypass in each case: the platform-admin
+branch is gone from both, because an instance-scoped grant contains every
+path beneath it.
+
+### What the invariant covers, and what it does not
+
+`tests/authz/test_cutover_preflight.py` asserts, on real PostgreSQL:
+
+- `new_visible ⊆ legacy_visible` for every persona — unconditional;
+- every legacy-only row attributed to a registered divergence class;
+- the SQL fragment and `permit()` agreeing **row by row**.
+
+M2-B7 pointed those at the production policy set and attribute columns. They
+previously ran with `policies=[]`, which measures grants alone — a strict
+subset of what the deployed list shows, and a proof about something nobody
+runs.
+
+**That proof reaches the six sample-rooted lists only.** It is built on
+`samples`, so it cannot say anything about `imports/sessions` or
+`pipelines/`. Those two are covered by route tests, and their relationship to
+the legacy filter is worth stating plainly rather than implying:
+
+- **`imports/sessions` narrows.** Ownership was previously the entire filter;
+  a lab rung is added on top, so the new set is a strict subset. Nothing can
+  appear that did not before.
+- **`pipelines/` can widen, but only by configuration.** Legacy read
+  `lab_id IN (SELECT lab_id FROM lab_membership …)`; the new filter is a
+  `pipeline:read` grant covering the run's project scope. A lab-scoped grant
+  gives the same set. An **org-scoped** grant would give more — every lab in
+  the org — which the legacy form could not express. Today no preset issues
+  org-scoped grants (reseed writes lab and instance scopes only), so the sets
+  match; an operator who issues one later gets the wider reading, which is
+  what an org-scoped grant is supposed to mean. Same class as the
+  director-at-org-scope widening on the access-request list.
+
+### Measured, not assumed
+
+The backlog asked whether prefix `LIKE` over a computed expression needs an
+expression index. Measured at 3,000 samples on PostgreSQL:
+
+| | Estimated cost | Execution |
+|---|---|---|
+| New (`sample_list_clause`) | 113 | 5.3 ms |
+| Legacy (`permissions.py`) | 3,923 | 7.1 ms |
+
+Both sequential-scan `samples`. The new fragment is **faster**, because the
+legacy ladder also ran four correlated `EXISTS` subqueries. No index added —
+this is not a regression, and one would be speculative. Revisit if a
+deployment's sample count makes the scan itself the problem; the scan, not
+the fragment, is what would need fixing.
 
 ## Gaps
 

@@ -6,6 +6,7 @@ filter parameters, and the empty-state response are exercised here.
 """
 
 import pytest
+from authz_helpers import sync_grants_from_legacy_roles
 
 from backend.config import get_settings
 from backend.database import execute_query, execute_write
@@ -149,6 +150,10 @@ async def test_list_broken_files_returns_user_accessible_only(client, monkeypatc
     email = "f10-scope-user@test.com"
     user_id = _make_user(email)
     _add_membership(user_id, SEED_LAB_ID)
+    # M2-B7: the list filter is compiled from grants, so the membership has to
+    # be reseeded into one. The lab_membership row alone stopped being a
+    # decision input at M2-B1.
+    sync_grants_from_legacy_roles()
     _switch_user(email, monkeypatch)
 
     resp = await client.get("/api/v1/files/broken")

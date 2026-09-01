@@ -6,9 +6,10 @@ from pydantic import BaseModel
 from backend import deletion
 from backend.audit import AuditActions, log_audit
 from backend.auth.guards import get_current_user, get_user_lab_membership, require_capability
+from backend.authz.principal import load_principal
+from backend.authz.visibility import sample_list_clause
 from backend.database import execute_query, execute_write, get_db_dep
 from backend.pagination import paginate
-from backend.permissions import visibility_sql_clause
 from backend.responses import success, success_list
 from backend.storage import StorageError, generate_presigned_url
 from backend.validator import (
@@ -308,7 +309,11 @@ def list_samples(
 ):
     user = get_current_user(request)
 
-    vis_clause, vis_params = visibility_sql_clause(user)
+    # M2-B7: the list filter is now compiled from the same grants and policies
+    # permit() reads, rather than permissions.py's hand-written ladder. The
+    # samples JOIN labs below is not decoration — a sample's scope is derived
+    # from its lineage (ADR 0015) and the org segment comes from labs.
+    vis_clause, vis_params = sample_list_clause(load_principal(user["id"]))
     where, params = _build_sample_filters(
         vis_clause=vis_clause,
         vis_params=vis_params,
@@ -331,14 +336,14 @@ def list_samples(
 
     if select_all:
         rows = execute_query(
-            f"SELECT s.id FROM samples s WHERE {where_sql}",
+            f"SELECT s.id FROM samples s JOIN labs l ON l.id = s.lab_id WHERE {where_sql}",
             params,
             conn=db,
         )
         ids = [r["id"] for r in rows]
         return success(data={"ids": ids, "count": len(ids)})
 
-    base_query = f"SELECT s.* FROM samples s WHERE {where_sql}"
+    base_query = f"SELECT s.* FROM samples s JOIN labs l ON l.id = s.lab_id WHERE {where_sql}"
     results, total = paginate(
         base_query,
         params,

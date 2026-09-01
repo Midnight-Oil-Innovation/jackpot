@@ -85,9 +85,8 @@ def scope_sql(*, samples: str, labs: str) -> str:
     responsible for the ``samples JOIN labs ON labs.id = samples.lab_id`` that
     puts ``organization_id`` in reach.
     """
-    for name, alias in (("samples", samples), ("labs", labs)):
-        if not _ALIAS_RE.match(alias):
-            raise ValueError(f"{name} alias must be a SQL identifier, got {alias!r}")
+    _check_alias("samples", samples)
+    _check_alias("labs", labs)
     return (
         f"('{ROOT}/org/' || {labs}.organization_id"
         f" || '/lab/' || {samples}.lab_id"
@@ -96,8 +95,41 @@ def scope_sql(*, samples: str, labs: str) -> str:
     )
 
 
+def lab_scope_sql(*, labs: str) -> str:
+    """SQL expression computing a LAB row's canonical scope URI (M2-B7).
+
+    Only the ``labs`` alias is needed: once a query joins ``labs``, that table
+    carries both segments of the path. Used by lists whose rows live at lab
+    level and have no sample — import sessions, for one — where
+    :func:`scope_sql` would name a sample that does not exist.
+    """
+    _check_alias("labs", labs)
+    return f"('{ROOT}/org/' || {labs}.organization_id || '/lab/' || {labs}.id)"
+
+
+def project_scope_sql(*, labs: str, rows: str) -> str:
+    """SQL expression computing a PROJECT-level row's scope URI (M2-B7).
+
+    ``rows`` is the alias of the table carrying ``project_id`` — pipeline
+    runs, say. The lab and org segments come from ``labs``, which the caller
+    joins on that table's ``lab_id``.
+    """
+    _check_alias("labs", labs)
+    _check_alias("rows", rows)
+    return (
+        f"('{ROOT}/org/' || {labs}.organization_id"
+        f" || '/lab/' || {labs}.id"
+        f" || '/project/' || {rows}.project_id)"
+    )
+
+
+def _check_alias(name: str, alias: str) -> None:
+    if not _ALIAS_RE.match(alias):
+        raise ValueError(f"{name} alias must be a SQL identifier, got {alias!r}")
+
+
 def is_canonical_scope_sql(expr: str) -> bool:
-    """True when ``expr`` is exactly what :func:`scope_sql` produces.
+    """True when ``expr`` is exactly what one of the scope-SQL builders produces.
 
     ``visibility_sql_clause`` interpolates the expression into a WHERE
     fragment, so it is SQL the caller supplies rather than user input — but
@@ -105,12 +137,18 @@ def is_canonical_scope_sql(expr: str) -> bool:
     the caller, the expression is re-derived from the aliases it names and
     compared: anything that is not byte-identical to a generated expression is
     rejected, which admits no room for an appended clause.
+
+    All three levels are accepted (M2-B7). Re-deriving each candidate and
+    comparing bytes means adding a level cannot accidentally widen what this
+    admits — a regex loosened to cover three shapes could.
     """
-    m = re.match(
-        r"^\('[^']*/org/' \|\| ([A-Za-z_][A-Za-z0-9_]*)\.organization_id"
-        r" \|\| '/lab/' \|\| ([A-Za-z_][A-Za-z0-9_]*)\.lab_id",
-        expr,
-    )
-    if not m:
+    aliases = re.findall(r"\b([A-Za-z_][A-Za-z0-9_]*)\.", expr)
+    if not aliases:
         return False
-    return expr == scope_sql(labs=m.group(1), samples=m.group(2))
+    candidates = []
+    for a in set(aliases):
+        candidates.append(lab_scope_sql(labs=a))
+        for b in set(aliases):
+            candidates.append(scope_sql(labs=a, samples=b))
+            candidates.append(project_scope_sql(labs=a, rows=b))
+    return expr in candidates

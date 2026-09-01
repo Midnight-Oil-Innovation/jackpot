@@ -16,14 +16,16 @@ GET  /api/v1/wastewater/lineage-abundance
     Wastewater samples joined to their ``wastewater_lineage_abundance``
     rows. Filterable by date range, site, and lineage. One row per
     (sample, lineage). Visibility honours
-    ``permissions.visibility_sql_clause``.
+    ``authz.visibility.sample_list_clause`` — the same grants and policies
+    ``permit()`` reads (M2-B7).
 """
 
 from fastapi import APIRouter, Depends, Query, Request
 
 from backend.auth.guards import get_current_user
+from backend.authz.principal import load_principal
+from backend.authz.visibility import sample_list_clause
 from backend.database import execute_query, get_db_dep
-from backend.permissions import visibility_sql_clause
 from backend.responses import success
 
 router = APIRouter(prefix="/api/v1/wastewater", tags=["wastewater"])
@@ -43,11 +45,12 @@ def list_sites(
     db=Depends(get_db_dep),  # noqa: B008
 ):
     user = get_current_user(request)
-    vis_clause, vis_params = visibility_sql_clause(user)
+    vis_clause, vis_params = sample_list_clause(load_principal(user["id"]))
     rows = execute_query(
         f"""
         SELECT DISTINCT s.wwtp_name AS site
         FROM samples s
+        JOIN labs l ON l.id = s.lab_id
         WHERE s.is_archived = FALSE
           AND s.sector = 'wastewater'
           AND s.wwtp_name IS NOT NULL
@@ -75,7 +78,7 @@ def list_lineage_abundance(
     against ``wastewater_lineage_abundance`` on the textual ``sample_id``.
     """
     user = get_current_user(request)
-    vis_clause, vis_params = visibility_sql_clause(user)
+    vis_clause, vis_params = sample_list_clause(load_principal(user["id"]))
 
     where = [
         "s.is_archived = FALSE",
@@ -114,6 +117,7 @@ def list_lineage_abundance(
             w.tool_version           AS tool_version,
             w.barcode_version        AS barcode_version
         FROM samples s
+        JOIN labs l ON l.id = s.lab_id
         JOIN wastewater_lineage_abundance w
             ON w.sample_id = s.sample_id
         WHERE {" AND ".join(where)}
