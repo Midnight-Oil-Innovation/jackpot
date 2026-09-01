@@ -119,7 +119,7 @@ All catalog gaps were resolved in the M2 pre-cutover review (see
 | PATCH | `/api/v1/samples/{sample_id}` | `sample:update` | Sample | `require_capability("sample:update", sample_id=…)` (M2-B2); Lab Reader excluded by preset, not by a branch |
 | DELETE | `/api/v1/samples/{sample_id}` | `sample:archive` | Sample | `require_capability("sample:archive", sample_id=…)` (M2-B2); `sample:archive` is lab_lead + instance_administrator only. Archive-vs-soft_delete semantics still open (M3) |
 | GET | `/api/v1/samples/{sample_id}/files` | `sample:read_detail` | Sample | `require_capability("sample:read_detail", sample_id=…)` (M2-B2) |
-| GET | `/api/v1/samples/{sample_id}/download` | `sample:read_detail` | Sample | `require_capability("sample:read_detail", sample_id=…)` (M2-B2). The narrower raw_fastq Lab-Director restriction inside the route is unchanged — no §4 verb names it; see Residue below |
+| GET | `/api/v1/samples/{sample_id}/download` | `sample:read_detail` (+ `sample:read_unscrubbed` when `file_type=raw_fastq`) | Sample | `require_capability("sample:read_detail", sample_id=…)` (M2-B2), then a second, narrower check for the pre-scrub file (M2-DROP-PRE slice 2). The two are nested, not alternatives — a raw_fastq caller passes both. The legacy branch's platform-admin arm is deliberately gone: §8.2's Instance Administrator holds no content-read verb, so admitting it to pre-scrub content while barring it from post-scrub detail was incoherent |
 | GET | `/api/v1/sequencing-labs/` | — | Instance | AUTH-ONLY BY DESIGN — registry of physical facilities; every ingesting user needs it |
 | POST | `/api/v1/sequencing-labs/` | `org:manage` | Instance | `require_capability("org:manage")` |
 | GET | `/api/v1/sequencing-labs/{seq_lab_id}` | — | Instance | AUTH-ONLY BY DESIGN — detail read of the same facility registry |
@@ -204,11 +204,9 @@ the lab they are asking.
 
 ### Residue — deliberately still on the legacy check
 
-- `GET /api/v1/samples/{sample_id}/download?file_type=raw_fastq` keeps its
-  in-route Lab-Director test. The map gives the route one capability,
-  `sample:read_detail`, and this is a narrower restriction inside it with no
-  §4 verb to name it. Dropping it to finish the rewrite would widen access
-  to un-scrubbed reads. Needs a verb (M2-B5 owns catalog additions).
+- ~~`GET /api/v1/samples/{sample_id}/download?file_type=raw_fastq`~~ —
+  **closed by M2-DROP-PRE slice 2.** `sample:read_unscrubbed` is now the verb
+  that names the pre-scrub restriction; see the download row above.
 - `POST /api/v1/files/{file_id}/promote` moved the other way: the map's
   `sample:update` is held by `lab_member_rw`, so a Lab Collaborator can now
   promote where the legacy branch required a Director. Recorded as a
@@ -235,18 +233,31 @@ not an oversight. An M3 draft added both verbs to the preset and
 `test_reseed_presets_match_the_documented_ones` rejected it, which is the
 check working.
 
-### Residue after M3 — still on the legacy check
+### Deletion plane after M2-DROP-PRE slice 2
 
-- `GET /samples/{id}/deletion-report` and
-  `POST /samples/{id}/retraction-requests` keep `_require_lab_tie` /
-  `_require_approval_authority`. Both read `is_platform_admin`. Converting
-  them needs a decision the §4 catalog does not currently support: the report
-  is a read whose natural verb (`sample:read_detail`) excludes admins, and a
-  retraction request is submission-governance with no verb of its own. Listed
-  in `M2-DROP`.
-- `POST /samples/{id}/reverse-tombstone` and `POST /samples/{id}/vacuum-now`
-  are admin-only and have no §4 verb. Same treatment as the raw_fastq residue
-  above: they need a catalog addition, not a guess.
+The four residue routes below are converted; `samples.py` now reads neither
+`is_platform_admin` nor `is_lab_director` anywhere.
+
+| Method | Path | Capability | Scope | Note |
+|---|---|---|---|---|
+| GET | `/api/v1/samples/{sample_id}/deletion-report` | `deletion:read_report` | Sample | Replaces `_require_lab_tie`'s three rungs: admin and lab-member became grants (§8.2 puts the verb in Instance Administrator and all three lab presets), ownership became a `LADDER_POLICIES` `owner_id` ALLOW. The admin **keeps** this one — the report is lifecycle state, erasure evidence and an audit trail, a governance record rather than sample content |
+| POST | `/api/v1/samples/{sample_id}/retraction-requests` | `submission:retract` | Sample | Replaces `_require_approval_authority`. Its own verb rather than a reuse of `submission:approve`: retraction is the deletion plane reaching outward (B-CARE-3g). The admin **loses** it — asking a repository to withdraw a published record is a consent act, the same call M3 made for `deletion:approve` |
+| POST | `/api/v1/samples/{sample_id}/reverse-tombstone` | `deletion:reverse_tombstone` | Sample | Instance Administrator only. Operational: unmakes a purge that has not happened yet |
+| POST | `/api/v1/samples/{sample_id}/vacuum-now` | `deletion:vacuum` | Sample | Instance Administrator only. Executes a decision the consent authority already made — the sample is TOMBSTONED before this route will touch it |
+
+**The record/content line, stated once.** An instance admin keeps a route that
+reads or executes a governance *record* and loses one that returns sample
+*content* or makes a consent decision. That is the discriminator behind the
+split above and behind `sample:read_unscrubbed`; it is the same boundary §4.7
+draws for AUTH-ONLY rows.
+
+**Why these needed their own tests.** The baseline migration seeds
+`admin@example.org` as a platform admin *and* Lab Director of lab 1, so every
+existing test acting "as admin" holds both preset grant sets and cannot tell
+which rung answered. All of them stayed green through this change, including
+the two routes it takes away from an instance admin.
+`tests/test_deletion_plane_capabilities.py` builds single-shape principals for
+exactly that reason.
 
 ### Federation plane after M4-B
 

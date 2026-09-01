@@ -209,6 +209,19 @@ LADDER_POLICIES: list[dict[str, Any]] = [
         "scope_ref": _ROOT,
         "resource": {"owner_id": PRINCIPAL_ID},
     },
+    # M2-DROP-PRE slice 2. _require_lab_tie's three rungs were "platform
+    # admin, owner, or lab member". Admin and member become grants; ownership
+    # cannot, for the reason stated on the two rungs above — it would mean a
+    # grant row per sample. Without this the owner of a sample in a lab they
+    # have since left would lose the report, which is a narrowing nobody
+    # asked for and which no test would have caught, because the presets
+    # cover every owner who is still a member.
+    {
+        "effect": "ALLOW",
+        "capability": "deletion:read_report",
+        "scope_ref": _ROOT,
+        "resource": {"owner_id": PRINCIPAL_ID},
+    },
     # Asking for access to a DISCOVERABLE sample. This one cannot be a grant
     # and cannot come from a preset: the requester is, by definition, not a
     # member of the sample's lab — that is why they are asking — so a
