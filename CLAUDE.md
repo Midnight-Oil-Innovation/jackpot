@@ -39,7 +39,7 @@ Per-item status lives in `active_backlog.yaml`, not here.
    redirect stub on 2026-08-28 — it is no longer the specification.)
 2. Read `todo.md` — find the next unchecked task
 3. Re-read this file (`docs/CLAUDE.md`) — every Critical Rule applies at all times
-4. Confirm the baseline is stable: `uv run pytest tests/ schema/tests/ cli/tests/` from the workspace root. The expected test count is `test_count` in `docs/STATUS.md` — never a number quoted in prose here or elsewhere. Coverage must stay at or above the CI threshold of 80%. The post-P0d 39% number we carried briefly was a pytest-cov misconfiguration (omit list wasn't reaching the report-time matcher); fixed by making `--cov-config=pyproject.toml` explicit in addopts — see `docs/learnings.md` "Coverage measurement bug" entry. P0e (`docs/architecture/jackpot-init-cli.md`) shipped `jackpot init` operator-bootstrap CLI plus 13 absorbed Phase 22 cleanup items; see `docs/review_log.md` "P0e closeout" section.
+4. Confirm the baseline is stable: `uv run pytest tests/ schema/tests/ cli/tests/` from the workspace root. The expected test count is `test_count` in `docs/STATUS.md` — never a number quoted in prose here or elsewhere. Coverage must stay at or above the CI threshold of 80%. The post-P0d 39% number we carried briefly was a pytest-cov misconfiguration (omit list wasn't reaching the report-time matcher); fixed by making `--cov-config=pyproject.toml` explicit in addopts — see `docs/learnings.md` "Coverage measurement bug" entry. P0e (`docs/architecture/jackpot-init-cli.md`) shipped `jackpot init` operator-bootstrap CLI plus 13 absorbed Phase 22 cleanup items; see the P0e entry in `docs/learnings.md`.
 
 ## Session-start checklist
 
@@ -93,7 +93,7 @@ If the session crosses from conversation into action — even a single edit — 
 - If tests pass: check the item off in `todo.md`, commit with `git commit -a -m`, move to the next item
 - If tests fail: fix and rerun — **never mark a task complete without passing tests**
 - Every ~20 tasks: pause, review `docs/architecture.md` vs the current implementation for gaps,
-  log findings to `docs/review_log.md`, and resolve all gaps before continuing
+  log findings to `docs/learnings.md`, and resolve all gaps before continuing
 
 ### Decision Rules
 
@@ -103,8 +103,8 @@ If the session crosses from conversation into action — even a single edit — 
 - **Never write placeholder code** — every function must be fully implemented
 - **Always use `uv run python` / `uv run python3`** — never bare `python` or `python3`; the shell aliases do not apply in Claude Code sessions
 - When blocked on intent: check `docs/architecture.md` and `docs/adr/`, then the relevant section of this file,
-  then log the question to `docs/review_log.md` and continue with the next unblocked task
-- For non-trivial architectural changes: write the plan to `docs/review_log.md` and
+  then log the question to `docs/learnings.md` and continue with the next unblocked task
+- For non-trivial architectural changes: write the plan to `docs/learnings.md` and
   wait for explicit "Go" before proceeding
 
 ### Commit Convention
@@ -1362,8 +1362,9 @@ quoted for several phases was a measurement bug — pytest-cov
 needs `--cov-config=pyproject.toml` explicit in addopts to load
 the omit list (it does NOT auto-discover the
 `[tool.coverage.run]` table the way the coverage CLI does).
-Real gaps to close (still tracked as action item 15 in
-`docs/review_log.md` but smaller than thought):
+Real gaps to close (Phase 22 action item 15, restated in the
+coverage-measurement entry in `docs/learnings.md`, and smaller
+than that item assumed):
 `harmonizer.py` 0% (no tests), `routers/gisaid.py` 43%,
 `routers/templates.py` 53%, `dlp_scanner.py` 71%.
 Priority order for new tests:
