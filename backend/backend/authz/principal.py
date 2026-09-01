@@ -147,3 +147,65 @@ def sample_resource(sample_id: int, *, conn: Any = None) -> Resource:
 def sample_resource_scope(sample_id: int, *, conn: Any = None) -> str:
     """Canonical scope URI for a sample (§3.1.1). See :func:`sample_resource`."""
     return sample_resource(sample_id, conn=conn).scope
+
+
+# ── SERVICE principals (M2-B6, access_model.md §4.6, §8.4, §9.4) ─────────
+
+PIPELINE_RUN_CAPABILITIES: list[str] = ["pipeline:write_results"]
+"""What a running pipeline may do, and — by omission — what it may not.
+
+The omission is the point. §8.4's Data Source Lab preset spells it out:
+"EXPLICITLY NOT GRANTED: sample:read_detail, sample:read ... The absence is
+the security property, not an oversight." A principal that can write results
+for a run and cannot read the samples that run consumed is the
+"computes without seeing" guarantee (§4.6) expressed as a capability set
+rather than as a promise about how tokens happen to be minted.
+
+Adding a read verb here would silently undo that, which is why the negative
+is asserted by a test rather than left to review.
+"""
+
+
+def pipeline_run_principal(run: dict[str, Any]) -> Principal:
+    """The SERVICE principal for a pipeline run's own callbacks.
+
+    Not loaded from ``authz_capability_grants``: this principal has no rows
+    and should not. It exists for the duration of one run, its credential is
+    the per-run ``X-Pipeline-Token``, and its authority is bounded by the
+    project that run belongs to — so the grant is constructed from the run
+    rather than stored, exactly as a sample's scope is derived rather than
+    stored (ADR 0015).
+
+    **What this does and does not buy, honestly.** The positive check cannot
+    fail today: the scope is built from the same run the token authenticated
+    against, so ``permit()`` always ALLOWs. The value is not a new failure
+    mode, it is that the principal now *exists* with an enumerated capability
+    set and that ``permit()`` is the chokepoint. When M4/M5 introduce a
+    ``data_source_lab`` peer carrying the §8.4 preset, the route asks the same
+    question of a different principal and the answer differs — without the
+    route changing. Today the token collapses authentication and
+    authorization; this separates them so the collapse is not load-bearing.
+
+    Raises ``ValueError`` if the run names no project — ``pipeline_runs
+    .project_id`` is NOT NULL, so that means a caller passed a row it did not
+    fetch the column for, and inventing an instance-root scope there would
+    hand a pipeline callback authority over the whole deployment.
+    """
+    project_id = run.get("project_id")
+    if project_id is None:
+        raise ValueError(
+            f"run {run.get('run_id')!r} has no project_id — cannot scope a SERVICE principal"
+        )
+    return Principal(
+        kind=PrincipalKind.SERVICE,
+        id=f"pipeline-run:{run.get('run_id')}",
+        on_behalf_of=None,
+        grants=[
+            CapabilityGrant(
+                capability=capability,
+                scope_ref=project_resource_scope(project_id),
+                source="pipeline_token",
+            )
+            for capability in PIPELINE_RUN_CAPABILITIES
+        ],
+    )
