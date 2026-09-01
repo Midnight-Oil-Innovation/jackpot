@@ -260,6 +260,7 @@ def project_list_clause(
     *,
     labs: str = "l",
     rows: str = "pr",
+    project_id_column: str = "project_id",
     context: Context | None = None,
 ) -> tuple[str, dict]:
     """List filter for rows that live at PROJECT level — pipeline runs.
@@ -271,7 +272,7 @@ def project_list_clause(
     return visibility_sql_clause(
         principal,
         capability,
-        project_scope_sql(labs=labs, rows=rows),
+        project_scope_sql(labs=labs, rows=rows, project_id_column=project_id_column),
         context=context or Context(conditions={}, now=datetime.now(UTC)),
         policies=[],
     )

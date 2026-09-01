@@ -107,19 +107,39 @@ def lab_scope_sql(*, labs: str) -> str:
     return f"('{ROOT}/org/' || {labs}.organization_id || '/lab/' || {labs}.id)"
 
 
-def project_scope_sql(*, labs: str, rows: str) -> str:
+PROJECT_ID_COLUMNS = ("project_id", "id")
+"""Where a project's id lives on the row being scoped.
+
+``project_id`` for a table that references a project (pipeline runs); ``id``
+when the row IS the project. Enumerated rather than free-form because
+:func:`is_canonical_scope_sql` re-derives every accepted expression from this
+list, and an arbitrary column name would be an injection surface.
+"""
+
+
+def project_scope_sql(*, labs: str, rows: str, project_id_column: str = "project_id") -> str:
     """SQL expression computing a PROJECT-level row's scope URI (M2-B7).
 
-    ``rows`` is the alias of the table carrying ``project_id`` — pipeline
-    runs, say. The lab and org segments come from ``labs``, which the caller
-    joins on that table's ``lab_id``.
+    ``rows`` is the alias of the table being scoped; the lab and org segments
+    come from ``labs``, which the caller joins on that table's ``lab_id``.
+
+    ``project_id_column`` distinguishes the two shapes: a row that *references*
+    a project carries ``project_id`` (pipeline runs), while the ``projects``
+    table itself carries ``id``. Getting this wrong is a loud
+    ``UndefinedColumn`` rather than a silent mis-scope, but only because the
+    column is interpolated — which is why the value is restricted to
+    :data:`PROJECT_ID_COLUMNS`.
     """
     _check_alias("labs", labs)
     _check_alias("rows", rows)
+    if project_id_column not in PROJECT_ID_COLUMNS:
+        raise ValueError(
+            f"project_id_column must be one of {PROJECT_ID_COLUMNS}, got {project_id_column!r}"
+        )
     return (
         f"('{ROOT}/org/' || {labs}.organization_id"
         f" || '/lab/' || {labs}.id"
-        f" || '/project/' || {rows}.project_id)"
+        f" || '/project/' || {rows}.{project_id_column})"
     )
 
 
@@ -150,5 +170,6 @@ def is_canonical_scope_sql(expr: str) -> bool:
         candidates.append(lab_scope_sql(labs=a))
         for b in set(aliases):
             candidates.append(scope_sql(labs=a, samples=b))
-            candidates.append(project_scope_sql(labs=a, rows=b))
+            for column in PROJECT_ID_COLUMNS:
+                candidates.append(project_scope_sql(labs=a, rows=b, project_id_column=column))
     return expr in candidates

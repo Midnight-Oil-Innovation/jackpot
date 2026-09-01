@@ -4,9 +4,12 @@ from pydantic import BaseModel, Field
 from backend.audit import AuditActions, log_audit
 from backend.auth.guards import (
     get_current_user,
-    get_user_lab_membership,
+    permits,
     require_capability,
 )
+from backend.authz.principal import load_principal
+from backend.authz.reseed import group_name_for_id, sync_membership_grants
+from backend.authz.visibility import lab_list_clause
 from backend.database import execute_query, execute_write, get_db_dep
 from backend.pagination import paginate
 from backend.responses import error, success, success_list, success_message
@@ -126,22 +129,17 @@ def list_labs(
 ):
     user = get_current_user(request)
 
-    if user.get("is_platform_admin"):
-        base_query = "SELECT * FROM labs"
-        params: dict = {}
-        if organization_id is not None:
-            base_query += " WHERE organization_id = :org_id"
-            params["org_id"] = organization_id
-    else:
-        base_query = (
-            "SELECT l.* FROM labs l "
-            "JOIN lab_membership lm ON lm.lab_id = l.id "
-            "WHERE lm.user_id = :uid"
-        )
-        params = {"uid": user["id"]}
-        if organization_id is not None:
-            base_query += " AND l.organization_id = :org_id"
-            params["org_id"] = organization_id
+    # M2-B5: the lab directory, filtered by lab:read. Replaces a
+    # platform-admin bypass and a JOIN through lab_membership — the first is
+    # unnecessary once an instance-scoped grant contains every lab path, and
+    # the second could not see an org-scoped grant at all, which is exactly
+    # what "read the lab directory for my org" should be.
+    vis, params = lab_list_clause(load_principal(user["id"]), "lab:read", labs="l")
+    where = [vis]
+    if organization_id is not None:
+        where.append("l.organization_id = :org_id")
+        params["org_id"] = organization_id
+    base_query = f"SELECT l.* FROM labs l WHERE {' AND '.join(where)}"
 
     rows, total = paginate(
         query=base_query,
@@ -174,7 +172,10 @@ def get_lab(
     if not rows:
         return error("NOT_FOUND", f"Lab {lab_id} not found.", status_code=404)
 
-    if not user.get("is_platform_admin") and not get_user_lab_membership(user["id"], lab_id):
+    # M2-B5: lab:read at the lab, per the map. Every lab preset holds it, so
+    # this admits the same members the membership test did, plus anyone with
+    # an org- or instance-scoped grant.
+    if not permits(user, "lab:read", lab_id=lab_id):
         return error(
             "ACCESS_DENIED",
             "You are not a member of this lab.",
@@ -268,6 +269,29 @@ def deactivate_lab(
         db_conn=db,
     )
     return success_message("Lab deactivated.")
+
+
+def _sync_grants_for(membership: dict, db, *, removed: bool = False) -> None:
+    """Keep a member's grants in step with their membership row (M2-B5).
+
+    A ``lab_membership`` row stopped being a decision input at M2-B1, so
+    without this a member added after cutover holds nothing until someone runs
+    a reseed — the row would say they are a Lab Collaborator and every route
+    would disagree. §4.5 already scopes ``user:manage`` as "create/modify/
+    deactivate users, **assign capabilities**"; issuing the grants is that
+    assignment, not a side effect of it.
+
+    Runs on the request's own connection so the grants and the membership land
+    in one transaction: a half-applied pair is a member who is either
+    invisible or over-privileged, and neither should survive a failure.
+    """
+    group = None if removed else group_name_for_id(db, membership["permission_group_id"])
+    sync_membership_grants(
+        db,
+        user_id=membership["user_id"],
+        lab_id=membership["lab_id"],
+        group_name=group,
+    )
 
 
 @router.get("/{lab_id}/members")
@@ -377,6 +401,7 @@ def add_member(
         conn=db,
     )
     membership = rows[0]
+    _sync_grants_for(membership, db)
 
     log_audit(
         action=AuditActions.ADD_LAB_MEMBER,
@@ -443,6 +468,10 @@ def update_member(
         conn=db,
     )
     after = rows[0]
+    # The role changed, so the grants must too — a member promoted to Lab
+    # Director who kept lab_member_rw's grants would be a director in the row
+    # and a collaborator to every route.
+    _sync_grants_for(after, db)
 
     log_audit(
         action=AuditActions.CHANGE_MEMBER_ROLE,
@@ -485,6 +514,10 @@ def remove_member(
         {"uid": user_id, "lid": lab_id},
         conn=db,
     )
+    # Removing the row must remove the access. Leaving the grants would make
+    # removal cosmetic — the loudest possible failure of "membership is not
+    # access" run in reverse.
+    _sync_grants_for(before, db, removed=True)
 
     log_audit(
         action=AuditActions.REMOVE_LAB_MEMBER,

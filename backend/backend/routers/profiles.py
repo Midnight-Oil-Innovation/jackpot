@@ -27,7 +27,7 @@ from sqlalchemy import Column, String
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import DeclarativeBase, Session
 
-from backend.auth.guards import get_current_user
+from backend.auth.guards import get_current_user, permits
 from backend.database import get_db_dep
 
 
@@ -78,7 +78,13 @@ router = APIRouter(prefix="/api/v1/profiles", tags=["profiles"])
 
 
 def _is_admin(user: dict) -> bool:
-    return bool(user.get("is_platform_admin"))
+    """M2-B5: reaching another principal's profile takes ``user:manage``.
+
+    Kept as a predicate rather than a raising guard because both call sites
+    pair it with a self check, and self is not a capability — §3.1's scope
+    tree has no user level, so "you are yourself" cannot be a grant (§4.7).
+    """
+    return permits(user, "user:manage")
 
 
 def _uid_str(user: dict) -> str:
