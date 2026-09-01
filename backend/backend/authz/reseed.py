@@ -24,6 +24,7 @@ Bioinformatics User simply *is* a Lab Member RW. Corrected in M2-B3, which
 found the contradiction; ``BIOINFORMATICS_EXTRA`` is gone with it.
 """
 
+import json
 import logging
 
 from sqlalchemy import bindparam, text
@@ -633,6 +634,94 @@ def sync_sample_access_grants(
     for row in rows:
         conn.execute(_INSERT_GRANT, row)
     return len(rows)
+
+
+# ── Sharing agreements → peer grants (M4-A) ──────────────────────────────
+#
+# The third sync, and the same shape as the two above: an operator-facing
+# source table with its own lifecycle, projected into authz_capability_grants
+# so permit() keeps having exactly one place to look. §7.3's agreement is
+# "scoped, conditional capability grants to a specific peer-instance
+# principal" — which is the grant row, so this is a projection rather than a
+# translation.
+#
+# Dark at M4-A: nothing calls this on a request path. M4-B wires L1 federated
+# visibility to load a PEER_INSTANCE principal, at which point these grants
+# start deciding.
+
+AGREEMENT_SOURCE = "agreement"
+
+_DELETE_AGREEMENT_GRANTS = text(
+    """
+    DELETE FROM authz_capability_grants
+     WHERE principal_id = :principal_id
+       AND source = :source
+    """
+)
+
+_AGREEMENT_GRANT_SQL = text(
+    """
+    SELECT sag.capability, sag.scope_ref, sag.conditions, sag.not_after
+    FROM sharing_agreement_grants sag
+    JOIN sharing_agreements a ON a.id = sag.agreement_id
+    WHERE a.peer_instance_id = :peer AND a.active
+    """
+)
+
+_INSERT_AGREEMENT_GRANT = text(
+    """
+    INSERT INTO authz_capability_grants
+        (principal_id, capability, scope_ref, source, conditions, not_after)
+    VALUES (:principal_id, :capability, :scope_ref, :source, :conditions, :not_after)
+    ON CONFLICT DO NOTHING
+    """
+)
+
+
+def sync_agreement_grants(conn: Connection, *, peer_instance_id: str) -> int:
+    """Make one peer's agreement grants match its active agreements.
+
+    Reconciles the whole peer, not one agreement: a peer may hold several, and
+    the question the decision path asks is "what does this peer hold" — which
+    no single agreement can answer. Deactivating one agreement must withdraw
+    exactly its grants and leave the others, and a per-agreement sync would
+    have to diff across siblings to get that right.
+
+    Delete-then-insert scoped by ``source='agreement'``, for the same reason
+    :func:`sync_membership_grants` does it: replacing outright is obviously
+    correct where a diff has to reason about which capabilities survive a
+    transition, and the source scoping keeps it off grants issued by any other
+    path to the same principal.
+
+    Returns the number of grants issued.
+    """
+    conn.execute(
+        _DELETE_AGREEMENT_GRANTS,
+        {"principal_id": str(peer_instance_id), "source": AGREEMENT_SOURCE},
+    )
+    rows = conn.execute(_AGREEMENT_GRANT_SQL, {"peer": peer_instance_id}).mappings().all()
+    issued = 0
+    for r in rows:
+        conn.execute(
+            _INSERT_AGREEMENT_GRANT,
+            {
+                "principal_id": str(peer_instance_id),
+                "capability": r["capability"],
+                "scope_ref": r["scope_ref"],
+                "source": AGREEMENT_SOURCE,
+                # json.dumps rather than the dict: the column is JSONB and the
+                # driver will not adapt a bare dict on a text() insert.
+                "conditions": json.dumps(r["conditions"] or {}),
+                "not_after": r["not_after"],
+            },
+        )
+        issued += 1
+    logger.info(
+        "agreement sync: peer %s now holds %d agreement-sourced grants",
+        peer_instance_id,
+        issued,
+    )
+    return issued
 
 
 def group_name_for_id(conn: Connection, permission_group_id: int) -> str | None:

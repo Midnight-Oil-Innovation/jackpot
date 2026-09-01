@@ -2841,6 +2841,49 @@ sessions:
       migration were reverted. The Scenario-T preset stays deferred per §6.4's own instruction (M3-SCENARIO-T)."
     merged_at:
     merge_sha:
+  - id: M4-B
+    title: Federation Layer 2 — wire agreement grants into the decision path
+    short_description: |
+      The half of M4 that changes behavior. M4-A landed the schema, the
+      projection into authz_capability_grants, and load_peer_principal, all
+      dark. This turns them on:
+        (a) L1 query — the federated samples path filters by what the PEER
+            principal can see, via the same visibility_sql_clause companion
+            local lists use (§7.4). Today that path is PUBLIC/DISCOVERABLE-only
+            and consults no agreement, so this is the change that makes
+            per-peer differential access real — and the one where an
+            over-grant leaks across an instance boundary.
+        (b) L2 push — FederationPushJob.is_qualifying_sample consults permit()
+            for federation:push at the sample's scope, with the three
+            qualification gates as grant conditions (§7.4). is_qualifying_sample
+            is a pure function today and push_to_hub's IO is still stubbed, so
+            the decision half can land and be tested without the IO half.
+      (b) is what gives M3-FEDERATION-DELETION-GUARD a call site.
+      Pin AM-OPEN-2 (org floor vs peer floor vs stricter-of-two) when L2 push
+      IO is wired, per §7.6-1 — not required for the decision wiring itself.
+    phase: access_model_redesign
+    status: open
+    depends_on:
+      - M4
+    blocked_by_external:
+    parallel_safe: false
+    parallel_safe_reason: "Authorization decision path, and federation-visibility besides; serializes per CLAUDE.md."
+    effort_sessions: 2
+    primary_files:
+      - backend/backend/routers/federation.py
+      - backend/backend/federation/push.py
+      - backend/backend/authz/visibility.py
+    test_files:
+      - tests/authz/test_sharing_agreements.py
+    source_of_truth_views:
+      - docs/access_model.md
+    pr_title_template: "feat(authz): M4-B — agreement grants decide federated visibility"
+    pr_title_function:
+    branch_name_template: m4b-federation-visibility
+    role_framing:
+    notes: "Carved out of M4 so the schema could land reversibly first. §7.4's three integration points; (c) the
+      cryptWWDB access_policy adapter is a separate concern and not in scope here."
+
   - id: M3-SCENARIO-T
     title: Scenario-T Tribal Authority Designee preset (blocked on AM-OPEN-1)
     short_description: |
@@ -2899,7 +2942,7 @@ sessions:
     status: blocked
     depends_on:
       - M3
-      - M4
+      - M4-B
     blocked_by_external:
     parallel_safe: false
     parallel_safe_reason: "Authz policy surface; serializes per CLAUDE.md."
@@ -2931,7 +2974,7 @@ sessions:
       to find. Pin AM-OPEN-2 (the min_sharing_level floor composition) when L2
       push IO is wired. Sequences with or just after P0c.
     phase: access_model_redesign
-    status: open
+    status: shipped
     depends_on:
       - M2
     blocked_by_external:
@@ -2949,8 +2992,20 @@ sessions:
     pr_title_function:
     branch_name_template: m4-sharing-agreements
     role_framing:
-    notes: "Net-new sharing_agreements schema. Carries AM-OPEN-2. access_model.md §7.3 + §7.7."
-
+    notes: "Shipped M4-A only, the dark half. sharing_agreements + sharing_agreement_grants (migration
+      f9c3e60b7d18, hand-written, no ORM), sync_agreement_grants() projecting them into
+      authz_capability_grants with source='agreement', and load_peer_principal(). Nothing on a request path calls
+      any of it — same staging M0 used for the engine and M2's additive migration used for the reseed, so the
+      behavior-changing step lands alone. Two tables rather than a JSONB grants blob: the grants have the same shape
+      as every other grant in the system, so the sync is a projection rather than a JSON parse whose schema drifts.
+      Reconciles per PEER, not per agreement — a peer may hold several and 'what does this peer hold' is the question
+      the decision path asks; deactivating one agreement must withdraw exactly its grants.
+      Deferred to M4-B: L1 federated visibility onto visibility_sql_clause with a peer principal (the piece that
+      changes what peers can see, today PUBLIC/DISCOVERABLE-only), and is_qualifying_sample consulting permit() for
+      federation:push — which is what gives M3-FEDERATION-DELETION-GUARD a call site. AM-OPEN-2 (the
+      min_sharing_level floor composition) is still unpinned and belongs with L2 push IO, per §7.6-1."
+    merged_at:
+    merge_sha:
   - id: M5
     title: Compute plane / cryptWWDB — permit() as the PolicyChecker access_policy
     short_description: |

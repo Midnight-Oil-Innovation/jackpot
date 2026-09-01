@@ -88,6 +88,26 @@ def load_principal(
     )
 
 
+def load_peer_principal(peer_instance_id: str, *, conn: Any = None) -> Principal:
+    """A federated peer as the engine sees it (§2.1, §7.3).
+
+    Thin on purpose. ``load_principal`` was already kind-agnostic — it reads
+    ``authz_capability_grants`` by principal id and takes the kind as an
+    argument — so a peer needs no separate loading path, and giving it one
+    would be the second decision point §2.1 exists to avoid. This exists to be
+    findable: a reader looking for "how does a peer get its grants" should not
+    have to know that the answer is the human loader with a different enum.
+
+    The id is the ``federated_instances.id`` UUID that
+    ``authenticate_federation_peer`` resolves a key to, stringified — the same
+    value ``sync_agreement_grants`` writes as ``principal_id``.
+
+    Default-deny falls out (§5.1, §7.3): a peer with no active agreement loads
+    with an empty grant list, so it can authenticate and do nothing.
+    """
+    return load_principal(peer_instance_id, kind=PrincipalKind.PEER_INSTANCE, conn=conn)
+
+
 def lab_resource_scope(lab_id: int, *, conn: Any = None) -> str:
     """Canonical scope URI for a lab, resolving its org (§3.1.1).
 
