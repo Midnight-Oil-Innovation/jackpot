@@ -60,7 +60,7 @@ All catalog gaps were resolved in the M2 pre-cutover review (see
 | GET | `/api/v1/files/` | `sample:read` | Lab | **M2-B7**, not B2 — row-filtered |
 | GET | `/api/v1/files/{file_id}` | `sample:read_detail` | Sample | `require_capability("sample:read_detail", sample_id=…)` on the referencing sample (M2-B2); a 403 is collapsed into FILE_NOT_FOUND so existence is not leaked |
 | POST | `/api/v1/files/{file_id}/promote` | `sample:update` | Sample | `require_capability("sample:update", sample_id=…)` (M2-B2). WIDENED deliberately: the legacy branch required a Lab Director, the map's verb is also held by lab_member_rw |
-| GET | `/api/v1/files/jobs/{job_id}` | `sample:read` | Lab | `require_capability("sample:read", sample_id=…)` on the job's file (M2-B2). Decided at **Sample** scope, not Lab: the job names one file, so its sample is resolvable and the narrower scope is the honest one |
+| GET | `/api/v1/files/jobs/{job_id}` | `sample:read` | Sample | `require_capability("sample:read", sample_id=…)` on the job's file (M2-B2). Decided at **Sample** scope, not Lab: the job names one file, so its sample is resolvable and the narrower scope is the honest one |
 | POST | `/api/v1/files/{file_id}/verify` | `sample:update` | Sample | `require_capability("sample:update", sample_id=…)` (M2-B2) |
 | POST | `/api/v1/gisaid/export/{lab_id}` | `sample:read_detail` | Lab | `require_capability("sample:read_detail")` — export reads lab samples |
 | GET | `/api/v1/import_mappings/` | `import:read` | Lab | auth-only today; mapping-config read |

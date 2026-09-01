@@ -76,6 +76,19 @@ def _lab_guard(user: dict, lab_id: int, capability: str) -> None:
     require_capability(capability)(user, lab_id=lab_id)
 
 
+def _guarded_session(session_id: int, user: dict, capability: str, db) -> dict:
+    """Load the caller's session and check the capability on its lab.
+
+    The owner filter lives in ``get_session_for_user`` (404 for someone
+    else's session, 410 for an expired one); the lab check is this module's.
+    Both belong to every per-session route, so they travel together rather
+    than being re-paired at four call sites.
+    """
+    session = get_session_for_user(session_id, user["id"], db)
+    _lab_guard(user, session["lab_id"], capability)
+    return session
+
+
 @router.post("/sessions/", status_code=201)
 async def create_session(
     request: Request,
@@ -141,9 +154,7 @@ def get_session(
     db=Depends(get_db_dep),  # noqa: B008
 ):
     user = get_current_user(request)
-    session = get_session_for_user(session_id, user["id"], db)
-    _lab_guard(user, session["lab_id"], "sample:read")
-    return success(data=session)
+    return success(data=_guarded_session(session_id, user, "sample:read", db))
 
 
 @router.patch("/sessions/{session_id}")
@@ -161,7 +172,7 @@ async def patch_session(
     db=Depends(get_db_dep),  # noqa: B008
 ):
     user = get_current_user(request)
-    _lab_guard(user, get_session_for_user(session_id, user["id"], db)["lab_id"], "sample:create")
+    _guarded_session(session_id, user, "sample:create", db)
     fields = {k: v for k, v in body.model_dump(exclude_none=True).items()}
     session = update_import_session(
         session_id=session_id,
@@ -185,7 +196,7 @@ def import_session(
     db=Depends(get_db_dep),  # noqa: B008
 ):
     user = get_current_user(request)
-    _lab_guard(user, get_session_for_user(session_id, user["id"], db)["lab_id"], "sample:create")
+    _guarded_session(session_id, user, "sample:create", db)
     return success(
         data=execute_import(session_id=session_id, user_id=user["id"], conn=db),
         status_code=201,
@@ -199,5 +210,5 @@ def delete_session(
     db=Depends(get_db_dep),  # noqa: B008
 ):
     user = get_current_user(request)
-    _lab_guard(user, get_session_for_user(session_id, user["id"], db)["lab_id"], "sample:create")
+    _guarded_session(session_id, user, "sample:create", db)
     return success(data=abandon_session(session_id, user["id"], db))

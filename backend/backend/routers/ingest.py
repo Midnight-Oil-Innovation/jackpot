@@ -300,6 +300,14 @@ def _insert_sample_files(
     return inserted
 
 
+def _normalize_lab_id(value: object) -> int | None:
+    """The caller's ``lab_id`` as an int, or None when it is not one."""
+    try:
+        return int(value)  # type: ignore[arg-type]
+    except (TypeError, ValueError):
+        return None
+
+
 def _require_sample_create(user: dict, metadata: dict) -> None:
     """Gate an ingest on ``sample:create`` at the target lab (M2-B2).
 
@@ -311,13 +319,9 @@ def _require_sample_create(user: dict, metadata: dict) -> None:
     the NOT NULL constraint already reject it, and a 422 naming the missing
     field is a better answer than a 403 on a scope that was never named.
     """
-    lab_id = metadata.get("lab_id")
+    lab_id = _normalize_lab_id(metadata.get("lab_id"))
     if lab_id is None:
         return
-    try:
-        lab_id = int(lab_id)
-    except (TypeError, ValueError):
-        return  # not a lab id at all — the validator's 422 is the right answer
     require_capability("sample:create")(user, lab_id=lab_id)
 
 
@@ -667,7 +671,7 @@ def run_csv_ingest(*, csv_text: str, user: dict, db) -> dict:
     # cached as well as approvals: an upload aimed entirely at a lab the
     # caller cannot write to is the case most likely to be adversarial, and
     # a success-only memo would re-run the guard on every one of its rows.
-    lab_decisions: dict[object, HTTPException | None] = {}
+    lab_decisions: dict[int | None, HTTPException | None] = {}
 
     for idx, raw_row in enumerate(reader, start=1):
         try:
@@ -676,7 +680,10 @@ def run_csv_ingest(*, csv_text: str, user: dict, db) -> dict:
             # caller may not write to fails as that row's error while the
             # rest of the upload proceeds — the same shape every other
             # per-row validation failure has.
-            row_lab = metadata.get("lab_id")
+            # Normalized, so a CSV mixing "1" and 1 does not memoize the
+            # same lab twice — _require_sample_create coerces internally, but
+            # the raw value is what would otherwise key the cache.
+            row_lab = _normalize_lab_id(metadata.get("lab_id"))
             if row_lab not in lab_decisions:
                 try:
                     _require_sample_create(user, metadata)

@@ -86,7 +86,7 @@ def _insert_sample(sample_id: str, *, lab_id, project_id, sharing_level="PRIVATE
         "organism_name": "Severe acute respiratory syndrome coronavirus 2",
         "date_collected": "2026-01-15",
         "sequencing_lab": "Example Sequencing Lab",
-        "type_of_experiment": "Whole genome sequencing",
+        "type_of_experiment": "WGS",
         "library_preparation_method": "Illumina DNA Prep",
         "sequencing_protocol": "ARTIC v4.1",
         "sequencing_platform": "Illumina MiSeq",
@@ -124,6 +124,7 @@ def _cleanup_users(emails: list[str]) -> None:
         if not rows:
             continue
         uid = rows[0]["id"]
+        execute_write("DELETE FROM import_sessions WHERE created_by_user_id = :u", {"u": uid})
         execute_write("DELETE FROM lab_membership WHERE user_id = :u", {"u": uid})
         execute_write(
             "DELETE FROM authz_capability_grants WHERE principal_id = :u", {"u": str(uid)}
@@ -410,4 +411,235 @@ async def test_import_session_creation_denied_for_a_lab_reader(client, monkeypat
         )
         assert resp.status_code == 403, resp.text
     finally:
+        _cleanup_users(emails)
+
+
+# ────────────────────────────── files router ───────────────────────────────
+#
+# The file routes are the ones where a denial is *not* a 403: each collapses
+# it into FILE_NOT_FOUND so the row's existence is not leaked. That makes
+# them the easiest place for a missing guard to hide — a route that skipped
+# the check entirely would return 200, and a route that kept the check would
+# return 404, but nothing in between is distinguishable from the outside.
+
+
+def _insert_file(sample_row: dict, *, filename="R1.fastq.gz") -> dict:
+    return execute_write(
+        "INSERT INTO sample_files (sample_id_fk, uri, filename, file_type, "
+        "storage_state, ingest_method) "
+        "VALUES (:s, :u, :f, 'fastq', 'EXTERNAL', 'register') RETURNING *",
+        {
+            "s": sample_row["id"],
+            "u": f"gs://bucket/{sample_row['sample_id']}/{filename}",
+            "f": filename,
+        },
+    )[0]
+
+
+@pytest.mark.asyncio
+async def test_file_detail_is_404_for_an_outsider_not_403(client, outsider):
+    """The denial collapses into FILE_NOT_FOUND — existence must not leak."""
+    sid = "B2-FILE-01"
+    _cleanup_samples(sid)
+    lab = _other_lab()
+    s = _insert_sample(sid, lab_id=lab, project_id=_project_of(lab))
+    f = _insert_file(s)
+    try:
+        resp = await client.get(f"/api/v1/files/{f['id']}")
+        assert resp.status_code == 404, resp.text
+        assert resp.json()["error"]["code"] == "FILE_NOT_FOUND"
+    finally:
+        _cleanup_samples(sid)
+
+
+@pytest.mark.asyncio
+async def test_file_detail_visible_to_a_lab_reader(client, monkeypatch):
+    """sample:read_detail, so the weakest membership sees the file."""
+    sid = "B2-FILE-02"
+    emails: list[str] = []
+    _cleanup_samples(sid)
+    lab = _other_lab()
+    s = _insert_sample(sid, lab_id=lab, project_id=_project_of(lab))
+    f = _insert_file(s)
+    try:
+        u = _member("fro", lab, "Lab Reader", monkeypatch)
+        emails.append(u["email"])
+        resp = await client.get(f"/api/v1/files/{f['id']}")
+        assert resp.status_code == 200, resp.text
+        assert resp.json()["data"]["samples"][0]["id"] == s["id"]
+    finally:
+        _cleanup_samples(sid)
+        _cleanup_users(emails)
+
+
+@pytest.mark.asyncio
+async def test_file_verify_needs_write_not_merely_read(client, monkeypatch):
+    """verify takes sample:update — strictly narrower than get_file's read verb."""
+    sid = "B2-FILE-03"
+    emails: list[str] = []
+    _cleanup_samples(sid)
+    lab = _other_lab()
+    s = _insert_sample(sid, lab_id=lab, project_id=_project_of(lab))
+    f = _insert_file(s)
+    try:
+        reader = _member("vro", lab, "Lab Reader", monkeypatch)
+        emails.append(reader["email"])
+        # Can read it...
+        assert (await client.get(f"/api/v1/files/{f['id']}")).status_code == 200
+        # ...but not re-stat it.
+        resp = await client.post(f"/api/v1/files/{f['id']}/verify")
+        assert resp.status_code == 404, resp.text
+        assert resp.json()["error"]["code"] == "FILE_NOT_FOUND"
+    finally:
+        _cleanup_samples(sid)
+        _cleanup_users(emails)
+
+
+@pytest.mark.asyncio
+async def test_promote_allowed_for_collaborator_denied_for_reader(client, monkeypatch):
+    """Pins the deliberate WIDENING: the map gives promote sample:update, which
+    lab_member_rw holds — the legacy branch required a Lab Director."""
+    sid = "B2-FILE-04"
+    emails: list[str] = []
+    _cleanup_samples(sid)
+    lab = _other_lab()
+    s = _insert_sample(sid, lab_id=lab, project_id=_project_of(lab))
+    f = _insert_file(s)
+    body = {"to": "MANAGED", "retention_policy": "STANDARD"}
+    try:
+        reader = _member("pro", lab, "Lab Reader", monkeypatch)
+        emails.append(reader["email"])
+        resp = await client.post(f"/api/v1/files/{f['id']}/promote", json=body)
+        assert resp.status_code == 404, resp.text
+
+        rw = _member("prw", lab, "Lab Collaborator", monkeypatch)
+        emails.append(rw["email"])
+        resp = await client.post(f"/api/v1/files/{f['id']}/promote", json=body)
+        assert resp.status_code == 202, resp.text
+    finally:
+        _cleanup_samples(sid)
+        _cleanup_users(emails)
+
+
+@pytest.mark.asyncio
+async def test_promote_job_lookup_is_scoped_to_the_file(client, monkeypatch):
+    """The job id is predictable, so the lookup is guarded at the file's sample."""
+    sid = "B2-FILE-05"
+    emails: list[str] = []
+    _cleanup_samples(sid)
+    lab = _other_lab()
+    s = _insert_sample(sid, lab_id=lab, project_id=_project_of(lab))
+    f = _insert_file(s)
+    try:
+        rw = _member("jrw", lab, "Lab Collaborator", monkeypatch)
+        emails.append(rw["email"])
+        started = await client.post(
+            f"/api/v1/files/{f['id']}/promote",
+            json={"to": "MANAGED", "retention_policy": "STANDARD"},
+        )
+        assert started.status_code == 202, started.text
+        job_id = started.json()["data"]["job_id"]
+
+        assert (await client.get(f"/api/v1/files/jobs/{job_id}")).status_code == 200
+
+        # An outsider holding nothing gets the same 404 an unknown job gets.
+        email = f"nosy-{uuid.uuid4().hex[:6]}@test.com"
+        _make_user(email)
+        emails.append(email)
+        sync_grants_from_legacy_roles()
+        _switch_user(email, monkeypatch)
+        resp = await client.get(f"/api/v1/files/jobs/{job_id}")
+        assert resp.status_code == 404, resp.text
+        assert resp.json()["error"]["code"] == "JOB_NOT_FOUND"
+    finally:
+        _cleanup_samples(sid)
+        _cleanup_users(emails)
+
+
+# ─────────────────── imports: the per-step re-check ────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_import_session_steps_recheck_the_lab(client, monkeypatch):
+    """Owning the session is not enough — the lab capability is re-checked on
+    each step, so revoked membership stops an in-flight import."""
+    emails: list[str] = []
+    try:
+        u = _member("impw", SEED_LAB_ID, "Lab Collaborator", monkeypatch)
+        emails.append(u["email"])
+        created = await client.post(
+            "/api/v1/imports/sessions/",
+            data={"lab_id": str(SEED_LAB_ID)},
+            files={"file": ("x.csv", b"sample_id\nA-1\n", "text/csv")},
+        )
+        assert created.status_code == 201, created.text
+        session_id = created.json()["data"]["id"]
+
+        assert (await client.get(f"/api/v1/imports/sessions/{session_id}")).status_code == 200
+
+        # Demote to Lab Reader and reseed: sample:create is gone, sample:read stays.
+        _add_membership(u["id"], SEED_LAB_ID, "Lab Reader")
+        execute_write(
+            "DELETE FROM authz_capability_grants WHERE principal_id = :u", {"u": str(u["id"])}
+        )
+        sync_grants_from_legacy_roles()
+
+        assert (await client.get(f"/api/v1/imports/sessions/{session_id}")).status_code == 200
+        resp = await client.patch(
+            f"/api/v1/imports/sessions/{session_id}", json={"current_step": 2}
+        )
+        assert resp.status_code == 403, resp.text
+        resp = await client.delete(f"/api/v1/imports/sessions/{session_id}")
+        assert resp.status_code == 403, resp.text
+    finally:
+        _cleanup_users(emails)
+
+
+# ───────────────────── ingest: the CSV per-row decision ────────────────────
+
+
+@pytest.mark.asyncio
+async def test_csv_rows_are_authorized_per_lab(client, monkeypatch):
+    """A row targeting a lab the caller cannot write fails as that row's
+    error; rows for a lab they can write still land."""
+    emails: list[str] = []
+    _cleanup_samples("B2-CSV")
+    other = _other_lab()
+    try:
+        u = _member("csv", SEED_LAB_ID, "Lab Collaborator", monkeypatch)
+        emails.append(u["email"])
+        header = (
+            "sample_id,lab_id,project_id,source_type,organism_name,date_collected,"
+            "date_sequenced,sequencing_lab,type_of_experiment,library_preparation_method,"
+            "sequencing_protocol,sequencing_platform,collection_facility,"
+            "collection_location_country,external_case_id,files"
+        )
+        tail = (
+            "Human,Severe acute respiratory syndrome coronavirus 2,2026-01-15,2026-01-20,"
+            "Example Sequencing Lab,WGS,Illumina DNA Prep,ARTIC v4.1,"
+            "Illumina,Example Facility,USA,EX-1,B2-CSV-{n}_R1.fastq.gz"
+        )
+        csv_text = "\n".join(
+            [
+                header,
+                f"B2-CSV-1,{SEED_LAB_ID},{SEED_PROJECT_ID}," + tail.format(n=1),
+                f"B2-CSV-2,{other},{_project_of(other)}," + tail.format(n=2),
+            ]
+        )
+        resp = await client.post(
+            "/api/v1/ingest/csv",
+            files={"file": ("rows.csv", csv_text.encode(), "text/csv")},
+        )
+        assert resp.status_code == 200, resp.text
+        data = resp.json()["data"]
+        by_sample = {e["sample_id"]: str(e["detail"]) for e in data["errors"]}
+
+        # The invariant is that the guard discriminated by lab. Asserted this
+        # way rather than "row 1 succeeds" so the test does not also depend on
+        # the validator's required-field list for Human samples, which is a
+        # different rule that would otherwise break this one when it changes.
+        assert "sample:create" in by_sample.get("B2-CSV-2", ""), data
+        assert "sample:create" not in by_sample.get("B2-CSV-1", ""), data
+    finally:
+        _cleanup_samples("B2-CSV")
         _cleanup_users(emails)
