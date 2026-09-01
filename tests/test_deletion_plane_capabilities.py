@@ -215,6 +215,39 @@ async def test_owner_outside_the_lab_still_reads_the_report(client, principals, 
 
 
 @pytest.mark.asyncio
+async def test_owner_outside_the_lab_can_request_deletion(client, principals, monkeypatch):
+    """The ownership rung has to reach deletion:request, not just the reads.
+
+    M3 replaced the route's in-line "owner, or lab member" ladder with
+    require_capability("deletion:request") and recorded that ownership survived
+    as LADDER_POLICIES' owner_id rung. It did not: _matches compares capability
+    by equality and no rung named deletion:request, so an owner with no grant
+    over the sample was refused deletion of their own row.
+    """
+    s = _mk_sample("SLICE2-REQ-OWNER", owner_id=principals[OUTSIDER])
+    _act_as(OUTSIDER, monkeypatch)
+    resp = await client.post(
+        f"/api/v1/samples/{s['id']}/request-deletion",
+        json={"reason": "owner exercising RTBF over their own row"},
+    )
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["data"]["deletion_status"] == "DELETION_REQUESTED"
+    _cleanup("SLICE2-REQ-OWNER")
+
+
+@pytest.mark.asyncio
+async def test_non_owner_non_member_cannot_request_deletion(client, principals, monkeypatch):
+    """The rung is ownership, not "anyone with no tie" — the paired negative."""
+    s = _mk_sample("SLICE2-REQ-DENY")
+    _act_as(OUTSIDER, monkeypatch)
+    resp = await client.post(
+        f"/api/v1/samples/{s['id']}/request-deletion", json={"reason": "not mine"}
+    )
+    assert resp.status_code == 403, resp.text
+    _cleanup("SLICE2-REQ-DENY")
+
+
+@pytest.mark.asyncio
 async def test_non_member_non_owner_is_refused_the_report(client, principals, monkeypatch):
     s = _mk_sample("SLICE2-RPT-DENY")
     _act_as(OUTSIDER, monkeypatch)

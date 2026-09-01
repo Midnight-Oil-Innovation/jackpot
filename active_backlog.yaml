@@ -2752,6 +2752,11 @@ sessions:
       backlog briefly said the irreversible column drop was ready to start while 31 legacy-column readers were
       still live. Reopened by hand. The helper keys on branch name, so a multi-slice entry must not reuse its own
       id as a branch name; name future slices m2-drop-pre-slice2 or similar.
+      Slice 2's review turned up an M3 defect on a route it did not touch: request-deletion's comment claimed
+      ownership survived as a LADDER_POLICIES owner_id rung and no such rung existed, so an owner holding no grant
+      over the sample could not request deletion of their own row. Fixed separately (branch
+      fix/deletion-request-ownership-rung), with §5.3 gaining an enumerated ownership roster that
+      tests/authz/test_ownership_rung.py holds the policy list to in both directions.
       Slice 2 also raised the endpoint-map row count 128 -> 132: the four deletion-plane routes existed only as
       prose in a Residue section, so the preflight parser never counted them. A route described but uncounted is
       the same drift as a route counted but undescribed, and only one of the two had a guard.

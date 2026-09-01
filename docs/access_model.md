@@ -531,7 +531,7 @@ The current `permissions.py` ladder is this algorithm avant la lettre. The mappi
 | Today's `_base_access` rung | Becomes |
 |---|---|
 | `is_platform_admin` → True | An Instance-scope grant of (effectively) all capabilities — the Instance Administrator preset (§8) |
-| `owner_id == user.id` → True | A structural grant: ownership implies a Sample-scope grant of read/update capabilities |
+| `owner_id == user.id` → True | An **ALLOW policy** keyed on `resource.owner_id == principal.id` — see the ownership-rung roster below |
 | lab membership → True | A structural grant at Lab scope (the principal's lab membership *is* a scope grant) |
 | project membership → True | A structural grant at Project scope |
 | `sharing_level == 'PUBLIC'` → True | An **ALLOW policy** keyed on `resource.sharing_level == 'PUBLIC'` (step 4) |
@@ -540,6 +540,37 @@ The current `permissions.py` ladder is this algorithm avant la lettre. The mappi
 | approved access request/grant → True | A structural grant at Sample scope, `source=direct`, time-bounded via the grant's conditions + `context.now` |
 
 Every rung of the existing ladder has a clean home in the new model — structural rungs become scope-grants, attribute rungs become ALLOW policies. Nothing in the current behavior is lost; it is re-expressed in a model that can *also* express federation, sovereignty, and tenancy, which the ladder could not.
+
+#### The ownership rung, enumerated
+
+The row above says ALLOW policy where this section's first draft said
+"structural grant". That was not a documentation slip corrected later — it is
+the design decision `LADDER_POLICIES` records in code: ownership as a grant
+would mean writing a grant row on every sample creation and deleting one on
+every transfer, while as a policy it is one rule that stays true.
+
+The consequence is that ownership reaches **exactly the verbs a rung names**,
+because `_matches` compares capability by equality. There is no "ownership
+implies read/update" in general. The roster:
+
+| Capability | Ownership rung? | Why |
+|---|---|---|
+| `sample:read` | yes | An owner sees their own row in a list |
+| `sample:read_detail` | yes | And can open it |
+| `deletion:request` | yes | §10's ladder had ownership on this route. Requesting is not approving — `deletion:approve` has its own verb and §6.2-1b's DENY, which wins over this ALLOW unconditionally |
+| `deletion:read_report` | yes | The RTBF confirmation for a row you own, readable after you have left the lab it lived in |
+| `sample:update` | **no** | Deliberate, and a real narrowing against the legacy ladder: editing metadata on a sample whose lab you have left is a write into someone else's tenant. An owner who still needs it holds a lab preset. Recorded here so the absence is a decision rather than an oversight |
+| everything else | no | Default-deny. A verb not listed here is not reachable by ownership alone |
+
+**This table is enforced**, by `tests/authz/test_ownership_rung.py`, in both
+directions: a rung added to `LADDER_POLICIES` without a row here fails, and a
+row here without a rung fails. It exists because the failure it catches has
+now happened once: M3 removed `request-deletion`'s in-line owner branch and
+wrote "ownership is not lost — it is `LADDER_POLICIES`' `owner_id` rung" in
+the comment. No such rung existed. The claim read as true, no test covered an
+owner outside the lab, and the narrowing shipped silently. A comment asserting
+where a rule lives is a claim; this table is the same claim somewhere a test
+can reach it.
 
 ### 5.4 Strict deny-wins, restated
 

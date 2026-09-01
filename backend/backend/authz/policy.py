@@ -222,6 +222,23 @@ LADDER_POLICIES: list[dict[str, Any]] = [
         "scope_ref": _ROOT,
         "resource": {"owner_id": PRINCIPAL_ID},
     },
+    # M3 replaced request_sample_deletion's in-line "owner, or lab member"
+    # ladder with require_capability("deletion:request") and its comment said
+    # ownership survived here. It did not — _matches compares capability by
+    # equality, so a rung for sample:read_detail does nothing for a different
+    # verb, and an owner holding no grant over the sample could not request
+    # deletion of their own row. §10's ladder is "platform admin, owner, or
+    # lab member"; this is that middle rung, restored.
+    #
+    # Requesting is not approving. deletion:approve has its own verb, its own
+    # grants, and §6.2-1b's DENY, which wins over this ALLOW unconditionally —
+    # so an owner reaching the request route cannot walk it to a deletion.
+    {
+        "effect": "ALLOW",
+        "capability": "deletion:request",
+        "scope_ref": _ROOT,
+        "resource": {"owner_id": PRINCIPAL_ID},
+    },
     # Asking for access to a DISCOVERABLE sample. This one cannot be a grant
     # and cannot come from a preset: the requester is, by definition, not a
     # member of the sample's lab — that is why they are asking — so a
