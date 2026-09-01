@@ -38,7 +38,7 @@ Per-item status lives in `active_backlog.yaml`, not here.
    `docs/adr/`; for what a term means read `CONTEXT.md`. (`spec.md` was demoted to a
    redirect stub on 2026-08-28 — it is no longer the specification.)
 2. Read `todo.md` — find the next unchecked task
-3. Re-read this file (`docs/CLAUDE.md`) — all 67 Critical Rules apply at all times
+3. Re-read this file (`docs/CLAUDE.md`) — every Critical Rule applies at all times
 4. Confirm the baseline is stable: `uv run pytest tests/ schema/tests/ cli/tests/` from the workspace root. The expected test count is `test_count` in `docs/STATUS.md` — never a number quoted in prose here or elsewhere. Coverage must stay at or above the CI threshold of 80%. The post-P0d 39% number we carried briefly was a pytest-cov misconfiguration (omit list wasn't reaching the report-time matcher); fixed by making `--cov-config=pyproject.toml` explicit in addopts — see `docs/learnings.md` "Coverage measurement bug" entry. P0e (`docs/architecture/jackpot-init-cli.md`) shipped `jackpot init` operator-bootstrap CLI plus 13 absorbed Phase 22 cleanup items; see `docs/review_log.md` "P0e closeout" section.
 
 ## Session-start checklist
@@ -1206,6 +1206,66 @@ SELECT * FROM users         WHERE is_active = TRUE;  -- everything else
 Do not "fix" the inconsistency by renaming one side without a migration and a
 sweep of every call site. Recorded here after it was found living only in the
 demoted `spec.md` §3.
+
+**70 — A documented integration point is a claim. Grep for the call site before building on it.**
+
+`docs/` describes how the system fits together. Some of those descriptions were
+written from the phase plan rather than from the code, and **a spec section
+written from the plan reads identically to one written from the code.** Only
+grep tells them apart. Three instances found in one session:
+
+| Doc said | Reality |
+|---|---|
+| §6.2-3 DENYs `federation:push` | The capability existed nowhere but a comment — no route, no grant, no guard |
+| §6.2-2 is a DENY on `submission:approve` | Checked once at Lab scope while the rule is per-sample across a set; the shipped set-level 422 was already correct |
+| §7.4: "B's `/api/v1/samples/` filters by what A-as-principal can see" | That route authenticates a JWT cookie only. A real federated query would have 401'd |
+
+Before implementing a policy, guard, or capability that a design document says
+attaches somewhere, verify the attachment: grep for the capability string, the
+route, the calling function. **If it does not exist, that is the finding** —
+report it and scope accordingly. Building the half that has no call site
+produces something no test can exercise, which is worse than not building it,
+because it reads as done.
+
+The corollary is about tests, and it is the reason §7.4's gap survived 2600 of
+them: **when only one side of a contract is tested, the other side's absence is
+invisible.** The federation client tests mocked the partner, so the suite
+asserted the client *called* a URL and nothing asserted anyone answered it. If
+a contract has two ends, ask which end the tests are standing on.
+
+Related, and mechanized rather than trusted to this rule:
+`tests/authz/test_condition_registry.py` forces every policy condition key to
+declare where its value comes from and what capability gates it — see Rule 71.
+
+**71 — A policy condition is caller-supplied unless the router proves otherwise.**
+
+`permit()` evaluates `Context.conditions` as facts about the request. The engine
+**cannot** know whether the caller was entitled to assert one — correct for an
+engine, dangerous for a router. M3 shipped
+`deletion.separation_of_duties` with a `platform_admin_self_approve` condition
+that the route set straight from the request body, so any principal could lift
+the DENY by sending the flag.
+
+Any value reaching `Context.conditions` from a request body is an **assertion**.
+If lifting a DENY depends on it, the router must AND it with a held capability:
+
+```python
+self_approve = bool(payload and payload.platform_admin_self_approve) and permits(
+    user, "deletion:self_approve", sample_id=sample_id
+)
+```
+
+Enforced by `tests/authz/test_condition_registry.py`: every condition key used
+by a policy **or passed by any router** must be registered with its provenance
+and its gating capability, and the gate must name a real §4 verb. A new key
+fails that test until someone writes the answer down.
+
+Why it needed a rule and a guard rather than a fix: the defect was never
+exploitable — a legacy `is_platform_admin` check still caught it — so nothing
+failed. It was masked by a check that was itself scheduled for removal in
+M2-DROP, meaning the hole would have opened during a mechanical
+convert-the-readers pass, inside a PR about removing columns, where nobody
+would be reviewing for an authorization change.
 
 ## Local Dev Role Switching
 
