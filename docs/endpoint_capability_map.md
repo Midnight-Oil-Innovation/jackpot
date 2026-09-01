@@ -148,7 +148,7 @@ All catalog gaps were resolved in the M2 pre-cutover review (see
 | GET | `/api/v1/templates/source-types` | — | Instance | PUBLIC (intentional — Rule 42) |
 | GET | `/api/v1/tokens/` | `token:manage` | Instance | self path AUTH-ONLY BY DESIGN (§4.7); listing another principal's tokens takes `token:manage` (M2-B5) |
 | POST | `/api/v1/tokens/` | — | Instance | AUTH-ONLY BY DESIGN — mints a token for the caller only; no other principal reachable |
-| DELETE | `/api/v1/tokens/{token_id}` | `token:manage` | Instance | `permits("token:manage")` only when the token is not the caller's own (M2-B5). Gating the whole route would take every user's control of their own credentials |
+| DELETE | `/api/v1/tokens/{token_id}` | `token:manage` | Instance | self path AUTH-ONLY BY DESIGN (§4.7) — the owner revokes their own; `permits("token:manage")` gates only the cross-principal half (M2-B5). Gating the whole route would take every user's control of their own credentials |
 | GET | `/api/v1/users/me` | — | Instance | AUTH-ONLY BY DESIGN — caller's own user record + memberships |
 | GET | `/api/v1/users/` | `user:manage` | Instance | `require_capability("user:manage")` |
 | GET | `/api/v1/users/{user_id}` | `user:manage` | Org | self, OR `permits("user:manage")` (M2-B5) |
