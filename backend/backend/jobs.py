@@ -20,6 +20,7 @@ from time import monotonic
 from urllib.parse import urlparse
 
 from backend.audit import AuditActions, log_audit
+from backend.authz.reseed import sync_sample_access_grants
 from backend.config import get_settings
 from backend.database import execute_query, execute_write, get_db
 from backend.file_fingerprint import cheap_fingerprint
@@ -158,6 +159,8 @@ def _auto_approve_due_requests(db) -> int:
             },
             conn=db,
         )
+        # Same reason as the manual approve path: the grant is the access.
+        sync_sample_access_grants(db, sample_id=req["sample_id"], requester_id=req["requester_id"])
         create_notification(
             recipient_id=req["requester_id"],
             event_type=NotificationEvents.ACCESS_AUTO_APPROVED,
@@ -286,6 +289,13 @@ def _expire_grants(db) -> int:
             "UPDATE sample_access_grants SET revoked = TRUE, revoked_at = NOW() WHERE id = :id",
             {"id": grant["id"]},
             conn=db,
+        )
+        # not_after on the grant would already deny this read, so the sync is
+        # belt-and-braces — but it keeps the grants table free of rows that
+        # convey nothing, which is what makes "holds a grant" mean "has
+        # access" when someone reads the table to answer that question.
+        sync_sample_access_grants(
+            db, sample_id=grant["sample_id"], requester_id=grant["requester_id"]
         )
         if grant["request_id"]:
             execute_write(

@@ -28,6 +28,7 @@ from urllib.parse import urlparse
 from fastapi import HTTPException
 
 from backend.audit import AuditActions, log_audit
+from backend.authz.reseed import sync_sample_access_grants
 from backend.database import execute_query, execute_write
 from backend.federation.deletion_propagation import enqueue_deletion_events
 from backend.notifications import create_notification
@@ -242,6 +243,10 @@ def _seal_derivatives(sample: dict, actor: dict, conn) -> None:
         {"id": sample["id"]},
         conn=conn,
     )
+    # Every requester at once — no requester_id filter. A tombstoned sample
+    # conveys access to nobody, and leaving capability grants behind would let
+    # the guard allow a read the access table has already withdrawn.
+    sync_sample_access_grants(conn, sample_id=sample["id"])
     memberships = execute_query(
         "SELECT * FROM dataset_files WHERE original_sample_id = :id",
         {"id": sample["id"]},
@@ -336,6 +341,9 @@ def _restore_sealed_grants(sample: dict, conn) -> None:
             {"ids": ids},
             conn=conn,
         )
+        # Reversing the tombstone restores the rows; the grants must follow or
+        # the restored access exists only in the access table.
+        sync_sample_access_grants(conn, sample_id=sample["id"])
 
 
 def _restore_dataset_memberships(sample: dict, conn) -> None:

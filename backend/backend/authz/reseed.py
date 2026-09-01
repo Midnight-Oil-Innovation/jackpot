@@ -193,6 +193,13 @@ _INSERT_GRANT = text(
 # requests without a grant row are the documented fallback for pre-grants-table
 # data, and the expiry job transitions a request to EXPIRED when its grant
 # lapses, so an APPROVED row still present is necessarily still active.
+# The optional :sample_id / :requester_id filters are what let the live sync
+# (M2-SAMPLE-ACCESS-SYNC) reconcile one row against the SAME definition of
+# "who currently has access" that the cutover reseed uses. A second query here
+# would be a second answer, free to drift from this one — and the drift would
+# be invisible, because both produce grants that permit() reads identically.
+# NULL means "no filter"; the casts are required or PostgreSQL cannot infer a
+# type for a NULL bind parameter.
 _SAMPLE_ACCESS_SQL = text(
     """
     SELECT sag.requester_id AS user_id, s.id AS sample_id, s.lab_id, s.project_id,
@@ -202,6 +209,9 @@ _SAMPLE_ACCESS_SQL = text(
     JOIN labs l ON l.id = s.lab_id
     WHERE sag.revoked = FALSE
       AND (sag.access_expires_at IS NULL OR sag.access_expires_at > CURRENT_TIMESTAMP)
+      AND (CAST(:sample_id AS INTEGER) IS NULL OR s.id = CAST(:sample_id AS INTEGER))
+      AND (CAST(:requester_id AS INTEGER) IS NULL
+           OR sag.requester_id = CAST(:requester_id AS INTEGER))
     UNION
     SELECT sar.requester_id, s.id, s.lab_id, s.project_id,
            l.organization_id, NULL
@@ -213,6 +223,9 @@ _SAMPLE_ACCESS_SQL = text(
         SELECT 1 FROM sample_access_grants g
         WHERE g.requester_id = sar.requester_id AND g.sample_id = sar.sample_id
       )
+      AND (CAST(:sample_id AS INTEGER) IS NULL OR s.id = CAST(:sample_id AS INTEGER))
+      AND (CAST(:requester_id AS INTEGER) IS NULL
+           OR sar.requester_id = CAST(:requester_id AS INTEGER))
     """
 )
 
@@ -323,15 +336,24 @@ def _grant_rows(
     ]
 
 
-def _sample_access_rows(conn: Connection) -> list[dict]:
+def _sample_access_rows(
+    conn: Connection,
+    *,
+    sample_id: int | None = None,
+    requester_id: int | None = None,
+) -> list[dict]:
     """Approved per-sample access → Sample-scoped grants (§5's mapping table).
 
     Without this, every approved access request stops granting anything at
     cutover: the legacy ladder reads these tables directly and reseed did not
     look at them at all.
+
+    Both filters default to None, which is the unfiltered whole-database read
+    ``reseed()`` wants. :func:`sync_sample_access_grants` narrows them.
     """
     rows: list[dict] = []
-    for r in conn.execute(_SAMPLE_ACCESS_SQL).mappings():
+    params = {"sample_id": sample_id, "requester_id": requester_id}
+    for r in conn.execute(_SAMPLE_ACCESS_SQL, params).mappings():
         scope = scope_uri(
             org=r["organization_id"],
             lab=r["lab_id"],
@@ -506,6 +528,108 @@ def sync_membership_grants(
         )
         return 0
     rows = _grant_rows(str(user_id), capabilities, scope)
+    for row in rows:
+        conn.execute(_INSERT_GRANT, row)
+    return len(rows)
+
+
+# ── Live per-sample access → grants (M2-SAMPLE-ACCESS-SYNC) ──────────────
+#
+# The membership twin above, for the other thing that conveys access. Approving
+# a request wrote `sample_access_grants` and nothing else, so between M2-B2
+# (when the detail route started deciding on grants) and this function, every
+# approved requester was denied: no policy reads the request tables and the
+# only translation was reseed(), at migration time. It failed CLOSED, which is
+# why it survived — the tests that would have caught it were asserting through
+# the legacy helper, which read the tables directly.
+
+_DELETE_SAMPLE_ACCESS_GRANTS = text(
+    """
+    DELETE FROM authz_capability_grants
+     WHERE scope_ref = :scope_ref
+       AND source = :source
+       AND (CAST(:principal_id AS TEXT) IS NULL OR principal_id = CAST(:principal_id AS TEXT))
+    """
+)
+
+_SAMPLE_SCOPE_SQL = text(
+    """
+    SELECT s.id, s.lab_id, s.project_id, l.organization_id
+    FROM samples s JOIN labs l ON l.id = s.lab_id
+    WHERE s.id = :sid
+    """
+)
+
+
+def sample_scope(conn: Connection, sample_id: int) -> str | None:
+    """Canonical Sample path, or None if the sample is gone.
+
+    None rather than a raise: the deletion lifecycle syncs grants for samples
+    it is in the middle of removing, and a vacuumed sample legitimately has no
+    scope left to write grants at.
+    """
+    rows = conn.execute(_SAMPLE_SCOPE_SQL, {"sid": sample_id}).mappings().all()
+    if not rows:
+        return None
+    r = rows[0]
+    return scope_uri(
+        org=r["organization_id"], lab=r["lab_id"], project=r["project_id"], sample=r["id"]
+    )
+
+
+def sync_sample_access_grants(
+    conn: Connection | None, *, sample_id: int, requester_id: int | None = None
+) -> int:
+    """Make per-sample access grants match the access tables for one sample.
+
+    ``requester_id=None`` reconciles every principal holding access to the
+    sample — what the deletion lifecycle needs, since it revokes and restores
+    in bulk. Passing one narrows it to that requester.
+
+    State-reconciling rather than event-driven, and deliberately so: callers
+    do not have to know whether they just granted, revoked, expired or
+    restored. They say "this sample's access changed" and the grants are made
+    to agree. Delete-then-insert for the same reason
+    :func:`sync_membership_grants` uses it — a diff would have to reason about
+    which capabilities survive the transition, and getting that wrong on the
+    authorization path fails open.
+
+    Scoped by ``source = 'direct'`` so it cannot disturb the ``'reseed'``
+    membership grants that sit at the same principal.
+
+    ``conn=None`` opens an auto-committed internal transaction, matching
+    ``execute_write``'s documented convention — ``approve_deletion`` and the
+    rest of the deletion lifecycle accept a None connection, and a sync that
+    was stricter than the code calling it would turn a supported call shape
+    into an AttributeError.
+
+    Returns the number of grants issued.
+    """
+    if conn is None:
+        from backend.database import _get_engine  # noqa: PLC0415 — migrations
+        # import this module; keep the database import off that path.
+
+        engine, _ = _get_engine()
+        with engine.begin() as owned:
+            return sync_sample_access_grants(owned, sample_id=sample_id, requester_id=requester_id)
+
+    scope = sample_scope(conn, sample_id)
+    if scope is None:
+        logger.info(
+            "sample access sync: sample %s no longer exists; no grants to reconcile",
+            sample_id,
+        )
+        return 0
+
+    conn.execute(
+        _DELETE_SAMPLE_ACCESS_GRANTS,
+        {
+            "scope_ref": scope,
+            "source": DIRECT_SOURCE,
+            "principal_id": str(requester_id) if requester_id is not None else None,
+        },
+    )
+    rows = _sample_access_rows(conn, sample_id=sample_id, requester_id=requester_id)
     for row in rows:
         conn.execute(_INSERT_GRANT, row)
     return len(rows)

@@ -2762,7 +2762,7 @@ sessions:
       router_api.py's _can_read_detail helper at the route instead of running a
       full reseed.
     phase: access_model_redesign
-    status: open
+    status: shipped
     depends_on:
       - M2
     blocked_by_external:
@@ -2780,10 +2780,19 @@ sessions:
     pr_title_function:
     branch_name_template: sample-access-grant-sync
     role_framing:
-    notes: "Found while verifying M2. Not fixed in the M2 PR because it is a behavior change on the decision path and that
-      path serializes one session at a time (CLAUDE.md). The M2 PR's _can_read_detail test helper runs a reseed to bridge
-      the gap and carries a pointer to this entry."
-
+    notes: "Shipped. sync_sample_access_grants(conn, *, sample_id, requester_id=None) sits beside
+      sync_membership_grants and reconciles state rather than reacting to events — callers say 'this sample's access
+      changed' and the grants are made to agree, so no caller has to know whether it granted, revoked, expired or
+      restored. Wired into all five write paths: approve endpoint, the auto-approve and expire-grants jobs, and the
+      deletion lifecycle's bulk revoke (seal) and un-revoke (reverse-tombstone). The shared _SAMPLE_ACCESS_SQL gained
+      optional :sample_id/:requester_id filters rather than growing a second query, so the live sync and the cutover
+      reseed cannot drift on what 'currently has access' means. Proven RED first by deleting the reseed bridge from
+      _can_read_detail in tests/test_sample_access_router_api.py: exactly two tests failed (approval grants nothing,
+      an active grant conveys nothing) while the negative tests passed for the wrong reason — the signature of a
+      fail-closed gap. New tests/authz/test_sample_access_sync.py (10) covers the deletion lifecycle, source and
+      scope isolation from membership grants, idempotence, and the conn=None call shape."
+    merged_at:
+    merge_sha:
   - id: M3
     title: Sovereignty policies (deletion-lifecycle guards + Scenario-T preset)
     short_description: |

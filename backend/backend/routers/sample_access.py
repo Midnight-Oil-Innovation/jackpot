@@ -27,6 +27,7 @@ from pydantic import BaseModel, Field
 from backend.audit import AuditActions, log_audit
 from backend.auth.guards import get_current_user, permits
 from backend.authz.principal import load_principal
+from backend.authz.reseed import sync_sample_access_grants
 from backend.authz.visibility import sample_list_clause
 from backend.database import execute_query, execute_write, get_db_dep
 from backend.notifications import NotificationEvents, create_notification
@@ -424,6 +425,14 @@ def approve_access_request(
         conn=db,
     )
     grant = grant_rows[0] if grant_rows else None
+
+    # Issuing the grant IS the approval — on the request's own connection, so
+    # the sample_access_grants row and the capability grant land together or
+    # not at all. Before M2-SAMPLE-ACCESS-SYNC only reseed() translated these,
+    # so an approved requester stayed denied until the next migration.
+    sync_sample_access_grants(
+        db, sample_id=req_row["sample_id"], requester_id=req_row["requester_id"]
+    )
 
     create_notification(
         recipient_id=req_row["requester_id"],
