@@ -308,6 +308,7 @@ def list_submissions(
     target_repository: str | None = None,
     page: int = 1,
     per_page: int = 50,
+    visibility: tuple[str, dict[str, Any]] | None = None,
     conn,
 ) -> tuple[list[dict], int]:
     """Return one page of submissions plus the total count for pagination.
@@ -317,36 +318,48 @@ def list_submissions(
     validated against :data:`VALID_REPOSITORIES`. Results are ordered
     ``created_at DESC`` so the most recent shows first. ``is_archived``
     rows are always excluded.
+
+    ``visibility`` is a compiled ``(fragment, params)`` pair from
+    ``authz.visibility.lab_list_clause`` (M2-B4). The router supplies it; this
+    module does not build one, so the authorization decision stays in one
+    place rather than being reconstructed here.
     """
-    where = ["is_archived = FALSE"]
+    where = ["s.is_archived = FALSE"]
     params: dict[str, Any] = {}
+    if visibility is not None:
+        fragment, vis_params = visibility
+        where.append(fragment)
+        params.update(vis_params)
     if lab_id is not None:
-        where.append("lab_id = :lab_id")
+        where.append("s.lab_id = :lab_id")
         params["lab_id"] = lab_id
     if status is not None:
         if status not in VALID_STATUSES:
             raise HTTPException(status_code=422, detail=f"Invalid status {status!r}.")
-        where.append("status = :status")
+        where.append("s.status = :status")
         params["status"] = status
     if target_repository is not None:
         _require_repository(target_repository)
-        where.append("target_repository = :repo")
+        where.append("s.target_repository = :repo")
         params["repo"] = target_repository
 
     where_sql = " AND ".join(where)
     offset = (page - 1) * per_page
     rows = execute_query(
         f"""
-        SELECT * FROM submissions
+        SELECT s.* FROM submissions s
+          JOIN labs l ON l.id = s.lab_id
          WHERE {where_sql}
-         ORDER BY created_at DESC
+         ORDER BY s.created_at DESC
          LIMIT :_limit OFFSET :_offset
         """,
         {**params, "_limit": per_page, "_offset": offset},
         conn=conn,
     )
     count_rows = execute_query(
-        f"SELECT COUNT(*) AS total FROM submissions WHERE {where_sql}",
+        "SELECT COUNT(*) AS total FROM submissions s "
+        "JOIN labs l ON l.id = s.lab_id "
+        f"WHERE {where_sql}",
         params,
         conn=conn,
     )

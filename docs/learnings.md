@@ -3020,3 +3020,13 @@ batches' worth of blockers closed.
   read a submission. That is consistent with `sample:create`, which admins
   also lack, and with §8.2's "Instance Administrator is operational, not a
   consent authority" — but it will surprise someone.
+- **The catalog guard checks presence, not reachability, and that gap bit
+  inside the same batch.** `GET /submissions/` unfiltered used to gate on
+  `is_platform_admin`; swapping that for `sample:read` at the instance root
+  produced a branch nobody could take, because every preset granting
+  `sample:read` issues it at *lab* scope. The new test would not have caught
+  it — a verb can be in a preset and still be unheld at the scope a route
+  asks about. Found by reading the presets by hand while writing this entry,
+  and independently by the review; fixed by making the route a filtered list
+  (M2-B7's builder) instead, which removes the branch rather than repairing
+  it. The limitation is now written into the test's own docstring.

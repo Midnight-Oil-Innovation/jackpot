@@ -77,6 +77,19 @@ def test_the_catalog_is_actually_parsed():
 
 
 def test_every_catalog_capability_has_a_holder_or_a_reason():
+    """Presence, not reachability — and the difference matters.
+
+    This asserts a verb is in SOME preset. It does not assert that any
+    principal holds it at the scope a given route checks, and those come
+    apart: every preset granting `sample:read` issues it at LAB scope, so a
+    route checking `sample:read` at the instance root is reachable by nobody
+    even though this test passes. M2-B4 shipped exactly that bug in
+    `GET /submissions/` and caught it by reading the presets by hand.
+
+    Closing the gap properly means walking every route's declared scope, which
+    is the endpoint-capability map's job rather than this file's — noted here
+    so the limitation is known rather than assumed away.
+    """
     held = {c for caps in PRESET_GRANTS.values() for c in caps}
     policy_carried = {p["capability"] for p in LADDER_POLICIES}
     unexplained = [
@@ -138,7 +151,16 @@ _DOC_PRESET_NAMES = {
 
 
 def _doc_presets() -> dict[str, set[str]]:
-    """Capability lists from §8.2's fenced preset blocks."""
+    """Capability lists from §8.2's fenced preset blocks.
+
+    **Exact-indent contract.** Continuation lines must be indented exactly 16
+    spaces, matching the ``capabilities: `` label above them. Re-wrapping a
+    preset block in the doc without preserving that will truncate the captured
+    set — which does not fail silently (the equality test below turns it into
+    a mismatch) but does report it as a doc/code drift rather than as a parser
+    problem. If that test fails and the diff you are looking at only
+    reformatted prose, look here first.
+    """
     text = ACCESS_MODEL.read_text()
     blocks = re.findall(
         r'Preset "([^"]+)":\n  scope-template:[^\n]*\n  capabilities: '

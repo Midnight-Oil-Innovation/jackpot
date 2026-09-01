@@ -20,9 +20,10 @@ from pydantic import BaseModel
 
 from backend.auth.guards import (
     get_current_user,
-    permits,
     require_capability,
 )
+from backend.authz.principal import load_principal
+from backend.authz.visibility import lab_list_clause
 from backend.config import get_settings
 from backend.credentials import credentials
 from backend.credentials.base import CredentialNotFoundError
@@ -176,20 +177,19 @@ def list_submissions_endpoint(
     db=Depends(get_db_dep),  # noqa: B008
 ):
     user = get_current_user(request)
+    # M2-B4: a filtered list rather than "name a lab or be an admin".
+    #
+    # The admin branch this replaces became unreachable the moment the flag
+    # stopped authorizing: nobody holds sample:read at the INSTANCE root —
+    # every preset that grants it is issued at lab scope — so an unfiltered
+    # call would have 400'd for everyone, including the admins it was for.
+    # Compiling the filter (M2-B7's builder) removes the dead branch and gives
+    # every caller the labs they can actually read.
+    vis = lab_list_clause(load_principal(user["id"]), "sample:read")
     if lab_id is not None:
         _ensure_lab_access(user, lab_id, "sample:read")
-    elif not permits(user, "sample:read"):
-        # Unfiltered means every lab, so it takes the capability at the
-        # instance root rather than the is_platform_admin flag, which has
-        # authorized nothing since M2-B1.
-        # Non-admins must be scoped to their labs explicitly. We could
-        # implement a "show all my labs" flow but the simpler v1
-        # contract is "ask for a lab_id."
-        raise HTTPException(
-            status_code=400,
-            detail="Provide ?lab_id=… (or call as Platform Admin to see all).",
-        )
-    rows, total = list_submissions(
+    subs, total = list_submissions(
+        visibility=vis,
         lab_id=lab_id,
         status=status,
         target_repository=target_repository,
@@ -197,7 +197,7 @@ def list_submissions_endpoint(
         per_page=per_page,
         conn=db,
     )
-    return success_list(data=rows, page=page, per_page=per_page, total=total)
+    return success_list(data=subs, page=page, per_page=per_page, total=total)
 
 
 @router.get("/{submission_id}")

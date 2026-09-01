@@ -128,7 +128,7 @@ All catalog gaps were resolved in the M2 pre-cutover review (see
 | DELETE | `/api/v1/sequencing-labs/{seq_lab_id}/assign/{lab_id}` | `org:manage` | Instance | `require_capability("org:manage")` |
 | GET | `/api/v1/settings/public` | — | Instance | PUBLIC (intentional — public instance settings) |
 | POST | `/api/v1/submissions/` | `submission:prepare` | Lab | `require_capability("submission:prepare", lab_id=…)` (M2-B4) |
-| GET | `/api/v1/submissions/` | `sample:read` | Lab | `require_capability("sample:read", lab_id=…)` (M2-B4); unfiltered still needs the verb at the instance root, replacing the platform-admin bypass |
+| GET | `/api/v1/submissions/` | `sample:read` | Lab | `lab_list_clause("sample:read")` (M2-B4), plus `require_capability` when `?lab_id=` is given. The platform-admin branch it replaced was dead on arrival: it gated on `sample:read` at the INSTANCE root, and every preset granting that verb issues it at lab scope |
 | GET | `/api/v1/submissions/{submission_id}` | `sample:read` | Lab | `require_capability("sample:read", lab_id=…)` (M2-B4) |
 | PATCH | `/api/v1/submissions/{submission_id}` | `submission:prepare` | Lab | `require_capability("submission:prepare", lab_id=…)` (M2-B4) |
 | DELETE | `/api/v1/submissions/{submission_id}` | `submission:prepare` | Lab | `require_capability("submission:prepare", lab_id=…)` (M2-B4); soft-delete |
