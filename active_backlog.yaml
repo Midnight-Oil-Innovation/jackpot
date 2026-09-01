@@ -2513,6 +2513,9 @@ sessions:
       pipeline_run_principal RAISES on a run row with no project_id rather than rooting at the instance —
       the results route was not selecting that column, and a fallback there would have handed a pipeline
       callback authority over the whole deployment."
+    merged_at: '2026-09-01'
+    merge_sha: cb6c872
+
   - id: M2-B7
     title: List endpoints onto visibility_sql_clause (cutover step (c))
     short_description: |
