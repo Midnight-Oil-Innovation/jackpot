@@ -23,8 +23,9 @@ import pytest
 from authz_helpers import sync_grants_from_legacy_roles
 
 from backend.auth.guards import permits
+from backend.authz.reseed import sync_sample_access_grants
 from backend.config import get_settings
-from backend.database import execute_query, execute_write
+from backend.database import _get_engine, execute_query, execute_write
 from backend.jobs import run_access_request_job
 
 SEED_USER_ID = 1
@@ -35,17 +36,31 @@ SEED_PROJECT_ID = 1
 # ────────────────────────── helpers ──────────────────────────
 
 
+def _sync_access(sample_id: int) -> None:
+    """What every route that touches sample_access_grants does afterwards.
+
+    The three grant-lifecycle tests below insert into the table directly
+    rather than going through approve, so they must stand in for the route.
+    Calling the real sync — not hand-writing capability grants — is the point:
+    a test that hand-wrote them could pass against a sync that no longer
+    produces them.
+    """
+    engine, _ = _get_engine()
+    with engine.begin() as conn:
+        sync_sample_access_grants(conn, sample_id=sample_id)
+
+
 def _can_read_detail(user_id: int, sample_id: int) -> bool:
     """Detail access as production decides it since M2-B2.
 
-    Replaces ``permissions.can_access_sample``, deleted at the M2 cutover. The
-    guard reads capability grants, and a ``sample_access_grants`` row only
-    becomes one by way of ``reseed()`` — no route issues a per-sample grant on
-    approval (backlog M2-SAMPLE-ACCESS-SYNC). So the sync runs here exactly as
-    the cutover migration runs it, and these tests keep pinning what they
-    always pinned: revoked and expired grants convey nothing, active ones do.
+    Replaces ``permissions.can_access_sample``, deleted at the M2 cutover.
+
+    Deliberately does NOT run a reseed. Until M2-SAMPLE-ACCESS-SYNC this
+    helper bridged the gap by reseeding, which made these tests pass while
+    production denied every approved requester — the bridge hid the bug it
+    should have exposed. The access path each test exercises must now stand on
+    its own: a route that changes access issues or removes the grant itself.
     """
-    sync_grants_from_legacy_roles()
     return permits({"id": user_id}, "sample:read_detail", sample_id=sample_id)
 
 
@@ -759,6 +774,7 @@ async def test_expired_grant_blocks_access():
         "VALUES (:sid, :uid, :uid, NOW() - INTERVAL '1 day')",
         {"sid": s["id"], "uid": uid},
     )
+    _sync_access(s["id"])
     assert _can_read_detail(uid, s["id"]) is False
 
     _cleanup_users([email])
@@ -784,6 +800,7 @@ async def test_active_grant_allows_access():
         "VALUES (:sid, :uid, :uid, NOW() + INTERVAL '30 days')",
         {"sid": s["id"], "uid": uid},
     )
+    _sync_access(s["id"])
     assert _can_read_detail(uid, s["id"]) is True
 
     _cleanup_users([email])
@@ -809,6 +826,7 @@ async def test_revoked_grant_blocks_access():
         "VALUES (:sid, :uid, :uid, NOW() + INTERVAL '30 days', TRUE, NOW())",
         {"sid": s["id"], "uid": uid},
     )
+    _sync_access(s["id"])
     assert _can_read_detail(uid, s["id"]) is False
 
     _cleanup_users([email])

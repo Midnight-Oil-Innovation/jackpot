@@ -3184,3 +3184,58 @@ verification showed the irreversible half could not ship.
                            (rows indistinguishable
                             from the additive run)
 ```
+
+## M2-SAMPLE-ACCESS-SYNC — approving a request now issues the grant — 2026-09-01
+
+**What was built:** `sync_sample_access_grants()` beside `sync_membership_grants()`,
+wired into all five paths that change per-sample access, closing the gap where
+an approved requester was denied until the next migration.
+
+**Key decisions:**
+
+- **The bug was invisible because the test bridged it.** Between M2-B2 (when
+  the detail route started deciding on grants) and this change, approving a
+  request wrote `sample_access_grants` and nothing else — no policy reads the
+  request tables, and the only translation was `reseed()`, at migration time.
+  The tests that should have caught it were asserting through the legacy
+  `can_access_sample()`, which read the tables directly and therefore always
+  agreed with itself. The M2 session replaced that with a helper that ran a
+  full reseed, which bridged the gap just as effectively. Deleting the bridge
+  turned exactly two tests RED — and the *negative* tests (revoked and expired
+  deny access) had been passing the whole time for the wrong reason, because
+  nothing was ever granted. **A fail-closed bug hides inside its own negative
+  tests.** When a gap denies rather than allows, half the suite confirms it.
+- **State-reconciling, not event-driven.** The function takes "this sample's
+  access changed" and makes the grants agree. Callers do not say what they
+  did. That is what lets one function serve approve, auto-approve, expire,
+  tombstone-seal and reverse-tombstone without five different signatures —
+  and the deletion lifecycle needs the requester-less bulk form anyway.
+- **One query, two callers.** `_SAMPLE_ACCESS_SQL` gained optional
+  `:sample_id` / `:requester_id` filters instead of the sync growing its own
+  query. Two definitions of "who currently has access" would be free to drift,
+  and the drift would be invisible: both produce grant rows that `permit()`
+  reads identically. The `CAST(:x AS INTEGER)` wrappers are load-bearing —
+  PostgreSQL cannot infer a type for a NULL bind parameter.
+- **Deleting scoped by `source='direct'` and by the sample's own scope.**
+  Membership grants live at Lab scope with `source='reseed'`; per-sample
+  access at Sample scope with `source='direct'`. A delete predicate loose in
+  either dimension would strip a Lab Reader's lab access every time one shared
+  sample was revoked.
+
+**Watch out for:**
+
+- **`conn=None` is a supported call shape in this codebase.** `execute_write`
+  documents it as "an auto-committed internal transaction", and
+  `approve_deletion` accepts it — the federation deletion-propagation test
+  calls it that way. Wiring a function that required a real `Connection` into
+  that path failed with `AttributeError: 'NoneType' object has no attribute
+  'execute'` in one test out of 2600. Being stricter than the code calling you
+  is a compatibility break, not defensive programming.
+- **The uniqueness arbiter has no `source` column.** It is
+  `(principal_id, capability, scope_ref)`, so the same capability at the same
+  scope exists once regardless of which subsystem issued it, and
+  `ON CONFLICT DO NOTHING` silently skips the second. It does not bite today
+  because membership and per-sample grants never share a scope — but a future
+  preset that grants at Sample scope would collide, and the losing row would
+  vanish without a word. A test asserting otherwise is asserting against the
+  index, not the code.
