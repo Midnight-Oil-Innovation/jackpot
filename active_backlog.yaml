@@ -2602,28 +2602,23 @@ sessions:
     merge_sha: b19a398
 
   - id: M2
-    title: Reseed + cutover (IRREVERSIBLE — manual flow only)
+    title: Catch-up reseed (cutover part a — the legacy drop is M2-DROP)
     short_description: |
-      The irreversible remainder, after the additive migration (b2f47c1a9e30,
-      shipped) and the seven guard-rewrite batches (M2-B1..B7). Everything
-      reversible has already landed; what is left cannot be undone:
-        (a) catch-up reseed — idempotent, covers rows created through the old
-            paths between the additive migration and this one, with the
-            M2-PRE-4 pre-flight guard run first and its counts surfaced;
-        (b) drop users.is_platform_admin, users.is_data_analyst, the
-            PermissionGroups enum, and the permissions.py _base_access ladder.
-      ORDER: pre-flight guard -> catch-up reseed -> drop, and the drop LAST so
-      a failure earlier rolls back with the old model intact. Nothing reads
-      the legacy columns by this point — B1..B7 moved every guard and the list
-      path onto permit() — so the drop is bookkeeping that happens to be
-      permanent. That is the whole design: make the irreversible step small
-      and boring by doing everything else first.
-      Wire the migration to read the operator override
-      (JACKPOT_RESEED_ACCEPT_DATA_LOSS) rather than hardcoding force.
-      Run as MANUAL flow, single session. Verify B1..B7 are all shipped and
-      the preflight matrix is green before starting.
+      Shipped the reversible half of the cutover: migration a1c7d94e6b28 runs
+      the M2-PRE-4 pre-flight guard, logs every count including the zeros, and
+      re-runs the idempotent reseed to pick up roles granted through legacy
+      paths after the additive migration (b2f47c1a9e30). Also deleted
+      backend/permissions.py — dead in production since M2-B7 — and the
+      committed-but-unreachable orphan backend/alembic/versions/
+      20260829_reseed_roles_to_grants.py, which carried DROP COLUMN statements
+      in a directory alembic.ini never pointed at.
+      The irreversible half — dropping users.is_platform_admin,
+      users.is_data_analyst, and the PermissionGroups enum — did NOT ship and
+      is now M2-DROP. This entry assumed "nothing reads the legacy columns by
+      this point"; that premise was false. Eleven production modules still
+      read them. See M2-DROP for the inventory.
     phase: access_model_redesign
-    status: open
+    status: shipped
     depends_on:
       - M0
       - M1
@@ -2642,25 +2637,144 @@ sessions:
       - M2-B7
     blocked_by_external:
     parallel_safe: false
-    parallel_safe_reason: "Irreversible cutover touching auth, migrations, route guards, and the list path. Manual flow only;
-      the authorization decision path serializes (CLAUDE.md)."
+    parallel_safe_reason: "Authorization decision path; serializes per CLAUDE.md."
     effort_sessions: 1
     primary_files:
+      - backend/db/migrations/versions/a1c7d94e6b28_m2_cutover_catchup_reseed.py
       - backend/backend/permissions.py
-      - backend/backend/auth/guards.py
-      - backend/backend/authz/
     test_files:
       - tests/authz/test_cutover.py
     source_of_truth_views:
       - docs/access_model.md
-    pr_title_template:
+    pr_title_template: "feat(authz): M2 — catch-up reseed and legacy-ladder removal"
     pr_title_function:
     branch_name_template: m2-cutover
     role_framing:
-    notes: "IRREVERSIBLE, and now small: the guard rewrites were carved out into M2-B1..B7 and the additive
-      migration b2f47c1a9e30 already shipped, leaving only the catch-up reseed and the legacy drop. Two migrations,
-      not one: ADR 0016. Scope serialization decided ahead of the session: ADR 0015 (single rooted instance://self path) + access_model.md §3.1.1 — M2 lands the scope-URI builder, reseed's labs join, and the fixture rewrite. access_model.md §10 (greenfield, no shim) + §11.1. Verify M0/M1 proven before starting — the project-wide
-      'verify before operating' discipline applied to the cutover."
+    notes: "Scope split at session start, on the finding that the entry's central premise was wrong: it called the
+      column drop 'bookkeeping that happens to be permanent' because B1..B7 had moved every guard onto permit().
+      They moved every GUARD, not every READER. tenancy.py's require_org_access, five in-route checks in samples.py,
+      deletion.py's self-approve carve-out, federation/deletion_propagation.py's admin-notification lookup, and the
+      identity plumbing in guards.py / auth.py / users.py / imports.py all still read the flags. Dropping the columns
+      would 500 those paths, and several belong to M3 by the endpoint map's own assignment — M3 depends_on M2, so the
+      original plan inverted its own dependency. Part (a) shipped alone; the drop is M2-DROP, blocked on M3.
+      Two findings surfaced while verifying and were split out rather than absorbed: M2-SAMPLE-ACCESS-SYNC (approving
+      a sample-access request issues no capability grant, so per-sample access only materializes at reseed) and the
+      raw_fastq verb the endpoint map's Residue section still awaits."
+    merged_at:
+    merge_sha:
+
+  - id: M2-DROP
+    title: Drop the legacy role columns (IRREVERSIBLE — manual flow only)
+    short_description: |
+      The irreversible half carved out of M2. Drop users.is_platform_admin,
+      users.is_data_analyst, and the PermissionGroups enum — but only after
+      every remaining reader is off them. Inventory as of the M2 session:
+
+        DECISION-PATH (must become permit()/permits() calls):
+          - tenancy.py:131        require_org_access — admin bypasses the
+                                  tenant wall. ADR 0015 makes instance://self
+                                  prefix every org path, so this should fall
+                                  out of scope containment, not a flag.
+          - deletion.py:184       platform-admin self-approve carve-out (M3)
+          - samples.py:582        raw_fastq Lab-Director restriction — still
+                                  awaiting a §4 verb; endpoint map Residue
+          - samples.py:643        _require_lab_tie (M3)
+          - samples.py:652        _require_approval_authority (M3)
+          - samples.py:717        reverse-tombstone admin-only (M3)
+          - samples.py:734        vacuum-now admin-only (M3)
+
+        LOOKUP (rewrite as a grant query):
+          - federation/deletion_propagation.py:358 — selects platform admins
+            to notify. Becomes "principals holding the instance_administrator
+            preset at instance scope".
+
+        IDENTITY PLUMBING (stop selecting / stop writing):
+          - guards.py:41,42,72    mock-user fallback dict + the user SELECT
+          - imports.py:813        user SELECT
+          - auth.py:446-485,590   dev-login writes both columns; /me returns
+                                  them
+          - users.py:15,16,24,25  PATCH exposes both as admin-editable —
+                                  role ASSIGNMENT, which must become grant
+                                  issuance the way M2-B5 did for membership
+
+      ORDER: convert every reader -> verify the full suite -> drop last, so a
+      failure earlier leaves the old model intact. Run the catch-up reseed
+      (a1c7d94e6b28) again immediately before the drop if any legacy write
+      path is still live at that point.
+    phase: access_model_redesign
+    status: blocked
+    depends_on:
+      - M2
+      - M3
+    blocked_by_external:
+    parallel_safe: false
+    parallel_safe_reason: "Irreversible, on the authorization decision path. Manual flow only; serializes per CLAUDE.md."
+    effort_sessions: 2
+    primary_files:
+      - backend/backend/tenancy.py
+      - backend/backend/routers/samples.py
+      - backend/backend/routers/users.py
+      - backend/backend/routers/auth.py
+      - backend/backend/auth/guards.py
+    test_files:
+      - tests/authz/test_cutover.py
+    source_of_truth_views:
+      - docs/access_model.md
+      - docs/endpoint_capability_map.md
+    pr_title_template: "feat(authz): M2-DROP — remove the legacy role columns"
+    pr_title_function:
+    branch_name_template: m2-drop-legacy-columns
+    role_framing:
+    notes: "Blocked on M3 rather than merely sequenced after it: the endpoint capability map assigns the
+      deletion-lifecycle checks (samples.py 643/652/717/734, deletion.py:184) to M3's sovereignty policies, and M3
+      depends_on M2. Dropping the columns before M3 converts those checks would break them. The M2 entry originally
+      contained this work on the premise that nothing read the columns; see M2's notes for why that was wrong.
+      access_model.md §10 (greenfield, no shim) still governs — no compatibility shim, no dual-read period."
+
+  - id: M2-SAMPLE-ACCESS-SYNC
+    title: Approving a sample-access request must issue a capability grant
+    short_description: |
+      POST /sample-access/requests/{id}/approve inserts a sample_access_grants
+      row but issues nothing into authz_capability_grants. Since M2-B2 the
+      detail route decides via require_capability("sample:read_detail",
+      sample_id=...), and neither authz/policy.py nor authz/visibility.py has
+      an approved-request rung — the ONLY translation from
+      sample_access_grants to a capability grant is reseed._sample_access_rows,
+      which runs at migration time.
+      So an approved requester gains nothing until someone runs a reseed. This
+      is the same class of bug M2-B5 fixed on the membership side with
+      sync_membership_grants(); sample access has no twin. Fails CLOSED
+      (denies access that should be allowed), so it is a functionality gap
+      rather than a security hole — which is also why no test caught it: the
+      existing tests called the legacy can_access_sample() helper, which read
+      the table directly.
+      Fix: a sync_sample_access_grants(conn, *, requester_id, sample_id) beside
+      sync_membership_grants, called on approve and on revoke, honouring
+      access_expires_at as not_after. Then point tests/test_sample_access_
+      router_api.py's _can_read_detail helper at the route instead of running a
+      full reseed.
+    phase: access_model_redesign
+    status: open
+    depends_on:
+      - M2
+    blocked_by_external:
+    parallel_safe: false
+    parallel_safe_reason: "Authorization decision path; serializes per CLAUDE.md."
+    effort_sessions: 1
+    primary_files:
+      - backend/backend/authz/reseed.py
+      - backend/backend/routers/sample_access.py
+    test_files:
+      - tests/test_sample_access_router_api.py
+    source_of_truth_views:
+      - docs/access_model.md
+    pr_title_template: "fix(authz): issue capability grants on sample-access approval"
+    pr_title_function:
+    branch_name_template: sample-access-grant-sync
+    role_framing:
+    notes: "Found while verifying M2. Not fixed in the M2 PR because it is a behavior change on the decision path and
+      that path serializes one session at a time (CLAUDE.md). The M2 PR's _can_read_detail test helper runs a reseed
+      to bridge the gap and carries a pointer to this entry."
 
   - id: M3
     title: Sovereignty policies (deletion-lifecycle guards + Scenario-T preset)
@@ -2675,7 +2789,7 @@ sessions:
       sovereignty_mode; off-deployments unaffected. Resolve AM-OPEN-1 (designee
       representation) before finalizing.
     phase: access_model_redesign
-    status: blocked
+    status: open
     depends_on:
       - M2
     blocked_by_external:
@@ -2708,7 +2822,7 @@ sessions:
       to find. Pin AM-OPEN-2 (the min_sharing_level floor composition) when L2
       push IO is wired. Sequences with or just after P0c.
     phase: access_model_redesign
-    status: blocked
+    status: open
     depends_on:
       - M2
     blocked_by_external:
@@ -2743,7 +2857,7 @@ sessions:
       HEOperation enum membership) here. Gated on the cryptWWDB compute path
       being scheduled (Track 2).
     phase: access_model_redesign
-    status: blocked
+    status: open
     depends_on:
       - M2
     blocked_by_external:

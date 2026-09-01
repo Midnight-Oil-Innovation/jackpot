@@ -38,6 +38,7 @@ from authz.preflight import (
     UNIQUE_INDEX_DDL,
     classify_legacy_only_visibility,
     lab_scope,
+    legacy_visibility_sql_clause,
     load_principal,
     run_matrix,
     seed_world,
@@ -59,7 +60,6 @@ from backend.authz.reseed import (
 from backend.authz.scope import scope_sql, scope_uri
 from backend.authz.visibility import visibility_sql_clause as new_visibility_sql_clause
 from backend.database import _get_engine, execute_query
-from backend.permissions import visibility_sql_clause as legacy_visibility_sql_clause
 
 # The seeded world deliberately contains every condition the M2-PRE-4
 # pre-flight guard aborts on — P9 (unmapped group), P11 (director flag vs

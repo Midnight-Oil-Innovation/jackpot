@@ -3085,3 +3085,102 @@ membership mean anything after cutover.
   membership conveys rather than how a route reads.
 - `GET /projects/` loses the `project_membership` rung — the registered
   `project_only_membership` divergence reaching one more route, not a new loss.
+
+## M2 (part a) — catch-up reseed, and the premise that did not survive contact — 2026-09-01
+
+**What was built:** the reversible half of the cutover — migration
+`a1c7d94e6b28` (pre-flight guard, counts logged, idempotent catch-up reseed)
+and the deletion of `backend/permissions.py` — after the session's opening
+verification showed the irreversible half could not ship.
+
+**Key decisions:**
+
+- **The entry's central claim was false, and checking it was the session.**
+  M2 said the column drop was "bookkeeping that happens to be permanent"
+  because B1..B7 had moved every guard onto `permit()`. They moved every
+  *guard*. They did not move every *reader*. `grep is_platform_admin` returns
+  eleven production modules: the tenant wall in `tenancy.py`, five in-route
+  checks in `samples.py`, the self-approve carve-out in `deletion.py`, the
+  admin-notification lookup in `federation/deletion_propagation.py`, and the
+  identity plumbing in `guards.py` / `auth.py` / `users.py` / `imports.py`.
+  Dropping the columns would have 500'd every one of those paths. The lesson
+  is not "the entry was wrong" — entries written months ahead usually are. It
+  is that "nothing reads X any more" is a claim with a two-second check behind
+  it, and an irreversible migration is the wrong place to find out.
+- **The dependency was inverted.** `docs/endpoint_capability_map.md` assigns
+  the deletion-lifecycle checks to M3, and M3 `depends_on: M2`. So M2 as
+  written had to drop columns that M3's not-yet-converted targets still read.
+  Split instead: M2 keeps part (a), `M2-DROP` takes the drop and is blocked on
+  M3. A cycle in a backlog shows up as a task that cannot be done in either
+  order, which is what this looked like from inside.
+- **`permissions.py` deleted, its `visibility_sql_clause` frozen into the test
+  tree.** Nothing in production imported the module by M2-B7, but two tests
+  did, and one of them — the 2c list-equivalence proof — needs the *old*
+  fragment to compare against. A comparator that lives in production code
+  stops being a comparator the moment production changes. It now sits in
+  `tests/authz/preflight.py` beside `legacy_ladder`, under the same "do not
+  fix this to match new behavior" banner.
+- **The catch-up's `downgrade()` is a deliberate no-op.** Its grants are
+  byte-identical to the additive migration's — same `source`, same
+  `(principal_id, capability, scope_ref)` — because they *are* the same
+  grants, issued late. No predicate selects "the rows this migration inserted"
+  without also selecting rows it did not. Deleting on `source` would silently
+  de-authorize users this migration never touched, so it deletes nothing and
+  says why.
+- **Counts are logged, not just enforced.** `reseed()` raises on a non-zero
+  pre-flight and logs nothing when clean, so a clean run left no evidence the
+  check happened. The migration now calls `preflight_counts()` itself and logs
+  every kind including the zeros. The authoritative refusal still lives in
+  `reseed()` — this is a read-only echo, deliberately not a second
+  implementation of the rule.
+
+**Watch out for:**
+
+- **Approving a sample-access request grants nothing.** The approve endpoint
+  writes `sample_access_grants`, but the only translation into
+  `authz_capability_grants` is `reseed._sample_access_rows`, which runs at
+  migration time. Neither `authz/policy.py` nor `authz/visibility.py` has an
+  approved-request rung. M2-B5 built `sync_membership_grants` for exactly this
+  failure on the membership side; sample access has no twin. It fails *closed*,
+  so it is a functionality gap rather than a hole — and that is why nothing
+  caught it: the tests that would have were calling the legacy
+  `can_access_sample()`, which read the table directly. Now `M2-SAMPLE-ACCESS-SYNC`.
+- **A test helper that reseeds is a smell, not a fix.** `_can_read_detail` in
+  `tests/test_sample_access_router_api.py` runs a full reseed to bridge that
+  gap. It carries a pointer to the backlog entry. When the sync lands, the
+  helper should call the route instead.
+- **A directory named after a dependency silently reclassifies its imports.**
+  Deleting `backend/alembic/` changed 20 unrelated migration files: ruff's
+  isort had been resolving `alembic` as a *first-party local package* because
+  a directory of that name sat inside the source tree, so `from alembic import
+  op` was sorting into the first-party block everywhere. With the orphan gone
+  the real third-party distribution classifies correctly. Nothing was broken
+  before and nothing is broken now — but the repo had been carrying a
+  lint-classification skew for as long as the directory existed, and it only
+  surfaced because CI runs `pre-commit --all-files` while the local hook sees
+  only changed files. That gap is worth remembering on its own: a green local
+  commit does not mean a green `--all-files`.
+- **`backend/alembic/versions/` was never on the chain.** `alembic.ini` points
+  at `backend/db/migrations`. ACCESS-SEED deliberately parked a
+  reads-then-drops migration in the unreachable directory to move it in at M2;
+  ADR 0016 then split that design in two and M2 deferred the drop, leaving a
+  committed file carrying `DROP COLUMN` that no chain could reach and whose
+  design was superseded. Deleted. A staged artifact outside the build path
+  ages badly precisely because nothing fails while it rots.
+
+**ASCII diagram** — the two-migration split, and where the drop went:
+
+```
+  b2f47c1a9e30            a1c7d94e6b28              M2-DROP (blocked on M3)
+  additive                catch-up  [this session]  ┌──────────────────────┐
+  ┌──────────────┐        ┌──────────────┐          │ convert 11 readers   │
+  │ CREATE UNIQ  │        │ preflight    │          │  7 decision-path     │
+  │ INDEX        │        │  counts →log │          │  1 lookup            │
+  │ reseed()     │───────▶│ reseed()     │─────────▶│  3 plumbing          │
+  └──────────────┘        │  (no-op if   │          │ THEN drop columns    │
+   grants inert:          │   caught up) │          └──────────────────────┘
+   nothing reads          └──────────────┘           irreversible; last
+   them yet                downgrade: no-op
+                           (rows indistinguishable
+                            from the additive run)
+```
