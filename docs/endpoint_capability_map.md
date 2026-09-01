@@ -56,27 +56,27 @@ All catalog gaps were resolved in the M2 pre-cutover review (see
 | POST | `/api/v1/federation/search` | `sample:read` | Instance | auth-only today; L1 federated query fan-out (§7.4) |
 | POST | `/api/v1/federation/push` | `federation:push` | Lab | peer-key auth (`authenticate_federation_peer`); §6.2-3 `sovereignty.no_federate_deleting` DENY applies on the sender |
 | POST | `/api/v1/federation/access-requests` | `access:approve_request` | Sample | peer-key auth + anti-spoofing body cross-check (403 on mismatch, §7.6-Q2); brokers into `sample_access` workflow (L3) |
-| GET | `/api/v1/files/broken` | `sample:read` | Lab | auth-only today |
-| GET | `/api/v1/files/` | `sample:read` | Lab | auth-only today |
-| GET | `/api/v1/files/{file_id}` | `sample:read_detail` | Sample | auth-only today |
-| POST | `/api/v1/files/{file_id}/promote` | `sample:update` | Sample | in-route Lab-Director-or-admin check today |
-| GET | `/api/v1/files/jobs/{job_id}` | `sample:read` | Lab | auth-only today |
-| POST | `/api/v1/files/{file_id}/verify` | `sample:update` | Sample | auth-only today |
+| GET | `/api/v1/files/broken` | `sample:read` | Lab | **M2-B7**, not B2 — row-filtered |
+| GET | `/api/v1/files/` | `sample:read` | Lab | **M2-B7**, not B2 — row-filtered |
+| GET | `/api/v1/files/{file_id}` | `sample:read_detail` | Sample | `require_capability("sample:read_detail", sample_id=…)` on the referencing sample (M2-B2); a 403 is collapsed into FILE_NOT_FOUND so existence is not leaked |
+| POST | `/api/v1/files/{file_id}/promote` | `sample:update` | Sample | `require_capability("sample:update", sample_id=…)` (M2-B2). WIDENED deliberately: the legacy branch required a Lab Director, the map's verb is also held by lab_member_rw |
+| GET | `/api/v1/files/jobs/{job_id}` | `sample:read` | Sample | `require_capability("sample:read", sample_id=…)` on the job's file (M2-B2). Decided at **Sample** scope, not Lab: the job names one file, so its sample is resolvable and the narrower scope is the honest one |
+| POST | `/api/v1/files/{file_id}/verify` | `sample:update` | Sample | `require_capability("sample:update", sample_id=…)` (M2-B2) |
 | POST | `/api/v1/gisaid/export/{lab_id}` | `sample:read_detail` | Lab | `require_capability("sample:read_detail")` — export reads lab samples |
 | GET | `/api/v1/import_mappings/` | `import:read` | Lab | auth-only today; mapping-config read |
 | GET | `/api/v1/import_mappings/{mapping_id}` | `import:read` | Lab | auth-only today |
 | POST | `/api/v1/import_mappings/` | `import:manage` | Lab | auth-only today; mapping-config write |
 | PATCH | `/api/v1/import_mappings/{mapping_id}` | `import:manage` | Lab | auth-only today |
 | DELETE | `/api/v1/import_mappings/{mapping_id}` | `import:manage` | Lab | auth-only today; soft-delete (is_active=false) |
-| POST | `/api/v1/imports/sessions/` | `sample:create` | Lab | auth-only today; import staging |
-| GET | `/api/v1/imports/sessions/` | `sample:read` | Lab | auth-only today |
-| GET | `/api/v1/imports/sessions/{session_id}` | `sample:read` | Lab | auth-only today |
-| PATCH | `/api/v1/imports/sessions/{session_id}` | `sample:create` | Lab | auth-only today |
-| POST | `/api/v1/imports/sessions/{session_id}/import` | `sample:create` | Lab | auth-only today |
-| DELETE | `/api/v1/imports/sessions/{session_id}` | `sample:create` | Lab | auth-only today; deletes staging session, not samples |
-| POST | `/api/v1/ingest/upload` | `sample:create` | Lab | auth-only today |
-| POST | `/api/v1/ingest/csv` | `sample:create` | Lab | auth-only today |
-| POST | `/api/v1/ingest/register` | `sample:create` | Lab | auth-only today (BYOP no-copy registration, Rule 57) |
+| POST | `/api/v1/imports/sessions/` | `sample:create` | Lab | `require_capability("sample:create", lab_id=…)` (M2-B2); narrower than the membership test it replaced — a Lab Reader is a member but holds no `sample:create` |
+| GET | `/api/v1/imports/sessions/` | `sample:read` | Lab | **M2-B7**, not B2 — the caller's own sessions, filtered per row by owner |
+| GET | `/api/v1/imports/sessions/{session_id}` | `sample:read` | Lab | `require_capability("sample:read", lab_id=…)` on the session's lab (M2-B2), after the owner filter |
+| PATCH | `/api/v1/imports/sessions/{session_id}` | `sample:create` | Lab | `require_capability("sample:create", lab_id=…)` (M2-B2) |
+| POST | `/api/v1/imports/sessions/{session_id}/import` | `sample:create` | Lab | `require_capability("sample:create", lab_id=…)` (M2-B2); re-checked here, not trusted from session-creation time |
+| DELETE | `/api/v1/imports/sessions/{session_id}` | `sample:create` | Lab | `require_capability("sample:create", lab_id=…)` (M2-B2); deletes staging session, not samples |
+| POST | `/api/v1/ingest/upload` | `sample:create` | Lab | `require_capability("sample:create", lab_id=…)` (M2-B2), before any byte is staged |
+| POST | `/api/v1/ingest/csv` | `sample:create` | Lab | `require_capability("sample:create", lab_id=…)` per row (M2-B2), memoized per lab; a denied row fails as that row's error and the rest of the upload proceeds |
+| POST | `/api/v1/ingest/register` | `sample:create` | Lab | `require_capability("sample:create", lab_id=…)` (M2-B2). Closes a real gap: `lab_id` came from the request body and nothing checked it (BYOP no-copy registration, Rule 57) |
 | POST | `/api/v1/ingest/globus` | `deposit:record` | Instance | `require_capability("deposit:record")` — records a deposit and notifies directors; creates no samples, so it is not `sample:create` (corrected in M2-B1). A SERVICE principal is the better long-term fit if the facility calls it directly (cf. M2-B6) |
 | POST | `/api/v1/labs/` | `org:manage` | Instance | `require_capability("org:manage")` |
 | GET | `/api/v1/labs/` | `lab:read` | Org | auth-only today; lab directory read |
@@ -110,16 +110,16 @@ All catalog gaps were resolved in the M2 pre-cutover review (see
 | GET | `/api/v1/projects/` | `sample:read` | Lab | auth-only today; membership-filtered list |
 | GET | `/api/v1/projects/{project_id}` | `sample:read` | Project | auth-only today |
 | PATCH | `/api/v1/projects/{project_id}` | `org:manage` | Lab | `require_capability("org:manage")` at lab scope |
-| POST | `/api/v1/sample-access/requests` | `access:request` | Sample | auth-only today; pairs with `access:approve_request` |
-| GET | `/api/v1/sample-access/requests` | `sample:read` | Lab | auth-only today |
-| POST | `/api/v1/sample-access/requests/{request_id}/approve` | `access:approve_request` | Sample | in-route Lab-Director-or-admin check today |
-| POST | `/api/v1/sample-access/requests/{request_id}/deny` | `access:approve_request` | Sample | in-route Lab-Director-or-admin check today |
-| GET | `/api/v1/samples/` | `sample:read` | Lab | auth-only today; `visibility_sql_clause` list filter |
-| GET | `/api/v1/samples/{sample_id}` | `sample:read_detail` | Sample | auth-only today; `can_access_sample` in route |
-| PATCH | `/api/v1/samples/{sample_id}` | `sample:update` | Sample | auth-only today |
-| DELETE | `/api/v1/samples/{sample_id}` | `sample:archive` | Sample | in-route Lab-Director-or-admin check today; verify archive vs `sample:soft_delete` semantics at M2 |
-| GET | `/api/v1/samples/{sample_id}/files` | `sample:read_detail` | Sample | auth-only today |
-| GET | `/api/v1/samples/{sample_id}/download` | `sample:read_detail` | Sample | auth-only today |
+| POST | `/api/v1/sample-access/requests` | `access:request` | Sample | `require_capability("access:request", sample_id=…)` (M2-B2). Carried by an ALLOW **policy** on DISCOVERABLE, not a grant: the requester is by definition not a member of the sample's lab, so no preset could hold it at a covering scope |
+| GET | `/api/v1/sample-access/requests` | `sample:read` | Lab | **M2-B7**, not B2 — row-filtered by requester/director scope |
+| POST | `/api/v1/sample-access/requests/{request_id}/approve` | `access:approve_request` | Sample | `require_capability("access:approve_request", sample_id=…)` (M2-B2); scoped, so a director of another lab no longer passes |
+| POST | `/api/v1/sample-access/requests/{request_id}/deny` | `access:approve_request` | Sample | `require_capability("access:approve_request", sample_id=…)` (M2-B2) |
+| GET | `/api/v1/samples/` | `sample:read` | Lab | **M2-B7**, not B2 — row-filtered; `visibility_sql_clause` list filter |
+| GET | `/api/v1/samples/{sample_id}` | `sample:read_detail` | Sample | `require_capability("sample:read_detail", sample_id=…)` (M2-B2); fetch stays ahead of the guard so 404 semantics are unchanged |
+| PATCH | `/api/v1/samples/{sample_id}` | `sample:update` | Sample | `require_capability("sample:update", sample_id=…)` (M2-B2); Lab Reader excluded by preset, not by a branch |
+| DELETE | `/api/v1/samples/{sample_id}` | `sample:archive` | Sample | `require_capability("sample:archive", sample_id=…)` (M2-B2); `sample:archive` is lab_lead + instance_administrator only. Archive-vs-soft_delete semantics still open (M3) |
+| GET | `/api/v1/samples/{sample_id}/files` | `sample:read_detail` | Sample | `require_capability("sample:read_detail", sample_id=…)` (M2-B2) |
+| GET | `/api/v1/samples/{sample_id}/download` | `sample:read_detail` | Sample | `require_capability("sample:read_detail", sample_id=…)` (M2-B2). The narrower raw_fastq Lab-Director restriction inside the route is unchanged — no §4 verb names it; see Residue below |
 | GET | `/api/v1/sequencing-labs/` | — | Instance | AUTH-ONLY BY DESIGN — registry of physical facilities; every ingesting user needs it |
 | POST | `/api/v1/sequencing-labs/` | `org:manage` | Instance | `require_capability("org:manage")` |
 | GET | `/api/v1/sequencing-labs/{seq_lab_id}` | — | Instance | AUTH-ONLY BY DESIGN — detail read of the same facility registry |
@@ -154,8 +154,75 @@ All catalog gaps were resolved in the M2 pre-cutover review (see
 | GET | `/api/v1/users/{user_id}` | `user:manage` | Org | auth-only today; self OR user:manage at M2 |
 | PATCH | `/api/v1/users/{user_id}` | `user:manage` | Org | auth-only today; self OR user:manage in-route |
 | DELETE | `/api/v1/users/{user_id}` | `user:manage` | Instance | `require_capability("user:manage")` |
-| GET | `/api/v1/wastewater/sites` | `sample:read_surveillance` | Org | auth-only today |
-| GET | `/api/v1/wastewater/lineage-abundance` | `sample:read_surveillance` | Org | auth-only today |
+| GET | `/api/v1/wastewater/sites` | `sample:read_surveillance` | Org | **M2-B7**, not B2 — row-filtered |
+| GET | `/api/v1/wastewater/lineage-abundance` | `sample:read_surveillance` | Org | **M2-B7**, not B2 — row-filtered |
+
+## Sample plane after M2-B2
+
+20 of the 27 sample-plane rows now carry a `require_capability(...)` call.
+The other 7 do not, and the reason is structural rather than a shortfall.
+
+**A route can only be guarded by `require_capability` when it names one
+resource.** The guard resolves a scope from a `lab_id` or a `sample_id` and
+asks one question about it. A list endpoint names none: its authorization
+*is* the row filter, and asking the question at the instance root instead
+would demand an instance-wide grant and deny every ordinary lab member the
+whole endpoint. That is not a conservative approximation — it is a louder
+version of exactly the silent-removal failure the B2 pre-work existed to
+avoid. Those 7 rows are M2-B7's, which compiles the same rules into SQL via
+`visibility_sql_clause` and keeps `new_visible ⊆ legacy_visible` as its
+invariant:
+
+| Method | Path |
+|--------|------|
+| GET | `/api/v1/samples/` |
+| GET | `/api/v1/files/` |
+| GET | `/api/v1/files/broken` |
+| GET | `/api/v1/imports/sessions/` |
+| GET | `/api/v1/sample-access/requests` |
+| GET | `/api/v1/wastewater/sites` |
+| GET | `/api/v1/wastewater/lineage-abundance` |
+
+Until B7 lands these still run on `permissions.visibility_sql_clause`, the
+legacy ladder. They are not unguarded; they are guarded by the old model.
+
+### What the guard gained
+
+Sample-scoped decisions now carry the row's attributes
+(`principal.sample_resource`), evaluated against `policy.LADDER_POLICIES`.
+Without that, the three permissive rungs of the legacy ladder — a PUBLIC
+sample readable by anyone, a surveillance-relevant row readable by a
+`sample:read_surveillance` holder, a sample readable by its owner — would
+have evaluated against absent attributes, which reads as DENY. B2's read
+routes would have kept working for lab members and quietly stopped working
+for everyone else.
+
+`access:request` is the one capability held by no preset and no grant. It
+is an ALLOW policy on `sharing_level = DISCOVERABLE`, because the whole
+premise of the self-serve workflow is that the asker is *not* a member of
+the lab they are asking.
+
+### Residue — deliberately still on the legacy check
+
+- `GET /api/v1/samples/{sample_id}/download?file_type=raw_fastq` keeps its
+  in-route Lab-Director test. The map gives the route one capability,
+  `sample:read_detail`, and this is a narrower restriction inside it with no
+  §4 verb to name it. Dropping it to finish the rewrite would widen access
+  to un-scrubbed reads. Needs a verb (M2-B5 owns catalog additions).
+- `POST /api/v1/files/{file_id}/promote` moved the other way: the map's
+  `sample:update` is held by `lab_member_rw`, so a Lab Collaborator can now
+  promote where the legacy branch required a Director. Recorded as a
+  deliberate widening, not an oversight — if the narrower rule was intended
+  it needs its own verb rather than a re-added branch.
+
+### Known divergence from the legacy ladder
+
+Project-only membership. `permissions._base_access` admitted a project
+member; no preset issues grants at Project scope, so after B2 a user whose
+only tie to a sample is `project_membership` is denied. This is the
+divergence `reseed()`'s pre-flight guard counts as `project_only_membership`
+so an operator sees the number before cutover — not a new B2 finding, but
+B2 is where it becomes reachable from a route.
 
 Deletion-approval note (§10.3 example): no deletion-approval route exists
 yet (the B-CARE-3 lifecycle routes land with P0c/M3). When it lands it

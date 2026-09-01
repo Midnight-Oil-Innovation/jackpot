@@ -2648,3 +2648,97 @@ documentation pattern.
 - Live chain lacks the grants unique index; reseed idempotency exists only after the staged migration creates it. Ordering pinned by test_reseed_duplicates_without_index.
 - `tests` dotted imports are shadowed by cli/tests (regular package from the editable cli install); use `authz.preflight` under pytest, file-path import in scripts.
 - Repo-wide gotcha: `git stash pop` in a worktree can pop ANOTHER session's stash — stashes are shared across worktrees. Check `git stash list` before pop.
+
+## M2-B2 — sample-plane route guards — 2026-08-31
+
+**What was built:** 20 of the 27 sample-plane routes moved off their in-route
+ownership/visibility/director checks and onto `require_capability(...)`, and
+the guard grew the attribute half it needed to make those decisions correctly.
+
+**Key decisions:**
+
+- **The guard now passes `LADDER_POLICIES`, not `policies=[]`.** M2-B1 left a
+  note saying the attribute-policy paths "belong to the sample-visibility
+  plane". That reading was too narrow: they belong to any *sample-scoped
+  decision*, list or detail. A PUBLIC sample is readable by a non-member on
+  the detail route too, and no grant expresses that — only a policy reading
+  the row does. Passing the set on every call, including lab- and
+  instance-scoped ones, is safe rather than sloppy: every policy predicate
+  reads a resource attribute, a resource carrying none matches nothing, and
+  the set has no DENY entry, so it can only widen and only for a sample.
+- **`sample_resource()` fetches scope and attributes in one query.** The
+  alternative — resolve the scope, then fetch attributes separately — costs a
+  second round trip per request and invites the failure where one is fetched
+  without the other. A guard holding the scope but not the attributes
+  evaluates every policy against a missing value, which reads as DENY: the
+  permissive rungs disappear silently rather than erroring.
+- **`access:request` had to be a policy.** It appears in no §8.2 preset, and
+  adding it to one would not have worked: the requester is by definition not
+  a member of the lab they are asking about, so a lab-scoped grant never
+  contains the target sample's scope, and an instance-scoped grant issued to
+  everybody is the same thing as no check at all. The rule is a fact about
+  the row — "this sample invites requests" — which is what an
+  attribute-policy is for. It replaces the in-route
+  `REQUESTABLE_SHARING_LEVELS` test one-for-one.
+- **Seven list routes were NOT converted, and could not be.**
+  `require_capability` resolves exactly one resource scope. A list endpoint
+  names none; its authorization *is* the row filter. Guarding one at the
+  instance root would require an instance-wide grant and deny every ordinary
+  lab member the entire endpoint. They belong to M2-B7, which already owns
+  compiling these rules into SQL. Recorded in the backlog and the map rather
+  than approximated.
+- **404 stays ahead of 403 on the sample routes.** The fetch runs first, so
+  an archived or tombstoned sample is still "not found" rather than
+  "forbidden" — that is `_get_sample`'s filter talking, not the authorization
+  model. On the *file* routes the opposite convention already held (a denial
+  collapses into `FILE_NOT_FOUND`), so the guard's `HTTPException` is caught
+  and swallowed there. Letting the 403 through would have re-leaked the
+  existence that helper exists to hide.
+
+**Watch out for:**
+
+- `promote` is a deliberate **widening**. The map assigns `sample:update`,
+  which `lab_member_rw` holds; the legacy branch demanded a Lab Director. If
+  the narrower rule was intended it needs its own verb, not a re-added
+  branch.
+- The `raw_fastq` Lab-Director check in `download` is deliberately still the
+  legacy check. No §4 verb names "pre-scrub reads", and dropping it to finish
+  the rewrite would have widened access to un-scrubbed data.
+- **Project-only membership loses access here.** The legacy ladder admitted a
+  project member; no preset grants at Project scope. Known and counted by
+  reseed's pre-flight (`project_only_membership`), but B2 is where it first
+  becomes reachable from a route.
+- Ingest gained a check it never had: `lab_id` arrives in the caller's own
+  metadata and nothing verified it, so any authenticated user could ingest
+  into any lab. The CSV path checks per row, memoized per lab — without the
+  memo a 1000-row upload would add 2000 queries.
+- A stale `m2-b2-sample-plane` branch from the aborted 2026-08-31 attempt
+  still pointed at `b95a218`, three commits before the PRE work. `git diff
+  development...branch` was empty, which reads as "identical" but also means
+  "strict ancestor". Check `git log HEAD..development`, not just the diff.
+
+**ASCII diagram — where a sample-plane decision comes from after B2:**
+
+```
+  route (samples/files/imports/sample-access/ingest)
+      |
+      |  require_capability("sample:read_detail")(user, sample_id=42)
+      v
+  +---------------------------- guard ----------------------------+
+  |  load_principal(user.id) ---> grants  (authz_capability_grants) |
+  |  sample_resource(42)     ---> scope   org://o/lab/proj/sample   |
+  |                           \-> attrs   sharing_level, owner_id,  |
+  |                                       surveillance_relevant     |
+  +---------------------------------------------------------------+
+      |
+      v
+  permit(principal, capability, Resource(scope, attrs),
+         Context(now=...), policies=LADDER_POLICIES)
+      |
+      +-- DENY policy matches? ------------------> DENY   (deny-wins)
+      +-- grant covers scope, unexpired? --------> ALLOW  (structural)
+      +-- ALLOW policy matches attrs? -----------> ALLOW  (attribute)
+      +-- otherwise ----------------------------> DENY   (default)
+
+  Lists take neither path yet — no single resource to name.  -> M2-B7
+```

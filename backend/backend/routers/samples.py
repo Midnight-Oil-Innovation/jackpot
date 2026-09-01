@@ -5,10 +5,10 @@ from pydantic import BaseModel
 
 from backend import deletion
 from backend.audit import AuditActions, log_audit
-from backend.auth.guards import get_current_user, get_user_lab_membership
+from backend.auth.guards import get_current_user, get_user_lab_membership, require_capability
 from backend.database import execute_query, execute_write, get_db_dep
 from backend.pagination import paginate
-from backend.permissions import can_access_sample, visibility_sql_clause
+from backend.permissions import visibility_sql_clause
 from backend.responses import success, success_list
 from backend.storage import StorageError, generate_presigned_url
 from backend.validator import (
@@ -193,12 +193,17 @@ def _get_sample_files(sample_id: int, conn) -> list[dict]:
     )
 
 
-def _require_readable(user: dict, sample: dict | None, conn) -> dict:
-    """Raise 404 if missing, 403 if denied. Returns the sample row."""
+def _require_readable(user: dict, sample: dict | None) -> dict:
+    """Raise 404 if missing, 403 if denied. Returns the sample row.
+
+    M2-B2: the decision is ``sample:read_detail`` at Sample scope. The fetch
+    stays ahead of the guard so the 404 answers survive unchanged — an
+    archived or tombstoned sample is not found rather than forbidden, which
+    ``_get_sample``'s filter, not the authorization model, decides.
+    """
     if not sample:
         raise HTTPException(status_code=404, detail="Sample not found.")
-    if not can_access_sample(user, sample, conn):
-        raise HTTPException(status_code=403, detail="Access denied.")
+    require_capability("sample:read_detail")(user, sample_id=sample["id"])
     return sample
 
 
@@ -357,7 +362,7 @@ def get_sample(
     db=Depends(get_db_dep),  # noqa: B008
 ):
     user = get_current_user(request)
-    sample = _require_readable(user, _get_sample(sample_id, db), db)
+    sample = _require_readable(user, _get_sample(sample_id, db))
     files = _get_sample_files(sample_id, db)
     out = _serialise(sample)
     out["files"] = [_serialise(f) for f in files]
@@ -365,15 +370,17 @@ def get_sample(
 
 
 def _require_sample_writable(user: dict, sample: dict) -> None:
-    """Writes require lab membership (Lab Collaborator+) on the sample's lab,
-    or Platform Admin. Lab Readers cannot write. Raises HTTPException."""
-    if user.get("is_platform_admin"):
-        return
-    member = get_user_lab_membership(user["id"], sample["lab_id"])
-    if not member:
-        raise HTTPException(status_code=403, detail="Lab membership required to update.")
-    if member.get("permission_group_name") == "Lab Reader":
-        raise HTTPException(status_code=403, detail="Lab Reader cannot update samples.")
+    """Writes require ``sample:update`` at the sample's scope.
+
+    M2-B2. The three legacy rungs are all preserved by the preset mapping
+    rather than by branches here: Platform Admin holds it instance-wide, Lab
+    Collaborator and Bioinformatics User hold it through ``lab_member_rw``,
+    and ``lab_member_ro`` (Lab Reader) deliberately does not list it. The
+    single 403 replaces two differently-worded ones; the distinction was
+    never actionable and telling a caller which rung they failed on is a
+    membership disclosure.
+    """
+    require_capability("sample:update")(user, sample_id=sample["id"])
 
 
 async def _parse_sample_update_body(request: Request) -> dict:
@@ -484,13 +491,9 @@ def archive_sample(
     if not sample:
         raise HTTPException(status_code=404, detail="Sample not found.")
 
-    if not user.get("is_platform_admin"):
-        member = get_user_lab_membership(user["id"], sample["lab_id"])
-        if not member or not member.get("is_lab_director"):
-            raise HTTPException(
-                status_code=403,
-                detail="Lab Director or Platform Admin required to archive samples.",
-            )
+    # sample:archive sits in the lab_lead and instance_administrator presets
+    # only — the same two roles the director-or-admin branch admitted.
+    require_capability("sample:archive")(user, sample_id=sample_id)
 
     rows = execute_write(
         "UPDATE samples SET is_archived = TRUE, deleted_at = NOW(), "
@@ -520,7 +523,7 @@ def list_sample_files(
     db=Depends(get_db_dep),  # noqa: B008
 ):
     user = get_current_user(request)
-    sample = _require_readable(user, _get_sample(sample_id, db), db)
+    sample = _require_readable(user, _get_sample(sample_id, db))
     files = _get_sample_files(sample["id"], db)
     return success(data=[_serialise(f) for f in files])
 
@@ -550,7 +553,7 @@ def download_sample(
     db=Depends(get_db_dep),  # noqa: B008
 ):
     user = get_current_user(request)
-    sample = _require_readable(user, _get_sample(sample_id, db), db)
+    sample = _require_readable(user, _get_sample(sample_id, db))
 
     column_map = {
         "fastq_r1": "fastq_r1_uri",
@@ -565,7 +568,12 @@ def download_sample(
             detail=f"Unknown file_type '{file_type}'. Allowed: {sorted(column_map.keys())}.",
         )
 
-    # raw_fastq is pre-scrub and restricted to Lab Directors (and Platform Admin).
+    # raw_fastq is pre-scrub and restricted to Lab Directors (and Platform
+    # Admin). Deliberately still the legacy check after M2-B2: the map gives
+    # this route one capability, sample:read_detail, and this is a narrower
+    # restriction *inside* it with no verb in the §4 catalog to name it.
+    # Dropping it to finish the rewrite would widen access to un-scrubbed
+    # reads, so it stays until a verb exists (M2-B5 owns catalog additions).
     if file_type == "raw_fastq" and not user.get("is_platform_admin"):
         member = get_user_lab_membership(user["id"], sample["lab_id"])
         if not member or not member.get("is_lab_director"):

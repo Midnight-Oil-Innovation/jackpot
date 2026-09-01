@@ -20,6 +20,7 @@ from __future__ import annotations
 import uuid
 
 import pytest
+from authz_helpers import sync_grants_from_legacy_roles
 
 from backend.config import get_settings
 from backend.database import execute_query, execute_write
@@ -522,6 +523,9 @@ async def test_approve_as_lab_director_creates_grant(client, monkeypatch):
     )
     req_id = inserted[0]["id"]
 
+    # The Lab Director membership reseeds to access:approve_request; the
+    # is_lab_director flag is not itself a decision input since M2-B1.
+    sync_grants_from_legacy_roles()
     _switch_user(email_ld, monkeypatch)
     resp = await client.post(f"/api/v1/sample-access/requests/{req_id}/approve")
     assert resp.status_code == 200, resp.text
@@ -568,6 +572,9 @@ async def test_approve_grant_unlocks_can_access_sample(client, monkeypatch):
     )
     req_id = inserted[0]["id"]
 
+    # The Lab Director membership reseeds to access:approve_request; the
+    # is_lab_director flag is not itself a decision input since M2-B1.
+    sync_grants_from_legacy_roles()
     _switch_user(email_ld, monkeypatch)
     resp = await client.post(f"/api/v1/sample-access/requests/{req_id}/approve")
     assert resp.status_code == 200
@@ -662,6 +669,7 @@ async def test_deny_as_lab_director_sets_status(client, monkeypatch):
     )
     req_id = inserted[0]["id"]
 
+    sync_grants_from_legacy_roles()
     _switch_user(email_ld, monkeypatch)
     resp = await client.post(
         f"/api/v1/sample-access/requests/{req_id}/deny",

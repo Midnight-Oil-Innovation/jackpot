@@ -7,10 +7,11 @@ from fastapi import HTTPException, Request
 from jose import jwt
 
 from backend.authz.engine import Context, Decision, Resource, permit
+from backend.authz.policy import LADDER_POLICIES
 from backend.authz.principal import (
     lab_resource_scope,
     load_principal,
-    sample_resource_scope,
+    sample_resource,
 )
 from backend.authz.scope import scope_uri
 from backend.config import get_settings
@@ -88,24 +89,28 @@ def get_user_lab_membership(user_id: int, lab_id: int) -> dict | None:
     return rows[0] if rows else None
 
 
-def _allows(principal, capability: str, scope: str) -> bool:
+def _allows(principal, capability: str, resource: Resource) -> bool:
     """One place where a decision is made, so the guard cannot drift from it.
 
-    ``policies=[]`` for the structural routes this guard serves; the
-    attribute-policy set (PRE-A's LADDER_POLICIES) belongs to the sample
-    plane, which B2 wires per route along with the resource attributes those
-    policies read.
+    ``LADDER_POLICIES`` (PRE-A) rather than ``policies=[]``: the sample plane's
+    permissive rungs — PUBLIC, surveillance relevance, ownership, and the
+    invitation a DISCOVERABLE sample extends to request access — are facts
+    about the row, not about the caller's memberships, so no grant can carry
+    them. Passing them on every call including lab- and instance-scoped ones is
+    safe rather than sloppy: each policy's predicate reads a resource
+    attribute, a resource carrying none matches nothing, and the set contains
+    no DENY entry, so it can only ever widen and only ever for a sample.
     """
     return (
         permit(
             principal,
             capability,
-            Resource(scope=scope),
+            resource,
             # A real clock, so a lapsed grant is refused at decision time —
             # the legacy ladder compared access_expires_at against NOW() and
             # did not wait for the nightly expiry job (M2-B2-PRE-C).
             Context(conditions={}, now=datetime.now(UTC)),
-            policies=[],
+            policies=LADDER_POLICIES,
         )
         is Decision.ALLOW
     )
@@ -131,13 +136,13 @@ def require_capability(capability: str):
                                operator sees the loss before it happens
                                (``project_only_membership``).
 
-    ``policies=[]`` is passed deliberately, not as a placeholder: DB-backed
-    policy loading is not wired until M3, and the engine raises on ``None``
-    rather than silently treating "no policies" as "policies not loaded".
-    Every route reaching this guard is decided by structural grants alone;
-    the attribute-policy paths (PUBLIC samples, sovereignty DENY) belong to
-    the sample-visibility plane, which M2-B7 moves onto
-    ``visibility_sql_clause``.
+    M2-B2 adds the attribute half. A route naming a ``sample_id`` is decided
+    against the row's attributes as well as its scope, under the static
+    ``LADDER_POLICIES`` set — that is what keeps a PUBLIC sample readable by a
+    non-member and a DISCOVERABLE one requestable by a stranger, neither of
+    which any grant expresses. DB-backed policy loading still waits for M3;
+    the list path, where the same rules have to be compiled into SQL rather
+    than evaluated per row, is M2-B7.
     """
 
     def _guard(
@@ -157,11 +162,15 @@ def require_capability(capability: str):
 
         try:
             if sample_id is not None:
-                scope = sample_resource_scope(sample_id)
+                # Carries the row's attributes, not just its scope — the
+                # attribute-policies are the only path by which a non-member
+                # reads a PUBLIC sample or a stranger requests access to a
+                # DISCOVERABLE one.
+                resource = sample_resource(sample_id)
             elif lab_id is not None:
-                scope = lab_resource_scope(lab_id)
+                resource = Resource(scope=lab_resource_scope(lab_id))
             else:
-                scope = scope_uri()
+                resource = Resource(scope=scope_uri())
         except ValueError:
             # No such lab/sample. Whether the caller may learn that depends on
             # their reach: someone holding the capability instance-wide can
@@ -170,7 +179,7 @@ def require_capability(capability: str):
             # denied resource produces — under org isolation existence is
             # itself the secret (§3.2: another org must not learn of a lab's
             # data, users, "or existence").
-            if _allows(principal, capability, scope_uri()):
+            if _allows(principal, capability, Resource(scope=scope_uri())):
                 return current_user
             logger.info(
                 "authz: DENY user=%s capability=%s unknown lab_id=%s sample_id=%s",
@@ -183,18 +192,36 @@ def require_capability(capability: str):
                 status_code=403, detail=f"capability '{capability}' required"
             ) from None
 
-        if _allows(principal, capability, scope):
+        if _allows(principal, capability, resource):
             return current_user
 
         logger.info(
             "authz: DENY user=%s capability=%s scope=%s",
             current_user.get("id"),
             capability,
-            scope,
+            resource.scope,
         )
         raise HTTPException(status_code=403, detail=f"capability '{capability}' required")
 
     return _guard
+
+
+def permits(user: dict, capability: str, *, lab_id=None, sample_id=None) -> bool:
+    """``require_capability`` as a boolean, for routes that answer with
+    something other than the guard's 403.
+
+    Several sample-plane routes deliberately do not surface a denial as a 403:
+    the file routes collapse it into ``FILE_NOT_FOUND`` so existence is not
+    leaked, and ``sample-access`` answers with a message naming the sharing
+    level. Each was writing its own ``try/except HTTPException`` around the
+    guard; this is that shape once, so a future change to how the guard
+    signals denial does not have to be found in three places.
+    """
+    try:
+        require_capability(capability)(user, lab_id=lab_id, sample_id=sample_id)
+    except HTTPException:
+        return False
+    return True
 
 
 def authenticate_federation_peer(request: Request, conn: Any = None) -> dict[str, Any] | None:

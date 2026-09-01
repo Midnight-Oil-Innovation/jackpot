@@ -2284,11 +2284,17 @@ sessions:
     pr_title_template: "feat(authz): M2-B2 — sample-plane route guards"
     branch_name_template: m2-b2-sample-plane
     role_framing:
-    notes: "Sequenced first for its evidence, but it is the most BLOCKED batch — found on starting it 2026-08-31.
-      Its read routes decide on resource attributes the engine cannot see (PRE-A), 12 of 27 rows are Sample-scoped
-      and the guard cannot name that scope (PRE-B), and approved access requests are never reseeded (PRE-C).
-      Doing B2 without these would silently REMOVE access — PUBLIC samples to non-members, and every approved
-      access request. Fails closed, so not a security hole, but a functional break with no error to notice."
+    notes: "Shipped 20 of the 27 rows. The other 7 are list endpoints and moved to M2-B7, which already owns
+      that path: require_capability resolves ONE resource scope, a list names none, and asking at the instance
+      root would demand an instance-wide grant and deny every ordinary member the whole endpoint — the same
+      silent-removal failure the PRE tasks existed to prevent, only louder. Guard now carries the row's
+      attributes (principal.sample_resource) under LADDER_POLICIES on sample-scoped calls; without that the
+      PUBLIC / surveillance / ownership rungs evaluate against absent attributes, which reads as DENY.
+      access:request needed a NEW policy — it is in no preset and cannot be, since the requester is by
+      definition not a member of the lab they are asking. Two deliberate deviations recorded in the map:
+      promote WIDENED (map gives sample:update, held by lab_member_rw; legacy wanted a Director), and the
+      raw_fastq Director check KEPT (no §4 verb names it; dropping it would widen access to un-scrubbed reads).
+      Sequenced first for its evidence, and it was the most blocked batch — PRE-A/B/C cleared it 2026-08-31."
 
   - id: M2-B3
     title: Pipeline and BYOP route guards (16 routes)
@@ -2459,7 +2465,14 @@ sessions:
     pr_title_template: "feat(authz): M2-B7 — list endpoints onto visibility_sql_clause"
     branch_name_template: m2-b7-list-visibility
     role_framing:
-    notes: "An over-granting list is silent — no error, no audit row. never_over_grants is the invariant, not a nicety."
+    notes: "An over-granting list is silent — no error, no audit row. never_over_grants is the invariant, not a nicety.
+      Scope grew in M2-B2: 7 sample-plane list rows could not be guarded by require_capability at all (a list names
+      no single resource, so there is no scope to resolve) and are B7's, not just samples/. They are
+      GET /samples/, /files/, /files/broken, /imports/sessions/, /sample-access/requests, /wastewater/sites,
+      /wastewater/lineage-abundance. All still run on permissions.visibility_sql_clause until this batch lands —
+      guarded by the old model, not unguarded. attribute_columns for the SQL half is
+      principal.SAMPLE_ATTRIBUTE_COLUMNS, kept next to the row loader so the two halves cannot name different
+      columns."
 
   - id: M2
     title: Reseed + cutover (IRREVERSIBLE — manual flow only)
