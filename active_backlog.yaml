@@ -39,7 +39,7 @@
 
 meta:
   version: 1
-  last_updated: "2026-08-29"
+  last_updated: "2026-08-31"
   source_documents:
     - todo.md
     - docs/jackpot_session_summary_and_backlog.md
@@ -1877,8 +1877,8 @@ sessions:
     depends_on: []
     blocked_by_external:
     parallel_safe: false
-    parallel_safe_reason: "Touches the auth guard surface — the authorization decision path serializes (CLAUDE.md,
-      Authorization-path serialization)."
+    parallel_safe_reason: "Touches the auth guard surface — the authorization decision path serializes (CLAUDE.md, Authorization-path
+      serialization)."
     effort_sessions: 1
     primary_files:
       - backend/backend/auth/guards.py
@@ -1912,8 +1912,8 @@ sessions:
       - M0
     blocked_by_external:
     parallel_safe: false
-    parallel_safe_reason: "Writes into M0's grants table — authorization decision path, serialized (CLAUDE.md,
-      Authorization-path serialization)."
+    parallel_safe_reason: "Writes into M0's grants table — authorization decision path, serialized (CLAUDE.md, Authorization-path
+      serialization)."
     effort_sessions: 1
     primary_files:
       - backend/backend/authz/
@@ -1965,10 +1965,10 @@ sessions:
     pr_title_template: "feat(authz): M2-PRE-1 — canonical scope-URI builder"
     branch_name_template: m2-pre-1-scope-uri
     role_framing:
-    notes: "access_model.md §3.1.1 is the spec. _scope_contains must NOT change — if it needs to, the ADR was wrong.
-      Shipped without changing it. §9.1's cross-instance DENY case was removed rather than translated: under one root
-      per deployment no resource scope can name another instance, so the case cannot arise; replaced by the
-      instance-root-reaches-every-depth property, with test_scope.py pinning that no input produces a second root."
+    notes: "access_model.md §3.1.1 is the spec. _scope_contains must NOT change — if it needs to, the ADR was wrong. Shipped
+      without changing it. §9.1's cross-instance DENY case was removed rather than translated: under one root per deployment
+      no resource scope can name another instance, so the case cannot arise; replaced by the instance-root-reaches-every-depth
+      property, with test_scope.py pinning that no input produces a second root."
     merged_at: '2026-08-31'
     merge_sha: eec4900
 
@@ -2000,9 +2000,12 @@ sessions:
     pr_title_template: "feat(authz): M2-PRE-2 — visibility_sql_clause takes a scope expression"
     branch_name_template: m2-pre-2-scope-expr
     role_framing:
-    notes: "Shipped inside the M2-PRE-3 PR (#148, merge 87e7101): PRE-2's signature change breaks preflight.py's synthesized 'lab://' scope column, and repairing it needs PRE-3's canonical grants — the two are one unit, not the independent items this entry assumed. scope_expr is validated by re-derivation (is_canonical_scope_sql), not trusted, because it is interpolated rather than bound."
+    notes: "Shipped inside the M2-PRE-3 PR (#148, merge 87e7101): PRE-2's signature change breaks preflight.py's synthesized
+      'lab://' scope column, and repairing it needs PRE-3's canonical grants — the two are one unit, not the independent items
+      this entry assumed. scope_expr is validated by re-derivation (is_canonical_scope_sql), not trusted, because it is interpolated
+      rather than bound."
     merged_at: '2026-08-31'
-    merge_sha: 87e7101
+    merge_sha: .inf
 
   - id: M2-PRE-3
     title: reseed emits path scopes — and the admin divergence disappears
@@ -2024,7 +2027,8 @@ sessions:
       - M2-PRE-1
     blocked_by_external:
     parallel_safe: false
-    parallel_safe_reason: "Rewrites reseed and the divergence registry; auth-adjacent, the authorization decision path serializes (CLAUDE.md)."
+    parallel_safe_reason: "Rewrites reseed and the divergence registry; auth-adjacent, the authorization decision path serializes
+      (CLAUDE.md)."
     effort_sessions: 1
     primary_files:
       - backend/backend/authz/reseed.py
@@ -2038,9 +2042,13 @@ sessions:
     pr_title_template: "feat(authz): M2-PRE-3 — reseed emits path scopes"
     branch_name_template: m2-pre-3-reseed-scopes
     role_framing:
-    notes: "Shipped with M2-PRE-2 (#148, merge 87e7101). ACCEPTANCE SIGNAL came back HALF: every lab-scoped cell for an in-preset capability now allows by plain containment (test_admin_reaches_lab_scope_structurally, on PG), but admin-bypass-vs-scoped-grants still fires for capabilities outside the 13-verb §8.2 instance_administrator preset — intentional narrowing, same family as director-passes-all-lab-caps, so the class was re-scoped rather than deleted. Also fixed impossible PRE-1 fixtures (lab 1 under four orgs; reused sample ids); fixtures now shared via tests/authz/scopes.py."
+    notes: "Shipped with M2-PRE-2 (#148, merge 87e7101). ACCEPTANCE SIGNAL came back HALF: every lab-scoped cell for an in-preset
+      capability now allows by plain containment (test_admin_reaches_lab_scope_structurally, on PG), but admin-bypass-vs-scoped-grants
+      still fires for capabilities outside the 13-verb §8.2 instance_administrator preset — intentional narrowing, same family
+      as director-passes-all-lab-caps, so the class was re-scoped rather than deleted. Also fixed impossible PRE-1 fixtures
+      (lab 1 under four orgs; reused sample ids); fixtures now shared via tests/authz/scopes.py."
     merged_at: '2026-08-31'
-    merge_sha: 87e7101
+    merge_sha: .inf
 
   - id: M2-PRE-4
     title: reseed pre-flight guard — the three data-quality divergences
@@ -2076,7 +2084,11 @@ sessions:
     pr_title_template: "feat(authz): M2-PRE-4 — reseed pre-flight data-quality guard"
     branch_name_template: m2-pre-4-preflight-guard
     role_framing:
-    notes: "Shipped #150 (merge 664e0db). preflight_counts() + ReseedPreflightError, force=True to override. Two deliberate force call sites: the preflight harness (P9/P11/P12 exist to MEASURE these divergences, so it must not be blocked by them) and the skip-and-warn body test. PG test asserts the guard finds exactly the personas the divergence matrix diverges on — a persona the guard cannot see would mean the migration runs silently on data the report calls broken. M2 still wires the migration to surface the counts and read the override from the operator rather than a hardcoded flag."
+    notes: "Shipped #150 (merge 664e0db). preflight_counts() + ReseedPreflightError, force=True to override. Two deliberate
+      force call sites: the preflight harness (P9/P11/P12 exist to MEASURE these divergences, so it must not be blocked by
+      them) and the skip-and-warn body test. PG test asserts the guard finds exactly the personas the divergence matrix diverges
+      on — a persona the guard cannot see would mean the migration runs silently on data the report calls broken. M2 still
+      wires the migration to surface the counts and read the override from the operator rather than a hardcoded flag."
     merged_at: '2026-08-31'
     merge_sha: 664e0db
 
@@ -2111,7 +2123,8 @@ sessions:
       - M2-PRE-4
     blocked_by_external:
     parallel_safe: false
-    parallel_safe_reason: "Rewrites the guard every other batch builds on; auth-adjacent, the authorization decision path serializes (CLAUDE.md)."
+    parallel_safe_reason: "Rewrites the guard every other batch builds on; auth-adjacent, the authorization decision path
+      serializes (CLAUDE.md)."
     effort_sessions: 2
     primary_files:
       - backend/backend/auth/guards.py
@@ -2125,10 +2138,16 @@ sessions:
     pr_title_template: "feat(authz): M2-B1 — require_capability calls permit()"
     branch_name_template: m2-b1-guard-permit
     role_framing:
-    notes: "Shipped #154 (merge cd94b28). Exposed three preset gaps that each made a route unreachable: pipeline:promote + pipeline:register_custom were in NO preset; lab_lead lacked org:manage so a director could not rename their own lab or create a project in it; and POST /ingest/globus was mapped to sample:create from its router rather than its behavior (it creates no samples) — new deposit:record verb. Unknown lab_id now answers as a denied lab does (403) since 404-vs-403 leaks lab existence, which org isolation treats as the secret (§3.2). preflight.py froze the old ladder as legacy_ladder() so the divergence registry keeps meaning something; TestRealGuardIsPermitBacked asserts guard == permit() per cell. Also fixed two pre-existing test-hygiene bugs the change surfaced: the preflight teardown deleted ALL grants, and fixtures must materialize grants after creating a user or membership."
+    notes: "Shipped #154 (merge cd94b28). Exposed three preset gaps that each made a route unreachable: pipeline:promote +
+      pipeline:register_custom were in NO preset; lab_lead lacked org:manage so a director could not rename their own lab
+      or create a project in it; and POST /ingest/globus was mapped to sample:create from its router rather than its behavior
+      (it creates no samples) — new deposit:record verb. Unknown lab_id now answers as a denied lab does (403) since 404-vs-403
+      leaks lab existence, which org isolation treats as the secret (§3.2). preflight.py froze the old ladder as legacy_ladder()
+      so the divergence registry keeps meaning something; TestRealGuardIsPermitBacked asserts guard == permit() per cell.
+      Also fixed two pre-existing test-hygiene bugs the change surfaced: the preflight teardown deleted ALL grants, and fixtures
+      must materialize grants after creating a user or membership."
     merged_at: '2026-08-31'
-    merge_sha: cd94b28
-      real guard. Legacy columns still exist, so this batch is revertible."
+    merge_sha: cd94b28 real guard. Legacy columns still exist, so this batch is revertible."
 
   # ── B2 prerequisites — found when B2 started (2026-08-31) ───────────────
   # The carve assumed the sample plane was structural like the others. It is
@@ -2175,10 +2194,13 @@ sessions:
     pr_title_template: "feat(authz): M2-B2-PRE-A — resource attributes and attribute-policies"
     branch_name_template: m2-b2-pre-a-resource-attributes
     role_framing:
-    notes: "Shipped #158 (merge f1dcfe2). Predicates kept declarative (equality, in, PRINCIPAL_ID) so both the Python and SQL halves can evaluate them — a lambda would have been unimplementable in SQL. requires_capability added for the principal half of the surveillance rung. Ownership shipped as a POLICY, deviating from §5's mapping table which calls it a Sample-scope grant: as a grant it would need a row written per sample creation and deleted per transfer. Unmapped attribute RAISES — a dropped term widens an ALLOW and neuters a DENY."
+    notes: "Shipped #158 (merge f1dcfe2). Predicates kept declarative (equality, in, PRINCIPAL_ID) so both the Python and
+      SQL halves can evaluate them — a lambda would have been unimplementable in SQL. requires_capability added for the principal
+      half of the surveillance rung. Ownership shipped as a POLICY, deviating from §5's mapping table which calls it a Sample-scope
+      grant: as a grant it would need a row written per sample creation and deleted per transfer. Unmapped attribute RAISES
+      — a dropped term widens an ALLOW and neuters a DENY."
     merged_at: '2026-08-31'
-    merge_sha: f1dcfe2
-      cross-checked on the same fixtures as M1."
+    merge_sha: f1dcfe2 cross-checked on the same fixtures as M1."
 
   - id: M2-B2-PRE-B
     title: Guards can name a Sample-scoped resource
@@ -2212,7 +2234,8 @@ sessions:
     pr_title_template: "feat(authz): M2-B2-PRE-B — sample-scoped guard resolution"
     branch_name_template: m2-b2-pre-b-sample-scope
     role_framing:
-    notes: "Shipped #159 (merge 2a5ccf1). Guard takes sample_id; both identifiers raises rather than picking one. Lab and sample paths share one _allows() helper so the unknown-resource rule cannot drift between them."
+    notes: "Shipped #159 (merge 2a5ccf1). Guard takes sample_id; both identifiers raises rather than picking one. Lab and
+      sample paths share one _allows() helper so the unknown-resource rule cannot drift between them."
     merged_at: '2026-08-31'
     merge_sha: 2a5ccf1
 
@@ -2246,10 +2269,14 @@ sessions:
     pr_title_template: "feat(authz): M2-B2-PRE-C — reseed per-sample access grants"
     branch_name_template: m2-b2-pre-c-sample-grants
     role_framing:
-    notes: "Shipped #160 (merge 8470010). Reseeds per-sample access from BOTH legacy sources (grants table + APPROVED requests with no grant row). Expiry became an engine concept: grants gained not_after, Context gained now, and a time-bounded grant with NO clock denies. Stored as a column, not a conditions key, since conditions mean equality and expiry is a comparison. Exposed the real coupling hazard of a migration calling app code — not deleting reseed() but CHANGING ITS SHAPE, which broke b2f47c1a9e30 on a fresh DB; fixed with an idempotent ALTER there plus c93e1f5a7b02 for already-migrated databases."
+    notes: "Shipped #160 (merge 8470010). Reseeds per-sample access from BOTH legacy sources (grants table + APPROVED requests
+      with no grant row). Expiry became an engine concept: grants gained not_after, Context gained now, and a time-bounded
+      grant with NO clock denies. Stored as a column, not a conditions key, since conditions mean equality and expiry is a
+      comparison. Exposed the real coupling hazard of a migration calling app code — not deleting reseed() but CHANGING ITS
+      SHAPE, which broke b2f47c1a9e30 on a fresh DB; fixed with an idempotent ALTER there plus c93e1f5a7b02 for already-migrated
+      databases."
     merged_at: '2026-08-31'
-    merge_sha: 8470010
-      expiry is enforced."
+    merge_sha: 8470010 expiry is enforced."
 
   - id: M2-B2
     title: Sample-plane route guards (27 routes)
@@ -2284,17 +2311,16 @@ sessions:
     pr_title_template: "feat(authz): M2-B2 — sample-plane route guards"
     branch_name_template: m2-b2-sample-plane
     role_framing:
-    notes: "Shipped 20 of the 27 rows. The other 7 are list endpoints and moved to M2-B7, which already owns
-      that path: require_capability resolves ONE resource scope, a list names none, and asking at the instance
-      root would demand an instance-wide grant and deny every ordinary member the whole endpoint — the same
-      silent-removal failure the PRE tasks existed to prevent, only louder. Guard now carries the row's
-      attributes (principal.sample_resource) under LADDER_POLICIES on sample-scoped calls; without that the
-      PUBLIC / surveillance / ownership rungs evaluate against absent attributes, which reads as DENY.
-      access:request needed a NEW policy — it is in no preset and cannot be, since the requester is by
-      definition not a member of the lab they are asking. Two deliberate deviations recorded in the map:
-      promote WIDENED (map gives sample:update, held by lab_member_rw; legacy wanted a Director), and the
-      raw_fastq Director check KEPT (no §4 verb names it; dropping it would widen access to un-scrubbed reads).
-      Sequenced first for its evidence, and it was the most blocked batch — PRE-A/B/C cleared it 2026-08-31."
+    notes: "Shipped 20 of the 27 rows. The other 7 are list endpoints and moved to M2-B7, which already owns that path: require_capability
+      resolves ONE resource scope, a list names none, and asking at the instance root would demand an instance-wide grant
+      and deny every ordinary member the whole endpoint — the same silent-removal failure the PRE tasks existed to prevent,
+      only louder. Guard now carries the row's attributes (principal.sample_resource) under LADDER_POLICIES on sample-scoped
+      calls; without that the PUBLIC / surveillance / ownership rungs evaluate against absent attributes, which reads as DENY.
+      access:request needed a NEW policy — it is in no preset and cannot be, since the requester is by definition not a member
+      of the lab they are asking. Two deliberate deviations recorded in the map: promote WIDENED (map gives sample:update,
+      held by lab_member_rw; legacy wanted a Director), and the raw_fastq Director check KEPT (no §4 verb names it; dropping
+      it would widen access to un-scrubbed reads). Sequenced first for its evidence, and it was the most blocked batch — PRE-A/B/C
+      cleared it 2026-08-31."
     merged_at: '2026-09-01'
     merge_sha: 8059bac
 
@@ -2346,10 +2372,10 @@ sessions:
     pr_title_template: "feat(authz): M2-B3-PRE — pipeline:read holders and Project-scope resolution"
     branch_name_template: m2-b3-pipeline-plane
     role_framing:
-    notes: "pipeline:read added to all three lab presets INCLUDING read-only, plus instance_administrator.
-      Scoped at the member's lab, which contains that lab's projects by ordinary containment, so it says
-      nothing about another lab's runs. The guard's 'exactly one identifier' rule replaces the old
-      'not both' — three identifiers now, and the message names which were passed."
+    notes: "pipeline:read added to all three lab presets INCLUDING read-only, plus instance_administrator. Scoped at the member's
+      lab, which contains that lab's projects by ordinary containment, so it says nothing about another lab's runs. The guard's
+      'exactly one identifier' rule replaces the old 'not both' — three identifiers now, and the message names which were
+      passed."
     merged_at: '2026-09-01'
     merge_sha: 3a3dcc8
 
@@ -2384,22 +2410,19 @@ sessions:
     pr_title_template: "feat(authz): M2-B3 — pipeline and BYOP route guards"
     branch_name_template: m2-b3-pipeline-plane
     role_framing:
-    notes: "Shipped 11 routes (7 BYOP mutations, launch, resume, 3 run-status reads). The original 16 became
-      11 in M2-B3-PRE: three BYOP catalog reads are AUTH-ONLY BY DESIGN, and GET /pipelines/ is a B7-class
-      list. Both PRE open questions were answered by the schema rather than by judgement: owner_lab_id is
-      nullable because sharing_scope admits private, so a lab-less pipeline is a person's, governed by a
-      registrant attribute-policy of the same shape sample ownership needed in PRE-A.
-      One real bug found and fixed in the batch: routing create_pipeline through the ownership rung made the
-      lab check vacuous (the caller is always the registrant at creation), so any user could register into
-      any lab. A widening, so it would not have failed closed. Pinned by a regression test.
-      Second bug, found by the spec-axis review: the batch justified a launch narrowing by citing §8.2 as
-      putting pipeline:run in lab_lead + Bioinformatics User only. §8.2's Lab Member (read-write) preset block
-      lists pipeline:run outright. The claim came from reseed.py, which excluded it on a misreading of §8.5's
-      role-mapping prose — so code and prose agreed only because one was derived from the other. Corrected:
-      lab_member_rw now grants pipeline:run, BIOINFORMATICS_EXTRA is deleted, §8.5's phrasing is fixed, and
-      Lab Collaborators keep launch. Only read-only members lose it.
-      Remaining narrowing, documented in the map: BYOP mutation on a lab-owned pipeline takes
-      pipeline:register_custom, so ordinary lab membership is no longer enough."
+    notes: "Shipped 11 routes (7 BYOP mutations, launch, resume, 3 run-status reads). The original 16 became 11 in M2-B3-PRE:
+      three BYOP catalog reads are AUTH-ONLY BY DESIGN, and GET /pipelines/ is a B7-class list. Both PRE open questions were
+      answered by the schema rather than by judgement: owner_lab_id is nullable because sharing_scope admits private, so a
+      lab-less pipeline is a person's, governed by a registrant attribute-policy of the same shape sample ownership needed
+      in PRE-A. One real bug found and fixed in the batch: routing create_pipeline through the ownership rung made the lab
+      check vacuous (the caller is always the registrant at creation), so any user could register into any lab. A widening,
+      so it would not have failed closed. Pinned by a regression test. Second bug, found by the spec-axis review: the batch
+      justified a launch narrowing by citing §8.2 as putting pipeline:run in lab_lead + Bioinformatics User only. §8.2's Lab
+      Member (read-write) preset block lists pipeline:run outright. The claim came from reseed.py, which excluded it on a
+      misreading of §8.5's role-mapping prose — so code and prose agreed only because one was derived from the other. Corrected:
+      lab_member_rw now grants pipeline:run, BIOINFORMATICS_EXTRA is deleted, §8.5's phrasing is fixed, and Lab Collaborators
+      keep launch. Only read-only members lose it. Remaining narrowing, documented in the map: BYOP mutation on a lab-owned
+      pipeline takes pipeline:register_custom, so ordinary lab membership is no longer enough."
     merged_at: '2026-09-01'
     merge_sha: 7ab7bf5
 
@@ -2431,23 +2454,19 @@ sessions:
     pr_title_template: "feat(authz): M2-B4 — submission and import-mapping guards"
     branch_name_template: m2-b4-submission-plane
     role_framing:
-    notes: "Shipped 21 routes. The blocker was bigger than three verbs: SIX were in no preset
-      (submission:prepare, import:read, import:manage, lab:read, org:read, token:manage), and they came from
-      the same event as the three earlier batches found by hand — the M2 catalog review added eight verbs to
-      §4 and nobody updated §8.2's preset blocks. Fixed the six AND the mechanism:
-      tests/authz/test_catalog_preset_coverage.py now checks catalog->preset (reachable by nobody),
-      preset->catalog (a typo is silent — the grant is issued and matches nothing), §8.2 <-> PRESET_GRANTS
-      (the exact drift that caused B3's pipeline:run bug), and that the deliberately-unheld allowlist does
-      not rot. Eight verbs are legitimately unheld, each with a written reason.
-      prepare vs approve is a REAL NARROWING: the old check let a submission's own creator mark it
-      submitted, execute it and register accessions. Six routes now need a Lab Lead. The creator rung is
-      subsumed, not dropped — creating already required submission:prepare. /validate narrowed from a read
-      check to prepare per the map.
-      Import mappings split the same way; a Lab Reader could previously rewrite a mapping config. The list
-      moved onto B7's lab_list_clause, dropping a platform-admin bypass and a membership subquery that could
-      not see an org-scoped grant.
-      The existing submission suite stayed green throughout because the seeded admin is BOTH platform admin
-      and Lab Director of lab 1 — a fixture holding every capability cannot detect a split."
+    notes: "Shipped 21 routes. The blocker was bigger than three verbs: SIX were in no preset (submission:prepare, import:read,
+      import:manage, lab:read, org:read, token:manage), and they came from the same event as the three earlier batches found
+      by hand — the M2 catalog review added eight verbs to §4 and nobody updated §8.2's preset blocks. Fixed the six AND the
+      mechanism: tests/authz/test_catalog_preset_coverage.py now checks catalog->preset (reachable by nobody), preset->catalog
+      (a typo is silent — the grant is issued and matches nothing), §8.2 <-> PRESET_GRANTS (the exact drift that caused B3's
+      pipeline:run bug), and that the deliberately-unheld allowlist does not rot. Eight verbs are legitimately unheld, each
+      with a written reason. prepare vs approve is a REAL NARROWING: the old check let a submission's own creator mark it
+      submitted, execute it and register accessions. Six routes now need a Lab Lead. The creator rung is subsumed, not dropped
+      — creating already required submission:prepare. /validate narrowed from a read check to prepare per the map. Import
+      mappings split the same way; a Lab Reader could previously rewrite a mapping config. The list moved onto B7's lab_list_clause,
+      dropping a platform-admin bypass and a membership subquery that could not see an org-scoped grant. The existing submission
+      suite stayed green throughout because the seeded admin is BOTH platform admin and Lab Director of lab 1 — a fixture
+      holding every capability cannot detect a split."
     merged_at: '2026-09-01'
     merge_sha: 3ad16ae
 
@@ -2479,22 +2498,18 @@ sessions:
     pr_title_template: "feat(authz): M2-B5 — governance route guards"
     branch_name_template: m2-b5-governance
     role_framing:
-    notes: "Shipped 13 of 14. Membership now ISSUES grants — the M2-B1 finding this entry named. Add,
-      role-change and remove all sync authz_capability_grants on the request's own connection, so the row
-      and the access land in one transaction. Delete-then-insert rather than a diff, scoped by
-      source='reseed' so per-sample access grants (source='direct') survive; pinned by a test.
-      Split routes stayed split: tokens and users gate only the half reaching another principal, because
-      self is not a capability (§3.1's tree has no user level, §4.7).
-      NOT converted: POST /federation/search. The map assigns sample:read at INSTANCE scope and nobody holds
-      it there — enforcing it would need an Instance Administrator to hold blanket sample:read, which
-      contradicts §8.2 head-on (the Surveillance Officer preset exists to narrow instance-wide sample
-      reading to surveillance_relevant rather than confer it wholesale). The act is 'query our peers on this
-      deployment's behalf', not 'read a sample here'; the right verb is §7/M4's call. Map row carries the
-      question.
-      GENERAL: 'held at lab scope' is not 'held at instance scope', and that bit twice in two batches (B4's
-      submissions list, this). The B4 catalog guard does not catch it — it checks a verb is in SOME preset,
-      not that anything holds it where a route asks. Closing that means walking each route's declared scope,
-      which is the endpoint map's job."
+    notes: "Shipped 13 of 14. Membership now ISSUES grants — the M2-B1 finding this entry named. Add, role-change and remove
+      all sync authz_capability_grants on the request's own connection, so the row and the access land in one transaction.
+      Delete-then-insert rather than a diff, scoped by source='reseed' so per-sample access grants (source='direct') survive;
+      pinned by a test. Split routes stayed split: tokens and users gate only the half reaching another principal, because
+      self is not a capability (§3.1's tree has no user level, §4.7). NOT converted: POST /federation/search. The map assigns
+      sample:read at INSTANCE scope and nobody holds it there — enforcing it would need an Instance Administrator to hold
+      blanket sample:read, which contradicts §8.2 head-on (the Surveillance Officer preset exists to narrow instance-wide
+      sample reading to surveillance_relevant rather than confer it wholesale). The act is 'query our peers on this deployment's
+      behalf', not 'read a sample here'; the right verb is §7/M4's call. Map row carries the question. GENERAL: 'held at lab
+      scope' is not 'held at instance scope', and that bit twice in two batches (B4's submissions list, this). The B4 catalog
+      guard does not catch it — it checks a verb is in SOME preset, not that anything holds it where a route asks. Closing
+      that means walking each route's declared scope, which is the endpoint map's job."
     merged_at: '2026-09-01'
     merge_sha: 2296650
 
@@ -2533,18 +2548,15 @@ sessions:
     pr_title_template: "feat(authz): M2-B6 — SERVICE-principal pipeline callbacks"
     branch_name_template: m2-b6-service-principals
     role_framing:
-    notes: "Token check untouched — authorization added beside it, and ordered after it so a bad token
-      answers 401 (who are you) rather than 403 (you may not), which would confirm the run exists and is
-      writable to an unauthenticated caller.
-      The positive check CANNOT FAIL today and the code says so rather than pretending otherwise: the
-      principal is built from the same run the token authenticated against. The value is the chokepoint —
-      at M4/M5 a data_source_lab peer with the §8.4 preset reaches the same route and the answer differs
-      without the route changing. The load-bearing half now is the NEGATIVE one: the principal holds
-      pipeline:write_results and nothing else, so permit() refuses it sample:read and sample:read_detail on
-      the samples its own run computes over, and refuses the enclosing lab and the instance root.
-      pipeline_run_principal RAISES on a run row with no project_id rather than rooting at the instance —
-      the results route was not selecting that column, and a fallback there would have handed a pipeline
-      callback authority over the whole deployment."
+    notes: "Token check untouched — authorization added beside it, and ordered after it so a bad token answers 401 (who are
+      you) rather than 403 (you may not), which would confirm the run exists and is writable to an unauthenticated caller.
+      The positive check CANNOT FAIL today and the code says so rather than pretending otherwise: the principal is built from
+      the same run the token authenticated against. The value is the chokepoint — at M4/M5 a data_source_lab peer with the
+      §8.4 preset reaches the same route and the answer differs without the route changing. The load-bearing half now is the
+      NEGATIVE one: the principal holds pipeline:write_results and nothing else, so permit() refuses it sample:read and sample:read_detail
+      on the samples its own run computes over, and refuses the enclosing lab and the instance root. pipeline_run_principal
+      RAISES on a run row with no project_id rather than rooting at the instance — the results route was not selecting that
+      column, and a fallback there would have handed a pipeline callback authority over the whole deployment."
     merged_at: '2026-09-01'
     merge_sha: cb6c872
 
@@ -2584,20 +2596,17 @@ sessions:
     pr_title_template: "feat(authz): M2-B7 — list endpoints onto visibility_sql_clause"
     branch_name_template: m2-b7-list-visibility
     role_framing:
-    notes: "Shipped all 8 lists; permissions.py now has zero production callers.
-      Order mattered: the equivalence harness ran with policies=[] (grants only), which is a strict subset
-      of what a deployed list shows — it would have stayed green while production dropped every PUBLIC and
-      DISCOVERABLE row. Pointed it at LADDER_POLICIES + SAMPLE_ATTRIBUTE_COLUMNS BEFORE touching a router;
-      the never-over-grants invariant held and the per-row test failed exactly where it should, still asking
-      permit() without the attributes half the fragment reads.
-      Two scope levels added (lab_scope_sql, project_scope_sql) because import sessions and pipeline runs are
-      not sample-rooted; both list builders pass NO policies since every LADDER_POLICIES entry reads a sample
-      attribute. is_canonical_scope_sql re-derives each candidate rather than loosening its regex.
-      Kept two ownership rungs (requests you filed, runs you launched — no grant expresses those and legacy
-      admitted them); removed two is_platform_admin bypasses and one is_lab_director subquery.
-      PERF, measured as the entry asked: at 3000 samples the new fragment costs 113 / 5.3ms, legacy costs
-      3923 / 7.1ms. Both seq-scan; legacy also ran four correlated EXISTS. No index added — the new path is
-      faster, so an index would have been speculative."
+    notes: "Shipped all 8 lists; permissions.py now has zero production callers. Order mattered: the equivalence harness ran
+      with policies=[] (grants only), which is a strict subset of what a deployed list shows — it would have stayed green
+      while production dropped every PUBLIC and DISCOVERABLE row. Pointed it at LADDER_POLICIES + SAMPLE_ATTRIBUTE_COLUMNS
+      BEFORE touching a router; the never-over-grants invariant held and the per-row test failed exactly where it should,
+      still asking permit() without the attributes half the fragment reads. Two scope levels added (lab_scope_sql, project_scope_sql)
+      because import sessions and pipeline runs are not sample-rooted; both list builders pass NO policies since every LADDER_POLICIES
+      entry reads a sample attribute. is_canonical_scope_sql re-derives each candidate rather than loosening its regex. Kept
+      two ownership rungs (requests you filed, runs you launched — no grant expresses those and legacy admitted them); removed
+      two is_platform_admin bypasses and one is_lab_director subquery. PERF, measured as the entry asked: at 3000 samples
+      the new fragment costs 113 / 5.3ms, legacy costs 3923 / 7.1ms. Both seq-scan; legacy also ran four correlated EXISTS.
+      No index added — the new path is faster, so an index would have been speculative."
     merged_at: '2026-09-01'
     merge_sha: b19a398
 
@@ -2650,18 +2659,17 @@ sessions:
     pr_title_function:
     branch_name_template: m2-cutover
     role_framing:
-    notes: "Scope split at session start, on the finding that the entry's central premise was wrong: it called the
-      column drop 'bookkeeping that happens to be permanent' because B1..B7 had moved every guard onto permit().
-      They moved every GUARD, not every READER. tenancy.py's require_org_access, five in-route checks in samples.py,
-      deletion.py's self-approve carve-out, federation/deletion_propagation.py's admin-notification lookup, and the
-      identity plumbing in guards.py / auth.py / users.py / imports.py all still read the flags. Dropping the columns
-      would 500 those paths, and several belong to M3 by the endpoint map's own assignment — M3 depends_on M2, so the
-      original plan inverted its own dependency. Part (a) shipped alone; the drop is M2-DROP, blocked on M3.
-      Two findings surfaced while verifying and were split out rather than absorbed: M2-SAMPLE-ACCESS-SYNC (approving
-      a sample-access request issues no capability grant, so per-sample access only materializes at reseed) and the
-      raw_fastq verb the endpoint map's Residue section still awaits."
-    merged_at:
-    merge_sha:
+    notes: "Scope split at session start, on the finding that the entry's central premise was wrong: it called the column
+      drop 'bookkeeping that happens to be permanent' because B1..B7 had moved every guard onto permit(). They moved every
+      GUARD, not every READER. tenancy.py's require_org_access, five in-route checks in samples.py, deletion.py's self-approve
+      carve-out, federation/deletion_propagation.py's admin-notification lookup, and the identity plumbing in guards.py /
+      auth.py / users.py / imports.py all still read the flags. Dropping the columns would 500 those paths, and several belong
+      to M3 by the endpoint map's own assignment — M3 depends_on M2, so the original plan inverted its own dependency. Part
+      (a) shipped alone; the drop is M2-DROP, blocked on M3. Two findings surfaced while verifying and were split out rather
+      than absorbed: M2-SAMPLE-ACCESS-SYNC (approving a sample-access request issues no capability grant, so per-sample access
+      only materializes at reseed) and the raw_fastq verb the endpoint map's Residue section still awaits."
+    merged_at: '2026-08-31'
+    merge_sha: 81f3a55
 
   - id: M2-DROP
     title: Drop the legacy role columns (IRREVERSIBLE — manual flow only)
@@ -2725,11 +2733,11 @@ sessions:
     pr_title_function:
     branch_name_template: m2-drop-legacy-columns
     role_framing:
-    notes: "Blocked on M3 rather than merely sequenced after it: the endpoint capability map assigns the
-      deletion-lifecycle checks (samples.py 643/652/717/734, deletion.py:184) to M3's sovereignty policies, and M3
-      depends_on M2. Dropping the columns before M3 converts those checks would break them. The M2 entry originally
-      contained this work on the premise that nothing read the columns; see M2's notes for why that was wrong.
-      access_model.md §10 (greenfield, no shim) still governs — no compatibility shim, no dual-read period."
+    notes: "Blocked on M3 rather than merely sequenced after it: the endpoint capability map assigns the deletion-lifecycle
+      checks (samples.py 643/652/717/734, deletion.py:184) to M3's sovereignty policies, and M3 depends_on M2. Dropping the
+      columns before M3 converts those checks would break them. The M2 entry originally contained this work on the premise
+      that nothing read the columns; see M2's notes for why that was wrong. access_model.md §10 (greenfield, no shim) still
+      governs — no compatibility shim, no dual-read period."
 
   - id: M2-SAMPLE-ACCESS-SYNC
     title: Approving a sample-access request must issue a capability grant
@@ -2772,9 +2780,9 @@ sessions:
     pr_title_function:
     branch_name_template: sample-access-grant-sync
     role_framing:
-    notes: "Found while verifying M2. Not fixed in the M2 PR because it is a behavior change on the decision path and
-      that path serializes one session at a time (CLAUDE.md). The M2 PR's _can_read_detail test helper runs a reseed
-      to bridge the gap and carries a pointer to this entry."
+    notes: "Found while verifying M2. Not fixed in the M2 PR because it is a behavior change on the decision path and that
+      path serializes one session at a time (CLAUDE.md). The M2 PR's _can_read_detail test helper runs a reseed to bridge
+      the gap and carries a pointer to this entry."
 
   - id: M3
     title: Sovereignty policies (deletion-lifecycle guards + Scenario-T preset)
@@ -2875,11 +2883,10 @@ sessions:
     pr_title_function:
     branch_name_template: m5-compute-plane
     role_framing:
-    notes: "Adapter over shipped PolicyChecker; carries AM-OPEN-4. access_model.md §4.6 + §7.4 + §9.4.
-      Still owned here after M2-B6: §8.4's Data Source Lab PRESET — pipeline:write_results plus
-      compute:he_aggregate / he_query / register_dataset, scoped to the cryptWWDB Project and applied to a
-      data_source_lab federation peer. B6 landed a different object: a per-run SERVICE principal
-      (pipeline_run_principal) that is constructed per callback and never stored. No preset in reseed.py
+    notes: "Adapter over shipped PolicyChecker; carries AM-OPEN-4. access_model.md §4.6 + §7.4 + §9.4. Still owned here after
+      M2-B6: §8.4's Data Source Lab PRESET — pipeline:write_results plus compute:he_aggregate / he_query / register_dataset,
+      scoped to the cryptWWDB Project and applied to a data_source_lab federation peer. B6 landed a different object: a per-run
+      SERVICE principal (pipeline_run_principal) that is constructed per callback and never stored. No preset in reseed.py
       grants pipeline:write_results and none should until that peer exists."
 
   # ── Open DESIGN items from access_model.md §11.4 — not codeable sessions ──
