@@ -50,6 +50,15 @@ PRESET_GRANTS: dict[str, list[str]] = {
         "federation:approve_request",
         "anomaly:configure_detector",
         "sample:read_surveillance",
+        # M2-B4: the read-plane and admin verbs the M2 catalog review added to
+        # §4 without anyone updating §8.2's preset blocks. token:manage is
+        # here and nowhere else — §4.5 scopes it to acting on ANOTHER
+        # principal's tokens, which is administrative by definition; a
+        # caller's own tokens are auth-only (§4.7).
+        "lab:read",
+        "org:read",
+        "import:read",
+        "token:manage",
         # POST /ingest/globus records a sequencing-facility deposit and
         # notifies the assigned Lab Directors — it creates no samples. It was
         # mapped to sample:create from its router rather than its behavior,
@@ -91,6 +100,14 @@ PRESET_GRANTS: dict[str, list[str]] = {
         "access:revoke",
         "pipeline:run",
         "submission:approve",
+        # M2-B4. A Lab Lead prepares as well as approves — §6.2-1b's
+        # separation-of-duties DENY covers deletion, not submissions, so
+        # holding both is not a conflict here.
+        "submission:prepare",
+        "import:read",
+        "import:manage",
+        "lab:read",
+        "org:read",
         # BYOP registration is lab-level work — the endpoint-capability map
         # scopes every byop route at Lab — so a Lab Lead registers their own
         # pipelines without an instance admin in the loop (M2-B1).
@@ -107,6 +124,16 @@ PRESET_GRANTS: dict[str, list[str]] = {
         "org:manage",
     ],
     "lab_member_rw": [
+        # M2-B4. §8.2's note on this preset says a member "can run pipelines
+        # but not approve submissions or access requests" — which distinguishes
+        # preparing from approving rather than putting submissions out of
+        # reach. Building the package is the work; approving it is governance,
+        # and that stays with Lab Lead.
+        "submission:prepare",
+        "import:read",
+        "import:manage",
+        "lab:read",
+        "org:read",
         "pipeline:read",
         # §8.2's preset block lists pipeline:run here. See the module
         # docstring: excluding it was a misreading of §8.5's role-mapping
@@ -128,6 +155,12 @@ PRESET_GRANTS: dict[str, list[str]] = {
         # contains that lab's projects by ordinary containment (§3.1), so it
         # conveys nothing about any other lab's runs.
         "pipeline:read",
+        # M2-B4: read-plane verbs a read-only member plainly needs — the lab
+        # directory, the org they belong to, and the mapping configs that make
+        # an import legible. None of the three writes anything.
+        "lab:read",
+        "org:read",
+        "import:read",
         "sample:read",
         "sample:read_detail",
     ],

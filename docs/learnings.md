@@ -2975,3 +2975,58 @@ surface.
 - The engine still applies `not_after` to a SERVICE principal. Unused today
   (these grants carry no expiry) but asserted, so a future "services do not
   expire" shortcut has to break a test to land.
+
+## M2-B4 — submission and import-mapping guards — 2026-09-01
+
+**What was built:** 21 routes converted, and the systemic gap behind four
+batches' worth of blockers closed.
+
+**Key decisions:**
+
+- **The blocker was one root cause, not six.** Six of B4 and B5's verbs were
+  in no preset. So were two that M2-B1 found and one that M2-B3-PRE found. All
+  eight came from the same event: the M2 catalog review added verbs to §4 and
+  nobody updated §8.2's preset blocks. Fixing the six without fixing the
+  mechanism would have left the seventh for the next batch.
+- **The guard runs in four directions, and two of them are about the docs.**
+  Catalog→preset catches "reachable by nobody". Preset→catalog catches a typo,
+  which is silent otherwise — the grant is issued and matches nothing.
+  §8.2↔`PRESET_GRANTS` catches the drift that caused M2-B3's `pipeline:run`
+  bug. And the allowlist is checked for rot, so an entry cannot quietly
+  contradict a later grant.
+- **"Held by no preset" is a legitimate answer, so the test demands a reason
+  rather than a grant.** Eight verbs are deliberately unheld — SERVICE verbs,
+  peer verbs, one carried by an attribute-policy, one deferred to M3, one with
+  no route yet. Requiring prose (and asserting it is longer than a shrug)
+  turns each into a decision on the record.
+- **prepare vs approve is a real narrowing and the tests say so.** The old
+  check let a submission's creator send it. Six routes now need a Lab Lead.
+  The creator rung is subsumed, not dropped — creating already required
+  `submission:prepare`.
+
+**Watch out for:**
+
+- **The existing submission suite stayed green through all of this**, because
+  the seeded admin is both a platform admin *and* Lab Director of lab 1, so it
+  holds `lab_lead` and passes both halves. A batch whose whole point is a
+  boundary needs a test that stands on each side of it; the general lesson is
+  that a fixture holding every capability cannot detect a split.
+- **FastAPI validates the request body before the handler runs**, so a guard
+  test posting an invalid body gets 422 and proves nothing. This bit M2-B3
+  (`/resume`) and bit twice more here (`mark-rejected` and `withdraw` both
+  require a `reason`). Every "should be 403" assertion needs a *valid* body.
+- An Instance Administrator holds neither `submission:prepare` nor
+  `sample:read`, so a platform admin who is not a lab member cannot create or
+  read a submission. That is consistent with `sample:create`, which admins
+  also lack, and with §8.2's "Instance Administrator is operational, not a
+  consent authority" — but it will surprise someone.
+- **The catalog guard checks presence, not reachability, and that gap bit
+  inside the same batch.** `GET /submissions/` unfiltered used to gate on
+  `is_platform_admin`; swapping that for `sample:read` at the instance root
+  produced a branch nobody could take, because every preset granting
+  `sample:read` issues it at *lab* scope. The new test would not have caught
+  it — a verb can be in a preset and still be unheld at the scope a route
+  asks about. Found by reading the presets by hand while writing this entry,
+  and independently by the review; fixed by making the route a filtered list
+  (M2-B7's builder) instead, which removes the branch rather than repairing
+  it. The limitation is now written into the test's own docstring.

@@ -63,11 +63,11 @@ All catalog gaps were resolved in the M2 pre-cutover review (see
 | GET | `/api/v1/files/jobs/{job_id}` | `sample:read` | Sample | `require_capability("sample:read", sample_id=…)` on the job's file (M2-B2). Decided at **Sample** scope, not Lab: the job names one file, so its sample is resolvable and the narrower scope is the honest one |
 | POST | `/api/v1/files/{file_id}/verify` | `sample:update` | Sample | `require_capability("sample:update", sample_id=…)` (M2-B2) |
 | POST | `/api/v1/gisaid/export/{lab_id}` | `sample:read_detail` | Lab | `require_capability("sample:read_detail")` — export reads lab samples |
-| GET | `/api/v1/import_mappings/` | `import:read` | Lab | auth-only today; mapping-config read |
-| GET | `/api/v1/import_mappings/{mapping_id}` | `import:read` | Lab | auth-only today |
-| POST | `/api/v1/import_mappings/` | `import:manage` | Lab | auth-only today; mapping-config write |
-| PATCH | `/api/v1/import_mappings/{mapping_id}` | `import:manage` | Lab | auth-only today |
-| DELETE | `/api/v1/import_mappings/{mapping_id}` | `import:manage` | Lab | auth-only today; soft-delete (is_active=false) |
+| GET | `/api/v1/import_mappings/` | `import:read` | Lab | `lab_list_clause("import:read")` (M2-B4) — the compiled lab-level filter M2-B7 landed, replacing a platform-admin bypass and a hand-rolled "labs I am a member of" subquery |
+| GET | `/api/v1/import_mappings/{mapping_id}` | `import:read` | Lab | `require_capability("import:read", lab_id=…)` (M2-B4) |
+| POST | `/api/v1/import_mappings/` | `import:manage` | Lab | `require_capability("import:manage", lab_id=…)` (M2-B4) |
+| PATCH | `/api/v1/import_mappings/{mapping_id}` | `import:manage` | Lab | `require_capability("import:manage", lab_id=…)` (M2-B4) |
+| DELETE | `/api/v1/import_mappings/{mapping_id}` | `import:manage` | Lab | `require_capability("import:manage", lab_id=…)` (M2-B4); soft-delete (is_active=false) |
 | POST | `/api/v1/imports/sessions/` | `sample:create` | Lab | `require_capability("sample:create", lab_id=…)` (M2-B2); narrower than the membership test it replaced — a Lab Reader is a member but holds no `sample:create` |
 | GET | `/api/v1/imports/sessions/` | `sample:read` | Lab | `lab_list_clause("sample:read")` (M2-B7), on top of the owner filter — a session stops listing when the caller loses access to its lab |
 | GET | `/api/v1/imports/sessions/{session_id}` | `sample:read` | Lab | `require_capability("sample:read", lab_id=…)` on the session's lab (M2-B2), after the owner filter |
@@ -127,22 +127,22 @@ All catalog gaps were resolved in the M2 pre-cutover review (see
 | POST | `/api/v1/sequencing-labs/{seq_lab_id}/assign/{lab_id}` | `org:manage` | Instance | `require_capability("org:manage")` |
 | DELETE | `/api/v1/sequencing-labs/{seq_lab_id}/assign/{lab_id}` | `org:manage` | Instance | `require_capability("org:manage")` |
 | GET | `/api/v1/settings/public` | — | Instance | PUBLIC (intentional — public instance settings) |
-| POST | `/api/v1/submissions/` | `submission:prepare` | Lab | auth-only today; pairs with `submission:approve` |
-| GET | `/api/v1/submissions/` | `sample:read` | Lab | auth-only today |
-| GET | `/api/v1/submissions/{submission_id}` | `sample:read` | Lab | auth-only today |
-| PATCH | `/api/v1/submissions/{submission_id}` | `submission:prepare` | Lab | auth-only today |
-| DELETE | `/api/v1/submissions/{submission_id}` | `submission:prepare` | Lab | auth-only today; soft-delete |
-| POST | `/api/v1/submissions/{submission_id}/samples` | `submission:prepare` | Lab | auth-only today |
-| DELETE | `/api/v1/submissions/{submission_id}/samples` | `submission:prepare` | Lab | auth-only today |
-| POST | `/api/v1/submissions/{submission_id}/validate` | `submission:prepare` | Lab | auth-only today; readiness check, same authz question as CRUD |
-| POST | `/api/v1/submissions/{submission_id}/generate` | `submission:prepare` | Lab | auth-only today; builds BioSample XML + optional file copy — heavier, same authz question |
-| POST | `/api/v1/submissions/{submission_id}/mark-submitted` | `submission:approve` | Lab | auth-only today; §6.2-2 `deletion.no_publish_while_deleting` DENY (deletion_status != ACTIVE → 422) |
-| POST | `/api/v1/submissions/{submission_id}/register-accessions` | `submission:approve` | Lab | auth-only today |
-| POST | `/api/v1/submissions/{submission_id}/mark-rejected` | `submission:approve` | Lab | auth-only today |
-| POST | `/api/v1/submissions/{submission_id}/withdraw` | `submission:approve` | Lab | auth-only today |
-| POST | `/api/v1/submissions/{submission_id}/execute` | `submission:approve` | Lab | auth-only today; §6.2-2 DENY applies |
-| POST | `/api/v1/submissions/{submission_id}/retry-execution` | `submission:approve` | Lab | auth-only today |
-| GET | `/api/v1/submissions/{submission_id}/execution-logs` | `sample:read` | Lab | auth-only today |
+| POST | `/api/v1/submissions/` | `submission:prepare` | Lab | `require_capability("submission:prepare", lab_id=…)` (M2-B4) |
+| GET | `/api/v1/submissions/` | `sample:read` | Lab | `lab_list_clause("sample:read")` (M2-B4), plus `require_capability` when `?lab_id=` is given. The platform-admin branch it replaced was dead on arrival: it gated on `sample:read` at the INSTANCE root, and every preset granting that verb issues it at lab scope |
+| GET | `/api/v1/submissions/{submission_id}` | `sample:read` | Lab | `require_capability("sample:read", lab_id=…)` (M2-B4) |
+| PATCH | `/api/v1/submissions/{submission_id}` | `submission:prepare` | Lab | `require_capability("submission:prepare", lab_id=…)` (M2-B4) |
+| DELETE | `/api/v1/submissions/{submission_id}` | `submission:prepare` | Lab | `require_capability("submission:prepare", lab_id=…)` (M2-B4); soft-delete |
+| POST | `/api/v1/submissions/{submission_id}/samples` | `submission:prepare` | Lab | `require_capability("submission:prepare", lab_id=…)` (M2-B4) |
+| DELETE | `/api/v1/submissions/{submission_id}/samples` | `submission:prepare` | Lab | `require_capability("submission:prepare", lab_id=…)` (M2-B4) |
+| POST | `/api/v1/submissions/{submission_id}/validate` | `submission:prepare` | Lab | `require_capability("submission:prepare", lab_id=…)` (M2-B4) — NARROWED from a read check: readiness is a question only the person assembling the package needs |
+| POST | `/api/v1/submissions/{submission_id}/generate` | `submission:prepare` | Lab | `require_capability("submission:prepare", lab_id=…)` (M2-B4); heavier, same authorization question |
+| POST | `/api/v1/submissions/{submission_id}/mark-submitted` | `submission:approve` | Lab | `require_capability("submission:approve", lab_id=…)` (M2-B4) — NARROWED: the check this replaced let the submission's own creator send it. §6.2-2 `deletion.no_publish_while_deleting` DENY still applies (422) |
+| POST | `/api/v1/submissions/{submission_id}/register-accessions` | `submission:approve` | Lab | `require_capability("submission:approve", lab_id=…)` (M2-B4) — NARROWED: the check this replaced let the submission's own creator send it |
+| POST | `/api/v1/submissions/{submission_id}/mark-rejected` | `submission:approve` | Lab | `require_capability("submission:approve", lab_id=…)` (M2-B4) — NARROWED: the check this replaced let the submission's own creator send it |
+| POST | `/api/v1/submissions/{submission_id}/withdraw` | `submission:approve` | Lab | `require_capability("submission:approve", lab_id=…)` (M2-B4) — NARROWED: the check this replaced let the submission's own creator send it |
+| POST | `/api/v1/submissions/{submission_id}/execute` | `submission:approve` | Lab | `require_capability("submission:approve", lab_id=…)` (M2-B4) — NARROWED: the check this replaced let the submission's own creator send it. §6.2-2 DENY applies |
+| POST | `/api/v1/submissions/{submission_id}/retry-execution` | `submission:approve` | Lab | `require_capability("submission:approve", lab_id=…)` (M2-B4) — NARROWED: the check this replaced let the submission's own creator send it |
+| GET | `/api/v1/submissions/{submission_id}/execution-logs` | `sample:read` | Lab | `require_capability("sample:read", lab_id=…)` (M2-B4) |
 | GET | `/api/v1/templates/` | — | Instance | PUBLIC (intentional — Rule 42, templates are public) |
 | GET | `/api/v1/templates/enums` | — | Instance | PUBLIC (intentional — Rule 42) |
 | GET | `/api/v1/templates/source-types` | — | Instance | PUBLIC (intentional — Rule 42) |
@@ -383,6 +383,72 @@ legacy ladder also ran four correlated `EXISTS` subqueries. No index added —
 this is not a regression, and one would be speculative. Revisit if a
 deployment's sample count makes the scan itself the problem; the scan, not
 the fragment, is what would need fixing.
+
+## The catalog/preset gap, closed in M2-B4
+
+Four batches found the same bug by hand: a verb in §4's catalog that no
+preset grants, so the route needing it is reachable by nobody.
+`pipeline:promote` and `pipeline:register_custom` in M2-B1, `pipeline:read`
+in M2-B3-PRE, and six more here — `submission:prepare`, `import:read`,
+`import:manage`, `lab:read`, `org:read`, `token:manage`. All eight were added
+to §4 by the M2 catalog review; §8.2's preset blocks were never updated to say
+who holds them.
+
+Two lists that must agree, and nothing made them.
+`tests/authz/test_catalog_preset_coverage.py` now does, in four directions:
+
+- every catalog verb has a preset, a policy, or a written reason it has none;
+- no preset names a verb the catalog does not define (a typo there is silent —
+  the grant is issued and matches nothing);
+- §8.2's preset blocks and `reseed.py`'s `PRESET_GRANTS` agree exactly;
+- the "no holder" allowlist does not rot — an entry that later gets granted,
+  or names a dropped verb, fails.
+
+The third is the one that would have caught M2-B3's `pipeline:run` bug
+directly, where §8.2 said one thing and the reseed did another for long enough
+that a "deliberate narrowing" got written into four documents before review
+caught it.
+
+**Deliberately held by no human preset**, each with its reason recorded in the
+allowlist: `pipeline:write_results` (SERVICE), the three `compute:*` verbs and
+`federation:push` (peer presets), `access:request` (carried by an
+attribute-policy — the requester is by definition not a member of the target
+lab), `sample:hard_delete` (M3's, and an explicit per-deployment assignment
+rather than something a preset confers), and `scrub:approve_skip` (no route
+consumes it yet; Critical Rule 18 says it belongs in `lab_lead` when one does).
+
+## Submission plane after M2-B4
+
+The boundary is prepare versus approve, and the check that preceded it could
+not express it: one "is a lab member, or the creator, or a director" test
+gated building a submission and sending it.
+
+- **`submission:prepare`** — create, amend, add/remove samples, validate,
+  generate. In `lab_member_rw` and `lab_lead`. §8.2's note on the read-write
+  preset already implied this: "can run pipelines but not approve submissions
+  or access requests" distinguishes preparing from approving rather than
+  putting submissions out of reach.
+- **`submission:approve`** — mark-submitted, register-accessions,
+  mark-rejected, withdraw, execute, retry-execution. `lab_lead` only.
+
+**This is a real narrowing.** Before M2-B4 a submission's *creator* could mark
+it submitted, execute it, and register its accessions — the same person who
+built the package could send it. Now those six need a Lab Lead.
+
+The creator rung is subsumed rather than dropped: creating a submission
+already required `submission:prepare` at that lab, so anyone who could have
+created one holds the verb that lets them edit it. What changes is that a
+creator who has since lost the capability stops being able to edit — which is
+the point of checking a capability rather than a stored user id.
+
+`/validate` also narrows, from a read check to `submission:prepare`: readiness
+is a question only the person assembling the package needs.
+
+**Import mappings** split the same way, `import:read` versus `import:manage`.
+A Lab Reader could previously rewrite a mapping config, because membership was
+the only test. The list endpoint moved onto M2-B7's `lab_list_clause`, dropping
+a platform-admin bypass and a hand-rolled "labs I am a member of" subquery that
+could not see an org-scoped grant at all.
 
 ## Gaps
 

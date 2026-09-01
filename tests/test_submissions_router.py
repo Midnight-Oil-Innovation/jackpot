@@ -337,8 +337,15 @@ async def test_get_unknown_submission_returns_404(client):
 
 
 @pytest.mark.asyncio
-async def test_list_without_lab_id_for_non_admin_returns_400(client, monkeypatch):
-    # Switch to non-admin user
+async def test_list_without_lab_id_shows_only_what_the_caller_can_read(client, monkeypatch):
+    """M2-B4 replaced the old "name a lab or be an admin" contract.
+
+    That branch had become unreachable: it gated on sample:read at the
+    INSTANCE root, and every preset granting sample:read issues it at lab
+    scope, so an unfiltered call answered 400 for everyone including the
+    admins it was meant for. The list is now filtered instead — a caller with
+    no grants sees an empty page rather than an error.
+    """
     execute_write(
         "INSERT INTO users (email, name, organization_id, "
         "is_platform_admin, is_active) "
@@ -350,5 +357,7 @@ async def test_list_without_lab_id_for_non_admin_returns_400(client, monkeypatch
 
     get_settings.cache_clear()
     resp = await client.get("/api/v1/submissions/")
-    assert resp.status_code == 400
+    assert resp.status_code == 200, resp.text
+    # No memberships, no grants, so no rows — default-deny, not an error.
+    assert resp.json()["data"] == []
     execute_write("DELETE FROM users WHERE email = 'i2-rt-nonadmin@test.com'")

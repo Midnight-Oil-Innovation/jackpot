@@ -18,10 +18,12 @@ from __future__ import annotations
 import json
 import logging
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi import APIRouter, Depends, Query, Request
 from pydantic import BaseModel
 
-from backend.auth.guards import get_current_user, get_user_lab_membership
+from backend.auth.guards import get_current_user, require_capability
+from backend.authz.principal import load_principal
+from backend.authz.visibility import lab_list_clause
 from backend.database import execute_query, execute_write, get_db_dep
 from backend.responses import error, success, success_list
 
@@ -45,14 +47,18 @@ class _PatchBody(BaseModel):
     is_active: bool | None = None
 
 
-def _ensure_lab_access(user: dict, lab_id: int) -> None:
-    if user.get("is_platform_admin"):
-        return
-    if not get_user_lab_membership(user["id"], lab_id):
-        raise HTTPException(
-            status_code=403,
-            detail="Lab membership required to manage mappings for this lab.",
-        )
+def _ensure_lab_access(user: dict, lab_id: int, capability: str) -> None:
+    """M2-B4: the mapping's lab, and the verb the route needs.
+
+    ``import:read`` for the two reads, ``import:manage`` for the three writes.
+    The split is the whole reason those verbs are separate in §4.5; the
+    membership test this replaces could not express it, so a Lab Reader who
+    could see a mapping could also rewrite it.
+
+    The platform-admin branch is gone: an instance-scoped grant contains every
+    lab path (ADR 0015), so the admin passes on the same rung as everyone else.
+    """
+    require_capability(capability)(user, lab_id=lab_id)
 
 
 def _serialise(row: dict) -> dict:
@@ -73,42 +79,36 @@ def list_mappings(
     db=Depends(get_db_dep),  # noqa: B008
 ):
     user = get_current_user(request)
-    where = ["1 = 1"]
-    params: dict = {}
+    # M2-B4: the same list filter the sample-plane lists use (M2-B7), at lab
+    # level. Replaces both a platform-admin bypass and a hand-rolled
+    # "labs I am a member of" subquery — an instance-scoped grant contains
+    # every lab path, so the first is unnecessary, and the second could not
+    # see an org-scoped grant at all.
+    vis, params = lab_list_clause(load_principal(user["id"]), "import:read")
+    where = [vis]
     if lab_id is not None:
-        _ensure_lab_access(user, lab_id)
-        where.append("lab_id = :lab_id")
+        where.append("im.lab_id = :lab_id")
         params["lab_id"] = lab_id
-    elif not user.get("is_platform_admin"):
-        # Restrict to labs the user is a member of.
-        rows = execute_query(
-            "SELECT lab_id FROM lab_membership WHERE user_id = :uid",
-            {"uid": user["id"]},
-            conn=db,
-        )
-        ids = [r["lab_id"] for r in rows]
-        if not ids:
-            return success_list(data=[], page=page, per_page=per_page, total=0)
-        # ANY clause via positional list parameter.
-        where.append("lab_id = ANY(:lab_ids)")
-        params["lab_ids"] = ids
     if is_active is not None:
-        where.append("is_active = :is_active")
+        where.append("im.is_active = :is_active")
         params["is_active"] = is_active
 
     offset = (page - 1) * per_page
     rows = execute_query(
         f"""
-        SELECT * FROM import_mappings
+        SELECT im.* FROM import_mappings im
+          JOIN labs l ON l.id = im.lab_id
          WHERE {" AND ".join(where)}
-         ORDER BY updated_at DESC
+         ORDER BY im.updated_at DESC
          LIMIT :_limit OFFSET :_offset
         """,
         {**params, "_limit": per_page, "_offset": offset},
         conn=db,
     )
     count_rows = execute_query(
-        f"SELECT COUNT(*) AS total FROM import_mappings WHERE {' AND '.join(where)}",
+        "SELECT COUNT(*) AS total FROM import_mappings im "
+        "JOIN labs l ON l.id = im.lab_id "
+        f"WHERE {' AND '.join(where)}",
         params,
         conn=db,
     )
@@ -136,7 +136,7 @@ def get_mapping(
     if not rows:
         return error("NOT_FOUND", f"Mapping {mapping_id} not found.", status_code=404)
     row = rows[0]
-    _ensure_lab_access(user, row["lab_id"])
+    _ensure_lab_access(user, row["lab_id"], "import:read")
     return success(data=_serialise(row))
 
 
@@ -147,7 +147,7 @@ def create_mapping(
     db=Depends(get_db_dep),  # noqa: B008
 ):
     user = get_current_user(request)
-    _ensure_lab_access(user, body.lab_id)
+    _ensure_lab_access(user, body.lab_id, "import:manage")
     rows = execute_write(
         """
         INSERT INTO import_mappings (
@@ -187,7 +187,7 @@ def patch_mapping(
     )
     if not rows:
         return error("NOT_FOUND", f"Mapping {mapping_id} not found.", status_code=404)
-    _ensure_lab_access(user, rows[0]["lab_id"])
+    _ensure_lab_access(user, rows[0]["lab_id"], "import:manage")
 
     fields = body.model_dump(exclude_none=True)
     if not fields:
@@ -236,7 +236,7 @@ def delete_mapping(
     )
     if not rows:
         return error("NOT_FOUND", f"Mapping {mapping_id} not found.", status_code=404)
-    _ensure_lab_access(user, rows[0]["lab_id"])
+    _ensure_lab_access(user, rows[0]["lab_id"], "import:manage")
     execute_write(
         "UPDATE import_mappings SET is_active = FALSE WHERE id = :id AND lab_id = :_lab",
         {"id": mapping_id, "_lab": rows[0]["lab_id"]},

@@ -2414,7 +2414,7 @@ sessions:
       question is identical, so it takes the same verb. The separation that
       matters is prepare vs approve, and that boundary already exists.
     phase: access_model_redesign
-    status: open
+    status: shipped
     depends_on:
       - M2-B1
     blocked_by_external:
@@ -2431,8 +2431,23 @@ sessions:
     pr_title_template: "feat(authz): M2-B4 — submission and import-mapping guards"
     branch_name_template: m2-b4-submission-plane
     role_framing:
-    notes: "Three new §4 verbs land here. prepare vs approve is the boundary that matters, not CRUD vs generate."
-
+    notes: "Shipped 21 routes. The blocker was bigger than three verbs: SIX were in no preset
+      (submission:prepare, import:read, import:manage, lab:read, org:read, token:manage), and they came from
+      the same event as the three earlier batches found by hand — the M2 catalog review added eight verbs to
+      §4 and nobody updated §8.2's preset blocks. Fixed the six AND the mechanism:
+      tests/authz/test_catalog_preset_coverage.py now checks catalog->preset (reachable by nobody),
+      preset->catalog (a typo is silent — the grant is issued and matches nothing), §8.2 <-> PRESET_GRANTS
+      (the exact drift that caused B3's pipeline:run bug), and that the deliberately-unheld allowlist does
+      not rot. Eight verbs are legitimately unheld, each with a written reason.
+      prepare vs approve is a REAL NARROWING: the old check let a submission's own creator mark it
+      submitted, execute it and register accessions. Six routes now need a Lab Lead. The creator rung is
+      subsumed, not dropped — creating already required submission:prepare. /validate narrowed from a read
+      check to prepare per the map.
+      Import mappings split the same way; a Lab Reader could previously rewrite a mapping config. The list
+      moved onto B7's lab_list_clause, dropping a platform-admin bypass and a membership subquery that could
+      not see an org-scoped grant.
+      The existing submission suite stayed green throughout because the seeded admin is BOTH platform admin
+      and Lab Director of lab 1 — a fixture holding every capability cannot detect a split."
   - id: M2-B5
     title: Governance route guards (14 routes)
     short_description: |
