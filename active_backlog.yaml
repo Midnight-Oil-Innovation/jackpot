@@ -2448,6 +2448,9 @@ sessions:
       not see an org-scoped grant.
       The existing submission suite stayed green throughout because the seeded admin is BOTH platform admin
       and Lab Director of lab 1 — a fixture holding every capability cannot detect a split."
+    merged_at: '2026-09-01'
+    merge_sha: 3ad16ae
+
   - id: M2-B5
     title: Governance route guards (14 routes)
     short_description: |
@@ -2492,6 +2495,9 @@ sessions:
       submissions list, this). The B4 catalog guard does not catch it — it checks a verb is in SOME preset,
       not that anything holds it where a route asks. Closing that means walking each route's declared scope,
       which is the endpoint map's job."
+    merged_at: '2026-09-01'
+    merge_sha: 2296650
+
   - id: M2-B6
     title: SERVICE-principal callbacks (2 routes)
     short_description: |
