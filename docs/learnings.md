@@ -3149,6 +3149,17 @@ verification showed the irreversible half could not ship.
   `tests/test_sample_access_router_api.py` runs a full reseed to bridge that
   gap. It carries a pointer to the backlog entry. When the sync lands, the
   helper should call the route instead.
+- **A directory named after a dependency silently reclassifies its imports.**
+  Deleting `backend/alembic/` changed 20 unrelated migration files: ruff's
+  isort had been resolving `alembic` as a *first-party local package* because
+  a directory of that name sat inside the source tree, so `from alembic import
+  op` was sorting into the first-party block everywhere. With the orphan gone
+  the real third-party distribution classifies correctly. Nothing was broken
+  before and nothing is broken now — but the repo had been carrying a
+  lint-classification skew for as long as the directory existed, and it only
+  surfaced because CI runs `pre-commit --all-files` while the local hook sees
+  only changed files. That gap is worth remembering on its own: a green local
+  commit does not mean a green `--all-files`.
 - **`backend/alembic/versions/` was never on the chain.** `alembic.ini` points
   at `backend/db/migrations`. ACCESS-SEED deliberately parked a
   reads-then-drops migration in the unreachable directory to move it in at M2;
