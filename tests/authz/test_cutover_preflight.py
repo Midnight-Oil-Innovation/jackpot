@@ -572,7 +572,11 @@ class TestPreflightReport:
             sys.path.pop(0)
 
         rows = parse_map(REPO_ROOT / "docs" / "endpoint_capability_map.md")
-        assert len(rows) == 124
+        # 127 since M3 added the three deletion-lifecycle routes. They existed
+        # in samples.py all along; the map said "no deletion-approval route
+        # exists yet" because it was written from the phase plan rather than
+        # from the router, which is exactly the drift this row count catches.
+        assert len(rows) == 127
         # Every row classifiable — parser guarantees the five classes.
         assert {r.klass for r in rows} <= {
             "require_capability",

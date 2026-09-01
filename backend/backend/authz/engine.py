@@ -78,8 +78,33 @@ def _scope_contains(grant_scope: str, resource_scope: str) -> bool:
 
 
 def _conditions_satisfied(conditions: dict[str, Any], context: Context) -> bool:
-    """Every key in the grant's conditions must appear in context with equal value."""
-    return all(context.conditions.get(k) == v for k, v in conditions.items())
+    """Every key must appear in context with the required value.
+
+    Two forms, mirroring the resource-predicate language in ``policy.py``:
+
+    * ``{"k": v}`` — equality. The default.
+    * ``{"k": {"not": v}}`` — the context value is anything but ``v``,
+      **including absent**.
+
+    The negation form exists because §6.2-1b's separation-of-duties DENY reads
+    "unless a Platform Admin explicitly self-approves". Absent must mean the
+    DENY applies: with equality only, ``{"platform_admin_self_approve": False}``
+    would not match a context that never set the key, so the DENY would
+    silently not fire and the rule would fail OPEN. A caller forgetting to
+    pass a flag must lose the escape hatch, never gain it.
+
+    Deliberately still tiny and declarative — ``visibility.py`` compiles the
+    same dict into SQL, and a form that cannot be compiled there would split
+    the two halves apart (the failure M1 exists to prevent).
+    """
+    for key, expected in conditions.items():
+        actual = context.conditions.get(key)
+        if isinstance(expected, dict) and "not" in expected:
+            if actual == expected["not"]:
+                return False
+        elif actual != expected:
+            return False
+    return True
 
 
 def _unexpired(grant: "CapabilityGrant", context: Context) -> bool:

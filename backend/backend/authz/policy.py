@@ -232,3 +232,45 @@ LADDER_POLICIES: list[dict[str, Any]] = [
         "resource": {"registered_by_user_id": PRINCIPAL_ID},
     },
 ]
+
+
+# ── Deletion governance (§6.2-1b, M3) ────────────────────────────────────
+#
+# The first DENY policies in the set, which changes an invariant guards.py
+# used to rely on: LADDER_POLICIES could only ever WIDEN, so passing it on
+# every call — including lab- and instance-scoped ones carrying no resource
+# attributes — was free. A DENY inverts that. "A resource carrying no
+# attributes matches nothing" is true for an equality predicate and FALSE for
+# a negation one, because absent != "ACTIVE".
+#
+# Hence the rule this family follows: **a DENY policy here may only read
+# attributes that SAMPLE_ATTRIBUTE_COLUMNS loads, and may only be keyed to a
+# capability whose routes resolve a Sample resource.** deletion:approve does
+# (samples.py names sample_id). submission:approve deliberately does NOT get a
+# policy: it is checked once at Lab scope while §6.2-2's rule is per-sample
+# across the submission's whole set, so it stays the set-level 422 in
+# submissions.py — see docs/endpoint_capability_map.md.
+
+DELETION_POLICIES: list[dict[str, Any]] = [
+    {
+        # §6.2-1b. The approver of a deletion must differ from the requester.
+        # A DENY, not a missing grant: it subtracts a path that a legitimate
+        # deletion:approve grant would otherwise permit, which is exactly what
+        # "intentional friction" means here.
+        "id": "deletion.separation_of_duties",
+        "effect": "DENY",
+        "capability": "deletion:approve",
+        "scope_ref": _ROOT,
+        "resource": {"deletion_requested_by_user_id": PRINCIPAL_ID},
+        # The audited platform-admin escape. {"not": True} rather than False
+        # because absent must mean the DENY APPLIES — a route that forgets to
+        # pass the flag must lose the escape hatch, never gain it. With plain
+        # equality this rule would fail open on every caller that never set
+        # the key, which is every caller but one.
+        "conditions": {"platform_admin_self_approve": {"not": True}},
+    },
+]
+
+# What guards.py evaluates. Kept as one name so a policy added to either
+# family reaches the decision path without a second edit somewhere else.
+ACTIVE_POLICIES: list[dict[str, Any]] = LADDER_POLICIES + DELETION_POLICIES

@@ -3239,3 +3239,64 @@ an approved requester was denied until the next migration.
   preset that grants at Sample scope would collide, and the losing row would
   vanish without a word. A test asserting otherwise is asserting against the
   index, not the code.
+
+## M3 — deletion-governance policies, and the two that weren't — 2026-09-01
+
+**What was built:** `deletion.separation_of_duties` as a real DENY policy, the
+condition-language negation form it needs, and the conversion of three
+deletion-lifecycle routes onto capabilities. The other two policies §6.2
+describes did not ship, for different and specific reasons.
+
+**Key decisions:**
+
+- **A spec section describing three policies contained one.**
+  `no_publish_while_deleting` reads as a DENY on `submission:approve` — but
+  that capability is checked once at *Lab* scope, while the rule is per-sample
+  across the submission's whole set. `submissions.py:497` already enforces it
+  correctly as a set-level query returning a 422 that names each blocked
+  sample. A policy would have been strictly worse *and* wrong-shaped.
+  `no_federate_deleting` keys on `federation:push`, which exists nowhere in
+  the codebase outside an example string in a comment — no route, no grant, no
+  guard. Both are now their own backlog entries. **Checking whether a spec's
+  rule has a call site is part of implementing it**, and neither the backlog
+  nor the report caught this because both were derived from the same section.
+- **The first DENY in a shared policy set breaks an invariant nobody wrote
+  down as fragile.** `guards.py` passes the whole set on every call, and the
+  docstring justified it: *"a resource carrying none matches nothing, and the
+  set contains no DENY entry, so it can only ever widen."* Both clauses matter.
+  "Matches nothing" is true for equality and **false for negation** — absent is
+  not equal to `"ACTIVE"`, so a `{"not": "ACTIVE"}` DENY on a lab-scoped call
+  carrying no attributes fires and denies everything. The replacement invariant
+  is now written down and tested: a DENY may only read attributes
+  `SAMPLE_ATTRIBUTE_COLUMNS` loads, and may only key on a capability whose
+  routes resolve a Sample resource.
+- **Absent had to mean "the rule applies".** `_conditions_satisfied` was
+  equality-only, so `{"platform_admin_self_approve": False}` would not match a
+  context that never set the key — the separation-of-duties DENY would have
+  silently not fired for every caller but one. That is a rule failing OPEN on
+  the authorization path. Hence `{"not": v}`, mirroring the resource
+  predicates' `{"in": [...]}`.
+- **`visibility.py` held a second copy of the condition semantics.** A local
+  `_live()` duplicating `_conditions_satisfied`'s body. Extending one and not
+  the other would have split `permit()` from the SQL clause — the exact
+  divergence the M1 equivalence suite exists to catch, arriving through the
+  door that suite does not watch. It now calls the one definition.
+
+**Watch out for:**
+
+- **The preset is the source of truth, and the test that says so was right.**
+  A draft added `deletion:request` / `deletion:approve` to the
+  `instance_administrator` preset, reasoning from the B-CARE-3 design doc's §10
+  matrix ("Platform Admin (any)"). `test_reseed_presets_match_the_documented_ones`
+  rejected it, and reading §8.2's own note showed the omission was deliberate:
+  *"Instance Administrator is operational, not a consent authority."* On
+  Scenario T the consent authority is the Tribal authority; elsewhere the Lab
+  Lead holds the verb at lab scope. **Two design documents disagreed, and the
+  one that had already resolved the disagreement was the one I was editing
+  away from.** The preset change and the migration written to propagate it
+  were both reverted. When code and prose disagree, find out which one already
+  thought about it.
+- **Changing `PRESET_GRANTS` is inert without a migration.** Grants are rows,
+  not a live view of the preset. Any future preset edit needs a reseed
+  migration to reach existing deployments — the one written for this change
+  was deleted along with it, but the requirement stands.

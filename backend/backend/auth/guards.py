@@ -7,7 +7,7 @@ from fastapi import HTTPException, Request
 from jose import jwt
 
 from backend.authz.engine import Context, Decision, Resource, permit
-from backend.authz.policy import LADDER_POLICIES
+from backend.authz.policy import ACTIVE_POLICIES
 from backend.authz.principal import (
     lab_resource_scope,
     load_principal,
@@ -90,17 +90,36 @@ def get_user_lab_membership(user_id: int, lab_id: int) -> dict | None:
     return rows[0] if rows else None
 
 
-def _allows(principal, capability: str, resource: Resource) -> bool:
+def _allows(
+    principal,
+    capability: str,
+    resource: Resource,
+    conditions: dict | None = None,
+) -> bool:
     """One place where a decision is made, so the guard cannot drift from it.
 
-    ``LADDER_POLICIES`` (PRE-A) rather than ``policies=[]``: the sample plane's
+    ``ACTIVE_POLICIES`` rather than ``policies=[]``: the sample plane's
     permissive rungs — PUBLIC, surveillance relevance, ownership, and the
     invitation a DISCOVERABLE sample extends to request access — are facts
     about the row, not about the caller's memberships, so no grant can carry
-    them. Passing them on every call including lab- and instance-scoped ones is
-    safe rather than sloppy: each policy's predicate reads a resource
-    attribute, a resource carrying none matches nothing, and the set contains
-    no DENY entry, so it can only ever widen and only ever for a sample.
+    them.
+
+    **M3 changed what passing this set on every call means.** It used to be
+    free because the set held no DENY: it could only widen, and only for a
+    sample. `deletion.separation_of_duties` is a DENY, and the old safety
+    argument — "a resource carrying no attributes matches nothing" — holds for
+    an equality predicate but inverts for a negation one, since absent is not
+    equal to anything. The invariant that replaces it, enforced by the comment
+    on ``DELETION_POLICIES``: a DENY here may only read attributes
+    ``SAMPLE_ATTRIBUTE_COLUMNS`` loads, and may only key on a capability whose
+    routes resolve a Sample resource. Under that rule a lab- or
+    instance-scoped call still cannot trip a DENY, because no DENY names its
+    capability.
+
+    ``conditions`` carries request facts the policies read — today only
+    ``platform_admin_self_approve`` for §6.2-1b's audited escape. It is a
+    parameter rather than ambient state so the escape is visible at the call
+    site that grants it.
     """
     return (
         permit(
@@ -110,8 +129,8 @@ def _allows(principal, capability: str, resource: Resource) -> bool:
             # A real clock, so a lapsed grant is refused at decision time —
             # the legacy ladder compared access_expires_at against NOW() and
             # did not wait for the nightly expiry job (M2-B2-PRE-C).
-            Context(conditions={}, now=datetime.now(UTC)),
-            policies=LADDER_POLICIES,
+            Context(conditions=conditions or {}, now=datetime.now(UTC)),
+            policies=ACTIVE_POLICIES,
         )
         is Decision.ALLOW
     )
@@ -165,6 +184,7 @@ def require_capability(capability: str):
         sample_id: int | None = None,
         project_id: int | None = None,
         row_attributes: dict | None = None,
+        conditions: dict | None = None,
     ) -> dict:
         if current_user is None:
             raise HTTPException(status_code=403, detail=f"capability '{capability}' required")
@@ -203,7 +223,7 @@ def require_capability(capability: str):
             # denied resource produces — under org isolation existence is
             # itself the secret (§3.2: another org must not learn of a lab's
             # data, users, "or existence").
-            if _allows(principal, capability, Resource(scope=scope_uri())):
+            if _allows(principal, capability, Resource(scope=scope_uri()), conditions):
                 return current_user
             logger.info(
                 "authz: DENY user=%s capability=%s unknown lab_id=%s sample_id=%s project_id=%s",
@@ -217,7 +237,7 @@ def require_capability(capability: str):
                 status_code=403, detail=f"capability '{capability}' required"
             ) from None
 
-        if _allows(principal, capability, resource):
+        if _allows(principal, capability, resource, conditions):
             return current_user
 
         logger.info(
@@ -239,6 +259,7 @@ def permits(
     sample_id=None,
     project_id=None,
     row_attributes: dict | None = None,
+    conditions: dict | None = None,
 ) -> bool:
     """``require_capability`` as a boolean, for routes that answer with
     something other than the guard's 403.
@@ -257,6 +278,7 @@ def permits(
             sample_id=sample_id,
             project_id=project_id,
             row_attributes=row_attributes,
+            conditions=conditions,
         )
     except HTTPException:
         return False

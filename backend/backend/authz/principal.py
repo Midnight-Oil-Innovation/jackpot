@@ -36,7 +36,8 @@ _PROJECT_LINEAGE_SQL = (
 # rungs rather than failing loudly.
 _SAMPLE_LINEAGE_SQL = (
     "SELECT l.organization_id, s.lab_id, s.project_id, "
-    "s.sharing_level, s.surveillance_relevant, s.owner_id "
+    "s.sharing_level, s.surveillance_relevant, s.owner_id, "
+    "s.deletion_status, s.deletion_requested_by_user_id "
     "FROM samples s JOIN labs l ON l.id = s.lab_id WHERE s.id = :sid"
 )
 
@@ -47,6 +48,13 @@ SAMPLE_ATTRIBUTE_COLUMNS: dict[str, str] = {
     "sharing_level": "s.sharing_level",
     "surveillance_relevant": "s.surveillance_relevant",
     "owner_id": "s.owner_id",
+    # M3. Read by deletion.separation_of_duties. A DENY policy that reads an
+    # attribute the resource does not carry is not inert — the attribute comes
+    # back None and the predicate compares against None, so the policy fires
+    # or not for a reason unrelated to the row. Every attribute a DENY reads
+    # must be loaded here, or the DENY is deciding on absence.
+    "deletion_status": "s.deletion_status",
+    "deletion_requested_by_user_id": "s.deletion_requested_by_user_id",
 }
 
 
