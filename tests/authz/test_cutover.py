@@ -14,6 +14,9 @@ output. ``test_catchup_did_not_duplicate_the_additive_grants`` is the check
 that would actually notice.
 """
 
+import re
+from pathlib import Path
+
 from sqlalchemy import text
 
 from backend.authz.reseed import GRANT_SOURCE, PRESET_GRANTS, preflight_counts, reseed
@@ -21,6 +24,7 @@ from backend.authz.scope import scope_uri
 from backend.database import _get_engine, execute_query
 
 MIGRATION_REVISION = "a1c7d94e6b28"
+REPO_ROOT = Path(__file__).resolve().parents[2]
 
 
 def test_catchup_did_not_duplicate_the_additive_grants():
@@ -39,11 +43,41 @@ def test_catchup_did_not_duplicate_the_additive_grants():
 
 
 def test_chain_reached_the_catchup_migration():
-    """The migration is in the chain and ran — not merely present on disk."""
+    """The migration is in the chain and was applied — not merely on disk.
+
+    Walks ``down_revision`` back from the stamped head rather than asserting
+    head *equals* this revision, so adding a migration later does not fail
+    this test for the wrong reason. What it pins is the claim that matters:
+    the database in front of these tests has run the catch-up.
+
+    A ``reseed()`` that is correct in isolation says nothing about whether the
+    cutover actually happened — the same gap ``test_additive_reseed_migration``
+    exists to close for b2f47c1a9e30.
+    """
+    versions_dir = REPO_ROOT / "backend" / "db" / "migrations" / "versions"
+    parents: dict[str, str | None] = {}
+    for path in versions_dir.glob("*.py"):
+        src = path.read_text()
+        rev = re.search(r'^revision(?:: str)? = "([^"]+)"', src, re.M)
+        down = re.search(r'^down_revision(?:[^=]*)= (?:"([^"]+)"|None)', src, re.M)
+        if rev:
+            parents[rev.group(1)] = down.group(1) if down else None
+
     rows = execute_query("SELECT version_num FROM alembic_version")
-    applied = {r["version_num"] for r in rows}
-    # Single linear chain, so head is the catch-up (or something after it).
-    assert applied, "no alembic version stamped"
+    assert rows, "no alembic version stamped"
+    head = rows[0]["version_num"]
+
+    seen: set[str] = set()
+    node: str | None = head
+    while node and node not in seen:
+        if node == MIGRATION_REVISION:
+            return
+        seen.add(node)
+        node = parents.get(node)
+    raise AssertionError(
+        f"{MIGRATION_REVISION} is not an ancestor of the stamped head {head} — "
+        "the catch-up reseed did not run"
+    )
 
 
 def test_preflight_is_clean_on_a_fresh_install():
