@@ -55,9 +55,15 @@ INSTANCE_SCOPE = scope_uri()
 #
 # (An earlier version of this comment cited
 # backend/alembic/versions/20260829_reseed_roles_to_grants.py as the DDL
-# source. That file was planned during ACCESS-SEED and never committed; the
-# real migration is backend/db/migrations/versions/
-# b2f47c1a9e30_m2_additive_reseed_grants.py.)
+# source, then claimed it was never committed. Both readings were wrong. It
+# was committed, and deliberately: ACCESS-SEED staged it OUTSIDE the chain
+# (alembic.ini points at backend/db/migrations) to be moved in at M2, when it
+# would reseed and drop the legacy columns in one transaction. ADR 0016 then
+# split reads-then-drops into two migrations, and M2 deferred the drop
+# entirely to M2-DROP, which left a parked file whose whole design had been
+# superseded still sitting there carrying DROP COLUMN. M2 deleted it. The
+# real migrations are b2f47c1a9e30 (additive) and a1c7d94e6b28 (catch-up),
+# both under backend/db/migrations/versions/.)
 UNIQUE_INDEX_DDL = (
     "CREATE UNIQUE INDEX IF NOT EXISTS "
     "authz_capability_grants_principal_capability_scope_uniq "
@@ -355,6 +361,42 @@ def real_guard(p: Persona, capability: str, lab_id: int | None) -> bool:
         return True
     except HTTPException:
         return False
+
+
+def legacy_visibility_sql_clause(user: dict) -> tuple[str, dict]:
+    """Pre-M2-B7 ``permissions.visibility_sql_clause``, verbatim in behavior.
+
+    Frozen here for the same reason as :func:`legacy_ladder`, and moved here
+    when M2 deleted ``backend/permissions.py``: the list-equivalence proof in
+    test_cutover_preflight.py needs the OLD fragment to compare against, and a
+    comparator that lives in production code stops being a comparator the
+    moment production changes. Keeping it in the test tree is what lets the
+    2c equivalence assertions keep meaning "the new list matches the list
+    users actually used to get".
+
+    Do not "fix" this to match new behavior. It is a historical record.
+    """
+    if user.get("is_platform_admin"):
+        return "TRUE", {}
+
+    params: dict = {"uid": user["id"]}
+    clauses = [
+        "s.owner_id = :uid",
+        "s.sharing_level IN ('PUBLIC', 'DISCOVERABLE')",
+        "EXISTS (SELECT 1 FROM lab_membership lm WHERE lm.user_id = :uid AND lm.lab_id = s.lab_id)",
+        "EXISTS (SELECT 1 FROM project_membership pm "
+        "WHERE pm.user_id = :uid AND pm.project_id = s.project_id)",
+        "EXISTS (SELECT 1 FROM sample_access_requests sar "
+        "WHERE sar.requester_id = :uid AND sar.sample_id = s.id "
+        "AND sar.status = 'APPROVED')",
+        "EXISTS (SELECT 1 FROM sample_access_grants sag "
+        "WHERE sag.requester_id = :uid AND sag.sample_id = s.id "
+        "AND sag.revoked = FALSE "
+        "AND (sag.access_expires_at IS NULL OR sag.access_expires_at > NOW()))",
+    ]
+    if user.get("is_data_analyst"):
+        clauses.append("s.surveillance_relevant = TRUE")
+    return "(" + " OR ".join(clauses) + ")", params
 
 
 def new_guard(principal: Principal, capability: str, scope: str) -> bool:

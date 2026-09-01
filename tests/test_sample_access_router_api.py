@@ -2,7 +2,7 @@
 Session O — sample_access router end-to-end tests.
 
 Covers every endpoint introduced in Session O plus the access-grant
-expiry job and the can_access_sample() update:
+expiry job and per-sample detail access:
 
     POST   /api/v1/sample-access/requests
     GET    /api/v1/sample-access/requests
@@ -22,10 +22,10 @@ import uuid
 import pytest
 from authz_helpers import sync_grants_from_legacy_roles
 
+from backend.auth.guards import permits
 from backend.config import get_settings
 from backend.database import execute_query, execute_write
 from backend.jobs import run_access_request_job
-from backend.permissions import can_access_sample
 
 SEED_USER_ID = 1
 SEED_LAB_ID = 1
@@ -33,6 +33,20 @@ SEED_PROJECT_ID = 1
 
 
 # ────────────────────────── helpers ──────────────────────────
+
+
+def _can_read_detail(user_id: int, sample_id: int) -> bool:
+    """Detail access as production decides it since M2-B2.
+
+    Replaces ``permissions.can_access_sample``, deleted at the M2 cutover. The
+    guard reads capability grants, and a ``sample_access_grants`` row only
+    becomes one by way of ``reseed()`` — no route issues a per-sample grant on
+    approval (backlog M2-SAMPLE-ACCESS-SYNC). So the sync runs here exactly as
+    the cutover migration runs it, and these tests keep pinning what they
+    always pinned: revoked and expired grants convey nothing, active ones do.
+    """
+    sync_grants_from_legacy_roles()
+    return permits({"id": user_id}, "sample:read_detail", sample_id=sample_id)
 
 
 def _switch_user(email: str, monkeypatch) -> None:
@@ -547,8 +561,8 @@ async def test_approve_as_lab_director_creates_grant(client, monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_approve_grant_unlocks_can_access_sample(client, monkeypatch):
-    """Sanity check the can_access_sample() update — grant flips access from False to True."""
+async def test_approve_grant_unlocks_detail_access(client, monkeypatch):
+    """Approval flips detail access from denied to allowed."""
     sid = "O-APR-CAN"
     _cleanup_samples(sid)
     other_lab = _ensure_other_lab()
@@ -563,10 +577,9 @@ async def test_approve_grant_unlocks_can_access_sample(client, monkeypatch):
     uid_ld = _make_user(email_ld)
     _add_membership(uid_ld, other_lab, "Lab Director", is_director=True)
     uid_req = _make_user(email_req)
-    requester = {"id": uid_req, "is_platform_admin": False}
 
     # Before any request — DISCOVERABLE is visible but detail access is denied.
-    assert can_access_sample(requester, s) is False
+    assert _can_read_detail(uid_req, s["id"]) is False
 
     inserted = execute_write(
         "INSERT INTO sample_access_requests (sample_id, requester_id, owner_id, "
@@ -583,7 +596,7 @@ async def test_approve_grant_unlocks_can_access_sample(client, monkeypatch):
     resp = await client.post(f"/api/v1/sample-access/requests/{req_id}/approve")
     assert resp.status_code == 200
 
-    assert can_access_sample(requester, s) is True
+    assert _can_read_detail(uid_req, s["id"]) is True
 
     _cleanup_users([email_ld, email_req])
     _cleanup_samples(sid)
@@ -722,7 +735,7 @@ async def test_deny_as_non_director_returns_403(client, monkeypatch):
     _cleanup_samples(sid)
 
 
-# ────────────────────────── can_access_sample / expiry ──────────────────────────
+# ────────────────────────── detail access / expiry ──────────────────────────
 
 
 @pytest.mark.asyncio
@@ -746,8 +759,7 @@ async def test_expired_grant_blocks_access():
         "VALUES (:sid, :uid, :uid, NOW() - INTERVAL '1 day')",
         {"sid": s["id"], "uid": uid},
     )
-    user_dict = {"id": uid, "is_platform_admin": False}
-    assert can_access_sample(user_dict, s) is False
+    assert _can_read_detail(uid, s["id"]) is False
 
     _cleanup_users([email])
     _cleanup_samples(sid)
@@ -772,8 +784,7 @@ async def test_active_grant_allows_access():
         "VALUES (:sid, :uid, :uid, NOW() + INTERVAL '30 days')",
         {"sid": s["id"], "uid": uid},
     )
-    user_dict = {"id": uid, "is_platform_admin": False}
-    assert can_access_sample(user_dict, s) is True
+    assert _can_read_detail(uid, s["id"]) is True
 
     _cleanup_users([email])
     _cleanup_samples(sid)
@@ -798,8 +809,7 @@ async def test_revoked_grant_blocks_access():
         "VALUES (:sid, :uid, :uid, NOW() + INTERVAL '30 days', TRUE, NOW())",
         {"sid": s["id"], "uid": uid},
     )
-    user_dict = {"id": uid, "is_platform_admin": False}
-    assert can_access_sample(user_dict, s) is False
+    assert _can_read_detail(uid, s["id"]) is False
 
     _cleanup_users([email])
     _cleanup_samples(sid)
