@@ -2742,3 +2742,57 @@ the guard grew the attribute half it needed to make those decisions correctly.
 
   Lists take neither path yet — no single resource to name.  -> M2-B7
 ```
+
+## M2-B3-PRE — pipeline:read holders and Project-scope resolution — 2026-09-01
+
+**What was built:** the two prerequisites M2-B3 turned out to be blocked on,
+plus map corrections for two document contradictions the same investigation
+surfaced.
+
+**Key decisions:**
+
+- **`pipeline:read` went into every lab preset, read-only included.** It was
+  in the §4 catalog but in no preset, so every route needing it was reachable
+  by nobody — the third instance of that exact failure, after
+  `pipeline:promote` and `pipeline:register_custom` in M2-B1. The catalog and
+  the presets are two lists that have to agree and nothing checks that they
+  do; `test_every_lab_preset_holds_pipeline_read` now checks this one, at the
+  presets rather than at a route, so it fails where the capability goes
+  missing.
+- **Run-status reads are `pipeline:read`, not `pipeline:run`.** The map and
+  §4 disagreed. §4's wording is explicit — "the pipeline zoo, the BYOP
+  registry, and run status" — and `pipeline:run` sits only in `lab_lead` and
+  the Bioinformatics User extra, so taking the map literally would have
+  removed run visibility from every Lab Collaborator and Lab Reader, for runs
+  on their own lab's samples. Watching a run is not launching one.
+- **BYOP catalog reads stay unscoped.** The map said `pipeline:read` at Lab;
+  `byop.py` said reads are "INTENTIONALLY unscoped per design §9 (catalog
+  browse)". Resolved toward the router: a pipeline definition is not tenant
+  data, and this is the same shape as the sequencing-lab registry the map
+  already calls AUTH-ONLY BY DESIGN. Mutations stay tenancy-guarded. The
+  by-design count in the pre-flight suite moved 7 → 10 with a comment saying
+  why, rather than being loosened to a range.
+- **Project scope resolves like the other levels.** `scope_uri(project=…)`
+  already existed; what was missing was `project_resource_scope()`. Naming the
+  project rather than approximating it by its lab is what lets a cryptWWDB
+  service principal hold `pipeline:write_results` on one project and nothing
+  else (§9.4). Containment still runs downward, so a lab member's `…/lab/7`
+  grant covers `…/lab/7/project/12` — scoping down costs existing members
+  nothing, which two tests pin from both directions.
+- **The guard's "not both" rule became "exactly one."** With a third
+  identifier, a pairwise check would have needed three comparisons and would
+  quietly miss the fourth when a fifth level arrives. It now counts what was
+  passed and names them in the error.
+
+**Watch out for:**
+
+- B3 proper is 11 routes now, not 16 — three BYOP reads became auth-only and
+  two are B7-class lists.
+- Two open questions for B3, neither blocking: BYOP `owner_lab_id` is
+  NULLABLE, so a lab-less pipeline has no lab scope to check against; and
+  `_get_or_404_tenancy`'s "registering user" rung is an ownership rung with no
+  grant behind it — the same shape sample ownership needed an attribute-policy
+  for in PRE-A.
+- The backlog's B3 note claimed M2 must "land the catalog entry" for
+  `pipeline:read`. It was already in §4. Read the catalog before believing a
+  note about it.

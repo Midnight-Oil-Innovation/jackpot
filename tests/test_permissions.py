@@ -45,7 +45,17 @@ def principal_with(*grants: tuple[str, str], uid=1) -> Principal:
     )
 
 
-def guard(capability, user, *, grants=(), lab_id=None, sample_id=None, lab_org=1, attributes=None):
+def guard(
+    capability,
+    user,
+    *,
+    grants=(),
+    lab_id=None,
+    sample_id=None,
+    project_id=None,
+    lab_org=1,
+    attributes=None,
+):
     """Run the guard with a stubbed principal and resource lookups.
 
     ``attributes`` stands in for the sample row the real
@@ -66,6 +76,10 @@ def guard(capability, user, *, grants=(), lab_id=None, sample_id=None, lab_org=1
             side_effect=lambda lid: scope_uri(org=lab_org, lab=lid),
         ),
         patch(
+            "backend.auth.guards.project_resource_scope",
+            side_effect=lambda pid: scope_uri(org=lab_org, lab=5, project=pid),
+        ),
+        patch(
             "backend.auth.guards.sample_resource",
             side_effect=lambda sid: Resource(
                 scope=scope_uri(org=lab_org, lab=5, project=2, sample=sid),
@@ -73,7 +87,9 @@ def guard(capability, user, *, grants=(), lab_id=None, sample_id=None, lab_org=1
             ),
         ),
     ):
-        return require_capability(capability)(user, lab_id=lab_id, sample_id=sample_id)
+        return require_capability(capability)(
+            user, lab_id=lab_id, sample_id=sample_id, project_id=project_id
+        )
 
 
 class TestDecisionMapping:
@@ -198,9 +214,14 @@ class TestSampleScope:
                 lab_id=5,
             )
 
-    def test_both_identifiers_is_a_programming_error(self):
-        with pytest.raises(ValueError, match="not both"):
+    def test_two_identifiers_is_a_programming_error(self):
+        with pytest.raises(ValueError, match="exactly one"):
             guard("sample:read_detail", make_user(), lab_id=5, sample_id=42)
+
+    def test_project_and_sample_together_is_also_rejected(self):
+        """M2-B3-PRE added a third identifier; the rule is one, not 'not both'."""
+        with pytest.raises(ValueError, match="exactly one"):
+            guard("pipeline:read", make_user(), project_id=3, sample_id=42)
 
 
 class TestAttributeRungs:
@@ -312,3 +333,51 @@ class TestAttributeRungs:
         """A lab resource carries no attributes, so no policy can match it."""
         with pytest.raises(HTTPException):
             guard("sample:read_detail", make_user(uid=7), lab_id=5)
+
+
+class TestProjectScope:
+    """M2-B3-PRE: the pipeline plane decides at Project scope (§4.2, §9.4)."""
+
+    def test_project_scoped_grant_authorizes_that_project(self):
+        user = make_user()
+        assert (
+            guard(
+                "pipeline:read",
+                user,
+                project_id=12,
+                grants=[("pipeline:read", scope_uri(org=1, lab=5, project=12))],
+            )
+            is user
+        )
+
+    def test_project_grant_does_not_reach_another_project(self):
+        with pytest.raises(HTTPException):
+            guard(
+                "pipeline:read",
+                make_user(),
+                project_id=13,
+                grants=[("pipeline:read", scope_uri(org=1, lab=5, project=12))],
+            )
+
+    def test_lab_grant_covers_a_project_in_that_lab(self):
+        """Scoping down takes nothing from lab members: containment runs down."""
+        user = make_user()
+        assert (
+            guard(
+                "pipeline:read",
+                user,
+                project_id=12,
+                grants=[("pipeline:read", scope_uri(org=1, lab=5))],
+            )
+            is user
+        )
+
+    def test_project_grant_is_invisible_when_checked_at_lab_scope(self):
+        """The converse, which is why a project route must name its project."""
+        with pytest.raises(HTTPException):
+            guard(
+                "pipeline:read",
+                make_user(),
+                lab_id=5,
+                grants=[("pipeline:read", scope_uri(org=1, lab=5, project=12))],
+            )

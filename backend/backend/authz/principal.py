@@ -22,6 +22,11 @@ _GRANTS_SQL = (
 
 _LAB_ORG_SQL = "SELECT organization_id FROM labs WHERE id = :lid"
 
+_PROJECT_LINEAGE_SQL = (
+    "SELECT l.organization_id, p.lab_id "
+    "FROM projects p JOIN labs l ON l.id = p.lab_id WHERE p.id = :pid"
+)
+
 # The three attribute columns are selected alongside the lineage because the
 # attribute-policies (policy.LADDER_POLICIES) read them on every sample-scoped
 # decision. Fetching them here keeps the guard at one query: a second round
@@ -88,6 +93,28 @@ def lab_resource_scope(lab_id: int, *, conn: Any = None) -> str:
     if not rows:
         raise ValueError(f"unknown lab_id {lab_id!r} — cannot build a resource scope")
     return scope_uri(org=rows[0]["organization_id"], lab=lab_id)
+
+
+def project_resource_scope(project_id: int, *, conn: Any = None) -> str:
+    """Canonical scope URI for a project, resolving its lab and org (§3.1.1).
+
+    The pipeline plane decides at Project scope: a run belongs to a project,
+    and §4.2's compute verbs are scoped there so a cryptWWDB service principal
+    can hold ``pipeline:write_results`` on one project and nothing else (§9.4).
+
+    Naming the project rather than approximating it by its lab is what makes
+    that possible — a lab-scoped check would let any grant on the lab satisfy
+    a per-project one. Containment still runs the other way: a lab member's
+    ``…/lab/7`` grant contains ``…/lab/7/project/12``, so scoping down here
+    takes nothing away from them.
+
+    Raises ``ValueError`` for an unknown project; the guard turns that into
+    the same answer a denied project gets.
+    """
+    rows = execute_query(_PROJECT_LINEAGE_SQL, {"pid": project_id}, conn=conn)
+    if not rows:
+        raise ValueError(f"unknown project id {project_id!r} — cannot build a resource scope")
+    return scope_uri(org=rows[0]["organization_id"], lab=rows[0]["lab_id"], project=project_id)
 
 
 def sample_resource(sample_id: int, *, conn: Any = None) -> Resource:

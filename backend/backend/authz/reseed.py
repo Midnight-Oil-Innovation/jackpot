@@ -60,6 +60,11 @@ PRESET_GRANTS: dict[str, list[str]] = {
         # deployment-lifecycle act, so it sits with the instance admin.
         "pipeline:promote",
         "pipeline:register_custom",
+        # M2-B3-PRE: pipeline:read was in the §4 catalog but in no preset, so
+        # every route that needs it was reachable by nobody — the same bug
+        # this preset's two entries above were added to fix. The instance
+        # admin's grant is at instance scope and so covers every project.
+        "pipeline:read",
     ],
     "surveillance_officer": [
         "sample:read_surveillance",
@@ -67,6 +72,8 @@ PRESET_GRANTS: dict[str, list[str]] = {
         "anomaly:triage",
     ],
     "lab_lead": [
+        # See lab_member_ro for why every lab preset holds pipeline:read.
+        "pipeline:read",
         "sample:read",
         "sample:read_detail",
         "sample:create",
@@ -95,6 +102,7 @@ PRESET_GRANTS: dict[str, list[str]] = {
         "org:manage",
     ],
     "lab_member_rw": [
+        "pipeline:read",
         "sample:read",
         "sample:read_detail",
         "sample:create",
@@ -102,6 +110,15 @@ PRESET_GRANTS: dict[str, list[str]] = {
         "deletion:request",
     ],
     "lab_member_ro": [
+        # M2-B3-PRE. §4 defines pipeline:read as "read the pipeline zoo, the
+        # BYOP registry, and run status", and run status is what a lab member
+        # needs to see a run on their own lab's samples. It sits in every lab
+        # preset including read-only: watching a run is not running one, and
+        # pipeline:run — the launch verb — stays confined to lab_lead and the
+        # Bioinformatics User extra. Scoped at the member's lab, which
+        # contains that lab's projects by ordinary containment (§3.1), so it
+        # conveys nothing about any other lab's runs.
+        "pipeline:read",
         "sample:read",
         "sample:read_detail",
     ],
