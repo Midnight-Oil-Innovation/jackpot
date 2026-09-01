@@ -2912,6 +2912,14 @@ callers.
 - `select_all` on the samples list is a separate code path from the paginated
   one. A filter applied to only one of them is exactly the gap a page-only
   test misses; there is now a test asserting the two return the same set.
+- **The equivalence proof does not reach two of the eight lists.** It is
+  built on `samples`, so `imports/sessions` and `pipelines/` have route tests
+  and nothing more. Worth being explicit about rather than letting "the
+  invariant suite passes" imply coverage it does not have: the imports list
+  strictly narrows (a lab rung added on top of ownership), while the run list
+  *can* widen — an org-scoped `pipeline:read` grant would show every lab in
+  the org, which the legacy `lab_id IN (…)` form could not express. No preset
+  issues org-scoped grants today, so the sets currently match.
 - **The performance worry was backwards.** The backlog flagged that prefix
   `LIKE` over a computed expression cannot use an index and asked for a
   measurement. At 3,000 samples the new fragment costs 113 and runs in 5.3 ms;

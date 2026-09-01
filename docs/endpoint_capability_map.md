@@ -92,7 +92,7 @@ All catalog gaps were resolved in the M2 pre-cutover review (see
 | GET | `/api/v1/organizations/{org_id}` | `org:read` | Org | auth-only today |
 | PATCH | `/api/v1/organizations/{org_id}` | `org:manage` | Instance | `require_capability("org:manage")` |
 | DELETE | `/api/v1/organizations/{org_id}` | `org:manage` | Instance | `require_capability("org:manage")` |
-| GET | `/api/v1/pipelines/` | `pipeline:read` | Instance | `project_list_clause("pipeline:read")` OR launched-by (M2-B7) — same verb and scope the per-run status routes check, so the list cannot show a run those routes would refuse |
+| GET | `/api/v1/pipelines/` | `pipeline:read` | Project | `project_list_clause("pipeline:read")` OR launched-by (M2-B7) — same verb and scope the per-run status routes check, so the list cannot show a run those routes would refuse |
 | POST | `/api/v1/pipelines/launch` | `pipeline:run` | Project | `permits("pipeline:run", project_id=…)` (M2-B3). §8.2 puts the verb in Lab Lead and Lab Member RW, so who can launch is unchanged except that read-only members no longer can. The in-route per-sample checks were CONVERTED, not dropped — each input now takes `sample:read_detail` at its own sample scope, which also picks up PUBLIC, owned and per-sample-granted inputs the lab test could not see |
 | POST | `/api/v1/pipelines/events` | `pipeline:write_results` | Instance | SERVICE-authenticated (NOT public): per-run `X-Pipeline-Token`, `hmac.compare_digest`, 401 on mismatch (`routers/pipelines.py:903`). Rule 60's never-raises applies to weblog delivery, not auth. M2 adds the SERVICE-principal `permit()` call |
 | GET | `/api/v1/pipelines/{run_id}` | `pipeline:read` | Project | `_may_read_run` -> `permits("pipeline:read", project_id=…)` (M2-B3). Capability corrected from `pipeline:run` in M2-B3-PRE — §4 defines `pipeline:read` as covering run status, and the old reading would have hidden a lab's own runs from its Collaborators and Readers |
@@ -337,7 +337,7 @@ Their *other* rung replaced a legacy bypass in each case: the platform-admin
 branch is gone from both, because an instance-scoped grant contains every
 path beneath it.
 
-### The invariant
+### What the invariant covers, and what it does not
 
 `tests/authz/test_cutover_preflight.py` asserts, on real PostgreSQL:
 
@@ -349,6 +349,24 @@ M2-B7 pointed those at the production policy set and attribute columns. They
 previously ran with `policies=[]`, which measures grants alone — a strict
 subset of what the deployed list shows, and a proof about something nobody
 runs.
+
+**That proof reaches the six sample-rooted lists only.** It is built on
+`samples`, so it cannot say anything about `imports/sessions` or
+`pipelines/`. Those two are covered by route tests, and their relationship to
+the legacy filter is worth stating plainly rather than implying:
+
+- **`imports/sessions` narrows.** Ownership was previously the entire filter;
+  a lab rung is added on top, so the new set is a strict subset. Nothing can
+  appear that did not before.
+- **`pipelines/` can widen, but only by configuration.** Legacy read
+  `lab_id IN (SELECT lab_id FROM lab_membership …)`; the new filter is a
+  `pipeline:read` grant covering the run's project scope. A lab-scoped grant
+  gives the same set. An **org-scoped** grant would give more — every lab in
+  the org — which the legacy form could not express. Today no preset issues
+  org-scoped grants (reseed writes lab and instance scopes only), so the sets
+  match; an operator who issues one later gets the wider reading, which is
+  what an org-scoped grant is supposed to mean. Same class as the
+  director-at-org-scope widening on the access-request list.
 
 ### Measured, not assumed
 

@@ -2553,8 +2553,6 @@ sessions:
       PERF, measured as the entry asked: at 3000 samples the new fragment costs 113 / 5.3ms, legacy costs
       3923 / 7.1ms. Both seq-scan; legacy also ran four correlated EXISTS. No index added — the new path is
       faster, so an index would have been speculative."
-    merged_at: '2026-09-01'
-    merge_sha: PENDING
   - id: M2
     title: Reseed + cutover (IRREVERSIBLE — manual flow only)
     short_description: |

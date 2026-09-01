@@ -340,3 +340,40 @@ async def test_pipeline_run_list_is_project_scoped(client, monkeypatch):
         for rid in (mine, theirs):
             execute_write("DELETE FROM pipeline_runs WHERE run_id = :r", {"r": rid})
         _cleanup_users(emails)
+
+
+@pytest.mark.asyncio
+async def test_import_session_list_drops_a_lab_you_lost_access_to(client, monkeypatch):
+    """The rung `lab_list_clause` adds on top of the owner filter.
+
+    Before M2-B7 ownership was the whole filter, so a session kept listing
+    after its owner lost access to the lab it targets. The two non-sample
+    scope levels have no equivalence harness behind them — the sample-rooted
+    proof in tests/authz/ cannot reach them — so this is the only thing
+    asserting the lab half actually applies.
+    """
+    emails: list[str] = []
+    try:
+        u = _member("b7imp", "Lab Collaborator", monkeypatch)
+        emails.append(u["email"])
+        created = await client.post(
+            "/api/v1/imports/sessions/",
+            data={"lab_id": str(SEED_LAB_ID)},
+            files={"file": ("x.csv", b"sample_id\nA-1\n", "text/csv")},
+        )
+        assert created.status_code == 201, created.text
+        session_id = created.json()["data"]["id"]
+
+        listed = await client.get("/api/v1/imports/sessions/")
+        assert listed.status_code == 200, listed.text
+        assert session_id in {r["id"] for r in listed.json()["data"]}
+
+        # Revoke every grant: still the owner, no longer able to read the lab.
+        execute_write(
+            "DELETE FROM authz_capability_grants WHERE principal_id = :u", {"u": str(u["id"])}
+        )
+        listed = await client.get("/api/v1/imports/sessions/")
+        assert listed.status_code == 200, listed.text
+        assert session_id not in {r["id"] for r in listed.json()["data"]}
+    finally:
+        _cleanup_users(emails)
