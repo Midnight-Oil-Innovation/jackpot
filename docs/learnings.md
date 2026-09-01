@@ -2796,3 +2796,53 @@ surfaced.
 - The backlog's B3 note claimed M2 must "land the catalog entry" for
   `pipeline:read`. It was already in §4. Read the catalog before believing a
   note about it.
+
+## M2-B3 — pipeline and BYOP route guards — 2026-09-01
+
+**What was built:** the 11 remaining pipeline-plane routes moved onto
+capability checks — 7 BYOP mutations, launch, resume, and the 3 run-status
+reads.
+
+**Key decisions:**
+
+- **The schema had already answered the two "open questions".**
+  `owner_lab_id` is nullable because `sharing_scope` admits `'private'` — a
+  pipeline belonging to a person, not a lab. That makes the nullable column
+  correct rather than a hole, and makes the registrant rung an ownership
+  policy of exactly the shape PRE-A built for samples. Neither needed a
+  judgement call; both needed reading the DDL.
+- **Creation must not use the ownership rung, and a test caught it.** The
+  first cut routed `create_pipeline` through `_may_manage`, which passes
+  `registered_by_user_id`. At creation the caller *is* the registrant, so the
+  policy matched every time and the lab check became vacuous — any
+  authenticated user could register a pipeline into any lab. This was a
+  widening, the direction that does not fail closed. Caught by an existing
+  tenancy test (`test_byop_create_into_foreign_lab_is_403`) returning 201, and
+  now pinned by its own regression test.
+- **BYOP tests run the real engine against stubbed DB lookups.** Those router
+  tests use in-memory SQLite with no Postgres, so the tempting move was to
+  patch `_may_manage` wholesale. That would have asserted the test's copy of
+  the ownership rule instead of the rule. The `authz_grants` fixture stubs
+  only `load_principal` and the scope resolvers — the parts that touch a
+  database — and lets the real `permit()` and the real `LADDER_POLICIES` run.
+- **`_may_read_run` and the launch check are separate functions on purpose.**
+  Reading a run is `pipeline:read`; launching and resuming are `pipeline:run`.
+  A single shared helper would have made it one edit to collapse the
+  distinction the whole batch exists to draw.
+- **The per-sample launch checks were converted, not dropped** (the backlog
+  entry is explicit). They moved from "is the caller in this sample's lab" to
+  `sample:read_detail` at the sample's own scope, which additionally admits
+  PUBLIC samples, the caller's own, and per-sample grants — paths the lab test
+  could not see at all.
+
+**Watch out for:**
+
+- Launch narrows to `lab_lead` + Bioinformatics User. Lab Collaborators and
+  Readers can no longer launch a pipeline. Intended per §8.2, fails closed,
+  documented in the map — but it is the most user-visible change in the batch.
+- A test that passed alone failed in full-suite order: `'Other Lab'` already
+  existed, created by another module *without* a project, and the helper only
+  seeded the project on the lab-insert path. Ensure each half independently.
+- `POST /{run_id}/resume` takes a body, and FastAPI validates the body before
+  the handler runs — a guard test that omits it gets 422, not 403, and proves
+  nothing about the guard.

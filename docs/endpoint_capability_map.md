@@ -37,15 +37,15 @@ All catalog gaps were resolved in the M2 pre-cutover review (see
 | POST | `/api/v1/auth/logout` | — | Instance | PUBLIC (intentional — clears cookies) |
 | POST | `/api/v1/auth/dev-login` | — | Instance | PUBLIC — intent VERIFIED: `env != "local"` returns 404 before any work (`routers/auth.py:557`); pinned by `test_dev_login_returns_404_outside_local_mode` |
 | GET | `/api/v1/byop/telemetry` | — | Instance | AUTH-ONLY BY DESIGN — telemetry over the shared pipeline catalog; aggregate success rate / walltime / cost, not tenant data |
-| POST | `/api/v1/byop/pipelines` | `pipeline:register_custom` | Lab | auth-only today |
+| POST | `/api/v1/byop/pipelines` | `pipeline:register_custom` | Lab | `permits("pipeline:register_custom", lab_id=owner_lab_id)` (M2-B3). Deliberately NOT the ownership rung: at creation the caller is always the registrant, so routing this through it would make the lab check vacuous. A lab-less (`sharing_scope='private'`) registration needs only authentication |
 | GET | `/api/v1/byop/pipelines` | — | Instance | AUTH-ONLY BY DESIGN — catalog browse (`byop.py`: "list-all is INTENTIONALLY unscoped per design §9"); a pipeline definition is not tenant data. Mutations stay tenancy-guarded |
 | GET | `/api/v1/byop/pipelines/{pipeline_id}` | — | Instance | AUTH-ONLY BY DESIGN — same catalog browse; `_get_or_404_tenancy` gates the mutations, not this read |
-| PATCH | `/api/v1/byop/pipelines/{pipeline_id}` | `pipeline:register_custom` | Lab | auth-only today |
-| PUT | `/api/v1/byop/pipelines/{pipeline_id}` | `pipeline:register_custom` | Lab | auth-only today |
-| DELETE | `/api/v1/byop/pipelines/{pipeline_id}` | `pipeline:register_custom` | Lab | auth-only today |
-| POST | `/api/v1/byop/pipelines/{pipeline_id}/revalidate` | `pipeline:register_custom` | Lab | auth-only today |
-| POST | `/api/v1/byop/pipelines/{pipeline_id}/deactivate` | `pipeline:register_custom` | Lab | auth-only today |
-| POST | `/api/v1/byop/pipelines/{pipeline_id}/archive` | `pipeline:register_custom` | Lab | auth-only today |
+| PATCH | `/api/v1/byop/pipelines/{pipeline_id}` | `pipeline:register_custom` | Lab | `_may_manage` (M2-B3): `pipeline:register_custom` at `owner_lab_id`, OR the registrant via an attribute-policy. Denial collapses to 404 (§3.3) |
+| PUT | `/api/v1/byop/pipelines/{pipeline_id}` | `pipeline:register_custom` | Lab | `_may_manage` (M2-B3) — same route function as PATCH |
+| DELETE | `/api/v1/byop/pipelines/{pipeline_id}` | `pipeline:register_custom` | Lab | `_may_manage` (M2-B3); soft-delete to ARCHIVED |
+| POST | `/api/v1/byop/pipelines/{pipeline_id}/revalidate` | `pipeline:register_custom` | Lab | `_may_manage` (M2-B3) |
+| POST | `/api/v1/byop/pipelines/{pipeline_id}/deactivate` | `pipeline:register_custom` | Lab | `_may_manage` (M2-B3) |
+| POST | `/api/v1/byop/pipelines/{pipeline_id}/archive` | `pipeline:register_custom` | Lab | `_may_manage` (M2-B3) |
 | GET | `/api/v1/dataharmonizer/templates/{source_type}/{tier}` | — | Instance | PUBLIC (intentional — templates are public, Critical Rule 42) |
 | POST | `/api/v1/dataharmonizer/validate` | — | Instance | AUTH-ONLY BY DESIGN — stateless validation utility; no resource, no scope, nothing to gate |
 | GET | `/api/v1/domain-whitelist/` | `whitelist:manage` | Instance | `require_capability("whitelist:manage")` |
@@ -93,12 +93,12 @@ All catalog gaps were resolved in the M2 pre-cutover review (see
 | PATCH | `/api/v1/organizations/{org_id}` | `org:manage` | Instance | `require_capability("org:manage")` |
 | DELETE | `/api/v1/organizations/{org_id}` | `org:manage` | Instance | `require_capability("org:manage")` |
 | GET | `/api/v1/pipelines/` | `pipeline:read` | Instance | auth-only today; pipeline zoo read |
-| POST | `/api/v1/pipelines/launch` | `pipeline:run` | Project | auth-only today; in-route sample-access checks |
+| POST | `/api/v1/pipelines/launch` | `pipeline:run` | Project | `permits("pipeline:run", project_id=…)` (M2-B3). NARROWED: §8.2 puts `pipeline:run` in lab_lead + Bioinformatics User only, so a Lab Collaborator/Reader can no longer launch. The in-route per-sample checks were CONVERTED, not dropped — each input now takes `sample:read_detail` at its own sample scope, which also picks up PUBLIC, owned and per-sample-granted inputs the lab test could not see |
 | POST | `/api/v1/pipelines/events` | `pipeline:write_results` | Instance | SERVICE-authenticated (NOT public): per-run `X-Pipeline-Token`, `hmac.compare_digest`, 401 on mismatch (`routers/pipelines.py:903`). Rule 60's never-raises applies to weblog delivery, not auth. M2 adds the SERVICE-principal `permit()` call |
-| GET | `/api/v1/pipelines/{run_id}` | `pipeline:read` | Project | auth-only today; run-status read. **Corrected 2026-09-01**: this row said `pipeline:run`, but §4 defines `pipeline:read` as "the pipeline zoo, the BYOP registry, and run status". Watching a run is not launching one, and `pipeline:run` sits only in lab_lead + Bioinformatics User — so the old reading would have taken run visibility away from every Lab Collaborator and Lab Reader for runs on their own lab's samples |
-| GET | `/api/v1/pipelines/{run_id}/tasks` | `pipeline:read` | Project | auth-only today; run-status read. **Corrected 2026-09-01**: this row said `pipeline:run`, but §4 defines `pipeline:read` as "the pipeline zoo, the BYOP registry, and run status". Watching a run is not launching one, and `pipeline:run` sits only in lab_lead + Bioinformatics User — so the old reading would have taken run visibility away from every Lab Collaborator and Lab Reader for runs on their own lab's samples |
-| GET | `/api/v1/pipelines/{run_id}/events` | `pipeline:read` | Project | auth-only today; run-status read. **Corrected 2026-09-01**: this row said `pipeline:run`, but §4 defines `pipeline:read` as "the pipeline zoo, the BYOP registry, and run status". Watching a run is not launching one, and `pipeline:run` sits only in lab_lead + Bioinformatics User — so the old reading would have taken run visibility away from every Lab Collaborator and Lab Reader for runs on their own lab's samples |
-| POST | `/api/v1/pipelines/{run_id}/resume` | `pipeline:run` | Project | auth-only today |
+| GET | `/api/v1/pipelines/{run_id}` | `pipeline:read` | Project | `_may_read_run` -> `permits("pipeline:read", project_id=…)` (M2-B3). Capability corrected from `pipeline:run` in M2-B3-PRE — §4 defines `pipeline:read` as covering run status, and the old reading would have hidden a lab's own runs from its Collaborators and Readers |
+| GET | `/api/v1/pipelines/{run_id}/tasks` | `pipeline:read` | Project | `_may_read_run` -> `permits("pipeline:read", project_id=…)` (M2-B3). Capability corrected from `pipeline:run` in M2-B3-PRE — §4 defines `pipeline:read` as covering run status, and the old reading would have hidden a lab's own runs from its Collaborators and Readers |
+| GET | `/api/v1/pipelines/{run_id}/events` | `pipeline:read` | Project | `_may_read_run` -> `permits("pipeline:read", project_id=…)` (M2-B3). Capability corrected from `pipeline:run` in M2-B3-PRE — §4 defines `pipeline:read` as covering run status, and the old reading would have hidden a lab's own runs from its Collaborators and Readers |
+| POST | `/api/v1/pipelines/{run_id}/resume` | `pipeline:run` | Project | `permits("pipeline:run", project_id=…)` (M2-B3) — resume launches work, so the write verb, not the read one |
 | POST | `/api/v1/pipelines/custom` | `pipeline:register_custom` | Lab | `require_capability("pipeline:register_custom")` |
 | POST | `/api/v1/pipelines/{catalog_id}/promote` | `pipeline:promote` | Lab or Instance | `require_capability("pipeline:promote")` — lab scope for lab-tier target, instance scope for global tier |
 | POST | `/api/v1/pipelines/{run_id}/results/{result_type}` | `pipeline:write_results` | Project | SERVICE-authenticated (NOT public): same per-run token check, `INVALID_TOKEN` 401 (`routers/pipelines.py:1495`). M2 adds the SERVICE-principal `permit()` call |
@@ -229,6 +229,63 @@ yet (the B-CARE-3 lifecycle routes land with P0c/M3). When it lands it
 takes `deletion:approve` at Sample scope and inherits the §6.2-1b
 `deletion.separation_of_duties` DENY (approver ≠ requester unless the
 audited platform-admin self-approve flag is set).
+
+## Pipeline plane after M2-B3
+
+11 routes converted: 7 BYOP mutations, launch + resume, and the 3 run-status
+reads. The original batch said 16; three BYOP catalog reads became AUTH-ONLY
+BY DESIGN and two are B7-class lists (see below).
+
+### The read/run split is the whole batch
+
+§4 defines `pipeline:read` as "the pipeline zoo, the BYOP registry, and run
+status"; `pipeline:run` is the launch verb and sits only in `lab_lead` and
+the Bioinformatics User extra. Watching a run and starting one are different
+acts by different people. Getting this backwards in either direction is a
+real failure: `pipeline:run` on the status routes hides a lab's own runs from
+its Collaborators and Readers, and `pipeline:read` on launch lets a read-only
+member start compute.
+
+### What a BYOP pipeline belongs to
+
+`byop_pipelines.owner_lab_id` is nullable, which looked like an open question
+and turned out to be answered by the schema: `sharing_scope` admits
+`'private'`, a pipeline belonging to a person rather than a lab. So:
+
+- **lab-owned** — `pipeline:register_custom` at `owner_lab_id`.
+- **private** (`owner_lab_id IS NULL`) — no lab scope exists, so only the
+  registrant policy or an instance-wide grant can match. Correct, not a gap.
+- **the registrant, either way** — an ALLOW policy on
+  `registered_by_user_id`, the same shape sample ownership needed in PRE-A.
+  As a grant it would mean a row written per registration and deleted per
+  transfer.
+
+The column stays nullable; the policy is what makes that safe.
+
+**One trap, pinned by a regression test.** Creation must NOT go through the
+ownership rung. At creation the caller is always the registrant, so the rung
+matches every time and the lab check becomes vacuous — any authenticated user
+could place a pipeline into any lab. `create_pipeline` asks the grant question
+only.
+
+### Deliberate narrowings
+
+- **Launch and resume**: `pipeline:run` replaces "any lab or project member".
+  Lab Collaborators and Lab Readers lose the ability to launch. This is §8.2's
+  intent — running pipelines is bioinformatics work — and it fails closed with
+  a 403.
+- **BYOP mutation on a lab-owned pipeline**: `pipeline:register_custom` sits
+  in `lab_lead`, so ordinary lab membership is no longer enough. A
+  Bioinformatics User keeps full control of the pipelines they registered
+  themselves, through the registrant rung.
+- **Project-only membership** loses launch, as it lost sample access in B2.
+  Same registered divergence (`project_only_membership`).
+
+### Still on the legacy path
+
+`GET /api/v1/pipelines/` is a B7-class list — runs the caller can see, filtered
+per row, with no single resource to scope against. It keeps its inline
+`launched_by_id OR lab_membership` filter until B7.
 
 ## Gaps
 

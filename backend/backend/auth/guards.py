@@ -146,11 +146,19 @@ def require_capability(capability: str):
     than evaluated per row, is M2-B7.
     """
 
+    # ``attributes`` is for a caller that has already loaded the row — the BYOP
+    # plane, whose rows come through SQLAlchemy in a test harness with no
+    # database for a resolver to query. The sample path deliberately does NOT
+    # work this way: it fetches its own attributes so a route cannot hand the
+    # guard a row that says something the database does not. Pass this only
+    # with fields read straight off a persisted row, never anything from a
+    # request body.
     def _guard(
         current_user: dict | None,
         lab_id: int | None = None,
         sample_id: int | None = None,
         project_id: int | None = None,
+        attributes: dict | None = None,
     ) -> dict:
         if current_user is None:
             raise HTTPException(status_code=403, detail=f"capability '{capability}' required")
@@ -175,11 +183,13 @@ def require_capability(capability: str):
                 # DISCOVERABLE one.
                 resource = sample_resource(sample_id)
             elif project_id is not None:
-                resource = Resource(scope=project_resource_scope(project_id))
+                resource = Resource(
+                    scope=project_resource_scope(project_id), attributes=attributes or {}
+                )
             elif lab_id is not None:
-                resource = Resource(scope=lab_resource_scope(lab_id))
+                resource = Resource(scope=lab_resource_scope(lab_id), attributes=attributes or {})
             else:
-                resource = Resource(scope=scope_uri())
+                resource = Resource(scope=scope_uri(), attributes=attributes or {})
         except ValueError:
             # No such lab/sample. Whether the caller may learn that depends on
             # their reach: someone holding the capability instance-wide can
@@ -216,7 +226,15 @@ def require_capability(capability: str):
     return _guard
 
 
-def permits(user: dict, capability: str, *, lab_id=None, sample_id=None, project_id=None) -> bool:
+def permits(
+    user: dict,
+    capability: str,
+    *,
+    lab_id=None,
+    sample_id=None,
+    project_id=None,
+    attributes: dict | None = None,
+) -> bool:
     """``require_capability`` as a boolean, for routes that answer with
     something other than the guard's 403.
 
@@ -229,7 +247,11 @@ def permits(user: dict, capability: str, *, lab_id=None, sample_id=None, project
     """
     try:
         require_capability(capability)(
-            user, lab_id=lab_id, sample_id=sample_id, project_id=project_id
+            user,
+            lab_id=lab_id,
+            sample_id=sample_id,
+            project_id=project_id,
+            attributes=attributes,
         )
     except HTTPException:
         return False

@@ -136,6 +136,21 @@ def _create(client: TestClient) -> dict:
 # --- CRUD happy paths -----------------------------------------------------
 
 
+@pytest.fixture(autouse=True)
+def _byop_author(authz_grants):
+    """These are CRUD tests, not authorization tests — the caller holds the
+    register verb instance-wide so each case exercises the route rather than
+    the guard. The authorization boundaries themselves are pinned in
+    test_tenancy.py and tests/authz/.
+
+    MOCK_USER_ID mirrors whatever user the module's client fixture presents.
+    """
+    from backend.authz import ROOT
+
+    for uid in (1, 2, 3):
+        authz_grants(uid, [("pipeline:register_custom", ROOT)])
+
+
 def test_create_pipeline(client: TestClient) -> None:
     body = _create(client)
     assert body["name"] == "tb-typer"

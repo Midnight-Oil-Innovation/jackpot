@@ -28,7 +28,7 @@ from pydantic import BaseModel, Field, ValidationError, field_validator
 from backend.audit import AuditActions, log_audit
 from backend.auth.guards import (
     get_current_user,
-    get_user_lab_membership,
+    permits,
     require_capability,
 )
 from backend.config import get_settings
@@ -74,21 +74,23 @@ def _serialise(row: dict | None) -> dict:
     return out
 
 
-def _user_has_lab_access(user: dict, lab_id: int | None, db) -> bool:
-    if user.get("is_platform_admin"):
-        return True
-    if lab_id is None:
+def _may_read_run(user: dict, run: dict) -> bool:
+    """May this caller see this run? ``pipeline:read`` at the run's project.
+
+    M2-B3. §4 defines pipeline:read as "the pipeline zoo, the BYOP registry,
+    and run status", so watching a run is a read verb — deliberately NOT
+    pipeline:run, which sits only in lab_lead and the Bioinformatics User
+    extra and would have taken run visibility away from every Lab
+    Collaborator and Lab Reader for runs on their own lab's samples. The
+    endpoint-capability map said pipeline:run and was corrected (M2-B3-PRE).
+
+    Decided at Project scope, which a lab-scoped grant contains, so an
+    ordinary lab member is unaffected by the narrower scope.
+    """
+    project_id = run.get("project_id")
+    if project_id is None:
         return False
-    if get_user_lab_membership(user["id"], lab_id):
-        return True
-    rows = execute_query(
-        "SELECT 1 FROM project_membership pm "
-        "JOIN projects p ON p.id = pm.project_id "
-        "WHERE pm.user_id = :uid AND p.lab_id = :lid LIMIT 1",
-        {"uid": user["id"], "lid": lab_id},
-        conn=db,
-    )
-    return bool(rows)
+    return permits(user, "pipeline:read", project_id=project_id)
 
 
 def _fetch_run(run_id: str, db) -> dict | None:
@@ -224,7 +226,13 @@ def _authorize_and_resolve_launch_inputs(
         )
     lab_id = proj_rows[0]["lab_id"]
 
-    if not _user_has_lab_access(user, lab_id, db):
+    # M2-B3: pipeline:run at the project's own scope, per the map. Narrower
+    # than the lab-membership test it replaces — §8.2 puts pipeline:run in
+    # lab_lead and the Bioinformatics User extra only, so a Lab Collaborator
+    # or Lab Reader can no longer launch. That is the model's intent (running
+    # pipelines is bioinformatics work), and it is a DENY, so it fails closed
+    # and visibly rather than silently.
+    if not permits(user, "pipeline:run", project_id=payload.project_id):
         return (
             None,
             None,
@@ -278,9 +286,14 @@ def _authorize_and_resolve_launch_inputs(
             ),
         )
 
-    # Every sample must belong to a lab the caller can access
+    # Every input sample must be readable by the caller. M2-B3 converts this
+    # rather than dropping it (the backlog entry is explicit), and moves it to
+    # the sample's own scope: sample:read_detail is the verb for "may use this
+    # as pipeline input", and checking per sample rather than per lab is what
+    # picks up a PUBLIC sample, an owned one, and a per-sample access grant —
+    # paths the lab test could not see at all.
     for sample in sample_rows:
-        if not _user_has_lab_access(user, sample.get("lab_id"), db):
+        if not permits(user, "sample:read_detail", sample_id=sample["id"]):
             return (
                 None,
                 None,
@@ -991,7 +1004,7 @@ def get_pipeline_run(
     run = _fetch_run(run_id, db)
     if not run:
         return error("NOT_FOUND", f"Run {run_id} not found.", status_code=404)
-    if not _user_has_lab_access(user, run.get("lab_id"), db):
+    if not _may_read_run(user, run):
         return error("ACCESS_DENIED", "You do not have access to this run.", status_code=403)
 
     recent_events = execute_query(
@@ -1032,7 +1045,7 @@ def list_pipeline_tasks(
     run = _fetch_run(run_id, db)
     if not run:
         return error("NOT_FOUND", f"Run {run_id} not found.", status_code=404)
-    if not _user_has_lab_access(user, run.get("lab_id"), db):
+    if not _may_read_run(user, run):
         return error("ACCESS_DENIED", "You do not have access to this run.", status_code=403)
 
     base_query = "SELECT * FROM pipeline_tasks WHERE run_id = :rid"
@@ -1068,7 +1081,7 @@ def list_pipeline_events(
     run = _fetch_run(run_id, db)
     if not run:
         return error("NOT_FOUND", f"Run {run_id} not found.", status_code=404)
-    if not _user_has_lab_access(user, run.get("lab_id"), db):
+    if not _may_read_run(user, run):
         return error("ACCESS_DENIED", "You do not have access to this run.", status_code=403)
 
     base_query = "SELECT * FROM pipeline_events WHERE run_id = :rid"
@@ -1106,7 +1119,9 @@ def resume_pipeline(
     previous = _fetch_run(run_id, db)
     if not previous:
         return error("NOT_FOUND", f"Run {run_id} not found.", status_code=404)
-    if not _user_has_lab_access(user, previous.get("lab_id"), db):
+    # Resume launches work, so it takes pipeline:run — the write verb — not
+    # the pipeline:read the status routes above use.
+    if not permits(user, "pipeline:run", project_id=previous.get("project_id")):
         return error("ACCESS_DENIED", "You do not have access to this run.", status_code=403)
 
     if (previous.get("status") or "").upper() != "FAILED":

@@ -22,6 +22,7 @@ from sqlalchemy.pool import StaticPool
 
 from backend import tenancy
 from backend.auth.guards import get_current_user
+from backend.authz import ROOT, scope_uri
 from backend.database import get_db_dep
 from backend.routers import byop
 from backend.routers.byop import Base, router
@@ -215,8 +216,10 @@ def _client_as(app: FastAPI, user: dict) -> TestClient:
     return TestClient(app)
 
 
-def test_byop_mutation_by_non_owner_is_404(byop_app: FastAPI) -> None:
+def test_byop_mutation_by_non_owner_is_404(byop_app: FastAPI, authz_grants) -> None:
     """Failure path (BYOP IDOR): another tenant cannot mutate by id."""
+    authz_grants(OWNER["id"], [])
+    authz_grants(INTRUDER["id"], [])
     created = _client_as(byop_app, OWNER).post("/api/v1/byop/pipelines", json=CREATE_PAYLOAD)
     assert created.status_code == 201
     pid = created.json()["id"]
@@ -230,7 +233,12 @@ def test_byop_mutation_by_non_owner_is_404(byop_app: FastAPI) -> None:
     assert intruder.post(f"/api/v1/byop/pipelines/{pid}/revalidate").status_code == 404
 
 
-def test_byop_owner_and_admin_can_mutate(byop_app: FastAPI) -> None:
+def test_byop_owner_and_admin_can_mutate(byop_app: FastAPI, authz_grants) -> None:
+    """The registrant needs no grant at all — the ownership policy carries them
+    — while the admin is admitted by an instance-scoped grant, not by the
+    is_platform_admin flag, which has been inert since M2-B1."""
+    authz_grants(OWNER["id"], [])
+    authz_grants(ADMIN["id"], [("pipeline:register_custom", ROOT)])
     created = _client_as(byop_app, OWNER).post("/api/v1/byop/pipelines", json=CREATE_PAYLOAD)
     pid = created.json()["id"]
 
@@ -243,32 +251,85 @@ def test_byop_owner_and_admin_can_mutate(byop_app: FastAPI) -> None:
     assert patched.status_code == 200
 
 
-def test_byop_lab_member_can_mutate(byop_app: FastAPI, monkeypatch: pytest.MonkeyPatch) -> None:
-    """A member of the pipeline's owner lab may mutate it (lab scope)."""
-    monkeypatch.setattr(byop, "_user_in_lab", lambda user_id, lab_id: True)
+def test_byop_lab_member_can_mutate(byop_app: FastAPI, authz_grants) -> None:
+    """A pipeline:register_custom holder on the pipeline's owner lab may mutate
+    it. M2-B3 narrows who that is: §8.2 puts the verb in lab_lead, so mere lab
+    membership is no longer enough — the grant is."""
+    lab_scope = scope_uri(org=1, lab=7)
+    authz_grants(OWNER["id"], [("pipeline:register_custom", lab_scope)])
+    authz_grants(INTRUDER["id"], [("pipeline:register_custom", lab_scope)])
     payload = {**CREATE_PAYLOAD, "owner_lab_id": 7}
     created = _client_as(byop_app, OWNER).post("/api/v1/byop/pipelines", json=payload)
     assert created.status_code == 201
     pid = created.json()["id"]
     assert created.json()["owner_lab_id"] == 7
 
-    member = _client_as(byop_app, INTRUDER)  # different user, same lab (patched)
+    member = _client_as(byop_app, INTRUDER)  # different user, holds the lab grant
     patched = member.patch(f"/api/v1/byop/pipelines/{pid}", json={"description": "lab"})
     assert patched.status_code == 200
 
-    monkeypatch.setattr(byop, "_user_in_lab", lambda user_id, lab_id: False)
+    # Revoke it: a lab member without the verb is now a stranger to this row.
+    authz_grants(INTRUDER["id"], [])
     denied = member.patch(f"/api/v1/byop/pipelines/{pid}", json={"description": "no"})
     assert denied.status_code == 404
 
 
-def test_byop_create_into_foreign_lab_is_403(
-    byop_app: FastAPI, monkeypatch: pytest.MonkeyPatch
+def test_byop_private_pipeline_is_governed_by_its_registrant(
+    byop_app: FastAPI, authz_grants
 ) -> None:
-    """Failure path: registering into a lab you're not a member of."""
-    monkeypatch.setattr(byop, "_user_in_lab", lambda user_id, lab_id: False)
+    """owner_lab_id is nullable because sharing_scope admits 'private'. Such a
+    row has no lab scope, so only the registrant policy or an instance grant
+    can reach it — M2-B3's answer to the nullable column."""
+    authz_grants(OWNER["id"], [])
+    authz_grants(INTRUDER["id"], [("pipeline:register_custom", scope_uri(org=1, lab=7))])
+    created = _client_as(byop_app, OWNER).post("/api/v1/byop/pipelines", json=CREATE_PAYLOAD)
+    assert created.status_code == 201
+    assert created.json()["owner_lab_id"] is None
+    pid = created.json()["id"]
+
+    # The registrant, holding nothing, still governs it.
+    assert (
+        _client_as(byop_app, OWNER)
+        .patch(f"/api/v1/byop/pipelines/{pid}", json={"description": "mine"})
+        .status_code
+        == 200
+    )
+    # A lab grant reaches lab-owned pipelines, not this one.
+    assert (
+        _client_as(byop_app, INTRUDER)
+        .patch(f"/api/v1/byop/pipelines/{pid}", json={"description": "no"})
+        .status_code
+        == 404
+    )
+
+
+def test_byop_create_into_foreign_lab_is_403(byop_app: FastAPI, authz_grants) -> None:
+    """Failure path: registering into a lab you hold no register verb at."""
+    authz_grants(OWNER["id"], [("pipeline:register_custom", scope_uri(org=1, lab=7))])
     payload = {**CREATE_PAYLOAD, "owner_lab_id": 9}
     response = _client_as(byop_app, OWNER).post("/api/v1/byop/pipelines", json=payload)
     assert response.status_code == 403
+
+
+def test_byop_create_registrant_rung_does_not_open_a_foreign_lab(
+    byop_app: FastAPI, authz_grants
+) -> None:
+    """Regression: at creation the caller IS the registrant, so routing create
+    through the ownership rung would match every time and make the lab check
+    vacuous — any user could place a pipeline into any lab. Create asks the
+    grant question only."""
+    authz_grants(OWNER["id"], [])
+    for lab in (7, 9):
+        response = _client_as(byop_app, OWNER).post(
+            "/api/v1/byop/pipelines", json={**CREATE_PAYLOAD, "owner_lab_id": lab}
+        )
+        assert response.status_code == 403, (lab, response.text)
+
+    # With no lab named it is a private pipeline and needs no grant.
+    assert (
+        _client_as(byop_app, OWNER).post("/api/v1/byop/pipelines", json=CREATE_PAYLOAD).status_code
+        == 201
+    )
 
 
 def test_byop_list_and_detail_stay_unscoped(byop_app: FastAPI) -> None:

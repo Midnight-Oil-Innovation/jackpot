@@ -215,4 +215,20 @@ LADDER_POLICIES: list[dict[str, Any]] = [
         "scope_ref": _ROOT,
         "resource": {"sharing_level": "DISCOVERABLE"},
     },
+    # A BYOP pipeline's registrant may manage what they registered (M2-B3).
+    # Same shape as sample ownership above and for the same reason: as a grant
+    # it would need a row written per registration and deleted per transfer.
+    #
+    # It also settles what a lab-less pipeline is. `byop_pipelines.owner_lab_id`
+    # is nullable because `sharing_scope` admits 'private' — a pipeline that
+    # belongs to a person, not a lab. Such a row has no lab scope, so the only
+    # thing that can authorize it is this rung or an instance-wide grant, which
+    # is exactly right. The column stays nullable; the policy is what makes
+    # that safe rather than a hole.
+    {
+        "effect": "ALLOW",
+        "capability": "pipeline:register_custom",
+        "scope_ref": _ROOT,
+        "resource": {"registered_by_user_id": PRINCIPAL_ID},
+    },
 ]

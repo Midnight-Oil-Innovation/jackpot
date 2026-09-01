@@ -38,7 +38,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import DateTime, Float, Integer, String, Text
 from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column
 
-from backend.auth.guards import get_current_user, get_user_lab_membership
+from backend.auth.guards import get_current_user, permits
 from backend.database import get_db_dep
 from backend.services.byop_sandbox import (
     OUTCOME_PASSED,
@@ -275,9 +275,37 @@ def _get_or_404(db: Session, pipeline_id: int) -> ByopPipeline:
     return pipeline
 
 
-def _user_in_lab(user_id: int, lab_id: int) -> bool:
-    """Lab-membership lookup, isolated so the SQLite test harness can patch it."""
-    return get_user_lab_membership(user_id, lab_id) is not None
+def _may_manage(current_user: dict, owner_lab_id: int | None, registered_by_user_id) -> bool:
+    """May this caller register or mutate this BYOP pipeline? (M2-B3)
+
+    One call replaces the three-branch ladder that preceded it —
+    platform-admin, registrant, lab member — because all three are now the
+    same question asked of ``permit()``:
+
+    - platform admin  -> ``pipeline:register_custom`` at instance scope, which
+                         contains every lab path by ordinary containment
+    - lab member      -> the same capability at the pipeline's ``owner_lab_id``.
+                         Narrower than before: §8.2 puts the verb in
+                         ``lab_lead``, so a Lab Collaborator no longer mutates
+                         a *lab-owned* pipeline — but see the next rung
+    - the registrant  -> an attribute-policy on ``registered_by_user_id``,
+                         which is what keeps a Bioinformatics User in control
+                         of the pipelines they registered themselves
+
+    ``owner_lab_id`` may be None: ``sharing_scope`` admits 'private', a
+    pipeline belonging to a person rather than a lab. That resolves to the
+    instance root, where only the registrant policy or an instance-wide grant
+    can match — which is the correct reading of a private pipeline, not a gap.
+
+    Isolated as one function so the SQLite router harness has a single seam to
+    patch, the role ``_user_in_lab`` used to play.
+    """
+    return permits(
+        current_user,
+        "pipeline:register_custom",
+        lab_id=owner_lab_id,
+        attributes={"registered_by_user_id": registered_by_user_id},
+    )
 
 
 def _get_or_404_tenancy(db: Session, pipeline_id: int, current_user: dict) -> ByopPipeline:
@@ -290,13 +318,7 @@ def _get_or_404_tenancy(db: Session, pipeline_id: int, current_user: dict) -> By
     tenant must never learn the resource exists.
     """
     pipeline = _get_or_404(db, pipeline_id)
-    if current_user.get("is_platform_admin"):
-        return pipeline
-    if pipeline.registered_by_user_id == str(current_user["id"]):
-        return pipeline
-    if pipeline.owner_lab_id is not None and _user_in_lab(
-        current_user["id"], pipeline.owner_lab_id
-    ):
+    if _may_manage(current_user, pipeline.owner_lab_id, pipeline.registered_by_user_id):
         return pipeline
     raise HTTPException(status_code=404, detail=f"BYOP pipeline {pipeline_id} not found.")
 
@@ -322,15 +344,23 @@ def create_pipeline(
             status_code=422,
             detail=f"source_type must be one of {sorted(SOURCE_TYPES)}.",
         )
-    # P0c tenancy: registering into a lab requires membership in that lab.
-    if (
-        payload.owner_lab_id is not None
-        and not current_user.get("is_platform_admin")
-        and not _user_in_lab(current_user["id"], payload.owner_lab_id)
+    # M2-B3: registering into a lab takes pipeline:register_custom AT that lab.
+    #
+    # Deliberately not _may_manage(): at creation the caller is always the
+    # registrant, so the registrant rung would match every time and the lab
+    # check would be vacuous — anyone could place a pipeline into any lab.
+    # That rung governs a row after it exists; the right to put one into
+    # someone else's lab is a grant question only.
+    #
+    # Registering with no lab (sharing_scope 'private') needs nothing beyond
+    # authentication: the row is the caller's own by construction, and
+    # _may_manage's registrant rung governs it from then on.
+    if payload.owner_lab_id is not None and not permits(
+        current_user, "pipeline:register_custom", lab_id=payload.owner_lab_id
     ):
         raise HTTPException(
             status_code=403,
-            detail=f"Not a member of lab {payload.owner_lab_id}.",
+            detail=f"Not authorized to register a pipeline into lab {payload.owner_lab_id}.",
         )
     manifest = _parse_manifest(payload.manifest_yaml)
     metadata = manifest.get("metadata") or {}
