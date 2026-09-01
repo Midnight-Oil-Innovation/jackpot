@@ -10,6 +10,7 @@ Access model (per spec.md §5 Session H):
 """
 
 import pytest
+from authz_helpers import sync_grants_from_legacy_roles
 
 from backend.config import get_settings
 from backend.database import execute_query, execute_write
@@ -372,6 +373,10 @@ async def test_discoverable_sample_detail_requires_access(client, monkeypatch):
         "VALUES (:sid, :uid, :owner, 'APPROVED')",
         {"sid": s["id"], "uid": uid, "owner": SEED_USER_ID},
     )
+    # Since M2-B2 the route decides on grants and policies, so the approved
+    # request has to become the sample-scoped grant reseed() issues for it —
+    # an APPROVED row is legacy state, not a decision input.
+    sync_grants_from_legacy_roles()
     resp2 = await client.get(f"/api/v1/samples/{s['id']}")
     assert resp2.status_code == 200
 
@@ -396,6 +401,10 @@ async def test_data_analyst_can_access_surveillance_samples(client, monkeypatch)
     email = "adhs_oversight@test.com"
     _cleanup_users([email])
     _make_user(email, is_data_analyst=True)
+    # The is_data_analyst flag authorizes nothing by itself since M2-B1; it
+    # reseeds to a sample:read_surveillance grant, which the surveillance
+    # attribute-policy then reads.
+    sync_grants_from_legacy_roles()
     _switch_user(email, monkeypatch)
 
     resp = await client.get(f"/api/v1/samples/{s['id']}")

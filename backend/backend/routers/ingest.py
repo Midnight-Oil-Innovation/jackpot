@@ -300,6 +300,27 @@ def _insert_sample_files(
     return inserted
 
 
+def _require_sample_create(user: dict, metadata: dict) -> None:
+    """Gate an ingest on ``sample:create`` at the target lab (M2-B2).
+
+    ``samples.lab_id`` is NOT NULL and comes from the caller's own metadata,
+    which until now nothing checked — an authenticated user could ingest into
+    any lab in the deployment. This closes that.
+
+    A missing ``lab_id`` falls through deliberately: ``validate_sample`` and
+    the NOT NULL constraint already reject it, and a 422 naming the missing
+    field is a better answer than a 403 on a scope that was never named.
+    """
+    lab_id = metadata.get("lab_id")
+    if lab_id is None:
+        return
+    try:
+        lab_id = int(lab_id)
+    except (TypeError, ValueError):
+        return  # not a lab id at all — the validator's 422 is the right answer
+    require_capability("sample:create")(user, lab_id=lab_id)
+
+
 def _ingest_one(
     metadata: dict,
     uri_map: dict[str, str],
@@ -487,6 +508,10 @@ async def upload(
     if not sample_id:
         raise HTTPException(status_code=422, detail="metadata.sample_id is required.")
 
+    # Before any byte is staged: an unauthorized ingest should not leave
+    # files in object storage.
+    _require_sample_create(user, meta)
+
     uploads: list[UploadFile] = [fastq_r1]
     if fastq_r2 is not None and fastq_r2.filename:
         uploads.append(fastq_r2)
@@ -636,10 +661,31 @@ def run_csv_ingest(*, csv_text: str, user: dict, db) -> dict:
     failures = 0
     errors: list[dict] = []
     created_ids: list[int] = []
+    # M2-B2: authorize each row's target lab, memoized. A CSV is usually one
+    # lab repeated N times, and the guard costs two queries (principal + lab
+    # scope) — without this a 1000-row upload adds 2000 of them. Denials are
+    # cached as well as approvals: an upload aimed entirely at a lab the
+    # caller cannot write to is the case most likely to be adversarial, and
+    # a success-only memo would re-run the guard on every one of its rows.
+    lab_decisions: dict[object, HTTPException | None] = {}
 
     for idx, raw_row in enumerate(reader, start=1):
         try:
             metadata = _coerce_csv_row(raw_row)
+            # Per row, not per file: a CSV may span labs, and a row the
+            # caller may not write to fails as that row's error while the
+            # rest of the upload proceeds — the same shape every other
+            # per-row validation failure has.
+            row_lab = metadata.get("lab_id")
+            if row_lab not in lab_decisions:
+                try:
+                    _require_sample_create(user, metadata)
+                    lab_decisions[row_lab] = None
+                except HTTPException as denial:
+                    lab_decisions[row_lab] = denial
+            cached_denial = lab_decisions[row_lab]
+            if cached_denial is not None:
+                raise cached_denial
             filenames = _split_files_column(metadata.pop("files", "") or "")
             if not filenames:
                 raise HTTPException(status_code=422, detail="Row missing 'files' column.")
@@ -914,6 +960,7 @@ async def register_paths(
     """
     user = get_current_user(request)
 
+    _require_sample_create(user, payload.sample_metadata)
     resolved_intents = _validate_register_payload(payload)
     record, validation = _build_sample_record(payload, user, db)
 

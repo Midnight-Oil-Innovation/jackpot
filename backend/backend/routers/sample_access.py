@@ -25,7 +25,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, Field
 
 from backend.audit import AuditActions, log_audit
-from backend.auth.guards import get_current_user, get_user_lab_membership
+from backend.auth.guards import get_current_user, permits
 from backend.database import execute_query, execute_write, get_db_dep
 from backend.notifications import NotificationEvents, create_notification
 from backend.pagination import paginate
@@ -41,7 +41,6 @@ AUTO_APPROVE_WINDOW = timedelta(days=7)
 # Sharing levels eligible for the request workflow. PRIVATE / LAB samples
 # require talking to the Lab Director directly — there is no self-serve
 # request path for them.
-REQUESTABLE_SHARING_LEVELS = {"DISCOVERABLE"}
 
 
 # ── Pydantic bodies ───────────────────────────────────────────────────────────
@@ -103,11 +102,16 @@ def _fetch_lab_directors(lab_id: int, db) -> list[dict]:
     )
 
 
-def _is_lab_director_or_admin(user: dict, lab_id: int, db) -> bool:
-    if user.get("is_platform_admin"):
-        return True
-    member = get_user_lab_membership(user["id"], lab_id)
-    return bool(member and member.get("is_lab_director"))
+def _may_review(user: dict, sample_id: int) -> bool:
+    """True iff the caller may approve or deny requests against this sample.
+
+    M2-B2: ``access:approve_request`` at the sample's scope. The capability
+    sits in the ``lab_lead`` and ``instance_administrator`` presets and
+    nowhere else, so it admits exactly the two roles the director-or-admin
+    branch did — but by scope containment, which means an org-scoped grant
+    reaches it too and a director of a *different* lab does not.
+    """
+    return permits(user, "access:approve_request", sample_id=sample_id)
 
 
 # ── POST /requests ────────────────────────────────────────────────────────────
@@ -125,7 +129,13 @@ def create_access_request(
     if not sample:
         return error("NOT_FOUND", f"Sample {payload.sample_id} not found.", status_code=404)
 
-    if sample["sharing_level"] not in REQUESTABLE_SHARING_LEVELS:
+    # M2-B2: access:request at Sample scope. The rule is carried by an
+    # attribute-policy rather than a grant because the requester is by
+    # definition not a member of the sample's lab — no preset could hold it
+    # at a scope containing this sample. That policy's sharing_level ==
+    # DISCOVERABLE predicate is now the only definition of "requestable";
+    # the REQUESTABLE_SHARING_LEVELS set this branch used to test is gone.
+    if not permits(user, "access:request", sample_id=sample["id"]):
         return error(
             "ACCESS_DENIED",
             (
@@ -360,7 +370,7 @@ def approve_access_request(
     if not sample:
         return error("NOT_FOUND", "Underlying sample no longer exists.", status_code=404)
 
-    if not _is_lab_director_or_admin(user, sample["lab_id"], db):
+    if not _may_review(user, sample["id"]):
         return error(
             "ACCESS_DENIED",
             "Lab Director or Platform Admin required to approve access requests.",
@@ -466,7 +476,7 @@ def deny_access_request(
     if not sample:
         return error("NOT_FOUND", "Underlying sample no longer exists.", status_code=404)
 
-    if not _is_lab_director_or_admin(user, sample["lab_id"], db):
+    if not _may_review(user, sample["id"]):
         return error(
             "ACCESS_DENIED",
             "Lab Director or Platform Admin required to deny access requests.",

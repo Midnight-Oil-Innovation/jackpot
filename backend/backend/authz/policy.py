@@ -200,4 +200,19 @@ LADDER_POLICIES: list[dict[str, Any]] = [
         "scope_ref": _ROOT,
         "resource": {"owner_id": PRINCIPAL_ID},
     },
+    # Asking for access to a DISCOVERABLE sample. This one cannot be a grant
+    # and cannot come from a preset: the requester is, by definition, not a
+    # member of the sample's lab — that is why they are asking — so a
+    # lab-scoped grant would never contain the sample's scope, and an
+    # instance-scoped one issued to everybody is the same thing as no check.
+    # The rule is a fact about the row ("this sample invites requests"), which
+    # is what an attribute-policy is for. Mirrors the sharing_level test the
+    # route performed in-line before M2-B2, and is now the only definition of
+    # "requestable" — the router's REQUESTABLE_SHARING_LEVELS set is gone.
+    {
+        "effect": "ALLOW",
+        "capability": "access:request",
+        "scope_ref": _ROOT,
+        "resource": {"sharing_level": "DISCOVERABLE"},
+    },
 ]

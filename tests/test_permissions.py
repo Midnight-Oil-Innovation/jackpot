@@ -20,7 +20,7 @@ import pytest
 from fastapi import HTTPException
 
 from backend.auth.guards import require_capability
-from backend.authz import CapabilityGrant, Principal, PrincipalKind, scope_uri
+from backend.authz import CapabilityGrant, Principal, PrincipalKind, Resource, scope_uri
 
 LAB_SCOPE = scope_uri(org=1, lab=5)
 
@@ -45,17 +45,32 @@ def principal_with(*grants: tuple[str, str], uid=1) -> Principal:
     )
 
 
-def guard(capability, user, *, grants=(), lab_id=None, sample_id=None, lab_org=1):
-    """Run the guard with a stubbed principal and resource lookups."""
+def guard(capability, user, *, grants=(), lab_id=None, sample_id=None, lab_org=1, attributes=None):
+    """Run the guard with a stubbed principal and resource lookups.
+
+    ``attributes`` stands in for the sample row the real
+    ``sample_resource`` reads. Default empty, so a test that says nothing
+    about the row gets a decision from grants alone — which is what every
+    pre-M2-B2 test in this file assumes.
+    """
     with (
-        patch("backend.auth.guards.load_principal", return_value=principal_with(*grants)),
+        patch(
+            "backend.auth.guards.load_principal",
+            # The principal carries the caller's own id — the ownership policy
+            # compares the row against it, so a fixed id would make every
+            # ownership test vacuous.
+            return_value=principal_with(*grants, uid=user["id"]),
+        ),
         patch(
             "backend.auth.guards.lab_resource_scope",
             side_effect=lambda lid: scope_uri(org=lab_org, lab=lid),
         ),
         patch(
-            "backend.auth.guards.sample_resource_scope",
-            side_effect=lambda sid: scope_uri(org=lab_org, lab=5, project=2, sample=sid),
+            "backend.auth.guards.sample_resource",
+            side_effect=lambda sid: Resource(
+                scope=scope_uri(org=lab_org, lab=5, project=2, sample=sid),
+                attributes=dict(attributes or {}),
+            ),
         ),
     ):
         return require_capability(capability)(user, lab_id=lab_id, sample_id=sample_id)
@@ -186,3 +201,114 @@ class TestSampleScope:
     def test_both_identifiers_is_a_programming_error(self):
         with pytest.raises(ValueError, match="not both"):
             guard("sample:read_detail", make_user(), lab_id=5, sample_id=42)
+
+
+class TestAttributeRungs:
+    """M2-B2: the permissive rungs of the legacy ladder, now attribute-policies.
+
+    Each of these is a path no grant expresses — the caller holds nothing at
+    the sample's scope, and is authorized (or not) purely by what the row is.
+    """
+
+    def test_public_sample_is_detail_readable_by_a_stranger(self):
+        user = make_user(uid=7)
+        assert (
+            guard(
+                "sample:read_detail",
+                user,
+                sample_id=42,
+                attributes={"sharing_level": "PUBLIC"},
+            )
+            is user
+        )
+
+    def test_private_sample_is_not(self):
+        with pytest.raises(HTTPException) as exc:
+            guard(
+                "sample:read_detail",
+                make_user(uid=7),
+                sample_id=42,
+                attributes={"sharing_level": "PRIVATE"},
+            )
+        assert exc.value.status_code == 403
+
+    def test_discoverable_is_list_visible_but_not_detail_readable(self):
+        """can_access_sample's rule: DISCOVERABLE alone is NOT sufficient."""
+        attrs = {"sharing_level": "DISCOVERABLE"}
+        assert guard("sample:read", make_user(uid=7), sample_id=42, attributes=attrs)
+        with pytest.raises(HTTPException):
+            guard("sample:read_detail", make_user(uid=7), sample_id=42, attributes=attrs)
+
+    def test_owner_reads_their_own_sample_without_any_grant(self):
+        user = make_user(uid=7)
+        assert guard("sample:read_detail", user, sample_id=42, attributes={"owner_id": 7}) is user
+
+    def test_a_different_owner_does_not(self):
+        with pytest.raises(HTTPException):
+            guard(
+                "sample:read_detail",
+                make_user(uid=7),
+                sample_id=42,
+                attributes={"owner_id": 8},
+            )
+
+    def test_surveillance_row_needs_the_capability_as_well(self):
+        attrs = {"surveillance_relevant": True}
+        with pytest.raises(HTTPException):
+            guard("sample:read_detail", make_user(uid=7), sample_id=42, attributes=attrs)
+        assert guard(
+            "sample:read_detail",
+            make_user(uid=7),
+            sample_id=42,
+            attributes=attrs,
+            grants=[("sample:read_surveillance", scope_uri())],
+        )
+
+    def test_surveillance_capability_does_not_reach_a_non_surveillance_row(self):
+        with pytest.raises(HTTPException):
+            guard(
+                "sample:read_detail",
+                make_user(uid=7),
+                sample_id=42,
+                attributes={"surveillance_relevant": False},
+                grants=[("sample:read_surveillance", scope_uri())],
+            )
+
+    def test_discoverable_sample_may_be_requested_by_a_stranger(self):
+        """access:request appears in no preset — a policy is the only path."""
+        user = make_user(uid=7)
+        assert (
+            guard(
+                "access:request",
+                user,
+                sample_id=42,
+                attributes={"sharing_level": "DISCOVERABLE"},
+            )
+            is user
+        )
+
+    def test_private_sample_may_not_be_requested(self):
+        with pytest.raises(HTTPException) as exc:
+            guard(
+                "access:request",
+                make_user(uid=7),
+                sample_id=42,
+                attributes={"sharing_level": "PRIVATE"},
+            )
+        assert exc.value.status_code == 403
+
+    def test_attributes_do_not_widen_a_write(self):
+        """The permissive rungs are read-plane only. PUBLIC is not writable."""
+        for capability in ("sample:update", "sample:archive"):
+            with pytest.raises(HTTPException):
+                guard(
+                    capability,
+                    make_user(uid=7),
+                    sample_id=42,
+                    attributes={"sharing_level": "PUBLIC", "owner_id": 7},
+                )
+
+    def test_policies_cannot_fire_on_a_lab_scoped_check(self):
+        """A lab resource carries no attributes, so no policy can match it."""
+        with pytest.raises(HTTPException):
+            guard("sample:read_detail", make_user(uid=7), lab_id=5)

@@ -24,7 +24,7 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
 from backend.audit import AuditActions, log_audit
-from backend.auth.guards import get_current_user, get_user_lab_membership
+from backend.auth.guards import get_current_user, permits
 from backend.database import execute_query, get_db_dep
 from backend.pagination import paginate
 from backend.permissions import visibility_sql_clause
@@ -71,64 +71,67 @@ def _serialise(row: dict) -> dict:
     return out
 
 
-def _load_file_row_for_user(file_id: int, user: dict, db) -> dict | None:
-    """Fetch a sample_files row scoped to the caller's visibility.
+_FILE_ROW_SQL = """
+    SELECT sf.id, sf.uri, sf.alternate_uris, sf.original_uri,
+           sf.filename, sf.file_type, sf.file_size_bytes,
+           sf.head64k_hash, sf.tail64k_hash, sf.content_hash,
+           sf.storage_state, sf.library_layout, sf.read_direction,
+           sf.first_seen_at, sf.last_verified_at,
+           sf.last_verification_status, sf.retention_policy,
+           sf.staged_for_run_id, sf.ingest_method,
+           sf.sample_id_fk, s.lab_id, s.project_id
+      FROM sample_files sf
+      JOIN samples s ON s.id = sf.sample_id_fk
+     WHERE sf.id = :id
+       AND COALESCE(sf.is_archived, FALSE) = FALSE
+       AND COALESCE(s.is_archived, FALSE) = FALSE
+     LIMIT 1
+"""
 
-    The visibility ladder is the same one ``visibility_sql_clause``
-    enforces for the samples list — owner / lab / project membership /
-    approved access request / active grant / PUBLIC / DISCOVERABLE.
-    Returns the row when visible, ``None`` otherwise. The caller maps
-    ``None`` to ``FILE_NOT_FOUND`` (404) without distinguishing
-    "doesn't exist" from "not visible to you", so the row presence
-    isn't leaked across access boundaries.
+
+def _load_file_row_for_user(file_id: int, user: dict, db, capability: str) -> dict | None:
+    """Fetch a ``sample_files`` row the caller holds ``capability`` on.
+
+    M2-B2: a file has no scope of its own — it is authorized at the scope of
+    the sample referencing it, which is what ``sample_id_fk`` names. The row
+    is loaded unfiltered and the decision made against that sample.
+
+    Returns the row when permitted, ``None`` otherwise. Every caller maps
+    ``None`` to ``FILE_NOT_FOUND`` (404) without distinguishing "doesn't
+    exist" from "not yours", so a denial is swallowed here rather than
+    allowed to surface as the guard's 403 — the collapse is the point, and a
+    403 would re-leak the existence this function exists to hide.
     """
-    vis_clause, vis_params = visibility_sql_clause(user)
-    params: dict = {"id": file_id}
-    params.update(vis_params)
-    rows = execute_query(
-        f"""
-        SELECT sf.id, sf.uri, sf.alternate_uris, sf.original_uri,
-               sf.filename, sf.file_type, sf.file_size_bytes,
-               sf.head64k_hash, sf.tail64k_hash, sf.content_hash,
-               sf.storage_state, sf.library_layout, sf.read_direction,
-               sf.first_seen_at, sf.last_verified_at,
-               sf.last_verification_status, sf.retention_policy,
-               sf.staged_for_run_id, sf.ingest_method,
-               sf.sample_id_fk, s.lab_id, s.project_id
-          FROM sample_files sf
-          JOIN samples s ON s.id = sf.sample_id_fk
-         WHERE sf.id = :id
-           AND COALESCE(sf.is_archived, FALSE) = FALSE
-           AND COALESCE(s.is_archived, FALSE) = FALSE
-           AND {vis_clause}
-         LIMIT 1
-        """,
-        params,
-        conn=db,
-    )
-    return rows[0] if rows else None
+    rows = execute_query(_FILE_ROW_SQL, {"id": file_id}, conn=db)
+    if not rows:
+        return None
+    if not permits(user, capability, sample_id=rows[0]["sample_id_fk"]):
+        return None
+    return rows[0]
 
 
-def _samples_for_file(file_id: int, user: dict, db) -> list[dict]:
-    """Return the list of (visible) samples that reference ``file_id``.
+def _samples_for_file(file_id: int, db) -> list[dict]:
+    """Return the samples referencing ``file_id``.
 
-    Currently sample_files has a single ``sample_id_fk``, so the list
-    is at most one row. Returned as a list to keep the response shape
+    Currently ``sample_files`` has a single ``sample_id_fk``, so the list is
+    at most one row. Returned as a list to keep the response shape
     forward-compatible when the dedup model evolves into a join table.
+
+    No visibility filter: the only caller has already been authorized against
+    this exact sample by ``_load_file_row_for_user``, so re-filtering here
+    would either be a no-op or — once the join table lands — silently drop
+    rows the caller is entitled to see. When that day comes this becomes a
+    per-row permit(), not a second copy of the ladder.
     """
-    vis_clause, vis_params = visibility_sql_clause(user)
-    params: dict = {"id": file_id}
-    params.update(vis_params)
     rows = execute_query(
-        f"""
+        """
         SELECT s.id, s.sample_id, s.project_id, s.lab_id
           FROM samples s
           JOIN sample_files sf ON sf.sample_id_fk = s.id
          WHERE sf.id = :id
            AND COALESCE(s.is_archived, FALSE) = FALSE
-           AND {vis_clause}
         """,
-        params,
+        {"id": file_id},
         conn=db,
     )
     return [_serialise(r) for r in rows]
@@ -322,10 +325,10 @@ def get_file(
 ):
     """Retrieve a single ``sample_files`` row plus the referencing samples."""
     user = get_current_user(request)
-    file_row = _load_file_row_for_user(file_id, user, db)
+    file_row = _load_file_row_for_user(file_id, user, db, "sample:read_detail")
     if not file_row:
         return error("FILE_NOT_FOUND", f"File {file_id} not found.", status_code=404)
-    samples = _samples_for_file(file_id, user, db)
+    samples = _samples_for_file(file_id, db)
     payload = _serialise(file_row)
     payload["samples"] = samples
     return success(data=payload)
@@ -396,26 +399,6 @@ def _validate_promote_request(payload: _PromoteRequest) -> tuple[str, str, JSONR
             ),
         )
     return target, retention, None
-
-
-def _authorize_promote(file_id: int, user: dict, db) -> tuple[dict | None, JSONResponse | None]:
-    """Load the file (visibility-scoped) and enforce write authority. Returns (file_row, err)."""
-    file_row = _load_file_row_for_user(file_id, user, db)
-    if not file_row:
-        return None, error("FILE_NOT_FOUND", f"File {file_id} not found.", status_code=404)
-
-    # Promotion triggers an expensive storage copy; gate it behind write
-    # authority (Lab Director of the file's lab, or Platform Admin) rather
-    # than mere read-visibility, matching sample archival in routers/samples.py.
-    if not user.get("is_platform_admin"):
-        member = get_user_lab_membership(user["id"], file_row["lab_id"])
-        if not member or not member.get("is_lab_director"):
-            return None, error(
-                "ACCESS_DENIED",
-                "Lab Director or Platform Admin required to promote files.",
-                status_code=403,
-            )
-    return file_row, None
 
 
 def _validate_promote_transition(file_id: int, current: str, target: str) -> JSONResponse | None:
@@ -497,10 +480,17 @@ def promote_file(
     if err:
         return err
 
-    file_row, err = _authorize_promote(file_id, user, db)
-    if err:
-        return err
-    assert file_row is not None  # narrowed by `if err: return err` above
+    # Promotion triggers an expensive storage copy, so it is gated on write
+    # authority rather than mere read-visibility. M2-B2 makes that one check
+    # instead of two: sample:update at the referencing sample's scope, per the
+    # endpoint-capability map. Note this is a widening the map asks for — the
+    # legacy branch required a Lab *Director*, whereas sample:update is also
+    # held by lab_member_rw. The map's column is authoritative and promote is
+    # an ordinary write on a file the collaborator may already replace; if the
+    # narrower rule was intended it needs a verb, not a re-added branch.
+    file_row = _load_file_row_for_user(file_id, user, db, "sample:update")
+    if not file_row:
+        return error("FILE_NOT_FOUND", f"File {file_id} not found.", status_code=404)
 
     current = file_row["storage_state"]
     err = _validate_promote_transition(file_id, current, target)
@@ -591,7 +581,7 @@ def get_promote_job(
     # could read another user's job metadata. Collapse "not visible" into
     # the same 404 as "unknown job" so existence isn't leaked.
     file_id = entry.get("file_id")
-    if file_id is None or _load_file_row_for_user(file_id, user, db) is None:
+    if file_id is None or _load_file_row_for_user(file_id, user, db, "sample:read") is None:
         return error("JOB_NOT_FOUND", f"Job {job_id} not found.", status_code=404)
     out = {"job_id": job_id, **entry}
     return success(data=out)
@@ -612,11 +602,13 @@ def verify_file_endpoint(
     user can clear a stale ``BROKEN`` state immediately after putting
     the file back, instead of waiting for the daily verification job.
 
-    Visibility scoping matches :func:`get_file`: the caller must be
-    able to see at least one sample referencing this file.
+    Gated on ``sample:update`` at the referencing sample's scope — a write
+    verb, not :func:`get_file`'s ``sample:read_detail``: verify re-stats the
+    file and can clear a stale ``BROKEN`` state, which is a change to what
+    the platform believes about the row.
     """
     user = get_current_user(request)
-    file_row = _load_file_row_for_user(file_id, user, db)
+    file_row = _load_file_row_for_user(file_id, user, db, "sample:update")
     if not file_row:
         return error("FILE_NOT_FOUND", f"File {file_id} not found.", status_code=404)
     from backend.jobs import verify_sample_file
