@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, Field
 
 from backend.audit import AuditActions, log_audit
-from backend.auth.guards import get_current_user, require_capability
+from backend.auth.guards import get_current_user, permits, require_capability
 from backend.database import execute_query, execute_write, get_db_dep
 from backend.pagination import paginate
 from backend.responses import error, success, success_list, success_message
@@ -110,7 +110,10 @@ def get_user(
     db=Depends(get_db_dep),  # noqa: B008
 ):
     current = get_current_user(request)
-    if not current.get("is_platform_admin") and current["id"] != user_id:
+    # M2-B5: self, or user:manage. Self is not a capability — §3.1's scope
+    # tree has no user level, so "you are yourself" cannot be expressed as a
+    # grant and stays an identity comparison (§4.7).
+    if current["id"] != user_id and not permits(current, "user:manage"):
         return error(
             "ACCESS_DENIED",
             "You do not have access to this user record.",
@@ -135,7 +138,7 @@ def update_user(
     db=Depends(get_db_dep),  # noqa: B008
 ):
     current = get_current_user(request)
-    is_admin = bool(current.get("is_platform_admin"))
+    is_admin = permits(current, "user:manage")
     is_self = current["id"] == user_id
     if not is_admin and not is_self:
         return error(

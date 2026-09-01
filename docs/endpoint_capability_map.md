@@ -53,7 +53,7 @@ All catalog gaps were resolved in the M2 pre-cutover review (see
 | DELETE | `/api/v1/domain-whitelist/{domain_id}` | `whitelist:manage` | Instance | `require_capability("whitelist:manage")` |
 | GET | `/api/v1/federation/instances` | `federation:configure_peer` | Instance | `require_capability("federation:configure_peer")` |
 | POST | `/api/v1/federation/instances` | `federation:configure_peer` OR `org:manage` | Instance | `require_capability("federation:configure_peer")` (§10.3 example) |
-| POST | `/api/v1/federation/search` | `sample:read` | Instance | auth-only today; L1 federated query fan-out (§7.4) |
+| POST | `/api/v1/federation/search` | `sample:read` | Instance | **Still auth-only after M2-B5, and this row is the thing that needs deciding.** It assigns `sample:read` at Instance scope, which nobody holds — every preset issues that verb at lab scope, and giving an Instance Administrator blanket `sample:read` would contradict §8.2 head-on (the Surveillance Officer preset exists precisely to narrow instance-wide sample reading to `surveillance_relevant` rows). Enforcing the row as written makes a working route reachable by nobody. The act is "query our peers on this deployment's behalf", not "read a sample here", and results return filtered by the peer's own policy — the right verb belongs with §7's federation work (M4) |
 | POST | `/api/v1/federation/push` | `federation:push` | Lab | peer-key auth (`authenticate_federation_peer`); §6.2-3 `sovereignty.no_federate_deleting` DENY applies on the sender |
 | POST | `/api/v1/federation/access-requests` | `access:approve_request` | Sample | peer-key auth + anti-spoofing body cross-check (403 on mismatch, §7.6-Q2); brokers into `sample_access` workflow (L3) |
 | GET | `/api/v1/files/broken` | `sample:read` | Lab | `sample_list_clause` (M2-B7) — a broken file lists exactly when its sample lists |
@@ -79,17 +79,17 @@ All catalog gaps were resolved in the M2 pre-cutover review (see
 | POST | `/api/v1/ingest/register` | `sample:create` | Lab | `require_capability("sample:create", lab_id=…)` (M2-B2). Closes a real gap: `lab_id` came from the request body and nothing checked it (BYOP no-copy registration, Rule 57) |
 | POST | `/api/v1/ingest/globus` | `deposit:record` | Instance | `require_capability("deposit:record")` — records a deposit and notifies directors; creates no samples, so it is not `sample:create` (corrected in M2-B1). A SERVICE principal is the better long-term fit if the facility calls it directly (cf. M2-B6) |
 | POST | `/api/v1/labs/` | `org:manage` | Instance | `require_capability("org:manage")` |
-| GET | `/api/v1/labs/` | `lab:read` | Org | auth-only today; lab directory read |
-| GET | `/api/v1/labs/{lab_id}` | `lab:read` | Lab | auth-only today |
+| GET | `/api/v1/labs/` | `lab:read` | Org | `lab_list_clause("lab:read")` (M2-B5) — replaces a platform-admin bypass and a JOIN through `lab_membership`, which could not see an org-scoped grant |
+| GET | `/api/v1/labs/{lab_id}` | `lab:read` | Lab | `permits("lab:read", lab_id=…)` (M2-B5) |
 | PATCH | `/api/v1/labs/{lab_id}` | `org:manage` | Lab | `require_capability("org:manage")` at lab scope |
 | DELETE | `/api/v1/labs/{lab_id}` | `org:manage` | Instance | `require_capability("org:manage")` |
 | GET | `/api/v1/labs/{lab_id}/members` | `user:manage` | Lab | `require_capability("user:manage")` |
-| POST | `/api/v1/labs/{lab_id}/members` | `user:manage` | Lab | `require_capability("user:manage")` |
-| PATCH | `/api/v1/labs/{lab_id}/members/{user_id}` | `user:manage` | Lab | `require_capability("user:manage")` |
-| DELETE | `/api/v1/labs/{lab_id}/members/{user_id}` | `user:manage` | Lab | `require_capability("user:manage")` |
+| POST | `/api/v1/labs/{lab_id}/members` | `user:manage` | Lab | `require_capability("user:manage")`, and **M2-B5 makes it issue the member's grants**. A `lab_membership` row stopped being a decision input at M2-B1, so without this a member added after cutover holds nothing until a reseed runs. §4.5 already scopes `user:manage` as "create/modify/deactivate users, **assign capabilities**" |
+| PATCH | `/api/v1/labs/{lab_id}/members/{user_id}` | `user:manage` | Lab | `require_capability("user:manage")`; re-issues the grants for the new role (M2-B5) |
+| DELETE | `/api/v1/labs/{lab_id}/members/{user_id}` | `user:manage` | Lab | `require_capability("user:manage")`; revokes the membership's grants (M2-B5). Scoped by `source='reseed'`, so a per-sample access grant survives |
 | POST | `/api/v1/organizations/` | `org:manage` | Instance | `require_capability("org:manage")` |
 | GET | `/api/v1/organizations/` | `org:manage` | Instance | `require_capability("org:manage")` |
-| GET | `/api/v1/organizations/{org_id}` | `org:read` | Org | auth-only today |
+| GET | `/api/v1/organizations/{org_id}` | `org:read` | Org | `permits("org:read")` OR the caller's own `organization_id` (M2-B5). The second rung is deliberately still a membership test: every preset issues `org:read` at LAB scope and containment runs downward, so checking it at org scope would deny every ordinary member their own organization. Making it structural needs org-scoped grants at reseed — a change to what memberships convey, not a route rewrite |
 | PATCH | `/api/v1/organizations/{org_id}` | `org:manage` | Instance | `require_capability("org:manage")` |
 | DELETE | `/api/v1/organizations/{org_id}` | `org:manage` | Instance | `require_capability("org:manage")` |
 | GET | `/api/v1/pipelines/` | `pipeline:read` | Project | `project_list_clause("pipeline:read")` OR launched-by (M2-B7) — same verb and scope the per-run status routes check, so the list cannot show a run those routes would refuse |
@@ -104,11 +104,11 @@ All catalog gaps were resolved in the M2 pre-cutover review (see
 | POST | `/api/v1/pipelines/{run_id}/results/{result_type}` | `pipeline:write_results` | Project | SERVICE-authenticated: same per-run token check, `INVALID_TOKEN` 401. **M2-B6** adds the `permit()` call; the query now selects `project_id` because that is what the SERVICE principal is scoped to |
 | POST | `/api/v1/profiles/` | — | Instance | AUTH-ONLY BY DESIGN — creates the caller's own USER profile (not an execution profile) |
 | GET | `/api/v1/profiles/me` | — | Instance | AUTH-ONLY BY DESIGN — caller's own USER profile |
-| GET | `/api/v1/profiles/{user_id}` | `user:manage` | Org | auth-only today; self OR user:manage at M2 |
-| PUT | `/api/v1/profiles/{user_id}` | `user:manage` | Org | auth-only today; self OR user:manage at M2 |
+| GET | `/api/v1/profiles/{user_id}` | `user:manage` | Org | self, OR `permits("user:manage")` (M2-B5). Self is not a capability — §3.1's scope tree has no user level (§4.7) |
+| PUT | `/api/v1/profiles/{user_id}` | `user:manage` | Org | self, OR `permits("user:manage")` (M2-B5) |
 | POST | `/api/v1/projects/` | `org:manage` | Lab | `require_capability("org:manage")` at lab scope (§4.5: org:manage covers projects) |
-| GET | `/api/v1/projects/` | `sample:read` | Lab | auth-only today; membership-filtered list |
-| GET | `/api/v1/projects/{project_id}` | `sample:read` | Project | auth-only today |
+| GET | `/api/v1/projects/` | `sample:read` | Lab | `project_list_clause("sample:read")` (M2-B5). A lab-scoped grant covers that lab's projects by containment; the `project_membership` rung is NOT preserved — the registered `project_only_membership` divergence reaching one more route |
+| GET | `/api/v1/projects/{project_id}` | `sample:read` | Project | `permits("sample:read", project_id=…)` (M2-B5) |
 | PATCH | `/api/v1/projects/{project_id}` | `org:manage` | Lab | `require_capability("org:manage")` at lab scope |
 | POST | `/api/v1/sample-access/requests` | `access:request` | Sample | `require_capability("access:request", sample_id=…)` (M2-B2). Carried by an ALLOW **policy** on DISCOVERABLE, not a grant: the requester is by definition not a member of the sample's lab, so no preset could hold it at a covering scope |
 | GET | `/api/v1/sample-access/requests` | `sample:read` | Lab | `sample_list_clause("access:approve_request")` OR requester (M2-B7). Replaces the platform-admin bypass and the `is_lab_director` subquery; a director whose grant sits at org scope now sees their org's requests, which `lab_id IN (…)` could not express |
@@ -146,13 +146,13 @@ All catalog gaps were resolved in the M2 pre-cutover review (see
 | GET | `/api/v1/templates/` | — | Instance | PUBLIC (intentional — Rule 42, templates are public) |
 | GET | `/api/v1/templates/enums` | — | Instance | PUBLIC (intentional — Rule 42) |
 | GET | `/api/v1/templates/source-types` | — | Instance | PUBLIC (intentional — Rule 42) |
-| GET | `/api/v1/tokens/` | `token:manage` | Instance | self path AUTH-ONLY BY DESIGN (caller's own tokens); `token:manage` required only to list another user's |
+| GET | `/api/v1/tokens/` | `token:manage` | Instance | self path AUTH-ONLY BY DESIGN (§4.7); listing another principal's tokens takes `token:manage` (M2-B5) |
 | POST | `/api/v1/tokens/` | — | Instance | AUTH-ONLY BY DESIGN — mints a token for the caller only; no other principal reachable |
-| DELETE | `/api/v1/tokens/{token_id}` | `token:manage` | Instance | self path AUTH-ONLY BY DESIGN (owner revokes own); `token:manage` required only to revoke another user's |
+| DELETE | `/api/v1/tokens/{token_id}` | `token:manage` | Instance | self path AUTH-ONLY BY DESIGN (§4.7) — the owner revokes their own; `permits("token:manage")` gates only the cross-principal half (M2-B5). Gating the whole route would take every user's control of their own credentials |
 | GET | `/api/v1/users/me` | — | Instance | AUTH-ONLY BY DESIGN — caller's own user record + memberships |
 | GET | `/api/v1/users/` | `user:manage` | Instance | `require_capability("user:manage")` |
-| GET | `/api/v1/users/{user_id}` | `user:manage` | Org | auth-only today; self OR user:manage at M2 |
-| PATCH | `/api/v1/users/{user_id}` | `user:manage` | Org | auth-only today; self OR user:manage in-route |
+| GET | `/api/v1/users/{user_id}` | `user:manage` | Org | self, OR `permits("user:manage")` (M2-B5) |
+| PATCH | `/api/v1/users/{user_id}` | `user:manage` | Org | self, OR `permits("user:manage")` (M2-B5) — the admin-only field set is gated on the capability, not the flag |
 | DELETE | `/api/v1/users/{user_id}` | `user:manage` | Instance | `require_capability("user:manage")` |
 | GET | `/api/v1/wastewater/sites` | `sample:read_surveillance` | Org | `sample_list_clause` (M2-B7) |
 | GET | `/api/v1/wastewater/lineage-abundance` | `sample:read_surveillance` | Org | `sample_list_clause` (M2-B7) |

@@ -33,6 +33,21 @@ USER_B = {"id": USER_B_ID, "email": "b@example.org", "is_platform_admin": False}
 ADMIN = {"id": ADMIN_ID, "email": "admin@example.org", "is_platform_admin": True}
 
 
+@pytest.fixture(autouse=True)
+def _profile_authz(authz_grants):
+    """M2-B5: reaching another principal's profile takes user:manage.
+
+    The is_platform_admin flag has authorized nothing since M2-B1, so the
+    admin persona needs the grant. The two ordinary users get none — self
+    access is an identity comparison, not a capability (§4.7).
+    """
+    from backend.authz import ROOT
+
+    authz_grants(ADMIN_ID, [("user:manage", ROOT)])
+    authz_grants(USER_A_ID, [])
+    authz_grants(USER_B_ID, [])
+
+
 @pytest.fixture
 def app() -> Iterator[FastAPI]:
     engine = create_engine(
@@ -82,7 +97,7 @@ def _seed(
     return response.json()
 
 
-def test_create_profile_success(app: FastAPI) -> None:
+def test_create_profile_success(app: FastAPI, authz_grants) -> None:
     client = _as(app, USER_A)
     response = client.post(
         "/api/v1/profiles/",
@@ -96,14 +111,14 @@ def test_create_profile_success(app: FastAPI) -> None:
     assert body["user_id"] == str(USER_A_ID)
 
 
-def test_create_profile_duplicate(app: FastAPI) -> None:
+def test_create_profile_duplicate(app: FastAPI, authz_grants) -> None:
     _seed(app, USER_A)
     response = _as(app, USER_A).post("/api/v1/profiles/", json={"display_name": "Alice Again"})
     assert response.status_code == 409
     assert "already exists" in response.json()["detail"].lower()
 
 
-def test_create_profile_concurrent_race_returns_409_not_500(app: FastAPI) -> None:
+def test_create_profile_concurrent_race_returns_409_not_500(app: FastAPI, authz_grants) -> None:
     """Two overlapping requests can both pass the existence check before
     either commits. Reproduce that interleaving directly with two
     sessions bound to the same in-memory engine, bypassing the
@@ -131,7 +146,7 @@ def test_create_profile_concurrent_race_returns_409_not_500(app: FastAPI) -> Non
         gen.close()
 
 
-def test_read_own_profile(app: FastAPI) -> None:
+def test_read_own_profile(app: FastAPI, authz_grants) -> None:
     _seed(app, USER_A, display_name="Alice", bio="bio-A")
     response = _as(app, USER_A).get("/api/v1/profiles/me")
     assert response.status_code == 200
@@ -141,41 +156,41 @@ def test_read_own_profile(app: FastAPI) -> None:
     assert body["user_id"] == str(USER_A_ID)
 
 
-def test_read_own_profile_not_found(app: FastAPI) -> None:
+def test_read_own_profile_not_found(app: FastAPI, authz_grants) -> None:
     response = _as(app, USER_A).get("/api/v1/profiles/me")
     assert response.status_code == 404
     assert response.json()["detail"] == "Profile not found."
 
 
-def test_read_profile_by_id_self(app: FastAPI) -> None:
+def test_read_profile_by_id_self(app: FastAPI, authz_grants) -> None:
     _seed(app, USER_A)
     response = _as(app, USER_A).get(f"/api/v1/profiles/{USER_A_ID}")
     assert response.status_code == 200
     assert response.json()["user_id"] == str(USER_A_ID)
 
 
-def test_read_profile_by_id_admin(app: FastAPI) -> None:
+def test_read_profile_by_id_admin(app: FastAPI, authz_grants) -> None:
     _seed(app, USER_A)
     response = _as(app, ADMIN).get(f"/api/v1/profiles/{USER_A_ID}")
     assert response.status_code == 200
     assert response.json()["display_name"] == "Alice"
 
 
-def test_read_profile_by_id_forbidden(app: FastAPI) -> None:
+def test_read_profile_by_id_forbidden(app: FastAPI, authz_grants) -> None:
     _seed(app, USER_A)
     response = _as(app, USER_B).get(f"/api/v1/profiles/{USER_A_ID}")
     assert response.status_code == 403
     assert response.json()["detail"] == "Not permitted to access this profile."
 
 
-def test_read_profile_not_found(app: FastAPI) -> None:
+def test_read_profile_not_found(app: FastAPI, authz_grants) -> None:
     missing = uuid.uuid4()
     response = _as(app, ADMIN).get(f"/api/v1/profiles/{missing}")
     assert response.status_code == 404
     assert str(missing) in response.json()["detail"]
 
 
-def test_update_profile_success(app: FastAPI) -> None:
+def test_update_profile_success(app: FastAPI, authz_grants) -> None:
     _seed(app, USER_A, display_name="Alice", bio="old")
     response = _as(app, USER_A).put(
         f"/api/v1/profiles/{USER_A_ID}",
@@ -188,7 +203,7 @@ def test_update_profile_success(app: FastAPI) -> None:
     assert body["avatar_url"] == "https://x/n.png"
 
 
-def test_update_profile_admin(app: FastAPI) -> None:
+def test_update_profile_admin(app: FastAPI, authz_grants) -> None:
     _seed(app, USER_A, display_name="Alice")
     response = _as(app, ADMIN).put(
         f"/api/v1/profiles/{USER_A_ID}",
@@ -198,7 +213,7 @@ def test_update_profile_admin(app: FastAPI) -> None:
     assert response.json()["display_name"] == "AdminEdit"
 
 
-def test_update_profile_forbidden(app: FastAPI) -> None:
+def test_update_profile_forbidden(app: FastAPI, authz_grants) -> None:
     _seed(app, USER_A)
     response = _as(app, USER_B).put(
         f"/api/v1/profiles/{USER_A_ID}",
@@ -208,7 +223,7 @@ def test_update_profile_forbidden(app: FastAPI) -> None:
     assert response.json()["detail"] == "Not permitted to update this profile."
 
 
-def test_update_profile_not_found(app: FastAPI) -> None:
+def test_update_profile_not_found(app: FastAPI, authz_grants) -> None:
     missing = uuid.uuid4()
     response = _as(app, ADMIN).put(
         f"/api/v1/profiles/{missing}",
@@ -218,7 +233,7 @@ def test_update_profile_not_found(app: FastAPI) -> None:
     assert str(missing) in response.json()["detail"]
 
 
-def test_delete_profile_success(app: FastAPI) -> None:
+def test_delete_profile_success(app: FastAPI, authz_grants) -> None:
     _seed(app, USER_A)
     response = _as(app, ADMIN).delete(f"/api/v1/profiles/{USER_A_ID}")
     assert response.status_code == 204
@@ -226,14 +241,14 @@ def test_delete_profile_success(app: FastAPI) -> None:
     assert follow.status_code == 404
 
 
-def test_delete_profile_forbidden(app: FastAPI) -> None:
+def test_delete_profile_forbidden(app: FastAPI, authz_grants) -> None:
     _seed(app, USER_A)
     response = _as(app, USER_A).delete(f"/api/v1/profiles/{USER_A_ID}")
     assert response.status_code == 403
     assert response.json()["detail"] == "Admin required."
 
 
-def test_delete_profile_not_found(app: FastAPI) -> None:
+def test_delete_profile_not_found(app: FastAPI, authz_grants) -> None:
     missing = uuid.uuid4()
     response = _as(app, ADMIN).delete(f"/api/v1/profiles/{missing}")
     assert response.status_code == 404

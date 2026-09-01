@@ -248,6 +248,22 @@ async def federation_search(
     db=Depends(get_db_dep),  # noqa: B008
 ):
     user = get_current_user(request)
+    # M2-B5: deliberately still auth-only, and the map row is corrected
+    # rather than the route.
+    #
+    # The map assigns sample:read at INSTANCE scope. Nobody holds it there:
+    # every preset granting sample:read issues it at lab scope, and giving an
+    # Instance Administrator blanket sample:read would contradict §8.2 head-on
+    # — the Surveillance Officer preset exists precisely so that instance-wide
+    # sample reading is narrowed to surveillance_relevant rows rather than
+    # conferred wholesale. So enforcing the row as written makes a working
+    # route reachable by nobody.
+    #
+    # What the right verb is belongs with §7's federation work (M4): the
+    # question this route actually asks is "may this user query our peers on
+    # this deployment's behalf", which is not the same act as reading a
+    # sample here, and the results come back filtered by the peer's own
+    # policy regardless.
 
     rows = execute_query(
         "SELECT * FROM federated_instances WHERE federation_enabled = TRUE",

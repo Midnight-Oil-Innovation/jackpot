@@ -3030,3 +3030,58 @@ batches' worth of blockers closed.
   and independently by the review; fixed by making the route a filtered list
   (M2-B7's builder) instead, which removes the branch rather than repairing
   it. The limitation is now written into the test's own docstring.
+
+## M2-B5 — governance route guards — 2026-09-01
+
+**What was built:** 13 of 14 routes converted, plus the change that makes
+membership mean anything after cutover.
+
+**Key decisions:**
+
+- **Membership now issues grants, and that was the point of the batch.** A
+  `lab_membership` row stopped being a decision input at M2-B1, so a member
+  added after cutover held nothing until someone ran a reseed — the row said
+  Lab Collaborator and every route disagreed. `POST/PATCH/DELETE
+  /labs/{id}/members` now sync grants on the request's own connection, so the
+  row and the access land in one transaction; a half-applied pair is a member
+  who is either invisible or over-privileged. §4.5 already scoped
+  `user:manage` as "create/modify/deactivate users, **assign capabilities**" —
+  issuing them is that assignment, not a side effect.
+- **Delete-then-insert, scoped by `source`.** Syncing a changed role by diffing
+  would have to reason about which of the old group's capabilities the new one
+  also has. Replacing outright is simpler and obviously correct, and scoping
+  the delete to `source='reseed'` keeps it off the per-sample access grants
+  (`source='direct'`) that share the principal. Pinned by a test.
+- **Split routes stay split.** `tokens` and `users` gate only the half that
+  reaches another principal. Self is not a capability and cannot be: §3.1's
+  scope tree has no user level, so "you are yourself" stays an identity
+  comparison (§4.7). Gating the whole route would take every user's control of
+  their own credentials.
+- **One route was left auth-only on purpose.** `POST /federation/search` — see
+  below.
+
+**Watch out for:**
+
+- **"Held at lab scope" is not "held at instance scope", and that bit twice in
+  two batches.** B4's `GET /submissions/` and B5's `/federation/search` both
+  gated a verb at the instance root that every preset issues at lab scope,
+  making a working route reachable by nobody. The catalog guard added in B4
+  does not catch this — it asserts a verb is in *some* preset, not that
+  anything holds it where a route asks. Both were caught by reading the
+  presets by hand.
+- **`/federation/search` is left auth-only and the map row now carries the
+  question.** Enforcing `sample:read` at Instance would need an
+  Instance Administrator to hold blanket `sample:read`, which contradicts §8.2
+  head-on — the Surveillance Officer preset exists precisely so instance-wide
+  sample reading is narrowed to `surveillance_relevant` rather than conferred
+  wholesale. The act is "query our peers on this deployment's behalf", not
+  "read a sample here", so the right verb belongs with §7's federation work
+  (M4) rather than being invented here.
+- **`GET /organizations/{org_id}` keeps a membership rung deliberately.** Every
+  preset issues `org:read` at lab scope and containment runs downward, so a
+  lab-scoped grant does not cover the org above it — checking `org:read` at
+  org scope would deny every ordinary member their own organization. Making
+  it structural needs org-scoped grants at reseed, which changes what a
+  membership conveys rather than how a route reads.
+- `GET /projects/` loses the `project_membership` rung — the registered
+  `project_only_membership` divergence reaching one more route, not a new loss.

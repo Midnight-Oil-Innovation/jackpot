@@ -4,9 +4,11 @@ from pydantic import BaseModel, Field
 from backend.audit import AuditActions, log_audit
 from backend.auth.guards import (
     get_current_user,
-    get_user_lab_membership,
+    permits,
     require_capability,
 )
+from backend.authz.principal import load_principal
+from backend.authz.visibility import project_list_clause
 from backend.database import execute_query, execute_write, get_db_dep
 from backend.pagination import paginate
 from backend.responses import error, success, success_list
@@ -123,15 +125,23 @@ def list_projects(
 ):
     user = get_current_user(request)
 
-    params: dict = {}
-    where: list[str] = []
-
-    if not user.get("is_platform_admin"):
-        where.append(
-            "(p.lab_id IN (SELECT lab_id FROM lab_membership WHERE user_id = :uid) "
-            "OR p.id IN (SELECT project_id FROM project_membership WHERE user_id = :uid))"
-        )
-        params["uid"] = user["id"]
+    # M2-B5: sample:read at each project's own scope (M2-B7's builder).
+    # Replaces a platform-admin bypass plus two membership subqueries. The
+    # lab_membership half is preserved by containment — a lab-scoped grant
+    # covers that lab's projects. The project_membership half is NOT: no
+    # preset issues grants at Project scope, so a project-only member loses
+    # the listing. That is the registered `project_only_membership`
+    # divergence (M2-B1's reseed pre-flight counts it), reaching one more
+    # route rather than a new loss.
+    vis, params = project_list_clause(
+        load_principal(user["id"]),
+        "sample:read",
+        labs="l",
+        rows="p",
+        # The row IS the project here, so its id is `id`, not `project_id`.
+        project_id_column="id",
+    )
+    where: list[str] = [vis]
 
     if name is not None:
         where.append("LOWER(p.display_name) = LOWER(:name)")
@@ -141,9 +151,9 @@ def list_projects(
         where.append("p.lab_id = :lab_id")
         params["lab_id"] = lab_id
 
-    base_query = "SELECT p.* FROM projects p"
-    if where:
-        base_query += " WHERE " + " AND ".join(where)
+    base_query = (
+        f"SELECT p.* FROM projects p JOIN labs l ON l.id = p.lab_id WHERE {' AND '.join(where)}"
+    )
 
     rows, total = paginate(
         query=base_query,
@@ -177,21 +187,16 @@ def get_project(
         return error("NOT_FOUND", f"Project {project_id} not found.", status_code=404)
     project = rows[0]
 
-    if not user.get("is_platform_admin"):
-        lab_member = get_user_lab_membership(user["id"], project["lab_id"])
-        if not lab_member:
-            proj_member = execute_query(
-                "SELECT 1 FROM project_membership "
-                "WHERE user_id = :uid AND project_id = :pid LIMIT 1",
-                {"uid": user["id"], "pid": project_id},
-                conn=db,
-            )
-            if not proj_member:
-                return error(
-                    "ACCESS_DENIED",
-                    "You do not have access to this project.",
-                    status_code=403,
-                )
+    # M2-B5: sample:read at the project's own scope, per the map. A
+    # lab-scoped grant contains it, so lab members are unaffected; a
+    # project-only member is not (the registered project_only_membership
+    # divergence).
+    if not permits(user, "sample:read", project_id=project_id):
+        return error(
+            "ACCESS_DENIED",
+            "You do not have access to this project.",
+            status_code=403,
+        )
     return success(data=_serialise(project))
 
 

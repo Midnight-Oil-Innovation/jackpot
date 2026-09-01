@@ -2459,7 +2459,7 @@ sessions:
       The federation rows use peer-key auth, not a user JWT; leave that path
       alone and rewrite only the capability half.
     phase: access_model_redesign
-    status: open
+    status: shipped
     depends_on:
       - M2-B1
     blocked_by_external:
@@ -2476,11 +2476,22 @@ sessions:
     pr_title_template: "feat(authz): M2-B5 — governance route guards"
     branch_name_template: m2-b5-governance
     role_framing:
-    notes: "Split routes: gating the whole tokens route would break every user's access to their own tokens.
-      M2-B1 finding: POST /labs/{id}/members must ISSUE grants when it creates a membership. Today a new member
-      holds nothing until a reseed runs — membership is not access under the new model, and §4.5 already scopes
-      user:manage as 'create/modify/deactivate users, assign capabilities'."
-
+    notes: "Shipped 13 of 14. Membership now ISSUES grants — the M2-B1 finding this entry named. Add,
+      role-change and remove all sync authz_capability_grants on the request's own connection, so the row
+      and the access land in one transaction. Delete-then-insert rather than a diff, scoped by
+      source='reseed' so per-sample access grants (source='direct') survive; pinned by a test.
+      Split routes stayed split: tokens and users gate only the half reaching another principal, because
+      self is not a capability (§3.1's tree has no user level, §4.7).
+      NOT converted: POST /federation/search. The map assigns sample:read at INSTANCE scope and nobody holds
+      it there — enforcing it would need an Instance Administrator to hold blanket sample:read, which
+      contradicts §8.2 head-on (the Surveillance Officer preset exists to narrow instance-wide sample
+      reading to surveillance_relevant rather than confer it wholesale). The act is 'query our peers on this
+      deployment's behalf', not 'read a sample here'; the right verb is §7/M4's call. Map row carries the
+      question.
+      GENERAL: 'held at lab scope' is not 'held at instance scope', and that bit twice in two batches (B4's
+      submissions list, this). The B4 catalog guard does not catch it — it checks a verb is in SOME preset,
+      not that anything holds it where a route asks. Closing that means walking each route's declared scope,
+      which is the endpoint map's job."
   - id: M2-B6
     title: SERVICE-principal callbacks (2 routes)
     short_description: |
@@ -2606,7 +2617,7 @@ sessions:
       Run as MANUAL flow, single session. Verify B1..B7 are all shipped and
       the preflight matrix is green before starting.
     phase: access_model_redesign
-    status: blocked
+    status: open
     depends_on:
       - M0
       - M1

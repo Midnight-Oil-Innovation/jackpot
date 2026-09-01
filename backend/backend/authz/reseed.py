@@ -437,3 +437,87 @@ def reseed(conn: Connection, *, force: bool = False) -> None:
         len(rows),
         after - before,
     )
+
+
+# ── Live membership → grants (M2-B5) ─────────────────────────────────────
+#
+# reseed() translates every stored role at cutover. These do the same for one
+# membership as it changes, which is what makes membership mean anything after
+# cutover: a lab_membership row is not a decision input any more, so a member
+# added on Tuesday holds nothing until someone runs a reseed. §4.5 already
+# scopes user:manage as "create/modify/deactivate users, assign capabilities"
+# — issuing the grants IS the assignment, not a side effect of it.
+
+_DELETE_MEMBERSHIP_GRANTS = text(
+    """
+    DELETE FROM authz_capability_grants
+     WHERE principal_id = :principal_id
+       AND scope_ref = :scope_ref
+       AND source = :source
+    """
+)
+
+
+def _membership_capabilities(group_name: str) -> list[str] | None:
+    """Preset capabilities for an APGAP group, or None if it maps to none."""
+    preset = MEMBERSHIP_PRESETS.get(group_name)
+    return list(PRESET_GRANTS[preset]) if preset else None
+
+
+def sync_membership_grants(
+    conn: Connection, *, user_id: int, lab_id: int, group_name: str | None
+) -> int:
+    """Make one user's grants at one lab match their membership.
+
+    ``group_name=None`` removes the membership's grants — used when the
+    membership itself is deleted.
+
+    Delete-then-insert rather than a diff: the whole point is that the row
+    and the grants agree afterwards, and a diff would have to reason about
+    which of the previous group's capabilities the new group also has. Scoped
+    by ``source = 'reseed'`` so it cannot touch a per-sample access grant
+    (``source = 'direct'``) that happens to sit at the same principal.
+
+    Returns the number of grants issued.
+    """
+    org_rows = (
+        conn.execute(text("SELECT organization_id FROM labs WHERE id = :lid"), {"lid": lab_id})
+        .mappings()
+        .all()
+    )
+    if not org_rows:
+        raise ValueError(f"unknown lab_id {lab_id!r} — cannot scope membership grants")
+    scope = _lab_scope(org_rows[0]["organization_id"], lab_id)
+
+    conn.execute(
+        _DELETE_MEMBERSHIP_GRANTS,
+        {"principal_id": str(user_id), "scope_ref": scope, "source": GRANT_SOURCE},
+    )
+    if group_name is None:
+        return 0
+    capabilities = _membership_capabilities(group_name)
+    if capabilities is None:
+        logger.warning(
+            "membership sync: permission group %r maps to no preset; user %s holds "
+            "no grants at lab %s",
+            group_name,
+            user_id,
+            lab_id,
+        )
+        return 0
+    rows = _grant_rows(str(user_id), capabilities, scope)
+    for row in rows:
+        conn.execute(_INSERT_GRANT, row)
+    return len(rows)
+
+
+def group_name_for_id(conn: Connection, permission_group_id: int) -> str | None:
+    rows = (
+        conn.execute(
+            text("SELECT name FROM permission_groups WHERE id = :pg"),
+            {"pg": permission_group_id},
+        )
+        .mappings()
+        .all()
+    )
+    return rows[0]["name"] if rows else None
