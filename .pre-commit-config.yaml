@@ -64,3 +64,22 @@ repos:
         entry: uv run python scripts/check_migration_heads.py
         language: system
         pass_filenames: false
+      - id: status-regen
+        name: STATUS.md is current
+        entry: uv run python scripts/gen_status.py
+        language: system
+        pass_filenames: false
+        # Only the two inputs that actually vary: test_count comes from a
+        # pytest collect, alembic_head from the versions directory. Everything
+        # else in STATUS.md is a constant or comes from the interpreter, so a
+        # docs-only or source-only commit does not pay the ~3.4s collect.
+        #
+        # Regenerating rewrites docs/STATUS.md; pre-commit compares hashes and
+        # fails the commit only when the content actually changed, so the
+        # re-stage prompt appears exactly when the count moved — the same
+        # shape as the ruff auto-fix hooks above.
+        #
+        # Why it exists: `make status` embeds a test count, so it is only
+        # correct if run AFTER the last test is added. Running it mid-work and
+        # then adding tests broke CI's guardrails job twice in one session.
+        files: ^((tests|schema/tests|cli/tests)/.*|backend/db/migrations/versions/.*)\.py$
