@@ -2927,3 +2927,51 @@ callers.
   `samples`; the legacy one *also* ran four correlated `EXISTS` subqueries. No
   index added — it would have been speculative, and this is an improvement,
   not a regression.
+
+## M2-B6 — SERVICE-principal pipeline callbacks — 2026-09-01
+
+**What was built:** the two per-run callbacks (`/pipelines/events`,
+`/pipelines/{run_id}/results/{result_type}`) gained an authorization call
+beside their existing token check. First `PrincipalKind.SERVICE` on the route
+surface.
+
+**Key decisions:**
+
+- **The token check did not move, shrink, or change.** It is the
+  authentication half and the backlog said so explicitly. Authorization was
+  added *after* it, and the ordering is deliberate: a bad token answers 401
+  (who are you), not 403 (you may not), because a 403 would confirm to an
+  unauthenticated caller that the run exists and is writable. Pinned by a
+  test.
+- **The positive check cannot fail today, and the docstring says so.** The
+  principal is constructed from the same run the token authenticated against,
+  so `permit()` always ALLOWs. Writing that down was more useful than
+  inventing a failure mode to make the check look load-bearing. What the
+  separation buys is the chokepoint: at M4/M5 a `data_source_lab` peer
+  carrying the §8.4 preset reaches the same route with a different capability
+  set, and the answer changes there rather than in the route.
+- **The negative half is what is load-bearing now.** The principal holds
+  `pipeline:write_results` and nothing else, so `permit()` refuses it
+  `sample:read` and `sample:read_detail` on the samples its own run computes
+  over. §8.4: "The absence is the security property, not an oversight." A
+  capability set is only a security property if something breaks when it
+  grows, so the set itself is asserted, along with the scope not reaching
+  another project, the enclosing lab, or the instance root.
+- **A run without `project_id` raises rather than falling back.** The column
+  is NOT NULL, so a row lacking it means the caller did not SELECT it —
+  which is exactly what the results route was doing before this batch.
+  Defaulting to the instance root there would have handed a pipeline callback
+  authority over the whole deployment; raising turns that mistake into a 500
+  instead of a silent widening.
+
+**Watch out for:**
+
+- The results route's query now selects `project_id`. If a future edit drops
+  it, `pipeline_run_principal` raises — loud, which is the intent — but the
+  reason will not be obvious from the traceback alone.
+- These grants are *constructed*, never stored. Nothing in
+  `authz_capability_grants` should ever match one; `source="pipeline_token"`
+  marks the difference.
+- The engine still applies `not_after` to a SERVICE principal. Unused today
+  (these grants carry no expiry) but asserted, so a future "services do not
+  expire" shortcut has to break a test to land.

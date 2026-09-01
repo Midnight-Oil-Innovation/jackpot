@@ -10,6 +10,7 @@ from .engine import (
 from .principal import (
     lab_resource_scope,
     load_principal,
+    pipeline_run_principal,
     project_resource_scope,
     sample_resource,
     sample_resource_scope,
@@ -30,6 +31,7 @@ __all__ = [
     "ROOT",
     "load_principal",
     "lab_resource_scope",
+    "pipeline_run_principal",
     "project_resource_scope",
     "sample_resource",
     "sample_resource_scope",

@@ -19,6 +19,7 @@ from __future__ import annotations
 import hmac
 import json
 import logging
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -31,7 +32,12 @@ from backend.auth.guards import (
     permits,
     require_capability,
 )
-from backend.authz.principal import load_principal
+from backend.authz.engine import Context, Decision, Resource, permit
+from backend.authz.principal import (
+    load_principal,
+    pipeline_run_principal,
+    project_resource_scope,
+)
 from backend.authz.visibility import project_list_clause
 from backend.config import get_settings
 from backend.database import execute_query, execute_write, get_db_dep
@@ -93,6 +99,40 @@ def _may_read_run(user: dict, run: dict) -> bool:
     if project_id is None:
         return False
     return permits(user, "pipeline:read", project_id=project_id)
+
+
+def _authorize_run_callback(run: dict) -> bool:
+    """Authorization half of a per-run callback (M2-B6).
+
+    The ``X-Pipeline-Token`` check at every call site is AUTHENTICATION and
+    stays exactly as it is. This is the separate question: may this principal
+    write results for this run? Asked of a SERVICE principal holding
+    ``pipeline:write_results`` at the run's project scope and nothing else —
+    §4.6's "computes without seeing" property expressed as a capability set
+    rather than as a consequence of how tokens happen to be minted.
+
+    It cannot refuse today, and that is not a defect: the principal is built
+    from the same run the token authenticated against. What it buys is the
+    chokepoint. A ``data_source_lab`` peer (§8.4) reaching these routes at
+    M4/M5 carries a different capability set, and the answer changes here
+    rather than in the route.
+    """
+    principal = pipeline_run_principal(run)
+    resource = Resource(scope=project_resource_scope(run["project_id"]))
+    decision = permit(
+        principal,
+        "pipeline:write_results",
+        resource,
+        Context(conditions={}, now=datetime.now(UTC)),
+        policies=[],
+    )
+    if decision is not Decision.ALLOW:
+        logger.warning(
+            "authz: DENY service principal=%s capability=pipeline:write_results scope=%s",
+            principal.id,
+            resource.scope,
+        )
+    return decision is Decision.ALLOW
 
 
 def _fetch_run(run_id: str, db) -> dict | None:
@@ -923,6 +963,14 @@ def receive_pipeline_event(
     if not expected_token or not hmac.compare_digest(supplied_token, expected_token):
         raise HTTPException(status_code=401, detail="Invalid or missing X-Pipeline-Token")
 
+    # M2-B6: authorization, separate from the authentication above. 403 rather
+    # than 401 — the caller proved who it is and was refused, which is a
+    # different fact and a different fix. Rule 60's "the receiver never raises"
+    # governs weblog *delivery* errors, not auth: a wrong token has always
+    # raised 401 here, and a refused principal is the same kind of answer.
+    if not _authorize_run_callback(run):
+        raise HTTPException(status_code=403, detail="capability 'pipeline:write_results' required")
+
     # Always persist the raw event
     execute_write(
         """
@@ -1504,7 +1552,7 @@ def register_pipeline_result(
 
     rows = execute_query(
         """
-        SELECT pipeline_token, pipeline_name, pipeline_version
+        SELECT run_id, project_id, pipeline_token, pipeline_name, pipeline_version
         FROM pipeline_runs
         WHERE run_id = :run_id
         """,
@@ -1519,6 +1567,15 @@ def register_pipeline_result(
     expected_token = run.get("pipeline_token") or ""
     if not expected_token or not hmac.compare_digest(supplied_token, expected_token):
         return error("INVALID_TOKEN", "Invalid or missing X-Pipeline-Token", status_code=401)
+
+    # M2-B6: authorization, separate from the token check above. project_id is
+    # selected for this — a SERVICE principal is scoped to the run's project,
+    # and pipeline_run_principal refuses a row that does not carry it rather
+    # than falling back to the instance root.
+    if not _authorize_run_callback(run):
+        return error(
+            "ACCESS_DENIED", "capability 'pipeline:write_results' required", status_code=403
+        )
 
     try:
         validated = schema_cls(**body)

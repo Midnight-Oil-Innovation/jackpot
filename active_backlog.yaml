@@ -2482,7 +2482,7 @@ sessions:
       pipeline:write_results and not sample:read_detail, and permit() is where
       that becomes enforceable.
     phase: access_model_redesign
-    status: open
+    status: shipped
     depends_on:
       - M2-B1
     blocked_by_external:
@@ -2501,8 +2501,18 @@ sessions:
     pr_title_template: "feat(authz): M2-B6 — SERVICE-principal pipeline callbacks"
     branch_name_template: m2-b6-service-principals
     role_framing:
-    notes: "Do not weaken the token check while adding permit() — it is the authentication half and stays."
-
+    notes: "Token check untouched — authorization added beside it, and ordered after it so a bad token
+      answers 401 (who are you) rather than 403 (you may not), which would confirm the run exists and is
+      writable to an unauthenticated caller.
+      The positive check CANNOT FAIL today and the code says so rather than pretending otherwise: the
+      principal is built from the same run the token authenticated against. The value is the chokepoint —
+      at M4/M5 a data_source_lab peer with the §8.4 preset reaches the same route and the answer differs
+      without the route changing. The load-bearing half now is the NEGATIVE one: the principal holds
+      pipeline:write_results and nothing else, so permit() refuses it sample:read and sample:read_detail on
+      the samples its own run computes over, and refuses the enclosing lab and the instance root.
+      pipeline_run_principal RAISES on a run row with no project_id rather than rooting at the instance —
+      the results route was not selecting that column, and a fallback there would have handed a pipeline
+      callback authority over the whole deployment."
   - id: M2-B7
     title: List endpoints onto visibility_sql_clause (cutover step (c))
     short_description: |

@@ -94,14 +94,14 @@ All catalog gaps were resolved in the M2 pre-cutover review (see
 | DELETE | `/api/v1/organizations/{org_id}` | `org:manage` | Instance | `require_capability("org:manage")` |
 | GET | `/api/v1/pipelines/` | `pipeline:read` | Project | `project_list_clause("pipeline:read")` OR launched-by (M2-B7) — same verb and scope the per-run status routes check, so the list cannot show a run those routes would refuse |
 | POST | `/api/v1/pipelines/launch` | `pipeline:run` | Project | `permits("pipeline:run", project_id=…)` (M2-B3). §8.2 puts the verb in Lab Lead and Lab Member RW, so who can launch is unchanged except that read-only members no longer can. The in-route per-sample checks were CONVERTED, not dropped — each input now takes `sample:read_detail` at its own sample scope, which also picks up PUBLIC, owned and per-sample-granted inputs the lab test could not see |
-| POST | `/api/v1/pipelines/events` | `pipeline:write_results` | Instance | SERVICE-authenticated (NOT public): per-run `X-Pipeline-Token`, `hmac.compare_digest`, 401 on mismatch (`routers/pipelines.py:903`). Rule 60's never-raises applies to weblog delivery, not auth. M2 adds the SERVICE-principal `permit()` call |
+| POST | `/api/v1/pipelines/events` | `pipeline:write_results` | Instance | SERVICE-authenticated: per-run `X-Pipeline-Token`, `hmac.compare_digest`, 401 on mismatch. **M2-B6** adds the authorization half — `permit()` against a SERVICE principal holding `pipeline:write_results` at the run's project scope and nothing else; 403 on refusal. Rule 60's never-raises governs weblog *delivery*, not auth |
 | GET | `/api/v1/pipelines/{run_id}` | `pipeline:read` | Project | `_may_read_run` -> `permits("pipeline:read", project_id=…)` (M2-B3). Capability corrected from `pipeline:run` in M2-B3-PRE — §4 defines `pipeline:read` as covering run status, and the old reading would have hidden a lab's own runs from its Collaborators and Readers |
 | GET | `/api/v1/pipelines/{run_id}/tasks` | `pipeline:read` | Project | `_may_read_run` -> `permits("pipeline:read", project_id=…)` (M2-B3). Capability corrected from `pipeline:run` in M2-B3-PRE — §4 defines `pipeline:read` as covering run status, and the old reading would have hidden a lab's own runs from its Collaborators and Readers |
 | GET | `/api/v1/pipelines/{run_id}/events` | `pipeline:read` | Project | `_may_read_run` -> `permits("pipeline:read", project_id=…)` (M2-B3). Capability corrected from `pipeline:run` in M2-B3-PRE — §4 defines `pipeline:read` as covering run status, and the old reading would have hidden a lab's own runs from its Collaborators and Readers |
 | POST | `/api/v1/pipelines/{run_id}/resume` | `pipeline:run` | Project | `permits("pipeline:run", project_id=…)` (M2-B3) — resume launches work, so the write verb, not the read one |
 | POST | `/api/v1/pipelines/custom` | `pipeline:register_custom` | Lab | `require_capability("pipeline:register_custom")` |
 | POST | `/api/v1/pipelines/{catalog_id}/promote` | `pipeline:promote` | Lab or Instance | `require_capability("pipeline:promote")` — lab scope for lab-tier target, instance scope for global tier |
-| POST | `/api/v1/pipelines/{run_id}/results/{result_type}` | `pipeline:write_results` | Project | SERVICE-authenticated (NOT public): same per-run token check, `INVALID_TOKEN` 401 (`routers/pipelines.py:1495`). M2 adds the SERVICE-principal `permit()` call |
+| POST | `/api/v1/pipelines/{run_id}/results/{result_type}` | `pipeline:write_results` | Project | SERVICE-authenticated: same per-run token check, `INVALID_TOKEN` 401. **M2-B6** adds the `permit()` call; the query now selects `project_id` because that is what the SERVICE principal is scoped to |
 | POST | `/api/v1/profiles/` | — | Instance | AUTH-ONLY BY DESIGN — creates the caller's own USER profile (not an execution profile) |
 | GET | `/api/v1/profiles/me` | — | Instance | AUTH-ONLY BY DESIGN — caller's own USER profile |
 | GET | `/api/v1/profiles/{user_id}` | `user:manage` | Org | auth-only today; self OR user:manage at M2 |
@@ -410,15 +410,27 @@ outcome is one confirmation and two corrections:
   (`routers/pipelines.py:1495`); pinned by
   `tests/test_pipelines_registration_api.py:92,111`.
 
-**M2 work on the two token routes.** The token today collapses authentication
-and authorization: holding the run's token *is* the permission, because the
-token is per-run. M2 keeps the token as authentication and adds a `permit()`
-call with a SERVICE principal holding `pipeline:write_results` at the run's
-project scope. The point is not that the token check is weak — it is that
-separating the two is what makes the cryptWWDB property structural (§4.6,
-§9.4): a `data_source_lab` principal holds `pipeline:write_results` and not
-`sample:read_detail`, and `permit()` is where that becomes enforceable rather
-than a consequence of how tokens happen to be minted.
+**M2 work on the two token routes — done in M2-B6.** The token collapsed
+authentication and authorization: holding the run's token *was* the
+permission, because the token is per-run. The token stays as authentication,
+unchanged; `permit()` now asks the separate question of a SERVICE principal
+holding `pipeline:write_results` at the run's project scope.
+
+**The positive check cannot fail today, and that is the honest shape rather
+than a defect.** The principal is constructed from the same run the token
+authenticated against, so `permit()` always ALLOWs. What the separation buys
+is the chokepoint: when M4/M5 bring a `data_source_lab` peer carrying the
+§8.4 preset, the route asks the same question of a different principal and
+the answer differs — without the route changing.
+
+What *is* load-bearing today is the negative half. The principal holds
+`pipeline:write_results` and nothing else, so `permit()` refuses it
+`sample:read` and `sample:read_detail` on the very samples its run computes
+over. §8.4 puts it plainly: "The absence is the security property, not an
+oversight." `tests/authz/test_service_principal.py` asserts that absence,
+plus that the grant does not reach another project, the enclosing lab, or the
+instance root — a capability set is only a security property if something
+breaks when it grows.
 - `GET /api/v1/settings/public`, `GET /api/v1/templates/*`, `GET /api/v1/dataharmonizer/templates/*`, `POST /api/v1/auth/{google/login,refresh,logout}` — intentionally public (login flow, public settings, Rule 42 public templates).
 - Stub routers returning `{"status": "not implemented"}` (no auth, no data): `archive_requests`, `billing`, `dataset_access`, `datasets`, `ncbi_submissions`, `notifications`, `saved_searches`, `GET /api/v1/ingest/`. Guard when implemented; excluded from the table above.
 
