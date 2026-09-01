@@ -9,6 +9,7 @@ Kept out of ``auth/guards.py`` so the decision inputs stay testable without a
 FastAPI request, and out of ``engine.py`` so the engine keeps having no I/O.
 """
 
+from datetime import UTC, datetime
 from typing import Any
 
 from backend.authz.engine import CapabilityGrant, Principal, PrincipalKind, Resource
@@ -86,6 +87,58 @@ def load_principal(
             for r in rows
         ],
     )
+
+
+# The reverse of _GRANTS_SQL: not "what does this principal hold" but "who
+# holds this". The containment test is _scope_contains transcribed to SQL and
+# runs the same direction — the GRANT scope must contain the RESOURCE scope,
+# so `:scope LIKE scope_ref || '/%'` and never the other way round. The
+# rstrip mirrors the Python: a scope_ref stored with a trailing slash would
+# otherwise build a pattern with a doubled separator matching nothing.
+#
+# The join to `users` is load-bearing rather than decorative: peer principals
+# share this table with an id that is a federated_instances UUID, and a caller
+# asking for people gets only rows that are people.
+_CAPABILITY_HOLDERS_SQL = (
+    "SELECT DISTINCT u.id FROM authz_capability_grants g "
+    "JOIN users u ON CAST(u.id AS TEXT) = g.principal_id "
+    "WHERE g.capability = :cap "
+    "AND u.is_active = TRUE "
+    "AND g.conditions = CAST('{}' AS JSONB) "
+    "AND (g.not_after IS NULL OR g.not_after > :now) "
+    "AND (g.scope_ref = :scope OR :scope LIKE RTRIM(g.scope_ref, '/') || '/%') "
+    "ORDER BY u.id"
+)
+
+
+def capability_holders(capability: str, scope: str, *, conn: Any = None) -> list[int]:
+    """Active users whose grants cover ``scope`` for ``capability``.
+
+    The reverse lookup, for background work that has to reach the people
+    responsible for something — B-CARE-4's non-compliant-peer alert is the
+    first caller, replacing a ``users.is_platform_admin`` SELECT.
+
+    **This is not a decision function.** It answers "who would plausibly be
+    permitted", which is the right question for addressing a notification and
+    the wrong one for allowing an action: it sees grants only, so it is blind
+    to the DENY policies that ``permit()`` applies per resource, and a DENY is
+    exactly what deny-wins says must be consulted before anyone is allowed
+    anything. Authorizing off this list would reintroduce the second decision
+    point §2.1 exists to prevent. Route guards call ``permit()``.
+
+    Conditional grants are excluded rather than assumed satisfied. A condition
+    is a fact about a request (§5), and a scheduled job has no request to
+    check it against; the engine's own rule for an input it cannot evaluate is
+    to refuse — ``Context.now`` unset costs a time-bounded grant its effect
+    rather than granting it unbounded. Refusing here can only shorten a
+    notification list, never widen access.
+    """
+    rows = execute_query(
+        _CAPABILITY_HOLDERS_SQL,
+        {"cap": capability, "scope": scope, "now": datetime.now(UTC)},
+        conn=conn,
+    )
+    return [r["id"] for r in rows]
 
 
 def load_peer_principal(peer_instance_id: str, *, conn: Any = None) -> Principal:
