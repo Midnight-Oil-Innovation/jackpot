@@ -80,6 +80,17 @@ PRESET_GRANTS: dict[str, list[str]] = {
         # this preset's two entries above were added to fix. The instance
         # admin's grant is at instance scope and so covers every project.
         "pipeline:read",
+        # M2-DROP-PRE. §6.2-1b's escape — "unless a Platform Admin explicitly
+        # self-approves" — was a request-body flag the route passed straight
+        # into the policy condition, so ANY principal could set it and lift the
+        # separation-of-duties DENY. (Not exploitable end to end: deletion.py
+        # re-checked is_platform_admin. But that check is a legacy-column read
+        # scheduled for removal, and removing it would have opened the hole.)
+        # Making the escape a capability puts it back under the grant model:
+        # the route now derives the condition from what the caller holds
+        # instead of trusting what they sent. Confers no approval authority of
+        # its own — see the §8.2 note.
+        "deletion:self_approve",
     ],
     "surveillance_officer": [
         "sample:read_surveillance",

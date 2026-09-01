@@ -5,7 +5,12 @@ from pydantic import BaseModel
 
 from backend import deletion
 from backend.audit import AuditActions, log_audit
-from backend.auth.guards import get_current_user, get_user_lab_membership, require_capability
+from backend.auth.guards import (
+    get_current_user,
+    get_user_lab_membership,
+    permits,
+    require_capability,
+)
 from backend.authz.principal import load_principal
 from backend.authz.visibility import sample_list_clause
 from backend.database import execute_query, execute_write, get_db_dep
@@ -704,7 +709,14 @@ def approve_sample_deletion(
 ):
     user = get_current_user(request)
     sample = _get_sample_any_or_404(sample_id, db)
-    self_approve = bool(payload and payload.platform_admin_self_approve)
+    # The flag is a REQUEST, not the decision. §6.2-1b's escape is for a
+    # Platform Admin; taking payload.platform_admin_self_approve at face value
+    # made the separation-of-duties DENY liftable by anyone who set it, which
+    # is the opposite of what an audited escape means. What the caller asked
+    # for is ANDed with what they actually hold.
+    self_approve = bool(payload and payload.platform_admin_self_approve) and permits(
+        user, "deletion:self_approve", sample_id=sample_id
+    )
     # M3: separation of duties is now deletion.separation_of_duties, a DENY
     # policy (§6.2-1b), so the approver-differs-from-requester rule is decided
     # by permit() rather than re-derived here. The self-approve flag travels as
