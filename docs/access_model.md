@@ -238,7 +238,7 @@ Consequences worth stating where the scheme is defined:
 
 ### 3.2 Why Tenant and Org are the same concept
 
-Earlier drafts of this model treated "tenant" (the multi-tenancy isolation boundary) and "org" (the ownership entity) as separate layers. They are collapsed into one: **the Org *is* the isolation boundary.** "Multi-tenancy" means one Instance hosts multiple Orgs, each walled off from the others; the P0c multi-tenancy middleware enforces that wall at the Org level.
+Earlier drafts of this model treated "tenant" (the multi-tenancy isolation boundary) and "org" (the ownership entity) as separate layers. They are collapsed into one: **the Org *is* the isolation boundary.** "Multi-tenancy" means one Instance hosts multiple Orgs, each walled off from the others; the wall is the org segment of the scope path (§3.1.1), enforced by the same containment check every other decision uses — not by a middleware. See §5.4.
 
 The collapse is justified because in every JACKPOT deployment scenario, the isolation boundary and the ownership entity coincide — a hosted-SaaS customer is exactly one org and is exactly one isolation domain. Keeping them separate would add a layer that is always 1:1 with org, which is pure ceremony. (If a future "consortium tenant containing multiple distinct orgs that share an isolation boundary" requirement ever appears, the model can reintroduce a Tenant level above Org without disturbing anything below it — but we are not paying for that layer speculatively.)
 
@@ -265,7 +265,7 @@ Instance: agency-cloud
    └─ Lab: Wastewater Surveillance
 ```
 
-**Hosted SaaS (Scenario C, cloud, multi-org):** one Instance hosts multiple isolated Orgs. The **Org isolation boundary** is the load-bearing scope — County A must never see County B's data, users, or existence. P0c middleware filters every query by the requesting principal's Org.
+**Hosted SaaS (Scenario C, cloud, multi-org):** one Instance hosts multiple isolated Orgs. The **Org isolation boundary** is the load-bearing scope — County A must never see County B's data, users, or existence. Every list query is filtered by `visibility_sql_clause`, whose grant terms are prefix matches on the principal's own `instance://self/org/N/…` scopes — so County B's rows are unreachable because nothing County A holds contains them, not because a filter remembered to exclude them.
 
 ```
 Instance: jackpot-saas-prod        (one deployment, one database)
@@ -579,7 +579,9 @@ The conflict-resolution rule, stated once, authoritatively: **if any applicable 
 Consequences, all intended:
 
 - **Sovereignty constraints are absolute.** A sovereignty DENY (§6) cannot be overridden by any grant, however broad — not even an Instance Administrator's. This is the property tribal-sovereignty and CARE compliance require.
-- **Org-isolation is absolute.** The tenant wall is a DENY policy keyed on cross-org access; no grant punches through it. P0c multi-tenancy is enforced here.
+- **Org-isolation is structural, not a DENY policy.** There is no cross-org DENY, and there is no tenant-wall function — an earlier draft of this bullet claimed both, and `backend/backend/tenancy.py` was written to the claim (a `require_org_access` guard that no route ever called; deleted in M2-DROP-PRE slice 3). What actually isolates orgs is scope containment (§3.1.1, ADR 0015): a principal's grants are rooted at `instance://self/org/N/…`, and `_scope_contains` matches only on a prefix at a segment boundary, so no grant a tenant holds covers another org's rows. A cross-org read is refused by default-deny (§5.1) rather than by a policy firing. `visibility_sql_clause` compiles the same containment into the list path, so the SQL and per-row decisions agree by construction.
+
+  The consequence worth stating plainly, because "absolute" implied otherwise: an **Instance-scoped grant does reach every org**. `instance://self` is a prefix of every org path, which is precisely how the Instance Administrator preset works and is intended (ADR 0015 — "admin reach is structural, not a bypass"). A sovereignty DENY still beats it, which is the property that matters; org isolation walls tenants off from each other, not from the operator of the instance hosting them.
 - **Reasoning is simple.** "Why was this denied?" always has a crisp answer: either a specific DENY policy fired (and `policy.rationale` says which and why), or nothing granted access and default-deny applied. There is no precedence chain to trace.
 
 The cost — occasionally wanting "deny X in general but allow it in this one case" — is paid by *not writing the DENY policy so broadly*, rather than by overriding it. If a real case ever demands true override, precedence can be added later, scoped narrowly to the policies that need it, without retrofitting complexity the rest of the system doesn't use. v1 does not need it.

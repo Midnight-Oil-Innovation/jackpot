@@ -3620,3 +3620,60 @@ routes — correct code behind a door no lab principal could open.
   it at `instance://self` from the cutover, and dropping those rows would leave
   a deployment with no one able to administer users at all. Filtered on
   `scope_ref LIKE '%/lab/%'`.
+
+## M2-DROP-PRE slice 3 — the tenant wall nobody called — 2026-09-01
+
+**What was built:** Nothing. `backend/backend/tenancy.py` was deleted, along with
+`tests/routers/test_tenancy.py` and the `TenancyMiddleware` registration in
+`main.py`, and three sentences in `access_model.md` that described the module as
+enforcing org isolation were corrected to describe what actually does.
+
+The entry planned a conversion: `require_org_access` bypassed the tenant wall on
+`is_platform_admin`, and per ADR 0015 that bypass should fall out of scope
+containment instead of a flag. The mechanism was right. The premise was not —
+`require_org_access` had no production callers. Neither did `get_org_context`.
+Nothing in the codebase read the `request.state.org_context` the middleware set
+on every non-exempt request, at the cost of one `get_current_user` DB lookup per
+request.
+
+**Key decisions:**
+
+- *Deleting beat converting, and the reason is Rule 70 rather than laziness.* A
+  correctly-implemented wall with no call site reads as done to every future
+  reader and cannot be exercised by any test. The three `is_platform_admin`
+  readers it carried were retired at zero conversion cost; 28 of 31 remain.
+- *Org isolation was never in danger, because it was never here.* It is
+  structural per ADR 0015: grants are rooted at `instance://self/org/N/…` and
+  `_scope_contains` matches only at a segment boundary, so a cross-org row is
+  refused by default-deny — no grant a tenant holds contains it.
+  `visibility_sql_clause` compiles the same relation for the list path. byop.py,
+  the entry's "mandatory IDOR case," had already converted to `permits()` under
+  M2-B3 and never used `require_org_access` at all.
+- *The doc said "DENY policy" and there is no such policy.* §5.4 claimed the
+  tenant wall was "a DENY policy keyed on cross-org access; no grant punches
+  through it." Both halves were false: `grep` over `authz/policy.py` finds no
+  cross-org policy, and an Instance-scoped grant does punch through, by design.
+  The bullet now says so, because "absolute" is the kind of word a future reader
+  builds on.
+
+**Watch out for:**
+
+- **A module can be wired into `main.py` and still be dead.** Registering the
+  middleware made `tenancy.py` look load-bearing from the import graph; only the
+  grep for consumers of `request.state.org_context` showed the cargo was never
+  picked up. Import-graph reachability is not enforcement.
+- **The doc did not lie so much as get written first.** §5.4's sentence and
+  `tenancy.py`'s docstring agree with each other perfectly, and both disagree
+  with the code. That is what a spec written from the phase plan looks like from
+  inside — self-consistent. Third instance recorded under Rule 70.
+- **`docs/review_log.md` does not exist.** Root `CLAUDE.md` names it in two
+  places ("log the question to `docs/review_log.md`", "write the plan to
+  `docs/review_log.md` and wait for explicit Go") and several `learnings.md`
+  entries reference sections of it. It was never created, or was removed without
+  updating the references. This entry went to `learnings.md` instead. Worth a
+  decision: create it, or strike the references.
+- **P0c is not deleted, only its scaffolding.** If P0c later wants a
+  request-context carrier, note that it duplicates what `get_current_user` plus
+  the principal's grant scopes already give every route — that is why this went
+  rather than being converted. Rebuilding it is an hour if the need turns out to
+  be real.
