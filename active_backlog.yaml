@@ -2836,8 +2836,8 @@ sessions:
       note says 'Instance Administrator is operational, not a consent authority'. A draft added the two verbs to the preset
       and test_reseed_presets_match_the_documented_ones rejected it; the preset change and its migration were reverted. The
       Scenario-T preset stays deferred per §6.4's own instruction (M3-SCENARIO-T)."
-    merged_at:
-    merge_sha:
+    merged_at: '2026-09-01'
+    merge_sha: 6c1a02d
   - id: M4-B
     title: Federation Layer 2 — wire agreement grants into the decision path
     short_description: |
