@@ -77,7 +77,7 @@ sessions:
     pr_title_template:
     branch_name_template:
     role_framing:
-    notes: "Shipped pre-2026-05; reference pattern for PRV-A, CRY-A."
+    notes: "Shipped pre-2026-05; reference pattern for PRV-A, CRY-A. Provenance not establishable: shipped before the PR workflow began (PR #1 was 2026-05-03), so no merge commit exists to record in merge_sha. Searched git log for the id and found only incidental mentions in unrelated commits — deliberately left empty rather than filled with a plausible-looking SHA, because a wrong provenance record looks authoritative and nobody re-derives it."
 
   - id: PRV-A
     title: Privacy scaffold (HRRT + DLP + AISPrivacyHooks)
@@ -105,6 +105,8 @@ sessions:
     branch_name_template:
     role_framing:
     notes: "Session 21 PR #39."
+    merge_sha: da425fe
+    merged_at: '2026-05-09'
 
   - id: CRY-A
     title: Crypto scaffold (filesystem keystore + Ed25519 + AISCryptoHooks)
@@ -293,7 +295,7 @@ sessions:
       attestation, AIS-hook policy points table.
     phase: cryptwwdb_track
     status: shipped
-    merged_at: "2026-04-28"
+    merged_at: '2026-05-12'
     depends_on: []
     blocked_by_external:
     parallel_safe:
@@ -306,6 +308,7 @@ sessions:
     branch_name_template:
     role_framing:
     notes: "PR #49. Anchor docs Jackpot_AIS.md + jackpot_immune_platform_plan.md restored in same PR."
+    merge_sha: 1eab572
 
   - id: B-CWB-FED-1
     title: data_source_lab FederationRole enum value
@@ -390,6 +393,7 @@ sessions:
     branch_name_template:
     role_framing:
     notes: "PR #50. Interface-only; full DB wiring tracked as B-CWB-MB-1-DB."
+    merged_at: '2026-05-12'
 
   - id: B-CWB-MB-1-DB
     title: Mass-balance full DB wiring (post-B-CWB-SCHEMA-2)
@@ -634,6 +638,7 @@ sessions:
     branch_name_template:
     role_framing:
     notes: "PR #51."
+    merged_at: '2026-05-12'
 
   - id: B-WW-ADV-1
     title: Multi-target wastewater panel
@@ -1330,6 +1335,8 @@ sessions:
       the 2026-04-29 phasing decision in todo.md."
 
     merged_at: '2026-05-26'
+    merge_sha: 7da717b
+
   - id: B-BYOP-2
     title: BYOP Stage 1 static validator
     short_description: |
@@ -1778,6 +1785,7 @@ sessions:
   # Dependency graph (access_model.md §11.2):
   #   M0 → M1 → M2 → {M3, M4, M5}; ACCESS-GUARD-MAP + ACCESS-SEED block M2.
   # ────────────────────────────────────────────────────────────────────────
+    merge_sha: 7da717b
 
   - id: M0
     title: permit() engine + grants/policy tables, dark (wired into no route)
@@ -3297,6 +3305,7 @@ sessions:
       deletion from the API with nothing replacing it. 43 is_deleted
       reference sites in backend/ plus a migration. An archive must never be
       able to satisfy a deletion request (CARE Authority to Control).
+    merge_sha: 93f39fd
 
   - id: B-DOC-INGEST-PATHS
     title: Reconcile the "six ingest methods" contradiction between docs and code
