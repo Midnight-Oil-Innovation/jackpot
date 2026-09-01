@@ -46,9 +46,9 @@ Create Date: 2026-08-31
 import os
 from collections.abc import Sequence
 
+from alembic import op
 from sqlalchemy import text
 
-from alembic import op
 from backend.authz.reseed import GRANT_SOURCE, ReseedPreflightError, reseed
 
 revision: str = "b2f47c1a9e30"
