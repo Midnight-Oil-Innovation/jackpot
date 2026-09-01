@@ -20,10 +20,16 @@ skipping them per row.
 """
 
 import re
+from datetime import UTC, datetime
 
 from backend.authz.engine import Context, Principal, Resource, _unexpired
 from backend.authz.policy import _DB_NOT_WIRED, PRINCIPAL_ID, _principal_holds
-from backend.authz.scope import is_canonical_scope_sql
+from backend.authz.scope import (
+    is_canonical_scope_sql,
+    lab_scope_sql,
+    project_scope_sql,
+    scope_sql,
+)
 
 _CAPABILITY_RE = re.compile(r"^[a-z_]+:[a-z_]+$")
 
@@ -177,3 +183,95 @@ def visibility_sql_clause(
     if deny_terms:
         return f"(NOT ({' OR '.join(deny_terms)}) AND ({allow_sql}))", params
     return f"({allow_sql})", params
+
+
+# ── The production shape (M2-B7) ─────────────────────────────────────────
+
+
+def sample_list_clause(
+    principal: Principal,
+    capability: str = "sample:read",
+    *,
+    samples: str = "s",
+    labs: str = "l",
+    context: Context | None = None,
+) -> tuple[str, dict]:
+    """The WHERE fragment every sample-rooted list endpoint uses.
+
+    Six lists across five routers filter on the same question — which sample
+    rows may this principal see — and the answer has three moving parts that
+    must match the row-wise guard exactly: the scope expression, the policy
+    set, and the attribute-column mapping. Assembling them at each call site
+    is how the two halves drift, and a list that drifts *wider* leaks rows
+    with no error and no audit entry. So it is assembled once, here.
+
+    The caller supplies its own table aliases and must join
+    ``samples JOIN labs ON labs.id = samples.lab_id`` — the org segment of the
+    scope path comes from ``labs.organization_id``, and a sample's scope is
+    derived rather than stored (ADR 0015).
+
+    Not I/O: the principal is loaded by the caller, which keeps this module a
+    pure compiler.
+    """
+    from backend.authz.policy import LADDER_POLICIES
+    from backend.authz.principal import SAMPLE_ATTRIBUTE_COLUMNS
+
+    columns = {
+        attr: column.replace("s.", f"{samples}.", 1)
+        for attr, column in SAMPLE_ATTRIBUTE_COLUMNS.items()
+    }
+    return visibility_sql_clause(
+        principal,
+        capability,
+        scope_sql(samples=samples, labs=labs),
+        context=context or Context(conditions={}, now=datetime.now(UTC)),
+        policies=LADDER_POLICIES,
+        attribute_columns=columns,
+    )
+
+
+def lab_list_clause(
+    principal: Principal,
+    capability: str,
+    *,
+    labs: str = "l",
+    context: Context | None = None,
+) -> tuple[str, dict]:
+    """List filter for rows that live at LAB level and have no sample.
+
+    No attribute columns and no policies: every entry in ``LADDER_POLICIES``
+    reads a *sample* attribute, so passing them here would compile predicates
+    against columns that do not exist on the row. Rows at this level are
+    decided by structural grants alone, which is what ``permit()`` does for
+    them too.
+    """
+    return visibility_sql_clause(
+        principal,
+        capability,
+        lab_scope_sql(labs=labs),
+        context=context or Context(conditions={}, now=datetime.now(UTC)),
+        policies=[],
+    )
+
+
+def project_list_clause(
+    principal: Principal,
+    capability: str,
+    *,
+    labs: str = "l",
+    rows: str = "pr",
+    context: Context | None = None,
+) -> tuple[str, dict]:
+    """List filter for rows that live at PROJECT level — pipeline runs.
+
+    Same reasoning as :func:`lab_list_clause` on policies. A lab-scoped grant
+    still covers these rows by containment, so scoping the filter at project
+    level narrows nothing for an ordinary lab member.
+    """
+    return visibility_sql_clause(
+        principal,
+        capability,
+        project_scope_sql(labs=labs, rows=rows),
+        context=context or Context(conditions={}, now=datetime.now(UTC)),
+        policies=[],
+    )

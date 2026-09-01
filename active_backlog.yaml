@@ -2519,7 +2519,7 @@ sessions:
       expression is a sequential scan, and an expression index is the fix if
       it matters. Do not add one speculatively.
     phase: access_model_redesign
-    status: open
+    status: shipped
     depends_on:
       - M2-B1
       - M2-B2
@@ -2539,16 +2539,22 @@ sessions:
     pr_title_template: "feat(authz): M2-B7 — list endpoints onto visibility_sql_clause"
     branch_name_template: m2-b7-list-visibility
     role_framing:
-    notes: "An over-granting list is silent — no error, no audit row. never_over_grants is the invariant, not a nicety.
-      Scope grew in M2-B2: 7 sample-plane list rows could not be guarded by require_capability at all (a list names
-      no single resource, so there is no scope to resolve) and are B7's, not just samples/. They are
-      GET /samples/, /files/, /files/broken, /imports/sessions/, /sample-access/requests, /wastewater/sites,
-      /wastewater/lineage-abundance. M2-B3 added an eighth: GET /pipelines/, the run list, which keeps its
-      inline launched_by_id OR lab_membership filter until this batch. All still run on permissions.visibility_sql_clause until this batch lands —
-      guarded by the old model, not unguarded. attribute_columns for the SQL half is
-      principal.SAMPLE_ATTRIBUTE_COLUMNS, kept next to the row loader so the two halves cannot name different
-      columns."
-
+    notes: "Shipped all 8 lists; permissions.py now has zero production callers.
+      Order mattered: the equivalence harness ran with policies=[] (grants only), which is a strict subset
+      of what a deployed list shows — it would have stayed green while production dropped every PUBLIC and
+      DISCOVERABLE row. Pointed it at LADDER_POLICIES + SAMPLE_ATTRIBUTE_COLUMNS BEFORE touching a router;
+      the never-over-grants invariant held and the per-row test failed exactly where it should, still asking
+      permit() without the attributes half the fragment reads.
+      Two scope levels added (lab_scope_sql, project_scope_sql) because import sessions and pipeline runs are
+      not sample-rooted; both list builders pass NO policies since every LADDER_POLICIES entry reads a sample
+      attribute. is_canonical_scope_sql re-derives each candidate rather than loosening its regex.
+      Kept two ownership rungs (requests you filed, runs you launched — no grant expresses those and legacy
+      admitted them); removed two is_platform_admin bypasses and one is_lab_director subquery.
+      PERF, measured as the entry asked: at 3000 samples the new fragment costs 113 / 5.3ms, legacy costs
+      3923 / 7.1ms. Both seq-scan; legacy also ran four correlated EXISTS. No index added — the new path is
+      faster, so an index would have been speculative."
+    merged_at: '2026-09-01'
+    merge_sha: PENDING
   - id: M2
     title: Reseed + cutover (IRREVERSIBLE — manual flow only)
     short_description: |

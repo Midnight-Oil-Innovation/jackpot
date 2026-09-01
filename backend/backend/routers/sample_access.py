@@ -26,6 +26,8 @@ from pydantic import BaseModel, Field
 
 from backend.audit import AuditActions, log_audit
 from backend.auth.guards import get_current_user, permits
+from backend.authz.principal import load_principal
+from backend.authz.visibility import sample_list_clause
 from backend.database import execute_query, execute_write, get_db_dep
 from backend.notifications import NotificationEvents, create_notification
 from backend.pagination import paginate
@@ -250,27 +252,30 @@ def _resolve_requester_filter_id(requester_id: str | None, user: dict) -> int | 
         ) from exc
 
 
-def _build_access_request_scope(user: dict, db) -> tuple[str, dict[str, Any]]:
-    """Non-admin visibility scope: own requests, plus requests on labs I direct.
+def _build_access_request_scope(user: dict) -> tuple[str, dict[str, Any]]:
+    """Visibility scope for the request list (M2-B7).
 
-    The director_lab_ids subquery tightens the filter at the DB tier so
-    non-admins can never accidentally page through other labs' requests
-    by omitting filters.
+    Two rungs, matching what the model already says elsewhere:
+
+    * **Your own requests.** Ownership — you can always see what you filed.
+      Not a capability: no grant expresses "the row you created", and the
+      requester by definition holds nothing on the sample.
+    * **Requests you could act on.** ``access:approve_request`` at the
+      sample's scope — the same verb the approve and deny routes check, so
+      the list cannot show a row those routes would refuse, nor hide one they
+      would accept.
+
+    This replaces two legacy rungs. The platform-admin branch is gone: an
+    instance-scoped grant contains every sample path, so the admin is covered
+    by the second rung with no bypass. The ``is_lab_director`` subquery is
+    gone too, and the replacement is strictly more expressive — a director
+    whose grant sits at org scope now sees their org's requests, which the
+    lab_id IN (...) form could not express.
     """
-    director_labs = execute_query(
-        "SELECT lab_id FROM lab_membership WHERE user_id = :uid AND is_lab_director = TRUE",
-        {"uid": user["id"]},
-        conn=db,
-    )
-    director_lab_ids = [r["lab_id"] for r in director_labs]
-    params: dict[str, Any] = {"scope_uid": user["id"]}
-    if not director_lab_ids:
-        return "sar.requester_id = :scope_uid", params
-
-    placeholders = ",".join(f":dl{i}" for i in range(len(director_lab_ids)))
-    for i, lid in enumerate(director_lab_ids):
-        params[f"dl{i}"] = lid
-    return f"(sar.requester_id = :scope_uid OR s.lab_id IN ({placeholders}))", params
+    principal = load_principal(user["id"])
+    fragment, params = sample_list_clause(principal, "access:approve_request")
+    params["scope_uid"] = user["id"]
+    return f"(sar.requester_id = :scope_uid OR {fragment})", params
 
 
 @router.get("/requests")
@@ -291,13 +296,10 @@ def list_access_requests(
 ):
     """List access requests visible to the caller.
 
-    Visibility ladder:
-      * Platform Admin       — sees everything.
-      * Lab Director         — sees requests targeting their lab.
-      * Anyone else          — sees only their own.
+    Visibility (M2-B7): your own requests, plus any request on a sample you
+    hold ``access:approve_request`` over. See ``_build_access_request_scope``.
     """
     user = get_current_user(request)
-    is_admin = bool(user.get("is_platform_admin"))
 
     # Pagination sorts on `created_at` by default but the underlying
     # column is `requested_at`. Keep the public name and translate.
@@ -323,16 +325,18 @@ def list_access_requests(
         where.append("s.lab_id = :lab_id")
         params["lab_id"] = lab_id
 
-    if not is_admin:
-        scope, scope_params = _build_access_request_scope(user, db)
-        where.append(scope)
-        params.update(scope_params)
+    scope, scope_params = _build_access_request_scope(user)
+    where.append(scope)
+    params.update(scope_params)
 
     where_sql = " AND ".join(where) if where else "TRUE"
     base_query = (
         "SELECT sar.*, s.sample_id AS sample_external_id, s.lab_id AS sample_lab_id "
         "FROM sample_access_requests sar "
         "JOIN samples s ON s.id = sar.sample_id "
+        # labs is joined for the org segment of the sample's scope path
+        # (ADR 0015): the scope is derived from lineage, not stored.
+        "JOIN labs l ON l.id = s.lab_id "
         f"WHERE {where_sql}"
     )
 

@@ -47,6 +47,8 @@ from authz.preflight import (
 from backend.auth.guards import require_capability
 from backend.authz import Context, Decision, Resource, permit, sample_resource_scope
 from backend.authz.engine import _scope_contains
+from backend.authz.policy import LADDER_POLICIES
+from backend.authz.principal import SAMPLE_ATTRIBUTE_COLUMNS, sample_resource
 from backend.authz.reseed import (
     PRESET_GRANTS,
     SAMPLE_ACCESS_CAPABILITIES,
@@ -464,15 +466,28 @@ def _legacy_visible(persona) -> set[str]:
 _SCOPE_EXPR = scope_sql(samples="s", labs="l")
 
 
-def _new_visible(persona) -> set[str]:
+def _new_visible(persona, *, grants_only: bool = False) -> set[str]:
     """Rows the new model lists, via the production shape.
 
     No synthesized scope column: the scope is derived from the
     ``samples JOIN labs`` the real list query performs (ADR 0015), which is
     also what puts ``organization_id`` in reach for the org segment.
+
+    M2-B7: the policy set and the attribute columns are the production ones.
+    Passing ``policies=[]`` — as this harness did while the fragment was dark
+    — measures grants alone, which is a strict subset of what the deployed
+    list shows and would have made the equivalence proof describe something
+    nobody runs. ``grants_only=True`` keeps the old reading for the one test
+    that wants to see the two halves separately.
     """
     principal = load_principal(persona.user_id)
-    fragment, params = new_visibility_sql_clause(principal, "sample:read", _SCOPE_EXPR, policies=[])
+    fragment, params = new_visibility_sql_clause(
+        principal,
+        "sample:read",
+        _SCOPE_EXPR,
+        policies=[] if grants_only else LADDER_POLICIES,
+        attribute_columns=SAMPLE_ATTRIBUTE_COLUMNS,
+    )
     rows = execute_query(
         "SELECT s.sample_id FROM samples s JOIN labs l ON l.id = s.lab_id "
         f"WHERE {fragment} AND s.sample_id LIKE :prefix",  # noqa: S608
@@ -523,12 +538,15 @@ class TestVisibilityEquivalence:
                     permit(
                         principal,
                         "sample:read",
-                        # The row's own scope. Comparing at lab scope would
-                        # hide exactly the sample-scoped grants PRE-C issues —
-                        # the approximation PRE-B exists to remove.
-                        Resource(scope=sample_resource_scope(row["id"])),
+                        # The row's own scope AND its attributes. Comparing at
+                        # lab scope would hide exactly the sample-scoped grants
+                        # PRE-C issues — the approximation PRE-B exists to
+                        # remove — and omitting the attributes would ask a
+                        # different question than the fragment answers, since
+                        # half the fragment's terms are attribute predicates.
+                        sample_resource(row["id"]),
                         Context(conditions={}),
-                        policies=[],
+                        policies=LADDER_POLICIES,
                     )
                     is Decision.ALLOW
                 )

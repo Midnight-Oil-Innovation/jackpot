@@ -290,17 +290,31 @@ def create_import_session(
 
 
 def list_user_sessions(user_id: int, conn) -> list[dict]:
+    """The caller's in-progress sessions, in labs they may still read.
+
+    M2-B7 adds the second half. Ownership alone was the whole filter, which
+    kept listing a session after the user lost access to its lab — the same
+    gap the per-step guard closes for the routes that act on one. Rows live at
+    lab level and carry no sample, so the filter is ``lab_list_clause``.
+    """
+    from backend.authz.principal import load_principal
+    from backend.authz.visibility import lab_list_clause
+
+    vis, params = lab_list_clause(load_principal(user_id), "sample:read")
     rows = execute_query(
-        """
-        SELECT id, file_name, file_format, lab_id, current_step, status,
-               created_at, updated_at, expires_at
-          FROM import_sessions
-         WHERE created_by_user_id = :uid
-           AND status = 'in_progress'
-           AND expires_at > NOW()
-         ORDER BY created_at DESC
-        """,
-        {"uid": user_id},
+        f"""
+        SELECT ims.id, ims.file_name, ims.file_format, ims.lab_id,
+               ims.current_step, ims.status,
+               ims.created_at, ims.updated_at, ims.expires_at
+          FROM import_sessions ims
+          JOIN labs l ON l.id = ims.lab_id
+         WHERE ims.created_by_user_id = :uid
+           AND ims.status = 'in_progress'
+           AND ims.expires_at > NOW()
+           AND {vis}
+         ORDER BY ims.created_at DESC
+        """,  # noqa: S608 — vis is compiled by the authz layer, not interpolated input
+        {**params, "uid": user_id},
         conn=conn,
     )
     return [_serialise(r) for r in rows]

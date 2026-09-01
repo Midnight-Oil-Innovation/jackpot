@@ -25,9 +25,10 @@ from pydantic import BaseModel, Field
 
 from backend.audit import AuditActions, log_audit
 from backend.auth.guards import get_current_user, permits
+from backend.authz.principal import load_principal
+from backend.authz.visibility import sample_list_clause
 from backend.database import execute_query, get_db_dep
 from backend.pagination import paginate
-from backend.permissions import visibility_sql_clause
 from backend.responses import error, success, success_list
 
 router = APIRouter(prefix="/api/v1/files", tags=["files"])
@@ -154,14 +155,14 @@ def list_broken_files(
 ):
     """List ``sample_files`` rows in the ``BROKEN`` storage state.
 
-    Phase P0f F-10. Powers the broken-files admin page. Lab access
-    scoping uses the same ``visibility_sql_clause`` ladder as the
-    samples list endpoint, so the user only sees broken files for
-    samples they could otherwise see in /samples/.
+    Phase P0f F-10. Powers the broken-files admin page. Visibility is
+    ``sample_list_clause`` — the same fragment the samples list uses (M2-B7),
+    so a broken file appears here exactly when its sample appears in
+    /samples/.
     """
     user = get_current_user(request)
 
-    vis_clause, vis_params = visibility_sql_clause(user)
+    vis_clause, vis_params = sample_list_clause(load_principal(user["id"]))
     where: list[str] = [
         "sf.is_archived = FALSE",
         "sf.storage_state = 'BROKEN'",
@@ -205,6 +206,7 @@ def list_broken_files(
             s.project_id
           FROM sample_files sf
           JOIN samples s ON s.id = sf.sample_id_fk
+          JOIN labs l ON l.id = s.lab_id
          WHERE {where_sql}
     """
     results, total = paginate(
@@ -242,7 +244,7 @@ def list_files(
 
     Phase P0f F-9. Filters: ``storage_state`` (one of the five enum
     values), ``sample_id`` (numeric ``samples.id``), ``project_id``.
-    Visibility is scoped via :func:`visibility_sql_clause`. The
+    Visibility is scoped via :func:`sample_list_clause` (M2-B7). The
     ``/broken`` endpoint is the listing shorthand for ``BROKEN`` rows
     and remains in place for backward compatibility.
     """
@@ -261,7 +263,7 @@ def list_files(
             detail=(f"Invalid sort_by {sort_by!r}; must be one of {sorted(_LIST_SORT_COLUMNS)}."),
         )
 
-    vis_clause, vis_params = visibility_sql_clause(user)
+    vis_clause, vis_params = sample_list_clause(load_principal(user["id"]))
     where: list[str] = [
         "sf.is_archived = FALSE",
         "s.is_archived = FALSE",
@@ -296,6 +298,7 @@ def list_files(
             s.lab_id
           FROM sample_files sf
           JOIN samples s ON s.id = sf.sample_id_fk
+          JOIN labs l ON l.id = s.lab_id
          WHERE {where_sql}
     """
     results, total = paginate(

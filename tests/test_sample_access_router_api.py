@@ -456,6 +456,10 @@ async def test_list_requests_lab_director_sees_lab_requests(client, monkeypatch)
         {"sid": s["id"], "uid": uid_req, "owner": SEED_USER_ID},
     )
 
+    # M2-B7: the list scope is access:approve_request over the sample, so the
+    # director's membership has to exist as a grant — the is_lab_director flag
+    # is no longer read by the list any more than by the approve route.
+    sync_grants_from_legacy_roles()
     _switch_user(email_ld, monkeypatch)
     resp = await client.get(f"/api/v1/sample-access/requests?lab_id={other_lab}")
     assert resp.status_code == 200

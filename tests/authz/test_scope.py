@@ -97,3 +97,71 @@ class TestContainment:
         # into and the reason _scope_contains appends a separator.
         assert not _scope_contains(scope_uri(org=3, lab=7), scope_uri(org=3, lab=70))
         assert not _scope_contains(scope_uri(org=1), scope_uri(org=11, lab=2))
+
+
+# ── M2-B7: lab- and project-level scope SQL ──────────────────────────────
+
+
+def test_lab_scope_sql_shape():
+    from backend.authz.scope import lab_scope_sql
+
+    assert lab_scope_sql(labs="l") == (
+        "('instance://self/org/' || l.organization_id || '/lab/' || l.id)"
+    )
+
+
+def test_project_scope_sql_shape():
+    from backend.authz.scope import project_scope_sql
+
+    assert project_scope_sql(labs="l", rows="pr") == (
+        "('instance://self/org/' || l.organization_id"
+        " || '/lab/' || l.id"
+        " || '/project/' || pr.project_id)"
+    )
+
+
+def test_every_level_is_accepted_as_canonical():
+    from backend.authz.scope import (
+        is_canonical_scope_sql,
+        lab_scope_sql,
+        project_scope_sql,
+        scope_sql,
+    )
+
+    for expr in (
+        lab_scope_sql(labs="l"),
+        project_scope_sql(labs="l", rows="pr"),
+        scope_sql(labs="l", samples="s"),
+    ):
+        assert is_canonical_scope_sql(expr), expr
+
+
+def test_a_tampered_level_expression_is_still_refused():
+    """The point of byte-comparison: adding levels must not loosen the gate."""
+    from backend.authz.scope import is_canonical_scope_sql, lab_scope_sql
+
+    tampered = lab_scope_sql(labs="l").rstrip(")") + " || '' ) OR 1=1 --"
+    assert not is_canonical_scope_sql(tampered)
+
+
+def test_lab_scope_sql_contains_its_projects_and_samples():
+    """Containment is what makes a lab-level list filter correct: a lab-scoped
+    grant must cover rows named deeper in the tree."""
+    from backend.authz.engine import _scope_contains
+    from backend.authz.scope import scope_uri
+
+    lab = scope_uri(org=1, lab=7)
+    assert _scope_contains(lab, scope_uri(org=1, lab=7, project=3))
+    assert _scope_contains(lab, scope_uri(org=1, lab=7, project=3, sample=9))
+    assert not _scope_contains(lab, scope_uri(org=1, lab=8, project=3))
+
+
+def test_alias_must_be_an_identifier():
+    import pytest
+
+    from backend.authz.scope import lab_scope_sql, project_scope_sql
+
+    with pytest.raises(ValueError):
+        lab_scope_sql(labs="l; DROP TABLE labs")
+    with pytest.raises(ValueError):
+        project_scope_sql(labs="l", rows="x y")

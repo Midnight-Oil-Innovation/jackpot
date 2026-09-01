@@ -31,6 +31,8 @@ from backend.auth.guards import (
     permits,
     require_capability,
 )
+from backend.authz.principal import load_principal
+from backend.authz.visibility import project_list_clause
 from backend.config import get_settings
 from backend.database import execute_query, execute_write, get_db_dep
 from backend.pagination import paginate
@@ -121,40 +123,46 @@ def list_pipeline_runs(
 ):
     """Paginated run list scoped to the caller's visibility.
 
-    Platform admins see every run; everyone else sees only runs in labs
-    they belong to (matching the lab_id stored on each run) OR runs they
-    launched themselves. Query params are additive filters inside that
-    visibility window.
+    M2-B7: two rungs, compiled from the same grants ``permit()`` reads.
+
+    * **Runs you launched.** Ownership — no grant expresses "the run you
+      started", and the legacy filter admitted it, so removing it would
+      narrow access this batch was not asked to narrow.
+    * **Runs you may read.** ``pipeline:read`` at the run's project scope,
+      the same verb and scope the per-run status routes check (M2-B3), so
+      the list cannot show a run those routes would refuse.
+
+    The platform-admin branch is gone: an instance-scoped grant contains
+    every project path, so the admin is covered by the second rung.
     """
     user = get_current_user(request)
 
-    where: list[str] = []
-    params: dict = {}
-    if not user.get("is_platform_admin"):
-        where.append(
-            "(launched_by_id = :me OR lab_id IN "
-            "(SELECT lab_id FROM lab_membership WHERE user_id = :me))"
-        )
-        params["me"] = user["id"]
+    vis, vis_params = project_list_clause(
+        load_principal(user["id"]), "pipeline:read", labs="l", rows="pr"
+    )
+    where: list[str] = [f"(pr.launched_by_id = :me OR {vis})"]
+    params: dict = {**vis_params, "me": user["id"]}
 
     if user_id is not None:
-        where.append("launched_by_id = :user_id")
+        where.append("pr.launched_by_id = :user_id")
         params["user_id"] = user_id
     if lab_id is not None:
-        where.append("lab_id = :lab_id")
+        where.append("pr.lab_id = :lab_id")
         params["lab_id"] = lab_id
     if project_id is not None:
-        where.append("project_id = :project_id")
+        where.append("pr.project_id = :project_id")
         params["project_id"] = project_id
     if status:
-        where.append("status = :status")
+        where.append("pr.status = :status")
         params["status"] = status
     if pipeline_name:
-        where.append("pipeline_name = :pipeline_name")
+        where.append("pr.pipeline_name = :pipeline_name")
         params["pipeline_name"] = pipeline_name
 
-    where_sql = " WHERE " + " AND ".join(where) if where else ""
-    base_query = f"SELECT * FROM pipeline_runs{where_sql}"
+    where_sql = " AND ".join(where)
+    base_query = (
+        f"SELECT pr.* FROM pipeline_runs pr JOIN labs l ON l.id = pr.lab_id WHERE {where_sql}"
+    )
     rows, total = paginate(
         query=base_query,
         params=params,

@@ -2858,3 +2858,64 @@ reads.
 - `POST /{run_id}/resume` takes a body, and FastAPI validates the body before
   the handler runs — a guard test that omits it gets 422, not 403, and proves
   nothing about the guard.
+
+## M2-B7 — list endpoints onto visibility_sql_clause — 2026-09-01
+
+**What was built:** all 8 list endpoints moved off `permissions.py`'s
+hand-written ladder and onto filters compiled from the same grants and
+policies `permit()` reads. `backend/permissions.py` now has zero production
+callers.
+
+**Key decisions:**
+
+- **The equivalence harness was proving the wrong thing, and that came
+  first.** `test_new_never_over_grants` and the per-row agreement test both
+  ran with `policies=[]` — grants only. That is a strict subset of what a
+  deployed list shows, so the proof described something nobody would run, and
+  it would have stayed green while production silently dropped every PUBLIC
+  and DISCOVERABLE row. Pointing them at `LADDER_POLICIES` and
+  `SAMPLE_ATTRIBUTE_COLUMNS` *before* touching a router is what made the rest
+  of the batch safe: the invariant held, and the per-row test failed exactly
+  where it should have — it was still asking `permit()` a question without
+  the attributes half the fragment's terms read.
+- **One builder, not eight call sites.** Scope expression, policy set and
+  attribute-column mapping all have to match the row-wise guard. Assembling
+  them per route is how the two halves drift, and a list that drifts wider
+  leaks rows with no error and no audit row. `sample_list_clause` assembles
+  them once; routes pass table aliases.
+- **Three scope levels, because not every list is sample-rooted.** Import
+  sessions live at lab level and pipeline runs at project level, and
+  `scope_sql` only emitted the sample path. `lab_scope_sql` and
+  `project_scope_sql` fill that in. Both new builders pass **no policies** on
+  purpose: every `LADDER_POLICIES` entry reads a sample attribute, and
+  compiling those against a table that has no such column is either an error
+  or, worse, a term that silently matches nothing.
+- **`is_canonical_scope_sql` still byte-compares.** It now re-derives every
+  candidate shape from the aliases it finds rather than loosening its regex to
+  cover three forms. A regex that admits three shapes is one edit away from
+  admitting four.
+- **Two ownership rungs kept, two admin bypasses removed.** The request list
+  and the run list each keep "rows you created" — no grant expresses that, and
+  removing it would narrow access this batch was not asked to narrow. Both
+  lost their `is_platform_admin` branch, because an instance-scoped grant
+  already contains every path beneath it. The request list also lost its
+  `is_lab_director` subquery, and the replacement is strictly more
+  expressive: a director whose grant sits at org scope now sees their org's
+  requests, which `lab_id IN (...)` could not express.
+
+**Watch out for:**
+
+- Every one of these queries now needs `JOIN labs` in reach. A sample's scope
+  is derived from its lineage (ADR 0015) and the org segment comes from
+  `labs.organization_id` — forget the join and the query fails loudly, which
+  is the good case.
+- `select_all` on the samples list is a separate code path from the paginated
+  one. A filter applied to only one of them is exactly the gap a page-only
+  test misses; there is now a test asserting the two return the same set.
+- **The performance worry was backwards.** The backlog flagged that prefix
+  `LIKE` over a computed expression cannot use an index and asked for a
+  measurement. At 3,000 samples the new fragment costs 113 and runs in 5.3 ms;
+  the legacy ladder costs 3,923 and runs in 7.1 ms. Both sequential-scan
+  `samples`; the legacy one *also* ran four correlated `EXISTS` subqueries. No
+  index added — it would have been speculative, and this is an improvement,
+  not a regression.
