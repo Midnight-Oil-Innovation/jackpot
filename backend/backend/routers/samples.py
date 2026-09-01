@@ -651,8 +651,11 @@ def request_sample_deletion(
     user = get_current_user(request)
     sample = _get_sample_any_or_404(sample_id, db)
     # M3: the §10 "platform admin, owner, or lab member" ladder became a
-    # capability. Ownership is not lost — it is LADDER_POLICIES' owner_id
-    # rung, which reaches sample scope the same way the in-route branch did.
+    # capability. Ownership survives as LADDER_POLICIES' owner_id rung for
+    # deletion:request specifically — M3 claimed that in this comment before
+    # the rung existed, and a rung for a different verb does nothing, because
+    # _matches compares capability by equality. §5.3's ownership row now
+    # enumerates every verb the rung carries and a test holds it to that.
     require_capability("deletion:request")(user, sample_id=sample_id)
     row = deletion.request_deletion(sample, user, payload.reason, db)
     return success(data=_serialise(row))

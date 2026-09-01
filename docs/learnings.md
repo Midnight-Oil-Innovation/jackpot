@@ -3503,3 +3503,41 @@ sent, and `deletion.py`'s legacy `is_platform_admin` check removed.
 - **`_tombstone` test fixtures need `deletion_requested_at`.**
   `samples_deletion_active_requested_chk` asserts
   `(deletion_status = 'ACTIVE') = (deletion_requested_at IS NULL)`.
+
+## deletion:request ownership rung — 2026-09-01
+
+**What was built:** The `LADDER_POLICIES` ownership ALLOW for
+`deletion:request` that M3's comment said already existed, plus §5.3's
+ownership roster and `tests/authz/test_ownership_rung.py` enforcing it.
+
+**Key decisions:**
+
+- **The roster is a table in §5.3, not a registry constant in the test.** A
+  constant listing the rungs would restate the code beside the code and agree
+  with it by construction. The doc is the second recording of the decision, so
+  the guard is doc-vs-code — the pattern `test_catalog_preset_coverage.py`
+  already uses for §8.2's presets.
+- **`sample:update` is a recorded `no`, not an omission.** The legacy ladder
+  gave an owner everything; the capability model gives them read, report and
+  request. Editing metadata on a sample whose lab you have left is a write
+  into someone else's tenant, so it stays excluded — but as a row in the table
+  rather than as an absence.
+- **Requesting is not approving.** The rung is safe to add because
+  `deletion:approve` is a separate verb with §6.2-1b's DENY, which beats any
+  ALLOW unconditionally, so an owner reaching the request route cannot walk it
+  to a completed deletion.
+
+**Watch out for:**
+
+- **`_matches` compares capability by equality.** An ownership rung for
+  `sample:read_detail` does nothing for `deletion:request`. "Ownership implies
+  read/update" is prose that no mechanism implements; only the enumerated
+  verbs are reachable.
+- **The failure mode was a true-sounding comment.** M3 wrote "ownership is not
+  lost — it is `LADDER_POLICIES`' `owner_id` rung" and no rung existed. Nothing
+  threw, no test covered an owner outside the lab, and the narrowing shipped
+  silently. Grep for the rule before writing the comment that says where it
+  lives — Critical Rule 70, applied to policies rather than to capabilities.
+- **Verify a new guard by breaking it.** Flipping the roster's
+  `deletion:request` row to `no` must fail two of the four tests. A guard that
+  has never been seen to fail is not known to be a guard.
