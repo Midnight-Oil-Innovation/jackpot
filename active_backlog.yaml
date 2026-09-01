@@ -2709,10 +2709,22 @@ sessions:
       grant sets and all of them stayed green — see
       tests/test_deletion_plane_capabilities.py, which builds single-shape
       principals for that reason.
+      Slice 3 SHIPPED: tenancy.py DELETED rather than converted. The planned
+      conversion (require_org_access's admin bypass falling out of ADR 0015
+      containment) was right about the mechanism and wrong about the premise:
+      require_org_access had no production callers, get_org_context had none,
+      and nothing read the request.state.org_context the middleware set — at
+      one get_current_user DB lookup per request. Org isolation is structural
+      (grants rooted at instance://self/org/N, _scope_contains matching at a
+      segment boundary), and byop.py, the "mandatory IDOR case", had already
+      converted to permits() under M2-B3 without ever calling the wall. Rule 70:
+      building the half with no call site reads as done and no test can exercise
+      it. access_model.md §5.4 claimed the wall was "a DENY policy keyed on
+      cross-org access; no grant punches through it" — no such policy exists,
+      and an Instance-scoped grant punches through by design; §2/§3.2 carried
+      the same claim twice more. All three corrected (readers 8-10 of 31
+      retired at zero conversion cost).
       REMAINING, per site:
-        - tenancy.py:67/91/131  require_org_access — should fall out of ADR
-          0015 containment (instance://self prefixes every org path) rather
-          than a flag; likely OrgContext carrying instance-scope reach
         - federation/deletion_propagation.py:358  admin-notification lookup →
           a grant query, not a decision
         - guards.py:41/42/72, imports.py:813, auth.py:446-485/590,
@@ -2735,8 +2747,8 @@ sessions:
     effort_sessions: 3
     primary_files:
       - backend/backend/routers/samples.py
-      - backend/backend/tenancy.py
       - backend/backend/routers/users.py
+      - backend/backend/routers/auth.py
       - backend/backend/auth/guards.py
     test_files:
       - tests/authz/test_sovereignty_policies.py
@@ -2781,10 +2793,10 @@ sessions:
       every remaining reader is off them. Inventory as of the M2 session:
 
         DECISION-PATH (must become permit()/permits() calls):
-          - tenancy.py:131        require_org_access — admin bypasses the
-                                  tenant wall. ADR 0015 makes instance://self
-                                  prefix every org path, so this should fall
-                                  out of scope containment, not a flag.
+          - tenancy.py:131        RETIRED by M2-DROP-PRE slice 3 — the module
+                                  was deleted, not converted. No route ever
+                                  called require_org_access; org isolation is
+                                  ADR 0015 scope containment and always was.
           - deletion.py:184       platform-admin self-approve carve-out (M3)
           - samples.py:582        raw_fastq Lab-Director restriction — still
                                   awaiting a §4 verb; endpoint map Residue
@@ -2822,7 +2834,6 @@ sessions:
     parallel_safe_reason: "Irreversible, on the authorization decision path. Manual flow only; serializes per CLAUDE.md."
     effort_sessions: 2
     primary_files:
-      - backend/backend/tenancy.py
       - backend/backend/routers/samples.py
       - backend/backend/routers/users.py
       - backend/backend/routers/auth.py
