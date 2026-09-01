@@ -93,7 +93,7 @@ All catalog gaps were resolved in the M2 pre-cutover review (see
 | PATCH | `/api/v1/organizations/{org_id}` | `org:manage` | Instance | `require_capability("org:manage")` |
 | DELETE | `/api/v1/organizations/{org_id}` | `org:manage` | Instance | `require_capability("org:manage")` |
 | GET | `/api/v1/pipelines/` | `pipeline:read` | Instance | auth-only today; pipeline zoo read |
-| POST | `/api/v1/pipelines/launch` | `pipeline:run` | Project | `permits("pipeline:run", project_id=…)` (M2-B3). NARROWED: §8.2 puts `pipeline:run` in lab_lead + Bioinformatics User only, so a Lab Collaborator/Reader can no longer launch. The in-route per-sample checks were CONVERTED, not dropped — each input now takes `sample:read_detail` at its own sample scope, which also picks up PUBLIC, owned and per-sample-granted inputs the lab test could not see |
+| POST | `/api/v1/pipelines/launch` | `pipeline:run` | Project | `permits("pipeline:run", project_id=…)` (M2-B3). §8.2 puts the verb in Lab Lead and Lab Member RW, so who can launch is unchanged except that read-only members no longer can. The in-route per-sample checks were CONVERTED, not dropped — each input now takes `sample:read_detail` at its own sample scope, which also picks up PUBLIC, owned and per-sample-granted inputs the lab test could not see |
 | POST | `/api/v1/pipelines/events` | `pipeline:write_results` | Instance | SERVICE-authenticated (NOT public): per-run `X-Pipeline-Token`, `hmac.compare_digest`, 401 on mismatch (`routers/pipelines.py:903`). Rule 60's never-raises applies to weblog delivery, not auth. M2 adds the SERVICE-principal `permit()` call |
 | GET | `/api/v1/pipelines/{run_id}` | `pipeline:read` | Project | `_may_read_run` -> `permits("pipeline:read", project_id=…)` (M2-B3). Capability corrected from `pipeline:run` in M2-B3-PRE — §4 defines `pipeline:read` as covering run status, and the old reading would have hidden a lab's own runs from its Collaborators and Readers |
 | GET | `/api/v1/pipelines/{run_id}/tasks` | `pipeline:read` | Project | `_may_read_run` -> `permits("pipeline:read", project_id=…)` (M2-B3). Capability corrected from `pipeline:run` in M2-B3-PRE — §4 defines `pipeline:read` as covering run status, and the old reading would have hidden a lab's own runs from its Collaborators and Readers |
@@ -239,12 +239,12 @@ BY DESIGN and two are B7-class lists (see below).
 ### The read/run split is the whole batch
 
 §4 defines `pipeline:read` as "the pipeline zoo, the BYOP registry, and run
-status"; `pipeline:run` is the launch verb and sits only in `lab_lead` and
-the Bioinformatics User extra. Watching a run and starting one are different
-acts by different people. Getting this backwards in either direction is a
-real failure: `pipeline:run` on the status routes hides a lab's own runs from
-its Collaborators and Readers, and `pipeline:read` on launch lets a read-only
-member start compute.
+status"; `pipeline:run` is the launch verb, held by `lab_lead` and
+`lab_member_rw` but not by `lab_member_ro`. Watching a run and starting one
+are different acts. Getting this backwards fails in both directions:
+`pipeline:run` on the status routes hides a lab's own runs from its read-only
+members, and `pipeline:read` on launch lets a read-only member start
+compute.
 
 ### What a BYOP pipeline belongs to
 
@@ -271,9 +271,17 @@ only.
 ### Deliberate narrowings
 
 - **Launch and resume**: `pipeline:run` replaces "any lab or project member".
-  Lab Collaborators and Lab Readers lose the ability to launch. This is §8.2's
-  intent — running pipelines is bioinformatics work — and it fails closed with
-  a 403.
+  §8.2's Lab Member (read-write) block holds the verb, so Collaborators and
+  Bioinformatics Users are unaffected; **read-only members lose launch**,
+  which they should never have had.
+
+  This nearly went the other way. The reseed excluded `pipeline:run` from
+  `lab_member_rw` and added it back only for Bioinformatics User, reading
+  §8.5's "folded into Lab Member RW + `pipeline:run`" as meaning RW lacked
+  it. §8.2's preset block says the opposite in as many words: "can run
+  pipelines but not approve submissions or access requests". Shipping on the
+  reseed's reading would have taken launch from every Lab Collaborator and
+  called it intentional. Corrected here, in the reseed and in §8.5's prose.
 - **BYOP mutation on a lab-owned pipeline**: `pipeline:register_custom` sits
   in `lab_lead`, so ordinary lab membership is no longer enough. A
   Bioinformatics User keeps full control of the pipelines they registered

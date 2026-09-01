@@ -118,7 +118,9 @@ EXPECTED_GRANT_SHAPE = {
     "P4": {"lab_a": len(PRESET_GRANTS["lab_lead"])},
     "P5": {"lab_a": len(PRESET_GRANTS["lab_member_rw"])},
     "P6": {"lab_a": len(PRESET_GRANTS["lab_member_ro"])},
-    "P7": {"lab_a": len(PRESET_GRANTS["lab_member_rw"]) + 1},  # + pipeline:run
+    # A Bioinformatics User IS a Lab Member RW: §8.2 puts pipeline:run in
+    # that preset, so there is no extra grant (corrected in M2-B3).
+    "P7": {"lab_a": len(PRESET_GRANTS["lab_member_rw"])},
     "P8": {"lab_a": len(PRESET_GRANTS["lab_lead"]), "lab_b": len(PRESET_GRANTS["lab_member_ro"])},
     "P9": {},
     # P10 reaches two samples by per-sample access — one through
@@ -160,11 +162,17 @@ class TestReseedOnPostgres:
                 assert r["conditions"] in (None, {}), r
                 assert r["id"] is not None
 
-    def test_bioinformatics_user_gets_pipeline_run(self, world):
-        caps = {r["capability"] for r in _grants(world, "P7")}
-        assert "pipeline:run" in caps
-        # and a plain collaborator does not:
-        assert "pipeline:run" not in {r["capability"] for r in _grants(world, "P5")}
+    def test_pipeline_run_reaches_every_read_write_member(self, world):
+        """M2-B3 corrected the preset. §8.2's Lab Member (read-write) block
+        lists pipeline:run — "can run pipelines but not approve submissions or
+        access requests" — so both the Bioinformatics User (P7) and the plain
+        Collaborator (P5) hold it. This test previously asserted P5 did NOT,
+        which is what let the exclusion survive.
+        """
+        assert "pipeline:run" in {r["capability"] for r in _grants(world, "P7")}
+        assert "pipeline:run" in {r["capability"] for r in _grants(world, "P5")}
+        # Read-only members still cannot launch.
+        assert "pipeline:run" not in {r["capability"] for r in _grants(world, "P6")}
 
     def test_reseed_idempotent_on_pg_with_unique_index(self, world):
         engine, _ = _get_engine()

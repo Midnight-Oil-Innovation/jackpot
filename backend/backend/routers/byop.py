@@ -275,7 +275,9 @@ def _get_or_404(db: Session, pipeline_id: int) -> ByopPipeline:
     return pipeline
 
 
-def _may_manage(current_user: dict, owner_lab_id: int | None, registered_by_user_id) -> bool:
+def _may_manage(
+    current_user: dict, owner_lab_id: int | None, registered_by_user_id: str | None
+) -> bool:
     """May this caller register or mutate this BYOP pipeline? (M2-B3)
 
     One call replaces the three-branch ladder that preceded it —
@@ -304,7 +306,7 @@ def _may_manage(current_user: dict, owner_lab_id: int | None, registered_by_user
         current_user,
         "pipeline:register_custom",
         lab_id=owner_lab_id,
-        attributes={"registered_by_user_id": registered_by_user_id},
+        row_attributes={"registered_by_user_id": registered_by_user_id},
     )
 
 

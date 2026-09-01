@@ -2390,9 +2390,14 @@ sessions:
       One real bug found and fixed in the batch: routing create_pipeline through the ownership rung made the
       lab check vacuous (the caller is always the registrant at creation), so any user could register into
       any lab. A widening, so it would not have failed closed. Pinned by a regression test.
-      Deliberate narrowings, all documented in the map: launch and resume take pipeline:run, which §8.2 puts
-      in lab_lead + Bioinformatics User only, so Lab Collaborators and Readers lose launch; BYOP mutation on
-      a lab-owned pipeline takes pipeline:register_custom, so ordinary lab membership is no longer enough."
+      Second bug, found by the spec-axis review: the batch justified a launch narrowing by citing §8.2 as
+      putting pipeline:run in lab_lead + Bioinformatics User only. §8.2's Lab Member (read-write) preset block
+      lists pipeline:run outright. The claim came from reseed.py, which excluded it on a misreading of §8.5's
+      role-mapping prose — so code and prose agreed only because one was derived from the other. Corrected:
+      lab_member_rw now grants pipeline:run, BIOINFORMATICS_EXTRA is deleted, §8.5's phrasing is fixed, and
+      Lab Collaborators keep launch. Only read-only members lose it.
+      Remaining narrowing, documented in the map: BYOP mutation on a lab-owned pipeline takes
+      pipeline:register_custom, so ordinary lab membership is no longer enough."
   - id: M2-B4
     title: Submission and import-mapping route guards (21 routes)
     short_description: |

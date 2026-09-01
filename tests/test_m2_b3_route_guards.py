@@ -193,8 +193,26 @@ async def test_reading_a_run_does_not_confer_resuming_it(client, monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_lab_collaborator_may_launch(client, monkeypatch):
+    """The access the reseed exclusion was silently removing."""
+    emails: list[str] = []
+    try:
+        u = _member("plw", "Lab Collaborator", monkeypatch)
+        emails.append(u["email"])
+        resp = await client.post(
+            "/api/v1/pipelines/launch",
+            json={"pipeline_id": 1, "project_id": SEED_PROJECT_ID, "sample_ids": ["nope"]},
+        )
+        # Past the guard: whatever the launch path then says about a
+        # nonexistent sample is not this test's business.
+        assert resp.status_code != 403, resp.text
+    finally:
+        _cleanup_users(emails)
+
+
+@pytest.mark.asyncio
 async def test_bioinformatics_user_may_resume(client, monkeypatch):
-    """pipeline:run reaches the Bioinformatics User via BIOINFORMATICS_EXTRA."""
+    """A Bioinformatics User maps to lab_member_rw, which holds pipeline:run."""
     emails: list[str] = []
     run_id = _seed_run()
     try:
@@ -214,10 +232,16 @@ async def test_bioinformatics_user_may_resume(client, monkeypatch):
 
 @pytest.mark.asyncio
 async def test_launch_denied_without_pipeline_run(client, monkeypatch):
-    """A Lab Collaborator holds sample:update but not pipeline:run."""
+    """A Lab Reader holds pipeline:read but not pipeline:run.
+
+    This test originally used a Lab Collaborator, which passed — because the
+    reseed wrongly withheld pipeline:run from lab_member_rw. §8.2's preset
+    block puts it there. A Collaborator launching is correct behaviour, so
+    the denial case has to be the read-only member.
+    """
     emails: list[str] = []
     try:
-        u = _member("plc", "Lab Collaborator", monkeypatch)
+        u = _member("plc", "Lab Reader", monkeypatch)
         emails.append(u["email"])
         resp = await client.post(
             "/api/v1/pipelines/launch",

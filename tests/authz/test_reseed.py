@@ -10,7 +10,6 @@ import pytest
 from sqlalchemy import create_engine, text
 
 from backend.authz.reseed import (
-    BIOINFORMATICS_EXTRA,
     GRANT_SOURCE,
     INSTANCE_SCOPE,
     PRESET_GRANTS,
@@ -197,8 +196,10 @@ def test_preset_grants_constant_completeness():
         assert caps, preset
         for cap in caps:
             assert cap.strip(), f"blank capability in {preset}"
-    assert "pipeline:run" not in PRESET_GRANTS["lab_member_rw"]
-    assert BIOINFORMATICS_EXTRA == ["pipeline:run"]
+    # §8.2 puts pipeline:run in Lab Member RW; only read-only lacks it.
+    assert "pipeline:run" in PRESET_GRANTS["lab_member_rw"]
+    assert "pipeline:run" not in PRESET_GRANTS["lab_member_ro"]
+    assert "pipeline:run" in PRESET_GRANTS["lab_member_rw"]
 
 
 def test_platform_admin_gets_instance_admin_grants(conn):
@@ -257,14 +258,36 @@ def test_lab_member_ro_grants(conn):
     assert not caps & write_caps
 
 
-def test_bioinformatics_user_gets_rw_plus_pipeline_run(conn):
+def test_bioinformatics_user_is_exactly_lab_member_rw(conn):
+    """M2-B3 corrected this. §8.2 puts pipeline:run in the Lab Member RW
+    preset, so a Bioinformatics User needs no extra capability — it *is* a
+    Lab Member RW. The reseed previously excluded the verb from RW and added
+    it back only here, which cost every Lab Collaborator the ability to
+    launch a pipeline."""
     _add_user(conn, 7)
     _add_membership(conn, 7, 7, "Bioinformatics User")
     reseed(conn)
-    grants = _grants(conn, "7")
-    caps = [g.capability for g in grants]
-    assert set(caps) == set(PRESET_GRANTS["lab_member_rw"]) | {"pipeline:run"}
+    caps = [g.capability for g in _grants(conn, "7")]
+    assert set(caps) == set(PRESET_GRANTS["lab_member_rw"])
     assert caps.count("pipeline:run") == 1
+
+
+def test_lab_collaborator_can_launch(conn):
+    """The regression the exclusion caused, pinned at the preset."""
+    _add_user(conn, 12)
+    _add_membership(conn, 12, 7, "Lab Collaborator")
+    reseed(conn)
+    caps = {g.capability for g in _grants(conn, "12")}
+    assert "pipeline:run" in caps
+
+
+def test_lab_reader_still_cannot_launch(conn):
+    _add_user(conn, 13)
+    _add_membership(conn, 13, 7, "Lab Reader")
+    reseed(conn)
+    caps = {g.capability for g in _grants(conn, "13")}
+    assert "pipeline:run" not in caps
+    assert "pipeline:read" in caps
 
 
 def test_every_lab_preset_holds_pipeline_read(conn):
@@ -283,9 +306,14 @@ def test_every_lab_preset_holds_pipeline_read(conn):
 
 
 def test_pipeline_read_does_not_imply_pipeline_run(conn):
-    """Watching a run is not launching one — the launch verb stays confined."""
-    for preset in ("lab_member_rw", "lab_member_ro"):
-        assert "pipeline:run" not in PRESET_GRANTS[preset], preset
+    """Watching a run is not launching one.
+
+    Read-only is where the two verbs come apart: it holds pipeline:read and
+    not pipeline:run. Read-write holds both — §8.2 puts the launch verb in
+    that preset — so it cannot carry this distinction.
+    """
+    assert "pipeline:read" in PRESET_GRANTS["lab_member_ro"]
+    assert "pipeline:run" not in PRESET_GRANTS["lab_member_ro"]
 
 
 def test_lab_reader_gets_pipeline_read_at_their_lab(conn):

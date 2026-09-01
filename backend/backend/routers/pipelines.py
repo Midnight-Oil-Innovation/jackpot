@@ -79,10 +79,10 @@ def _may_read_run(user: dict, run: dict) -> bool:
 
     M2-B3. §4 defines pipeline:read as "the pipeline zoo, the BYOP registry,
     and run status", so watching a run is a read verb — deliberately NOT
-    pipeline:run, which sits only in lab_lead and the Bioinformatics User
-    extra and would have taken run visibility away from every Lab
-    Collaborator and Lab Reader for runs on their own lab's samples. The
-    endpoint-capability map said pipeline:run and was corrected (M2-B3-PRE).
+    pipeline:run, which read-only members do not hold and which would
+    therefore have taken run visibility away from every Lab Reader watching a
+    run on their own lab's samples. The endpoint-capability map said
+    pipeline:run and was corrected (M2-B3-PRE).
 
     Decided at Project scope, which a lab-scoped grant contains, so an
     ordinary lab member is unaffected by the narrower scope.
@@ -226,12 +226,11 @@ def _authorize_and_resolve_launch_inputs(
         )
     lab_id = proj_rows[0]["lab_id"]
 
-    # M2-B3: pipeline:run at the project's own scope, per the map. Narrower
-    # than the lab-membership test it replaces — §8.2 puts pipeline:run in
-    # lab_lead and the Bioinformatics User extra only, so a Lab Collaborator
-    # or Lab Reader can no longer launch. That is the model's intent (running
-    # pipelines is bioinformatics work), and it is a DENY, so it fails closed
-    # and visibly rather than silently.
+    # M2-B3: pipeline:run at the project's own scope, per the map. §8.2 puts
+    # the verb in Lab Lead and Lab Member RW, so the set of people who can
+    # launch is unchanged from the lab-membership test this replaces, minus
+    # read-only members — who could launch before and had no business doing
+    # so. What DOES change is the scope: a project, not its whole lab.
     if not permits(user, "pipeline:run", project_id=payload.project_id):
         return (
             None,

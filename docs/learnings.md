@@ -2761,10 +2761,12 @@ surfaced.
   missing.
 - **Run-status reads are `pipeline:read`, not `pipeline:run`.** The map and
   §4 disagreed. §4's wording is explicit — "the pipeline zoo, the BYOP
-  registry, and run status" — and `pipeline:run` sits only in `lab_lead` and
-  the Bioinformatics User extra, so taking the map literally would have
-  removed run visibility from every Lab Collaborator and Lab Reader, for runs
-  on their own lab's samples. Watching a run is not launching one.
+  registry, and run status" — and `pipeline:run` is not held by read-only
+  members, so taking the map literally would have removed run visibility from
+  every Lab Reader watching a run on their own lab's samples. Watching a run
+  is not launching one. (This entry first said `pipeline:run` sat only in
+  `lab_lead` plus a Bioinformatics User extra. That was the reseed's
+  misreading rather than §8.2 — M2-B3 found and corrected it; see that entry.)
 - **BYOP catalog reads stay unscoped.** The map said `pipeline:read` at Lab;
   `byop.py` said reads are "INTENTIONALLY unscoped per design §9 (catalog
   browse)". Resolved toward the router: a pipeline definition is not tenant
@@ -2837,9 +2839,19 @@ reads.
 
 **Watch out for:**
 
-- Launch narrows to `lab_lead` + Bioinformatics User. Lab Collaborators and
-  Readers can no longer launch a pipeline. Intended per §8.2, fails closed,
-  documented in the map — but it is the most user-visible change in the batch.
+- **A citation I repeated four times did not hold, and the review caught it.**
+  I wrote "§8.2 puts `pipeline:run` in lab_lead + Bioinformatics User only" in
+  the router, the map, this file and the backlog, and built a "deliberate
+  narrowing" on it. §8.2's Lab Member (read-write) preset block lists
+  `pipeline:run` outright — "can run pipelines but not approve submissions or
+  access requests". The claim came from `reseed.py`, which excluded the verb
+  from `lab_member_rw` on a misreading of §8.5's role-mapping prose, and I
+  took the code's behaviour for the spec's intent because they were the only
+  two things I checked against each other. The fix runs the other way: the
+  reseed now grants it, `BIOINFORMATICS_EXTRA` is gone, and §8.5's phrasing is
+  corrected so it cannot re-create the confusion. Launch access is unchanged
+  for Collaborators; only read-only members lose it.
+  The general lesson: when code and prose agree, that is one source, not two.
 - A test that passed alone failed in full-suite order: `'Other Lab'` already
   existed, created by another module *without* a project, and the helper only
   seeded the project on the lab-insert path. Ensure each half independently.
