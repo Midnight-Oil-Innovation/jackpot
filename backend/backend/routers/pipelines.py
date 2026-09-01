@@ -116,6 +116,11 @@ def _authorize_run_callback(run: dict) -> bool:
     chokepoint. A ``data_source_lab`` peer (§8.4) reaching these routes at
     M4/M5 carries a different capability set, and the answer changes here
     rather than in the route.
+
+    ``policies=[]`` because no ALLOW or DENY policy names
+    ``pipeline:write_results`` — the decision is purely structural. The
+    sovereignty DENY policies that will (M3) are why this passes a list at all
+    rather than calling the grant check directly.
     """
     principal = pipeline_run_principal(run)
     resource = Resource(scope=project_resource_scope(run["project_id"]))
@@ -968,6 +973,12 @@ def receive_pipeline_event(
     # different fact and a different fix. Rule 60's "the receiver never raises"
     # governs weblog *delivery* errors, not auth: a wrong token has always
     # raised 401 here, and a refused principal is the same kind of answer.
+    #
+    # Raises where the results route returns an error envelope. The two have
+    # differed since before M2 — this one answers Nextflow, which reads status
+    # codes and ignores bodies — so each keeps its own idiom rather than one
+    # being changed inside an authz batch. ponytail: converge them if a third
+    # per-run callback lands, not before.
     if not _authorize_run_callback(run):
         raise HTTPException(status_code=403, detail="capability 'pipeline:write_results' required")
 

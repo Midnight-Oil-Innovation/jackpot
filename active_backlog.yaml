@@ -2726,7 +2726,12 @@ sessions:
     pr_title_function:
     branch_name_template: m5-compute-plane
     role_framing:
-    notes: "Adapter over shipped PolicyChecker; carries AM-OPEN-4. access_model.md §4.6 + §7.4 + §9.4."
+    notes: "Adapter over shipped PolicyChecker; carries AM-OPEN-4. access_model.md §4.6 + §7.4 + §9.4.
+      Still owned here after M2-B6: §8.4's Data Source Lab PRESET — pipeline:write_results plus
+      compute:he_aggregate / he_query / register_dataset, scoped to the cryptWWDB Project and applied to a
+      data_source_lab federation peer. B6 landed a different object: a per-run SERVICE principal
+      (pipeline_run_principal) that is constructed per callback and never stored. No preset in reseed.py
+      grants pipeline:write_results and none should until that peer exists."
 
   # ── Open DESIGN items from access_model.md §11.4 — not codeable sessions ──
   # Tracked, not scheduled. Each is a design question resolved before (or
