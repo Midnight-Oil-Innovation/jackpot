@@ -2671,6 +2671,71 @@ sessions:
     merged_at: '2026-08-31'
     merge_sha: 81f3a55
 
+  - id: M2-DROP-PRE
+    title: Convert every legacy-column reader (reversible half of M2-DROP)
+    short_description: |
+      Everything M2-DROP needs that is NOT the irreversible ALTER TABLE, so
+      the drop itself becomes small and boring. Split at the maintainer's
+      direction after the inventory came back larger than M2-DROP assumed:
+      12 production sites, 41 test files carrying 138 references, and 7 sites
+      needing §4 catalog verbs that do not exist.
+      Slice 1 SHIPPED: deletion:self_approve. §6.2-1b's escape was a
+      request-body flag the route passed straight into the policy condition,
+      so any principal could lift the separation-of-duties DENY. Not
+      exploitable end to end — deletion.py re-checked is_platform_admin — but
+      that check was itself on the removal list, so the drop would have opened
+      the hole. Now a capability held only by instance_administrator, with the
+      route ANDing what was asked against what is held, and deletion.py's
+      legacy check removed (reader 2 of 12 retired).
+      REMAINING, per site:
+        - samples.py:582  raw_fastq → needs a verb narrower than
+          sample:read_detail; endpoint-map Residue has tracked this since M2-B2
+        - samples.py:643  _require_lab_tie (deletion-report) → a read verb
+          instance admins also hold; sample:read_detail excludes them by §8.2
+        - samples.py:652  _require_approval_authority (retraction-requests)
+        - samples.py:730/747  reverse-tombstone, vacuum-now → admin-only, no verb
+        - tenancy.py:67/91/131  require_org_access — should fall out of ADR
+          0015 containment (instance://self prefixes every org path) rather
+          than a flag; likely OrgContext carrying instance-scope reach
+        - federation/deletion_propagation.py:358  admin-notification lookup →
+          a grant query, not a decision
+        - guards.py:41/42/72, imports.py:813, auth.py:446-485/590,
+          users.py:15/16/24/25  identity plumbing; users.py PATCH exposes both
+          flags as admin-editable, which is role ASSIGNMENT and must become
+          grant issuance the way M2-B5 did for membership
+        - 138 test references across 41 files
+      reseed() reads the columns BY DESIGN and two migrations call it. Ordering
+      holds on a fresh DB (both run before any drop), but after the drop
+      reseed() can never run again — it becomes historical-only, and that
+      should be stated in its docstring rather than discovered.
+    phase: access_model_redesign
+    status: open
+    depends_on:
+      - M2
+      - M3
+    blocked_by_external:
+    parallel_safe: false
+    parallel_safe_reason: "Authorization decision path; serializes per CLAUDE.md."
+    effort_sessions: 3
+    primary_files:
+      - backend/backend/routers/samples.py
+      - backend/backend/tenancy.py
+      - backend/backend/routers/users.py
+      - backend/backend/auth/guards.py
+    test_files:
+      - tests/authz/test_sovereignty_policies.py
+    source_of_truth_views:
+      - docs/access_model.md
+      - docs/endpoint_capability_map.md
+    pr_title_template: "feat(authz): M2-DROP-PRE — convert legacy-column readers"
+    pr_title_function:
+    branch_name_template: m2-drop-pre
+    role_framing:
+    notes: "Adding §4 verbs means editing access_model.md §4 AND the §8.2 preset blocks together —
+      test_reseed_presets_match_the_documented_ones enforces the pair, and it correctly rejected an M3 draft that
+      changed only the code. Every preset change also needs a reseed migration: PRESET_GRANTS is a template and the
+      grants are rows, so a preset edit reaches nobody until a reseed runs."
+
   - id: M2-DROP
     title: Drop the legacy role columns (IRREVERSIBLE — manual flow only)
     short_description: |
@@ -2710,10 +2775,11 @@ sessions:
       (a1c7d94e6b28) again immediately before the drop if any legacy write
       path is still live at that point.
     phase: access_model_redesign
-    status: open
+    status: blocked
     depends_on:
       - M2
       - M3
+      - M2-DROP-PRE
     blocked_by_external:
     parallel_safe: false
     parallel_safe_reason: "Irreversible, on the authorization decision path. Manual flow only; serializes per CLAUDE.md."

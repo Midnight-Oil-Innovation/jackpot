@@ -9,6 +9,7 @@ seven pre-existing deletion-adjacent AuditActions constants.
 """
 
 import pytest
+from authz_helpers import sync_grants_from_legacy_roles
 
 from backend.config import get_settings
 from backend.database import execute_query, execute_write
@@ -379,3 +380,64 @@ def test_deletion_audit_constants_have_call_sites():
         "ARCHIVE_SAMPLE",
     ):
         assert f"AuditActions.{const}" in sources, f"{const} has no call site"
+
+
+@pytest.mark.asyncio
+async def test_non_admin_cannot_self_approve_via_the_request_flag(client, monkeypatch):
+    """§6.2-1b's escape must be a capability, not caller-supplied input.
+
+    Before M2-DROP-PRE the route passed ``platform_admin_self_approve`` from
+    the request body straight into the policy condition, so the
+    separation-of-duties DENY was liftable by anyone who set it. It was never
+    exploitable end to end — ``deletion.py`` re-checked ``is_platform_admin``
+    and 403'd — but that check reads a legacy column scheduled for removal,
+    and removing it would have opened the hole. The route now ANDs the request
+    with ``deletion:self_approve``, which only ``instance_administrator``
+    holds.
+
+    A Lab Lead is the right adversary here: they legitimately hold
+    ``deletion:approve`` at their lab, so the only thing standing between them
+    and approving their own deletion request is this rule.
+    """
+    sid = "DEL-SELFAPPROVE"
+    _cleanup(sid)
+    s = _mk_sample(sid)
+
+    email = "lab-lead-selfapprove@example.org"
+    uid = execute_write(
+        "INSERT INTO users (email, name, organization_id, is_platform_admin, is_active) "
+        "VALUES (:e, 'Lab Lead', 1, FALSE, TRUE) "
+        "ON CONFLICT (email) DO UPDATE SET is_active = TRUE RETURNING id",
+        {"e": email},
+    )[0]["id"]
+    execute_write(
+        "INSERT INTO lab_membership (user_id, lab_id, permission_group_id, is_lab_director) "
+        "SELECT :u, 1, pg.id, TRUE FROM permission_groups pg WHERE pg.name = 'Lab Director' "
+        "ON CONFLICT DO NOTHING",
+        {"u": uid},
+    )
+    sync_grants_from_legacy_roles()
+
+    monkeypatch.setenv("MOCK_USER_EMAIL", email)
+    get_settings.cache_clear()
+
+    resp = await client.post(
+        f"/api/v1/samples/{s['id']}/request-deletion",
+        json={"reason": "consent withdrawn"},
+    )
+    assert resp.status_code == 200, resp.text
+
+    # Same actor, asking to skip the second pair of eyes.
+    resp = await client.post(
+        f"/api/v1/samples/{s['id']}/approve-deletion",
+        json={"platform_admin_self_approve": True},
+    )
+    assert resp.status_code == 403, resp.text
+
+    still = execute_query("SELECT deletion_status FROM samples WHERE id = :id", {"id": s["id"]})[0][
+        "deletion_status"
+    ]
+    assert still == "DELETION_REQUESTED", "the deletion must not have been approved"
+
+    execute_write("DELETE FROM lab_membership WHERE user_id = :u", {"u": uid})
+    _cleanup(sid)

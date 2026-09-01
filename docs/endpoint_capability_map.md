@@ -222,7 +222,7 @@ Four routes converted onto capabilities; two left, deliberately.
 | Method | Path | Capability | Scope | Note |
 |---|---|---|---|---|
 | POST | `/api/v1/samples/{sample_id}/request-deletion` | `deletion:request` | Sample | `require_capability("deletion:request", sample_id=…)` (M3) — the §10 "owner, or lab member" ladder became a capability; ownership survives as `LADDER_POLICIES`' `owner_id` rung |
-| POST | `/api/v1/samples/{sample_id}/approve-deletion` | `deletion:approve` | Sample | `require_capability("deletion:approve", sample_id=…)` (M3) — inherits the §6.2-1b `deletion.separation_of_duties` DENY; the audited self-approve flag travels as a Context condition |
+| POST | `/api/v1/samples/{sample_id}/approve-deletion` | `deletion:approve` | Sample | `require_capability("deletion:approve", sample_id=…)` (M3) — inherits the §6.2-1b `deletion.separation_of_duties` DENY. M2-DROP-PRE: the self-approve condition is derived from `permits(user, "deletion:self_approve")`, NOT from the request body — a condition taken at face value made the DENY liftable by any caller |
 | POST | `/api/v1/samples/{sample_id}/cancel-deletion` | `deletion:approve` | Sample | `require_capability("deletion:approve", sample_id=…)` (M3) — only when cancelling someone else's request; the requester cancelling their own is an identity comparison (§4.7) |
 
 **Platform admins lose these routes, by design.** §8.2's Instance

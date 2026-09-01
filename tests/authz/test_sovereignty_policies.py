@@ -208,3 +208,55 @@ def test_absent_deletion_status_denies_the_push():
     blocks an export, there it would block every approval.
     """
     assert _push_decision(_ABSENT) is Decision.DENY
+
+
+# ── §6.2-1b's escape is a capability, not a request-body flag ────────────
+
+
+def _requester_with(*capabilities: str) -> Principal:
+    """The deletion's own requester, holding whatever is listed."""
+    return Principal(
+        kind=PrincipalKind.HUMAN,
+        id=REQUESTER,
+        on_behalf_of=None,
+        grants=[CapabilityGrant(capability=c, scope_ref=scope_uri()) for c in capabilities],
+    )
+
+
+def test_the_self_approve_condition_alone_lifts_the_deny():
+    """Documents the engine's contract, and why the ROUTE must not trust input.
+
+    The policy condition is a fact about the request, and the engine has no
+    way to know whether the caller was entitled to assert it. That is correct
+    for an engine and dangerous for a router: before M2-DROP-PRE the route
+    passed payload.platform_admin_self_approve straight through, so any
+    principal could set it and lift the separation-of-duties DENY. The engine
+    behaviour below is unchanged — what changed is who is allowed to produce
+    the condition.
+    """
+    assert (
+        _decide(
+            _requester_with("deletion:approve"),
+            _sample(REQUESTER),
+            platform_admin_self_approve=True,
+        )
+        is Decision.ALLOW
+    )
+
+
+def test_deletion_self_approve_is_a_real_catalog_capability():
+    """The verb the route now checks before setting the condition.
+
+    Held only by instance_administrator (§8.2), and conferring no approval
+    authority of its own — an actor without deletion:approve still cannot
+    approve anything.
+    """
+    from backend.authz.reseed import PRESET_GRANTS
+
+    holders = [name for name, caps in PRESET_GRANTS.items() if "deletion:self_approve" in caps]
+    assert holders == ["instance_administrator"], holders
+
+    only_escape = _requester_with("deletion:self_approve")
+    assert _decide(only_escape, _sample(REQUESTER), platform_admin_self_approve=True) is (
+        Decision.DENY
+    ), "the escape must not confer approval authority by itself"

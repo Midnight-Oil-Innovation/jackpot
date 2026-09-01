@@ -181,16 +181,15 @@ def approve_deletion(sample: dict, actor: dict, conn, *, self_approve: bool = Fa
                 f"Sample is not deletion-requested (deletion_status={sample['deletion_status']})."
             ),
         )
-    if sample["deletion_requested_by_user_id"] == actor["id"] and not (
-        actor.get("is_platform_admin") and self_approve
-    ):
-        raise HTTPException(
-            status_code=403,
-            detail=(
-                "Approver must differ from the requester (platform admins may "
-                "self-approve with platform_admin_self_approve=true)."
-            ),
-        )
+    # Separation of duties (§6.2-1b) is decided by permit(), not here. M3 made
+    # it the deletion.separation_of_duties DENY policy; the route evaluates it
+    # with the self-approve condition derived from whether the caller holds
+    # deletion:self_approve, so re-deriving it from is_platform_admin would be
+    # a second, weaker copy of the rule reading a column M2-DROP removes.
+    #
+    # `self_approve` survives as a parameter because the audit metadata below
+    # records whether the escape was used, which is the whole point of calling
+    # it audited.
     pending = execute_query(
         "SELECT sub.id, sub.status FROM submissions sub "
         "JOIN submission_samples ss ON ss.submission_id = sub.id "

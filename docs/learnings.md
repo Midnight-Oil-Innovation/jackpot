@@ -3403,3 +3403,53 @@ gates, and — on that call site — `sovereignty.no_federate_deleting`.
   inserting a non-ACTIVE row without the timestamp is not merely rejected — it
   was never a state the system could reach, so a test built on one would prove
   nothing.
+
+## M2-DROP-PRE slice 1 — an audited escape that anyone could take — 2026-09-01
+
+**What was built:** `deletion:self_approve` as a real §4 capability, the route
+deriving §6.2-1b's escape from what the caller holds rather than what they
+sent, and `deletion.py`'s legacy `is_platform_admin` check removed.
+
+**Key decisions:**
+
+- **The bug was in M3, and inventorying M2-DROP is what surfaced it.** M3
+  moved separation-of-duties into a DENY policy with `platform_admin_self_approve`
+  as a Context condition — and the route set that condition straight from
+  `payload.platform_admin_self_approve`. The policy never checks the caller is
+  an admin, because a policy *cannot*: a condition is a fact about the request,
+  and the engine has no way to know whether the caller was entitled to assert
+  it. **Correct for an engine, dangerous for a router.** Verified directly:
+  a non-admin with `deletion:approve` at lab scope got ALLOW with the flag set.
+- **It was never exploitable, and that is exactly why it was dangerous.**
+  `deletion.py` still re-checked `is_platform_admin`, so end-to-end behaviour
+  was right. But that check was item 2 on M2-DROP's removal list. The hole
+  would have opened during a mechanical "convert the readers" pass, in a PR
+  about *removing columns*, where nobody would be looking for an authorization
+  change. Defence-in-depth hid the defect from the tests and would have
+  handed it to the drop.
+- **A regression test that passes without the fix proves nothing.** The first
+  version of the guard test passed either way, because `deletion.py` was still
+  catching it. Removing that legacy check — M2-DROP-PRE work regardless — is
+  what made the test isolate the fix. It now fails without the route change
+  and passes with it, which was verified by reverting the change and running
+  it, not by assuming.
+- **The escape is a capability, not a role check.** `deletion:self_approve` is
+  held only by `instance_administrator` and confers no approval authority of
+  its own — an actor without `deletion:approve` still cannot approve anything.
+  That keeps §8.2's "operational, not a consent authority" line true, and the
+  note now says so explicitly so the addition does not read as contradicting
+  the sentence above it.
+
+**Watch out for:**
+
+- **A policy condition is caller-supplied unless the router proves otherwise.**
+  Anything reaching `Context.conditions` from a request body is an assertion,
+  not a fact. If lifting a DENY depends on one, the router must AND it with a
+  held capability — the engine will not do it for you.
+- **Preset edits need a migration, every time.** `PRESET_GRANTS` is a template;
+  the grants are rows. `deletion:self_approve` reaches no existing admin until
+  a reseed runs, so the preset change ships with `c4d81a06f2b7`.
+- **Doc and code preset blocks must move together.**
+  `test_reseed_presets_match_the_documented_ones` compares §8.2's fenced block
+  against `PRESET_GRANTS`, and §8.2's continuation lines have a 16-space
+  indent contract the parser depends on.

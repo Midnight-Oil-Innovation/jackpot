@@ -360,6 +360,7 @@ The category-defining absence: **there is no `anomaly:emit`.** The immune subsys
 | `access:revoke` | Revoke an access grant | `REVOKE_ACCESS` |
 | `deletion:request` | Request deletion of a sample — drives the `ACTIVE → DELETION_REQUESTED` transition (see §6) | `sample_deletion_requested` |
 | `deletion:approve` | Approve a deletion request (sovereignty-sensitive — see §6) | `APPROVE_DELETION` |
+| `deletion:self_approve` | Lift the §6.2-1b separation-of-duties DENY on a deletion you requested yourself. Does **not** confer approval authority — it removes friction from an actor who already holds `deletion:approve`, and is audited | `APPROVE_DELETION` |
 | `submission:prepare` | Build and edit an outbound submission — create, amend, add/remove samples, validate readiness, generate the package | `CREATE_SUBMISSION` / `UPDATE_SUBMISSION` |
 | `submission:approve` | Approve an outbound submission | `SUBMISSION_MARKED_SUBMITTED` |
 | `scrub:approve_skip` | Approve a scrubber-skip request | `APPROVE_SCRUB_SKIP` |
@@ -793,11 +794,16 @@ Preset "Instance Administrator":
                 anomaly:configure_detector, sample:read_surveillance,
                 lab:read, org:read, import:read, token:manage,
                 deposit:record, pipeline:read, pipeline:promote,
-                pipeline:register_custom
+                pipeline:register_custom, deletion:self_approve
   note: Does NOT implicitly include deletion:approve over sovereignty-governed
         samples on Scenario T — that path is gated by the separation-of-duties
         DENY (§6.2 1b) and, where a Tribal authority exists, sits with that
         authority. Instance Administrator is operational, not a consent authority.
+        deletion:self_approve is consistent with that: it lifts §6.2-1b's
+        separation-of-duties friction for an actor who ALREADY holds
+        deletion:approve by some other grant, and confers no approval authority
+        of its own. Without it the escape §6.2-1b describes would be a
+        caller-supplied request-body flag that any principal could set.
 ```
 
 **Lab Lead** — replaces Lab Director. Full authority within one lab, including the human-judgment governance capabilities scoped to that lab.
