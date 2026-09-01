@@ -305,6 +305,7 @@ Each capability is `domain:action`. Where a capability mutates state, the table 
 | `sample:read` | See a sample in a list (list-level visibility) | — |
 | `sample:read_detail` | Read full sample detail (the `can_access_sample` level) | — |
 | `sample:read_surveillance` | Cross-scope read of `surveillance_relevant` samples (replaces the global `is_data_analyst` flag) | — |
+| `sample:read_unscrubbed` | Read a sample's **pre-scrub** raw FASTQ — the un-PII-scrubbed original, narrower than `sample:read_detail` | — |
 | `sample:create` | Create a sample | `CREATE_SAMPLE` |
 | `sample:update` | Edit sample metadata | `UPDATE_SAMPLE` |
 | `sample:archive` | Archive a sample | `ARCHIVE_SAMPLE` |
@@ -312,6 +313,16 @@ Each capability is `domain:action`. Where a capability mutates state, the table 
 | `sample:hard_delete` | Permanent deletion | `HARD_DELETE_SAMPLE` |
 
 `sample:read_surveillance` is the capability that the immune-platform and federation consuming-workflows depend on (§6, §7). It is the clean replacement for the `is_data_analyst` boolean — instead of a global flag, it is a capability granted at Instance scope to whoever does surveillance oversight.
+
+`sample:read_unscrubbed` (M2-DROP-PRE) names a restriction that lived inside a
+route rather than in this catalog: `GET /samples/{id}/download?file_type=raw_fastq`
+returns the pre-scrub original, and the route tested `is_lab_director` in-line
+because no verb described it. It is strictly narrower than `sample:read_detail`
+— holding it without `read_detail` conveys nothing, since the route checks both
+— and it is the one sample verb where **Instance Administrator's exclusion from
+the data plane is load-bearing rather than incidental**: an operational admin who
+holds no `sample:read_detail` must not reach un-scrubbed PII by a side door.
+The legacy check admitted a platform admin; the verb does not. See §8.2.
 
 ### 4.2 Pipeline plane
 
@@ -361,8 +372,12 @@ The category-defining absence: **there is no `anomaly:emit`.** The immune subsys
 | `deletion:request` | Request deletion of a sample — drives the `ACTIVE → DELETION_REQUESTED` transition (see §6) | `sample_deletion_requested` |
 | `deletion:approve` | Approve a deletion request (sovereignty-sensitive — see §6) | `APPROVE_DELETION` |
 | `deletion:self_approve` | Lift the §6.2-1b separation-of-duties DENY on a deletion you requested yourself. Does **not** confer approval authority — it removes friction from an actor who already holds `deletion:approve`, and is audited | `APPROVE_DELETION` |
+| `deletion:read_report` | Read a sample's RTBF confirmation report — deletion lifecycle state, erasure evidence, the deletion audit trail, and any external retraction requests | — |
+| `deletion:reverse_tombstone` | Return a TOMBSTONED, not-yet-vacuumed sample to ACTIVE | `DENY_DELETION` |
+| `deletion:vacuum` | Force immediate purge of a TOMBSTONED sample, ahead of the scheduled job | `HARD_DELETE_SAMPLE` |
 | `submission:prepare` | Build and edit an outbound submission — create, amend, add/remove samples, validate readiness, generate the package | `CREATE_SUBMISSION` / `UPDATE_SUBMISSION` |
 | `submission:approve` | Approve an outbound submission | `SUBMISSION_MARKED_SUBMITTED` |
+| `submission:retract` | Ask an external repository to retract an already-published record (B-CARE-3g) | `REQUEST_DELETION` today, with `{"kind": "external_retraction"}` metadata — accurate enough to trace but overloaded; a `REQUEST_EXTERNAL_RETRACTION` action is proposed, same shape as `deposit:record`'s |
 | `scrub:approve_skip` | Approve a scrubber-skip request | `APPROVE_SCRUB_SKIP` |
 | `key:rotate` | Rotate signing/federation keys | `ROTATE_KEY` |
 | `whitelist:manage` | Manage the domain whitelist | `ADD_WHITELIST_DOMAIN` / `REMOVE_WHITELIST_DOMAIN` |
@@ -794,7 +809,9 @@ Preset "Instance Administrator":
                 anomaly:configure_detector, sample:read_surveillance,
                 lab:read, org:read, import:read, token:manage,
                 deposit:record, pipeline:read, pipeline:promote,
-                pipeline:register_custom, deletion:self_approve
+                pipeline:register_custom, deletion:self_approve,
+                deletion:read_report, deletion:reverse_tombstone,
+                deletion:vacuum
   note: Does NOT implicitly include deletion:approve over sovereignty-governed
         samples on Scenario T — that path is gated by the separation-of-duties
         DENY (§6.2 1b) and, where a Tribal authority exists, sits with that
@@ -804,6 +821,15 @@ Preset "Instance Administrator":
         deletion:approve by some other grant, and confers no approval authority
         of its own. Without it the escape §6.2-1b describes would be a
         caller-supplied request-body flag that any principal could set.
+        The three M2-DROP-PRE deletion verbs are operational, not consent:
+        deletion:reverse_tombstone and deletion:vacuum EXECUTE a decision the
+        consent authority already made (or unmake a tombstone that has not
+        vacuumed yet), and deletion:read_report reads the record of one. That
+        is the same line audit:read sits on, and it is why the admin keeps
+        these three while still holding neither deletion:approve nor any
+        content-read verb. sample:read_unscrubbed is the mirror image and is
+        deliberately absent: it returns SAMPLE CONTENT, and pre-scrub content
+        at that.
 ```
 
 **Lab Lead** — replaces Lab Director. Full authority within one lab, including the human-judgment governance capabilities scoped to that lab.
@@ -816,9 +842,17 @@ Preset "Lab Lead":
                 deletion:approve, access:approve_request, access:revoke,
                 pipeline:run, submission:approve, submission:prepare,
                 pipeline:read, pipeline:register_custom, org:manage,
-                lab:read, org:read, import:read, import:manage
+                lab:read, org:read, import:read, import:manage,
+                sample:read_unscrubbed, deletion:read_report,
+                submission:retract
   note: deletion:approve here is the ordinary intra-lab path; the §6.2 1b
         separation-of-duties DENY still forbids approving one's own request.
+        The three M2-DROP-PRE verbs land here because the routes they name all
+        tested is_lab_director in-line. submission:retract is deliberately its
+        own verb rather than a reuse of submission:approve: retraction is the
+        deletion plane reaching outward (B-CARE-3g), and folding it into the
+        submission verb would hand repository-retraction to every future
+        preset that gains submission approval for submission reasons.
 ```
 
 **Lab Member (read-write)** — replaces Lab Collaborator. Does the work, cannot approve governance.
@@ -829,7 +863,7 @@ Preset "Lab Member (read-write)":
   capabilities: sample:read, sample:read_detail, sample:create, sample:update,
                 deletion:request, pipeline:run, pipeline:read,
                 submission:prepare, lab:read, org:read,
-                import:read, import:manage
+                import:read, import:manage, deletion:read_report
   note: Can request deletion but not approve it; can run pipelines but not
         approve submissions or access requests. The read-write/governance
         split is the main line between this and Lab Lead — note that it runs
@@ -843,10 +877,12 @@ Preset "Lab Member (read-write)":
 Preset "Lab Member (read-only)":
   scope-template: Lab
   capabilities: sample:read, sample:read_detail, pipeline:read,
-                lab:read, org:read, import:read
+                lab:read, org:read, import:read, deletion:read_report
   note: Every addition beyond the original two is a read. Watching a pipeline
         run, seeing the lab directory, and reading a mapping config are all
-        things a read-only member needs and none of them writes.
+        things a read-only member needs and none of them writes. So is
+        deletion:read_report — the legacy _require_lab_tie admitted ANY lab
+        member, read-only included, and the report writes nothing.
 ```
 
 **Keeping this section and `reseed.py` in agreement.** The blocks above were
@@ -883,7 +919,8 @@ Preset "Surveillance Officer":
 ```
 Preset "Tribal Authority Designee"  (Scenario T deployments only):
   scope-template: Org (or a dedicated authority scope, pending §6.4 resolution)
-  capabilities: deletion:request, deletion:approve, submission:approve
+  capabilities: deletion:request, deletion:approve, submission:approve,
+                submission:retract
   carve-out:    EXEMPT from the §6.2 1b separation-of-duties DENY — the
                 designee MAY request and approve the same deletion, because
                 the consent authority and the operational chain are

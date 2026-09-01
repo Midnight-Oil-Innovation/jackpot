@@ -2695,13 +2695,21 @@ sessions:
       the hole. Now a capability held only by instance_administrator, with the
       route ANDing what was asked against what is held, and deletion.py's
       legacy check removed (reader 2 of 12 retired).
+      Slice 2 SHIPPED: the five samples.py sites and their verbs. The design
+      question the split was made for — a read verb whose natural form excludes
+      instance admins while the legacy flag admitted them — resolved on one
+      discriminator: an instance admin KEEPS a route that reads or executes a
+      governance RECORD and LOSES one that returns sample CONTENT or makes a
+      consent decision. So deletion:read_report, deletion:reverse_tombstone and
+      deletion:vacuum go to the admin; sample:read_unscrubbed and
+      submission:retract do not. samples.py now reads neither legacy column
+      (readers 3-7 of 12 retired). The existing suite could not have caught
+      either narrowing: the baseline seeds admin@example.org as platform admin
+      AND Lab Director of lab 1, so every "as admin" test holds both preset
+      grant sets and all of them stayed green — see
+      tests/test_deletion_plane_capabilities.py, which builds single-shape
+      principals for that reason.
       REMAINING, per site:
-        - samples.py:582  raw_fastq → needs a verb narrower than
-          sample:read_detail; endpoint-map Residue has tracked this since M2-B2
-        - samples.py:643  _require_lab_tie (deletion-report) → a read verb
-          instance admins also hold; sample:read_detail excludes them by §8.2
-        - samples.py:652  _require_approval_authority (retraction-requests)
-        - samples.py:730/747  reverse-tombstone, vacuum-now → admin-only, no verb
         - tenancy.py:67/91/131  require_org_access — should fall out of ADR
           0015 containment (instance://self prefixes every org path) rather
           than a flag; likely OrgContext carrying instance-scope reach
@@ -2744,12 +2752,15 @@ sessions:
       backlog briefly said the irreversible column drop was ready to start while 31 legacy-column readers were
       still live. Reopened by hand. The helper keys on branch name, so a multi-slice entry must not reuse its own
       id as a branch name; name future slices m2-drop-pre-slice2 or similar.
+      Slice 2 also raised the endpoint-map row count 128 -> 132: the four deletion-plane routes existed only as
+      prose in a Residue section, so the preflight parser never counted them. A route described but uncounted is
+      the same drift as a route counted but undescribed, and only one of the two had a guard.
       Adding §4 verbs means editing access_model.md §4 AND the §8.2 preset blocks together — test_reseed_presets_match_the_documented_ones
       enforces the pair, and it correctly rejected an M3 draft that changed only the code. Every preset change also needs
       a reseed migration: PRESET_GRANTS is a template and the grants are rows, so a preset edit reaches nobody until a reseed
       runs."
 
-    merged_at: '2026-09-01'
+    merged_at:
     merge_sha:
   - id: M2-DROP
     title: Drop the legacy role columns (IRREVERSIBLE — manual flow only)

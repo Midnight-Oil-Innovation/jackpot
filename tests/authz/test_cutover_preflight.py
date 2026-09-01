@@ -577,7 +577,12 @@ class TestPreflightReport:
         # in samples.py all along; the map said "no deletion-approval route
         # exists yet" because it was written from the phase plan rather than
         # from the router, which is exactly the drift this row count catches.
-        assert len(rows) == 128
+        #
+        # 128 -> 132 (M2-DROP-PRE slice 2): the four deletion-plane routes that
+        # had been prose in a "Residue — still on the legacy check" section
+        # became real rows once they took capabilities. Same drift, opposite
+        # direction — routes the map described but did not COUNT.
+        assert len(rows) == 132
         # Every row classifiable — parser guarantees the five classes.
         assert {r.klass for r in rows} <= {
             "require_capability",

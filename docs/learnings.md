@@ -3453,3 +3453,53 @@ sent, and `deletion.py`'s legacy `is_platform_admin` check removed.
   `test_reseed_presets_match_the_documented_ones` compares §8.2's fenced block
   against `PRESET_GRANTS`, and §8.2's continuation lines have a 16-space
   indent contract the parser depends on.
+
+## M2-DROP-PRE slice 2 — deletion-plane verbs — 2026-09-01
+
+**What was built:** Five §4 capabilities (`sample:read_unscrubbed`,
+`deletion:read_report`, `deletion:reverse_tombstone`, `deletion:vacuum`,
+`submission:retract`) replacing the last in-line `is_platform_admin` /
+`is_lab_director` reads in `samples.py`.
+
+**Key decisions:**
+
+- **The record/content discriminator.** The open design question was a read
+  verb whose natural form (`sample:read_detail`) excludes instance admins by
+  §8.2 while the legacy flag admitted them. Resolved by asking what the route
+  returns, not how sensitive it is: an instance admin keeps a route that reads
+  or executes a governance *record* and loses one that returns sample *content*
+  or makes a consent decision. `deletion-report` keeps the admin (it is
+  lifecycle state plus an audit trail — the line `audit:read` already sits on);
+  `raw_fastq` and `retraction-requests` do not.
+- **`submission:retract` is not `submission:approve`.** Holder sets match
+  exactly on the non-admin path, so reuse was the lazy option. Rejected because
+  retraction is the deletion plane reaching outward: one verb for both would
+  hand repository-retraction to every future preset that gains submission
+  approval for submission reasons.
+- **Ownership needed a policy, not a preset.** `_require_lab_tie` had three
+  rungs — admin, owner, lab member. Two are grants; ownership cannot be, for
+  the reason already written on the `sample:read` rungs (a grant row per
+  sample). Added a `LADDER_POLICIES` `owner_id` ALLOW for
+  `deletion:read_report`, or an owner who had left the lab would have lost the
+  report — a narrowing nobody asked for.
+
+**Watch out for:**
+
+- **`admin@example.org` is a dual-role principal.** The baseline migration
+  seeds it as platform admin *and* Lab Director of lab 1. Every test acting
+  "as admin" therefore holds `instance_administrator` and `lab_lead` grants at
+  once and cannot distinguish them. Both deliberate narrowings in this batch
+  left the whole existing suite green. If a test needs to prove *which* grant
+  answered, build a principal with one shape — see
+  `tests/test_deletion_plane_capabilities.py`.
+- **Guard ordering vs 404.** `sample_resource()` raises for an unknown id and
+  the guard turns that into 403, so a `require_capability(sample_id=…)` placed
+  before the row fetch reports "not allowed" for a sample that does not exist.
+  All four converted routes fetch first.
+- **A route described in prose is not a counted route.** These four lived in a
+  "Residue — still on the legacy check" section, so `parse_map` never saw them
+  and the preflight row count stayed 128 while the map already discussed them.
+  Converting them moved it to 132.
+- **`_tombstone` test fixtures need `deletion_requested_at`.**
+  `samples_deletion_active_requested_chk` asserts
+  `(deletion_status = 'ACTIVE') = (deletion_requested_at IS NULL)`.

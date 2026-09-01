@@ -91,6 +91,16 @@ PRESET_GRANTS: dict[str, list[str]] = {
         # instead of trusting what they sent. Confers no approval authority of
         # its own — see the §8.2 note.
         "deletion:self_approve",
+        # M2-DROP-PRE slice 2. The last three admin-only deletion routes were
+        # still reading users.is_platform_admin in-line because no verb named
+        # them. All three are OPERATIONAL rather than consent acts — vacuum
+        # and reverse-tombstone execute or unmake a decision the consent
+        # authority already made, and the report is the record of one — which
+        # is why the admin holds them while still holding neither
+        # deletion:approve nor any content-read verb (§8.2's note).
+        "deletion:read_report",
+        "deletion:reverse_tombstone",
+        "deletion:vacuum",
     ],
     "surveillance_officer": [
         "sample:read_surveillance",
@@ -134,6 +144,20 @@ PRESET_GRANTS: dict[str, list[str]] = {
         # project:create pair is the tidier vocabulary and is M2-B5's call,
         # not a reason to leave directors locked out now.
         "org:manage",
+        # M2-DROP-PRE slice 2, all three replacing an in-line is_lab_director
+        # test. sample:read_unscrubbed is the pre-scrub raw-FASTQ read and is
+        # the one verb here the instance admin deliberately does NOT get: it
+        # returns un-scrubbed sample CONTENT, and an operational admin holding
+        # no sample:read_detail must not reach PII by a side door. The legacy
+        # branch admitted a platform admin; this is a deliberate narrowing of
+        # the same shape M3 applied to the deletion verbs.
+        "sample:read_unscrubbed",
+        "deletion:read_report",
+        # Not a reuse of submission:approve: retraction is the deletion plane
+        # reaching outward (B-CARE-3g), and folding the two together would
+        # hand repository-retraction to every future preset that gains
+        # submission approval for submission reasons.
+        "submission:retract",
     ],
     "lab_member_rw": [
         # M2-B4. §8.2's note on this preset says a member "can run pipelines
@@ -156,6 +180,9 @@ PRESET_GRANTS: dict[str, list[str]] = {
         "sample:create",
         "sample:update",
         "deletion:request",
+        # M2-DROP-PRE slice 2. _require_lab_tie admitted any lab member, and
+        # the report writes nothing — see lab_member_ro.
+        "deletion:read_report",
     ],
     "lab_member_ro": [
         # M2-B3-PRE. §4 defines pipeline:read as "read the pipeline zoo, the
@@ -175,6 +202,12 @@ PRESET_GRANTS: dict[str, list[str]] = {
         "import:read",
         "sample:read",
         "sample:read_detail",
+        # M2-DROP-PRE slice 2. The legacy _require_lab_tie on
+        # GET /samples/{id}/deletion-report admitted ANY lab member,
+        # read-only included. The report is lifecycle state plus an audit
+        # trail — a governance record, not sample content — so it reads
+        # like the other three additions above rather than like a data verb.
+        "deletion:read_report",
     ],
 }
 
