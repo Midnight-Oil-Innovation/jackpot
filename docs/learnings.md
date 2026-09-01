@@ -3580,3 +3580,43 @@ issued no grants: `PATCH /users/{id}`, and both halves of `POST /auth/dev-login`
   `user:manage` at Lab scope, which no lab preset holds.** So a Lab Lead cannot
   list or manage their own lab's membership — only an instance admin can. Found
   by accident here; not fixed, and not obviously intentional.
+
+## Lab Leads locked out of their own lab's roster — 2026-09-01
+
+**What was built:** `user:manage` added to the `lab_lead` preset, plus reseed
+migration `a7f1c30d54b9` and `tests/test_lab_lead_member_management.py`.
+
+**Root cause:** M2 replaced `require_lab_director(user, lab_id)` on the four
+`/labs/{id}/members` routes with `require_capability("user:manage")` at Lab
+scope. No lab preset held that verb, so the authority moved to instance admins
+and nobody noticed. M2-B5 then wired grant issuance into three of those four
+routes — correct code behind a door no lab principal could open.
+
+**Key decisions:**
+
+- **Reused `user:manage` rather than minting `lab:manage_members`.** The
+  precedent is one entry above it in the same preset: `org:manage` sits in
+  `lab_lead` scoped to their lab, with a comment saying the narrower vocabulary
+  is tidier and is a later call, "not a reason to leave directors locked out
+  now." Identical situation, so the same answer, and a new verb would have
+  meant four route changes, a catalog entry and a second preset edit.
+- **The safety argument is scope and nothing else.** `PATCH` and `DELETE
+  /users/{id}` request `user:manage` with **no scope argument**, which resolves
+  to `instance://self`. Containment runs downward, so a `lab://` grant cannot
+  reach the root. Because the entire fix rests on that asymmetry, it is pinned
+  by two negative tests — including a Lab Lead trying to set their own
+  `is_platform_admin` — rather than left to the reader.
+
+**Watch out for:**
+
+- **When a guard changes vocabulary, the holders change with it, and only the
+  route's own tests notice — if any test stands where the old holder stood.**
+  Second instance in two days, after the `deletion:request` ownership rung.
+  Both were verb swaps that silently moved authority; both were invisible
+  because the tests that covered the route were written from the new holder's
+  seat.
+- **A preset edit needs its reseed migration or it reaches nobody**, and this
+  one's downgrade must not blanket-delete `user:manage` — instance admins hold
+  it at `instance://self` from the cutover, and dropping those rows would leave
+  a deployment with no one able to administer users at all. Filtered on
+  `scope_ref LIKE '%/lab/%'`.

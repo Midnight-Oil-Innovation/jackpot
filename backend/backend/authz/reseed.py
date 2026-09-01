@@ -144,6 +144,22 @@ PRESET_GRANTS: dict[str, list[str]] = {
         # project:create pair is the tidier vocabulary and is M2-B5's call,
         # not a reason to leave directors locked out now.
         "org:manage",
+        # Same story, same scope argument, found later. M2 replaced
+        # require_lab_director(user, lab_id) on the four /labs/{id}/members
+        # routes with require_capability("user:manage") at Lab scope, and no
+        # lab preset held the verb — so Lab Directors lost the roster of the
+        # lab they direct, and M2-B5 then wired grant issuance into routes no
+        # lab principal could reach. It is not in the endpoint map's
+        # "Deliberate narrowings" list because nobody decided it.
+        #
+        # Safe because of scope and nothing else: the routes that administer
+        # users at large (PATCH/DELETE /users/{id}) ask for user:manage with
+        # no scope argument, which resolves to the instance root, and a lab://
+        # grant does not contain the root — containment runs downward. §4.5's
+        # "assign capabilities" reads at lab scope as "within this lab", which
+        # is exactly what the four routes do. Pinned by
+        # tests/test_lab_lead_member_management.py's two negative cases.
+        "user:manage",
         # M2-DROP-PRE slice 2, all three replacing an in-line is_lab_director
         # test. sample:read_unscrubbed is the pre-scrub raw-FASTQ read and is
         # the one verb here the instance admin deliberately does NOT get: it
