@@ -2364,7 +2364,7 @@ sessions:
       launch_account override is a P0c stub whose audit row exists precisely
       so this rewrite can decide whether to keep trusting the request body.
     phase: access_model_redesign
-    status: open
+    status: shipped
     depends_on:
       - M2-B1
     blocked_by_external:
@@ -2382,20 +2382,22 @@ sessions:
     pr_title_template: "feat(authz): M2-B3 — pipeline and BYOP route guards"
     branch_name_template: m2-b3-pipeline-plane
     role_framing:
-    notes: "UNBLOCKED by M2-B3-PRE (pipeline:read holders + Project-scope resolver + both map contradictions
-      resolved). The stale part of the original note: §4 already had pipeline:read; what was missing was a
-      preset holding it.
-      Remaining scope is 11 routes, not 16. The three BYOP catalog reads became AUTH-ONLY BY DESIGN, and
-      two more are B7-class lists with no single resource to scope against (GET /pipelines/, and BYOP's
-      list which is now auth-only anyway). Left to convert: 7 BYOP mutations (pipeline:register_custom at
-      the pipeline's owner_lab_id), launch + resume (pipeline:run at Project), and the 3 run-status reads
-      (pipeline:read at Project).
-      Two things to settle while doing it, neither a blocker: BYOP owner_lab_id is NULLABLE, so a lab-less
-      pipeline has no lab scope — decide whether it falls to instance scope or the column becomes required;
-      and _get_or_404_tenancy's 'registering user' rung is an ownership rung with no grant behind it, the
-      same shape sample ownership needed a policy for. Do not drop the in-route sample-access checks on
-      launch — convert them (they are per-sample, so sample_id, not the launch project)."
-
+    notes: "Shipped 11 routes (7 BYOP mutations, launch, resume, 3 run-status reads). The original 16 became
+      11 in M2-B3-PRE: three BYOP catalog reads are AUTH-ONLY BY DESIGN, and GET /pipelines/ is a B7-class
+      list. Both PRE open questions were answered by the schema rather than by judgement: owner_lab_id is
+      nullable because sharing_scope admits private, so a lab-less pipeline is a person's, governed by a
+      registrant attribute-policy of the same shape sample ownership needed in PRE-A.
+      One real bug found and fixed in the batch: routing create_pipeline through the ownership rung made the
+      lab check vacuous (the caller is always the registrant at creation), so any user could register into
+      any lab. A widening, so it would not have failed closed. Pinned by a regression test.
+      Second bug, found by the spec-axis review: the batch justified a launch narrowing by citing §8.2 as
+      putting pipeline:run in lab_lead + Bioinformatics User only. §8.2's Lab Member (read-write) preset block
+      lists pipeline:run outright. The claim came from reseed.py, which excluded it on a misreading of §8.5's
+      role-mapping prose — so code and prose agreed only because one was derived from the other. Corrected:
+      lab_member_rw now grants pipeline:run, BIOINFORMATICS_EXTRA is deleted, §8.5's phrasing is fixed, and
+      Lab Collaborators keep launch. Only read-only members lose it.
+      Remaining narrowing, documented in the map: BYOP mutation on a lab-owned pipeline takes
+      pipeline:register_custom, so ordinary lab membership is no longer enough."
   - id: M2-B4
     title: Submission and import-mapping route guards (21 routes)
     short_description: |
@@ -2536,7 +2538,8 @@ sessions:
       Scope grew in M2-B2: 7 sample-plane list rows could not be guarded by require_capability at all (a list names
       no single resource, so there is no scope to resolve) and are B7's, not just samples/. They are
       GET /samples/, /files/, /files/broken, /imports/sessions/, /sample-access/requests, /wastewater/sites,
-      /wastewater/lineage-abundance. All still run on permissions.visibility_sql_clause until this batch lands —
+      /wastewater/lineage-abundance. M2-B3 added an eighth: GET /pipelines/, the run list, which keeps its
+      inline launched_by_id OR lab_membership filter until this batch. All still run on permissions.visibility_sql_clause until this batch lands —
       guarded by the old model, not unguarded. attribute_columns for the SQL half is
       principal.SAMPLE_ATTRIBUTE_COLUMNS, kept next to the row loader so the two halves cannot name different
       columns."

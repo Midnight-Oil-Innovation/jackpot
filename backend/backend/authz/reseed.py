@@ -13,10 +13,15 @@ All SQL is raw ``text()``; no ORM. Idempotent: inserts use
 ``(principal_id, capability, scope_ref)`` index the containing migration
 creates.
 
-Note on ``pipeline:run``: the §8.5 mapping folds Bioinformatics User into
-Lab Member RW *plus* ``pipeline:run`` as an independent extra capability,
-so ``PRESET_GRANTS["lab_member_rw"]`` deliberately excludes it —
-``BIOINFORMATICS_EXTRA`` is the only place it is added for memberships.
+Note on ``pipeline:run``: it is part of the Lab Member RW preset. This module
+previously excluded it and added it back only for Bioinformatics User, reading
+§8.5's "folded into Lab Member RW + ``pipeline:run``" as meaning RW lacks it.
+§8.2's preset block is the definition and says otherwise — it lists
+``pipeline:run`` under Lab Member (read-write), with the note "can run
+pipelines but not approve submissions or access requests" — and on that
+reading §8.5's phrasing is just loose: if RW already holds the verb, a
+Bioinformatics User simply *is* a Lab Member RW. Corrected in M2-B3, which
+found the contradiction; ``BIOINFORMATICS_EXTRA`` is gone with it.
 """
 
 import logging
@@ -103,6 +108,10 @@ PRESET_GRANTS: dict[str, list[str]] = {
     ],
     "lab_member_rw": [
         "pipeline:read",
+        # §8.2's preset block lists pipeline:run here. See the module
+        # docstring: excluding it was a misreading of §8.5's role-mapping
+        # prose, and it cost Lab Collaborators the ability to launch.
+        "pipeline:run",
         "sample:read",
         "sample:read_detail",
         "sample:create",
@@ -114,8 +123,8 @@ PRESET_GRANTS: dict[str, list[str]] = {
         # BYOP registry, and run status", and run status is what a lab member
         # needs to see a run on their own lab's samples. It sits in every lab
         # preset including read-only: watching a run is not running one, and
-        # pipeline:run — the launch verb — stays confined to lab_lead and the
-        # Bioinformatics User extra. Scoped at the member's lab, which
+        # pipeline:run — the launch verb — is held by Lab Lead and Lab Member
+        # RW but not by read-only. Scoped at the member's lab, which
         # contains that lab's projects by ordinary containment (§3.1), so it
         # conveys nothing about any other lab's runs.
         "pipeline:read",
@@ -123,9 +132,6 @@ PRESET_GRANTS: dict[str, list[str]] = {
         "sample:read_detail",
     ],
 }
-
-# Bioinformatics User = lab_member_rw capabilities + pipeline:run (§8.5).
-BIOINFORMATICS_EXTRA: list[str] = ["pipeline:run"]
 
 # APGAP permission_groups.name → preset key. 'Platform Admin' and
 # 'Data Analyst' memberships are intentionally absent: those roles are
@@ -371,10 +377,9 @@ def reseed(conn: Connection, *, force: bool = False) -> None:
             )
             continue
         scope = _lab_scope(org_id, lab_id)
-        capabilities = list(PRESET_GRANTS[preset])
-        if group_name == "Bioinformatics User":
-            capabilities.extend(BIOINFORMATICS_EXTRA)
-        rows.extend(_grant_rows(str(user_id), capabilities, scope))
+        # Bioinformatics User needs no extra capability: it maps to
+        # lab_member_rw, which holds pipeline:run (§8.2).
+        rows.extend(_grant_rows(str(user_id), list(PRESET_GRANTS[preset]), scope))
 
     access_rows = _sample_access_rows(conn)
     rows.extend(access_rows)
