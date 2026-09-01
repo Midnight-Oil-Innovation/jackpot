@@ -111,6 +111,35 @@ def test_containment_requires_a_segment_boundary(cleanup):
     assert uid in capability_holders(CAP, scope_uri(org=1, lab=3))
 
 
+def test_a_stored_scope_ref_is_data_not_a_pattern(cleanup):
+    """A ``%`` or ``_`` in a stored ``scope_ref`` must match itself, literally.
+
+    The containment test is a prefix match, and the obvious SQL for a prefix
+    match is LIKE — which reads its pattern from the grant row, so a stored
+    scope_ref containing a LIKE metacharacter becomes a wildcard grant.
+    ``visibility.py::_like_prefix`` escapes for this reason and this query
+    initially did not: a row with ``instance://self/org/%`` was returned as a
+    holder for every org.
+
+    ``scope_uri()`` cannot produce such a string, so reaching it takes a
+    hand-written or migrated row. That is not much comfort — it widens in the
+    one direction authorization must never widen, and it silently disagrees
+    with the ``_scope_contains`` this query claims to transcribe.
+    """
+    users, _ = cleanup
+    uid = _user("ch-meta")
+    users.append(uid)
+    _grant(str(uid), "instance://self/org/%")
+    assert uid not in capability_holders(CAP, scope_uri(org=999, lab=1))
+    # The literal reading still works: the row covers exactly itself.
+    assert uid in capability_holders(CAP, "instance://self/org/%")
+
+    other = _user("ch-meta-underscore")
+    users.append(other)
+    _grant(str(other), "instance://self/org/_")
+    assert other not in capability_holders(CAP, scope_uri(org=7, lab=1))
+
+
 def test_a_different_capability_is_not_a_match(cleanup):
     users, _ = cleanup
     uid = _user("ch-othercap")

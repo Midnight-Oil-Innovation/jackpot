@@ -165,3 +165,76 @@ def test_alias_must_be_an_identifier():
         lab_scope_sql(labs="l; DROP TABLE labs")
     with pytest.raises(ValueError):
         project_scope_sql(labs="l", rows="x y")
+
+
+# ── ancestor_scopes: containment's dual ───────────────────────────────────
+
+
+def test_ancestor_scopes_enumerates_every_containing_scope():
+    from backend.authz.scope import ancestor_scopes
+
+    assert ancestor_scopes(scope_uri(org=3, lab=7)) == [
+        "instance://self",
+        "instance://self/org/3",
+        "instance://self/org/3/lab/7",
+    ]
+    assert ancestor_scopes(scope_uri()) == ["instance://self"]
+
+
+def test_ancestor_scopes_agrees_with_scope_contains():
+    """The property that makes the SQL form correct: a grant contains a scope
+    exactly when it appears in that scope's ancestor list. Asserted over the
+    full tree rather than asserted about, because the two are one rule and the
+    SQL half stops being reviewable the moment they can disagree."""
+    from backend.authz.scope import ancestor_scopes
+
+    every_scope = [
+        scope_uri(),
+        scope_uri(org=1),
+        scope_uri(org=2),
+        scope_uri(org=1, lab=5),
+        scope_uri(org=1, lab=50),
+        scope_uri(org=1, lab=5, project=9),
+        scope_uri(org=1, lab=5, project=9, sample=4),
+    ]
+    for grant in every_scope:
+        for resource in every_scope:
+            assert _scope_contains(grant, resource) == (grant in ancestor_scopes(resource)), (
+                f"{grant} vs {resource}"
+            )
+
+
+def test_ancestor_scopes_strips_a_trailing_slash_like_scope_contains():
+    from backend.authz.scope import ancestor_scopes
+
+    assert ancestor_scopes("instance://self/org/3/") == [
+        "instance://self",
+        "instance://self/org/3",
+    ]
+
+
+def test_ancestor_scopes_does_not_interpret_a_non_canonical_scope():
+    """A scope carrying a LIKE metacharacter is a literal, not a pattern — it
+    contributes one ancestor naming itself and nothing wider."""
+    from backend.authz.scope import ancestor_scopes
+
+    assert ancestor_scopes("instance://self/org/%") == [
+        "instance://self",
+        "instance://self/org/%",
+    ]
+
+
+def test_ancestor_scopes_requires_a_segment_boundary_at_the_root():
+    """``instance://selfish`` is not under ``instance://self``.
+
+    Found by review on the fix for the LIKE widening — the same mistake one
+    level up. A bare prefix test claimed the root as an ancestor (disagreeing
+    with ``_scope_contains``) and split the remainder into a fabricated
+    ``instance://self/ish/org``.
+    """
+    from backend.authz.scope import ROOT, ancestor_scopes
+
+    for impostor in ("instance://selfish", "instance://selfish/org/1"):
+        assert ancestor_scopes(impostor) == [impostor]
+        assert ROOT not in ancestor_scopes(impostor)
+        assert not _scope_contains(ROOT, impostor)

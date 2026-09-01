@@ -348,8 +348,10 @@ def test_sla_breach_flags_noncompliant_and_alerts(signer, monkeypatch):
         "SELECT n.id FROM notifications n "
         "JOIN authz_capability_grants g ON g.principal_id = CAST(n.recipient_id AS TEXT) "
         "WHERE n.event_type = 'FEDERATION_PEER_NONCOMPLIANT' "
+        "AND n.resource_id = :peer_id "
         "AND g.capability = 'federation:configure_peer' "
         "AND g.scope_ref = 'instance://self'",
+        {"peer_id": str(peer["id"])},
     )
     assert notes
     get_settings.cache_clear()
