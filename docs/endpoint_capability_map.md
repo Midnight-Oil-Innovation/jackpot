@@ -36,10 +36,10 @@ All catalog gaps were resolved in the M2 pre-cutover review (see
 | POST | `/api/v1/auth/refresh` | — | Instance | PUBLIC (intentional — token refresh via cookie) |
 | POST | `/api/v1/auth/logout` | — | Instance | PUBLIC (intentional — clears cookies) |
 | POST | `/api/v1/auth/dev-login` | — | Instance | PUBLIC — intent VERIFIED: `env != "local"` returns 404 before any work (`routers/auth.py:557`); pinned by `test_dev_login_returns_404_outside_local_mode` |
-| GET | `/api/v1/byop/telemetry` | `pipeline:read` | Lab | auth-only today; BYOP registry read |
+| GET | `/api/v1/byop/telemetry` | — | Instance | AUTH-ONLY BY DESIGN — telemetry over the shared pipeline catalog; aggregate success rate / walltime / cost, not tenant data |
 | POST | `/api/v1/byop/pipelines` | `pipeline:register_custom` | Lab | auth-only today |
-| GET | `/api/v1/byop/pipelines` | `pipeline:read` | Lab | auth-only today; registry read |
-| GET | `/api/v1/byop/pipelines/{pipeline_id}` | `pipeline:read` | Lab | auth-only today; registry read |
+| GET | `/api/v1/byop/pipelines` | — | Instance | AUTH-ONLY BY DESIGN — catalog browse (`byop.py`: "list-all is INTENTIONALLY unscoped per design §9"); a pipeline definition is not tenant data. Mutations stay tenancy-guarded |
+| GET | `/api/v1/byop/pipelines/{pipeline_id}` | — | Instance | AUTH-ONLY BY DESIGN — same catalog browse; `_get_or_404_tenancy` gates the mutations, not this read |
 | PATCH | `/api/v1/byop/pipelines/{pipeline_id}` | `pipeline:register_custom` | Lab | auth-only today |
 | PUT | `/api/v1/byop/pipelines/{pipeline_id}` | `pipeline:register_custom` | Lab | auth-only today |
 | DELETE | `/api/v1/byop/pipelines/{pipeline_id}` | `pipeline:register_custom` | Lab | auth-only today |
@@ -95,9 +95,9 @@ All catalog gaps were resolved in the M2 pre-cutover review (see
 | GET | `/api/v1/pipelines/` | `pipeline:read` | Instance | auth-only today; pipeline zoo read |
 | POST | `/api/v1/pipelines/launch` | `pipeline:run` | Project | auth-only today; in-route sample-access checks |
 | POST | `/api/v1/pipelines/events` | `pipeline:write_results` | Instance | SERVICE-authenticated (NOT public): per-run `X-Pipeline-Token`, `hmac.compare_digest`, 401 on mismatch (`routers/pipelines.py:903`). Rule 60's never-raises applies to weblog delivery, not auth. M2 adds the SERVICE-principal `permit()` call |
-| GET | `/api/v1/pipelines/{run_id}` | `pipeline:run` | Project | auth-only today; run-status read |
-| GET | `/api/v1/pipelines/{run_id}/tasks` | `pipeline:run` | Project | auth-only today |
-| GET | `/api/v1/pipelines/{run_id}/events` | `pipeline:run` | Project | auth-only today |
+| GET | `/api/v1/pipelines/{run_id}` | `pipeline:read` | Project | auth-only today; run-status read. **Corrected 2026-09-01**: this row said `pipeline:run`, but §4 defines `pipeline:read` as "the pipeline zoo, the BYOP registry, and run status". Watching a run is not launching one, and `pipeline:run` sits only in lab_lead + Bioinformatics User — so the old reading would have taken run visibility away from every Lab Collaborator and Lab Reader for runs on their own lab's samples |
+| GET | `/api/v1/pipelines/{run_id}/tasks` | `pipeline:read` | Project | auth-only today; run-status read. **Corrected 2026-09-01**: this row said `pipeline:run`, but §4 defines `pipeline:read` as "the pipeline zoo, the BYOP registry, and run status". Watching a run is not launching one, and `pipeline:run` sits only in lab_lead + Bioinformatics User — so the old reading would have taken run visibility away from every Lab Collaborator and Lab Reader for runs on their own lab's samples |
+| GET | `/api/v1/pipelines/{run_id}/events` | `pipeline:read` | Project | auth-only today; run-status read. **Corrected 2026-09-01**: this row said `pipeline:run`, but §4 defines `pipeline:read` as "the pipeline zoo, the BYOP registry, and run status". Watching a run is not launching one, and `pipeline:run` sits only in lab_lead + Bioinformatics User — so the old reading would have taken run visibility away from every Lab Collaborator and Lab Reader for runs on their own lab's samples |
 | POST | `/api/v1/pipelines/{run_id}/resume` | `pipeline:run` | Project | auth-only today |
 | POST | `/api/v1/pipelines/custom` | `pipeline:register_custom` | Lab | `require_capability("pipeline:register_custom")` |
 | POST | `/api/v1/pipelines/{catalog_id}/promote` | `pipeline:promote` | Lab or Instance | `require_capability("pipeline:promote")` — lab scope for lab-tier target, instance scope for global tier |

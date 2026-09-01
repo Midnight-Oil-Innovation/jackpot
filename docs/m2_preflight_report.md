@@ -4,7 +4,7 @@
 
 # M2 Pre-Cutover Report
 
-Map totals: 124 endpoints — 48 already wired to `require_capability`, 60 carrying a target capability but not yet guarded (ROUTE_LOCAL), 7 AUTH-ONLY BY DESIGN (permanently ungated — authentication is the whole decision), 0 catalog gaps, 9 PUBLIC (0 pending intent verification).
+Map totals: 124 endpoints — 48 already wired to `require_capability`, 57 carrying a target capability but not yet guarded (ROUTE_LOCAL), 10 AUTH-ONLY BY DESIGN (permanently ungated — authentication is the whole decision), 0 catalog gaps, 9 PUBLIC (0 pending intent verification).
 
 ## 1. Catalog gaps
 
@@ -13,7 +13,7 @@ review and written into `docs/endpoint_capability_map.md`. Most
 took a capability, adding `pipeline:read`, `lab:read`,
 `org:read`, `import:read`, `import:manage`,
 `submission:prepare`, `access:request`, and `token:manage` to
-the §4 catalog. The remaining 7 were marked
+the §4 catalog. The remaining 10 were marked
 AUTH-ONLY BY DESIGN — self-scope routes, the stateless
 validation utility, and the sequencing-lab registry, where
 authentication is the whole decision (§4.7). Those stay ungated
@@ -38,9 +38,9 @@ authentication from authorization on them (§4.6, §9.4).
 
 ## 3. ROUTE_LOCAL rows (auth-only today)
 
-60 routes carry `get_current_user` plus in-route ad-hoc
+57 routes carry `get_current_user` plus in-route ad-hoc
 checks and a target capability the map names but no guard enforces yet
-(a further 7 are AUTH-ONLY BY DESIGN and stay that way).
+(a further 10 are AUTH-ONLY BY DESIGN and stay that way).
 Two of them authenticate a per-run pipeline token rather than a user
 JWT — the weblog receiver and the result-registration callback — and
 take a SERVICE principal at M2 rather than a human one.

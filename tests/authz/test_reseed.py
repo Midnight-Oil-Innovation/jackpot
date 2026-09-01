@@ -267,6 +267,38 @@ def test_bioinformatics_user_gets_rw_plus_pipeline_run(conn):
     assert caps.count("pipeline:run") == 1
 
 
+def test_every_lab_preset_holds_pipeline_read(conn):
+    """M2-B3-PRE. pipeline:read was in the §4 catalog but in no preset, which
+    made every route needing it reachable by nobody — the failure mode
+    reseed's own comments record twice already.
+
+    Asserted against the presets rather than a route so it fails at the
+    point the capability would go missing, and includes read-only: §4 scopes
+    pipeline:read to the zoo, the BYOP registry and run status, none of which
+    is a write.
+    """
+    for preset in ("lab_lead", "lab_member_rw", "lab_member_ro"):
+        assert "pipeline:read" in PRESET_GRANTS[preset], preset
+    assert "pipeline:read" in PRESET_GRANTS["instance_administrator"]
+
+
+def test_pipeline_read_does_not_imply_pipeline_run(conn):
+    """Watching a run is not launching one — the launch verb stays confined."""
+    for preset in ("lab_member_rw", "lab_member_ro"):
+        assert "pipeline:run" not in PRESET_GRANTS[preset], preset
+
+
+def test_lab_reader_gets_pipeline_read_at_their_lab(conn):
+    _add_user(conn, 11)
+    _add_membership(conn, 11, 7, "Lab Reader")
+    reseed(conn)
+    read = [g for g in _grants(conn, "11") if g.capability == "pipeline:read"]
+    assert len(read) == 1
+    # Scoped at the lab, which contains that lab's projects by ordinary
+    # prefix containment — so it conveys nothing about any other lab's runs.
+    assert read[0].scope_ref == LAB_SCOPE
+
+
 def test_no_grants_without_matching_rows(conn):
     reseed(conn)
     assert _grants(conn) == []

@@ -577,10 +577,20 @@ class TestPreflightReport:
         assert not gaps, f"unresolved catalog gaps: {[(r.method, r.path) for r in gaps]}"
 
         # The 29 gaps the ACCESS-GUARD-MAP pass found were resolved in review:
-        # 20 took a capability, 9 were marked AUTH-ONLY BY DESIGN (self-scope,
-        # stateless utility, public registry — see access_model.md §4.7).
+        # most took a capability, the rest were marked AUTH-ONLY BY DESIGN
+        # (self-scope, stateless utility, public registry — access_model.md
+        # §4.7).
+        #
+        # 7 -> 10 on 2026-09-01 (M2-B3-PRE): the three BYOP catalog reads
+        # joined them. The map had given them pipeline:read at Lab scope while
+        # byop.py said reads are "INTENTIONALLY unscoped per design §9
+        # (catalog browse)" — a contradiction between two documents, resolved
+        # toward the router. Browsing pipeline definitions is the same shape as
+        # the sequencing-lab registry this list already admits: every
+        # bioinformatician needs it and a pipeline definition is not tenant
+        # data. BYOP *mutations* stay tenancy-guarded.
         by_design = [r for r in rows if r.klass == "auth_only_by_design"]
-        assert len(by_design) == 7
+        assert len(by_design) == 10
         # Every by-design row must justify itself in the notes, not just carry
         # the marker — the marker is a decision, and decisions carry reasons.
         for r in by_design:

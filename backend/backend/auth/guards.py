@@ -11,6 +11,7 @@ from backend.authz.policy import LADDER_POLICIES
 from backend.authz.principal import (
     lab_resource_scope,
     load_principal,
+    project_resource_scope,
     sample_resource,
 )
 from backend.authz.scope import scope_uri
@@ -149,14 +150,20 @@ def require_capability(capability: str):
         current_user: dict | None,
         lab_id: int | None = None,
         sample_id: int | None = None,
+        project_id: int | None = None,
     ) -> dict:
         if current_user is None:
             raise HTTPException(status_code=403, detail=f"capability '{capability}' required")
-        if lab_id is not None and sample_id is not None:
-            # Ambiguous: the two would produce different scopes, and silently
+        named = [
+            n
+            for n, v in (("lab_id", lab_id), ("sample_id", sample_id), ("project_id", project_id))
+            if v is not None
+        ]
+        if len(named) > 1:
+            # Ambiguous: each produces a different scope, and silently
             # preferring one would make the route's check quietly weaker or
             # stronger than it reads.
-            raise ValueError("pass lab_id or sample_id, not both")
+            raise ValueError(f"pass exactly one of lab_id / sample_id / project_id, got {named}")
 
         principal = load_principal(current_user["id"])
 
@@ -167,6 +174,8 @@ def require_capability(capability: str):
                 # reads a PUBLIC sample or a stranger requests access to a
                 # DISCOVERABLE one.
                 resource = sample_resource(sample_id)
+            elif project_id is not None:
+                resource = Resource(scope=project_resource_scope(project_id))
             elif lab_id is not None:
                 resource = Resource(scope=lab_resource_scope(lab_id))
             else:
@@ -182,11 +191,12 @@ def require_capability(capability: str):
             if _allows(principal, capability, Resource(scope=scope_uri())):
                 return current_user
             logger.info(
-                "authz: DENY user=%s capability=%s unknown lab_id=%s sample_id=%s",
+                "authz: DENY user=%s capability=%s unknown lab_id=%s sample_id=%s project_id=%s",
                 current_user.get("id"),
                 capability,
                 lab_id,
                 sample_id,
+                project_id,
             )
             raise HTTPException(
                 status_code=403, detail=f"capability '{capability}' required"
@@ -206,7 +216,7 @@ def require_capability(capability: str):
     return _guard
 
 
-def permits(user: dict, capability: str, *, lab_id=None, sample_id=None) -> bool:
+def permits(user: dict, capability: str, *, lab_id=None, sample_id=None, project_id=None) -> bool:
     """``require_capability`` as a boolean, for routes that answer with
     something other than the guard's 403.
 
@@ -218,7 +228,9 @@ def permits(user: dict, capability: str, *, lab_id=None, sample_id=None) -> bool
     signals denial does not have to be found in three places.
     """
     try:
-        require_capability(capability)(user, lab_id=lab_id, sample_id=sample_id)
+        require_capability(capability)(
+            user, lab_id=lab_id, sample_id=sample_id, project_id=project_id
+        )
     except HTTPException:
         return False
     return True

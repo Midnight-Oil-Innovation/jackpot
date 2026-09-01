@@ -2298,6 +2298,59 @@ sessions:
     merged_at: '2026-09-01'
     merge_sha: 8059bac
 
+  - id: M2-B3-PRE
+    title: pipeline:read into the presets, and a Project-scope resolver
+    short_description: |
+      B3 was found blocked on starting it 2026-09-01, the same way B2 was.
+      Two hard blockers and two document contradictions:
+        1. `pipeline:read` is in the §4 catalog but in NO preset. Wiring the
+           routes that need it would make them reachable by nobody — the exact
+           failure reseed.py's own comments record having happened twice.
+           (The B3 note saying M2 must "land the catalog entry" was stale:
+           §4 already has the verb. What was missing is a holder.)
+        2. The map decides launch and the run routes at PROJECT scope, but
+           principal.py resolves lab and sample only. Same shape as PRE-B,
+           one level down.
+        3. CONTRADICTION, resolved: the map gave run-status reads
+           `pipeline:run` while §4 defines `pipeline:read` as "the pipeline
+           zoo, the BYOP registry, and run status". §4 wins — watching a run
+           is not launching one, and `pipeline:run` sits only in lab_lead +
+           Bioinformatics User, so the map's reading would have removed run
+           visibility from every Lab Collaborator and Lab Reader for runs on
+           their own lab's samples.
+        4. CONTRADICTION, resolved: the map gave BYOP catalog reads
+           `pipeline:read` at Lab while byop.py says reads are "INTENTIONALLY
+           unscoped per design §9 (catalog browse)". The router wins — a
+           pipeline definition is not tenant data, and this is the same shape
+           as the sequencing-lab registry the map already calls AUTH-ONLY BY
+           DESIGN. BYOP mutations stay tenancy-guarded.
+      This entry ships 1 and 2 plus the map corrections for 3 and 4.
+    phase: access_model_redesign
+    status: shipped
+    depends_on:
+      - M2-B1
+    blocked_by_external:
+    parallel_safe: false
+    parallel_safe_reason: "Authorization decision path, serialized (CLAUDE.md, Authorization-path serialization)."
+    effort_sessions: 0.5
+    primary_files:
+      - backend/backend/authz/principal.py
+      - backend/backend/authz/reseed.py
+      - backend/backend/auth/guards.py
+    test_files:
+      - tests/test_permissions.py
+      - tests/authz/test_reseed.py
+    source_of_truth_views:
+      - docs/access_model.md
+      - docs/endpoint_capability_map.md
+    pr_title_template: "feat(authz): M2-B3-PRE — pipeline:read holders and Project-scope resolution"
+    branch_name_template: m2-b3-pipeline-plane
+    role_framing:
+    notes: "pipeline:read added to all three lab presets INCLUDING read-only, plus instance_administrator.
+      Scoped at the member's lab, which contains that lab's projects by ordinary containment, so it says
+      nothing about another lab's runs. The guard's 'exactly one identifier' rule replaces the old
+      'not both' — three identifiers now, and the message names which were passed."
+
   - id: M2-B3
     title: Pipeline and BYOP route guards (16 routes)
     short_description: |
@@ -2329,7 +2382,19 @@ sessions:
     pr_title_template: "feat(authz): M2-B3 — pipeline and BYOP route guards"
     branch_name_template: m2-b3-pipeline-plane
     role_framing:
-    notes: "Lands pipeline:read in §4. Do not drop the in-route sample-access checks on launch — convert them."
+    notes: "UNBLOCKED by M2-B3-PRE (pipeline:read holders + Project-scope resolver + both map contradictions
+      resolved). The stale part of the original note: §4 already had pipeline:read; what was missing was a
+      preset holding it.
+      Remaining scope is 11 routes, not 16. The three BYOP catalog reads became AUTH-ONLY BY DESIGN, and
+      two more are B7-class lists with no single resource to scope against (GET /pipelines/, and BYOP's
+      list which is now auth-only anyway). Left to convert: 7 BYOP mutations (pipeline:register_custom at
+      the pipeline's owner_lab_id), launch + resume (pipeline:run at Project), and the 3 run-status reads
+      (pipeline:read at Project).
+      Two things to settle while doing it, neither a blocker: BYOP owner_lab_id is NULLABLE, so a lab-less
+      pipeline has no lab scope — decide whether it falls to instance scope or the column becomes required;
+      and _get_or_404_tenancy's 'registering user' rung is an ownership rung with no grant behind it, the
+      same shape sample ownership needed a policy for. Do not drop the in-route sample-access checks on
+      launch — convert them (they are per-sample, so sample_id, not the launch project)."
 
   - id: M2-B4
     title: Submission and import-mapping route guards (21 routes)
