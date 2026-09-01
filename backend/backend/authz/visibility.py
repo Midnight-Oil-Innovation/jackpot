@@ -22,7 +22,13 @@ skipping them per row.
 import re
 from datetime import UTC, datetime
 
-from backend.authz.engine import Context, Principal, Resource, _unexpired
+from backend.authz.engine import (
+    Context,
+    Principal,
+    Resource,
+    _conditions_satisfied,
+    _unexpired,
+)
 from backend.authz.policy import _DB_NOT_WIRED, PRINCIPAL_ID, _principal_holds
 from backend.authz.scope import (
     is_canonical_scope_sql,
@@ -131,7 +137,12 @@ def visibility_sql_clause(
     params: dict = {}
 
     def _live(conditions: dict) -> bool:
-        return all(context.conditions.get(k) == v for k, v in conditions.items())
+        # The engine's own predicate, not a copy of it. This was a duplicate
+        # of _conditions_satisfied's body until M3 added the {"not": ...}
+        # form; two copies of the condition semantics is precisely how the
+        # per-row and SQL halves drift apart, which is the failure the M1
+        # equivalence suite exists to catch. Call the one definition.
+        return _conditions_satisfied(conditions, context)
 
     columns = attribute_columns or {}
 

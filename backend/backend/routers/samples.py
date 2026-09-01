@@ -669,7 +669,10 @@ def request_sample_deletion(
 ):
     user = get_current_user(request)
     sample = _get_sample_any_or_404(sample_id, db)
-    _require_lab_tie(user, sample)
+    # M3: the §10 "platform admin, owner, or lab member" ladder became a
+    # capability. Ownership is not lost — it is LADDER_POLICIES' owner_id
+    # rung, which reaches sample scope the same way the in-route branch did.
+    require_capability("deletion:request")(user, sample_id=sample_id)
     row = deletion.request_deletion(sample, user, payload.reason, db)
     return success(data=_serialise(row))
 
@@ -683,7 +686,11 @@ def cancel_sample_deletion(
     user = get_current_user(request)
     sample = _get_sample_any_or_404(sample_id, db)
     if sample.get("deletion_requested_by_user_id") != user["id"]:
-        _require_approval_authority(user, sample)
+        # Cancelling someone else's request is an approval-authority act. It
+        # takes deletion:approve without the separation-of-duties condition:
+        # the DENY keys on the caller BEING the requester, and this branch
+        # runs only when they are not, so it cannot fire here.
+        require_capability("deletion:approve")(user, sample_id=sample_id)
     row = deletion.cancel_deletion(sample, user, db)
     return success(data=_serialise(row))
 
@@ -697,13 +704,19 @@ def approve_sample_deletion(
 ):
     user = get_current_user(request)
     sample = _get_sample_any_or_404(sample_id, db)
-    _require_approval_authority(user, sample)
-    row = deletion.approve_deletion(
-        sample,
+    self_approve = bool(payload and payload.platform_admin_self_approve)
+    # M3: separation of duties is now deletion.separation_of_duties, a DENY
+    # policy (§6.2-1b), so the approver-differs-from-requester rule is decided
+    # by permit() rather than re-derived here. The self-approve flag travels as
+    # a Context condition because that is what the policy reads — passing it
+    # only to approve_deletion would leave the guard denying a call the route
+    # then went on to allow.
+    require_capability("deletion:approve")(
         user,
-        db,
-        self_approve=bool(payload and payload.platform_admin_self_approve),
+        sample_id=sample_id,
+        conditions={"platform_admin_self_approve": self_approve},
     )
+    row = deletion.approve_deletion(sample, user, db, self_approve=self_approve)
     return success(data=_serialise(row))
 
 

@@ -4,7 +4,7 @@
 
 # M2 Pre-Cutover Report
 
-Map totals: 124 endpoints — 68 already wired to `require_capability`, 36 carrying a target capability but not yet guarded (ROUTE_LOCAL), 10 AUTH-ONLY BY DESIGN (permanently ungated — authentication is the whole decision), 0 catalog gaps, 10 PUBLIC (0 pending intent verification).
+Map totals: 127 endpoints — 71 already wired to `require_capability`, 36 carrying a target capability but not yet guarded (ROUTE_LOCAL), 10 AUTH-ONLY BY DESIGN (permanently ungated — authentication is the whole decision), 0 catalog gaps, 10 PUBLIC (0 pending intent verification).
 
 ## 1. Catalog gaps
 

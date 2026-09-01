@@ -215,6 +215,39 @@ the lab they are asking.
   deliberate widening, not an oversight — if the narrower rule was intended
   it needs its own verb rather than a re-added branch.
 
+### Deletion plane after M3
+
+Four routes converted onto capabilities; two left, deliberately.
+
+| Method | Path | Capability | Scope | Note |
+|---|---|---|---|---|
+| POST | `/api/v1/samples/{sample_id}/request-deletion` | `deletion:request` | Sample | `require_capability("deletion:request", sample_id=…)` (M3) — the §10 "owner, or lab member" ladder became a capability; ownership survives as `LADDER_POLICIES`' `owner_id` rung |
+| POST | `/api/v1/samples/{sample_id}/approve-deletion` | `deletion:approve` | Sample | `require_capability("deletion:approve", sample_id=…)` (M3) — inherits the §6.2-1b `deletion.separation_of_duties` DENY; the audited self-approve flag travels as a Context condition |
+| POST | `/api/v1/samples/{sample_id}/cancel-deletion` | `deletion:approve` | Sample | `require_capability("deletion:approve", sample_id=…)` (M3) — only when cancelling someone else's request; the requester cancelling their own is an identity comparison (§4.7) |
+
+**Platform admins lose these routes, by design.** §8.2's Instance
+Administrator preset enumerates neither deletion verb, and its note is
+explicit about why: *"Instance Administrator is operational, not a consent
+authority."* On Scenario T the consent authority is the Tribal authority; on
+every other scenario the Lab Lead holds `deletion:approve` at lab scope. This
+is the `admin-bypass-vs-scoped-grants` narrowing, applied to one more plane —
+not an oversight. An M3 draft added both verbs to the preset and
+`test_reseed_presets_match_the_documented_ones` rejected it, which is the
+check working.
+
+### Residue after M3 — still on the legacy check
+
+- `GET /samples/{id}/deletion-report` and
+  `POST /samples/{id}/retraction-requests` keep `_require_lab_tie` /
+  `_require_approval_authority`. Both read `is_platform_admin`. Converting
+  them needs a decision the §4 catalog does not currently support: the report
+  is a read whose natural verb (`sample:read_detail`) excludes admins, and a
+  retraction request is submission-governance with no verb of its own. Listed
+  in `M2-DROP`.
+- `POST /samples/{id}/reverse-tombstone` and `POST /samples/{id}/vacuum-now`
+  are admin-only and have no §4 verb. Same treatment as the raw_fastq residue
+  above: they need a catalog addition, not a guess.
+
 ### Known divergence from the legacy ladder
 
 Project-only membership. `permissions._base_access` admitted a project

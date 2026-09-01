@@ -2710,7 +2710,7 @@ sessions:
       (a1c7d94e6b28) again immediately before the drop if any legacy write
       path is still live at that point.
     phase: access_model_redesign
-    status: blocked
+    status: open
     depends_on:
       - M2
       - M3
@@ -2806,7 +2806,7 @@ sessions:
       sovereignty_mode; off-deployments unaffected. Resolve AM-OPEN-1 (designee
       representation) before finalizing.
     phase: access_model_redesign
-    status: open
+    status: shipped
     depends_on:
       - M2
     blocked_by_external:
@@ -2824,7 +2824,99 @@ sessions:
     pr_title_function:
     branch_name_template: m3-sovereignty-policies
     role_framing:
-    notes: "Depends on AM-OPEN-1 resolution for the Tribal-authority preset. access_model.md §6 + §8.3."
+    notes: "Shipped the implementable part. §6.2 describes three policies; only one survived contact with the code.
+      (a) deletion.separation_of_duties — SHIPPED as a real DENY policy: its routes resolve a Sample resource, so a
+      per-row DENY is the right shape. Required extending the condition language with {'not': v}, because the doc's
+      rule is 'unless a Platform Admin explicitly self-approves' and equality-only conditions make absent != False,
+      so the DENY would have silently failed OPEN for every caller that never set the flag.
+      (b) deletion.no_publish_while_deleting — NOT a policy, deliberately. submission:approve is checked once at Lab
+      scope while the rule is per-sample across the submission's whole set; submissions.py:497 already enforces it
+      correctly as a set-level check returning a 422 that names each blocked sample.
+      (c) sovereignty.no_federate_deleting — deferred to M4. federation:push exists nowhere in the codebase outside
+      an engine.py comment; the capability arrives with Layer 2 sharing agreements, and a policy keyed to a verb no
+      route checks is untestable decoration. Filed as M3-FEDERATION-DELETION-GUARD.
+      Routes converted: request-deletion, approve-deletion, cancel-deletion. Platform admins lose them by design —
+      §8.2's note says 'Instance Administrator is operational, not a consent authority'. A draft added the two verbs
+      to the preset and test_reseed_presets_match_the_documented_ones rejected it; the preset change and its
+      migration were reverted. The Scenario-T preset stays deferred per §6.4's own instruction (M3-SCENARIO-T)."
+    merged_at:
+    merge_sha:
+  - id: M3-SCENARIO-T
+    title: Scenario-T Tribal Authority Designee preset (blocked on AM-OPEN-1)
+    short_description: |
+      The sovereignty-specific half of M3, carved out because access_model.md
+      §6.4 says not to build it yet: "Until a Scenario T pilot exists, this
+      stays an explicit open question rather than an invented mechanism."
+      Needs: the sovereignty.tribal_authority_deletion ALLOW policy (§6.2-1),
+      the Scenario-T preset (§8.3) with its separation-of-duties carve-out —
+      the designee MAY self-approve, unlike the general rule in §6.2-1b — and
+      whatever represents "their authority" as a scope.
+      AM-OPEN-1 is the blocker and its open part is empirical, not analytic:
+      whether a Tribal authority maps cleanly onto an Org, or spans several,
+      or covers a subset of one org's samples by consent cohort. §6.4's
+      recommendation is a HUMAN principal with the preset at Org scope, to be
+      confirmed against a real deployment rather than guessed.
+    phase: access_model_redesign
+    status: blocked
+    depends_on:
+      - M3
+      - AM-OPEN-1
+    blocked_by_external: "Needs a real Scenario T deployment to confirm the authority-to-scope mapping."
+    parallel_safe: false
+    parallel_safe_reason: "Authz policy surface; serializes per CLAUDE.md."
+    effort_sessions: 1
+    primary_files:
+      - backend/backend/authz/policy.py
+      - backend/backend/authz/reseed.py
+    test_files:
+      - tests/authz/test_sovereignty_policies.py
+    source_of_truth_views:
+      - docs/access_model.md
+    pr_title_template: "feat(authz): M3-SCENARIO-T — Tribal Authority Designee preset"
+    pr_title_function:
+    branch_name_template: m3-scenario-t-preset
+    role_framing:
+    notes: "Carved out of M3 at the maintainer's direction, following access_model.md §6.4's explicit instruction not
+      to invent the mechanism ahead of a pilot. access_model.md §6.2-1 + §8.3."
+
+  - id: M3-FEDERATION-DELETION-GUARD
+    title: sovereignty.no_federate_deleting — DENY federation push on non-ACTIVE samples
+    short_description: |
+      §6.2-3's DENY: a sample in the deletion lifecycle must never leave via
+      federation, regardless of any sharing agreement. Deferred out of M3
+      because the capability it keys on does not exist — federation:push
+      appears nowhere in the codebase except an example string in an
+      engine.py comment, no route checks it, and backend/federation/ has no
+      deletion_status guard. M4 (Layer 2 sharing agreements) introduces the
+      verb and the PEER_INSTANCE grant; this policy lands with it, when there
+      is a call site to test it against.
+      Shape when it lands: DENY on federation:push where deletion_status is
+      not ACTIVE, conditioned on request_origin == FEDERATION. Note the
+      guards.py DENY invariant M3 established — the policy may only read
+      attributes SAMPLE_ATTRIBUTE_COLUMNS loads, and may only key on a
+      capability whose routes resolve a Sample resource.
+    phase: access_model_redesign
+    status: blocked
+    depends_on:
+      - M3
+      - M4
+    blocked_by_external:
+    parallel_safe: false
+    parallel_safe_reason: "Authz policy surface; serializes per CLAUDE.md."
+    effort_sessions: 1
+    primary_files:
+      - backend/backend/authz/policy.py
+    test_files:
+      - tests/authz/test_sovereignty_policies.py
+    source_of_truth_views:
+      - docs/access_model.md
+    pr_title_template: "feat(authz): sovereignty.no_federate_deleting"
+    pr_title_function:
+    branch_name_template: sovereignty-no-federate-deleting
+    role_framing:
+    notes: "Found during M3: the policy §6.2-3 describes has no call site until M4. tests/authz/
+      test_sovereignty_policies.py::test_no_policy_keys_on_the_deferred_capabilities guards against it being added
+      early, since a DENY on a Lab-scoped capability reads an absent deletion_status and denies everything."
 
   - id: M4
     title: Federation Layer 2 — sharing_agreements table + agreement-sourced grants
