@@ -39,7 +39,7 @@
 
 meta:
   version: 1
-  last_updated: "2026-08-31"
+  last_updated: "2026-09-01"
   source_documents:
     - todo.md
     - docs/jackpot_session_summary_and_backlog.md
@@ -2780,19 +2780,18 @@ sessions:
     pr_title_function:
     branch_name_template: sample-access-grant-sync
     role_framing:
-    notes: "Shipped. sync_sample_access_grants(conn, *, sample_id, requester_id=None) sits beside
-      sync_membership_grants and reconciles state rather than reacting to events — callers say 'this sample's access
-      changed' and the grants are made to agree, so no caller has to know whether it granted, revoked, expired or
-      restored. Wired into all five write paths: approve endpoint, the auto-approve and expire-grants jobs, and the
-      deletion lifecycle's bulk revoke (seal) and un-revoke (reverse-tombstone). The shared _SAMPLE_ACCESS_SQL gained
-      optional :sample_id/:requester_id filters rather than growing a second query, so the live sync and the cutover
-      reseed cannot drift on what 'currently has access' means. Proven RED first by deleting the reseed bridge from
-      _can_read_detail in tests/test_sample_access_router_api.py: exactly two tests failed (approval grants nothing,
-      an active grant conveys nothing) while the negative tests passed for the wrong reason — the signature of a
-      fail-closed gap. New tests/authz/test_sample_access_sync.py (10) covers the deletion lifecycle, source and
-      scope isolation from membership grants, idempotence, and the conn=None call shape."
-    merged_at:
-    merge_sha:
+    notes: "Shipped. sync_sample_access_grants(conn, *, sample_id, requester_id=None) sits beside sync_membership_grants and
+      reconciles state rather than reacting to events — callers say 'this sample's access changed' and the grants are made
+      to agree, so no caller has to know whether it granted, revoked, expired or restored. Wired into all five write paths:
+      approve endpoint, the auto-approve and expire-grants jobs, and the deletion lifecycle's bulk revoke (seal) and un-revoke
+      (reverse-tombstone). The shared _SAMPLE_ACCESS_SQL gained optional :sample_id/:requester_id filters rather than growing
+      a second query, so the live sync and the cutover reseed cannot drift on what 'currently has access' means. Proven RED
+      first by deleting the reseed bridge from _can_read_detail in tests/test_sample_access_router_api.py: exactly two tests
+      failed (approval grants nothing, an active grant conveys nothing) while the negative tests passed for the wrong reason
+      — the signature of a fail-closed gap. New tests/authz/test_sample_access_sync.py (10) covers the deletion lifecycle,
+      source and scope isolation from membership grants, idempotence, and the conn=None call shape."
+    merged_at: '2026-09-01'
+    merge_sha: a28645b
   - id: M3
     title: Sovereignty policies (deletion-lifecycle guards + Scenario-T preset)
     short_description: |
@@ -2824,21 +2823,19 @@ sessions:
     pr_title_function:
     branch_name_template: m3-sovereignty-policies
     role_framing:
-    notes: "Shipped the implementable part. §6.2 describes three policies; only one survived contact with the code.
-      (a) deletion.separation_of_duties — SHIPPED as a real DENY policy: its routes resolve a Sample resource, so a
-      per-row DENY is the right shape. Required extending the condition language with {'not': v}, because the doc's
-      rule is 'unless a Platform Admin explicitly self-approves' and equality-only conditions make absent != False,
-      so the DENY would have silently failed OPEN for every caller that never set the flag.
-      (b) deletion.no_publish_while_deleting — NOT a policy, deliberately. submission:approve is checked once at Lab
-      scope while the rule is per-sample across the submission's whole set; submissions.py:497 already enforces it
-      correctly as a set-level check returning a 422 that names each blocked sample.
-      (c) sovereignty.no_federate_deleting — deferred to M4. federation:push exists nowhere in the codebase outside
-      an engine.py comment; the capability arrives with Layer 2 sharing agreements, and a policy keyed to a verb no
-      route checks is untestable decoration. Filed as M3-FEDERATION-DELETION-GUARD.
-      Routes converted: request-deletion, approve-deletion, cancel-deletion. Platform admins lose them by design —
-      §8.2's note says 'Instance Administrator is operational, not a consent authority'. A draft added the two verbs
-      to the preset and test_reseed_presets_match_the_documented_ones rejected it; the preset change and its
-      migration were reverted. The Scenario-T preset stays deferred per §6.4's own instruction (M3-SCENARIO-T)."
+    notes: "Shipped the implementable part. §6.2 describes three policies; only one survived contact with the code. (a) deletion.separation_of_duties
+      — SHIPPED as a real DENY policy: its routes resolve a Sample resource, so a per-row DENY is the right shape. Required
+      extending the condition language with {'not': v}, because the doc's rule is 'unless a Platform Admin explicitly self-approves'
+      and equality-only conditions make absent != False, so the DENY would have silently failed OPEN for every caller that
+      never set the flag. (b) deletion.no_publish_while_deleting — NOT a policy, deliberately. submission:approve is checked
+      once at Lab scope while the rule is per-sample across the submission's whole set; submissions.py:497 already enforces
+      it correctly as a set-level check returning a 422 that names each blocked sample. (c) sovereignty.no_federate_deleting
+      — deferred to M4. federation:push exists nowhere in the codebase outside an engine.py comment; the capability arrives
+      with Layer 2 sharing agreements, and a policy keyed to a verb no route checks is untestable decoration. Filed as M3-FEDERATION-DELETION-GUARD.
+      Routes converted: request-deletion, approve-deletion, cancel-deletion. Platform admins lose them by design — §8.2's
+      note says 'Instance Administrator is operational, not a consent authority'. A draft added the two verbs to the preset
+      and test_reseed_presets_match_the_documented_ones rejected it; the preset change and its migration were reverted. The
+      Scenario-T preset stays deferred per §6.4's own instruction (M3-SCENARIO-T)."
     merged_at:
     merge_sha:
   - id: M4-B
@@ -2881,17 +2878,17 @@ sessions:
     pr_title_function:
     branch_name_template: m4b-federation-visibility
     role_framing:
-    notes: "Shipped both halves. The L1 inbound path was not merely unwired \u2014 it did not exist: client._query_one
-      called GET /api/v1/samples/ on the partner, which authenticates a JWT cookie and nothing else, so a real
-      federated query would have 401'd. No test caught it because every federation-key test hit /api/v1/federation/*
-      and the client tests mocked the partner. Added POST /api/v1/federation/query beside the two routes that already
-      authenticate peers, rather than a second auth mode on the most-read endpoint in the system; \u00a77.4's actual
-      requirement \u2014 that federated visibility be the same DECISION as local visibility \u2014 is preserved, since the
-      filtering is sample_list_clause. Repointed client._query_one and 27 respx mocks that had encoded the old target.
-      L2: may_push_sample() composes permit() for federation:push with the three gates; is_qualifying_sample keeps its
-      own function and meaning. Not yet reached by push_to_hub, whose IO is still stubbed \u2014 it is the decision
-      function that stub will call. Resource predicates gained {'not': v} (and _attr_sql gained IS DISTINCT FROM, not
-      <>, so a NULL column cannot silently drop a DENY term). AM-OPEN-2 still unpinned; it belongs with push IO."
+    notes: "Shipped both halves. The L1 inbound path was not merely unwired — it did not exist: client._query_one called GET
+      /api/v1/samples/ on the partner, which authenticates a JWT cookie and nothing else, so a real federated query would
+      have 401'd. No test caught it because every federation-key test hit /api/v1/federation/* and the client tests mocked
+      the partner. Added POST /api/v1/federation/query beside the two routes that already authenticate peers, rather than
+      a second auth mode on the most-read endpoint in the system; §7.4's actual requirement — that federated visibility be
+      the same DECISION as local visibility — is preserved, since the filtering is sample_list_clause. Repointed client._query_one
+      and 27 respx mocks that had encoded the old target. L2: may_push_sample() composes permit() for federation:push with
+      the three gates; is_qualifying_sample keeps its own function and meaning. Not yet reached by push_to_hub, whose IO is
+      still stubbed — it is the decision function that stub will call. Resource predicates gained {'not': v} (and _attr_sql
+      gained IS DISTINCT FROM, not <>, so a NULL column cannot silently drop a DENY term). AM-OPEN-2 still unpinned; it belongs
+      with push IO."
     merged_at:
     merge_sha:
   - id: M3-SCENARIO-T
@@ -2929,8 +2926,8 @@ sessions:
     pr_title_function:
     branch_name_template: m3-scenario-t-preset
     role_framing:
-    notes: "Carved out of M3 at the maintainer's direction, following access_model.md §6.4's explicit instruction not
-      to invent the mechanism ahead of a pilot. access_model.md §6.2-1 + §8.3."
+    notes: "Carved out of M3 at the maintainer's direction, following access_model.md §6.4's explicit instruction not to invent
+      the mechanism ahead of a pilot. access_model.md §6.2-1 + §8.3."
 
   - id: M3-FEDERATION-DELETION-GUARD
     title: sovereignty.no_federate_deleting — DENY federation push on non-ACTIVE samples
@@ -2967,13 +2964,12 @@ sessions:
     pr_title_function:
     branch_name_template: sovereignty-no-federate-deleting
     role_framing:
-    notes: "Shipped on M4-B's call site. sovereignty.no_federate_deleting DENYs federation:push where
-      deletion_status is not ACTIVE, beating a valid sharing agreement by deny-precedence \u2014 \u00a75.4's
-      unconditionally-unoverridable property made concrete. Absent deletion_status reads as not-ACTIVE and therefore
-      DENIES: fail-closed is the safe direction for an export, and is exactly why the same {'not': v} form would be
-      catastrophic on a Lab-scoped capability like submission:approve (there absence would deny every approval).
-      Tested through may_push_sample, not permit() alone \u2014 asserting against the engine would prove nothing about
-      whether any code path consults the policy, which is why M3 deferred it in the first place."
+    notes: "Shipped on M4-B's call site. sovereignty.no_federate_deleting DENYs federation:push where deletion_status is not
+      ACTIVE, beating a valid sharing agreement by deny-precedence — §5.4's unconditionally-unoverridable property made concrete.
+      Absent deletion_status reads as not-ACTIVE and therefore DENIES: fail-closed is the safe direction for an export, and
+      is exactly why the same {'not': v} form would be catastrophic on a Lab-scoped capability like submission:approve (there
+      absence would deny every approval). Tested through may_push_sample, not permit() alone — asserting against the engine
+      would prove nothing about whether any code path consults the policy, which is why M3 deferred it in the first place."
     merged_at:
     merge_sha:
   - id: M4
@@ -3007,18 +3003,17 @@ sessions:
     pr_title_function:
     branch_name_template: m4-sharing-agreements
     role_framing:
-    notes: "Shipped M4-A only, the dark half. sharing_agreements + sharing_agreement_grants (migration
-      f9c3e60b7d18, hand-written, no ORM), sync_agreement_grants() projecting them into
-      authz_capability_grants with source='agreement', and load_peer_principal(). Nothing on a request path calls
-      any of it — same staging M0 used for the engine and M2's additive migration used for the reseed, so the
-      behavior-changing step lands alone. Two tables rather than a JSONB grants blob: the grants have the same shape
-      as every other grant in the system, so the sync is a projection rather than a JSON parse whose schema drifts.
-      Reconciles per PEER, not per agreement — a peer may hold several and 'what does this peer hold' is the question
-      the decision path asks; deactivating one agreement must withdraw exactly its grants.
-      Deferred to M4-B: L1 federated visibility onto visibility_sql_clause with a peer principal (the piece that
-      changes what peers can see, today PUBLIC/DISCOVERABLE-only), and is_qualifying_sample consulting permit() for
-      federation:push — which is what gives M3-FEDERATION-DELETION-GUARD a call site. AM-OPEN-2 (the
-      min_sharing_level floor composition) is still unpinned and belongs with L2 push IO, per §7.6-1."
+    notes: "Shipped M4-A only, the dark half. sharing_agreements + sharing_agreement_grants (migration f9c3e60b7d18, hand-written,
+      no ORM), sync_agreement_grants() projecting them into authz_capability_grants with source='agreement', and load_peer_principal().
+      Nothing on a request path calls any of it — same staging M0 used for the engine and M2's additive migration used for
+      the reseed, so the behavior-changing step lands alone. Two tables rather than a JSONB grants blob: the grants have the
+      same shape as every other grant in the system, so the sync is a projection rather than a JSON parse whose schema drifts.
+      Reconciles per PEER, not per agreement — a peer may hold several and 'what does this peer hold' is the question the
+      decision path asks; deactivating one agreement must withdraw exactly its grants. Deferred to M4-B: L1 federated visibility
+      onto visibility_sql_clause with a peer principal (the piece that changes what peers can see, today PUBLIC/DISCOVERABLE-only),
+      and is_qualifying_sample consulting permit() for federation:push — which is what gives M3-FEDERATION-DELETION-GUARD
+      a call site. AM-OPEN-2 (the min_sharing_level floor composition) is still unpinned and belongs with L2 push IO, per
+      §7.6-1."
     merged_at:
     merge_sha:
   - id: M5
