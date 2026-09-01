@@ -875,7 +875,7 @@ Preset "Lab Lead":
                 pipeline:read, pipeline:register_custom, org:manage,
                 lab:read, org:read, import:read, import:manage,
                 sample:read_unscrubbed, deletion:read_report,
-                submission:retract
+                submission:retract, user:manage
   note: deletion:approve here is the ordinary intra-lab path; the §6.2 1b
         separation-of-duties DENY still forbids approving one's own request.
         The three M2-DROP-PRE verbs land here because the routes they name all
@@ -884,6 +884,13 @@ Preset "Lab Lead":
         deletion plane reaching outward (B-CARE-3g), and folding it into the
         submission verb would hand repository-retraction to every future
         preset that gains submission approval for submission reasons.
+        user:manage is here for the lab's own roster — the four
+        /labs/{id}/members routes, which M2 moved to this verb at Lab scope
+        while no preset held it, locking Lab Directors out of the lab they
+        direct. It confers nothing globally: PATCH and DELETE /users/{id} ask
+        for the same verb with no scope argument, which resolves to the
+        instance root, and a lab:// grant does not contain the root. The verb
+        is scope-relative in the same way org:manage above is.
 ```
 
 **Lab Member (read-write)** — replaces Lab Collaborator. Does the work, cannot approve governance.

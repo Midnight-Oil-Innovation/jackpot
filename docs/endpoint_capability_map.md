@@ -83,7 +83,7 @@ All catalog gaps were resolved in the M2 pre-cutover review (see
 | GET | `/api/v1/labs/{lab_id}` | `lab:read` | Lab | `permits("lab:read", lab_id=…)` (M2-B5) |
 | PATCH | `/api/v1/labs/{lab_id}` | `org:manage` | Lab | `require_capability("org:manage")` at lab scope |
 | DELETE | `/api/v1/labs/{lab_id}` | `org:manage` | Instance | `require_capability("org:manage")` |
-| GET | `/api/v1/labs/{lab_id}/members` | `user:manage` | Lab | `require_capability("user:manage")` |
+| GET | `/api/v1/labs/{lab_id}/members` | `user:manage` | Lab | `require_capability("user:manage")`. §8.2 puts the verb in `lab_lead` — it did not until this was found, which is the correction recorded below |
 | POST | `/api/v1/labs/{lab_id}/members` | `user:manage` | Lab | `require_capability("user:manage")`, and **M2-B5 makes it issue the member's grants**. A `lab_membership` row stopped being a decision input at M2-B1, so without this a member added after cutover holds nothing until a reseed runs. §4.5 already scopes `user:manage` as "create/modify/deactivate users, **assign capabilities**" |
 | PATCH | `/api/v1/labs/{lab_id}/members/{user_id}` | `user:manage` | Lab | `require_capability("user:manage")`; re-issues the grants for the new role (M2-B5) |
 | DELETE | `/api/v1/labs/{lab_id}/members/{user_id}` | `user:manage` | Lab | `require_capability("user:manage")`; revokes the membership's grants (M2-B5). Scoped by `source='reseed'`, so a per-sample access grant survives |
@@ -330,6 +330,29 @@ ownership rung. At creation the caller is always the registrant, so the rung
 matches every time and the lab check becomes vacuous — any authenticated user
 could place a pipeline into any lab. `create_pipeline` asks the grant question
 only.
+
+### Corrected narrowings — changes nobody decided
+
+- **Lab member management.** M2 replaced `require_lab_director(user, lab_id)`
+  on the four `/labs/{id}/members` routes with `require_capability("user:manage")`
+  at Lab scope. No lab preset held `user:manage`, so the capability landed on
+  instance admins alone and a Lab Director lost the roster of the lab they
+  direct. M2-B5 then wired grant issuance into three of those four routes —
+  correct code behind a door no lab principal could open.
+
+  It reached here rather than into the list below because nothing decided it:
+  a verb swap moved the authority and no preset moved with it. Fixed by putting
+  `user:manage` in `lab_lead`, which is safe for one reason and it is worth
+  stating plainly — the routes that administer users at large (`PATCH` and
+  `DELETE /users/{id}`) request the verb with **no scope argument**, resolving
+  to `instance://self`, and containment runs downward, so a `lab://` grant
+  cannot reach it. `tests/test_lab_lead_member_management.py` pins both
+  directions, including a Lab Lead's attempt to promote themselves.
+
+  The general shape, since this is the second instance after the
+  `deletion:request` ownership rung: **when a guard changes vocabulary, the
+  holders change with it, and only the route's tests would notice — if any
+  test stands where the old holder stood.** None did here.
 
 ### Deliberate narrowings
 
