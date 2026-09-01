@@ -2264,7 +2264,7 @@ sessions:
       registered divergence class. Route-level tests are still required per
       route — the harness covers the decision, not the wiring.
     phase: access_model_redesign
-    status: open
+    status: shipped
     depends_on:
       - M2-B1
       - M2-B2-PRE-A
@@ -2295,6 +2295,8 @@ sessions:
       promote WIDENED (map gives sample:update, held by lab_member_rw; legacy wanted a Director), and the
       raw_fastq Director check KEPT (no §4 verb names it; dropping it would widen access to un-scrubbed reads).
       Sequenced first for its evidence, and it was the most blocked batch — PRE-A/B/C cleared it 2026-08-31."
+    merged_at: '2026-09-01'
+    merge_sha: 8059bac
 
   - id: M2-B3
     title: Pipeline and BYOP route guards (16 routes)
@@ -2445,7 +2447,7 @@ sessions:
       expression is a sequential scan, and an expression index is the fix if
       it matters. Do not add one speculatively.
     phase: access_model_redesign
-    status: blocked
+    status: open
     depends_on:
       - M2-B1
       - M2-B2
