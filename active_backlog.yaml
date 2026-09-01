@@ -2724,9 +2724,26 @@ sessions:
       and an Instance-scoped grant punches through by design; §2/§3.2 carried
       the same claim twice more. All three corrected (readers 8-10 of 31
       retired at zero conversion cost).
+      Slice 4 SHIPPED: federation/deletion_propagation.py's admin-notification
+      lookup. New authz/principal.py::capability_holders() is the reverse of
+      load_principal — "who holds this" rather than "what does this principal
+      hold" — with _scope_contains transcribed to SQL so containment runs the
+      same direction (grant contains resource, never the reverse). Excludes
+      expired grants, inactive users, peer principals (the users join), and
+      CONDITIONAL grants: a condition is a request fact and a scheduled job has
+      no request, so the engine's refuse-what-you-cannot-evaluate rule applies.
+      Documented NOT a decision function — it sees grants only and is blind to
+      DENY policies, so authorizing off it would rebuild the second decision
+      point §2.1 forbids. The alert now selects federation:configure_peer at
+      instance scope, i.e. the people who can act on the peer (suspension
+      writes federated_instances.federation_enabled, a configure-peer act)
+      rather than admins as a class; logs a warning when that set is empty,
+      since the audit row survives but the push is silently lost otherwise.
+      The old test asserted on u.is_platform_admin and would have stayed green
+      after the reader vanished; replaced, plus a narrowing pair (grant without
+      flag IS alerted, flag without grant is NOT) that the seeded
+      both-at-once admin could never have caught.
       REMAINING, per site:
-        - federation/deletion_propagation.py:358  admin-notification lookup →
-          a grant query, not a decision
         - guards.py:41/42/72, imports.py:813, auth.py:446-485/590,
           users.py:15/16/24/25  identity plumbing; users.py PATCH exposes both
           flags as admin-editable, which is role ASSIGNMENT and must become
@@ -2806,9 +2823,10 @@ sessions:
           - samples.py:734        vacuum-now admin-only (M3)
 
         LOOKUP (rewrite as a grant query):
-          - federation/deletion_propagation.py:358 — selects platform admins
-            to notify. Becomes "principals holding the instance_administrator
-            preset at instance scope".
+          - federation/deletion_propagation.py:358 — RETIRED by M2-DROP-PRE
+            slice 4. Now capability_holders("federation:configure_peer",
+            instance scope); the verb, not the preset, because the alert is
+            about a peer the recipient may need to suspend.
 
         IDENTITY PLUMBING (stop selecting / stop writing):
           - guards.py:41,42,72    mock-user fallback dict + the user SELECT

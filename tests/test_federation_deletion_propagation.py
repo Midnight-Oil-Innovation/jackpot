@@ -339,13 +339,73 @@ def test_sla_breach_flags_noncompliant_and_alerts(signer, monkeypatch):
         {"a": AuditActions.FEDERATION_PEER_NONCOMPLIANT, "r": str(peer["id"])},
     )
     assert audits
-    # Operator alert: platform admins get a notification.
+    # Operator alert: whoever holds federation:configure_peer at instance
+    # scope gets a notification. Asserted against the grant rather than
+    # users.is_platform_admin — the flag is the thing M2-DROP removes, and a
+    # test still standing on it would keep passing after the reader it covers
+    # stopped existing.
     notes = execute_query(
-        "SELECT n.id FROM notifications n JOIN users u ON u.id = n.recipient_id "
-        "WHERE n.event_type = 'FEDERATION_PEER_NONCOMPLIANT' AND u.is_platform_admin = TRUE",
+        "SELECT n.id FROM notifications n "
+        "JOIN authz_capability_grants g ON g.principal_id = CAST(n.recipient_id AS TEXT) "
+        "WHERE n.event_type = 'FEDERATION_PEER_NONCOMPLIANT' "
+        "AND g.capability = 'federation:configure_peer' "
+        "AND g.scope_ref = 'instance://self'",
     )
     assert notes
     get_settings.cache_clear()
+
+
+def test_the_alert_follows_the_grant_and_not_the_legacy_flag(signer, monkeypatch):
+    """The narrowing M2-DROP-PRE actually performs, pinned in both directions.
+
+    The baseline seeds admin@example.org holding the flag AND the instance
+    preset, so every "as admin" assertion passes whichever of the two the code
+    reads — which is precisely why the conversion needs a principal that holds
+    exactly one. Two of them: a holder with no flag must be notified, and a
+    flag-holder with no grant must not.
+    """
+    monkeypatch.setenv("FEDERATION_NONCOMPLIANCE_POLICY", "alert_only")
+    get_settings.cache_clear()
+    granted = execute_write(
+        "INSERT INTO users (email, name, organization_id, is_platform_admin, is_active) "
+        "VALUES ('fedop-granted@test.com', 'Granted', 1, FALSE, TRUE) RETURNING id",
+    )[0]["id"]
+    flagged_only = execute_write(
+        "INSERT INTO users (email, name, organization_id, is_platform_admin, is_active) "
+        "VALUES ('fedop-flagonly@test.com', 'Flag Only', 1, TRUE, TRUE) RETURNING id",
+    )[0]["id"]
+    try:
+        execute_write(
+            "INSERT INTO authz_capability_grants "
+            "(principal_id, capability, scope_ref, source) "
+            "VALUES (:p, 'federation:configure_peer', 'instance://self', 'test')",
+            {"p": str(granted)},
+        )
+        _mk_peer("bcare4-grant-narrowing")
+        sample = _mk_sample("BCARE4-NARROW-01")
+        enqueue_deletion_events(sample, "TOMBSTONE", None, signer=signer)
+        _age_events(sample["id"])
+        flag_noncompliant_events(None)
+
+        def notified(user_id: int) -> bool:
+            return bool(
+                execute_query(
+                    "SELECT id FROM notifications WHERE recipient_id = :u "
+                    "AND event_type = 'FEDERATION_PEER_NONCOMPLIANT'",
+                    {"u": user_id},
+                )
+            )
+
+        assert notified(granted), "capability holder was not alerted"
+        assert not notified(flagged_only), "is_platform_admin still selects recipients"
+    finally:
+        for uid in (granted, flagged_only):
+            execute_write("DELETE FROM notifications WHERE recipient_id = :u", {"u": uid})
+            execute_write(
+                "DELETE FROM authz_capability_grants WHERE principal_id = :p", {"p": str(uid)}
+            )
+            execute_write("DELETE FROM users WHERE id = :u", {"u": uid})
+        get_settings.cache_clear()
 
 
 def test_hard_fail_policy_suspends_peer_on_first_breach(signer, monkeypatch):

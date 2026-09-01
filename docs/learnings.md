@@ -3695,3 +3695,59 @@ request.
   the principal's grant scopes already give every route — that is why this went
   rather than being converted. Rebuilding it is an hour if the need turns out to
   be real.
+
+## M2-DROP-PRE slice 4 — who to tell, asked of the grant table — 2026-09-01
+
+**What was built:** `authz/principal.py::capability_holders(capability, scope)`
+— the reverse of `load_principal` — and the conversion of B-CARE-4's
+non-compliant-peer alert onto it. That alert was the last LOOKUP-class reader of
+`users.is_platform_admin`: a `SELECT id FROM users WHERE is_platform_admin =
+TRUE AND is_active = TRUE` used to address a notification.
+
+**Key decisions:**
+
+- *The verb is `federation:configure_peer`, not "the instance-admin preset".*
+  The backlog said "principals holding the instance_administrator preset at
+  instance scope", which would have hard-coded a preset name into a lookup. The
+  question the alert actually asks is "who can do something about this peer",
+  and the something is suspension — which writes
+  `federated_instances.federation_enabled`, a configure-peer act. Asking for the
+  verb means a deployment that grants it outside the preset gets alerted
+  correctly, and one that narrows the preset stops alerting people who can no
+  longer act.
+- *Containment runs one way and the SQL has to say so.* `_scope_contains`
+  transcribed is `:scope = scope_ref OR :scope LIKE RTRIM(scope_ref,'/') || '/%'`
+  — the GRANT scope contains the RESOURCE scope. Written backwards it would turn
+  every lab-scoped grant into instance-wide reach, so both directions are pinned
+  by tests, including the `org/1` vs `org/12` segment boundary.
+- *Conditional grants are excluded, not assumed satisfied.* A condition is a
+  fact about a request; a scheduled job has no request to check one against. The
+  engine already answers this — an unset `Context.now` costs a time-bounded
+  grant its effect rather than granting it unbounded — so the same discipline
+  applies. Refusing here can only shorten a notification list, never widen
+  access.
+- *It is documented as not a decision function, in the docstring, at length.*
+  It reads grants and cannot see DENY policies, so authorizing off it would
+  reintroduce the second decision point §2.1 exists to prevent — and it would
+  fail open, since a sovereignty DENY is invisible to it. The name says
+  "holders", which is exactly the shape someone reaches for when they want a
+  quick permission check.
+
+**Watch out for:**
+
+- **A `users` join is the only thing keeping peers out of a list of people.**
+  `authz_capability_grants.principal_id` is `TEXT` and holds user ids *and*
+  `federated_instances` UUIDs. A holder query that skipped the join would
+  eventually hand a UUID to `create_notification` as a `recipient_id`.
+- **The test that covered this route asserted on `u.is_platform_admin = TRUE`.**
+  It would have kept passing after the column was dropped and the code stopped
+  reading it — the assertion joined to `users`, not to the behaviour. Third
+  instance in this phase of a test standing on the seat the change is moving.
+  The replacement asserts against the grant, and a second test pins the
+  narrowing in both directions: a holder *without* the flag is alerted, a
+  flag-holder *without* the grant is not. Neither direction is observable
+  through the seeded `admin@example.org`, who holds both.
+- **An empty holder set is a silent failure**, so it logs. The audit row
+  (`FEDERATION_PEER_NONCOMPLIANT`) is written before the alert either way, so
+  the record survives a misconfigured deployment; what is lost is the push, and
+  nobody notices a notification they never got.
