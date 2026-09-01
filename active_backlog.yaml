@@ -2350,6 +2350,8 @@ sessions:
       Scoped at the member's lab, which contains that lab's projects by ordinary containment, so it says
       nothing about another lab's runs. The guard's 'exactly one identifier' rule replaces the old
       'not both' — three identifiers now, and the message names which were passed."
+    merged_at: '2026-09-01'
+    merge_sha: 3a3dcc8
 
   - id: M2-B3
     title: Pipeline and BYOP route guards (16 routes)
@@ -2398,6 +2400,9 @@ sessions:
       Lab Collaborators keep launch. Only read-only members lose it.
       Remaining narrowing, documented in the map: BYOP mutation on a lab-owned pipeline takes
       pipeline:register_custom, so ordinary lab membership is no longer enough."
+    merged_at: '2026-09-01'
+    merge_sha: 7ab7bf5
+
   - id: M2-B4
     title: Submission and import-mapping route guards (21 routes)
     short_description: |
