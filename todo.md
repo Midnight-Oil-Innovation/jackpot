@@ -40,7 +40,7 @@ Phase 21 UI triage stays where it is — Session 5 debt, ship-blocker, not displ
 
 Instructions for Claude Code: Work through items in order within each phase.
 Check off each item only after `uv run pytest` passes. Never skip an item —
-if blocked, note the blocker in `docs/review_log.md` and move to the next
+if blocked, note the blocker in `docs/learnings.md` and move to the next
 unblocked item.
 
 ---
@@ -724,8 +724,8 @@ Upload page triage". Two real backend bugs found and fixed at root.
 
 ### UI-G: End-of-Phase-21 commit
 
-- [ ] `gac "feat(ui): Phase 21 page triage complete — see review_log.md"`
-- [ ] Update `docs/review_log.md` with the per-page status.
+- [ ] `gac "feat(ui): Phase 21 page triage complete — see learnings.md"`
+- [ ] Update `docs/learnings.md` with the per-page status.
 
 ---
 
@@ -835,8 +835,8 @@ Items, all complete:
 
 Four-agent parallel review (Critical Rules, spec drift, coverage, TODOs)
 followed by four sequential security/deploy commits. Findings synthesized
-into `docs/review_log.md` (commit `8cbb993`) — that file is the canonical
-output and carries the 19-item action list. Session 13 in
+into `docs/review_log.md` (commit `8cbb993`) — that file was the canonical
+output and carries the 19-item action list. (That file was deleted on 2026-05-08 as collateral in `06e67ee`, a schema-regeneration commit; recover it with `git show 06e67ee^:docs/review_log.md`. `docs/learnings.md` is the log going forward.) Session 13 in
 `jackpot_session_summary_and_backlog.md` and the Phase 22 entry in
 `learnings.md` carry the play-by-play.
 

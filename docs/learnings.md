@@ -2455,7 +2455,7 @@ The user surfaced the discrepancy by asking "Why is the test coverage so low?" �
 
 ## P0e — `jackpot init` operator-bootstrap CLI + 13-item Phase 22 cleanup — 2026-05-02
 
-**What was built:** The full `jackpot init` CLI (detect / scenario-info / configure / secrets / bootstrap / validate subcommands; `reconfigure` documented in the design lockdown but deferred to P0f) plus 13 Phase 22 cleanup items absorbed into the same phase. P0e shipped 26 commits across 5 streams (A through E), 970+ tests passing, 86%+ coverage. Full closeout in `docs/review_log.md` "P0e closeout" section; this entry captures the patterns + lessons, not the per-commit log.
+**What was built:** The full `jackpot init` CLI (detect / scenario-info / configure / secrets / bootstrap / validate subcommands; `reconfigure` documented in the design lockdown but deferred to P0f) plus 13 Phase 22 cleanup items absorbed into the same phase. P0e shipped 26 commits across 5 streams (A through E), 970+ tests passing, 86%+ coverage. Full closeout in the `docs/review_log.md` "P0e closeout" section; this entry captures the patterns + lessons, not the per-commit log. (That file was deleted on 2026-05-08 as collateral in `06e67ee`, a schema-regeneration commit; recover it with `git show 06e67ee^:docs/review_log.md`. `docs/learnings.md` is the log going forward.)
 
 **Key decisions:**
 
@@ -3666,12 +3666,30 @@ request.
   `tenancy.py`'s docstring agree with each other perfectly, and both disagree
   with the code. That is what a spec written from the phase plan looks like from
   inside — self-consistent. Third instance recorded under Rule 70.
-- **`docs/review_log.md` does not exist.** Root `CLAUDE.md` names it in two
-  places ("log the question to `docs/review_log.md`", "write the plan to
-  `docs/review_log.md` and wait for explicit Go") and several `learnings.md`
-  entries reference sections of it. It was never created, or was removed without
-  updating the references. This entry went to `learnings.md` instead. Worth a
-  decision: create it, or strike the references.
+- **`docs/review_log.md` does not exist** — and the way it stopped existing is
+  the finding. It was real: 404 lines at `8cbb993` (Phase 22 review), grown to
+  469 by `620a56e` (P0e closeout). It was deleted on 2026-05-08 by `06e67ee`,
+  *"Regenerate models_generated.py and jackpot_schema.json from cleaned YAML
+  with seed values genericized"* — a 20-file schema-regeneration commit that
+  also silently dropped three long-form docs (`review_log.md`,
+  `jackpot_cdc_dmi_stlt_overview.md`, `jackpot_template_system_design.md`,
+  ~1,955 lines between them). Nothing referenced them differently afterward, so
+  the dangling pointers sat for nearly four months while `CLAUDE.md` kept
+  instructing every session to write architectural plans into a file that was
+  not there.
+  Resolved this session by decision: **`learnings.md` is the log; the
+  `review_log.md` references are struck.** Eleven live pointers redirected
+  (`CLAUDE.md` ×4, `todo.md` ×3, the three `governance/` policy docs,
+  `jackpot-init-cli.md`); historical prose in `learnings.md`,
+  `jackpot_session_summary_and_backlog.md` and `docs/archived/` left alone,
+  because those describe what a past session did and rewriting them would
+  falsify the record. Verified before striking that the file's three still-open
+  items (action 17 stub routers, action 19 testcontainers DinD, B-FED-1) are
+  independently carried by `todo.md:902/913/917`, so nothing was orphaned.
+  The general lesson is about the commit, not the file: **a
+  regenerate-artifacts commit is exactly where a deletion hides**, because the
+  diffstat is expected to be enormous and nobody reads it. Worth a glance at
+  `--diff-filter=D` on any commit whose message promises only regeneration.
 - **P0c is not deleted, only its scaffolding.** If P0c later wants a
   request-context carrier, note that it duplicates what `get_current_user` plus
   the principal's grant scopes already give every route — that is why this went

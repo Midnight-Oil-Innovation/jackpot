@@ -363,7 +363,7 @@ instances/<name>/
 - `docs/jackpot_cdc_dmi_stlt_overview.md` — Section 6 (Scenario T defaults), Section 8 (TEC federation)
 - `docs/governance/care-principles-and-tribal-data-sovereignty.md` — Scenario T behavioral requirements
 - `todo.md` — B-STLT-4 (scenario detector), B-FED-1 (deferred central-CA federation)
-- `docs/review_log.md` — Phase 22 action items 9 (CLI Rule 55), 11 (inherited Rule 55), 14 (spec drift)
+- `docs/learnings.md` — Phase 22 entry; that review's action items 9 (CLI Rule 55), 11 (inherited Rule 55) and 14 (spec drift) all closed in P0e
 
 ---
 
