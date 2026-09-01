@@ -15,6 +15,7 @@ from backend.auth.oauth import (
     issue_refresh_token,
     register_refresh_token,
 )
+from backend.authz.reseed import sync_instance_grants, sync_membership_grants
 from backend.config import get_settings
 from backend.credentials import credentials
 from backend.database import execute_query, execute_write, get_db_dep
@@ -462,6 +463,15 @@ def _get_or_create_dev_user(
             )
             user["is_platform_admin"] = is_platform_admin
             user["is_data_analyst"] = is_data_analyst
+            # Writing the flags is the role assignment, so it has to issue the
+            # grants — dev-login exists to drive the full RBAC matrix from a
+            # script, and a role that grants nothing drives nothing.
+            sync_instance_grants(
+                db,
+                user_id=user["id"],
+                is_platform_admin=is_platform_admin,
+                is_data_analyst=is_data_analyst,
+            )
         return user, False
 
     org_rows = execute_query("SELECT id FROM organizations ORDER BY id LIMIT 1", {}, conn=db)
@@ -486,7 +496,14 @@ def _get_or_create_dev_user(
         },
         conn=db,
     )
-    return new_rows[0], True
+    created_user = new_rows[0]
+    sync_instance_grants(
+        db,
+        user_id=created_user["id"],
+        is_platform_admin=is_platform_admin,
+        is_data_analyst=is_data_analyst,
+    )
+    return created_user, True
 
 
 def _upsert_dev_lab_membership(
@@ -505,7 +522,9 @@ def _upsert_dev_lab_membership(
                 status_code=400,
                 detail="No labs exist; pass lab_id or create a lab first.",
             )
-        lab_id = lab_rows[0]["id"]
+        # int() rather than a cast: the row value is Unknown to the type
+        # checker, and sync_membership_grants below takes a real int.
+        lab_id = int(lab_rows[0]["id"])
 
     pg_name, is_director = _DEV_LOGIN_LAB_ROLES[role]
     pg_rows = execute_query(
@@ -533,6 +552,11 @@ def _upsert_dev_lab_membership(
         {"uid": user_id, "lid": lab_id, "pg": pg_id, "idir": is_director},
         conn=db,
     )
+    # The same call labs.py makes after its own membership writes (M2-B5).
+    # This site was missed: a lab_membership row stopped being a decision
+    # input at M2-B1, so without this the dev user is a Lab Director in the
+    # row and a stranger to every route.
+    sync_membership_grants(db, user_id=user_id, lab_id=lab_id, group_name=pg_name)
     return {
         "lab_id": lab_id,
         "permission_group": pg_name,

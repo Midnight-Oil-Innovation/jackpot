@@ -3,6 +3,7 @@ from pydantic import BaseModel, Field
 
 from backend.audit import AuditActions, log_audit
 from backend.auth.guards import get_current_user, permits, require_capability
+from backend.authz.reseed import sync_instance_grants
 from backend.database import execute_query, execute_write, get_db_dep
 from backend.pagination import paginate
 from backend.responses import error, success, success_list, success_message
@@ -19,6 +20,10 @@ class UserUpdate(BaseModel):
 
 
 _SELF_EDITABLE = {"name"}
+# The two fields whose write is a capability assignment rather than a profile
+# edit. M2-DROP replaces them with a preset name; until then they stay the
+# input, and sync_instance_grants is what makes writing one mean anything.
+_ROLE_FLAGS = {"is_platform_admin", "is_data_analyst"}
 _ADMIN_EDITABLE = {
     "name",
     "is_platform_admin",
@@ -178,6 +183,21 @@ def update_user(
         conn=db,
     )
     after = rows[0]
+
+    # The role flags changed, so the grants must too. Nothing has decided on
+    # users.is_platform_admin since M2-B1, so writing it and stopping changes
+    # no one's authorization now and changes it silently at the next reseed.
+    # §4.5 scopes user:manage as "assign capabilities" — issuing the grants IS
+    # the assignment. On the request's own connection so the row and the grants
+    # land in one transaction: a half-applied pair leaves the principal either
+    # inert or over-privileged. Mirrors labs.py's _sync_grants_for (M2-B5).
+    if _ROLE_FLAGS & set(updates):
+        sync_instance_grants(
+            db,
+            user_id=user_id,
+            is_platform_admin=bool(after["is_platform_admin"]),
+            is_data_analyst=bool(after["is_data_analyst"]),
+        )
 
     log_audit(
         action=AuditActions.UPDATE_USER,
