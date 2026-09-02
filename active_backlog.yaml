@@ -2778,12 +2778,50 @@ sessions:
       can_manage registrant test fails when can_manage is reverted to the old
       is_platform_admin answer.
 
+      Slice 7 SHIPPED: PATCH /users/{id} assigns a preset, not a flag pair.
+      Breaking contract change — is_platform_admin / is_data_analyst are gone from
+      UserUpdate, replaced by instance_preset taking a name from access_model.md
+      §8.2 (or an explicit null to remove the role, detected via model_fields_set
+      since exclude_none cannot distinguish null from absent). New INSTANCE_PRESETS
+      frozenset is deliberately a SUBSET of PRESET_GRANTS and is enforced in
+      sync_instance_preset, not only at the route: lab_lead is a real preset and an
+      invalid thing to issue at the instance root, where its deletion:approve and
+      sample:read_unscrubbed would reach every sample on the deployment. That
+      constant outlives M2-DROP; INSTANCE_PRESET_FLAGS, which maps each preset to
+      its canonical flag pair, does not — it exists only while reseed() still reads
+      the columns. INSTANCE_PRESETS is DERIVED from that map rather than written
+      out beside it: two literals that must agree can disagree, and the
+      module-level assert this replaced is stripped by python -O, absent exactly
+      where a mismatch would matter most. At M2-DROP it becomes a literal
+      frozenset in the same commit, and forgetting fails at import. The route
+      still WRITES the columns for the same reason, so the row and the grants agree
+      until the drop removes both.
+      Old-contract rejection is explicit rather than incidental: Pydantic ignores
+      unknown fields, so {"is_platform_admin": true} would otherwise 200 having
+      assigned nothing, leaving the caller believing they promoted someone who
+      holds none of it. UserUpdate sets extra="forbid" and it 422s. The first
+      version of that test only covered a body containing ONLY the legacy field,
+      which missed the worse cases: a partly-valid body 200s on the valid part
+      while discarding the role, and {instance_preset, is_data_analyst} would
+      have assigned a role other than the one asked for. Now parametrized over
+      all three. Red-green verified on both boundaries that matter —
+      widening validation from INSTANCE_PRESETS to PRESET_GRANTS turns all three
+      lab-preset cases red. test_admin_flag_wins_over_analyst_flag became a
+      round-trip property test on instance_preset() x INSTANCE_PRESET_FLAGS: the
+      both-flags precedence is no longer reachable through the API (a preset is
+      singular) but stays load-bearing for dev-login and reseed.
+
+
       REMAINING, per site:
-        - auth.py:446-485/590, users.py:15/16/24/25  role ASSIGNMENT, not
-          plumbing: both write the flags and pair the write with
-          sync_instance_grants, and users.py PATCH exposes them as admin-editable.
-          These become preset-name inputs, the way M2-B5 did for membership. Each
-          already has its own SELECT, so none depended on slice 5's removals.
+        - auth.py:446-485/590  the last role-ASSIGNMENT site. dev-login writes
+          both columns via sync_instance_grants and its response returns them;
+          its `role` param is already name-shaped ("Platform Admin"), so the
+          work is mapping that vocabulary onto preset names and dropping the
+          flags from the response body. tests/e2e/scripts/
+          register_user_lab_project.py:75 reads them and follows.
+        - users.py still WRITES the two columns (not exposes them) so reseed()
+          stays consistent; that write is M2-DROP's to delete, together with
+          INSTANCE_PRESET_FLAGS and sync_instance_grants.
         - 138 test references across 41 files. NOT all convertible:
           tests/authz/preflight.py's legacy_ladder and legacy_visibility_sql_clause
           read the flags deliberately, as the frozen pre-M2 oracle the divergence

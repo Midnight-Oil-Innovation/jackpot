@@ -1,9 +1,9 @@
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from backend.audit import AuditActions, log_audit
 from backend.auth.guards import get_current_user, permits, require_capability
-from backend.authz.reseed import sync_instance_grants
+from backend.authz.reseed import INSTANCE_PRESET_FLAGS, INSTANCE_PRESETS, sync_instance_preset
 from backend.database import execute_query, execute_write, get_db_dep
 from backend.pagination import paginate
 from backend.responses import error, success, success_list, success_message
@@ -12,22 +12,31 @@ router = APIRouter(prefix="/api/v1/users", tags=["users"])
 
 
 class UserUpdate(BaseModel):
+    # Unknown fields are an error, not noise. Pydantic drops them by default,
+    # which for THIS model means a stale client sending the pre-slice-7 body
+    # gets a 200 having assigned nothing — the caller believing they promoted
+    # someone who holds none of it. That is the failure mode a breaking rename
+    # exists to prevent, so the rename has to be loud.
+    model_config = ConfigDict(extra="forbid")
+
     name: str | None = Field(default=None, min_length=1, max_length=255)
-    is_platform_admin: bool | None = None
-    is_data_analyst: bool | None = None
+    #: Instance-scope role, by preset name (access_model.md §8.2) — or an
+    #: explicit null to remove it. Replaces the is_platform_admin /
+    #: is_data_analyst booleans this endpoint used to accept: a role write is
+    #: a capability ASSIGNMENT, and the model's unit of assignment is a
+    #: preset, not a flag. Lab-scoped roles are assigned through membership
+    #: (M2-B5), not here.
+    instance_preset: str | None = None
     is_active: bool | None = None
     organization_id: int | None = None
 
 
 _SELF_EDITABLE = {"name"}
-# The two fields whose write is a capability assignment rather than a profile
-# edit. M2-DROP replaces them with a preset name; until then they stay the
-# input, and sync_instance_grants is what makes writing one mean anything.
-_ROLE_FLAGS = {"is_platform_admin", "is_data_analyst"}
+#: The field whose write issues grants rather than editing a profile.
+_ROLE_FIELD = "instance_preset"
 _ADMIN_EDITABLE = {
     "name",
-    "is_platform_admin",
-    "is_data_analyst",
+    "instance_preset",
     "is_active",
     "organization_id",
 }
@@ -152,12 +161,18 @@ def update_user(
             status_code=403,
         )
 
+    # An explicit null on the role field means "remove the Instance role",
+    # which exclude_none cannot distinguish from "not supplied" (Rule 39's
+    # partial-update shape has no way to say it). model_fields_set answers a
+    # different question — did the caller supply this — so it gets its own name
+    # and is the only thing consulted about the role field.
+    role_written = _ROLE_FIELD in payload.model_fields_set
     updates = payload.model_dump(exclude_none=True)
-    if not updates:
+    if not updates and not role_written:
         raise HTTPException(status_code=400, detail="No fields to update.")
 
     allowed = _ADMIN_EDITABLE if is_admin else _SELF_EDITABLE
-    forbidden = set(updates) - allowed
+    forbidden = (set(updates) | ({_ROLE_FIELD} if role_written else set())) - allowed
     if forbidden:
         return error(
             "ACCESS_DENIED",
@@ -174,6 +189,26 @@ def update_user(
         return error("NOT_FOUND", f"User {user_id} not found.", status_code=404)
     before = before_rows[0]
 
+    # The preset is the API's unit; the legacy columns are still what
+    # reseed() reads, so a role write updates both until M2-DROP removes them
+    # and this translation with them. INSTANCE_PRESET_FLAGS is the single
+    # place the two representations are related.
+    if role_written:
+        preset = payload.instance_preset
+        if preset is not None and preset not in INSTANCE_PRESETS:
+            return error(
+                "INVALID_PRESET",
+                f"instance_preset must be null or one of {sorted(INSTANCE_PRESETS)}.",
+                status_code=422,
+            )
+        updates.pop(_ROLE_FIELD, None)
+        # Indexed, not .get(preset, default): by this line preset is either
+        # None or a validated member, so a missing key would be a bug worth
+        # raising rather than silently demoting the user to no role.
+        updates["is_platform_admin"], updates["is_data_analyst"] = (
+            INSTANCE_PRESET_FLAGS[preset] if preset else (False, False)
+        )
+
     set_clause = ", ".join(f"{k} = :{k}" for k in updates)
     params = dict(updates)
     params["id"] = user_id
@@ -184,20 +219,13 @@ def update_user(
     )
     after = rows[0]
 
-    # The role flags changed, so the grants must too. Nothing has decided on
-    # users.is_platform_admin since M2-B1, so writing it and stopping changes
-    # no one's authorization now and changes it silently at the next reseed.
-    # §4.5 scopes user:manage as "assign capabilities" — issuing the grants IS
-    # the assignment. On the request's own connection so the row and the grants
-    # land in one transaction: a half-applied pair leaves the principal either
-    # inert or over-privileged. Mirrors labs.py's _sync_grants_for (M2-B5).
-    if _ROLE_FLAGS & set(updates):
-        sync_instance_grants(
-            db,
-            user_id=user_id,
-            is_platform_admin=bool(after["is_platform_admin"]),
-            is_data_analyst=bool(after["is_data_analyst"]),
-        )
+    # The role changed, so the grants must too. §4.5 scopes user:manage as
+    # "assign capabilities" — issuing the grants IS the assignment. On the
+    # request's own connection so the row and the grants land in one
+    # transaction: a half-applied pair leaves the principal either inert or
+    # over-privileged. Mirrors labs.py's _sync_grants_for (M2-B5).
+    if role_written:
+        sync_instance_preset(db, user_id=user_id, preset=payload.instance_preset)
 
     log_audit(
         action=AuditActions.UPDATE_USER,

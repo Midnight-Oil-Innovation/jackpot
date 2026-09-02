@@ -27,6 +27,7 @@ because nothing was standing at the second one.
 import pytest
 from httpx import ASGITransport, AsyncClient
 
+from backend.authz.reseed import INSTANCE_PRESET_FLAGS, instance_preset
 from backend.config import get_settings
 from backend.database import execute_query, execute_write
 from backend.main import app
@@ -85,7 +86,7 @@ async def _can_manage_users(subject_id: int, target_id: int, monkeypatch) -> boo
 
 @pytest.mark.asyncio
 async def test_promoting_a_user_grants_them_instance_capabilities(client, users, monkeypatch):
-    """PATCH is_platform_admin=true must take effect on this request.
+    """PATCH instance_preset=instance_administrator takes effect on this request.
 
     Before the fix the field flipped, the response was 200, and the promoted
     user held nothing — until some later migration ran a reseed and quietly
@@ -95,11 +96,13 @@ async def test_promoting_a_user_grants_them_instance_capabilities(client, users,
     assert not await _can_manage_users(subject, bystander, monkeypatch)
 
     _act_as(ADMIN, monkeypatch)
-    resp = await client.patch(f"/api/v1/users/{subject}", json={"is_platform_admin": True})
+    resp = await client.patch(
+        f"/api/v1/users/{subject}", json={"instance_preset": "instance_administrator"}
+    )
     assert resp.status_code == 200, resp.text
 
     assert await _can_manage_users(subject, bystander, monkeypatch), (
-        "promoted to platform admin but still cannot act as one — the flag was "
+        "assigned the admin preset but still cannot act as one — the role was "
         "written without issuing the grants it stands for"
     )
 
@@ -111,12 +114,15 @@ async def test_demoting_a_user_revokes_their_instance_capabilities(client, users
 
     _act_as(ADMIN, monkeypatch)
     assert (
-        await client.patch(f"/api/v1/users/{subject}", json={"is_platform_admin": True})
+        await client.patch(
+            f"/api/v1/users/{subject}", json={"instance_preset": "instance_administrator"}
+        )
     ).status_code == 200
     assert await _can_manage_users(subject, bystander, monkeypatch)
 
     _act_as(ADMIN, monkeypatch)
-    resp = await client.patch(f"/api/v1/users/{subject}", json={"is_platform_admin": False})
+    # An explicit null is how the contract says "no Instance role".
+    resp = await client.patch(f"/api/v1/users/{subject}", json={"instance_preset": None})
     assert resp.status_code == 200, resp.text
 
     assert not await _can_manage_users(subject, bystander, monkeypatch), (
@@ -127,10 +133,12 @@ async def test_demoting_a_user_revokes_their_instance_capabilities(client, users
 
 @pytest.mark.asyncio
 async def test_data_analyst_promotion_grants_the_surveillance_preset(client, users, monkeypatch):
-    """is_data_analyst maps to Surveillance Officer, not to nothing."""
+    """The surveillance_officer preset issues its capabilities, not nothing."""
     subject = users[SUBJECT]
     _act_as(ADMIN, monkeypatch)
-    resp = await client.patch(f"/api/v1/users/{subject}", json={"is_data_analyst": True})
+    resp = await client.patch(
+        f"/api/v1/users/{subject}", json={"instance_preset": "surveillance_officer"}
+    )
     assert resp.status_code == 200, resp.text
 
     held = {
@@ -143,31 +151,32 @@ async def test_data_analyst_promotion_grants_the_surveillance_preset(client, use
     assert "sample:read_surveillance" in held, held
 
 
-@pytest.mark.asyncio
-async def test_admin_flag_wins_over_analyst_flag(client, users, monkeypatch):
-    """reseed() reads analysts as ``is_data_analyst AND NOT is_platform_admin``.
+def test_instance_preset_round_trips_through_the_flag_pair():
+    """The two representations of an Instance role must agree.
 
-    The live path has to apply the same precedence or a principal's grants
-    would depend on whether they were last written by a PATCH or by a reseed.
+    ``instance_preset()`` maps flags to a preset and ``INSTANCE_PRESET_FLAGS``
+    maps back. The forward direction is many-to-one — a user carrying BOTH
+    flags is an admin, because that is how ``reseed()`` reads them — so the
+    inverse is a canonical representative rather than a true inverse, and the
+    round trip is the property that has to hold. Written as a differential
+    check because the alternative is two hand-maintained tables that agree
+    until someone edits one (Rule 73).
+
+    The precedence this pins used to be reachable from the API, when PATCH
+    took both booleans and a caller could send both at once. It no longer is —
+    a preset is singular — but ``sync_instance_grants`` still translates for
+    ``auth/dev-login``, and ``reseed()`` still reads the columns, so the
+    precedence stays load-bearing until M2-DROP.
     """
-    subject = users[SUBJECT]
-    _act_as(ADMIN, monkeypatch)
-    resp = await client.patch(
-        f"/api/v1/users/{subject}", json={"is_platform_admin": True, "is_data_analyst": True}
-    )
-    assert resp.status_code == 200, resp.text
+    for preset, (admin_flag, analyst_flag) in INSTANCE_PRESET_FLAGS.items():
+        assert (
+            instance_preset(is_platform_admin=admin_flag, is_data_analyst=analyst_flag) == preset
+        ), f"{preset} does not round-trip through its flag pair"
 
-    held = {
-        r["capability"]
-        for r in execute_query(
-            "SELECT capability FROM authz_capability_grants WHERE principal_id = :p",
-            {"p": str(subject)},
-        )
-    }
-    assert "user:manage" in held, held
-    assert "anomaly:triage" not in held, (
-        "both presets were issued; reseed would have issued only the admin one"
-    )
+    assert instance_preset(is_platform_admin=False, is_data_analyst=False) is None
+    assert (
+        instance_preset(is_platform_admin=True, is_data_analyst=True) == "instance_administrator"
+    ), "both flags must resolve to admin — reseed reads analysts as NOT is_platform_admin"
 
 
 @pytest.mark.asyncio
