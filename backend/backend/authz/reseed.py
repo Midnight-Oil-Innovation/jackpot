@@ -227,9 +227,27 @@ PRESET_GRANTS: dict[str, list[str]] = {
     ],
 }
 
+#: APGAP role name → Instance-scope preset. The twin of MEMBERSHIP_PRESETS
+#: for the two roles that are not lab-scoped, and named on the same axis so
+#: that reads. Deliberately NOT `INSTANCE_ROLE_PRESETS`: that is one word
+#: from INSTANCE_PRESETS, whose key space is disjoint from this one, so
+#: `preset in <the wrong constant>` would be a silent False in a
+#: validation position rather than an error.
+#:
+#: These names are Critical Rule 1's sacred enum values and are NOT going
+#: away: they name permission_groups rows and are the vocabulary the E-1 UAT
+#: matrix drives. What goes away is the boolean pair they used to be stored
+#: as. So this map is a bridge between two live vocabularies, not a migration
+#: artifact like INSTANCE_PRESET_FLAGS — it outlives M2-DROP.
+INSTANCE_PRESET_BY_ROLE: dict[str, str] = {
+    "Platform Admin": "instance_administrator",
+    "Data Analyst": "surveillance_officer",
+}
+
 # APGAP permission_groups.name → preset key. 'Platform Admin' and
-# 'Data Analyst' memberships are intentionally absent: those roles are
-# carried by the users booleans and reseeded at Instance scope (§10.2).
+# 'Data Analyst' memberships are intentionally absent: those roles are not
+# lab-scoped and are issued at Instance scope instead, via
+# INSTANCE_PRESET_BY_ROLE above (§10.2).
 MEMBERSHIP_PRESETS: dict[str, str] = {
     "Lab Director": "lab_lead",
     "Lab Collaborator": "lab_member_rw",
@@ -457,7 +475,7 @@ def reseed(conn: Connection, *, force: bool = False) -> None:
 
     rows: list[dict] = []
 
-    # One query and one precedence rule, shared with sync_instance_grants: the
+    # One query and one precedence rule, shared with instance_preset(): the
     # cutover and the live path must not be able to disagree about what a
     # user carrying both flags holds (see instance_preset).
     flagged = conn.execute(
@@ -609,9 +627,11 @@ def sync_instance_preset(conn: Connection, *, user_id: int, preset: str | None) 
 
     ``preset=None`` removes them — the user holds no Instance-scope role.
 
-    The preset-named form is primary; :func:`sync_instance_grants` is the
-    legacy flag-shaped door onto it, kept while ``auth/dev-login`` still
-    speaks in booleans. Delete-then-insert and ``source = 'reseed'``-scoped
+    The only door onto Instance-scope grants. A flag-shaped twin
+    (``sync_instance_grants``) existed while dev-login still spoke in
+    booleans; M2-DROP-PRE slice 8 ended that and took the function with it,
+    rather than leaving a callerless one to be read as live API.
+    Delete-then-insert and ``source = 'reseed'``-scoped
     for the reasons given on the membership twin: the point is that the row
     and the grants agree afterwards, and a per-sample ``source = 'direct'``
     grant on the same principal must survive untouched.
@@ -637,34 +657,6 @@ def sync_instance_preset(conn: Connection, *, user_id: int, preset: str | None) 
     for row in rows:
         conn.execute(_INSERT_GRANT, row)
     return len(rows)
-
-
-def sync_instance_grants(
-    conn: Connection, *, user_id: int, is_platform_admin: bool, is_data_analyst: bool
-) -> int:
-    """Make one user's Instance-scope grants match their stored role flags.
-
-    The twin of :func:`sync_membership_grants`, for the roles that are not
-    lab-scoped. Without it, writing ``users.is_platform_admin`` changes no
-    one's authorization — nothing has decided on that column since M2-B1 — but
-    the next ``reseed()`` translates it, so the write lands as a delayed effect
-    with no signal at the time it is made. That is worse than either a working
-    write or a rejected one.
-
-    Delete-then-insert and ``source = 'reseed'``-scoped for the same reasons
-    given on the membership twin: the point is that the row and the grants
-    agree afterwards, and a per-sample ``source = 'direct'`` grant on the same
-    principal must survive untouched.
-
-    Returns the number of grants issued.
-    """
-    return sync_instance_preset(
-        conn,
-        user_id=user_id,
-        preset=instance_preset(
-            is_platform_admin=is_platform_admin, is_data_analyst=is_data_analyst
-        ),
-    )
 
 
 def _membership_capabilities(group_name: str) -> list[str] | None:

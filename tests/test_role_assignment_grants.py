@@ -27,7 +27,12 @@ because nothing was standing at the second one.
 import pytest
 from httpx import ASGITransport, AsyncClient
 
-from backend.authz.reseed import INSTANCE_PRESET_FLAGS, instance_preset
+from backend.authz import ROOT
+from backend.authz.reseed import (
+    INSTANCE_PRESET_FLAGS,
+    PRESET_GRANTS,
+    instance_preset,
+)
 from backend.config import get_settings
 from backend.database import execute_query, execute_write
 from backend.main import app
@@ -164,9 +169,8 @@ def test_instance_preset_round_trips_through_the_flag_pair():
 
     The precedence this pins used to be reachable from the API, when PATCH
     took both booleans and a caller could send both at once. It no longer is —
-    a preset is singular — but ``sync_instance_grants`` still translates for
-    ``auth/dev-login``, and ``reseed()`` still reads the columns, so the
-    precedence stays load-bearing until M2-DROP.
+    a preset is singular — but ``reseed()`` still reads the columns and
+    translates them, so the precedence stays load-bearing until M2-DROP.
     """
     for preset, (admin_flag, analyst_flag) in INSTANCE_PRESET_FLAGS.items():
         assert (
@@ -177,6 +181,91 @@ def test_instance_preset_round_trips_through_the_flag_pair():
     assert (
         instance_preset(is_platform_admin=True, is_data_analyst=True) == "instance_administrator"
     ), "both flags must resolve to admin — reseed reads analysts as NOT is_platform_admin"
+
+
+def _grants_at_root(email: str) -> set[str]:
+    """Capabilities the user holds AT THE INSTANCE ROOT, not anywhere.
+
+    Scope-filtered on purpose: a preset issued at a lab scope instead of the
+    root is a different bug that an unfiltered read would call success.
+    """
+    uid = execute_query("SELECT id FROM users WHERE email = :e", {"e": email})[0]["id"]
+    return {
+        r["capability"]
+        for r in execute_query(
+            "SELECT capability FROM authz_capability_grants "
+            "WHERE principal_id = :p AND scope_ref = :s",
+            {"p": str(uid), "s": ROOT},
+        )
+    }
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "role,preset",
+    [
+        ("Platform Admin", "instance_administrator"),
+        ("Data Analyst", "surveillance_officer"),
+    ],
+)
+async def test_dev_login_global_role_issues_the_instance_preset(role, preset):
+    """The instance half of dev-login, after slice 8 moved it onto presets.
+
+    dev-login exists so the E-1 UAT can drive the whole RBAC matrix from a
+    script, so a role that grants nothing drives nothing. The response reports
+    the preset, and the grants at the instance root must be exactly that
+    preset's — a response naming a role the principal does not hold is worse
+    than one saying nothing.
+
+    Asserted as set EQUALITY rather than a probe capability. A probe cannot
+    detect over-granting, and the obvious probe for surveillance_officer is
+    the one capability it SHARES with instance_administrator
+    (``sample:read_surveillance``), so wiring Data Analyst to the admin preset
+    would have passed. The docstring claims an equality; assert the equality.
+    """
+    _purge(DEV)
+    try:
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
+            resp = await c.post("/api/v1/auth/dev-login", json={"email": DEV, "role": role})
+        assert resp.status_code == 200, resp.text
+        assert resp.json()["instance_preset"] == preset
+
+        assert _grants_at_root(DEV) == set(PRESET_GRANTS[preset])
+    finally:
+        _purge(DEV)
+
+
+@pytest.mark.asyncio
+async def test_dev_login_switching_down_to_a_lab_role_revokes_the_instance_preset():
+    """The direction the UAT actually exercises, and the only one where the
+    DELETE in ``sync_instance_preset`` is load-bearing.
+
+    dev-login switches identity repeatedly within one run. Starting from a
+    blank slate only ever tests the INSERT; the Platform Admin → Lab Director
+    switch is where a failure to revoke leaves a Lab Director holding
+    instance-root capabilities over every lab on the deployment.
+    """
+    _purge(DEV)
+    try:
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
+            up = await c.post(
+                "/api/v1/auth/dev-login", json={"email": DEV, "role": "Platform Admin"}
+            )
+            assert up.status_code == 200, up.text
+            assert _grants_at_root(DEV), "precondition: the admin preset was never issued"
+
+            down = await c.post(
+                "/api/v1/auth/dev-login", json={"email": DEV, "role": "Lab Director"}
+            )
+        assert down.status_code == 200, down.text
+        assert down.json()["instance_preset"] is None
+
+        assert _grants_at_root(DEV) == set(), (
+            "switched down to a lab role but kept instance-root grants — a Lab "
+            "Director with authority over every lab on the deployment"
+        )
+    finally:
+        _purge(DEV)
 
 
 @pytest.mark.asyncio

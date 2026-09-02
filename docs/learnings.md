@@ -3751,3 +3751,79 @@ TRUE AND is_active = TRUE` used to address a notification.
   (`FEDERATION_PEER_NONCOMPLIANT`) is written before the alert either way, so
   the record survives a misconfigured deployment; what is lost is the push, and
   nobody notices a notification they never got.
+
+---
+
+## M2-DROP-PRE slices 5–8 — the rest of the readers — 2026-09-02
+
+**What was built:** the remaining four slices of M2-DROP-PRE, retiring every
+production *reader* of `users.is_platform_admin` / `users.is_data_analyst`.
+The item is now shipped and M2-DROP is unblocked.
+
+**Key decisions:**
+
+- *Slice 5 — reads with no reader.* `guards.get_current_user` and
+  `imports.py`'s CSV-import lookup both selected the two columns into a dict
+  nothing consumed; the three real consumers each issued their own SELECT.
+  Same shape as slice 3: removable at zero conversion cost. The local-dev
+  fallback identity also advertised `is_platform_admin: True`, which conferred
+  nothing after M2-B1 but made a possibly-grantless `id=1` *read* as an admin —
+  the more dangerous half, because a field that looks like a bypass invites
+  someone to restore it as one.
+- *Slice 6 — the frontend was asking the wrong question, twice.* The plan was
+  "`/me` returns held capabilities"; reading the consumers said neither wanted
+  one. `access_requests.py` needed **nothing added** — the server has scoped
+  that list by `access:approve_request` since M2-B7, and the client-side
+  pre-filter was both redundant and wrong: a grant-holding non-director hit an
+  early `return` and never issued the request, and a caller who was both admin
+  and director fell into the per-lab loop and saw only those labs.
+  `pipelines.py` needed a *per-row* answer, because `_may_manage` admits an
+  instance grant, a lab grant at `owner_lab_id`, **or** the registrant — which
+  no flat capability list expresses. Building the `/me` field would have been a
+  third thing neither caller used.
+- *Slice 7 — a preset, not a flag pair.* `PATCH /users/{id}` takes
+  `instance_preset`. `INSTANCE_PRESETS` is deliberately a **subset** of
+  `PRESET_GRANTS`, enforced inside `sync_instance_preset` and not only at the
+  route: `lab_lead` is a real preset and an invalid thing to issue at the
+  instance root, where its `deletion:approve` and `sample:read_unscrubbed`
+  reach every sample on the deployment. A typo'd preset name must not be a
+  privilege escalation.
+- *Slice 8 — the role name stays, what it assigns changes.* dev-login keeps the
+  six APGAP names: Critical Rule 1's sacred values, they name
+  `permission_groups` rows, and they are the UAT matrix's vocabulary. None of
+  that ends at M2-DROP; the boolean pair they were *stored* as does.
+
+**Watch out for:**
+
+- **A test written against the code it describes proves nothing until it is
+  made to fail.** Slice 5's pin used a hand-rolled comment stripper that
+  treated the *closing* delimiter of a multi-line SQL literal as a docstring
+  opener and silently swallowed the rest of the module — it would not have
+  failed, it would have stopped looking. Replaced with `ast.parse`, which
+  cannot go blind. Slice 6's page test passed unchanged against pre-slice code
+  because `render()` runs at import, so the *other* tab issued the call the
+  assertion was standing on. Both were caught by making them red on purpose,
+  not by reading them.
+- **`extra="forbid"` is the half of a breaking rename that makes it worth
+  doing.** Pydantic drops unknown fields, so a stale client sending the old
+  body gets a 200 having assigned nothing. The first version of that test
+  covered only a body containing *only* the legacy field and so missed the
+  worse case: a partly-valid body 200s on the valid part while discarding the
+  role.
+- **A probe capability cannot detect over-granting.** Slice 8's first test
+  probed `sample:read_surveillance` for `surveillance_officer` — the one
+  capability it *shares* with `instance_administrator` — so wiring Data Analyst
+  to the admin preset would have passed. Assert the set equality the docstring
+  claims.
+- **Starting from a blank slate only tests the INSERT.** dev-login switches
+  identity repeatedly in one UAT run, and the Platform Admin → Lab Director
+  switch-down is the only path where `sync_instance_preset`'s DELETE is
+  load-bearing. No test covered it until slice 8 added one.
+- **`preflight.py`'s reads of the flags are deliberate and must survive
+  M2-DROP.** `legacy_ladder` and `legacy_visibility_sql_clause` are the frozen
+  pre-M2 oracle the divergence registry compares against, and they build the
+  flags from the `Persona` dataclass rather than a DB SELECT. Converting them
+  destroys the comparison that makes the registry mean anything.
+- **`INSTANCE_PRESETS` is derived from `INSTANCE_PRESET_FLAGS`,** which M2-DROP
+  deletes. Inline it as a literal frozenset in the same commit; forgetting
+  fails at import, which is the intent.

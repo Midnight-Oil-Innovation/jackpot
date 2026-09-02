@@ -63,7 +63,7 @@ that mutate seed data.
 - Successful output goes to stdout in a stable format
   (`✓ <description>` for shell, JSON for Python).
 - Scripts are idempotent where possible: re-running
-  `dev_login.sh` for an existing user just re-sets the role flags;
+  `dev_login.sh` for an existing user just re-assigns the role;
   re-running `register_files.py` for the same FASTQ dir hits the
   P0f content-hash dedup path and reuses existing `sample_files`
   rows.
