@@ -42,9 +42,9 @@ def _act_as(email: str, monkeypatch) -> None:
 
 def _mk_user(email: str) -> int:
     return execute_write(
-        "INSERT INTO users (email, name, organization_id, is_platform_admin, "
-        "is_data_analyst, is_active) VALUES (:e, :e, 1, FALSE, FALSE, TRUE) "
-        "ON CONFLICT (email) DO UPDATE SET is_platform_admin = FALSE, is_active = TRUE "
+        "INSERT INTO users (email, name, organization_id, is_active) "
+        "VALUES (:e, :e, 1, TRUE) "
+        "ON CONFLICT (email) DO UPDATE SET is_active = TRUE "
         "RETURNING id",
         {"e": email},
     )[0]["id"]
@@ -174,7 +174,12 @@ async def test_lab_lead_cannot_promote_themselves_to_platform_admin(client, rost
         f"/api/v1/users/{roster[LEAD]}", json={"instance_preset": "instance_administrator"}
     )
     assert resp.status_code == 403, resp.text
-    still = execute_query("SELECT is_platform_admin FROM users WHERE id = :i", {"i": roster[LEAD]})[
-        0
-    ]["is_platform_admin"]
-    assert not still
+    # No Instance-scope grant was issued. The column this used to read is
+    # gone; a lab lead holding user:manage at the instance root would be the
+    # escalation the 403 above is preventing.
+    escalated = execute_query(
+        "SELECT capability FROM authz_capability_grants "
+        "WHERE principal_id = :p AND scope_ref = 'instance://self'",
+        {"p": str(roster[LEAD])},
+    )
+    assert escalated == []

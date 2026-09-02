@@ -25,7 +25,11 @@ return sample CONTENT or make a consent decision.
 """
 
 import pytest
-from authz_helpers import sync_grants_from_legacy_roles
+from authz_helpers import (
+    ADMIN_PRESET,
+    grant_instance_preset,
+    sync_grants_from_legacy_roles,
+)
 
 from backend.config import get_settings
 from backend.database import execute_query, execute_write
@@ -39,13 +43,17 @@ EMAILS = (PURE_ADMIN, LAB_LEAD, LAB_READER, OUTSIDER)
 
 
 def _mk_user(email: str, *, admin: bool = False) -> int:
-    return execute_write(
-        "INSERT INTO users (email, name, organization_id, is_platform_admin, is_active) "
-        "VALUES (:e, :e, 1, :a, TRUE) "
-        "ON CONFLICT (email) DO UPDATE SET is_platform_admin = EXCLUDED.is_platform_admin, "
-        "is_active = TRUE RETURNING id",
-        {"e": email, "a": admin},
+    uid = execute_write(
+        "INSERT INTO users (email, name, organization_id, is_active) "
+        "VALUES (:e, :e, 1, TRUE) "
+        "ON CONFLICT (email) DO UPDATE SET is_active = TRUE RETURNING id",
+        {"e": email},
     )[0]["id"]
+    # The instance role is the grants now (M2-DROP). Both directions, because
+    # this upserts on a re-used email: the whole point of these personas is
+    # that each holds EXACTLY one role, so a leftover grant defeats the file.
+    grant_instance_preset(uid, ADMIN_PRESET if admin else None)
+    return uid
 
 
 def _add_membership(user_id: int, group: str, *, director: bool) -> None:

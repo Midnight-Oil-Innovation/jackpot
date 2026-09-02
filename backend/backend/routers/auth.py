@@ -17,7 +17,6 @@ from backend.auth.oauth import (
 )
 from backend.authz.reseed import (
     INSTANCE_PRESET_BY_ROLE,
-    INSTANCE_PRESET_FLAGS,
     sync_instance_preset,
     sync_membership_grants,
 )
@@ -463,12 +462,10 @@ def _get_or_create_dev_user(
     Returns (user, created).
 
     The role name is APGAP's and stays (Critical Rule 1); what it maps to is
-    a preset. The legacy columns are still written because ``reseed()`` reads
-    them until M2-DROP — the row and the grants have to agree — but nothing
-    decides on them, and the preset is what issues the capabilities.
+    a preset, and the grants are the whole of the assignment. M2-DROP removed
+    the legacy columns this used to also write.
     """
     preset = _instance_preset_for(role)
-    is_platform_admin, is_data_analyst = INSTANCE_PRESET_FLAGS[preset] if preset else (False, False)
     rows = execute_query(
         "SELECT id, email, name, is_active, organization_id FROM users WHERE email = :e LIMIT 1",
         {"e": email},
@@ -477,11 +474,6 @@ def _get_or_create_dev_user(
     if rows:
         user = rows[0]
         if role is not None:
-            execute_write(
-                "UPDATE users SET is_platform_admin = :pa, is_data_analyst = :da WHERE id = :uid",
-                {"pa": is_platform_admin, "da": is_data_analyst, "uid": user["id"]},
-                conn=db,
-            )
             # Assigning the role is what issues the grants — dev-login exists
             # to drive the full RBAC matrix from a script, and a role that
             # grants nothing drives nothing.
@@ -496,16 +488,13 @@ def _get_or_create_dev_user(
         )
     org_id = org_rows[0]["id"]
     new_rows = execute_write(
-        "INSERT INTO users (email, name, organization_id, "
-        "is_platform_admin, is_data_analyst) "
-        "VALUES (:e, :n, :org, :pa, :da) "
+        "INSERT INTO users (email, name, organization_id) "
+        "VALUES (:e, :n, :org) "
         "RETURNING id, email, name, is_active, organization_id",
         {
             "e": email,
             "n": name or email.split("@", 1)[0],
             "org": org_id,
-            "pa": is_platform_admin,
-            "da": is_data_analyst,
         },
         conn=db,
     )

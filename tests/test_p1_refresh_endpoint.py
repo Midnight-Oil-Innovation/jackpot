@@ -23,8 +23,8 @@ ALGO = "HS256"
 def _seed_user(email: str) -> int:
     execute_write(
         """
-        INSERT INTO users (email, name, organization_id, is_platform_admin, is_active)
-        VALUES (:e, 'P1 Refresh User', 1, FALSE, TRUE)
+        INSERT INTO users (email, name, organization_id, is_active)
+        VALUES (:e, 'P1 Refresh User', 1, TRUE)
         ON CONFLICT (email) DO UPDATE SET is_active = TRUE
         """,
         {"e": email},

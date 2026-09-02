@@ -39,7 +39,12 @@ def test_migration_created_the_unique_index():
 
 def test_baseline_admin_holds_instance_scoped_grants():
     """The seeded platform admin comes out of the migration with the §8.2 preset."""
-    admins = execute_query("SELECT id FROM users WHERE is_platform_admin = TRUE")
+    # Post-M2-DROP the baseline admin is identified by the grant the additive
+    # migration issued, not by a column. Same subject, surviving evidence.
+    admins = execute_query(
+        "SELECT DISTINCT principal_id AS id FROM authz_capability_grants "
+        "WHERE capability = 'user:manage' AND scope_ref = 'instance://self'"
+    )
     assert admins, "baseline migration seeds a platform admin"
 
     granted = {

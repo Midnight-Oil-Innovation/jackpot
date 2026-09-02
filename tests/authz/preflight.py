@@ -22,6 +22,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 
 from fastapi import HTTPException
+from sqlalchemy import text
 
 from backend.auth.guards import get_user_lab_membership, require_capability
 from backend.authz import (
@@ -33,8 +34,13 @@ from backend.authz import (
     Resource,
     permit,
 )
+from backend.authz.reseed import (
+    instance_preset,
+    sync_instance_preset,
+    sync_membership_grants,
+)
 from backend.authz.scope import scope_uri
-from backend.database import execute_query, execute_write
+from backend.database import _get_engine, execute_query, execute_write
 
 EMAIL_PREFIX = "preflight-p"
 SAMPLE_PREFIX = "PREFLT-"
@@ -122,6 +128,113 @@ def _personas() -> list[Persona]:
     ]
 
 
+#: DDL restoring the columns M2-DROP removed, for the tests that prove
+#: ``reseed()`` itself.
+#:
+#: Not a shim: ``reseed()`` still runs on every fresh install — its migrations
+#: sit BEFORE ``d51c4361877d`` in the chain, so the columns exist when it runs
+#: — and its correctness therefore still matters. The test database is at
+#: head, where they do not. This recreates the point in the chain those tests
+#: are about, rather than deleting a proof that a live code path is correct.
+LEGACY_COLUMNS_DDL = (
+    "ALTER TABLE users ADD COLUMN IF NOT EXISTS is_platform_admin BOOLEAN NOT NULL DEFAULT FALSE",
+    "ALTER TABLE users ADD COLUMN IF NOT EXISTS is_data_analyst BOOLEAN NOT NULL DEFAULT FALSE",
+)
+
+
+def _legacy_columns_present() -> bool:
+    rows = execute_query(
+        "SELECT column_name FROM information_schema.columns "
+        "WHERE table_name = 'users' AND column_name = 'is_platform_admin'"
+    )
+    return bool(rows)
+
+
+def restore_legacy_world(world: SeededWorld) -> bool:
+    """Put the seeded world back into its pre-M2-DROP shape.
+
+    Adds the columns and writes each Persona's flags, so ``reseed()`` has
+    something to read. Only the 2a reseed-proof tests need this; everything
+    else uses :func:`grant_world`.
+
+    Returns whether it ADDED the columns, so the caller can put the schema
+    back exactly as it found it. That matters because this file has to work
+    on both sides of the drop: before ``d51c4361877d`` the columns are real
+    and dropping them in teardown would break every later test, and after it
+    they are ours to remove.
+    """
+    added = not _legacy_columns_present()
+    engine, _ = _get_engine()
+    with engine.begin() as conn:
+        for ddl in LEGACY_COLUMNS_DDL:
+            conn.execute(text(ddl))
+        for p in world.personas.values():
+            conn.execute(
+                text(
+                    "UPDATE users SET is_platform_admin = :pa, is_data_analyst = :da "
+                    "WHERE id = :uid"
+                ),
+                {"pa": p.is_platform_admin, "da": p.is_data_analyst, "uid": p.user_id},
+            )
+    return added
+
+
+def drop_legacy_world(added: bool = True) -> None:
+    """Undo :func:`restore_legacy_world`, leaving the schema as it was found.
+
+    ``added=False`` means the columns pre-existed — the pre-drop side of the
+    chain — and dropping them would be this fixture vandalising the database
+    for every test after it.
+    """
+    if not added:
+        return
+    engine, _ = _get_engine()
+    with engine.begin() as conn:
+        conn.execute(text("ALTER TABLE users DROP COLUMN IF EXISTS is_platform_admin"))
+        conn.execute(text("ALTER TABLE users DROP COLUMN IF EXISTS is_data_analyst"))
+
+
+def grant_world(world: SeededWorld) -> None:
+    """Issue the seeded world's grants, replacing the ``reseed()`` call.
+
+    Before M2-DROP the fixture inserted users carrying ``is_platform_admin`` /
+    ``is_data_analyst`` and ran ``reseed()`` to translate them. The columns are
+    gone, so there is nothing to translate: grants are issued directly, through
+    the same ``sync_instance_preset`` and ``sync_membership_grants`` the routes
+    use.
+
+    **The mapping is unchanged, deliberately.** The Instance preset is chosen
+    by calling ``instance_preset()`` on the Persona's flags — the very function
+    ``reseed()`` called on the column values — so P3 (both flags) still resolves
+    to the admin preset and only that. Same function, different input source.
+    Re-deriving that precedence here would be a second implementation of it,
+    and this file is the one place in the suite that must not drift from the
+    engine it is checking (Rule 73).
+
+    Unmapped groups still skip: ``sync_membership_grants`` looks up
+    ``MEMBERSHIP_PRESETS``, which has no 'Data Analyst' entry, so P9 issues
+    nothing — the case ``preflight_counts`` warns about, preserved.
+    """
+    engine, _ = _get_engine()
+    with engine.begin() as conn:
+        for p in world.personas.values():
+            sync_instance_preset(
+                conn,
+                user_id=p.user_id,
+                preset=instance_preset(
+                    is_platform_admin=p.is_platform_admin,
+                    is_data_analyst=p.is_data_analyst,
+                ),
+            )
+            for lab_key, group_name, _ in p.memberships:
+                sync_membership_grants(
+                    conn,
+                    user_id=p.user_id,
+                    lab_id=world.lab_a if lab_key == "A" else world.lab_b,
+                    group_name=group_name,
+                )
+
+
 @dataclass
 class SeededWorld:
     personas: dict[str, Persona]
@@ -154,11 +267,14 @@ def seed_world() -> SeededWorld:
 
     personas = {p.key: p for p in _personas()}
     for p in personas.values():
+        # No role columns: M2-DROP removed them. The Persona still carries the
+        # flags — ``legacy_ladder`` reads them and must keep seeing exactly
+        # what it saw before — but they are now an input to the ORACLE only,
+        # never a stored fact. See grant_world().
         p.user_id = execute_write(
-            "INSERT INTO users (email, name, organization_id, is_platform_admin, "
-            "is_data_analyst, is_active) VALUES (:e, :e, :o, :pa, :da, TRUE) "
-            "RETURNING id",
-            {"e": p.email, "o": org, "pa": p.is_platform_admin, "da": p.is_data_analyst},
+            "INSERT INTO users (email, name, organization_id, is_active) "
+            "VALUES (:e, :e, :o, TRUE) RETURNING id",
+            {"e": p.email, "o": org},
         )[0]["id"]
         for lab_key, group_name, director_flag in p.memberships:
             execute_write(

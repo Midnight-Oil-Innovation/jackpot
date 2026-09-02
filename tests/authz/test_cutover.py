@@ -95,6 +95,29 @@ def test_preflight_is_clean_on_a_fresh_install():
     assert not any(counts.values()), f"fresh install is not clean: {counts}"
 
 
+#: Re-add the columns M2-DROP removed, inside the caller's transaction.
+#:
+#: Both tests below are about the CUTOVER — a user promoted through the legacy
+#: path between the additive migration and the catch-up reseed. That window is
+#: historical: the column is gone, PATCH stopped writing it at M2-DROP-PRE
+#: slice 7, and reseed() only ever runs from migrations earlier in the chain
+#: than the drop. The scenario is still worth pinning, because those
+#: migrations still run on every fresh install — so the tests recreate the
+#: point in the chain they describe.
+#:
+#: Safe because PostgreSQL has transactional DDL and both callers run inside a
+#: savepoint they roll back: the columns never outlive the test.
+_LEGACY_COLUMNS = (
+    "ALTER TABLE users ADD COLUMN IF NOT EXISTS is_platform_admin BOOLEAN NOT NULL DEFAULT FALSE",
+    "ALTER TABLE users ADD COLUMN IF NOT EXISTS is_data_analyst BOOLEAN NOT NULL DEFAULT FALSE",
+)
+
+
+def _restore_legacy_columns(conn) -> None:
+    for ddl in _LEGACY_COLUMNS:
+        conn.execute(text(ddl))
+
+
 def test_catchup_picks_up_a_role_granted_after_the_additive_migration():
     """The whole point of a second reseed.
 
@@ -110,6 +133,7 @@ def test_catchup_picks_up_a_role_granted_after_the_additive_migration():
     with engine.begin() as conn:
         trans = conn.begin_nested()
         try:
+            _restore_legacy_columns(conn)
             uid = conn.execute(
                 text(
                     "INSERT INTO users (email, name, organization_id, "
@@ -154,6 +178,7 @@ def test_catchup_is_re_runnable_without_issuing_anything_new():
     with engine.begin() as conn:
         trans = conn.begin_nested()
         try:
+            _restore_legacy_columns(conn)
             before = conn.execute(text("SELECT COUNT(*) FROM authz_capability_grants")).scalar_one()
             reseed(conn)
             after = conn.execute(text("SELECT COUNT(*) FROM authz_capability_grants")).scalar_one()

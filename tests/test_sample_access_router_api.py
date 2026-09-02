@@ -20,7 +20,12 @@ from __future__ import annotations
 import uuid
 
 import pytest
-from authz_helpers import sync_grants_from_legacy_roles
+from authz_helpers import (
+    ADMIN_PRESET,
+    ANALYST_PRESET,
+    grant_instance_preset,
+    sync_grants_from_legacy_roles,
+)
 
 from backend.auth.guards import permits
 from backend.authz.reseed import sync_sample_access_grants
@@ -76,16 +81,20 @@ def _make_user(
     is_data_analyst: bool = False,
 ) -> int:
     rows = execute_write(
-        "INSERT INTO users (email, name, organization_id, "
-        "is_platform_admin, is_data_analyst, is_active) "
-        "VALUES (:e, :e, 1, :pa, :da, TRUE) "
-        "ON CONFLICT (email) DO UPDATE SET "
-        "is_platform_admin = EXCLUDED.is_platform_admin, "
-        "is_data_analyst = EXCLUDED.is_data_analyst, is_active = TRUE "
+        "INSERT INTO users (email, name, organization_id, is_active) "
+        "VALUES (:e, :e, 1, TRUE) "
+        "ON CONFLICT (email) DO UPDATE SET is_active = TRUE "
         "RETURNING id",
-        {"e": email, "pa": is_platform_admin, "da": is_data_analyst},
+        {"e": email},
     )
-    return rows[0]["id"]
+    uid = rows[0]["id"]
+    # The role is the grants now (M2-DROP). Both directions: these helpers
+    # upsert on a re-used email, so a demotion must revoke.
+    grant_instance_preset(
+        uid,
+        ADMIN_PRESET if is_platform_admin else (ANALYST_PRESET if is_data_analyst else None),
+    )
+    return uid
 
 
 def _add_membership(user_id: int, lab_id: int, role: str, *, is_director: bool = False) -> None:

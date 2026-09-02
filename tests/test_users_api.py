@@ -18,12 +18,12 @@ def _ensure_user(
 ) -> int:
     execute_write(
         """
-        INSERT INTO users (email, name, is_platform_admin, is_active, organization_id)
-        VALUES (:e, :n, :a, :act, 1)
+        INSERT INTO users (email, name, is_active, organization_id)
+        VALUES (:e, :n, :act, 1)
         ON CONFLICT (email) DO UPDATE
-        SET name = :n, is_platform_admin = :a, is_active = :act, organization_id = 1
+        SET name = :n, is_active = :act, organization_id = 1
         """,
-        {"e": email, "n": name, "a": is_platform_admin, "act": is_active},
+        {"e": email, "n": name, "act": is_active},
     )
     row = execute_query("SELECT id FROM users WHERE email = :e", {"e": email})
     return row[0]["id"]
@@ -172,9 +172,14 @@ async def test_patch_user_self_cannot_promote_self(client, monkeypatch):
     assert resp.status_code == 403
     assert resp.json()["error"]["code"] == "ACCESS_DENIED"
 
-    # DB unchanged
-    row = execute_query("SELECT is_platform_admin FROM users WHERE id = :id", {"id": uid})
-    assert row[0]["is_platform_admin"] is False
+    # Nothing was assigned. The column is gone (M2-DROP), so the grants are
+    # where the fact lives — and an empty grant set is the stronger assertion
+    # anyway: the old one could pass while a grant had been issued.
+    held = execute_query(
+        "SELECT capability FROM authz_capability_grants WHERE principal_id = :p",
+        {"p": str(uid)},
+    )
+    assert held == []
     _cleanup_user(email)
 
 
@@ -187,10 +192,16 @@ async def test_patch_user_admin_can_assign_the_instance_preset(client):
         json={"instance_preset": "instance_administrator"},
     )
     assert resp.status_code == 200
-    # The response still carries the legacy columns because it is SELECT *;
-    # M2-DROP removes them. What matters here is that assigning by preset
-    # name lands, which the column echoes until then.
-    assert resp.json()["data"]["is_platform_admin"] is True
+    # M2-DROP removed the columns the response used to echo, so the
+    # assignment is asserted where it now lives.
+    held = {
+        r["capability"]
+        for r in execute_query(
+            "SELECT capability FROM authz_capability_grants WHERE principal_id = :p",
+            {"p": str(uid)},
+        )
+    }
+    assert "user:manage" in held, held
     _cleanup_user(email)
 
 

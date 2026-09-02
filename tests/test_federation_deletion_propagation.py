@@ -357,24 +357,29 @@ def test_sla_breach_flags_noncompliant_and_alerts(signer, monkeypatch):
     get_settings.cache_clear()
 
 
-def test_the_alert_follows_the_grant_and_not_the_legacy_flag(signer, monkeypatch):
-    """The narrowing M2-DROP-PRE actually performs, pinned in both directions.
+def test_the_alert_follows_the_grant(signer, monkeypatch):
+    """The narrowing M2-DROP-PRE performed, pinned in both directions.
 
-    The baseline seeds admin@example.org holding the flag AND the instance
-    preset, so every "as admin" assertion passes whichever of the two the code
-    reads — which is precisely why the conversion needs a principal that holds
-    exactly one. Two of them: a holder with no flag must be notified, and a
-    flag-holder with no grant must not.
+    Originally this contrasted a grant-holder with a FLAG-holder who had no
+    grant — the baseline seeds admin@example.org holding both, so every "as
+    admin" assertion passed whichever of the two the code read, and the
+    conversion needed a principal holding exactly one.
+
+    M2-DROP removed the column, so "holds the flag but no grant" is no longer
+    a state that can exist and that half of the narrowing became structural.
+    What is still worth pinning is the other edge of the same property: a user
+    who holds nothing is not alerted, so the alert cannot be selecting on
+    something incidental like "is a user at all".
     """
     monkeypatch.setenv("FEDERATION_NONCOMPLIANCE_POLICY", "alert_only")
     get_settings.cache_clear()
     granted = execute_write(
-        "INSERT INTO users (email, name, organization_id, is_platform_admin, is_active) "
-        "VALUES ('fedop-granted@test.com', 'Granted', 1, FALSE, TRUE) RETURNING id",
+        "INSERT INTO users (email, name, organization_id, is_active) "
+        "VALUES ('fedop-granted@test.com', 'Granted', 1, TRUE) RETURNING id",
     )[0]["id"]
-    flagged_only = execute_write(
-        "INSERT INTO users (email, name, organization_id, is_platform_admin, is_active) "
-        "VALUES ('fedop-flagonly@test.com', 'Flag Only', 1, TRUE, TRUE) RETURNING id",
+    ungranted = execute_write(
+        "INSERT INTO users (email, name, organization_id, is_active) "
+        "VALUES ('fedop-ungranted@test.com', 'Ungranted', 1, TRUE) RETURNING id",
     )[0]["id"]
     try:
         execute_write(
@@ -399,9 +404,9 @@ def test_the_alert_follows_the_grant_and_not_the_legacy_flag(signer, monkeypatch
             )
 
         assert notified(granted), "capability holder was not alerted"
-        assert not notified(flagged_only), "is_platform_admin still selects recipients"
+        assert not notified(ungranted), "a principal holding nothing was alerted"
     finally:
-        for uid in (granted, flagged_only):
+        for uid in (granted, ungranted):
             execute_write("DELETE FROM notifications WHERE recipient_id = :u", {"u": uid})
             execute_write(
                 "DELETE FROM authz_capability_grants WHERE principal_id = :p", {"p": str(uid)}
@@ -475,8 +480,8 @@ def test_approve_deletion_enqueues_tombstone_events():
     _mk_peer("bcare4-trigger-tomb")
     sample = _mk_sample("BCARE4-TRIG-01", status="ACTIVE")
     requester = execute_write(
-        "INSERT INTO users (email, name, organization_id, is_platform_admin, is_active) "
-        "VALUES ('bcare4-req@example.org', 'Req', 1, FALSE, TRUE) "
+        "INSERT INTO users (email, name, organization_id, is_active) "
+        "VALUES ('bcare4-req@example.org', 'Req', 1, TRUE) "
         "ON CONFLICT (email) DO UPDATE SET is_active = TRUE RETURNING id",
     )[0]["id"]
     sample = execute_write(
@@ -486,7 +491,10 @@ def test_approve_deletion_enqueues_tombstone_events():
         {"u": requester, "id": sample["id"]},
     )[0]
     approver = execute_query(
-        "SELECT id, email, is_platform_admin FROM users WHERE is_platform_admin = TRUE LIMIT 1",
+        # The approver is identified by the grant, not by a dropped column.
+        "SELECT u.id, u.email FROM users u "
+        "JOIN authz_capability_grants g ON g.principal_id = u.id::text "
+        "WHERE g.capability = 'user:manage' AND g.scope_ref = 'instance://self' LIMIT 1",
     )[0]
 
     approve_deletion(sample, approver, None)
