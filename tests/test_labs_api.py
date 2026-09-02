@@ -1,4 +1,9 @@
 import pytest
+from authz_helpers import (
+    ADMIN_PRESET,
+    grant_instance_preset,
+    sync_grants_from_legacy_roles,
+)
 
 from backend.config import get_settings
 from backend.database import execute_query, execute_write
@@ -12,15 +17,20 @@ def _switch_user(monkeypatch, email: str) -> None:
 def _ensure_user(email: str, *, is_platform_admin: bool = False) -> int:
     execute_write(
         """
-        INSERT INTO users (email, name, is_platform_admin, is_active, organization_id)
-        VALUES (:e, 'Test User', :a, TRUE, 1)
+        INSERT INTO users (email, name, is_active, organization_id)
+        VALUES (:e, 'Test User', TRUE, 1)
         ON CONFLICT (email) DO UPDATE
-        SET is_platform_admin = :a, is_active = TRUE, organization_id = 1
+        SET is_active = TRUE, organization_id = 1
         """,
-        {"e": email, "a": is_platform_admin},
+        {"e": email},
     )
     row = execute_query("SELECT id FROM users WHERE email = :e", {"e": email})
-    return row[0]["id"]
+    uid = row[0]["id"]
+    # The role is the grants now: this no longer writes the column and asks
+    # reseed() to translate it, ahead of M2-DROP removing it. Issued either
+    # way so a re-used email is demoted rather than keeping a stale grant.
+    grant_instance_preset(uid, ADMIN_PRESET if is_platform_admin else None)
+    return uid
 
 
 def _pg_id(name: str) -> int:
@@ -199,6 +209,11 @@ async def test_patch_lab_by_director(client, monkeypatch):
         },
     )
     assert resp.status_code == 201
+    # The membership was created after _ensure_user ran, so re-sync: a
+    # membership only becomes access once grants exist for it. In production
+    # M2-B5 makes POST /labs/{id}/members issue the grants directly — until
+    # then a new member holds nothing until a reseed runs.
+    sync_grants_from_legacy_roles()
 
     _switch_user(monkeypatch, director_email)
     resp = await client.patch(

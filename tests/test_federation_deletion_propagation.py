@@ -339,13 +339,81 @@ def test_sla_breach_flags_noncompliant_and_alerts(signer, monkeypatch):
         {"a": AuditActions.FEDERATION_PEER_NONCOMPLIANT, "r": str(peer["id"])},
     )
     assert audits
-    # Operator alert: platform admins get a notification.
+    # Operator alert: whoever holds federation:configure_peer at instance
+    # scope gets a notification. Asserted against the grant rather than
+    # users.is_platform_admin — the flag is the thing M2-DROP removes, and a
+    # test still standing on it would keep passing after the reader it covers
+    # stopped existing.
     notes = execute_query(
-        "SELECT n.id FROM notifications n JOIN users u ON u.id = n.recipient_id "
-        "WHERE n.event_type = 'FEDERATION_PEER_NONCOMPLIANT' AND u.is_platform_admin = TRUE",
+        "SELECT n.id FROM notifications n "
+        "JOIN authz_capability_grants g ON g.principal_id = CAST(n.recipient_id AS TEXT) "
+        "WHERE n.event_type = 'FEDERATION_PEER_NONCOMPLIANT' "
+        "AND n.resource_id = :peer_id "
+        "AND g.capability = 'federation:configure_peer' "
+        "AND g.scope_ref = 'instance://self'",
+        {"peer_id": str(peer["id"])},
     )
     assert notes
     get_settings.cache_clear()
+
+
+def test_the_alert_follows_the_grant(signer, monkeypatch):
+    """The narrowing M2-DROP-PRE performed, pinned in both directions.
+
+    Originally this contrasted a grant-holder with a FLAG-holder who had no
+    grant — the baseline seeds admin@example.org holding both, so every "as
+    admin" assertion passed whichever of the two the code read, and the
+    conversion needed a principal holding exactly one.
+
+    Nothing writes the column any more and M2-DROP removes it next, so
+    "holds the flag but no grant" is no longer a state a test can construct,
+    and that half of the narrowing became structural.
+    What is still worth pinning is the other edge of the same property: a user
+    who holds nothing is not alerted, so the alert cannot be selecting on
+    something incidental like "is a user at all".
+    """
+    monkeypatch.setenv("FEDERATION_NONCOMPLIANCE_POLICY", "alert_only")
+    get_settings.cache_clear()
+    granted = execute_write(
+        "INSERT INTO users (email, name, organization_id, is_active) "
+        "VALUES ('fedop-granted@test.com', 'Granted', 1, TRUE) RETURNING id",
+    )[0]["id"]
+    ungranted = execute_write(
+        "INSERT INTO users (email, name, organization_id, is_active) "
+        "VALUES ('fedop-ungranted@test.com', 'Ungranted', 1, TRUE) RETURNING id",
+    )[0]["id"]
+    try:
+        execute_write(
+            "INSERT INTO authz_capability_grants "
+            "(principal_id, capability, scope_ref, source) "
+            "VALUES (:p, 'federation:configure_peer', 'instance://self', 'test')",
+            {"p": str(granted)},
+        )
+        _mk_peer("bcare4-grant-narrowing")
+        sample = _mk_sample("BCARE4-NARROW-01")
+        enqueue_deletion_events(sample, "TOMBSTONE", None, signer=signer)
+        _age_events(sample["id"])
+        flag_noncompliant_events(None)
+
+        def notified(user_id: int) -> bool:
+            return bool(
+                execute_query(
+                    "SELECT id FROM notifications WHERE recipient_id = :u "
+                    "AND event_type = 'FEDERATION_PEER_NONCOMPLIANT'",
+                    {"u": user_id},
+                )
+            )
+
+        assert notified(granted), "capability holder was not alerted"
+        assert not notified(ungranted), "a principal holding nothing was alerted"
+    finally:
+        for uid in (granted, ungranted):
+            execute_write("DELETE FROM notifications WHERE recipient_id = :u", {"u": uid})
+            execute_write(
+                "DELETE FROM authz_capability_grants WHERE principal_id = :p", {"p": str(uid)}
+            )
+            execute_write("DELETE FROM users WHERE id = :u", {"u": uid})
+        get_settings.cache_clear()
 
 
 def test_hard_fail_policy_suspends_peer_on_first_breach(signer, monkeypatch):
@@ -413,8 +481,8 @@ def test_approve_deletion_enqueues_tombstone_events():
     _mk_peer("bcare4-trigger-tomb")
     sample = _mk_sample("BCARE4-TRIG-01", status="ACTIVE")
     requester = execute_write(
-        "INSERT INTO users (email, name, organization_id, is_platform_admin, is_active) "
-        "VALUES ('bcare4-req@example.org', 'Req', 1, FALSE, TRUE) "
+        "INSERT INTO users (email, name, organization_id, is_active) "
+        "VALUES ('bcare4-req@example.org', 'Req', 1, TRUE) "
         "ON CONFLICT (email) DO UPDATE SET is_active = TRUE RETURNING id",
     )[0]["id"]
     sample = execute_write(
@@ -424,7 +492,10 @@ def test_approve_deletion_enqueues_tombstone_events():
         {"u": requester, "id": sample["id"]},
     )[0]
     approver = execute_query(
-        "SELECT id, email, is_platform_admin FROM users WHERE is_platform_admin = TRUE LIMIT 1",
+        # The approver is identified by the grant, not by a dropped column.
+        "SELECT u.id, u.email FROM users u "
+        "JOIN authz_capability_grants g ON g.principal_id = u.id::text "
+        "WHERE g.capability = 'user:manage' AND g.scope_ref = 'instance://self' LIMIT 1",
     )[0]
 
     approve_deletion(sample, approver, None)

@@ -1,0 +1,262 @@
+"""M3 — deletion-governance policies on the M0 engine (access_model.md §6.2).
+
+Scope note, because the section describes three policies and this file pins
+one. Verified against the code while implementing:
+
+* ``deletion.separation_of_duties`` (§6.2-1b) — implemented here. Its routes
+  resolve a Sample resource, so a per-row DENY is the right shape.
+* ``deletion.no_publish_while_deleting`` (§6.2-2) — deliberately NOT a policy.
+  ``submission:approve`` is checked once at Lab scope while the rule is
+  per-sample across the submission's whole set; the shipped set-level check in
+  ``submissions.py`` (a 422 naming each blocked sample) is the correct shape
+  and already enforces it.
+* ``sovereignty.no_federate_deleting`` (§6.2-3) — premature. ``federation:push``
+  exists nowhere in the codebase outside a comment; the capability arrives
+  with M4's sharing agreements, and a policy keyed to a verb no route checks
+  would be untestable decoration.
+"""
+
+import pytest
+
+from backend.authz import Context, Decision, Resource, permit
+from backend.authz.engine import CapabilityGrant, Principal, PrincipalKind
+from backend.authz.policy import ACTIVE_POLICIES, DELETION_POLICIES, SOVEREIGNTY_POLICIES
+from backend.authz.scope import scope_uri
+
+REQUESTER = "77"
+APPROVER = "88"
+SAMPLE_SCOPE = scope_uri(org=1, lab=2, project=3, sample=4)
+
+
+def _principal(pid: str) -> Principal:
+    return Principal(
+        kind=PrincipalKind.HUMAN,
+        id=pid,
+        on_behalf_of=None,
+        grants=[CapabilityGrant(capability="deletion:approve", scope_ref=scope_uri())],
+    )
+
+
+def _sample(requested_by: str | None) -> Resource:
+    return Resource(
+        scope=SAMPLE_SCOPE,
+        attributes={
+            "deletion_status": "DELETION_REQUESTED",
+            "deletion_requested_by_user_id": requested_by,
+        },
+    )
+
+
+def _decide(principal: Principal, resource: Resource, **conditions) -> Decision:
+    return permit(
+        principal,
+        "deletion:approve",
+        resource,
+        Context(conditions=conditions),
+        policies=ACTIVE_POLICIES,
+    )
+
+
+def test_a_different_approver_is_allowed():
+    """The ordinary path: holding the grant is enough when you did not ask."""
+    assert _decide(_principal(APPROVER), _sample(REQUESTER)) is Decision.ALLOW
+
+
+def test_the_requester_cannot_approve_their_own_deletion():
+    """§6.2-1b. The DENY subtracts a path the grant would otherwise permit."""
+    assert _decide(_principal(REQUESTER), _sample(REQUESTER)) is Decision.DENY
+
+
+def test_the_audited_self_approve_flag_lifts_the_deny():
+    assert (
+        _decide(_principal(REQUESTER), _sample(REQUESTER), platform_admin_self_approve=True)
+        is Decision.ALLOW
+    )
+
+
+def test_a_missing_self_approve_flag_does_not_lift_the_deny():
+    """The reason the condition language needed a negation form.
+
+    With equality-only conditions, ``{"platform_admin_self_approve": False}``
+    would not match a context that never set the key — so the DENY would
+    silently not fire for every caller that forgot the flag, which is every
+    caller but one. Absent must mean the rule APPLIES. This test is the
+    difference between the escape hatch being explicit and being the default.
+    """
+    assert _decide(_principal(REQUESTER), _sample(REQUESTER)) is Decision.DENY
+
+
+def test_an_explicit_false_flag_does_not_lift_the_deny():
+    assert (
+        _decide(_principal(REQUESTER), _sample(REQUESTER), platform_admin_self_approve=False)
+        is Decision.DENY
+    )
+
+
+def test_deny_does_not_fire_when_nobody_requested_the_deletion():
+    """A NULL requester must not read as "matches the caller".
+
+    ``deletion_requested_by_user_id`` is NULL on an ACTIVE sample. The
+    PRINCIPAL_ID sentinel compares as strings, so a None here has to fail the
+    comparison rather than coincide with it.
+    """
+    assert _decide(_principal(APPROVER), _sample(None)) is Decision.ALLOW
+
+
+def test_the_deny_is_scoped_to_deletion_approve_only():
+    """A DENY in the shared policy set must not leak onto other capabilities.
+
+    ``guards.py`` passes ACTIVE_POLICIES on every call, including lab- and
+    instance-scoped ones carrying no resource attributes. That was free while
+    the set held only ALLOWs. The invariant that keeps it free now is that no
+    DENY names a capability whose routes lack a Sample resource — this asserts
+    the half of it that a future policy could break by copy-paste.
+    """
+    for policy in DELETION_POLICIES:
+        assert policy["effect"] == "DENY"
+        assert policy["capability"] == "deletion:approve", (
+            f"{policy['id']} keys on {policy['capability']}, whose routes may not resolve "
+            "a Sample resource; a DENY reading absent attributes decides on absence"
+        )
+
+
+def test_every_deny_reads_only_loaded_attributes():
+    """The other half of the same invariant, mechanically.
+
+    A DENY that reads an attribute ``sample_resource`` does not load gets None
+    and compares against it — firing or not for a reason unrelated to the row.
+    """
+    from backend.authz.principal import SAMPLE_ATTRIBUTE_COLUMNS
+
+    for policy in ACTIVE_POLICIES:
+        if policy["effect"] != "DENY":
+            continue
+        for attr in policy.get("resource", {}):
+            assert attr in SAMPLE_ATTRIBUTE_COLUMNS, (
+                f"{policy.get('id')} reads {attr!r}, which sample_resource does not load"
+            )
+
+
+def test_sovereignty_policies_are_auditable_by_id():
+    """§6.3: 'a sovereignty audit is a policy audit' — which needs ids."""
+    for policy in DELETION_POLICIES + SOVEREIGNTY_POLICIES:
+        assert policy.get("id"), "every governance policy needs an id to be auditable"
+        assert policy["id"].startswith(("deletion.", "sovereignty."))
+    # §6.3's audit query must actually select something.
+    assert [p for p in ACTIVE_POLICIES if str(p.get("id", "")).startswith("sovereignty.")]
+
+
+@pytest.mark.parametrize("capability", ["submission:approve"])
+def test_no_policy_keys_on_the_deferred_capabilities(capability):
+    """§6.2-2 is still deliberately not a policy.
+
+    ``submission:approve`` is checked once at Lab scope while the rule is
+    per-sample across the submission's whole set, so a DENY here would read an
+    absent deletion_status and deny every submission approval.
+    ``submissions.py`` enforces it correctly as a set-level 422.
+
+    ``federation:push`` was in this list until M4-B gave it a call site
+    (``FederationPushJob.may_push_sample``); the policy it was holding a place
+    for is now ``sovereignty.no_federate_deleting``, tested below.
+    """
+    assert not [p for p in ACTIVE_POLICIES if p["capability"] == capability]
+
+
+# ── §6.2-3 — the tombstone guard on federation ───────────────────────────
+
+
+def _push_principal(scope: str) -> Principal:
+    """A peer holding federation:push by agreement — a legitimate ALLOW."""
+    return Principal(
+        kind=PrincipalKind.PEER_INSTANCE,
+        id="peer-1",
+        on_behalf_of=None,
+        grants=[CapabilityGrant(capability="federation:push", scope_ref=scope, source="agreement")],
+    )
+
+
+def _push_decision(deletion_status) -> Decision:
+    attributes = {} if deletion_status is _ABSENT else {"deletion_status": deletion_status}
+    return permit(
+        _push_principal(scope_uri()),
+        "federation:push",
+        Resource(scope=SAMPLE_SCOPE, attributes=attributes),
+        Context(conditions={}),
+        policies=ACTIVE_POLICIES,
+    )
+
+
+_ABSENT = object()
+
+
+def test_an_active_sample_may_federate(world_free=None):
+    assert _push_decision("ACTIVE") is Decision.ALLOW
+
+
+@pytest.mark.parametrize("state", ["DELETION_REQUESTED", "TOMBSTONED", "VACUUMED"])
+def test_a_sample_in_the_deletion_lifecycle_may_not_federate(state):
+    """Deny-wins over a valid agreement — the §5.4 property made concrete."""
+    assert _push_decision(state) is Decision.DENY
+
+
+def test_absent_deletion_status_denies_the_push():
+    """Fail closed, and deliberately the opposite of the ALLOW-rule reading.
+
+    A caller that did not establish the sample's deletion state does not get
+    to export it. This is why the {"not": v} form is safe on THIS policy and
+    would be catastrophic on a Lab-scoped one: here the attribute's absence
+    blocks an export, there it would block every approval.
+    """
+    assert _push_decision(_ABSENT) is Decision.DENY
+
+
+# ── §6.2-1b's escape is a capability, not a request-body flag ────────────
+
+
+def _requester_with(*capabilities: str) -> Principal:
+    """The deletion's own requester, holding whatever is listed."""
+    return Principal(
+        kind=PrincipalKind.HUMAN,
+        id=REQUESTER,
+        on_behalf_of=None,
+        grants=[CapabilityGrant(capability=c, scope_ref=scope_uri()) for c in capabilities],
+    )
+
+
+def test_the_self_approve_condition_alone_lifts_the_deny():
+    """Documents the engine's contract, and why the ROUTE must not trust input.
+
+    The policy condition is a fact about the request, and the engine has no
+    way to know whether the caller was entitled to assert it. That is correct
+    for an engine and dangerous for a router: before M2-DROP-PRE the route
+    passed payload.platform_admin_self_approve straight through, so any
+    principal could set it and lift the separation-of-duties DENY. The engine
+    behaviour below is unchanged — what changed is who is allowed to produce
+    the condition.
+    """
+    assert (
+        _decide(
+            _requester_with("deletion:approve"),
+            _sample(REQUESTER),
+            platform_admin_self_approve=True,
+        )
+        is Decision.ALLOW
+    )
+
+
+def test_deletion_self_approve_is_a_real_catalog_capability():
+    """The verb the route now checks before setting the condition.
+
+    Held only by instance_administrator (§8.2), and conferring no approval
+    authority of its own — an actor without deletion:approve still cannot
+    approve anything.
+    """
+    from backend.authz.reseed import PRESET_GRANTS
+
+    holders = [name for name, caps in PRESET_GRANTS.items() if "deletion:self_approve" in caps]
+    assert holders == ["instance_administrator"], holders
+
+    only_escape = _requester_with("deletion:self_approve")
+    assert _decide(only_escape, _sample(REQUESTER), platform_admin_self_approve=True) is (
+        Decision.DENY
+    ), "the escape must not confer approval authority by itself"

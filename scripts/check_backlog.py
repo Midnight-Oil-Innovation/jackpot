@@ -25,8 +25,11 @@ Checks:
                    blocker — blocked by assertion only.
 
   6. Git evidence (ADVISORY — reported, does not fail)
-                   A non-shipped entry whose id opens a merged commit subject.
-                   Advisory because the signal is suggestive, not conclusive.
+                   A non-shipped entry whose id LEADS a merged commit
+                   subject — at its start, or straight after a
+                   conventional-commit prefix. Advisory because the signal is
+                   suggestive, not conclusive; see _evidence_pattern for what
+                   it deliberately misses and what it knowingly over-admits.
 
 **What checks 1-5 cannot do.** They verify the file against itself. The
 2026-08-28 failure was the file disagreeing with *reality*: `P0c` was
@@ -185,13 +188,57 @@ def check(entries: list[dict]) -> list[Violation]:
     return out
 
 
-def git_evidence_advisories(entries: list[dict], ref: str = "HEAD") -> list[Violation]:
-    """Non-shipped entries whose id opens a merged commit subject.
+#: Conventional-commit prefix: type, optional (scope), optional !, colon.
+#: A fact about the repo's commit convention, not about any one entry.
+_CC_PREFIX = r"(?:\w+(?:\([^)]*\))?!?:\s*)?"
 
-    Deliberately narrow: the id must start the subject (the repo's
-    release-commit shape, e.g. "P0b (Schema v5.0): ...") or the subject must
-    say "mark <id> shipped". A bare mention anywhere matches things like
-    "P0c stub" and the commit that first added the entry, which is noise.
+
+def _evidence_pattern(eid: str) -> re.Pattern[str]:
+    """Subjects that suggest ``eid`` shipped. Anchored: use with ``.match``.
+
+    ``(?![\\w-])`` rather than ``\b``: a word boundary sits between "P" and
+    "-", so ``M2-DROP\b`` matches inside ``M2-DROP-PRE``. This repo has at
+    least three such parent/child pairs — M2-DROP, B-CWB-MB-1, M2-B2 — each
+    shipped weeks apart from its child. Check 4 spells the same boundary.
+
+    Known and deliberate misses, recorded so nobody "fixes" them into false
+    positives:
+
+    * **Bundled ids.** ``feat(db): FED-D — ... + B-CWB-FED-1 ...`` fires for
+      the first id only, and this history really does bundle. Matching a
+      non-leading id is what re-admits "(P0c stub)" — the noise this check was
+      narrowed to exclude — so the second id stays out of reach.
+    * **Reverts.** ``Revert "feat(authz): M2-DROP — ..."`` does not match, and
+      should not: a revert is not evidence of shipping.
+
+    Knowingly over-admitted, since this section otherwise reads as exhaustive:
+    a doc commit leading with an id — ``docs: P0b (Schema v5.0) migration
+    spec`` — now counts as evidence. Two such subjects exist in this history,
+    harmless only because both entries are shipped and skipped. Tolerable
+    because the check is advisory; narrowing by commit TYPE, not by touching
+    the id part, is the fix if it ever gets noisy.
+    """
+    eid_re = rf"{re.escape(eid)}(?![\w-])"
+    return re.compile(rf"(?:{_CC_PREFIX}{eid_re}|.*\bmark {eid_re} shipped\b)", re.IGNORECASE)
+
+
+def git_evidence_advisories(entries: list[dict], ref: str = "HEAD") -> list[Violation]:
+    """Non-shipped entries whose id leads a merged commit subject.
+
+    Deliberately narrow: the id must start the subject (the repo's older
+    release-commit shape, e.g. "P0b (Schema v5.0): ...") or start the subject
+    body after a conventional-commit prefix ("feat(authz): M2-DROP — ..."), or
+    the subject must say "mark <id> shipped". A bare mention ANYWHERE matches
+    things like "P0c stub" and the commit that first added the entry, which is
+    noise — so the prefix is the only thing allowed to precede the id.
+
+    The prefix clause was added 2026-09-02 after this check silently stopped
+    working. It required the id to open the subject, the repo adopted
+    conventional commits, and by then ZERO of the last 40 subjects started
+    with a bare id — so the one check written because the file can disagree
+    with reality could no longer fire. M2-DROP was the case that exposed it:
+    merged as "feat(authz): M2-DROP — drop the legacy role columns", still
+    marked open, and unflagged.
 
     Returns advisories, never hard violations — see the module docstring.
     """
@@ -211,11 +258,9 @@ def git_evidence_advisories(entries: list[dict], ref: str = "HEAD") -> list[Viol
         eid = entry.get("id")
         if not eid or len(eid) < 3 or entry.get("status") == "shipped":
             continue
-        pattern = re.compile(
-            rf"^(?:{re.escape(eid)}\b|.*\bmark {re.escape(eid)} shipped\b)", re.IGNORECASE
-        )
+        pattern = _evidence_pattern(eid)
         for sha, subject in commits:
-            if pattern.search(subject):
+            if pattern.match(subject):
                 out.append(
                     Violation(
                         eid,

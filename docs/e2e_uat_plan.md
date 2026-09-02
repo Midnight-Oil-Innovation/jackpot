@@ -52,10 +52,13 @@ backend per role switch, E-1 added a small dev-only endpoint:
 - `POST /api/v1/auth/dev-login`
 - 404s in any environment other than `settings.env == "local"`
 - Body: `{email, role?, lab_id?, name?}`
-- Looks up the user, creating them if absent; updates the role flags
-  (`is_platform_admin`, `is_data_analyst`) and lab membership row
-  when relevant; mutates the cached `mock_user_email` so subsequent
-  same-process requests resolve as that identity.
+- Looks up the user, creating them if absent; assigns the Instance-scope
+  preset for a global role and the lab membership row for a lab role;
+  mutates the cached `mock_user_email` so subsequent same-process
+  requests resolve as that identity. (It also writes the legacy
+  `is_platform_admin` / `is_data_analyst` columns, but incidentally —
+  `reseed()` reads them until M2-DROP. Nothing decides on them, and the
+  response no longer reports them.)
 - No JWT minted; cookies untouched. The endpoint emits an
   `AUTH_DEV_LOGIN` audit row for forensics.
 
@@ -131,8 +134,10 @@ Pass: prints `✓ /health says database is connected` within 60 seconds.
 tests/e2e/scripts/dev_login.sh admin@example.org "Platform Admin"
 ```
 
-Pass: JSON response shows `user.is_platform_admin = true` and
-`active_role = "Platform Admin"`.
+Pass: JSON response shows `instance_preset = "instance_administrator"`
+and `active_role = "Platform Admin"`. (Was `user.is_platform_admin =
+true` before M2-DROP-PRE slice 8 — the role name is unchanged, what it
+assigns is now a preset.)
 
 ### Smoke step 3 — confirm seeded substrate
 

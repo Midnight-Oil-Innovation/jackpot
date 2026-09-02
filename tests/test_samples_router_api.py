@@ -10,7 +10,9 @@ Access model (per spec.md §5 Session H):
 """
 
 import pytest
+from authz_helpers import grant_instance_preset, sync_grants_from_legacy_roles
 
+from backend.authz.reseed import instance_preset
 from backend.config import get_settings
 from backend.database import execute_query, execute_write
 
@@ -93,16 +95,23 @@ def _make_user(
     is_data_analyst: bool = False,
 ) -> int:
     rows = execute_write(
-        "INSERT INTO users (email, name, organization_id, "
-        "is_platform_admin, is_data_analyst, is_active) "
-        "VALUES (:e, :e, 1, :pa, :da, TRUE) "
-        "ON CONFLICT (email) DO UPDATE SET "
-        "is_platform_admin = EXCLUDED.is_platform_admin, "
-        "is_data_analyst = EXCLUDED.is_data_analyst, is_active = TRUE "
+        "INSERT INTO users (email, name, organization_id, is_active) "
+        "VALUES (:e, :e, 1, TRUE) "
+        "ON CONFLICT (email) DO UPDATE SET is_active = TRUE "
         "RETURNING id",
-        {"e": email, "pa": is_platform_admin, "da": is_data_analyst},
+        {"e": email},
     )
-    return rows[0]["id"]
+    uid = rows[0]["id"]
+    # The role is the grants now, ahead of M2-DROP. Both directions: these
+    # helpers upsert on a re-used email, so a demotion must revoke.
+    # instance_preset() rather than a hand-written ternary: it exists to be
+    # the single answer to "which preset do these two flags mean", and a
+    # second copy of that precedence is exactly what Rule 73 is about.
+    grant_instance_preset(
+        uid,
+        instance_preset(is_platform_admin=is_platform_admin, is_data_analyst=is_data_analyst),
+    )
+    return uid
 
 
 def _add_membership(user_id: int, lab_id: int, role: str, *, is_director: bool = False) -> None:
@@ -372,6 +381,10 @@ async def test_discoverable_sample_detail_requires_access(client, monkeypatch):
         "VALUES (:sid, :uid, :owner, 'APPROVED')",
         {"sid": s["id"], "uid": uid, "owner": SEED_USER_ID},
     )
+    # Since M2-B2 the route decides on grants and policies, so the approved
+    # request has to become the sample-scoped grant reseed() issues for it —
+    # an APPROVED row is legacy state, not a decision input.
+    sync_grants_from_legacy_roles()
     resp2 = await client.get(f"/api/v1/samples/{s['id']}")
     assert resp2.status_code == 200
 
@@ -396,6 +409,10 @@ async def test_data_analyst_can_access_surveillance_samples(client, monkeypatch)
     email = "adhs_oversight@test.com"
     _cleanup_users([email])
     _make_user(email, is_data_analyst=True)
+    # The is_data_analyst flag authorizes nothing by itself since M2-B1; it
+    # reseeds to a sample:read_surveillance grant, which the surveillance
+    # attribute-policy then reads.
+    sync_grants_from_legacy_roles()
     _switch_user(email, monkeypatch)
 
     resp = await client.get(f"/api/v1/samples/{s['id']}")

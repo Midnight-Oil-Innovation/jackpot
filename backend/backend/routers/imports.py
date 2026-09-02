@@ -24,7 +24,7 @@ import logging
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Request, UploadFile
 from pydantic import BaseModel
 
-from backend.auth.guards import get_current_user, get_user_lab_membership
+from backend.auth.guards import get_current_user, require_capability
 from backend.database import get_db_dep
 from backend.imports import (
     abandon_session,
@@ -60,15 +60,33 @@ class _PatchSessionBody(BaseModel):
     current_step: int | None = None
 
 
-def _ensure_lab_access(user: dict, lab_id: int, db) -> None:
-    """Confirm the caller can act on the given lab."""
-    if user.get("is_platform_admin"):
-        return
-    if not get_user_lab_membership(user["id"], lab_id):
-        raise HTTPException(
-            status_code=403,
-            detail="Lab membership required to create an import session for this lab.",
-        )
+def _lab_guard(user: dict, lab_id: int, capability: str) -> None:
+    """Confirm the caller may act on this lab (M2-B2).
+
+    ``sample:create`` for every step that leads to writing samples,
+    ``sample:read`` for the one that only reads a session. Narrower than the
+    membership test it replaced — a Lab Reader is a member but holds no
+    ``sample:create``, and staging an import is the first step of creating
+    samples.
+
+    Re-checked on each step rather than trusted from session-creation time:
+    the owner filter in ``backend.imports`` answers "is this yours", not "may
+    you still act on that lab", and membership can be revoked in between.
+    """
+    require_capability(capability)(user, lab_id=lab_id)
+
+
+def _guarded_session(session_id: int, user: dict, capability: str, db) -> dict:
+    """Load the caller's session and check the capability on its lab.
+
+    The owner filter lives in ``get_session_for_user`` (404 for someone
+    else's session, 410 for an expired one); the lab check is this module's.
+    Both belong to every per-session route, so they travel together rather
+    than being re-paired at four call sites.
+    """
+    session = get_session_for_user(session_id, user["id"], db)
+    _lab_guard(user, session["lab_id"], capability)
+    return session
 
 
 @router.post("/sessions/", status_code=201)
@@ -80,7 +98,7 @@ async def create_session(
 ):
     """Create a new wizard session and parse the uploaded file's metadata."""
     user = get_current_user(request)
-    _ensure_lab_access(user, lab_id, db)
+    _lab_guard(user, lab_id, "sample:create")
 
     file_name = file.filename or "uploaded.xlsx"
     suffix = file_name.lower().rsplit(".", 1)[-1] if "." in file_name else ""
@@ -136,7 +154,7 @@ def get_session(
     db=Depends(get_db_dep),  # noqa: B008
 ):
     user = get_current_user(request)
-    return success(data=get_session_for_user(session_id, user["id"], db))
+    return success(data=_guarded_session(session_id, user, "sample:read", db))
 
 
 @router.patch("/sessions/{session_id}")
@@ -154,6 +172,7 @@ async def patch_session(
     db=Depends(get_db_dep),  # noqa: B008
 ):
     user = get_current_user(request)
+    _guarded_session(session_id, user, "sample:create", db)
     fields = {k: v for k, v in body.model_dump(exclude_none=True).items()}
     session = update_import_session(
         session_id=session_id,
@@ -177,6 +196,7 @@ def import_session(
     db=Depends(get_db_dep),  # noqa: B008
 ):
     user = get_current_user(request)
+    _guarded_session(session_id, user, "sample:create", db)
     return success(
         data=execute_import(session_id=session_id, user_id=user["id"], conn=db),
         status_code=201,
@@ -190,4 +210,5 @@ def delete_session(
     db=Depends(get_db_dep),  # noqa: B008
 ):
     user = get_current_user(request)
+    _guarded_session(session_id, user, "sample:create", db)
     return success(data=abandon_session(session_id, user["id"], db))

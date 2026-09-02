@@ -39,7 +39,7 @@
 
 meta:
   version: 1
-  last_updated: "2026-08-29"
+  last_updated: "2026-09-01"
   source_documents:
     - todo.md
     - docs/jackpot_session_summary_and_backlog.md
@@ -77,7 +77,7 @@ sessions:
     pr_title_template:
     branch_name_template:
     role_framing:
-    notes: "Shipped pre-2026-05; reference pattern for PRV-A, CRY-A."
+    notes: "Shipped pre-2026-05; reference pattern for PRV-A, CRY-A. Provenance not establishable: shipped before the PR workflow began (PR #1 was 2026-05-03), so no merge commit exists to record in merge_sha. Searched git log for the id and found only incidental mentions in unrelated commits — deliberately left empty rather than filled with a plausible-looking SHA, because a wrong provenance record looks authoritative and nobody re-derives it."
 
   - id: PRV-A
     title: Privacy scaffold (HRRT + DLP + AISPrivacyHooks)
@@ -105,6 +105,8 @@ sessions:
     branch_name_template:
     role_framing:
     notes: "Session 21 PR #39."
+    merge_sha: da425fe
+    merged_at: '2026-05-09'
 
   - id: CRY-A
     title: Crypto scaffold (filesystem keystore + Ed25519 + AISCryptoHooks)
@@ -293,7 +295,7 @@ sessions:
       attestation, AIS-hook policy points table.
     phase: cryptwwdb_track
     status: shipped
-    merged_at: "2026-04-28"
+    merged_at: '2026-05-12'
     depends_on: []
     blocked_by_external:
     parallel_safe:
@@ -306,6 +308,7 @@ sessions:
     branch_name_template:
     role_framing:
     notes: "PR #49. Anchor docs Jackpot_AIS.md + jackpot_immune_platform_plan.md restored in same PR."
+    merge_sha: 1eab572
 
   - id: B-CWB-FED-1
     title: data_source_lab FederationRole enum value
@@ -390,6 +393,7 @@ sessions:
     branch_name_template:
     role_framing:
     notes: "PR #50. Interface-only; full DB wiring tracked as B-CWB-MB-1-DB."
+    merged_at: '2026-05-12'
 
   - id: B-CWB-MB-1-DB
     title: Mass-balance full DB wiring (post-B-CWB-SCHEMA-2)
@@ -634,6 +638,7 @@ sessions:
     branch_name_template:
     role_framing:
     notes: "PR #51."
+    merged_at: '2026-05-12'
 
   - id: B-WW-ADV-1
     title: Multi-target wastewater panel
@@ -1330,6 +1335,8 @@ sessions:
       the 2026-04-29 phasing decision in todo.md."
 
     merged_at: '2026-05-26'
+    merge_sha: 7da717b
+
   - id: B-BYOP-2
     title: BYOP Stage 1 static validator
     short_description: |
@@ -1778,6 +1785,7 @@ sessions:
   # Dependency graph (access_model.md §11.2):
   #   M0 → M1 → M2 → {M3, M4, M5}; ACCESS-GUARD-MAP + ACCESS-SEED block M2.
   # ────────────────────────────────────────────────────────────────────────
+    merge_sha: 7da717b
 
   - id: M0
     title: permit() engine + grants/policy tables, dark (wired into no route)
@@ -1877,7 +1885,8 @@ sessions:
     depends_on: []
     blocked_by_external:
     parallel_safe: false
-    parallel_safe_reason: "Touches the auth guard surface; do not parallel-batch auth-adjacent work (coding_scripts_howto)."
+    parallel_safe_reason: "Touches the auth guard surface — the authorization decision path serializes (CLAUDE.md, Authorization-path
+      serialization)."
     effort_sessions: 1
     primary_files:
       - backend/backend/auth/guards.py
@@ -1911,7 +1920,8 @@ sessions:
       - M0
     blocked_by_external:
     parallel_safe: false
-    parallel_safe_reason: "Writes into M0's grants table; auth/migration-adjacent."
+    parallel_safe_reason: "Writes into M0's grants table — authorization decision path, serialized (CLAUDE.md, Authorization-path
+      serialization)."
     effort_sessions: 1
     primary_files:
       - backend/backend/authz/
@@ -1927,49 +1937,1081 @@ sessions:
 
     merged_at: '2026-08-29'
     merge_sha: b7509b5
-  - id: M2
-    title: Reseed + cutover (IRREVERSIBLE — manual flow only)
+  # ── M2 pre-work (ADR 0015) — dark and additive, each independently
+  # revertible. Lands the scope-URI scheme and the pre-flight guard BEFORE
+  # the irreversible cutover, so M2 is guard-rewrite work rather than
+  # guard-rewrite plus a serialization change plus a new guard.
+  - id: M2-PRE-1
+    title: Canonical scope-URI builder + M0/M1 fixture rewrite
     short_description: |
-      The one irreversible step (access_model.md §10, §11.1). In ONE change:
-        (a) run ACCESS-SEED (read old roles, issue preset grants);
-        (b) rewrite every route guard role-check -> capability-check using
-            ACCESS-GUARD-MAP;
-        (c) switch list endpoints to the M1 visibility_sql_clause companion;
-        (d) drop users.is_platform_admin, users.is_data_analyst, the
-            PermissionGroups enum, and the permissions.py _base_access ladder.
-      No rollback-to-dual-running — greenfield (§10), so safety comes from M0
-      and M1 having proven the engine and companion, NOT from a shim. Run as
-      MANUAL flow, single session, high attention — this is on the
-      do-NOT-parallel-batch list (auth + migrations + route guards). Do not
-      start until M0 and M1 are both shipped and ACCESS-GUARD-MAP + ACCESS-SEED
-      are ready.
+      Land the ADR 0015 serialization as code. One builder module producing
+      the canonical path (instance://self/org/{id}/lab/{id}/project/{id}/
+      sample/{id}) for grants, policies, and resources; _scope_contains
+      stays exactly as it is (prefix + segment boundary), which is the
+      point of the ADR. Rewrite the M0/M1 fixtures off the four ad-hoc
+      shapes they invented (instance://field-laptop/org-x/..., org://acme/
+      lab-1/..., instance://self, lab://N) onto the real one.
+      Everything downstream depends on this shape, and it is the cheapest
+      piece to verify in isolation — if the serialization is wrong, that
+      must surface here rather than with route guards already flipped.
+      Dark: nothing calls permit() from a route.
     phase: access_model_redesign
-    status: open
+    status: shipped
+    depends_on: []
+    blocked_by_external:
+    parallel_safe: false
+    parallel_safe_reason: "Authz-adjacent; every later M2 pre-work item depends on the shape this lands."
+    effort_sessions: 1
+    primary_files:
+      - backend/backend/authz/
+    test_files:
+      - tests/authz/test_permit.py
+      - tests/authz/test_visibility_sql_clause.py
+    source_of_truth_views:
+      - docs/adr/0015-single-rooted-scope-uri.md
+      - docs/access_model.md
+    pr_title_template: "feat(authz): M2-PRE-1 — canonical scope-URI builder"
+    branch_name_template: m2-pre-1-scope-uri
+    role_framing:
+    notes: "access_model.md §3.1.1 is the spec. _scope_contains must NOT change — if it needs to, the ADR was wrong. Shipped
+      without changing it. §9.1's cross-instance DENY case was removed rather than translated: under one root per deployment
+      no resource scope can name another instance, so the case cannot arise; replaced by the instance-root-reaches-every-depth
+      property, with test_scope.py pinning that no input produces a second root."
+    merged_at: '2026-08-31'
+    merge_sha: eec4900
+
+  - id: M2-PRE-2
+    title: visibility_sql_clause accepts a scope expression
+    short_description: |
+      visibility_sql_clause hardcodes `<alias>.scope` and rejects any alias
+      that is not a bare identifier. samples has no scope column and is not
+      getting one (ADR 0015): the resource scope is computed from the
+      samples JOIN labs the list query already performs. Widen the
+      signature to take a scope expression, keeping the injection guard
+      meaningful (the expression is caller-supplied SQL, not user input —
+      validate it is one of the known builders' output, do not just drop
+      the isidentifier check). Still dark.
+    phase: access_model_redesign
+    status: shipped
+    depends_on:
+      - M2-PRE-1
+    blocked_by_external:
+    parallel_safe: false
+    parallel_safe_reason: "Depends on M2-PRE-1's scope shape; touches the list-filtering compiler."
+    effort_sessions: 0.5
+    primary_files:
+      - backend/backend/authz/visibility.py
+    test_files:
+      - tests/authz/test_visibility_sql_clause.py
+    source_of_truth_views:
+      - docs/adr/0015-single-rooted-scope-uri.md
+    pr_title_template: "feat(authz): M2-PRE-2 — visibility_sql_clause takes a scope expression"
+    branch_name_template: m2-pre-2-scope-expr
+    role_framing:
+    notes: "Shipped inside the M2-PRE-3 PR (#148, merge 87e7101): PRE-2's signature change breaks preflight.py's synthesized
+      'lab://' scope column, and repairing it needs PRE-3's canonical grants — the two are one unit, not the independent items
+      this entry assumed. scope_expr is validated by re-derivation (is_canonical_scope_sql), not trusted, because it is interpolated
+      rather than bound."
+    merged_at: '2026-08-31'
+    merge_sha: .inf
+
+  - id: M2-PRE-3
+    title: reseed emits path scopes — and the admin divergence disappears
+    short_description: |
+      Point reseed() at the canonical builder: instance grants keep
+      instance://self (now genuinely a root), membership grants join labs
+      for organization_id and become
+      instance://self/org/{org}/lab/{lab}. Then re-run the preflight
+      matrix. ACCEPTANCE SIGNAL: the admin-bypass-vs-scoped-grants class
+      must stop firing, which turns test_expected_divergences red because
+      EXPECTED_DIVERGENCES asserts every registered class DOES fire.
+      Removing that class from the registry is the deliverable — it is the
+      moment ADR 0015 stops being a claim and becomes a measured result on
+      real PostgreSQL. If the class still fires, the serialization is
+      wrong and M2 must not proceed.
+    phase: access_model_redesign
+    status: shipped
+    depends_on:
+      - M2-PRE-1
+    blocked_by_external:
+    parallel_safe: false
+    parallel_safe_reason: "Rewrites reseed and the divergence registry; auth-adjacent, the authorization decision path serializes
+      (CLAUDE.md)."
+    effort_sessions: 1
+    primary_files:
+      - backend/backend/authz/reseed.py
+    test_files:
+      - tests/authz/test_reseed.py
+      - tests/authz/test_cutover_preflight.py
+      - tests/authz/preflight.py
+    source_of_truth_views:
+      - docs/adr/0015-single-rooted-scope-uri.md
+      - docs/m2_preflight_report.md
+    pr_title_template: "feat(authz): M2-PRE-3 — reseed emits path scopes"
+    branch_name_template: m2-pre-3-reseed-scopes
+    role_framing:
+    notes: "Shipped with M2-PRE-2 (#148, merge 87e7101). ACCEPTANCE SIGNAL came back HALF: every lab-scoped cell for an in-preset
+      capability now allows by plain containment (test_admin_reaches_lab_scope_structurally, on PG), but admin-bypass-vs-scoped-grants
+      still fires for capabilities outside the 13-verb §8.2 instance_administrator preset — intentional narrowing, same family
+      as director-passes-all-lab-caps, so the class was re-scoped rather than deleted. Also fixed impossible PRE-1 fixtures
+      (lab 1 under four orgs; reused sample ids); fixtures now shared via tests/authz/scopes.py."
+    merged_at: '2026-08-31'
+    merge_sha: .inf
+
+  - id: M2-PRE-4
+    title: reseed pre-flight guard — the three data-quality divergences
+    short_description: |
+      M2 deliverable (e), landed early. A pre-flight function that counts,
+      before reseed inserts anything: lab_membership rows where
+      is_lab_director=TRUE but the permission group disagrees; memberships
+      whose group name is absent from MEMBERSHIP_PRESETS; project-only
+      members with no lab_membership row. Non-zero aborts with the counts
+      and requires an explicit operator override to proceed. Test it
+      against the preflight harness's deliberately-broken worlds, which
+      already seed the flag/group mismatch (P11) and the unmapped group
+      (P9) — the fixtures exist, so this is guard plus assertions, not new
+      scaffolding. Cannot be reconciled ahead of time on any DB we have:
+      instances/ holds only ci and the baseline seeds one admin plus one
+      Lab Director, so a sweep passes vacuously. The check ships with the
+      code and runs wherever it is applied (Rule 55).
+    phase: access_model_redesign
+    status: shipped
+    depends_on:
+      - M2-PRE-3
+    blocked_by_external:
+    parallel_safe: false
+    parallel_safe_reason: "Guards the reseed path; auth/migration-adjacent."
+    effort_sessions: 1
+    primary_files:
+      - backend/backend/authz/reseed.py
+    test_files:
+      - tests/authz/test_reseed.py
+    source_of_truth_views:
+      - docs/m2_preflight_report.md
+      - docs/access_model.md
+    pr_title_template: "feat(authz): M2-PRE-4 — reseed pre-flight data-quality guard"
+    branch_name_template: m2-pre-4-preflight-guard
+    role_framing:
+    notes: "Shipped #150 (merge 664e0db). preflight_counts() + ReseedPreflightError, force=True to override. Two deliberate
+      force call sites: the preflight harness (P9/P11/P12 exist to MEASURE these divergences, so it must not be blocked by
+      them) and the skip-and-warn body test. PG test asserts the guard finds exactly the personas the divergence matrix diverges
+      on — a persona the guard cannot see would mean the migration runs silently on data the report calls broken. M2 still
+      wires the migration to surface the counts and read the override from the operator rather than a hardcoded flag."
+    merged_at: '2026-08-31'
+    merge_sha: 664e0db
+
+  # ── M2 guard-rewrite batches (cutover step (b), carved) ─────────────────
+  # 108 routes need a guard: 28 already name a capability via
+  # require_capability, 80 are ROUTE_LOCAL. Batched by risk class per the
+  # order pinned in M2, not by file. Every batch is landable while the legacy
+  # columns still exist, so only the final drop is irreversible.
+  - id: M2-B1
+    title: require_capability calls permit() — flips all 28 wired routes at once
+    short_description: |
+      The highest-leverage single change in the cutover, and the one with the
+      most evidence behind it. auth/guards.py's require_capability currently
+      runs the legacy ladder inline (platform-admin bypass, then lab
+      membership, then the project->lab join, then the director flag).
+      Rewrite its body to load the principal's grants and call permit(); the
+      28 routes that already pass through it flip together, with no per-route
+      edits.
+      Acceptance evidence already exists: the preflight matrix compares
+      legacy_guard against new_guard over 12 personas x 13 capabilities x 3
+      scopes and asserts zero unexpected divergences against the registered
+      classes. After this batch that comparison stops being a simulation —
+      new_guard IS the guard — so the matrix must be re-pointed at the real
+      require_capability rather than its stand-in, and any divergence that
+      moves is a behavior change to explain, not a fixture to adjust.
+      Principal loading is the new work: one query joining
+      authz_capability_grants for the user, cached per request. Do NOT
+      re-derive membership inline (Critical Rule 24).
+    phase: access_model_redesign
+    status: shipped
+    depends_on:
+      - M2-PRE-4
+    blocked_by_external:
+    parallel_safe: false
+    parallel_safe_reason: "Rewrites the guard every other batch builds on; auth-adjacent, the authorization decision path
+      serializes (CLAUDE.md)."
+    effort_sessions: 2
+    primary_files:
+      - backend/backend/auth/guards.py
+      - backend/backend/authz/
+    test_files:
+      - tests/authz/test_cutover_preflight.py
+      - tests/test_auth_guards.py
+    source_of_truth_views:
+      - docs/access_model.md
+      - docs/endpoint_capability_map.md
+    pr_title_template: "feat(authz): M2-B1 — require_capability calls permit()"
+    branch_name_template: m2-b1-guard-permit
+    role_framing:
+    notes: "Shipped #154 (merge cd94b28). Exposed three preset gaps that each made a route unreachable: pipeline:promote +
+      pipeline:register_custom were in NO preset; lab_lead lacked org:manage so a director could not rename their own lab
+      or create a project in it; and POST /ingest/globus was mapped to sample:create from its router rather than its behavior
+      (it creates no samples) — new deposit:record verb. Unknown lab_id now answers as a denied lab does (403) since 404-vs-403
+      leaks lab existence, which org isolation treats as the secret (§3.2). preflight.py froze the old ladder as legacy_ladder()
+      so the divergence registry keeps meaning something; TestRealGuardIsPermitBacked asserts guard == permit() per cell.
+      Also fixed two pre-existing test-hygiene bugs the change surfaced: the preflight teardown deleted ALL grants, and fixtures
+      must materialize grants after creating a user or membership."
+    merged_at: '2026-08-31'
+    merge_sha: cd94b28 real guard. Legacy columns still exist, so this batch is revertible."
+
+  # ── B2 prerequisites — found when B2 started (2026-08-31) ───────────────
+  # The carve assumed the sample plane was structural like the others. It is
+  # not: 12 of its 27 rows are Sample-scoped, and its read routes decide on
+  # resource ATTRIBUTES (sharing_level, surveillance_relevant) that the engine
+  # cannot currently see. Each item below is small; together they are what
+  # makes a faithful B2 possible instead of one that quietly removes access.
+  - id: M2-B2-PRE-A
+    title: Resource carries attributes — attribute-policies become expressible
+    short_description: |
+      access_model.md §2.4 gives a Resource `attributes` alongside its scope,
+      and §2.5 builds the whole attribute-policy half of the model on reading
+      them. M0 shipped `Resource` with `scope` only, and `policy._matches`
+      compares capability + scope + grant conditions against the request
+      context — never resource attributes. So the three permissive rungs of
+      the legacy ladder cannot be written as policies at all:
+        PUBLIC sharing_level readable by anyone (§5 names this as THE example
+        of an ALLOW policy), DISCOVERABLE list-visible, and
+        surveillance_relevant readable by a sample:read_surveillance holder.
+      Add `attributes: dict` to Resource, extend `_matches` to evaluate a
+      policy's resource predicate, and mirror it in visibility_sql_clause so
+      the row-wise and SQL paths stay equivalent (the M1 property).
+      Ship the three rungs as a static policy set — they are fixed today, not
+      operator-configurable — and leave DB-backed loading to M3. Without this
+      B2's read routes would deny PUBLIC samples to non-members: a silent
+      access REMOVAL, closed rather than open, but a functional break.
+    phase: access_model_redesign
+    status: shipped
+    depends_on:
+      - M2-B1
+    blocked_by_external:
+    parallel_safe: false
+    parallel_safe_reason: "Authorization decision path, serialized (CLAUDE.md, Authorization-path serialization)."
+    effort_sessions: 1.5
+    primary_files:
+      - backend/backend/authz/engine.py
+      - backend/backend/authz/policy.py
+      - backend/backend/authz/visibility.py
+    test_files:
+      - tests/authz/test_permit.py
+      - tests/authz/test_visibility_sql_clause.py
+    source_of_truth_views:
+      - docs/access_model.md
+    pr_title_template: "feat(authz): M2-B2-PRE-A — resource attributes and attribute-policies"
+    branch_name_template: m2-b2-pre-a-resource-attributes
+    role_framing:
+    notes: "Shipped #158 (merge f1dcfe2). Predicates kept declarative (equality, in, PRINCIPAL_ID) so both the Python and
+      SQL halves can evaluate them — a lambda would have been unimplementable in SQL. requires_capability added for the principal
+      half of the surveillance rung. Ownership shipped as a POLICY, deviating from §5's mapping table which calls it a Sample-scope
+      grant: as a grant it would need a row written per sample creation and deleted per transfer. Unmapped attribute RAISES
+      — a dropped term widens an ALLOW and neuters a DENY."
+    merged_at: '2026-08-31'
+    merge_sha: f1dcfe2 cross-checked on the same fixtures as M1."
+
+  - id: M2-B2-PRE-B
+    title: Guards can name a Sample-scoped resource
+    short_description: |
+      require_capability takes `lab_id` and otherwise decides at the instance
+      root, so it can express two of the five scope levels. 12 of B2's 27 rows
+      are Sample-scoped (sample detail/update/archive, file detail, promote,
+      verify, access approve/deny).
+      Checking those at lab scope is not a safe approximation: a grant issued
+      AT sample scope does not contain the lab, so per-sample access — the
+      mechanism §3.1 lists for the Sample level — would be invisible and
+      approved requests would stop working. Add sample_id resolution
+      (samples JOIN labs, mirroring lab_resource_scope) and let the guard take
+      exactly one of lab_id / sample_id.
+    phase: access_model_redesign
+    status: shipped
+    depends_on:
+      - M2-B1
+    blocked_by_external:
+    parallel_safe: false
+    parallel_safe_reason: "Authorization decision path, serialized (CLAUDE.md, Authorization-path serialization)."
+    effort_sessions: 0.5
+    primary_files:
+      - backend/backend/auth/guards.py
+      - backend/backend/authz/principal.py
+    test_files:
+      - tests/test_permissions.py
+    source_of_truth_views:
+      - docs/access_model.md
+      - docs/adr/0015-single-rooted-scope-uri.md
+    pr_title_template: "feat(authz): M2-B2-PRE-B — sample-scoped guard resolution"
+    branch_name_template: m2-b2-pre-b-sample-scope
+    role_framing:
+    notes: "Shipped #159 (merge 2a5ccf1). Guard takes sample_id; both identifiers raises rather than picking one. Lab and
+      sample paths share one _allows() helper so the unknown-resource rule cannot drift between them."
+    merged_at: '2026-08-31'
+    merge_sha: 2a5ccf1
+
+  - id: M2-B2-PRE-C
+    title: Reseed approved access requests into sample-scoped grants
+    short_description: |
+      `sample_access_grants` rows are a rung of the legacy ladder
+      (permissions.py:67) and §5 maps them explicitly: "approved access
+      request/grant -> a structural grant at Sample scope, source=direct,
+      time-bounded via the grant's conditions + context.now". reseed() does not
+      read that table — zero references — so at cutover every approved access
+      request silently stops granting access.
+      Issue one sample-scoped grant per live row, carrying the expiry as a
+      grant condition, and add the count to the pre-flight guard so an
+      operator sees how many are in flight before the migration runs.
+    phase: access_model_redesign
+    status: shipped
+    depends_on:
+      - M2-B1
+    blocked_by_external:
+    parallel_safe: false
+    parallel_safe_reason: "Authorization decision path, serialized (CLAUDE.md, Authorization-path serialization)."
+    effort_sessions: 1
+    primary_files:
+      - backend/backend/authz/reseed.py
+    test_files:
+      - tests/authz/test_reseed.py
+      - tests/authz/test_cutover_preflight.py
+    source_of_truth_views:
+      - docs/access_model.md
+    pr_title_template: "feat(authz): M2-B2-PRE-C — reseed per-sample access grants"
+    branch_name_template: m2-b2-pre-c-sample-grants
+    role_framing:
+    notes: "Shipped #160 (merge 8470010). Reseeds per-sample access from BOTH legacy sources (grants table + APPROVED requests
+      with no grant row). Expiry became an engine concept: grants gained not_after, Context gained now, and a time-bounded
+      grant with NO clock denies. Stored as a column, not a conditions key, since conditions mean equality and expiry is a
+      comparison. Exposed the real coupling hazard of a migration calling app code — not deleting reseed() but CHANGING ITS
+      SHAPE, which broke b2f47c1a9e30 on a fresh DB; fixed with an idempotent ALTER there plus c93e1f5a7b02 for already-migrated
+      databases."
+    merged_at: '2026-08-31'
+    merge_sha: 8470010 expiry is enforced."
+
+  - id: M2-B2
+    title: Sample-plane route guards (27 routes)
+    short_description: |
+      samples 6, files 6, imports 6, sample-access 4, ingest 3, wastewater 2.
+      Rewrite each route's in-route ad-hoc check (ownership, visibility,
+      director-or-admin) into a require_capability call at the scope the
+      endpoint-capability map declares authoritative.
+      This batch first because it is the only one the pre-cutover harness
+      actually covers: the visibility equivalence suite proves new ⊆ legacy
+      per row on PostgreSQL, and every legacy-only row is attributed to a
+      registered divergence class. Route-level tests are still required per
+      route — the harness covers the decision, not the wiring.
+    phase: access_model_redesign
+    status: shipped
+    depends_on:
+      - M2-B1
+      - M2-B2-PRE-A
+      - M2-B2-PRE-B
+      - M2-B2-PRE-C
+    blocked_by_external:
+    parallel_safe: false
+    parallel_safe_reason: "Auth-adjacent route rewrites; the authorization decision path serializes (CLAUDE.md)."
+    effort_sessions: 2
+    primary_files:
+      - backend/backend/routers/
+    test_files:
+      - tests/test_samples_router.py
+      - tests/test_files_router.py
+    source_of_truth_views:
+      - docs/endpoint_capability_map.md
+    pr_title_template: "feat(authz): M2-B2 — sample-plane route guards"
+    branch_name_template: m2-b2-sample-plane
+    role_framing:
+    notes: "Shipped 20 of the 27 rows. The other 7 are list endpoints and moved to M2-B7, which already owns that path: require_capability
+      resolves ONE resource scope, a list names none, and asking at the instance root would demand an instance-wide grant
+      and deny every ordinary member the whole endpoint — the same silent-removal failure the PRE tasks existed to prevent,
+      only louder. Guard now carries the row's attributes (principal.sample_resource) under LADDER_POLICIES on sample-scoped
+      calls; without that the PUBLIC / surveillance / ownership rungs evaluate against absent attributes, which reads as DENY.
+      access:request needed a NEW policy — it is in no preset and cannot be, since the requester is by definition not a member
+      of the lab they are asking. Two deliberate deviations recorded in the map: promote WIDENED (map gives sample:update,
+      held by lab_member_rw; legacy wanted a Director), and the raw_fastq Director check KEPT (no §4 verb names it; dropping
+      it would widen access to un-scrubbed reads). Sequenced first for its evidence, and it was the most blocked batch — PRE-A/B/C
+      cleared it 2026-08-31."
+    merged_at: '2026-09-01'
+    merge_sha: 8059bac
+
+  - id: M2-B3-PRE
+    title: pipeline:read into the presets, and a Project-scope resolver
+    short_description: |
+      B3 was found blocked on starting it 2026-09-01, the same way B2 was.
+      Two hard blockers and two document contradictions:
+        1. `pipeline:read` is in the §4 catalog but in NO preset. Wiring the
+           routes that need it would make them reachable by nobody — the exact
+           failure reseed.py's own comments record having happened twice.
+           (The B3 note saying M2 must "land the catalog entry" was stale:
+           §4 already has the verb. What was missing is a holder.)
+        2. The map decides launch and the run routes at PROJECT scope, but
+           principal.py resolves lab and sample only. Same shape as PRE-B,
+           one level down.
+        3. CONTRADICTION, resolved: the map gave run-status reads
+           `pipeline:run` while §4 defines `pipeline:read` as "the pipeline
+           zoo, the BYOP registry, and run status". §4 wins — watching a run
+           is not launching one, and `pipeline:run` sits only in lab_lead +
+           Bioinformatics User, so the map's reading would have removed run
+           visibility from every Lab Collaborator and Lab Reader for runs on
+           their own lab's samples.
+        4. CONTRADICTION, resolved: the map gave BYOP catalog reads
+           `pipeline:read` at Lab while byop.py says reads are "INTENTIONALLY
+           unscoped per design §9 (catalog browse)". The router wins — a
+           pipeline definition is not tenant data, and this is the same shape
+           as the sequencing-lab registry the map already calls AUTH-ONLY BY
+           DESIGN. BYOP mutations stay tenancy-guarded.
+      This entry ships 1 and 2 plus the map corrections for 3 and 4.
+    phase: access_model_redesign
+    status: shipped
+    depends_on:
+      - M2-B1
+    blocked_by_external:
+    parallel_safe: false
+    parallel_safe_reason: "Authorization decision path, serialized (CLAUDE.md, Authorization-path serialization)."
+    effort_sessions: 0.5
+    primary_files:
+      - backend/backend/authz/principal.py
+      - backend/backend/authz/reseed.py
+      - backend/backend/auth/guards.py
+    test_files:
+      - tests/test_permissions.py
+      - tests/authz/test_reseed.py
+    source_of_truth_views:
+      - docs/access_model.md
+      - docs/endpoint_capability_map.md
+    pr_title_template: "feat(authz): M2-B3-PRE — pipeline:read holders and Project-scope resolution"
+    branch_name_template: m2-b3-pipeline-plane
+    role_framing:
+    notes: "pipeline:read added to all three lab presets INCLUDING read-only, plus instance_administrator. Scoped at the member's
+      lab, which contains that lab's projects by ordinary containment, so it says nothing about another lab's runs. The guard's
+      'exactly one identifier' rule replaces the old 'not both' — three identifiers now, and the message names which were
+      passed."
+    merged_at: '2026-09-01'
+    merge_sha: 3a3dcc8
+
+  - id: M2-B3
+    title: Pipeline and BYOP route guards (16 routes)
+    short_description: |
+      byop 10, pipelines 6 (the two per-run-token callbacks are M2-B6, not
+      here). Uses pipeline:read, which M2 adds to the §4 catalog — the verb
+      does not exist yet, so this batch lands the catalog entry with its
+      first consumers.
+      Watch the launch path: pipelines/launch takes pipeline:run at PROJECT
+      scope, and today it performs in-route sample-access checks that must
+      become capability checks rather than being dropped. Rule 60's
+      launch_account override is a P0c stub whose audit row exists precisely
+      so this rewrite can decide whether to keep trusting the request body.
+    phase: access_model_redesign
+    status: shipped
+    depends_on:
+      - M2-B1
+    blocked_by_external:
+    parallel_safe: false
+    parallel_safe_reason: "Auth-adjacent route rewrites; the authorization decision path serializes (CLAUDE.md)."
+    effort_sessions: 1.5
+    primary_files:
+      - backend/backend/routers/pipelines.py
+      - backend/backend/routers/byop.py
+    test_files:
+      - tests/test_pipelines_router_api.py
+    source_of_truth_views:
+      - docs/endpoint_capability_map.md
+      - docs/access_model.md
+    pr_title_template: "feat(authz): M2-B3 — pipeline and BYOP route guards"
+    branch_name_template: m2-b3-pipeline-plane
+    role_framing:
+    notes: "Shipped 11 routes (7 BYOP mutations, launch, resume, 3 run-status reads). The original 16 became 11 in M2-B3-PRE:
+      three BYOP catalog reads are AUTH-ONLY BY DESIGN, and GET /pipelines/ is a B7-class list. Both PRE open questions were
+      answered by the schema rather than by judgement: owner_lab_id is nullable because sharing_scope admits private, so a
+      lab-less pipeline is a person's, governed by a registrant attribute-policy of the same shape sample ownership needed
+      in PRE-A. One real bug found and fixed in the batch: routing create_pipeline through the ownership rung made the lab
+      check vacuous (the caller is always the registrant at creation), so any user could register into any lab. A widening,
+      so it would not have failed closed. Pinned by a regression test. Second bug, found by the spec-axis review: the batch
+      justified a launch narrowing by citing §8.2 as putting pipeline:run in lab_lead + Bioinformatics User only. §8.2's Lab
+      Member (read-write) preset block lists pipeline:run outright. The claim came from reseed.py, which excluded it on a
+      misreading of §8.5's role-mapping prose — so code and prose agreed only because one was derived from the other. Corrected:
+      lab_member_rw now grants pipeline:run, BIOINFORMATICS_EXTRA is deleted, §8.5's phrasing is fixed, and Lab Collaborators
+      keep launch. Only read-only members lose it. Remaining narrowing, documented in the map: BYOP mutation on a lab-owned
+      pipeline takes pipeline:register_custom, so ordinary lab membership is no longer enough."
+    merged_at: '2026-09-01'
+    merge_sha: 7ab7bf5
+
+  - id: M2-B4
+    title: Submission and import-mapping route guards (21 routes)
+    short_description: |
+      submissions 16, import_mappings 5. Lands three new §4 verbs with their
+      first consumers: submission:prepare (pairs with the existing
+      submission:approve), import:read, import:manage.
+      submissions/{id}/generate builds the BioSample XML and optionally
+      copies files — heavier than the CRUD routes, but the authorization
+      question is identical, so it takes the same verb. The separation that
+      matters is prepare vs approve, and that boundary already exists.
+    phase: access_model_redesign
+    status: shipped
+    depends_on:
+      - M2-B1
+    blocked_by_external:
+    parallel_safe: false
+    parallel_safe_reason: "Auth-adjacent route rewrites; the authorization decision path serializes (CLAUDE.md)."
+    effort_sessions: 1.5
+    primary_files:
+      - backend/backend/routers/submissions.py
+      - backend/backend/routers/import_mappings.py
+    test_files:
+      - tests/test_submissions_router.py
+    source_of_truth_views:
+      - docs/endpoint_capability_map.md
+    pr_title_template: "feat(authz): M2-B4 — submission and import-mapping guards"
+    branch_name_template: m2-b4-submission-plane
+    role_framing:
+    notes: "Shipped 21 routes. The blocker was bigger than three verbs: SIX were in no preset (submission:prepare, import:read,
+      import:manage, lab:read, org:read, token:manage), and they came from the same event as the three earlier batches found
+      by hand — the M2 catalog review added eight verbs to §4 and nobody updated §8.2's preset blocks. Fixed the six AND the
+      mechanism: tests/authz/test_catalog_preset_coverage.py now checks catalog->preset (reachable by nobody), preset->catalog
+      (a typo is silent — the grant is issued and matches nothing), §8.2 <-> PRESET_GRANTS (the exact drift that caused B3's
+      pipeline:run bug), and that the deliberately-unheld allowlist does not rot. Eight verbs are legitimately unheld, each
+      with a written reason. prepare vs approve is a REAL NARROWING: the old check let a submission's own creator mark it
+      submitted, execute it and register accessions. Six routes now need a Lab Lead. The creator rung is subsumed, not dropped
+      — creating already required submission:prepare. /validate narrowed from a read check to prepare per the map. Import
+      mappings split the same way; a Lab Reader could previously rewrite a mapping config. The list moved onto B7's lab_list_clause,
+      dropping a platform-admin bypass and a membership subquery that could not see an org-scoped grant. The existing submission
+      suite stayed green throughout because the seeded admin is BOTH platform admin and Lab Director of lab 1 — a fixture
+      holding every capability cannot detect a split."
+    merged_at: '2026-09-01'
+    merge_sha: 3ad16ae
+
+  - id: M2-B5
+    title: Governance route guards (14 routes)
+    short_description: |
+      federation 3, labs 2, projects 2, profiles 2, tokens 2, users 2,
+      organizations 1. Lands lab:read, org:read and token:manage.
+      Two care points. tokens GET and DELETE are split routes: the self path
+      stays ungated (AUTH-ONLY BY DESIGN) and token:manage gates only
+      reaching another principal's tokens — do not gate the whole route.
+      The federation rows use peer-key auth, not a user JWT; leave that path
+      alone and rewrite only the capability half.
+    phase: access_model_redesign
+    status: shipped
+    depends_on:
+      - M2-B1
+    blocked_by_external:
+    parallel_safe: false
+    parallel_safe_reason: "Auth-adjacent route rewrites; the authorization decision path serializes (CLAUDE.md)."
+    effort_sessions: 1
+    primary_files:
+      - backend/backend/routers/
+    test_files:
+      - tests/test_tokens_router.py
+      - tests/test_labs_router.py
+    source_of_truth_views:
+      - docs/endpoint_capability_map.md
+    pr_title_template: "feat(authz): M2-B5 — governance route guards"
+    branch_name_template: m2-b5-governance
+    role_framing:
+    notes: "Shipped 13 of 14. Membership now ISSUES grants — the M2-B1 finding this entry named. Add, role-change and remove
+      all sync authz_capability_grants on the request's own connection, so the row and the access land in one transaction.
+      Delete-then-insert rather than a diff, scoped by source='reseed' so per-sample access grants (source='direct') survive;
+      pinned by a test. Split routes stayed split: tokens and users gate only the half reaching another principal, because
+      self is not a capability (§3.1's tree has no user level, §4.7). NOT converted: POST /federation/search. The map assigns
+      sample:read at INSTANCE scope and nobody holds it there — enforcing it would need an Instance Administrator to hold
+      blanket sample:read, which contradicts §8.2 head-on (the Surveillance Officer preset exists to narrow instance-wide
+      sample reading to surveillance_relevant rather than confer it wholesale). The act is 'query our peers on this deployment's
+      behalf', not 'read a sample here'; the right verb is §7/M4's call. Map row carries the question. GENERAL: 'held at lab
+      scope' is not 'held at instance scope', and that bit twice in two batches (B4's submissions list, this). The B4 catalog
+      guard does not catch it — it checks a verb is in SOME preset, not that anything holds it where a route asks. Closing
+      that means walking each route's declared scope, which is the endpoint map's job."
+    merged_at: '2026-09-01'
+    merge_sha: 2296650
+
+  - id: M2-B6
+    title: SERVICE-principal callbacks (2 routes)
+    short_description: |
+      pipelines/events and pipelines/{run_id}/results/{result_type}. Last,
+      because PrincipalKind.SERVICE has no route precedent — every other
+      guarded route resolves a HUMAN principal from a user JWT.
+      The per-run X-Pipeline-Token stays as AUTHENTICATION (hmac.compare_digest,
+      401, already tested both ways). What this batch adds is AUTHORIZATION: a
+      SERVICE principal holding pipeline:write_results at the run's project
+      scope. Today the token collapses the two, since holding it IS the
+      permission. Separating them is what makes the cryptWWDB
+      compute-without-read property structural (§4.6, §9.4) instead of a
+      consequence of how tokens are minted — a data_source_lab principal holds
+      pipeline:write_results and not sample:read_detail, and permit() is where
+      that becomes enforceable.
+    phase: access_model_redesign
+    status: shipped
+    depends_on:
+      - M2-B1
+    blocked_by_external:
+    parallel_safe: false
+    parallel_safe_reason: "New principal kind on the auth surface; the authorization decision path serializes (CLAUDE.md)."
+    effort_sessions: 1
+    primary_files:
+      - backend/backend/routers/pipelines.py
+      - backend/backend/authz/
+    test_files:
+      - tests/test_pipelines_router_api.py
+      - tests/test_pipelines_registration_api.py
+    source_of_truth_views:
+      - docs/access_model.md
+      - docs/endpoint_capability_map.md
+    pr_title_template: "feat(authz): M2-B6 — SERVICE-principal pipeline callbacks"
+    branch_name_template: m2-b6-service-principals
+    role_framing:
+    notes: "Token check untouched — authorization added beside it, and ordered after it so a bad token answers 401 (who are
+      you) rather than 403 (you may not), which would confirm the run exists and is writable to an unauthenticated caller.
+      The positive check CANNOT FAIL today and the code says so rather than pretending otherwise: the principal is built from
+      the same run the token authenticated against. The value is the chokepoint — at M4/M5 a data_source_lab peer with the
+      §8.4 preset reaches the same route and the answer differs without the route changing. The load-bearing half now is the
+      NEGATIVE one: the principal holds pipeline:write_results and nothing else, so permit() refuses it sample:read and sample:read_detail
+      on the samples its own run computes over, and refuses the enclosing lab and the instance root. pipeline_run_principal
+      RAISES on a run row with no project_id rather than rooting at the instance — the results route was not selecting that
+      column, and a fallback there would have handed a pipeline callback authority over the whole deployment."
+    merged_at: '2026-09-01'
+    merge_sha: cb6c872
+
+  - id: M2-B7
+    title: List endpoints onto visibility_sql_clause (cutover step (c))
+    short_description: |
+      Switch the sample list path from permissions.py's legacy
+      visibility_sql_clause to the M1 companion, using the scope expression
+      M2-PRE-2 landed (samples JOIN labs, scope derived not stored).
+      Highest-risk single change after M2-B1: a list that over-grants leaks
+      rows silently, with no error and no audit entry. The invariant to hold
+      is the one the preflight suite already asserts —
+      new_visible ⊆ legacy_visible for every persona — plus permit() and the
+      SQL fragment agreeing per row on PostgreSQL. Both tests exist; this
+      batch makes them describe production rather than a comparison harness.
+      Measure the list query afterwards: prefix LIKE over a computed
+      expression is a sequential scan, and an expression index is the fix if
+      it matters. Do not add one speculatively.
+    phase: access_model_redesign
+    status: shipped
+    depends_on:
+      - M2-B1
+      - M2-B2
+    blocked_by_external:
+    parallel_safe: false
+    parallel_safe_reason: "The list path is where an over-grant is silent; the authorization decision path serializes (CLAUDE.md)."
+    effort_sessions: 1
+    primary_files:
+      - backend/backend/routers/samples.py
+      - backend/backend/authz/visibility.py
+    test_files:
+      - tests/authz/test_cutover_preflight.py
+      - tests/test_samples_router.py
+    source_of_truth_views:
+      - docs/access_model.md
+      - docs/adr/0015-single-rooted-scope-uri.md
+    pr_title_template: "feat(authz): M2-B7 — list endpoints onto visibility_sql_clause"
+    branch_name_template: m2-b7-list-visibility
+    role_framing:
+    notes: "Shipped all 8 lists; permissions.py now has zero production callers. Order mattered: the equivalence harness ran
+      with policies=[] (grants only), which is a strict subset of what a deployed list shows — it would have stayed green
+      while production dropped every PUBLIC and DISCOVERABLE row. Pointed it at LADDER_POLICIES + SAMPLE_ATTRIBUTE_COLUMNS
+      BEFORE touching a router; the never-over-grants invariant held and the per-row test failed exactly where it should,
+      still asking permit() without the attributes half the fragment reads. Two scope levels added (lab_scope_sql, project_scope_sql)
+      because import sessions and pipeline runs are not sample-rooted; both list builders pass NO policies since every LADDER_POLICIES
+      entry reads a sample attribute. is_canonical_scope_sql re-derives each candidate rather than loosening its regex. Kept
+      two ownership rungs (requests you filed, runs you launched — no grant expresses those and legacy admitted them); removed
+      two is_platform_admin bypasses and one is_lab_director subquery. PERF, measured as the entry asked: at 3000 samples
+      the new fragment costs 113 / 5.3ms, legacy costs 3923 / 7.1ms. Both seq-scan; legacy also ran four correlated EXISTS.
+      No index added — the new path is faster, so an index would have been speculative."
+    merged_at: '2026-09-01'
+    merge_sha: b19a398
+
+  - id: M2
+    title: Catch-up reseed (cutover part a — the legacy drop is M2-DROP)
+    short_description: |
+      Shipped the reversible half of the cutover: migration a1c7d94e6b28 runs
+      the M2-PRE-4 pre-flight guard, logs every count including the zeros, and
+      re-runs the idempotent reseed to pick up roles granted through legacy
+      paths after the additive migration (b2f47c1a9e30). Also deleted
+      backend/permissions.py — dead in production since M2-B7 — and the
+      committed-but-unreachable orphan backend/alembic/versions/
+      20260829_reseed_roles_to_grants.py, which carried DROP COLUMN statements
+      in a directory alembic.ini never pointed at.
+      The irreversible half — dropping users.is_platform_admin,
+      users.is_data_analyst, and the PermissionGroups enum — did NOT ship and
+      is now M2-DROP. This entry assumed "nothing reads the legacy columns by
+      this point"; that premise was false. Eleven production modules still
+      read them. See M2-DROP for the inventory.
+    phase: access_model_redesign
+    status: shipped
     depends_on:
       - M0
       - M1
       - ACCESS-GUARD-MAP
       - ACCESS-SEED
+      - M2-PRE-1
+      - M2-PRE-2
+      - M2-PRE-3
+      - M2-PRE-4
+      - M2-B1
+      - M2-B2
+      - M2-B3
+      - M2-B4
+      - M2-B5
+      - M2-B6
+      - M2-B7
     blocked_by_external:
     parallel_safe: false
-    parallel_safe_reason: "Irreversible cutover touching auth, migrations, route guards, and the list path. Manual flow only;
-      never parallel-batch."
-    effort_sessions: 3
+    parallel_safe_reason: "Authorization decision path; serializes per CLAUDE.md."
+    effort_sessions: 1
     primary_files:
+      - backend/db/migrations/versions/a1c7d94e6b28_m2_cutover_catchup_reseed.py
       - backend/backend/permissions.py
-      - backend/backend/auth/guards.py
-      - backend/backend/authz/
     test_files:
       - tests/authz/test_cutover.py
     source_of_truth_views:
       - docs/access_model.md
-    pr_title_template:
+    pr_title_template: "feat(authz): M2 — catch-up reseed and legacy-ladder removal"
     pr_title_function:
     branch_name_template: m2-cutover
     role_framing:
-    notes: "IRREVERSIBLE. access_model.md §10 (greenfield, no shim) + §11.1. Verify M0/M1 proven before starting — the project-wide
-      'verify before operating' discipline applied to the cutover."
+    notes: "Scope split at session start, on the finding that the entry's central premise was wrong: it called the column
+      drop 'bookkeeping that happens to be permanent' because B1..B7 had moved every guard onto permit(). They moved every
+      GUARD, not every READER. tenancy.py's require_org_access, five in-route checks in samples.py, deletion.py's self-approve
+      carve-out, federation/deletion_propagation.py's admin-notification lookup, and the identity plumbing in guards.py /
+      auth.py / users.py / imports.py all still read the flags. Dropping the columns would 500 those paths, and several belong
+      to M3 by the endpoint map's own assignment — M3 depends_on M2, so the original plan inverted its own dependency. Part
+      (a) shipped alone; the drop is M2-DROP, blocked on M3. Two findings surfaced while verifying and were split out rather
+      than absorbed: M2-SAMPLE-ACCESS-SYNC (approving a sample-access request issues no capability grant, so per-sample access
+      only materializes at reseed) and the raw_fastq verb the endpoint map's Residue section still awaits."
+    merged_at: '2026-08-31'
+    merge_sha: 81f3a55
 
+  - id: M2-DROP-PRE
+    title: Convert every legacy-column reader (reversible half of M2-DROP)
+    short_description: |
+      Everything M2-DROP needs that is NOT the irreversible ALTER TABLE, so
+      the drop itself becomes small and boring. Split at the maintainer's
+      direction after the inventory came back larger than M2-DROP assumed:
+      12 production sites, 41 test files carrying 138 references, and 7 sites
+      needing §4 catalog verbs that do not exist.
+      Slice 1 SHIPPED: deletion:self_approve. §6.2-1b's escape was a
+      request-body flag the route passed straight into the policy condition,
+      so any principal could lift the separation-of-duties DENY. Not
+      exploitable end to end — deletion.py re-checked is_platform_admin — but
+      that check was itself on the removal list, so the drop would have opened
+      the hole. Now a capability held only by instance_administrator, with the
+      route ANDing what was asked against what is held, and deletion.py's
+      legacy check removed (reader 2 of 12 retired).
+      Slice 2 SHIPPED: the five samples.py sites and their verbs. The design
+      question the split was made for — a read verb whose natural form excludes
+      instance admins while the legacy flag admitted them — resolved on one
+      discriminator: an instance admin KEEPS a route that reads or executes a
+      governance RECORD and LOSES one that returns sample CONTENT or makes a
+      consent decision. So deletion:read_report, deletion:reverse_tombstone and
+      deletion:vacuum go to the admin; sample:read_unscrubbed and
+      submission:retract do not. samples.py now reads neither legacy column
+      (readers 3-7 of 12 retired). The existing suite could not have caught
+      either narrowing: the baseline seeds admin@example.org as platform admin
+      AND Lab Director of lab 1, so every "as admin" test holds both preset
+      grant sets and all of them stayed green — see
+      tests/test_deletion_plane_capabilities.py, which builds single-shape
+      principals for that reason.
+      Slice 3 SHIPPED: tenancy.py DELETED rather than converted. The planned
+      conversion (require_org_access's admin bypass falling out of ADR 0015
+      containment) was right about the mechanism and wrong about the premise:
+      require_org_access had no production callers, get_org_context had none,
+      and nothing read the request.state.org_context the middleware set — at
+      one get_current_user DB lookup per request. Org isolation is structural
+      (grants rooted at instance://self/org/N, _scope_contains matching at a
+      segment boundary), and byop.py, the "mandatory IDOR case", had already
+      converted to permits() under M2-B3 without ever calling the wall. Rule 70:
+      building the half with no call site reads as done and no test can exercise
+      it. access_model.md §5.4 claimed the wall was "a DENY policy keyed on
+      cross-org access; no grant punches through it" — no such policy exists,
+      and an Instance-scoped grant punches through by design; §2/§3.2 carried
+      the same claim twice more. All three corrected (readers 8-10 of 31
+      retired at zero conversion cost).
+      Slice 4 SHIPPED: federation/deletion_propagation.py's admin-notification
+      lookup. New authz/principal.py::capability_holders() is the reverse of
+      load_principal — "who holds this" rather than "what does this principal
+      hold" — with _scope_contains transcribed to SQL so containment runs the
+      same direction (grant contains resource, never the reverse). Excludes
+      expired grants, inactive users, peer principals (the users join), and
+      CONDITIONAL grants: a condition is a request fact and a scheduled job has
+      no request, so the engine's refuse-what-you-cannot-evaluate rule applies.
+      Documented NOT a decision function — it sees grants only and is blind to
+      DENY policies, so authorizing off it would rebuild the second decision
+      point §2.1 forbids. The alert now selects federation:configure_peer at
+      instance scope, i.e. the people who can act on the peer (suspension
+      writes federated_instances.federation_enabled, a configure-peer act)
+      rather than admins as a class; logs a warning when that set is empty,
+      since the audit row survives but the push is silently lost otherwise.
+      The old test asserted on u.is_platform_admin and would have stayed green
+      after the reader vanished; replaced, plus a narrowing pair (grant without
+      flag IS alerted, flag without grant is NOT) that the seeded
+      both-at-once admin could never have caught.
+      Slice 8 SHIPPED — M2-DROP-PRE IS COMPLETE. dev-login was the last
+      role-ASSIGNMENT site. Its `role` param keeps the six APGAP names: those
+      are Critical Rule 1's sacred values, they name permission_groups rows,
+      and they are the vocabulary the E-1 UAT matrix drives — none of that
+      ends at M2-DROP. What ends is the boolean pair they were stored as. New
+      INSTANCE_ROLE_PRESETS bridges the two live vocabularies (the twin of
+      MEMBERSHIP_PRESETS for the roles that are not lab-scoped) and OUTLIVES
+      the drop, unlike INSTANCE_PRESET_FLAGS. _DEV_LOGIN_GLOBAL_ROLES is
+      derived from it so a role can never be accepted without a preset to
+      issue. The response reports instance_preset beside membership — the two
+      halves of what a session may do, at the two scopes that can carry it —
+      and `user` is identity only. Removing the response booleans made the
+      SELECT/RETURNING columns and the dict mutation dead, so those went too
+      (slice 5's shape, one file later). tests/e2e/scripts/
+      register_user_lab_project.py follows.
+
+      NO PRODUCTION READER OF EITHER COLUMN REMAINS. What is left in
+      backend/backend is writes and one SELECT feeding a write: auth.py and
+      users.py write the columns so reseed() stays consistent, and reseed.py
+      reads them because translating them is its job. That is precisely
+      M2-DROP's inventory and nothing else.
+
+      Verified by red-green at every slice, not by reading: slice 8 stubs out
+      sync_instance_preset and four tests go red, including one asserting the
+      response cannot name a role the principal does not hold.
+
+      HANDOFF TO M2-DROP, corrected against the tree at 2026-09-02:
+        - DELETE, in one commit with the column drop: the UPDATE/INSERT in
+          auth.py (~462-499), the two updates[] assignments in users.py (~208),
+          INSTANCE_PRESET_FLAGS and sync_instance_grants. NOT instance_preset():
+          this entry was wrong about that. reseed() still calls it and still
+          runs from migrations earlier in the chain than the drop, so every
+          fresh install replays its precedence. Corrected 2026-09-02.
+          INSTANCE_PRESETS must survive — inline it as a literal frozenset in
+          the same commit, since it is currently DERIVED from the map being
+          deleted and forgetting fails at import (which is the intent).
+        - reseed() becomes historical-only. Two migrations call it; both run
+          before any drop on a fresh DB, and after the drop it can never run
+          again. Say so in its docstring or someone will discover it.
+        - 46 test files reference the flags. NOT all convertible:
+          tests/authz/preflight.py's legacy_ladder and
+          legacy_visibility_sql_clause read them deliberately as the frozen
+          pre-M2 oracle the divergence registry compares against, and build
+          them from the Persona dataclass rather than a DB SELECT — so they
+          survive the drop untouched. Converting them destroys the comparison
+          that makes the registry mean anything.
+        - Most of the rest are INSERT INTO users (... is_platform_admin ...)
+          fixtures, which are mechanical.
+
+      reseed() reads the columns BY DESIGN and two migrations call it. Ordering
+      holds on a fresh DB (both run before any drop), but after the drop
+      reseed() can never run again — it becomes historical-only, and that
+      should be stated in its docstring rather than discovered.
+    phase: access_model_redesign
+    status: shipped
+    depends_on:
+      - M2
+      - M3
+    blocked_by_external:
+    parallel_safe: false
+    parallel_safe_reason: "Authorization decision path; serializes per CLAUDE.md."
+    effort_sessions: 3
+    primary_files:
+      - backend/backend/routers/samples.py
+      - backend/backend/routers/users.py
+      - backend/backend/routers/auth.py
+      - backend/backend/auth/guards.py
+    test_files:
+      - tests/authz/test_sovereignty_policies.py
+    source_of_truth_views:
+      - docs/access_model.md
+      - docs/endpoint_capability_map.md
+    pr_title_template: "feat(authz): M2-DROP-PRE — convert legacy-column readers"
+    pr_title_function:
+    branch_name_template: m2-drop-pre
+    role_framing:
+    notes: "SLICE 1 ONLY shipped (merge 19e4da0, deletion:self_approve). jackpot-finish matched the branch name
+      m2-drop-pre to this entry and marked the whole thing shipped, which flipped M2-DROP to open — i.e. the
+      backlog briefly said the irreversible column drop was ready to start while 31 legacy-column readers were
+      still live. Reopened by hand. The helper keys on branch name, so a multi-slice entry must not reuse its own
+      id as a branch name; name future slices m2-drop-pre-slice2 or similar.
+      Concern 2 step 1 SHIPPED (branch fix/instance-grant-sync): sync_instance_grants() is the Instance-scope twin
+      of M2-B5's sync_membership_grants(), wired into PATCH /users/{id} and both halves of POST /auth/dev-login.
+      Writing users.is_platform_admin had changed nobody's authorization since M2-B1 while arming the next reseed
+      to make it real later. M2-B5 had also missed the identical lab_membership INSERT in auth.py, so dev-login
+      lab roles granted nothing either; fixed in the same pass. Step 2 (the flags become a preset name) belongs to
+      M2-DROP itself, and is mechanical now that grant issuance is the thing that happens.
+      Slice 2's review turned up an M3 defect on a route it did not touch: request-deletion's comment claimed
+      ownership survived as a LADDER_POLICIES owner_id rung and no such rung existed, so an owner holding no grant
+      over the sample could not request deletion of their own row. Fixed separately (branch
+      fix/deletion-request-ownership-rung), with §5.3 gaining an enumerated ownership roster that
+      tests/authz/test_ownership_rung.py holds the policy list to in both directions.
+      Slice 2 also raised the endpoint-map row count 128 -> 132: the four deletion-plane routes existed only as
+      prose in a Residue section, so the preflight parser never counted them. A route described but uncounted is
+      the same drift as a route counted but undescribed, and only one of the two had a guard.
+      Adding §4 verbs means editing access_model.md §4 AND the §8.2 preset blocks together — test_reseed_presets_match_the_documented_ones
+      enforces the pair, and it correctly rejected an M3 draft that changed only the code. Every preset change also needs
+      a reseed migration: PRESET_GRANTS is a template and the grants are rows, so a preset edit reaches nobody until a reseed
+      runs."
+
+    merged_at:
+    merge_sha:
+  - id: M2-DROP
+    title: Drop the legacy role columns (IRREVERSIBLE — manual flow only)
+    short_description: |
+      SHIPPED 2026-09-02. Dropped users.is_platform_admin and
+      users.is_data_analyst, in migration d51c4361877d, after PR #201 retired
+      every live writer.
+
+      It did NOT drop the PermissionGroups enum, which this description used
+      to advertise. That is not an enum — permission_groups is a table,
+      lab_membership FKs to it, and it is the live input to
+      sync_membership_grants and dev-login's lab roles — and access_model.md
+      §10.1's instruction to delete it contradicts Critical Rule 1, which
+      declares those six names sacred. Deferred to B-PERMGROUPS-DROP, whose
+      first question is whether §10.1 is simply stale: it predates M2-B5,
+      which made membership grants DERIVE from the table it says to delete.
+
+      The per-site inventory this entry used to carry is preserved below as
+      HISTORY only. It was written at the M2 session and was stale in both
+      directions by the time the work ran — the accurate account is
+      M2-DROP-PRE's HANDOFF section plus PRs #201 and #202.
+
+      HISTORY (as of the M2 session, superseded):
+        The irreversible half carved out of M2. Drop users.is_platform_admin,
+        users.is_data_analyst, and the PermissionGroups enum — but only after
+        every remaining reader is off them. Inventory as of the M2 session:
+
+          DECISION-PATH (must become permit()/permits() calls):
+            - tenancy.py:131        RETIRED by M2-DROP-PRE slice 3 — the module
+                                    was deleted, not converted. No route ever
+                                    called require_org_access; org isolation is
+                                    ADR 0015 scope containment and always was.
+            - deletion.py:184       platform-admin self-approve carve-out (M3)
+            - samples.py:582        raw_fastq Lab-Director restriction — still
+                                    awaiting a §4 verb; endpoint map Residue
+            - samples.py:643        _require_lab_tie (M3)
+            - samples.py:652        _require_approval_authority (M3)
+            - samples.py:717        reverse-tombstone admin-only (M3)
+            - samples.py:734        vacuum-now admin-only (M3)
+
+          LOOKUP (rewrite as a grant query):
+            - federation/deletion_propagation.py:358 — RETIRED by M2-DROP-PRE
+              slice 4. Now capability_holders("federation:configure_peer",
+              instance scope); the verb, not the preset, because the alert is
+              about a peer the recipient may need to suspend.
+
+          IDENTITY PLUMBING (stop selecting / stop writing):
+            - guards.py:41,42,72    mock-user fallback dict + the user SELECT
+            - imports.py:813        user SELECT
+            - auth.py:446-485,590   dev-login writes both columns; /me returns
+                                    them
+            - users.py:15,16,24,25  PATCH exposes both as admin-editable —
+                                    role ASSIGNMENT, which must become grant
+                                    issuance the way M2-B5 did for membership
+
+        ORDER: convert every reader -> verify the full suite -> drop last, so a
+        failure earlier leaves the old model intact. Run the catch-up reseed
+        (a1c7d94e6b28) again immediately before the drop if any legacy write
+        path is still live at that point.
+    phase: access_model_redesign
+    status: shipped
+    depends_on:
+      - M2
+      - M3
+      - M2-DROP-PRE
+    blocked_by_external:
+    parallel_safe: false
+    parallel_safe_reason: "Irreversible, on the authorization decision path. Manual flow only; serializes per CLAUDE.md."
+    effort_sessions: 2
+    primary_files:
+      - backend/backend/routers/samples.py
+      - backend/backend/routers/users.py
+      - backend/backend/routers/auth.py
+      - backend/backend/auth/guards.py
+    test_files:
+      - tests/authz/test_cutover.py
+    source_of_truth_views:
+      - docs/access_model.md
+      - docs/endpoint_capability_map.md
+    pr_title_template: "feat(authz): M2-DROP — remove the legacy role columns"
+    pr_title_function:
+    branch_name_template: m2-drop-legacy-columns
+    role_framing:
+    notes: "SHIPPED 2026-09-02 as PRs #201 (retire the writers) and #202 (the
+      migration). Split deliberately: this entry's own ORDER line says convert
+      every reader, verify the full suite, drop last, and doing the migration
+      first turned 177 tests red at once — where a real regression and fixture
+      noise are indistinguishable. #201 is green against the schema #202
+      removes, verified on a fresh container with a probe confirming the
+      columns present, so the drop flips one thing and reverting it leaves a
+      correct tree.
+
+      'shipped' here means MERGED, per this repo's convention: P0b — also a
+      schema migration — is shipped and dated by its merge, check 6 of
+      scripts/check_backlog.py treats a merged commit as shipped-evidence, and
+      blocked_by_external (null here) is the field that exists for work
+      gated on something outside the repo. APPLYING the migration is a
+      separate operational step, which is what 'manual flow only' in the title
+      warns about: note the PITR timestamp (Critical Rule 35) and run alembic
+      upgrade head against a restored copy before staging.
+
+      Scope: the two boolean columns only. permission_groups is NOT dropped —
+      see B-PERMGROUPS-DROP for why the §10.1 instruction to delete it
+      conflicts with Critical Rule 1 and may simply be stale.
+
+      Was UNBLOCKED 2026-09-02: M2-DROP-PRE is complete through slice 8 (dev-login),
+      and no production reader of either column remains. Read M2-DROP-PRE's HANDOFF
+      section for this item's real inventory — the per-site list in short_description
+      predates slices 3-8 and is stale in both directions. Was blocked on M3 rather
+      than merely sequenced after it: the endpoint capability map assigns the deletion-lifecycle
+      checks (samples.py 643/652/717/734, deletion.py:184) to M3's sovereignty policies, and M3 depends_on M2. Dropping the
+      columns before M3 converts those checks would break them. The M2 entry originally contained this work on the premise
+      that nothing read the columns; see M2's notes for why that was wrong. access_model.md §10 (greenfield, no shim) still
+      governs — no compatibility shim, no dual-read period."
+
+  - id: M2-SAMPLE-ACCESS-SYNC
+    title: Approving a sample-access request must issue a capability grant
+    short_description: |
+      POST /sample-access/requests/{id}/approve inserts a sample_access_grants
+      row but issues nothing into authz_capability_grants. Since M2-B2 the
+      detail route decides via require_capability("sample:read_detail",
+      sample_id=...), and neither authz/policy.py nor authz/visibility.py has
+      an approved-request rung — the ONLY translation from
+      sample_access_grants to a capability grant is reseed._sample_access_rows,
+      which runs at migration time.
+      So an approved requester gains nothing until someone runs a reseed. This
+      is the same class of bug M2-B5 fixed on the membership side with
+      sync_membership_grants(); sample access has no twin. Fails CLOSED
+      (denies access that should be allowed), so it is a functionality gap
+      rather than a security hole — which is also why no test caught it: the
+      existing tests called the legacy can_access_sample() helper, which read
+      the table directly.
+      Fix: a sync_sample_access_grants(conn, *, requester_id, sample_id) beside
+      sync_membership_grants, called on approve and on revoke, honouring
+      access_expires_at as not_after. Then point tests/test_sample_access_
+      router_api.py's _can_read_detail helper at the route instead of running a
+      full reseed.
+    phase: access_model_redesign
+    status: shipped
+    depends_on:
+      - M2
+    blocked_by_external:
+    parallel_safe: false
+    parallel_safe_reason: "Authorization decision path; serializes per CLAUDE.md."
+    effort_sessions: 1
+    primary_files:
+      - backend/backend/authz/reseed.py
+      - backend/backend/routers/sample_access.py
+    test_files:
+      - tests/test_sample_access_router_api.py
+    source_of_truth_views:
+      - docs/access_model.md
+    pr_title_template: "fix(authz): issue capability grants on sample-access approval"
+    pr_title_function:
+    branch_name_template: sample-access-grant-sync
+    role_framing:
+    notes: "Shipped. sync_sample_access_grants(conn, *, sample_id, requester_id=None) sits beside sync_membership_grants and
+      reconciles state rather than reacting to events — callers say 'this sample's access changed' and the grants are made
+      to agree, so no caller has to know whether it granted, revoked, expired or restored. Wired into all five write paths:
+      approve endpoint, the auto-approve and expire-grants jobs, and the deletion lifecycle's bulk revoke (seal) and un-revoke
+      (reverse-tombstone). The shared _SAMPLE_ACCESS_SQL gained optional :sample_id/:requester_id filters rather than growing
+      a second query, so the live sync and the cutover reseed cannot drift on what 'currently has access' means. Proven RED
+      first by deleting the reseed bridge from _can_read_detail in tests/test_sample_access_router_api.py: exactly two tests
+      failed (approval grants nothing, an active grant conveys nothing) while the negative tests passed for the wrong reason
+      — the signature of a fail-closed gap. New tests/authz/test_sample_access_sync.py (10) covers the deletion lifecycle,
+      source and scope isolation from membership grants, idempotence, and the conn=None call shape."
+    merged_at: '2026-09-01'
+    merge_sha: a28645b
   - id: M3
     title: Sovereignty policies (deletion-lifecycle guards + Scenario-T preset)
     short_description: |
@@ -1983,7 +3025,7 @@ sessions:
       sovereignty_mode; off-deployments unaffected. Resolve AM-OPEN-1 (designee
       representation) before finalizing.
     phase: access_model_redesign
-    status: blocked
+    status: shipped
     depends_on:
       - M2
     blocked_by_external:
@@ -2001,8 +3043,155 @@ sessions:
     pr_title_function:
     branch_name_template: m3-sovereignty-policies
     role_framing:
-    notes: "Depends on AM-OPEN-1 resolution for the Tribal-authority preset. access_model.md §6 + §8.3."
+    notes: "Shipped the implementable part. §6.2 describes three policies; only one survived contact with the code. (a) deletion.separation_of_duties
+      — SHIPPED as a real DENY policy: its routes resolve a Sample resource, so a per-row DENY is the right shape. Required
+      extending the condition language with {'not': v}, because the doc's rule is 'unless a Platform Admin explicitly self-approves'
+      and equality-only conditions make absent != False, so the DENY would have silently failed OPEN for every caller that
+      never set the flag. (b) deletion.no_publish_while_deleting — NOT a policy, deliberately. submission:approve is checked
+      once at Lab scope while the rule is per-sample across the submission's whole set; submissions.py:497 already enforces
+      it correctly as a set-level check returning a 422 that names each blocked sample. (c) sovereignty.no_federate_deleting
+      — deferred to M4. federation:push exists nowhere in the codebase outside an engine.py comment; the capability arrives
+      with Layer 2 sharing agreements, and a policy keyed to a verb no route checks is untestable decoration. Filed as M3-FEDERATION-DELETION-GUARD.
+      Routes converted: request-deletion, approve-deletion, cancel-deletion. Platform admins lose them by design — §8.2's
+      note says 'Instance Administrator is operational, not a consent authority'. A draft added the two verbs to the preset
+      and test_reseed_presets_match_the_documented_ones rejected it; the preset change and its migration were reverted. The
+      Scenario-T preset stays deferred per §6.4's own instruction (M3-SCENARIO-T)."
+    merged_at: '2026-09-01'
+    merge_sha: 6c1a02d
+  - id: M4-B
+    title: Federation Layer 2 — wire agreement grants into the decision path
+    short_description: |
+      The half of M4 that changes behavior. M4-A landed the schema, the
+      projection into authz_capability_grants, and load_peer_principal, all
+      dark. This turns them on:
+        (a) L1 query — the federated samples path filters by what the PEER
+            principal can see, via the same visibility_sql_clause companion
+            local lists use (§7.4). Today that path is PUBLIC/DISCOVERABLE-only
+            and consults no agreement, so this is the change that makes
+            per-peer differential access real — and the one where an
+            over-grant leaks across an instance boundary.
+        (b) L2 push — FederationPushJob.is_qualifying_sample consults permit()
+            for federation:push at the sample's scope, with the three
+            qualification gates as grant conditions (§7.4). is_qualifying_sample
+            is a pure function today and push_to_hub's IO is still stubbed, so
+            the decision half can land and be tested without the IO half.
+      (b) is what gives M3-FEDERATION-DELETION-GUARD a call site.
+      Pin AM-OPEN-2 (org floor vs peer floor vs stricter-of-two) when L2 push
+      IO is wired, per §7.6-1 — not required for the decision wiring itself.
+    phase: access_model_redesign
+    status: shipped
+    depends_on:
+      - M4
+    blocked_by_external:
+    parallel_safe: false
+    parallel_safe_reason: "Authorization decision path, and federation-visibility besides; serializes per CLAUDE.md."
+    effort_sessions: 2
+    primary_files:
+      - backend/backend/routers/federation.py
+      - backend/backend/federation/push.py
+      - backend/backend/authz/visibility.py
+    test_files:
+      - tests/authz/test_sharing_agreements.py
+    source_of_truth_views:
+      - docs/access_model.md
+    pr_title_template: "feat(authz): M4-B — agreement grants decide federated visibility"
+    pr_title_function:
+    branch_name_template: m4b-federation-visibility
+    role_framing:
+    notes: "Shipped both halves. The L1 inbound path was not merely unwired — it did not exist: client._query_one called GET
+      /api/v1/samples/ on the partner, which authenticates a JWT cookie and nothing else, so a real federated query would
+      have 401'd. No test caught it because every federation-key test hit /api/v1/federation/* and the client tests mocked
+      the partner. Added POST /api/v1/federation/query beside the two routes that already authenticate peers, rather than
+      a second auth mode on the most-read endpoint in the system; §7.4's actual requirement — that federated visibility be
+      the same DECISION as local visibility — is preserved, since the filtering is sample_list_clause. Repointed client._query_one
+      and 27 respx mocks that had encoded the old target. L2: may_push_sample() composes permit() for federation:push with
+      the three gates; is_qualifying_sample keeps its own function and meaning. Not yet reached by push_to_hub, whose IO is
+      still stubbed — it is the decision function that stub will call. Resource predicates gained {'not': v} (and _attr_sql
+      gained IS DISTINCT FROM, not <>, so a NULL column cannot silently drop a DENY term). AM-OPEN-2 still unpinned; it belongs
+      with push IO."
+    merged_at: '2026-09-01'
+    merge_sha: '2223890'
+  - id: M3-SCENARIO-T
+    title: Scenario-T Tribal Authority Designee preset (blocked on AM-OPEN-1)
+    short_description: |
+      The sovereignty-specific half of M3, carved out because access_model.md
+      §6.4 says not to build it yet: "Until a Scenario T pilot exists, this
+      stays an explicit open question rather than an invented mechanism."
+      Needs: the sovereignty.tribal_authority_deletion ALLOW policy (§6.2-1),
+      the Scenario-T preset (§8.3) with its separation-of-duties carve-out —
+      the designee MAY self-approve, unlike the general rule in §6.2-1b — and
+      whatever represents "their authority" as a scope.
+      AM-OPEN-1 is the blocker and its open part is empirical, not analytic:
+      whether a Tribal authority maps cleanly onto an Org, or spans several,
+      or covers a subset of one org's samples by consent cohort. §6.4's
+      recommendation is a HUMAN principal with the preset at Org scope, to be
+      confirmed against a real deployment rather than guessed.
+    phase: access_model_redesign
+    status: blocked
+    depends_on:
+      - M3
+      - AM-OPEN-1
+    blocked_by_external: "Needs a real Scenario T deployment to confirm the authority-to-scope mapping."
+    parallel_safe: false
+    parallel_safe_reason: "Authz policy surface; serializes per CLAUDE.md."
+    effort_sessions: 1
+    primary_files:
+      - backend/backend/authz/policy.py
+      - backend/backend/authz/reseed.py
+    test_files:
+      - tests/authz/test_sovereignty_policies.py
+    source_of_truth_views:
+      - docs/access_model.md
+    pr_title_template: "feat(authz): M3-SCENARIO-T — Tribal Authority Designee preset"
+    pr_title_function:
+    branch_name_template: m3-scenario-t-preset
+    role_framing:
+    notes: "Carved out of M3 at the maintainer's direction, following access_model.md §6.4's explicit instruction not to invent
+      the mechanism ahead of a pilot. access_model.md §6.2-1 + §8.3."
 
+  - id: M3-FEDERATION-DELETION-GUARD
+    title: sovereignty.no_federate_deleting — DENY federation push on non-ACTIVE samples
+    short_description: |
+      §6.2-3's DENY: a sample in the deletion lifecycle must never leave via
+      federation, regardless of any sharing agreement. Deferred out of M3
+      because the capability it keys on does not exist — federation:push
+      appears nowhere in the codebase except an example string in an
+      engine.py comment, no route checks it, and backend/federation/ has no
+      deletion_status guard. M4 (Layer 2 sharing agreements) introduces the
+      verb and the PEER_INSTANCE grant; this policy lands with it, when there
+      is a call site to test it against.
+      Shape when it lands: DENY on federation:push where deletion_status is
+      not ACTIVE, conditioned on request_origin == FEDERATION. Note the
+      guards.py DENY invariant M3 established — the policy may only read
+      attributes SAMPLE_ATTRIBUTE_COLUMNS loads, and may only key on a
+      capability whose routes resolve a Sample resource.
+    phase: access_model_redesign
+    status: shipped
+    depends_on:
+      - M3
+      - M4-B
+    blocked_by_external:
+    parallel_safe: false
+    parallel_safe_reason: "Authz policy surface; serializes per CLAUDE.md."
+    effort_sessions: 1
+    primary_files:
+      - backend/backend/authz/policy.py
+    test_files:
+      - tests/authz/test_sovereignty_policies.py
+    source_of_truth_views:
+      - docs/access_model.md
+    pr_title_template: "feat(authz): sovereignty.no_federate_deleting"
+    pr_title_function:
+    branch_name_template: sovereignty-no-federate-deleting
+    role_framing:
+    notes: "Shipped on M4-B's call site. sovereignty.no_federate_deleting DENYs federation:push where deletion_status is not
+      ACTIVE, beating a valid sharing agreement by deny-precedence — §5.4's unconditionally-unoverridable property made concrete.
+      Absent deletion_status reads as not-ACTIVE and therefore DENIES: fail-closed is the safe direction for an export, and
+      is exactly why the same {'not': v} form would be catastrophic on a Lab-scoped capability like submission:approve (there
+      absence would deny every approval). Tested through may_push_sample, not permit() alone — asserting against the engine
+      would prove nothing about whether any code path consults the policy, which is why M3 deferred it in the first place."
+    merged_at: '2026-09-01'
+    merge_sha: 2223890
   - id: M4
     title: Federation Layer 2 — sharing_agreements table + agreement-sourced grants
     short_description: |
@@ -2016,7 +3205,7 @@ sessions:
       to find. Pin AM-OPEN-2 (the min_sharing_level floor composition) when L2
       push IO is wired. Sequences with or just after P0c.
     phase: access_model_redesign
-    status: blocked
+    status: shipped
     depends_on:
       - M2
     blocked_by_external:
@@ -2034,8 +3223,19 @@ sessions:
     pr_title_function:
     branch_name_template: m4-sharing-agreements
     role_framing:
-    notes: "Net-new sharing_agreements schema. Carries AM-OPEN-2. access_model.md §7.3 + §7.7."
-
+    notes: "Shipped M4-A only, the dark half. sharing_agreements + sharing_agreement_grants (migration f9c3e60b7d18, hand-written,
+      no ORM), sync_agreement_grants() projecting them into authz_capability_grants with source='agreement', and load_peer_principal().
+      Nothing on a request path calls any of it — same staging M0 used for the engine and M2's additive migration used for
+      the reseed, so the behavior-changing step lands alone. Two tables rather than a JSONB grants blob: the grants have the
+      same shape as every other grant in the system, so the sync is a projection rather than a JSON parse whose schema drifts.
+      Reconciles per PEER, not per agreement — a peer may hold several and 'what does this peer hold' is the question the
+      decision path asks; deactivating one agreement must withdraw exactly its grants. Deferred to M4-B: L1 federated visibility
+      onto visibility_sql_clause with a peer principal (the piece that changes what peers can see, today PUBLIC/DISCOVERABLE-only),
+      and is_qualifying_sample consulting permit() for federation:push — which is what gives M3-FEDERATION-DELETION-GUARD
+      a call site. AM-OPEN-2 (the min_sharing_level floor composition) is still unpinned and belongs with L2 push IO, per
+      §7.6-1."
+    merged_at: '2026-09-01'
+    merge_sha: c2ec2a0
   - id: M5
     title: Compute plane / cryptWWDB — permit() as the PolicyChecker access_policy
     short_description: |
@@ -2051,10 +3251,18 @@ sessions:
       HEOperation enum membership) here. Gated on the cryptWWDB compute path
       being scheduled (Track 2).
     phase: access_model_redesign
-    status: blocked
+    status: blocked_external
     depends_on:
       - M2
-    blocked_by_external:
+    blocked_by_external: >
+      The cryptWWDB compute path (Track 2) is dormant. The plaintext
+      mass-balance work, the policy checker, and the mapping doc all shipped;
+      the homomorphic-encryption compute path they were built toward was never
+      scheduled, and the remaining wastewater schema entries carry
+      "re-scope deliberately if cryptWWDB work resumes". M5 is the adapter for
+      a caller that does not exist yet, so it is not on the frontier. Unpark it
+      when the HE compute path is scheduled; every in-file dependency has
+      already landed, so scheduling is the only gate.
     parallel_safe: false
     parallel_safe_reason: "Engine capability additions + federation/crypto adapter wiring."
     effort_sessions: 2
@@ -2069,7 +3277,11 @@ sessions:
     pr_title_function:
     branch_name_template: m5-compute-plane
     role_framing:
-    notes: "Adapter over shipped PolicyChecker; carries AM-OPEN-4. access_model.md §4.6 + §7.4 + §9.4."
+    notes: "Adapter over shipped PolicyChecker; carries AM-OPEN-4. access_model.md §4.6 + §7.4 + §9.4. Still owned here after
+      M2-B6: §8.4's Data Source Lab PRESET — pipeline:write_results plus compute:he_aggregate / he_query / register_dataset,
+      scoped to the cryptWWDB Project and applied to a data_source_lab federation peer. B6 landed a different object: a per-run
+      SERVICE principal (pipeline_run_principal) that is constructed per callback and never stored. No preset in reseed.py
+      grants pipeline:write_results and none should until that peer exists."
 
   # ── Open DESIGN items from access_model.md §11.4 — not codeable sessions ──
   # Tracked, not scheduled. Each is a design question resolved before (or
@@ -2220,7 +3432,8 @@ sessions:
       endpoint currently writes is_deleted = TRUE under audit action
       ARCHIVE_SAMPLE, while deletion_status has no writer at all.
     phase: phase_24_5
-    status: open
+    status: shipped
+    merged_at: '2026-08-29'  # shipped inside B-CARE-3 (merge 93f39fd) per its own MUST-ship-inside note
     depends_on:
       - B-CARE-3
     blocked_by_external:
@@ -2239,6 +3452,7 @@ sessions:
       deletion from the API with nothing replacing it. 43 is_deleted
       reference sites in backend/ plus a migration. An archive must never be
       able to satisfy a deletion request (CARE Authority to Control).
+    merge_sha: 93f39fd
 
   - id: B-DOC-INGEST-PATHS
     title: Reconcile the "six ingest methods" contradiction between docs and code
@@ -2302,6 +3516,50 @@ sessions:
       table also still carried the old A-F+T taxonomy; replaced with A/B/C/D
       per ADR-0002. Three regression tests added to tests/test_check_docs.py.
 
+  - id: B-VADS-1
+    title: PHIN VADS vocabulary snapshot before the 2026-11-30 sunset
+    short_description: |
+      CDC sunsets all PHIN systems on 2026-11-30 and has named no successor,
+      so the PHIN VADS-authored value sets stop being fetchable from anywhere.
+      Acquisition has a deadline; integration does not. This item is the
+      acquisition only: scripts/pull_phinvads.py walks the FHIR STU3 endpoint
+      and commits a snapshot with provenance under schema/schema/phinvads/.
+      Nothing in the backend reads it yet - that is deliberate, and is the
+      remaining work, tracked separately once a consumer exists.
+    phase: p0_series
+    status: shipped
+    merged_at: "2026-09-02"
+    merge_sha: "b5505c4"
+    depends_on: []
+    blocked_by_external:
+    parallel_safe: true
+    parallel_safe_reason: "Data acquisition plus one script. Touches no shared module."
+    effort_sessions: 1
+    primary_files:
+      - scripts/pull_phinvads.py
+      - schema/schema/phinvads/
+    test_files:
+      - tests/test_pull_phinvads.py
+    source_of_truth_views:
+      - docs/architecture.md
+    pr_title_template:
+    branch_name_template: "feat/phinvads-snapshot"
+    role_framing:
+    notes: >
+      Carved out of P0i, which is otherwise unscheduled, because this is the
+      only part of P0i with an external deadline. Scope is drawn on authorship,
+      not usefulness: all ~1,999 ValueSets and metadata for all ~221
+      CodeSystems, but full concept lists only for the CDC arc
+      (2.16.840.1.114222). LOINC, SNOMED CT and ICD-10-CM concept lists are
+      excluded - they outlive the sunset, have their own publishers, and carry
+      redistribution terms that do not belong in an AGPL-3.0 tree without a
+      deliberate decision. SNOMED CT alone is 47 MB from this API.
+
+      Shipped in PR #205: 1999/1999 value sets, 221/221 code systems, 33 CDC-arc
+      concept files (116,463 concepts), 19 MB gzipped. Only the ACQUISITION is
+      done. No consumer exists, by design - a follow-up item gets written when
+      one is wanted, and it has no deadline now that the data is local.
+
   - id: B-EUK-COINFECT-SENTINEL
     title: '"Screened, none found" sentinel for coinfection_organisms'
     short_description: |
@@ -2340,6 +3598,126 @@ sessions:
       boolean. Sequence it with Phase 28, when the malaria dashboards define
       what they actually query. Requires gen-pydantic regeneration plus the
       boolean-keyword patch (Critical Rules 3 and 20).
+
+  - id: B-PERMGROUPS-DROP
+    title: Retire permission_groups, or decide not to — the Rule 1 / §10.1 conflict
+    short_description: |
+      access_model.md §10.1 lists "the six-value APGAP permission-group enum
+      on lab_membership rows" among three things deleted outright by the
+      greenfield migration. CLAUDE.md Critical Rule 1 declares the same six
+      names sacred and forbids renaming them. Both are checked-in and
+      reviewed; they cannot both be followed. Someone has to decide which,
+      and M2-DROP deliberately did not.
+    phase: access_model_redesign
+    status: tracked_not_scheduled
+    depends_on:
+      - M2-DROP
+    blocked_by_external: null
+    parallel_safe: false
+    effort_sessions: 3
+    primary_files:
+      - backend/backend/authz/reseed.py
+      - backend/backend/routers/labs.py
+      - backend/backend/routers/auth.py
+      - backend/backend/routers/users.py
+      - backend/backend/auth/guards.py
+    test_files:
+      - tests/authz/preflight.py
+      - tests/test_lab_lead_member_management.py
+    source_of_truth_views:
+      - docs/access_model.md
+      - CLAUDE.md
+    pr_title_template: null
+    branch_name_template: null
+    role_framing: null
+    notes: |
+      Raised 2026-09-02 out of M2-DROP, which scoped itself to its TITLE (the
+      two boolean role columns) rather than its short_description (which also
+      said "and the PermissionGroups enum"). The reason for the split is not
+      caution, it is that the premise is wrong:
+
+      permission_groups is NOT a Postgres enum. It is a table
+      (baseline migration 5adf11b77c19:42) with lab_membership.permission_group_id
+      as an FK, and it carries 36 references across five backend modules. It
+      is the live INPUT to sync_membership_grants — the thing M2-B5 built —
+      and to dev-login's four lab roles. §10.1 was written before M2-B5 made
+      membership grants derive from it, so "delete outright" describes a
+      dependency graph that no longer holds.
+
+      Dropping it inside M2-DROP's irreversible migration would have repeated
+      exactly what the M2 entry's own notes record: containing the work on the
+      premise that nothing read the columns. It needs its own
+      reader-retirement campaign, the way M2-DROP-PRE was for the booleans —
+      eight slices, and three of those turned out to be deletions of code
+      with no call site.
+
+      What has to be decided FIRST, before any code:
+
+      1. Does §10.1 still mean it? The sentence may simply be stale. If the
+         answer is "permission_groups stays and §10.1 is corrected", this item
+         is a one-line doc fix and closes. Check that before scoping work.
+      2. If it goes, what replaces it as the membership vocabulary?
+         sync_membership_grants keys on permission_groups.name via
+         MEMBERSHIP_PRESETS; dev-login's _DEV_LOGIN_LAB_ROLES keys on the same
+         names; the E-1 UAT matrix drives them. A preset name could serve, but
+         then lab_membership needs a column that is not an FK to a table of
+         sacred names, and every seeded deployment needs migrating.
+      3. Critical Rule 1 has to be amended or the item cannot proceed. It is
+         in the binding file and says DO NOT rename. Amending a Critical Rule
+         is a deliberate act, not a side effect of a refactor.
+
+      Do not start (2) before (1) is answered. Most of the cost here is
+      migrating a vocabulary that may not need to move.
+
+  - id: B-DEPRECATION-1
+    title: API deprecation practice for the first real operator deployment
+    short_description: |
+      Decide how a breaking API change is communicated once JACKPOT has
+      deployments that are not ours. Today the answer is "it is not, because
+      there are none" — access_model.md §10 makes pre-production with no
+      installed base an explicit decision, which is why compatibility shims
+      are refused rather than written and why there is no changelog. That
+      premise expires at the first operator install, and nothing currently
+      notices when it does.
+    phase: p0_series
+    status: tracked_not_scheduled
+    depends_on: []
+    blocked_by_external: First real operator deployment; until then the
+      premise the practice would replace is still true.
+    parallel_safe: true
+    effort_sessions: 1
+    primary_files:
+      - CLAUDE.md
+      - docs/access_model.md
+    test_files: []
+    source_of_truth_views:
+      - docs/access_model.md
+    pr_title_template:
+    branch_name_template:
+    role_framing:
+    notes: |
+      Raised 2026-09-02 out of M2-DROP-PRE slice 7 (PR #198), which removed
+      is_platform_admin / is_data_analyst from PATCH /users/{id} in favour of
+      instance_preset. Correct under §10 and it broke no in-tree caller — the
+      grep across frontend/, cli/ and deploy/ finds only /users/me — but it
+      is the first change in this repo that would have broken somebody, had
+      there been a somebody.
+
+      The interim control is a grep, documented in CLAUDE.md's branching
+      section: `git log --oneline --grep="[Bb]reaking" main..development`
+      before a release PR, every hit named in the PR body. Deliberately
+      derived from commit history rather than a CHANGELOG.md — one entry does
+      not earn a file, and a second home for a fact nothing regenerates is
+      the failure mode PR #195 was about.
+
+      What this item has to decide when it comes up, none of which is worth
+      deciding early: whether /api/v1 gets a sibling version or breaks in
+      place (Critical Rule 6 fixes the prefix but says nothing about
+      versioning policy); whether a deprecation window exists at all given
+      §10's no-shim stance, which is a statement about the authorization
+      model rather than about every API; and where operators are told —
+      release notes, jackpot init output, or a doctor check. Do not
+      pre-build a changelog for it.
 
   - id: B-LICENSE-DATA-TERMS
     title: Data-use terms for queried data sources (separate from code licensing)
@@ -2430,3 +3808,208 @@ sessions:
 
       Apache-2.0 is on the allowlist, so nothing is blocked today: the row is
       [candidate] and nothing imports it.
+
+  # ────────────────────────────────────────────────────────────────────────
+  # Deferred planning — recovered 2026-09-01 from an unmerged local branch
+  #
+  # Detail for all six lives in docs/planning_2026-05-11_deferred_phases.md,
+  # extracted from git tag planning/2026-05-11-round4-phase35 (912697c). That
+  # commit was local-only, never pushed, never PR'd; 99 of its item IDs existed
+  # nowhere else in the repo. These six entries are the scheduling surface so
+  # the work is discoverable from the session-start read; the doc is the detail.
+  #
+  # All six predate P0b (Schema v5.0), P0e, P0f and the access-model redesign.
+  # Item numbering, phase numbering and every "must land with P0b" claim in the
+  # doc is stale. Scope each against current reality before starting — do not
+  # take the doc's integration claims on trust (Critical Rule 70).
+  # ────────────────────────────────────────────────────────────────────────
+
+  - id: PLAN-EPY
+    title: Phase 35 — epidemic modeling and forecasting (EPISTORM stack)
+    short_description: |
+      18 EPY items: epydemix calibration + simulation pipelines, WhiteLabRt Rt
+      estimation, parsers, API, Streamlit calibration / Rt-dashboard / scenario-
+      explorer pages, CLI, wastewater cross-link. Carries the B-EPY-1, B-EPY-2,
+      B-WLR-1 and B-RTEVAL-1 adoption decisions and DEC-16 (default Rt method).
+      The license analysis is the expensive part to reconstruct: epydemix is
+      GPL-3.0, WhiteLabRt MIT, epydemix-data GPL-3.0, against JACKPOT's
+      AGPL-3.0 — GPL-3.0 into AGPL-3.0 is one-way.
+    phase: deferred_planning
+    status: tracked_not_scheduled
+    depends_on: []
+    blocked_by_external: null
+    parallel_safe: true
+    effort_sessions: 20
+    primary_files: []
+    test_files: []
+    source_of_truth_views:
+      - docs/planning_2026-05-11_deferred_phases.md
+      - docs/epistorm_integration.md
+    pr_title_template: null
+    branch_name_template: null
+    role_framing: null
+    notes: |
+      EPY-S1/S2/S3 (the schema half) DID land in docs/epistorm_integration.md
+      and docs/domain_reference.md; the 18 implementation items did not. That
+      partial migration is why this looked merged on a spot-check — grep for an
+      EPY-N item id, not for "EPISTORM", when judging what is already here.
+
+  - id: PLAN-WW
+    title: Wastewater surveillance module — schema, pipelines, parsers, UI
+    short_description: |
+      22 WW items across the Phase 24.5 schema additions (WW-4..WW-12) and
+      Phase 34 pipelines/parsers/UI (WW-14..WW-26). Includes the round-3
+      defect-fix pass: owning_lab_id for P0c RBAC, the WW-2a consumer refactor,
+      audit fields, and WW-11's migration correctness fixes (site dedupe,
+      county_names to county_fips information loss, lossy down-migration).
+      Owns DEC-11 (typed table vs pipeline_results JSONB), DEC-12 (v5.0 vs
+      v5.0+v5.1 split) and DEC-14 (existing wastewater_lineage_abundance rows).
+    phase: deferred_planning
+    status: tracked_not_scheduled
+    depends_on: []
+    blocked_by_external: null
+    parallel_safe: true
+    effort_sessions: 18
+    primary_files: []
+    test_files: []
+    source_of_truth_views:
+      - docs/planning_2026-05-11_deferred_phases.md
+      - docs/wastewater.md
+    pr_title_template: null
+    branch_name_template: null
+    role_framing: null
+    notes: |
+      Reconciliation pass done 2026-09-01 — the overlap is small, and it is a
+      conflict rather than a duplication. Effort revised 20 -> 18 sessions.
+
+      Shipped, and NOT what the WW items describe:
+        - wastewater_target_concentration (migration c871b28bbdab step 7,
+          B-CWB-SCHEMA-1) is a thin readiness table: TEXT run_id/sample_id, no
+          FK, ~13 columns, built for the mass-balance equation in
+          backend/backend/wastewater/mass_balance.py. WW-3's
+          wastewater_target_results is a different table for the same job —
+          ~28 columns, real FKs, assay_method / variant_detection_method /
+          replicate fields, append-only. Two designs now exist for per-target
+          results and DEC-11 was decided against neither. Pick one before any
+          WW-3 work; a second table is the outcome to avoid.
+        - routers/wastewater.py is read-only, two GETs, no new tables. Its
+          /sites returns SELECT DISTINCT s.wwtp_name FROM samples — i.e. it is
+          built directly on the denormalization DEC-10 calls an architectural
+          bug, so WW-1 + WW-2 break this endpoint and both frontend pages.
+        - frontend/pages/wastewater.py (B-WW-1) and wastewater_multi_target.py
+          (B-WW-ADV-1) are consumers WW-2a must list; the doc's WW-2a
+          module list predates both.
+
+      Not shipped, confirmed by grep: no wastewater_collection_sites table
+      anywhere (WW-1), samples still carries wwtp_name (WW-2), no
+      wastewater_metagenomic_profiles (WW-4), no ww commands in cli/jackpot/cli/
+      (WW-26), no frontend/pages/wastewater/ package (WW-22..25), no
+      /api/v1/wastewater/{targets,metagenomic} routes (WW-20, WW-21).
+
+      So: WW-1/2/2a/11 are the load-bearing sequence and everything else queues
+      behind them, WW-3 is blocked on a table-design decision that did not exist
+      when the item was written, and WW-19 is now a rewrite of a shipped
+      endpoint rather than a new one.
+
+  - id: PLAN-TEST
+    title: Testing infrastructure for ML, federation and statistical models
+    short_description: |
+      11 TEST items: Hypothesis property suites (TEST-6), backtest/replay
+      harness (TEST-7), sensitivity and calibration-recovery testing (TEST-8),
+      plus TEST-2..5 and TEST-9..12. Written to support the ML, federation and
+      forecasting phases; the statistical-model testing patterns are the part
+      with no equivalent anywhere in the current suite.
+    phase: deferred_planning
+    status: tracked_not_scheduled
+    depends_on: []
+    blocked_by_external: null
+    parallel_safe: true
+    effort_sessions: 10
+    primary_files: []
+    test_files: []
+    source_of_truth_views:
+      - docs/planning_2026-05-11_deferred_phases.md
+    pr_title_template: null
+    branch_name_template: null
+    role_framing: null
+    notes: |
+      Partly generic: TEST-6's property-based approach would pay off against the
+      authz engine today, independent of whether the ML phases ever run. Worth
+      lifting that one item out rather than waiting for the phase.
+
+  - id: PLAN-ML
+    title: ML / modeling infrastructure and federated ML analytics
+    short_description: |
+      ML-13..ML-19 plus FML-2 — Phase 29 (ML/modeling infrastructure) and Phase
+      30 (federated ML analytics). Owns DEC-2 (model_artifacts serialization
+      format), DEC-3 (federation aggregator hosting model), DEC-4 (pgvector on
+      Cloud SQL), DEC-5..DEC-9. The ML-1 model_artifacts / ML-3 inference_runs
+      schema items are referenced by PLAN-EPY's EPY-S1.
+    phase: deferred_planning
+    status: tracked_not_scheduled
+    depends_on: []
+    blocked_by_external: null
+    parallel_safe: true
+    effort_sessions: 12
+    primary_files: []
+    test_files: []
+    source_of_truth_views:
+      - docs/planning_2026-05-11_deferred_phases.md
+      - docs/federation.md
+    pr_title_template: null
+    branch_name_template: null
+    role_framing: null
+    notes: |
+      ML-1 and OBS-3 are referenced from docs/federation.md and
+      docs/schema_sufficiency_observatory.md, so parts of the schema half
+      landed. ML-13..19 did not.
+
+  - id: PLAN-DEMO
+    title: Demo and benchmark infrastructure
+    short_description: |
+      DEMO-3..DEMO-14 — Phase 31. Demo datasets, benchmark harness, and the
+      reproducible-demo path for showing the platform to collaborators. DEC-7
+      (whether operator-specific demo code ships in the operator-agnostic tree)
+      belongs here and bears on Critical Rule 55.
+    phase: deferred_planning
+    status: tracked_not_scheduled
+    depends_on: []
+    blocked_by_external: null
+    parallel_safe: true
+    effort_sessions: 8
+    primary_files: []
+    test_files: []
+    source_of_truth_views:
+      - docs/planning_2026-05-11_deferred_phases.md
+    pr_title_template: null
+    branch_name_template: null
+    role_framing: null
+    notes: |
+      DEC-7 is the one item here with a bearing on shipped code: demo fixtures
+      naming a specific operator would violate Rule 55 in the same way the
+      inherited violations P0e cleaned up did.
+
+  - id: PLAN-DOC
+    title: Outreach documents and coalition drafts
+    short_description: |
+      16 DOC items — Phase 33, plus DOC-16/17/18 (SFI outreach) added in the
+      round-4 pass. Coalition-facing drafts and the release-notes items
+      (DOC-12 documents the DEC-11 typed-table rationale). Action-pending
+      rather than engineering work: these are documents to write and send.
+    phase: deferred_planning
+    status: tracked_not_scheduled
+    depends_on: []
+    blocked_by_external: null
+    parallel_safe: true
+    effort_sessions: 6
+    primary_files: []
+    test_files: []
+    source_of_truth_views:
+      - docs/planning_2026-05-11_deferred_phases.md
+    pr_title_template: null
+    branch_name_template: null
+    role_framing: null
+    notes: |
+      Named individuals and institutions appear in these items. They are
+      outreach targets recorded in a planning doc, not commitments, and nothing
+      here has been checked against what was actually sent since 2026-05-11.

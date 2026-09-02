@@ -438,9 +438,9 @@ async def test_csv_ingest_partial_failure(client, mock_storage):
 async def test_globus_ingest_requires_platform_admin(client, monkeypatch):
     # Switch to a non-admin user by creating one and switching
     execute_write(
-        "INSERT INTO users (email, name, is_platform_admin, is_active, organization_id) "
-        "VALUES ('globus_non_admin@test.com', 'Non Admin', FALSE, TRUE, 1) "
-        "ON CONFLICT (email) DO UPDATE SET is_platform_admin = FALSE",
+        "INSERT INTO users (email, name, is_active, organization_id) "
+        "VALUES ('globus_non_admin@test.com', 'Non Admin', TRUE, 1) "
+        "ON CONFLICT (email) DO UPDATE SET is_active = TRUE",
     )
     monkeypatch.setenv("MOCK_USER_EMAIL", "globus_non_admin@test.com")
     from backend.config import get_settings

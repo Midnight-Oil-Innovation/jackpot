@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, EmailStr, Field
 
 from backend.audit import AuditActions, log_audit
-from backend.auth.guards import get_current_user, require_capability
+from backend.auth.guards import get_current_user, permits, require_capability
 from backend.database import execute_query, execute_write, get_db_dep
 from backend.pagination import paginate
 from backend.responses import error, success, success_list, success_message
@@ -124,7 +124,20 @@ def get_organization(
     if not rows:
         return error("NOT_FOUND", f"Organization {org_id} not found.", status_code=404)
 
-    if not user.get("is_platform_admin") and user.get("organization_id") != org_id:
+    # M2-B5: two rungs, and the second is deliberately still a membership
+    # test rather than a capability.
+    #
+    # org:read at the instance root admits a reader who may see ANY org. Your
+    # own org is a different question, and a capability check cannot answer it
+    # today: every preset issues org:read at LAB scope, and containment runs
+    # downward — a lab-scoped grant does not cover the org above it. Checking
+    # org:read at org scope would therefore deny every ordinary member their
+    # own organization.
+    #
+    # Making it structural needs org-scoped grants at reseed, which is a
+    # change to what memberships convey rather than a route rewrite. Left as
+    # it stands, with the platform-admin flag replaced by the capability.
+    if not permits(user, "org:read") and user.get("organization_id") != org_id:
         return error(
             "ACCESS_DENIED",
             "You do not have access to this organization.",

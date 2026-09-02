@@ -42,8 +42,9 @@ async def test_dev_login_local_mode_creates_user_and_returns_payload():
         assert resp.status_code == 200, resp.text
         body = resp.json()
         assert body["user"]["email"] == email
-        assert body["user"]["is_platform_admin"] is False
-        assert body["user"]["is_data_analyst"] is False
+        # A lab role carries no Instance-scope preset: its authority comes
+        # from the membership grants, not from anything at the instance root.
+        assert body["instance_preset"] is None
         assert body["active_role"] == "Lab Collaborator"
         assert body["membership"]["permission_group"] == "Lab Collaborator"
         assert body["membership"]["is_lab_director"] is False
@@ -76,8 +77,7 @@ async def test_dev_login_existing_user_role_update():
     _cleanup_user(email)
     try:
         execute_write(
-            "INSERT INTO users (email, name, organization_id, is_platform_admin) "
-            "VALUES (:e, 'E1 Existing', 1, FALSE)",
+            "INSERT INTO users (email, name, organization_id) VALUES (:e, 'E1 Existing', 1)",
             {"e": email},
         )
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
@@ -87,14 +87,23 @@ async def test_dev_login_existing_user_role_update():
             )
         assert resp.status_code == 200
         body = resp.json()
-        assert body["user"]["is_platform_admin"] is True
+        assert body["instance_preset"] == "instance_administrator"
         assert body["membership"] is None
 
-        rows = execute_query(
-            "SELECT is_platform_admin FROM users WHERE email = :e",
-            {"e": email},
-        )
-        assert rows[0]["is_platform_admin"] is True
+        # The grants are the assignment. The legacy column is still written
+        # so reseed() stays consistent, and M2-DROP deletes both that write
+        # and this assertion.
+        uid = execute_query("SELECT id FROM users WHERE email = :e", {"e": email})[0]["id"]
+        held = {
+            r["capability"]
+            for r in execute_query(
+                "SELECT capability FROM authz_capability_grants WHERE principal_id = :p",
+                {"p": str(uid)},
+            )
+        }
+        assert "user:manage" in held, held
+        # The grants above ARE the assignment now; the column this used to
+        # read back is no longer written and M2-DROP removes it next.
     finally:
         _cleanup_user(email)
 

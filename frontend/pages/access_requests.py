@@ -6,13 +6,16 @@ Two tabs:
 - **My requests** — requester view. Filterable by status. Shows
   auto-approve countdown so the researcher knows when the 7-day window
   elapses.
-- **Incoming** — Lab Director view. Lists PENDING requests against
-  samples in labs where the caller is a director. Approve/deny land on
+- **Incoming** — approver view. Lists PENDING requests the caller can act
+  on, as scoped by the server: any request over a sample they hold
+  ``access:approve_request`` on. Approve/deny land on
   ``POST /api/v1/sample-access/requests/{id}/{approve|deny}`` from
   Session O.
 
-The Lab Director tab is suppressed entirely for users who are not in
-any director role; this avoids a confusing empty view.
+The tab renders for everyone and shows an empty state when there is
+nothing to review. It used to be suppressed for anyone without a
+directorship, which silently hid the tab from a grant-holding approver
+(M2-DROP-PRE slice 6).
 """
 
 from __future__ import annotations
@@ -20,7 +23,6 @@ from __future__ import annotations
 import streamlit as st
 
 from frontend.lib.api import ApiError, get_client
-from frontend.lib.session import is_platform_admin, my_director_lab_ids
 
 PAGE_TITLE = "Access requests"
 
@@ -91,27 +93,17 @@ def _deny(client, req_id: int, reason: str) -> None:
 
 
 def _render_incoming_tab(client) -> None:
-    lab_ids = my_director_lab_ids()
-    admin = is_platform_admin()
-    if not lab_ids and not admin:
-        st.info("Not a Lab Director — nothing to review here.")
-        return
-    if admin and not lab_ids:
-        st.caption("Platform Admin view: showing all labs.")
-        rows = _fetch(client, {"status": "PENDING"})
-    else:
-        rows = []
-        for lid in lab_ids:
-            rows.extend(_fetch(client, {"status": "PENDING", "lab_id": lid}))
+    """Requests the caller can act on — as decided by the server, not here.
+
+    The client-side pre-filter this replaces was redundant and wrong; see the
+    module docstring and M2-DROP-PRE slice 6.
+    """
+    rows = _fetch(client, {"status": "PENDING"})
     if not rows:
         st.success("No incoming requests.")
         return
-    seen = set()
     for row in rows:
         rid = row.get("id")
-        if rid in seen:
-            continue
-        seen.add(rid)
         with st.container(border=True):
             st.markdown(
                 f"Request **#{rid}** on sample `{row.get('sample_id')}` from "
@@ -141,7 +133,7 @@ def render() -> None:
     st.title(PAGE_TITLE)
     client = get_client()
 
-    tab_mine, tab_incoming = st.tabs(["My requests", "Incoming (Lab Director)"])
+    tab_mine, tab_incoming = st.tabs(["My requests", "Incoming"])
     with tab_mine:
         _render_my_tab(client)
     with tab_incoming:

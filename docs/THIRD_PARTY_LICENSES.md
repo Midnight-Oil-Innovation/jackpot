@@ -82,6 +82,26 @@ this domain. Tracked as `B-LICENSE-DATA-TERMS`.
 | name | license | version-or-scope | notes |
 |------|---------|------------------|-------|
 | SRA (via branchwater/sourmash) | public data | global-novelty signal | US public domain; queried, never redistributed |
+| CDC PHIN VADS | public data | `schema/schema/phinvads/` snapshot | US federal work; **redistributed, not merely queried** — see the note below |
+
+**PHIN VADS is the first redistributed entry, and it is the case the paragraph
+above predicted.** The snapshot is committed to this repository rather than
+fetched at runtime, because CDC sunsets all PHIN systems on 2026-11-30 and there
+is nothing to fetch from afterward. Two things follow:
+
+1. *CDC-authored content* — the value set curation, the PHIN code systems under
+   OID arc `2.16.840.1.114222` — is a US federal government work and carries no
+   copyright under 17 USC §105. Redistribution is unencumbered.
+2. *Member codes drawn from external terminologies* are a different question.
+   A PHIN value set enumerates the specific SNOMED CT, LOINC or ICD-10-CM
+   concepts in its subset, so those codes and display names travel with the
+   snapshot. Full concept lists for those systems were deliberately excluded
+   (`scripts/pull_phinvads.py` draws the line on authorship), which keeps the
+   exposure to enumerated subsets that CDC itself publishes publicly. Whether
+   that redistribution needs an attribution or licence notice of its own —
+   SNOMED CT is affiliate-licensed, with a US national licence held by NLM —
+   is unresolved and is exactly the data-use-terms question `B-LICENSE-DATA-TERMS`
+   tracks. Recorded here rather than assumed away.
 
 ## Python dependency overrides
 

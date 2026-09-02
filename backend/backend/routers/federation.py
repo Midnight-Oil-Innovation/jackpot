@@ -57,6 +57,8 @@ from backend.auth.guards import (
     get_current_user,
     require_capability,
 )
+from backend.authz.principal import load_peer_principal
+from backend.authz.visibility import sample_list_clause
 from backend.credentials import credentials
 from backend.database import execute_query, execute_write, get_db_dep
 from backend.federation.client import FederationClient
@@ -248,6 +250,22 @@ async def federation_search(
     db=Depends(get_db_dep),  # noqa: B008
 ):
     user = get_current_user(request)
+    # M2-B5: deliberately still auth-only, and the map row is corrected
+    # rather than the route.
+    #
+    # The map assigns sample:read at INSTANCE scope. Nobody holds it there:
+    # every preset granting sample:read issues it at lab scope, and giving an
+    # Instance Administrator blanket sample:read would contradict §8.2 head-on
+    # — the Surveillance Officer preset exists precisely so that instance-wide
+    # sample reading is narrowed to surveillance_relevant rows rather than
+    # conferred wholesale. So enforcing the row as written makes a working
+    # route reachable by nobody.
+    #
+    # What the right verb is belongs with §7's federation work (M4): the
+    # question this route actually asks is "may this user query our peers on
+    # this deployment's behalf", which is not the same act as reading a
+    # sample here, and the results come back filtered by the peer's own
+    # policy regardless.
 
     rows = execute_query(
         "SELECT * FROM federated_instances WHERE federation_enabled = TRUE",
@@ -281,6 +299,125 @@ async def federation_search(
         db_conn=db,
     )
     return success(data=serialised)
+
+
+# ---------------------------------------------------------------------------
+# Inbound L1 query
+# ---------------------------------------------------------------------------
+
+# Columns a federated result may carry. DISCOVERABLE-equivalent by
+# construction (models.FederationQueryResult): no file URIs, no clinical
+# metadata, no PII. The projection is an allowlist rather than SELECT * so a
+# column added to `samples` later cannot silently start crossing the boundary.
+_FEDERATION_RESULT_COLUMNS = (
+    "s.sample_id AS sample_id",
+    "s.organism_name AS organism",
+    "s.date_collected AS date_collected",
+    "s.collection_location_country AS country",
+    "s.collection_location_state AS state",
+    "s.source_type AS source_type",
+    "s.sector AS sector",
+    "s.quality_status AS quality_tier",
+    "s.surveillance_relevant AS surveillance_relevant",
+)
+
+# Wire-level floor, independent of any agreement (§7.4). A peer whose
+# agreement somehow granted more still cannot pull PRELIMINARY rows.
+_FEDERATION_QUALITY_FLOOR = ("ANALYZABLE", "SUBMITTABLE")
+
+
+@router.post("/query")
+def federation_query_inbound(
+    payload: FederationQuery,
+    request: Request,
+    db=Depends(get_db_dep),  # noqa: B008
+):
+    """Answer a peer's L1 query with what its sharing agreements allow.
+
+    **Why this route exists rather than peer-auth on /api/v1/samples/.**
+    §7.4 describes the inbound query landing on the partner's
+    ``GET /api/v1/samples/``, filtered by the peer principal — "not a separate
+    code path". That integration was never built: the samples list
+    authenticates a JWT cookie and nothing else, and no test exercised an
+    inbound federated query, so a real peer query would have 401'd. Given the
+    choice of adding a second authentication mode to the most-read endpoint in
+    the system, or putting the peer-facing route beside the two that already
+    authenticate peers, this takes the second. What §7.4 actually cares about
+    — that federated visibility is the *same decision* as local visibility, not
+    a parallel implementation — is preserved: the filtering below is
+    ``sample_list_clause``, the identical compiler every local list uses.
+
+    Default-deny falls out (§7.3): a peer with no active agreement loads with
+    an empty grant set, so the clause matches nothing and this returns [].
+    """
+    instance_row = authenticate_federation_peer(request, db)
+    if not instance_row:
+        return error("UNAUTHORIZED", "Invalid or missing federation key.", status_code=401)
+
+    principal = load_peer_principal(str(instance_row["id"]), conn=db)
+    vis_clause, params = sample_list_clause(principal)
+
+    clauses = [vis_clause, "s.deletion_status = 'ACTIVE'", "s.is_archived = FALSE"]
+
+    # The wire-level quality floor. The client also sets quality_tier_min, but
+    # a floor that only exists on the caller's side is not a floor.
+    clauses.append("s.quality_status = ANY(:fed_quality)")
+    params["fed_quality"] = list(_FEDERATION_QUALITY_FLOOR)
+
+    filters = {
+        "organism": ("s.organism_name = :f_organism", payload.organism),
+        "country": ("s.collection_location_country = :f_country", payload.country),
+        "state": ("s.collection_location_state = :f_state", payload.state),
+        "source_type": ("s.source_type = :f_source_type", payload.source_type),
+    }
+    for key, (sql, value) in filters.items():
+        if value is not None:
+            clauses.append(sql)
+            params[f"f_{key}"] = value
+    if payload.date_collected_from is not None:
+        clauses.append("s.date_collected >= :f_from")
+        params["f_from"] = payload.date_collected_from
+    if payload.date_collected_to is not None:
+        clauses.append("s.date_collected <= :f_to")
+        params["f_to"] = payload.date_collected_to
+
+    params["fed_limit"] = payload.page_size
+    params["fed_offset"] = (payload.page - 1) * payload.page_size
+
+    rows = execute_query(
+        # The samples JOIN labs is load-bearing, not decoration: a sample's
+        # scope is derived from its lineage and the org segment comes from
+        # labs.organization_id (ADR 0015).
+        f"SELECT {', '.join(_FEDERATION_RESULT_COLUMNS)} "  # noqa: S608 — constant projection
+        "FROM samples s JOIN labs l ON l.id = s.lab_id "
+        f"WHERE {' AND '.join(clauses)} "
+        "ORDER BY s.date_collected DESC, s.sample_id "
+        "LIMIT :fed_limit OFFSET :fed_offset",
+        params,
+        conn=db,
+    )
+
+    log_audit(
+        action=AUDIT_FEDERATION_SEARCH,
+        actor_id=None,
+        resource_type="federation_query_inbound",
+        resource_id=str(instance_row["id"]),
+        before=None,
+        after=None,
+        metadata={
+            "peer": instance_row.get("name"),
+            "result_count": len(rows),
+            "grants_held": len(principal.grants),
+            "query": payload.model_dump(mode="json", exclude_none=True),
+        },
+        db_conn=db,
+    )
+    return success_list(
+        data=[dict(r) for r in rows],
+        page=payload.page,
+        per_page=payload.page_size,
+        total=len(rows),
+    )
 
 
 # ---------------------------------------------------------------------------

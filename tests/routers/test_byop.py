@@ -136,6 +136,21 @@ def _create(client: TestClient) -> dict:
 # --- CRUD happy paths -----------------------------------------------------
 
 
+@pytest.fixture(autouse=True)
+def _byop_author(authz_grants):
+    """These are CRUD tests, not authorization tests — the caller holds the
+    register verb instance-wide so each case exercises the route rather than
+    the guard. The authorization boundaries themselves are pinned in
+    test_tenancy.py and tests/authz/.
+
+    MOCK_USER_ID mirrors whatever user the module's client fixture presents.
+    """
+    from backend.authz import ROOT
+
+    for uid in (1, 2, 3):
+        authz_grants(uid, [("pipeline:register_custom", ROOT)])
+
+
 def test_create_pipeline(client: TestClient) -> None:
     body = _create(client)
     assert body["name"] == "tb-typer"
@@ -352,3 +367,46 @@ def test_illegal_transitions_are_409(client: TestClient) -> None:
     assert client.post(f"/api/v1/byop/pipelines/{pid}/revalidate").status_code == 409
     assert client.delete(f"/api/v1/byop/pipelines/{pid}").status_code == 409
     assert client.put(f"/api/v1/byop/pipelines/{pid}", json={"description": "x"}).status_code == 409
+
+
+# --- M2-DROP-PRE slice 6: per-row manage authority on the read model -------
+
+
+def test_can_manage_is_true_for_the_registrant_holding_no_grant(
+    client: TestClient, authz_grants
+) -> None:
+    """The registrant may manage their own pipeline with zero grants.
+
+    This is the case the UI used to hide. It gated the deactivate/archive
+    controls on ``is_platform_admin``, so the person who registered the
+    pipeline — whom ``_may_manage``'s registrant rung admits — saw no
+    controls for a row the server would have let them mutate.
+    """
+    _create(client)
+    authz_grants(1, [])  # strip the autouse ROOT grant; registrant rung only
+
+    body = client.get("/api/v1/byop/pipelines").json()
+
+    assert [p["can_manage"] for p in body] == [True]
+
+
+def test_can_manage_is_false_for_a_stranger_to_the_row(
+    app: FastAPI, client: TestClient, authz_grants
+) -> None:
+    """Neither registrant nor grant-holder gets no manage affordance.
+
+    The catalog list is intentionally unscoped (design §9 — bioinformaticians
+    browse everything), so the row is visible. ``can_manage`` is what keeps
+    the mutate controls off it, and the mutating routes still answer 404
+    independently — this flag is an affordance, never the enforcement.
+    """
+    _create(client)
+
+    stranger = {"id": 99, "email": "stranger@example.org"}
+    app.dependency_overrides[get_current_user] = lambda: stranger
+    authz_grants(99, [])
+
+    body = client.get("/api/v1/byop/pipelines").json()
+
+    assert [p["can_manage"] for p in body] == [False]
+    assert client.post("/api/v1/byop/pipelines/1/deactivate").status_code == 404

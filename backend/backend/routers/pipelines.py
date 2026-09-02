@@ -19,6 +19,7 @@ from __future__ import annotations
 import hmac
 import json
 import logging
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -28,9 +29,16 @@ from pydantic import BaseModel, Field, ValidationError, field_validator
 from backend.audit import AuditActions, log_audit
 from backend.auth.guards import (
     get_current_user,
-    get_user_lab_membership,
+    permits,
     require_capability,
 )
+from backend.authz.engine import Context, Decision, Resource, permit
+from backend.authz.principal import (
+    load_principal,
+    pipeline_run_principal,
+    project_resource_scope,
+)
+from backend.authz.visibility import project_list_clause
 from backend.config import get_settings
 from backend.database import execute_query, execute_write, get_db_dep
 from backend.pagination import paginate
@@ -74,21 +82,62 @@ def _serialise(row: dict | None) -> dict:
     return out
 
 
-def _user_has_lab_access(user: dict, lab_id: int | None, db) -> bool:
-    if user.get("is_platform_admin"):
-        return True
-    if lab_id is None:
+def _may_read_run(user: dict, run: dict) -> bool:
+    """May this caller see this run? ``pipeline:read`` at the run's project.
+
+    M2-B3. §4 defines pipeline:read as "the pipeline zoo, the BYOP registry,
+    and run status", so watching a run is a read verb — deliberately NOT
+    pipeline:run, which read-only members do not hold and which would
+    therefore have taken run visibility away from every Lab Reader watching a
+    run on their own lab's samples. The endpoint-capability map said
+    pipeline:run and was corrected (M2-B3-PRE).
+
+    Decided at Project scope, which a lab-scoped grant contains, so an
+    ordinary lab member is unaffected by the narrower scope.
+    """
+    project_id = run.get("project_id")
+    if project_id is None:
         return False
-    if get_user_lab_membership(user["id"], lab_id):
-        return True
-    rows = execute_query(
-        "SELECT 1 FROM project_membership pm "
-        "JOIN projects p ON p.id = pm.project_id "
-        "WHERE pm.user_id = :uid AND p.lab_id = :lid LIMIT 1",
-        {"uid": user["id"], "lid": lab_id},
-        conn=db,
+    return permits(user, "pipeline:read", project_id=project_id)
+
+
+def _authorize_run_callback(run: dict) -> bool:
+    """Authorization half of a per-run callback (M2-B6).
+
+    The ``X-Pipeline-Token`` check at every call site is AUTHENTICATION and
+    stays exactly as it is. This is the separate question: may this principal
+    write results for this run? Asked of a SERVICE principal holding
+    ``pipeline:write_results`` at the run's project scope and nothing else —
+    §4.6's "computes without seeing" property expressed as a capability set
+    rather than as a consequence of how tokens happen to be minted.
+
+    It cannot refuse today, and that is not a defect: the principal is built
+    from the same run the token authenticated against. What it buys is the
+    chokepoint. A ``data_source_lab`` peer (§8.4) reaching these routes at
+    M4/M5 carries a different capability set, and the answer changes here
+    rather than in the route.
+
+    ``policies=[]`` because no ALLOW or DENY policy names
+    ``pipeline:write_results`` — the decision is purely structural. The
+    sovereignty DENY policies that will (M3) are why this passes a list at all
+    rather than calling the grant check directly.
+    """
+    principal = pipeline_run_principal(run)
+    resource = Resource(scope=project_resource_scope(run["project_id"]))
+    decision = permit(
+        principal,
+        "pipeline:write_results",
+        resource,
+        Context(conditions={}, now=datetime.now(UTC)),
+        policies=[],
     )
-    return bool(rows)
+    if decision is not Decision.ALLOW:
+        logger.warning(
+            "authz: DENY service principal=%s capability=pipeline:write_results scope=%s",
+            principal.id,
+            resource.scope,
+        )
+    return decision is Decision.ALLOW
 
 
 def _fetch_run(run_id: str, db) -> dict | None:
@@ -119,40 +168,46 @@ def list_pipeline_runs(
 ):
     """Paginated run list scoped to the caller's visibility.
 
-    Platform admins see every run; everyone else sees only runs in labs
-    they belong to (matching the lab_id stored on each run) OR runs they
-    launched themselves. Query params are additive filters inside that
-    visibility window.
+    M2-B7: two rungs, compiled from the same grants ``permit()`` reads.
+
+    * **Runs you launched.** Ownership — no grant expresses "the run you
+      started", and the legacy filter admitted it, so removing it would
+      narrow access this batch was not asked to narrow.
+    * **Runs you may read.** ``pipeline:read`` at the run's project scope,
+      the same verb and scope the per-run status routes check (M2-B3), so
+      the list cannot show a run those routes would refuse.
+
+    The platform-admin branch is gone: an instance-scoped grant contains
+    every project path, so the admin is covered by the second rung.
     """
     user = get_current_user(request)
 
-    where: list[str] = []
-    params: dict = {}
-    if not user.get("is_platform_admin"):
-        where.append(
-            "(launched_by_id = :me OR lab_id IN "
-            "(SELECT lab_id FROM lab_membership WHERE user_id = :me))"
-        )
-        params["me"] = user["id"]
+    vis, vis_params = project_list_clause(
+        load_principal(user["id"]), "pipeline:read", labs="l", rows="pr"
+    )
+    where: list[str] = [f"(pr.launched_by_id = :me OR {vis})"]
+    params: dict = {**vis_params, "me": user["id"]}
 
     if user_id is not None:
-        where.append("launched_by_id = :user_id")
+        where.append("pr.launched_by_id = :user_id")
         params["user_id"] = user_id
     if lab_id is not None:
-        where.append("lab_id = :lab_id")
+        where.append("pr.lab_id = :lab_id")
         params["lab_id"] = lab_id
     if project_id is not None:
-        where.append("project_id = :project_id")
+        where.append("pr.project_id = :project_id")
         params["project_id"] = project_id
     if status:
-        where.append("status = :status")
+        where.append("pr.status = :status")
         params["status"] = status
     if pipeline_name:
-        where.append("pipeline_name = :pipeline_name")
+        where.append("pr.pipeline_name = :pipeline_name")
         params["pipeline_name"] = pipeline_name
 
-    where_sql = " WHERE " + " AND ".join(where) if where else ""
-    base_query = f"SELECT * FROM pipeline_runs{where_sql}"
+    where_sql = " AND ".join(where)
+    base_query = (
+        f"SELECT pr.* FROM pipeline_runs pr JOIN labs l ON l.id = pr.lab_id WHERE {where_sql}"
+    )
     rows, total = paginate(
         query=base_query,
         params=params,
@@ -224,7 +279,12 @@ def _authorize_and_resolve_launch_inputs(
         )
     lab_id = proj_rows[0]["lab_id"]
 
-    if not _user_has_lab_access(user, lab_id, db):
+    # M2-B3: pipeline:run at the project's own scope, per the map. §8.2 puts
+    # the verb in Lab Lead and Lab Member RW, so the set of people who can
+    # launch is unchanged from the lab-membership test this replaces, minus
+    # read-only members — who could launch before and had no business doing
+    # so. What DOES change is the scope: a project, not its whole lab.
+    if not permits(user, "pipeline:run", project_id=payload.project_id):
         return (
             None,
             None,
@@ -278,9 +338,14 @@ def _authorize_and_resolve_launch_inputs(
             ),
         )
 
-    # Every sample must belong to a lab the caller can access
+    # Every input sample must be readable by the caller. M2-B3 converts this
+    # rather than dropping it (the backlog entry is explicit), and moves it to
+    # the sample's own scope: sample:read_detail is the verb for "may use this
+    # as pipeline input", and checking per sample rather than per lab is what
+    # picks up a PUBLIC sample, an owned one, and a per-sample access grant —
+    # paths the lab test could not see at all.
     for sample in sample_rows:
-        if not _user_has_lab_access(user, sample.get("lab_id"), db):
+        if not permits(user, "sample:read_detail", sample_id=sample["id"]):
             return (
                 None,
                 None,
@@ -903,6 +968,20 @@ def receive_pipeline_event(
     if not expected_token or not hmac.compare_digest(supplied_token, expected_token):
         raise HTTPException(status_code=401, detail="Invalid or missing X-Pipeline-Token")
 
+    # M2-B6: authorization, separate from the authentication above. 403 rather
+    # than 401 — the caller proved who it is and was refused, which is a
+    # different fact and a different fix. Rule 60's "the receiver never raises"
+    # governs weblog *delivery* errors, not auth: a wrong token has always
+    # raised 401 here, and a refused principal is the same kind of answer.
+    #
+    # Raises where the results route returns an error envelope. The two have
+    # differed since before M2 — this one answers Nextflow, which reads status
+    # codes and ignores bodies — so each keeps its own idiom rather than one
+    # being changed inside an authz batch. ponytail: converge them if a third
+    # per-run callback lands, not before.
+    if not _authorize_run_callback(run):
+        raise HTTPException(status_code=403, detail="capability 'pipeline:write_results' required")
+
     # Always persist the raw event
     execute_write(
         """
@@ -991,7 +1070,7 @@ def get_pipeline_run(
     run = _fetch_run(run_id, db)
     if not run:
         return error("NOT_FOUND", f"Run {run_id} not found.", status_code=404)
-    if not _user_has_lab_access(user, run.get("lab_id"), db):
+    if not _may_read_run(user, run):
         return error("ACCESS_DENIED", "You do not have access to this run.", status_code=403)
 
     recent_events = execute_query(
@@ -1032,7 +1111,7 @@ def list_pipeline_tasks(
     run = _fetch_run(run_id, db)
     if not run:
         return error("NOT_FOUND", f"Run {run_id} not found.", status_code=404)
-    if not _user_has_lab_access(user, run.get("lab_id"), db):
+    if not _may_read_run(user, run):
         return error("ACCESS_DENIED", "You do not have access to this run.", status_code=403)
 
     base_query = "SELECT * FROM pipeline_tasks WHERE run_id = :rid"
@@ -1068,7 +1147,7 @@ def list_pipeline_events(
     run = _fetch_run(run_id, db)
     if not run:
         return error("NOT_FOUND", f"Run {run_id} not found.", status_code=404)
-    if not _user_has_lab_access(user, run.get("lab_id"), db):
+    if not _may_read_run(user, run):
         return error("ACCESS_DENIED", "You do not have access to this run.", status_code=403)
 
     base_query = "SELECT * FROM pipeline_events WHERE run_id = :rid"
@@ -1106,7 +1185,9 @@ def resume_pipeline(
     previous = _fetch_run(run_id, db)
     if not previous:
         return error("NOT_FOUND", f"Run {run_id} not found.", status_code=404)
-    if not _user_has_lab_access(user, previous.get("lab_id"), db):
+    # Resume launches work, so it takes pipeline:run — the write verb — not
+    # the pipeline:read the status routes above use.
+    if not permits(user, "pipeline:run", project_id=previous.get("project_id")):
         return error("ACCESS_DENIED", "You do not have access to this run.", status_code=403)
 
     if (previous.get("status") or "").upper() != "FAILED":
@@ -1482,7 +1563,7 @@ def register_pipeline_result(
 
     rows = execute_query(
         """
-        SELECT pipeline_token, pipeline_name, pipeline_version
+        SELECT run_id, project_id, pipeline_token, pipeline_name, pipeline_version
         FROM pipeline_runs
         WHERE run_id = :run_id
         """,
@@ -1497,6 +1578,15 @@ def register_pipeline_result(
     expected_token = run.get("pipeline_token") or ""
     if not expected_token or not hmac.compare_digest(supplied_token, expected_token):
         return error("INVALID_TOKEN", "Invalid or missing X-Pipeline-Token", status_code=401)
+
+    # M2-B6: authorization, separate from the token check above. project_id is
+    # selected for this — a SERVICE principal is scoped to the run's project,
+    # and pipeline_run_principal refuses a row that does not carry it rather
+    # than falling back to the instance root.
+    if not _authorize_run_callback(run):
+        return error(
+            "ACCESS_DENIED", "capability 'pipeline:write_results' required", status_code=403
+        )
 
     try:
         validated = schema_cls(**body)

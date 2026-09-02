@@ -198,9 +198,47 @@ Each level contains the levels beneath it. A capability granted at a level appli
 | **Project** | A grouping of samples within a lab (the Seqera-derived org/lab/project hierarchy). | Samples | Project-scoped collaboration; per-project federation agreements |
 | **Sample** | The leaf data resource. | — | Per-sample access grants (the existing `sample_access_grants` mechanism) |
 
+#### 3.1.1 Scope URI serialization
+
+A scope reference serializes as a path under one root. There is exactly one
+root per deployment, spelled `instance://self` — an instance names itself
+`self` because a scope ref is only ever interpreted inside the instance that
+stores it (peers are principals, never branches of the tree; §3.3).
+
+```
+instance://self
+instance://self/org/3
+instance://self/org/3/lab/7
+instance://self/org/3/lab/7/project/12
+instance://self/org/3/lab/7/project/12/sample/55
+```
+
+Each level is the level name followed by that row's primary key. Containment
+is equality or a prefix match at a segment boundary — `_scope_contains` in
+`backend/backend/authz/engine.py`, mirrored as `= OR LIKE ... ESCAPE` by
+`visibility_sql_clause`. The segment boundary is what keeps
+`.../lab/7` from containing `.../lab/70`.
+
+Consequences worth stating where the scheme is defined:
+
+- **Instance-scope grants reach everything.** The Instance Administrator preset
+  holds its capabilities at `instance://self`, which prefixes every resource, so
+  administrative reach is ordinary structural containment rather than a bypass
+  branch. Deny-wins still applies on top (§5.1): a sovereignty DENY beats a root
+  grant.
+- **A resource's scope is derived, not stored.** It is built from the row's
+  existing lineage columns (`samples.lab_id`, `samples.project_id`, and
+  `labs.organization_id` via the join the list query already makes). Nothing is
+  denormalized onto `samples`.
+- **Grant scope refs embed lineage.** Moving a lab between orgs invalidates the
+  grants written against its old path; repair is an `UPDATE` over
+  `authz_capability_grants`. This is the price of prefix containment and is
+  accepted deliberately — see `docs/adr/0015-single-rooted-scope-uri.md` for the
+  alternative (ancestry resolution over short refs) and why it was not taken.
+
 ### 3.2 Why Tenant and Org are the same concept
 
-Earlier drafts of this model treated "tenant" (the multi-tenancy isolation boundary) and "org" (the ownership entity) as separate layers. They are collapsed into one: **the Org *is* the isolation boundary.** "Multi-tenancy" means one Instance hosts multiple Orgs, each walled off from the others; the P0c multi-tenancy middleware enforces that wall at the Org level.
+Earlier drafts of this model treated "tenant" (the multi-tenancy isolation boundary) and "org" (the ownership entity) as separate layers. They are collapsed into one: **the Org *is* the isolation boundary.** "Multi-tenancy" means one Instance hosts multiple Orgs, each walled off from the others; the wall is the org segment of the scope path (§3.1.1), enforced by the same containment check every other decision uses — not by a middleware. See §5.4.
 
 The collapse is justified because in every JACKPOT deployment scenario, the isolation boundary and the ownership entity coincide — a hosted-SaaS customer is exactly one org and is exactly one isolation domain. Keeping them separate would add a layer that is always 1:1 with org, which is pure ceremony. (If a future "consortium tenant containing multiple distinct orgs that share an isolation boundary" requirement ever appears, the model can reintroduce a Tenant level above Org without disturbing anything below it — but we are not paying for that layer speculatively.)
 
@@ -227,7 +265,7 @@ Instance: agency-cloud
    └─ Lab: Wastewater Surveillance
 ```
 
-**Hosted SaaS (Scenario C, cloud, multi-org):** one Instance hosts multiple isolated Orgs. The **Org isolation boundary** is the load-bearing scope — County A must never see County B's data, users, or existence. P0c middleware filters every query by the requesting principal's Org.
+**Hosted SaaS (Scenario C, cloud, multi-org):** one Instance hosts multiple isolated Orgs. The **Org isolation boundary** is the load-bearing scope — County A must never see County B's data, users, or existence. Every list query is filtered by `visibility_sql_clause`, whose grant terms are prefix matches on the principal's own `instance://self/org/N/…` scopes — so County B's rows are unreachable because nothing County A holds contains them, not because a filter remembered to exclude them.
 
 ```
 Instance: jackpot-saas-prod        (one deployment, one database)
@@ -267,6 +305,7 @@ Each capability is `domain:action`. Where a capability mutates state, the table 
 | `sample:read` | See a sample in a list (list-level visibility) | — |
 | `sample:read_detail` | Read full sample detail (the `can_access_sample` level) | — |
 | `sample:read_surveillance` | Cross-scope read of `surveillance_relevant` samples (replaces the global `is_data_analyst` flag) | — |
+| `sample:read_unscrubbed` | Read a sample's **pre-scrub** raw FASTQ — the un-PII-scrubbed original, narrower than `sample:read_detail` | — |
 | `sample:create` | Create a sample | `CREATE_SAMPLE` |
 | `sample:update` | Edit sample metadata | `UPDATE_SAMPLE` |
 | `sample:archive` | Archive a sample | `ARCHIVE_SAMPLE` |
@@ -275,10 +314,21 @@ Each capability is `domain:action`. Where a capability mutates state, the table 
 
 `sample:read_surveillance` is the capability that the immune-platform and federation consuming-workflows depend on (§6, §7). It is the clean replacement for the `is_data_analyst` boolean — instead of a global flag, it is a capability granted at Instance scope to whoever does surveillance oversight.
 
+`sample:read_unscrubbed` (M2-DROP-PRE) names a restriction that lived inside a
+route rather than in this catalog: `GET /samples/{id}/download?file_type=raw_fastq`
+returns the pre-scrub original, and the route tested `is_lab_director` in-line
+because no verb described it. It is strictly narrower than `sample:read_detail`
+— holding it without `read_detail` conveys nothing, since the route checks both
+— and it is the one sample verb where **Instance Administrator's exclusion from
+the data plane is load-bearing rather than incidental**: an operational admin who
+holds no `sample:read_detail` must not reach un-scrubbed PII by a side door.
+The legacy check admitted a platform admin; the verb does not. See §8.2.
+
 ### 4.2 Pipeline plane
 
 | Capability | Meaning | Audit action |
 |---|---|---|
+| `pipeline:read` | Read the pipeline zoo, the BYOP registry, and run status | — |
 | `pipeline:run` | Launch a pipeline run | `CREATE_PIPELINE_RUN` |
 | `pipeline:write_results` | Write pipeline results (held by the Nextflow weblog poster and the cryptWWDB third-party lab) | `REGISTER_PIPELINE_RESULT` |
 | `pipeline:register_custom` | Register a custom (BYOP) pipeline | `REGISTER_CUSTOM_PIPELINE` |
@@ -316,16 +366,29 @@ The category-defining absence: **there is no `anomaly:emit`.** The immune subsys
 
 | Capability | Meaning | Audit action |
 |---|---|---|
+| `access:request` | Request access to a `DISCOVERABLE` sample | `CREATE_ACCESS_REQUEST` |
 | `access:approve_request` | Approve a sample access request | `APPROVE_ACCESS_REQUEST` |
 | `access:revoke` | Revoke an access grant | `REVOKE_ACCESS` |
 | `deletion:request` | Request deletion of a sample — drives the `ACTIVE → DELETION_REQUESTED` transition (see §6) | `sample_deletion_requested` |
 | `deletion:approve` | Approve a deletion request (sovereignty-sensitive — see §6) | `APPROVE_DELETION` |
+| `deletion:self_approve` | Lift the §6.2-1b separation-of-duties DENY on a deletion you requested yourself. Does **not** confer approval authority — it removes friction from an actor who already holds `deletion:approve`, and is audited | `APPROVE_DELETION` |
+| `deletion:read_report` | Read a sample's RTBF confirmation report — deletion lifecycle state, erasure evidence, the deletion audit trail, and any external retraction requests | — |
+| `deletion:reverse_tombstone` | Return a TOMBSTONED, not-yet-vacuumed sample to ACTIVE | `DENY_DELETION` |
+| `deletion:vacuum` | Force immediate purge of a TOMBSTONED sample, ahead of the scheduled job | `HARD_DELETE_SAMPLE` |
+| `submission:prepare` | Build and edit an outbound submission — create, amend, add/remove samples, validate readiness, generate the package | `CREATE_SUBMISSION` / `UPDATE_SUBMISSION` |
 | `submission:approve` | Approve an outbound submission | `SUBMISSION_MARKED_SUBMITTED` |
+| `submission:retract` | Ask an external repository to retract an already-published record (B-CARE-3g) | `REQUEST_DELETION` today, with `{"kind": "external_retraction"}` metadata — accurate enough to trace but overloaded; a `REQUEST_EXTERNAL_RETRACTION` action is proposed, same shape as `deposit:record`'s |
 | `scrub:approve_skip` | Approve a scrubber-skip request | `APPROVE_SCRUB_SKIP` |
 | `key:rotate` | Rotate signing/federation keys | `ROTATE_KEY` |
 | `whitelist:manage` | Manage the domain whitelist | `ADD_WHITELIST_DOMAIN` / `REMOVE_WHITELIST_DOMAIN` |
 | `user:manage` | Create/modify/deactivate users, assign capabilities | `UPDATE_USER` / `CHANGE_MEMBER_ROLE` |
 | `org:manage` | Create/modify orgs, labs, projects | `CREATE_ORG` / `CREATE_LAB` / `CREATE_PROJECT` |
+| `org:read` | Read org detail | — |
+| `lab:read` | Read the lab directory and lab detail | — |
+| `import:read` | Read reusable column-mapping configs | — |
+| `import:manage` | Create/amend/deactivate mapping configs | `CREATE_IMPORT_MAPPING` / `UPDATE_IMPORT_MAPPING` |
+| `token:manage` | Act on **another principal's** personal API tokens (the caller's own are auth-only — §4.7) | `REVOKE_API_TOKEN` |
+| `deposit:record` | Record a sequencing-facility deposit and notify the assigned Lab Directors (`POST /ingest/globus`) — creates no sample rows | `CREATE_SAMPLE` today, which is inaccurate for a route that creates none; a `GLOBUS_DEPOSIT_RECORDED` action is proposed and belongs with M2-B2's ingest work |
 | `audit:read` | Read the audit log | — |
 
 These map almost one-to-one onto existing `audit.py` actions — the governance plane is the most stable because it is the part of the system APGAP already modeled well. The redesign mostly preserves these; what changes is that they become capabilities granted at a scope rather than implied by a role.
@@ -352,6 +415,10 @@ To make the boundary explicit, the following are **automation behaviors**, not c
 - The PII gates (SRA scrubber, GCP DLP) running at ingest
 
 These are things the *system does on a schedule or in response to data*, not things a *principal is authorized to do*. They emit audit actions (e.g. `AUTO_APPROVE_ACCESS_REQUEST`, `EXPIRE_ACCESS_GRANT`, `SYSTEM_SKIP_SCRUB`) with a system actor rather than a principal actor, but they are never gated by `permit()`. Conflating automation with capability is the category error §2.2 warns against; this list is the catalog's statement of where that line falls.
+
+There is a second class that is not a capability, for a different reason: **routes whose resource is definitionally the caller.** `GET /users/me`, the caller's own user profile, and minting or listing one's own API tokens all need authentication and no authorization decision — there is no other principal whose data is reachable, so a capability check has nothing to decide. Modelling these would mean either issuing every principal a grant that is never absent (ceremony that enlarges the grants table and changes no verdict) or adding a user level to the §3.1 scope tree solely to express "you are yourself". Neither earns its keep. The same reasoning covers routes with no resource at all: a stateless validation utility, and the registry of physical sequencing facilities every ingesting user must be able to read.
+
+The boundary is *reachability of another principal's data*, not sensitivity. `token:manage` exists precisely because one token route does cross it — an administrator listing or revoking another user's tokens. The self path stays ungated; the cross-principal path needs the capability. Rows decided this way are marked **AUTH-ONLY BY DESIGN** in `docs/endpoint_capability_map.md` and are verified by route-level tests rather than the capability matrix.
 
 ---
 
@@ -464,7 +531,7 @@ The current `permissions.py` ladder is this algorithm avant la lettre. The mappi
 | Today's `_base_access` rung | Becomes |
 |---|---|
 | `is_platform_admin` → True | An Instance-scope grant of (effectively) all capabilities — the Instance Administrator preset (§8) |
-| `owner_id == user.id` → True | A structural grant: ownership implies a Sample-scope grant of read/update capabilities |
+| `owner_id == user.id` → True | An **ALLOW policy** keyed on `resource.owner_id == principal.id` — see the ownership-rung roster below |
 | lab membership → True | A structural grant at Lab scope (the principal's lab membership *is* a scope grant) |
 | project membership → True | A structural grant at Project scope |
 | `sharing_level == 'PUBLIC'` → True | An **ALLOW policy** keyed on `resource.sharing_level == 'PUBLIC'` (step 4) |
@@ -474,6 +541,37 @@ The current `permissions.py` ladder is this algorithm avant la lettre. The mappi
 
 Every rung of the existing ladder has a clean home in the new model — structural rungs become scope-grants, attribute rungs become ALLOW policies. Nothing in the current behavior is lost; it is re-expressed in a model that can *also* express federation, sovereignty, and tenancy, which the ladder could not.
 
+#### The ownership rung, enumerated
+
+The row above says ALLOW policy where this section's first draft said
+"structural grant". That was not a documentation slip corrected later — it is
+the design decision `LADDER_POLICIES` records in code: ownership as a grant
+would mean writing a grant row on every sample creation and deleting one on
+every transfer, while as a policy it is one rule that stays true.
+
+The consequence is that ownership reaches **exactly the verbs a rung names**,
+because `_matches` compares capability by equality. There is no "ownership
+implies read/update" in general. The roster:
+
+| Capability | Ownership rung? | Why |
+|---|---|---|
+| `sample:read` | yes | An owner sees their own row in a list |
+| `sample:read_detail` | yes | And can open it |
+| `deletion:request` | yes | §10's ladder had ownership on this route. Requesting is not approving — `deletion:approve` has its own verb and §6.2-1b's DENY, which wins over this ALLOW unconditionally |
+| `deletion:read_report` | yes | The RTBF confirmation for a row you own, readable after you have left the lab it lived in |
+| `sample:update` | **no** | Deliberate, and a real narrowing against the legacy ladder: editing metadata on a sample whose lab you have left is a write into someone else's tenant. An owner who still needs it holds a lab preset. Recorded here so the absence is a decision rather than an oversight |
+| everything else | no | Default-deny. A verb not listed here is not reachable by ownership alone |
+
+**This table is enforced**, by `tests/authz/test_ownership_rung.py`, in both
+directions: a rung added to `LADDER_POLICIES` without a row here fails, and a
+row here without a rung fails. It exists because the failure it catches has
+now happened once: M3 removed `request-deletion`'s in-line owner branch and
+wrote "ownership is not lost — it is `LADDER_POLICIES`' `owner_id` rung" in
+the comment. No such rung existed. The claim read as true, no test covered an
+owner outside the lab, and the narrowing shipped silently. A comment asserting
+where a rule lives is a claim; this table is the same claim somewhere a test
+can reach it.
+
 ### 5.4 Strict deny-wins, restated
 
 The conflict-resolution rule, stated once, authoritatively: **if any applicable DENY policy fires, the decision is DENY — unconditionally, with no precedence or override mechanism.** There is no priority number on policies, no "this grant outranks that deny." The only way to *not* be denied is for no DENY policy to fire.
@@ -481,7 +579,9 @@ The conflict-resolution rule, stated once, authoritatively: **if any applicable 
 Consequences, all intended:
 
 - **Sovereignty constraints are absolute.** A sovereignty DENY (§6) cannot be overridden by any grant, however broad — not even an Instance Administrator's. This is the property tribal-sovereignty and CARE compliance require.
-- **Org-isolation is absolute.** The tenant wall is a DENY policy keyed on cross-org access; no grant punches through it. P0c multi-tenancy is enforced here.
+- **Org-isolation is structural, not a DENY policy.** There is no cross-org DENY, and there is no tenant-wall function — an earlier draft of this bullet claimed both, and `backend/backend/tenancy.py` was written to the claim (a `require_org_access` guard that no route ever called; deleted in M2-DROP-PRE slice 3). What actually isolates orgs is scope containment (§3.1.1, ADR 0015): a principal's grants are rooted at `instance://self/org/N/…`, and `_scope_contains` matches only on a prefix at a segment boundary, so no grant a tenant holds covers another org's rows. A cross-org read is refused by default-deny (§5.1) rather than by a policy firing. `visibility_sql_clause` compiles the same containment into the list path, so the SQL and per-row decisions agree by construction.
+
+  The consequence worth stating plainly, because "absolute" implied otherwise: an **Instance-scoped grant does reach every org**. `instance://self` is a prefix of every org path, which is precisely how the Instance Administrator preset works and is intended (ADR 0015 — "admin reach is structural, not a bypass"). A sovereignty DENY still beats it, which is the property that matters; org isolation walls tenants off from each other, not from the operator of the instance hosting them.
 - **Reasoning is simple.** "Why was this denied?" always has a crisp answer: either a specific DENY policy fired (and `policy.rationale` says which and why), or nothing granted access and default-deny applied. There is no precedence chain to trace.
 
 The cost — occasionally wanting "deny X in general but allow it in this one case" — is paid by *not writing the DENY policy so broadly*, rather than by overriding it. If a real case ever demands true override, precedence can be added later, scoped narrowly to the policies that need it, without retrofitting complexity the rest of the system doesn't use. v1 does not need it.
@@ -739,11 +839,30 @@ Preset "Instance Administrator":
                 audit:read, access:approve_request, access:revoke,
                 federation:configure_peer, federation:write_agreement,
                 federation:review_request, federation:approve_request,
-                anomaly:configure_detector, sample:read_surveillance
+                anomaly:configure_detector, sample:read_surveillance,
+                lab:read, org:read, import:read, token:manage,
+                deposit:record, pipeline:read, pipeline:promote,
+                pipeline:register_custom, deletion:self_approve,
+                deletion:read_report, deletion:reverse_tombstone,
+                deletion:vacuum
   note: Does NOT implicitly include deletion:approve over sovereignty-governed
         samples on Scenario T — that path is gated by the separation-of-duties
         DENY (§6.2 1b) and, where a Tribal authority exists, sits with that
         authority. Instance Administrator is operational, not a consent authority.
+        deletion:self_approve is consistent with that: it lifts §6.2-1b's
+        separation-of-duties friction for an actor who ALREADY holds
+        deletion:approve by some other grant, and confers no approval authority
+        of its own. Without it the escape §6.2-1b describes would be a
+        caller-supplied request-body flag that any principal could set.
+        The three M2-DROP-PRE deletion verbs are operational, not consent:
+        deletion:reverse_tombstone and deletion:vacuum EXECUTE a decision the
+        consent authority already made (or unmake a tombstone that has not
+        vacuumed yet), and deletion:read_report reads the record of one. That
+        is the same line audit:read sits on, and it is why the admin keeps
+        these three while still holding neither deletion:approve nor any
+        content-read verb. sample:read_unscrubbed is the mirror image and is
+        deliberately absent: it returns SAMPLE CONTENT, and pre-scrub content
+        at that.
 ```
 
 **Lab Lead** — replaces Lab Director. Full authority within one lab, including the human-judgment governance capabilities scoped to that lab.
@@ -754,9 +873,26 @@ Preset "Lab Lead":
   capabilities: sample:read, sample:read_detail, sample:create, sample:update,
                 sample:archive, sample:soft_delete, deletion:request,
                 deletion:approve, access:approve_request, access:revoke,
-                pipeline:run, submission:approve
+                pipeline:run, submission:approve, submission:prepare,
+                pipeline:read, pipeline:register_custom, org:manage,
+                lab:read, org:read, import:read, import:manage,
+                sample:read_unscrubbed, deletion:read_report,
+                submission:retract, user:manage
   note: deletion:approve here is the ordinary intra-lab path; the §6.2 1b
         separation-of-duties DENY still forbids approving one's own request.
+        The three M2-DROP-PRE verbs land here because the routes they name all
+        tested is_lab_director in-line. submission:retract is deliberately its
+        own verb rather than a reuse of submission:approve: retraction is the
+        deletion plane reaching outward (B-CARE-3g), and folding it into the
+        submission verb would hand repository-retraction to every future
+        preset that gains submission approval for submission reasons.
+        user:manage is here for the lab's own roster — the four
+        /labs/{id}/members routes, which M2 moved to this verb at Lab scope
+        while no preset held it, locking Lab Directors out of the lab they
+        direct. It confers nothing globally: PATCH and DELETE /users/{id} ask
+        for the same verb with no scope argument, which resolves to the
+        instance root, and a lab:// grant does not contain the root. The verb
+        is scope-relative in the same way org:manage above is.
 ```
 
 **Lab Member (read-write)** — replaces Lab Collaborator. Does the work, cannot approve governance.
@@ -765,10 +901,14 @@ Preset "Lab Lead":
 Preset "Lab Member (read-write)":
   scope-template: Lab
   capabilities: sample:read, sample:read_detail, sample:create, sample:update,
-                deletion:request, pipeline:run
+                deletion:request, pipeline:run, pipeline:read,
+                submission:prepare, lab:read, org:read,
+                import:read, import:manage, deletion:read_report
   note: Can request deletion but not approve it; can run pipelines but not
         approve submissions or access requests. The read-write/governance
-        split is the main line between this and Lab Lead.
+        split is the main line between this and Lab Lead — note that it runs
+        between preparing a submission and approving one, not around
+        submissions entirely.
 ```
 
 **Lab Member (read-only)** — replaces Lab Reader. Sees, does not touch.
@@ -776,8 +916,25 @@ Preset "Lab Member (read-write)":
 ```
 Preset "Lab Member (read-only)":
   scope-template: Lab
-  capabilities: sample:read, sample:read_detail
+  capabilities: sample:read, sample:read_detail, pipeline:read,
+                lab:read, org:read, import:read, deletion:read_report
+  note: Every addition beyond the original two is a read. Watching a pipeline
+        run, seeing the lab directory, and reading a mapping config are all
+        things a read-only member needs and none of them writes. So is
+        deletion:read_report — the legacy _require_lab_tie admitted ANY lab
+        member, read-only included, and the report writes nothing.
 ```
+
+**Keeping this section and `reseed.py` in agreement.** The blocks above were
+written before the M2 catalog review added eight verbs to §4, and nothing
+noticed: `pipeline:promote`, `pipeline:register_custom` and `pipeline:read`
+each reached a route that no principal could call, and `submission:prepare`,
+`lab:read`, `org:read`, `import:read`, `import:manage` and `token:manage`
+were heading the same way. §4 and these presets are two lists that must agree,
+and until M2-B4 nothing made them.
+`tests/authz/test_catalog_preset_coverage.py` now does, in both directions —
+every catalog verb has a preset, a policy, or a written reason it has none,
+and no preset names a verb the catalog does not define.
 
 **Surveillance Officer** — *not* a scope-bound lab role; this is the capability-bundle that replaces the global `is_data_analyst` flag, and §4.1 already isolated its core capability. It is the cross-scope surveillance-read grant, applied at Instance (or Org) scope.
 
@@ -802,7 +959,8 @@ Preset "Surveillance Officer":
 ```
 Preset "Tribal Authority Designee"  (Scenario T deployments only):
   scope-template: Org (or a dedicated authority scope, pending §6.4 resolution)
-  capabilities: deletion:request, deletion:approve, submission:approve
+  capabilities: deletion:request, deletion:approve, submission:approve,
+                submission:retract
   carve-out:    EXEMPT from the §6.2 1b separation-of-duties DENY — the
                 designee MAY request and approve the same deletion, because
                 the consent authority and the operational chain are
@@ -854,7 +1012,7 @@ The six APGAP roles map onto presets without information loss, which is what mak
 | Lab Director | Lab Lead | scoped grants instead of a role enum; deletion-approve subject to separation-of-duties |
 | Lab Collaborator | Lab Member (read-write) | unchanged in spirit; gains explicit `deletion:request` |
 | Lab Reader | Lab Member (read-only) | unchanged |
-| Bioinformatics User | *(folded into Lab Member RW + `pipeline:run`)* | `pipeline:run` is an independent capability, not a role — a Lab Member RW who runs pipelines simply holds it |
+| Bioinformatics User | *(folded into Lab Member RW)* | `pipeline:run` is an independent capability, not a role, and §8.2 puts it in the Lab Member RW preset — so a Bioinformatics User simply *is* a Lab Member RW. An earlier "Lab Member RW + `pipeline:run`" phrasing here read as though RW lacked it, and the reseed followed that reading until M2-B3 found the contradiction |
 | Data Analyst | Surveillance Officer | now a scoped capability-bundle, not a global boolean; genuinely narrower (surveillance-relevant only) |
 
 Two APGAP roles dissolve rather than map: **Bioinformatics User** was really "Lab Member who runs pipelines," and `pipeline:run` being its own capability (§4.2) means that is just a Lab Member RW with one extra capability — no separate preset needed. And the **`is_data_analyst` global boolean** becomes the Surveillance Officer preset applied at a wide scope, which is both more expressive (it can be Org-scoped, not only instance-global) and narrower (gated to `surveillance_relevant`). The net: six roles become four lab/instance presets plus two federation presets plus one Scenario-T preset, no capability that APGAP granted is lost, and several that APGAP *over*-granted (global data-analyst read; role-implied pipeline access) are now scoped down.
@@ -988,7 +1146,11 @@ The reseed is a one-time script (Python, per the no-`sed`/no-ORM conventions —
 | `lab_membership` = Bioinformatics User | apply **Lab Member (read-write)** preset at `lab:<id>` **+** the `pipeline:run` capability |
 | `lab_membership` = Platform Admin (group) | apply scope-appropriate admin preset (usually folds into the principal's Lab Lead / Instance Administrator grants) |
 
-After the reseed runs and is verified, the old columns and enum are dropped in the same migration. The reseed reads them; the migration that contains the reseed removes them; there is never a window where both the boolean and the grants are authoritative.
+**Amended (ADR 0016): the reseed and the column drop are two migrations, not one.** The original plan put both in a single migration so that "there is never a window where both the boolean and the grants are authoritative." That property is preserved by the split, because it was never the migration boundary that provided it — it is provided by *nothing reading the grants until the guards flip*. An additive reseed migration issues grants while `permissions.py` still decides every request: the grants exist and are inert, which is one authority, not two.
+
+What the split buys is the ability to inspect real grant rows — counts per preset, the pre-flight guard's three divergence counts, spot-checks against known users — before the irreversible step, rather than discovering a bad reseed with the old columns already dropped. Rows created through the old paths between the two migrations are covered by re-running `reseed()` inside the cutover migration; it is idempotent by construction (`ON CONFLICT DO NOTHING` against the unique index its own migration creates).
+
+The cutover migration therefore runs: re-run reseed (idempotent catch-up) → flip guards → flip list endpoints → drop the columns and enum **last**, so a failure at any earlier step rolls back with the old model intact.
 
 ### 10.3 The guard rewrite — role-checks become capability-checks
 

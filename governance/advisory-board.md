@@ -19,9 +19,8 @@ The trigger condition is the *first* of the following:
   funding award that requires multi-stakeholder governance).
 
 Until the trigger fires, the maintainer makes governance decisions
-unilaterally and is publicly accountable via `docs/learnings.md`,
-`docs/review_log.md`, and the `governance/grievance-log.md` (if
-populated).
+unilaterally and is publicly accountable via `docs/learnings.md` and
+the `governance/grievance-log.md` (if populated).
 
 ## Composition (target)
 

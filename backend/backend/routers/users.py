@@ -1,8 +1,9 @@
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from backend.audit import AuditActions, log_audit
-from backend.auth.guards import get_current_user, require_capability
+from backend.auth.guards import get_current_user, permits, require_capability
+from backend.authz.reseed import INSTANCE_PRESETS, sync_instance_preset
 from backend.database import execute_query, execute_write, get_db_dep
 from backend.pagination import paginate
 from backend.responses import error, success, success_list, success_message
@@ -11,18 +12,31 @@ router = APIRouter(prefix="/api/v1/users", tags=["users"])
 
 
 class UserUpdate(BaseModel):
+    # Unknown fields are an error, not noise. Pydantic drops them by default,
+    # which for THIS model means a stale client sending the pre-slice-7 body
+    # gets a 200 having assigned nothing — the caller believing they promoted
+    # someone who holds none of it. That is the failure mode a breaking rename
+    # exists to prevent, so the rename has to be loud.
+    model_config = ConfigDict(extra="forbid")
+
     name: str | None = Field(default=None, min_length=1, max_length=255)
-    is_platform_admin: bool | None = None
-    is_data_analyst: bool | None = None
+    #: Instance-scope role, by preset name (access_model.md §8.2) — or an
+    #: explicit null to remove it. Replaces the is_platform_admin /
+    #: is_data_analyst booleans this endpoint used to accept: a role write is
+    #: a capability ASSIGNMENT, and the model's unit of assignment is a
+    #: preset, not a flag. Lab-scoped roles are assigned through membership
+    #: (M2-B5), not here.
+    instance_preset: str | None = None
     is_active: bool | None = None
     organization_id: int | None = None
 
 
 _SELF_EDITABLE = {"name"}
+#: The field whose write issues grants rather than editing a profile.
+_ROLE_FIELD = "instance_preset"
 _ADMIN_EDITABLE = {
     "name",
-    "is_platform_admin",
-    "is_data_analyst",
+    "instance_preset",
     "is_active",
     "organization_id",
 }
@@ -110,7 +124,10 @@ def get_user(
     db=Depends(get_db_dep),  # noqa: B008
 ):
     current = get_current_user(request)
-    if not current.get("is_platform_admin") and current["id"] != user_id:
+    # M2-B5: self, or user:manage. Self is not a capability — §3.1's scope
+    # tree has no user level, so "you are yourself" cannot be expressed as a
+    # grant and stays an identity comparison (§4.7).
+    if current["id"] != user_id and not permits(current, "user:manage"):
         return error(
             "ACCESS_DENIED",
             "You do not have access to this user record.",
@@ -135,7 +152,7 @@ def update_user(
     db=Depends(get_db_dep),  # noqa: B008
 ):
     current = get_current_user(request)
-    is_admin = bool(current.get("is_platform_admin"))
+    is_admin = permits(current, "user:manage")
     is_self = current["id"] == user_id
     if not is_admin and not is_self:
         return error(
@@ -144,12 +161,18 @@ def update_user(
             status_code=403,
         )
 
+    # An explicit null on the role field means "remove the Instance role",
+    # which exclude_none cannot distinguish from "not supplied" (Rule 39's
+    # partial-update shape has no way to say it). model_fields_set answers a
+    # different question — did the caller supply this — so it gets its own name
+    # and is the only thing consulted about the role field.
+    role_written = _ROLE_FIELD in payload.model_fields_set
     updates = payload.model_dump(exclude_none=True)
-    if not updates:
+    if not updates and not role_written:
         raise HTTPException(status_code=400, detail="No fields to update.")
 
     allowed = _ADMIN_EDITABLE if is_admin else _SELF_EDITABLE
-    forbidden = set(updates) - allowed
+    forbidden = (set(updates) | ({_ROLE_FIELD} if role_written else set())) - allowed
     if forbidden:
         return error(
             "ACCESS_DENIED",
@@ -166,15 +189,42 @@ def update_user(
         return error("NOT_FOUND", f"User {user_id} not found.", status_code=404)
     before = before_rows[0]
 
-    set_clause = ", ".join(f"{k} = :{k}" for k in updates)
+    # The preset is the only representation the API has, and the grants are
+    # the assignment. This used to also write the two legacy columns; it no
+    # longer does, ahead of M2-DROP removing them.
+    if role_written:
+        preset = payload.instance_preset
+        if preset is not None and preset not in INSTANCE_PRESETS:
+            return error(
+                "INVALID_PRESET",
+                f"instance_preset must be null or one of {sorted(INSTANCE_PRESETS)}.",
+                status_code=422,
+            )
+        updates.pop(_ROLE_FIELD, None)
+
+    # A role-only PATCH now touches no column at all: instance_preset is not
+    # one, and it no longer writes the two it used to translate into. Before the
+    # drop `updates` was never empty here, so the SET clause was always
+    # well-formed; now it can be, and `SET , updated_at = ...` is a syntax
+    # error. The row still gets its updated_at bumped — a role assignment is
+    # a change to the user even when no column of theirs holds it.
+    set_clause = ", ".join([*(f"{k} = :{k}" for k in updates), "updated_at = NOW()"])
     params = dict(updates)
     params["id"] = user_id
     rows = execute_write(
-        f"UPDATE users SET {set_clause}, updated_at = NOW() WHERE id = :id RETURNING *",
+        f"UPDATE users SET {set_clause} WHERE id = :id RETURNING *",
         params,
         conn=db,
     )
     after = rows[0]
+
+    # The role changed, so the grants must too. §4.5 scopes user:manage as
+    # "assign capabilities" — issuing the grants IS the assignment. On the
+    # request's own connection so the row and the grants land in one
+    # transaction: a half-applied pair leaves the principal either inert or
+    # over-privileged. Mirrors labs.py's _sync_grants_for (M2-B5).
+    if role_written:
+        sync_instance_preset(db, user_id=user_id, preset=payload.instance_preset)
 
     log_audit(
         action=AuditActions.UPDATE_USER,

@@ -2455,7 +2455,7 @@ The user surfaced the discrepancy by asking "Why is the test coverage so low?" �
 
 ## P0e — `jackpot init` operator-bootstrap CLI + 13-item Phase 22 cleanup — 2026-05-02
 
-**What was built:** The full `jackpot init` CLI (detect / scenario-info / configure / secrets / bootstrap / validate subcommands; `reconfigure` documented in the design lockdown but deferred to P0f) plus 13 Phase 22 cleanup items absorbed into the same phase. P0e shipped 26 commits across 5 streams (A through E), 970+ tests passing, 86%+ coverage. Full closeout in `docs/review_log.md` "P0e closeout" section; this entry captures the patterns + lessons, not the per-commit log.
+**What was built:** The full `jackpot init` CLI (detect / scenario-info / configure / secrets / bootstrap / validate subcommands; `reconfigure` documented in the design lockdown but deferred to P0f) plus 13 Phase 22 cleanup items absorbed into the same phase. P0e shipped 26 commits across 5 streams (A through E), 970+ tests passing, 86%+ coverage. Full closeout in the `docs/review_log.md` "P0e closeout" section; this entry captures the patterns + lessons, not the per-commit log. (That file was deleted on 2026-05-08 as collateral in `06e67ee`, a schema-regeneration commit; recover it with `git show 06e67ee^:docs/review_log.md`. `docs/learnings.md` is the log going forward.)
 
 **Key decisions:**
 
@@ -2636,3 +2636,1276 @@ documentation pattern.
 - Middleware resolution duplicates the `get_current_user` DB lookup routes make via `Depends`; acceptable now, dedupe when M2 wires `permit()`.
 - `_user_in_lab` in byop.py wraps `get_user_lab_membership` (Postgres) so the SQLite test harness can monkeypatch it — new lab-scoped guards should use the same seam.
 - Per-endpoint capability enforcement is NOT P0c — it's the M2 cutover (access_model.md §10.3/§11); the endpoint→capability sweep lives in docs/endpoint_capability_map.md.
+
+## M2 pre-cutover verification harness — 2026-08-29
+**What was built:** Dark equivalence harness proving M0 permit() / M1 visibility / ACCESS-SEED reseed on real PostgreSQL before the irreversible M2 cutover (tests/authz/preflight.py + test_cutover_preflight.py, scripts/m2_preflight_report.py, docs/m2_preflight_report.md; PR #140).
+**Key decisions:**
+- Divergences legacy-vs-new are registered, not hidden: `EXPECTED_DIVERGENCES` maps each class to a predicate + rationale; tests assert zero unregistered divergences AND that every registered class still fires (stale-expectation check).
+- Visibility safety invariant is unconditional: new clause must never over-grant (new ⊆ legacy per persona); narrowing is allowed and documented, widening fails the build.
+- Report generator imports the registry by file path so rationales cannot drift from the tests.
+**Watch out for:**
+- `instance://self` does NOT contain `lab://N` (_scope_contains is URI-prefix) — reseeded admin grants match no lab resources. M2 blocker: scope redesign or admin ALLOW policy.
+- Live chain lacks the grants unique index; reseed idempotency exists only after the staged migration creates it. Ordering pinned by test_reseed_duplicates_without_index.
+- `tests` dotted imports are shadowed by cli/tests (regular package from the editable cli install); use `authz.preflight` under pytest, file-path import in scripts.
+- Repo-wide gotcha: `git stash pop` in a worktree can pop ANOTHER session's stash — stashes are shared across worktrees. Check `git stash list` before pop.
+
+## M2-B2 — sample-plane route guards — 2026-08-31
+
+**What was built:** 20 of the 27 sample-plane routes moved off their in-route
+ownership/visibility/director checks and onto `require_capability(...)`, and
+the guard grew the attribute half it needed to make those decisions correctly.
+
+**Key decisions:**
+
+- **The guard now passes `LADDER_POLICIES`, not `policies=[]`.** M2-B1 left a
+  note saying the attribute-policy paths "belong to the sample-visibility
+  plane". That reading was too narrow: they belong to any *sample-scoped
+  decision*, list or detail. A PUBLIC sample is readable by a non-member on
+  the detail route too, and no grant expresses that — only a policy reading
+  the row does. Passing the set on every call, including lab- and
+  instance-scoped ones, is safe rather than sloppy: every policy predicate
+  reads a resource attribute, a resource carrying none matches nothing, and
+  the set has no DENY entry, so it can only widen and only for a sample.
+- **`sample_resource()` fetches scope and attributes in one query.** The
+  alternative — resolve the scope, then fetch attributes separately — costs a
+  second round trip per request and invites the failure where one is fetched
+  without the other. A guard holding the scope but not the attributes
+  evaluates every policy against a missing value, which reads as DENY: the
+  permissive rungs disappear silently rather than erroring.
+- **`access:request` had to be a policy.** It appears in no §8.2 preset, and
+  adding it to one would not have worked: the requester is by definition not
+  a member of the lab they are asking about, so a lab-scoped grant never
+  contains the target sample's scope, and an instance-scoped grant issued to
+  everybody is the same thing as no check at all. The rule is a fact about
+  the row — "this sample invites requests" — which is what an
+  attribute-policy is for. It replaces the in-route
+  `REQUESTABLE_SHARING_LEVELS` test one-for-one.
+- **Seven list routes were NOT converted, and could not be.**
+  `require_capability` resolves exactly one resource scope. A list endpoint
+  names none; its authorization *is* the row filter. Guarding one at the
+  instance root would require an instance-wide grant and deny every ordinary
+  lab member the entire endpoint. They belong to M2-B7, which already owns
+  compiling these rules into SQL. Recorded in the backlog and the map rather
+  than approximated.
+- **404 stays ahead of 403 on the sample routes.** The fetch runs first, so
+  an archived or tombstoned sample is still "not found" rather than
+  "forbidden" — that is `_get_sample`'s filter talking, not the authorization
+  model. On the *file* routes the opposite convention already held (a denial
+  collapses into `FILE_NOT_FOUND`), so the guard's `HTTPException` is caught
+  and swallowed there. Letting the 403 through would have re-leaked the
+  existence that helper exists to hide.
+
+**Watch out for:**
+
+- `promote` is a deliberate **widening**. The map assigns `sample:update`,
+  which `lab_member_rw` holds; the legacy branch demanded a Lab Director. If
+  the narrower rule was intended it needs its own verb, not a re-added
+  branch.
+- The `raw_fastq` Lab-Director check in `download` is deliberately still the
+  legacy check. No §4 verb names "pre-scrub reads", and dropping it to finish
+  the rewrite would have widened access to un-scrubbed data.
+- **Project-only membership loses access here.** The legacy ladder admitted a
+  project member; no preset grants at Project scope. Known and counted by
+  reseed's pre-flight (`project_only_membership`), but B2 is where it first
+  becomes reachable from a route.
+- Ingest gained a check it never had: `lab_id` arrives in the caller's own
+  metadata and nothing verified it, so any authenticated user could ingest
+  into any lab. The CSV path checks per row, memoized per lab — without the
+  memo a 1000-row upload would add 2000 queries.
+- A stale `m2-b2-sample-plane` branch from the aborted 2026-08-31 attempt
+  still pointed at `b95a218`, three commits before the PRE work. `git diff
+  development...branch` was empty, which reads as "identical" but also means
+  "strict ancestor". Check `git log HEAD..development`, not just the diff.
+
+**ASCII diagram — where a sample-plane decision comes from after B2:**
+
+```
+  route (samples/files/imports/sample-access/ingest)
+      |
+      |  require_capability("sample:read_detail")(user, sample_id=42)
+      v
+  +---------------------------- guard ----------------------------+
+  |  load_principal(user.id) ---> grants  (authz_capability_grants) |
+  |  sample_resource(42)     ---> scope   org://o/lab/proj/sample   |
+  |                           \-> attrs   sharing_level, owner_id,  |
+  |                                       surveillance_relevant     |
+  +---------------------------------------------------------------+
+      |
+      v
+  permit(principal, capability, Resource(scope, attrs),
+         Context(now=...), policies=LADDER_POLICIES)
+      |
+      +-- DENY policy matches? ------------------> DENY   (deny-wins)
+      +-- grant covers scope, unexpired? --------> ALLOW  (structural)
+      +-- ALLOW policy matches attrs? -----------> ALLOW  (attribute)
+      +-- otherwise ----------------------------> DENY   (default)
+
+  Lists take neither path yet — no single resource to name.  -> M2-B7
+```
+
+## M2-B3-PRE — pipeline:read holders and Project-scope resolution — 2026-09-01
+
+**What was built:** the two prerequisites M2-B3 turned out to be blocked on,
+plus map corrections for two document contradictions the same investigation
+surfaced.
+
+**Key decisions:**
+
+- **`pipeline:read` went into every lab preset, read-only included.** It was
+  in the §4 catalog but in no preset, so every route needing it was reachable
+  by nobody — the third instance of that exact failure, after
+  `pipeline:promote` and `pipeline:register_custom` in M2-B1. The catalog and
+  the presets are two lists that have to agree and nothing checks that they
+  do; `test_every_lab_preset_holds_pipeline_read` now checks this one, at the
+  presets rather than at a route, so it fails where the capability goes
+  missing.
+- **Run-status reads are `pipeline:read`, not `pipeline:run`.** The map and
+  §4 disagreed. §4's wording is explicit — "the pipeline zoo, the BYOP
+  registry, and run status" — and `pipeline:run` is not held by read-only
+  members, so taking the map literally would have removed run visibility from
+  every Lab Reader watching a run on their own lab's samples. Watching a run
+  is not launching one. (This entry first said `pipeline:run` sat only in
+  `lab_lead` plus a Bioinformatics User extra. That was the reseed's
+  misreading rather than §8.2 — M2-B3 found and corrected it; see that entry.)
+- **BYOP catalog reads stay unscoped.** The map said `pipeline:read` at Lab;
+  `byop.py` said reads are "INTENTIONALLY unscoped per design §9 (catalog
+  browse)". Resolved toward the router: a pipeline definition is not tenant
+  data, and this is the same shape as the sequencing-lab registry the map
+  already calls AUTH-ONLY BY DESIGN. Mutations stay tenancy-guarded. The
+  by-design count in the pre-flight suite moved 7 → 10 with a comment saying
+  why, rather than being loosened to a range.
+- **Project scope resolves like the other levels.** `scope_uri(project=…)`
+  already existed; what was missing was `project_resource_scope()`. Naming the
+  project rather than approximating it by its lab is what lets a cryptWWDB
+  service principal hold `pipeline:write_results` on one project and nothing
+  else (§9.4). Containment still runs downward, so a lab member's `…/lab/7`
+  grant covers `…/lab/7/project/12` — scoping down costs existing members
+  nothing, which two tests pin from both directions.
+- **The guard's "not both" rule became "exactly one."** With a third
+  identifier, a pairwise check would have needed three comparisons and would
+  quietly miss the fourth when a fifth level arrives. It now counts what was
+  passed and names them in the error.
+
+**Watch out for:**
+
+- B3 proper is 11 routes now, not 16 — three BYOP reads became auth-only and
+  two are B7-class lists.
+- Two open questions for B3, neither blocking: BYOP `owner_lab_id` is
+  NULLABLE, so a lab-less pipeline has no lab scope to check against; and
+  `_get_or_404_tenancy`'s "registering user" rung is an ownership rung with no
+  grant behind it — the same shape sample ownership needed an attribute-policy
+  for in PRE-A.
+- The backlog's B3 note claimed M2 must "land the catalog entry" for
+  `pipeline:read`. It was already in §4. Read the catalog before believing a
+  note about it.
+
+## M2-B3 — pipeline and BYOP route guards — 2026-09-01
+
+**What was built:** the 11 remaining pipeline-plane routes moved onto
+capability checks — 7 BYOP mutations, launch, resume, and the 3 run-status
+reads.
+
+**Key decisions:**
+
+- **The schema had already answered the two "open questions".**
+  `owner_lab_id` is nullable because `sharing_scope` admits `'private'` — a
+  pipeline belonging to a person, not a lab. That makes the nullable column
+  correct rather than a hole, and makes the registrant rung an ownership
+  policy of exactly the shape PRE-A built for samples. Neither needed a
+  judgement call; both needed reading the DDL.
+- **Creation must not use the ownership rung, and a test caught it.** The
+  first cut routed `create_pipeline` through `_may_manage`, which passes
+  `registered_by_user_id`. At creation the caller *is* the registrant, so the
+  policy matched every time and the lab check became vacuous — any
+  authenticated user could register a pipeline into any lab. This was a
+  widening, the direction that does not fail closed. Caught by an existing
+  tenancy test (`test_byop_create_into_foreign_lab_is_403`) returning 201, and
+  now pinned by its own regression test.
+- **BYOP tests run the real engine against stubbed DB lookups.** Those router
+  tests use in-memory SQLite with no Postgres, so the tempting move was to
+  patch `_may_manage` wholesale. That would have asserted the test's copy of
+  the ownership rule instead of the rule. The `authz_grants` fixture stubs
+  only `load_principal` and the scope resolvers — the parts that touch a
+  database — and lets the real `permit()` and the real `LADDER_POLICIES` run.
+- **`_may_read_run` and the launch check are separate functions on purpose.**
+  Reading a run is `pipeline:read`; launching and resuming are `pipeline:run`.
+  A single shared helper would have made it one edit to collapse the
+  distinction the whole batch exists to draw.
+- **The per-sample launch checks were converted, not dropped** (the backlog
+  entry is explicit). They moved from "is the caller in this sample's lab" to
+  `sample:read_detail` at the sample's own scope, which additionally admits
+  PUBLIC samples, the caller's own, and per-sample grants — paths the lab test
+  could not see at all.
+
+**Watch out for:**
+
+- **A citation I repeated four times did not hold, and the review caught it.**
+  I wrote "§8.2 puts `pipeline:run` in lab_lead + Bioinformatics User only" in
+  the router, the map, this file and the backlog, and built a "deliberate
+  narrowing" on it. §8.2's Lab Member (read-write) preset block lists
+  `pipeline:run` outright — "can run pipelines but not approve submissions or
+  access requests". The claim came from `reseed.py`, which excluded the verb
+  from `lab_member_rw` on a misreading of §8.5's role-mapping prose, and I
+  took the code's behaviour for the spec's intent because they were the only
+  two things I checked against each other. The fix runs the other way: the
+  reseed now grants it, `BIOINFORMATICS_EXTRA` is gone, and §8.5's phrasing is
+  corrected so it cannot re-create the confusion. Launch access is unchanged
+  for Collaborators; only read-only members lose it.
+  The general lesson: when code and prose agree, that is one source, not two.
+- A test that passed alone failed in full-suite order: `'Other Lab'` already
+  existed, created by another module *without* a project, and the helper only
+  seeded the project on the lab-insert path. Ensure each half independently.
+- `POST /{run_id}/resume` takes a body, and FastAPI validates the body before
+  the handler runs — a guard test that omits it gets 422, not 403, and proves
+  nothing about the guard.
+
+## M2-B7 — list endpoints onto visibility_sql_clause — 2026-09-01
+
+**What was built:** all 8 list endpoints moved off `permissions.py`'s
+hand-written ladder and onto filters compiled from the same grants and
+policies `permit()` reads. `backend/permissions.py` now has zero production
+callers.
+
+**Key decisions:**
+
+- **The equivalence harness was proving the wrong thing, and that came
+  first.** `test_new_never_over_grants` and the per-row agreement test both
+  ran with `policies=[]` — grants only. That is a strict subset of what a
+  deployed list shows, so the proof described something nobody would run, and
+  it would have stayed green while production silently dropped every PUBLIC
+  and DISCOVERABLE row. Pointing them at `LADDER_POLICIES` and
+  `SAMPLE_ATTRIBUTE_COLUMNS` *before* touching a router is what made the rest
+  of the batch safe: the invariant held, and the per-row test failed exactly
+  where it should have — it was still asking `permit()` a question without
+  the attributes half the fragment's terms read.
+- **One builder, not eight call sites.** Scope expression, policy set and
+  attribute-column mapping all have to match the row-wise guard. Assembling
+  them per route is how the two halves drift, and a list that drifts wider
+  leaks rows with no error and no audit row. `sample_list_clause` assembles
+  them once; routes pass table aliases.
+- **Three scope levels, because not every list is sample-rooted.** Import
+  sessions live at lab level and pipeline runs at project level, and
+  `scope_sql` only emitted the sample path. `lab_scope_sql` and
+  `project_scope_sql` fill that in. Both new builders pass **no policies** on
+  purpose: every `LADDER_POLICIES` entry reads a sample attribute, and
+  compiling those against a table that has no such column is either an error
+  or, worse, a term that silently matches nothing.
+- **`is_canonical_scope_sql` still byte-compares.** It now re-derives every
+  candidate shape from the aliases it finds rather than loosening its regex to
+  cover three forms. A regex that admits three shapes is one edit away from
+  admitting four.
+- **Two ownership rungs kept, two admin bypasses removed.** The request list
+  and the run list each keep "rows you created" — no grant expresses that, and
+  removing it would narrow access this batch was not asked to narrow. Both
+  lost their `is_platform_admin` branch, because an instance-scoped grant
+  already contains every path beneath it. The request list also lost its
+  `is_lab_director` subquery, and the replacement is strictly more
+  expressive: a director whose grant sits at org scope now sees their org's
+  requests, which `lab_id IN (...)` could not express.
+
+**Watch out for:**
+
+- Every one of these queries now needs `JOIN labs` in reach. A sample's scope
+  is derived from its lineage (ADR 0015) and the org segment comes from
+  `labs.organization_id` — forget the join and the query fails loudly, which
+  is the good case.
+- `select_all` on the samples list is a separate code path from the paginated
+  one. A filter applied to only one of them is exactly the gap a page-only
+  test misses; there is now a test asserting the two return the same set.
+- **The equivalence proof does not reach two of the eight lists.** It is
+  built on `samples`, so `imports/sessions` and `pipelines/` have route tests
+  and nothing more. Worth being explicit about rather than letting "the
+  invariant suite passes" imply coverage it does not have: the imports list
+  strictly narrows (a lab rung added on top of ownership), while the run list
+  *can* widen — an org-scoped `pipeline:read` grant would show every lab in
+  the org, which the legacy `lab_id IN (…)` form could not express. No preset
+  issues org-scoped grants today, so the sets currently match.
+- **The performance worry was backwards.** The backlog flagged that prefix
+  `LIKE` over a computed expression cannot use an index and asked for a
+  measurement. At 3,000 samples the new fragment costs 113 and runs in 5.3 ms;
+  the legacy ladder costs 3,923 and runs in 7.1 ms. Both sequential-scan
+  `samples`; the legacy one *also* ran four correlated `EXISTS` subqueries. No
+  index added — it would have been speculative, and this is an improvement,
+  not a regression.
+
+## M2-B6 — SERVICE-principal pipeline callbacks — 2026-09-01
+
+**What was built:** the two per-run callbacks (`/pipelines/events`,
+`/pipelines/{run_id}/results/{result_type}`) gained an authorization call
+beside their existing token check. First `PrincipalKind.SERVICE` on the route
+surface.
+
+**Key decisions:**
+
+- **The token check did not move, shrink, or change.** It is the
+  authentication half and the backlog said so explicitly. Authorization was
+  added *after* it, and the ordering is deliberate: a bad token answers 401
+  (who are you), not 403 (you may not), because a 403 would confirm to an
+  unauthenticated caller that the run exists and is writable. Pinned by a
+  test.
+- **The positive check cannot fail today, and the docstring says so.** The
+  principal is constructed from the same run the token authenticated against,
+  so `permit()` always ALLOWs. Writing that down was more useful than
+  inventing a failure mode to make the check look load-bearing. What the
+  separation buys is the chokepoint: at M4/M5 a `data_source_lab` peer
+  carrying the §8.4 preset reaches the same route with a different capability
+  set, and the answer changes there rather than in the route.
+- **The negative half is what is load-bearing now.** The principal holds
+  `pipeline:write_results` and nothing else, so `permit()` refuses it
+  `sample:read` and `sample:read_detail` on the samples its own run computes
+  over. §8.4: "The absence is the security property, not an oversight." A
+  capability set is only a security property if something breaks when it
+  grows, so the set itself is asserted, along with the scope not reaching
+  another project, the enclosing lab, or the instance root.
+- **A run without `project_id` raises rather than falling back.** The column
+  is NOT NULL, so a row lacking it means the caller did not SELECT it —
+  which is exactly what the results route was doing before this batch.
+  Defaulting to the instance root there would have handed a pipeline callback
+  authority over the whole deployment; raising turns that mistake into a 500
+  instead of a silent widening.
+
+**Watch out for:**
+
+- The results route's query now selects `project_id`. If a future edit drops
+  it, `pipeline_run_principal` raises — loud, which is the intent — but the
+  reason will not be obvious from the traceback alone.
+- These grants are *constructed*, never stored. Nothing in
+  `authz_capability_grants` should ever match one; `source="pipeline_token"`
+  marks the difference.
+- The engine still applies `not_after` to a SERVICE principal. Unused today
+  (these grants carry no expiry) but asserted, so a future "services do not
+  expire" shortcut has to break a test to land.
+
+## M2-B4 — submission and import-mapping guards — 2026-09-01
+
+**What was built:** 21 routes converted, and the systemic gap behind four
+batches' worth of blockers closed.
+
+**Key decisions:**
+
+- **The blocker was one root cause, not six.** Six of B4 and B5's verbs were
+  in no preset. So were two that M2-B1 found and one that M2-B3-PRE found. All
+  eight came from the same event: the M2 catalog review added verbs to §4 and
+  nobody updated §8.2's preset blocks. Fixing the six without fixing the
+  mechanism would have left the seventh for the next batch.
+- **The guard runs in four directions, and two of them are about the docs.**
+  Catalog→preset catches "reachable by nobody". Preset→catalog catches a typo,
+  which is silent otherwise — the grant is issued and matches nothing.
+  §8.2↔`PRESET_GRANTS` catches the drift that caused M2-B3's `pipeline:run`
+  bug. And the allowlist is checked for rot, so an entry cannot quietly
+  contradict a later grant.
+- **"Held by no preset" is a legitimate answer, so the test demands a reason
+  rather than a grant.** Eight verbs are deliberately unheld — SERVICE verbs,
+  peer verbs, one carried by an attribute-policy, one deferred to M3, one with
+  no route yet. Requiring prose (and asserting it is longer than a shrug)
+  turns each into a decision on the record.
+- **prepare vs approve is a real narrowing and the tests say so.** The old
+  check let a submission's creator send it. Six routes now need a Lab Lead.
+  The creator rung is subsumed, not dropped — creating already required
+  `submission:prepare`.
+
+**Watch out for:**
+
+- **The existing submission suite stayed green through all of this**, because
+  the seeded admin is both a platform admin *and* Lab Director of lab 1, so it
+  holds `lab_lead` and passes both halves. A batch whose whole point is a
+  boundary needs a test that stands on each side of it; the general lesson is
+  that a fixture holding every capability cannot detect a split.
+- **FastAPI validates the request body before the handler runs**, so a guard
+  test posting an invalid body gets 422 and proves nothing. This bit M2-B3
+  (`/resume`) and bit twice more here (`mark-rejected` and `withdraw` both
+  require a `reason`). Every "should be 403" assertion needs a *valid* body.
+- An Instance Administrator holds neither `submission:prepare` nor
+  `sample:read`, so a platform admin who is not a lab member cannot create or
+  read a submission. That is consistent with `sample:create`, which admins
+  also lack, and with §8.2's "Instance Administrator is operational, not a
+  consent authority" — but it will surprise someone.
+- **The catalog guard checks presence, not reachability, and that gap bit
+  inside the same batch.** `GET /submissions/` unfiltered used to gate on
+  `is_platform_admin`; swapping that for `sample:read` at the instance root
+  produced a branch nobody could take, because every preset granting
+  `sample:read` issues it at *lab* scope. The new test would not have caught
+  it — a verb can be in a preset and still be unheld at the scope a route
+  asks about. Found by reading the presets by hand while writing this entry,
+  and independently by the review; fixed by making the route a filtered list
+  (M2-B7's builder) instead, which removes the branch rather than repairing
+  it. The limitation is now written into the test's own docstring.
+
+## M2-B5 — governance route guards — 2026-09-01
+
+**What was built:** 13 of 14 routes converted, plus the change that makes
+membership mean anything after cutover.
+
+**Key decisions:**
+
+- **Membership now issues grants, and that was the point of the batch.** A
+  `lab_membership` row stopped being a decision input at M2-B1, so a member
+  added after cutover held nothing until someone ran a reseed — the row said
+  Lab Collaborator and every route disagreed. `POST/PATCH/DELETE
+  /labs/{id}/members` now sync grants on the request's own connection, so the
+  row and the access land in one transaction; a half-applied pair is a member
+  who is either invisible or over-privileged. §4.5 already scoped
+  `user:manage` as "create/modify/deactivate users, **assign capabilities**" —
+  issuing them is that assignment, not a side effect.
+- **Delete-then-insert, scoped by `source`.** Syncing a changed role by diffing
+  would have to reason about which of the old group's capabilities the new one
+  also has. Replacing outright is simpler and obviously correct, and scoping
+  the delete to `source='reseed'` keeps it off the per-sample access grants
+  (`source='direct'`) that share the principal. Pinned by a test.
+- **Split routes stay split.** `tokens` and `users` gate only the half that
+  reaches another principal. Self is not a capability and cannot be: §3.1's
+  scope tree has no user level, so "you are yourself" stays an identity
+  comparison (§4.7). Gating the whole route would take every user's control of
+  their own credentials.
+- **One route was left auth-only on purpose.** `POST /federation/search` — see
+  below.
+
+**Watch out for:**
+
+- **"Held at lab scope" is not "held at instance scope", and that bit twice in
+  two batches.** B4's `GET /submissions/` and B5's `/federation/search` both
+  gated a verb at the instance root that every preset issues at lab scope,
+  making a working route reachable by nobody. The catalog guard added in B4
+  does not catch this — it asserts a verb is in *some* preset, not that
+  anything holds it where a route asks. Both were caught by reading the
+  presets by hand.
+- **`/federation/search` is left auth-only and the map row now carries the
+  question.** Enforcing `sample:read` at Instance would need an
+  Instance Administrator to hold blanket `sample:read`, which contradicts §8.2
+  head-on — the Surveillance Officer preset exists precisely so instance-wide
+  sample reading is narrowed to `surveillance_relevant` rather than conferred
+  wholesale. The act is "query our peers on this deployment's behalf", not
+  "read a sample here", so the right verb belongs with §7's federation work
+  (M4) rather than being invented here.
+- **`GET /organizations/{org_id}` keeps a membership rung deliberately.** Every
+  preset issues `org:read` at lab scope and containment runs downward, so a
+  lab-scoped grant does not cover the org above it — checking `org:read` at
+  org scope would deny every ordinary member their own organization. Making
+  it structural needs org-scoped grants at reseed, which changes what a
+  membership conveys rather than how a route reads.
+- `GET /projects/` loses the `project_membership` rung — the registered
+  `project_only_membership` divergence reaching one more route, not a new loss.
+
+## M2 (part a) — catch-up reseed, and the premise that did not survive contact — 2026-09-01
+
+**What was built:** the reversible half of the cutover — migration
+`a1c7d94e6b28` (pre-flight guard, counts logged, idempotent catch-up reseed)
+and the deletion of `backend/permissions.py` — after the session's opening
+verification showed the irreversible half could not ship.
+
+**Key decisions:**
+
+- **The entry's central claim was false, and checking it was the session.**
+  M2 said the column drop was "bookkeeping that happens to be permanent"
+  because B1..B7 had moved every guard onto `permit()`. They moved every
+  *guard*. They did not move every *reader*. `grep is_platform_admin` returns
+  eleven production modules: the tenant wall in `tenancy.py`, five in-route
+  checks in `samples.py`, the self-approve carve-out in `deletion.py`, the
+  admin-notification lookup in `federation/deletion_propagation.py`, and the
+  identity plumbing in `guards.py` / `auth.py` / `users.py` / `imports.py`.
+  Dropping the columns would have 500'd every one of those paths. The lesson
+  is not "the entry was wrong" — entries written months ahead usually are. It
+  is that "nothing reads X any more" is a claim with a two-second check behind
+  it, and an irreversible migration is the wrong place to find out.
+- **The dependency was inverted.** `docs/endpoint_capability_map.md` assigns
+  the deletion-lifecycle checks to M3, and M3 `depends_on: M2`. So M2 as
+  written had to drop columns that M3's not-yet-converted targets still read.
+  Split instead: M2 keeps part (a), `M2-DROP` takes the drop and is blocked on
+  M3. A cycle in a backlog shows up as a task that cannot be done in either
+  order, which is what this looked like from inside.
+- **`permissions.py` deleted, its `visibility_sql_clause` frozen into the test
+  tree.** Nothing in production imported the module by M2-B7, but two tests
+  did, and one of them — the 2c list-equivalence proof — needs the *old*
+  fragment to compare against. A comparator that lives in production code
+  stops being a comparator the moment production changes. It now sits in
+  `tests/authz/preflight.py` beside `legacy_ladder`, under the same "do not
+  fix this to match new behavior" banner.
+- **The catch-up's `downgrade()` is a deliberate no-op.** Its grants are
+  byte-identical to the additive migration's — same `source`, same
+  `(principal_id, capability, scope_ref)` — because they *are* the same
+  grants, issued late. No predicate selects "the rows this migration inserted"
+  without also selecting rows it did not. Deleting on `source` would silently
+  de-authorize users this migration never touched, so it deletes nothing and
+  says why.
+- **Counts are logged, not just enforced.** `reseed()` raises on a non-zero
+  pre-flight and logs nothing when clean, so a clean run left no evidence the
+  check happened. The migration now calls `preflight_counts()` itself and logs
+  every kind including the zeros. The authoritative refusal still lives in
+  `reseed()` — this is a read-only echo, deliberately not a second
+  implementation of the rule.
+
+**Watch out for:**
+
+- **Approving a sample-access request grants nothing.** The approve endpoint
+  writes `sample_access_grants`, but the only translation into
+  `authz_capability_grants` is `reseed._sample_access_rows`, which runs at
+  migration time. Neither `authz/policy.py` nor `authz/visibility.py` has an
+  approved-request rung. M2-B5 built `sync_membership_grants` for exactly this
+  failure on the membership side; sample access has no twin. It fails *closed*,
+  so it is a functionality gap rather than a hole — and that is why nothing
+  caught it: the tests that would have were calling the legacy
+  `can_access_sample()`, which read the table directly. Now `M2-SAMPLE-ACCESS-SYNC`.
+- **A test helper that reseeds is a smell, not a fix.** `_can_read_detail` in
+  `tests/test_sample_access_router_api.py` runs a full reseed to bridge that
+  gap. It carries a pointer to the backlog entry. When the sync lands, the
+  helper should call the route instead.
+- **A directory named after a dependency silently reclassifies its imports.**
+  Deleting `backend/alembic/` changed 20 unrelated migration files: ruff's
+  isort had been resolving `alembic` as a *first-party local package* because
+  a directory of that name sat inside the source tree, so `from alembic import
+  op` was sorting into the first-party block everywhere. With the orphan gone
+  the real third-party distribution classifies correctly. Nothing was broken
+  before and nothing is broken now — but the repo had been carrying a
+  lint-classification skew for as long as the directory existed, and it only
+  surfaced because CI runs `pre-commit --all-files` while the local hook sees
+  only changed files. That gap is worth remembering on its own: a green local
+  commit does not mean a green `--all-files`.
+- **`backend/alembic/versions/` was never on the chain.** `alembic.ini` points
+  at `backend/db/migrations`. ACCESS-SEED deliberately parked a
+  reads-then-drops migration in the unreachable directory to move it in at M2;
+  ADR 0016 then split that design in two and M2 deferred the drop, leaving a
+  committed file carrying `DROP COLUMN` that no chain could reach and whose
+  design was superseded. Deleted. A staged artifact outside the build path
+  ages badly precisely because nothing fails while it rots.
+
+**ASCII diagram** — the two-migration split, and where the drop went:
+
+```
+  b2f47c1a9e30            a1c7d94e6b28              M2-DROP (blocked on M3)
+  additive                catch-up  [this session]  ┌──────────────────────┐
+  ┌──────────────┐        ┌──────────────┐          │ convert 11 readers   │
+  │ CREATE UNIQ  │        │ preflight    │          │  7 decision-path     │
+  │ INDEX        │        │  counts →log │          │  1 lookup            │
+  │ reseed()     │───────▶│ reseed()     │─────────▶│  3 plumbing          │
+  └──────────────┘        │  (no-op if   │          │ THEN drop columns    │
+   grants inert:          │   caught up) │          └──────────────────────┘
+   nothing reads          └──────────────┘           irreversible; last
+   them yet                downgrade: no-op
+                           (rows indistinguishable
+                            from the additive run)
+```
+
+## M2-SAMPLE-ACCESS-SYNC — approving a request now issues the grant — 2026-09-01
+
+**What was built:** `sync_sample_access_grants()` beside `sync_membership_grants()`,
+wired into all five paths that change per-sample access, closing the gap where
+an approved requester was denied until the next migration.
+
+**Key decisions:**
+
+- **The bug was invisible because the test bridged it.** Between M2-B2 (when
+  the detail route started deciding on grants) and this change, approving a
+  request wrote `sample_access_grants` and nothing else — no policy reads the
+  request tables, and the only translation was `reseed()`, at migration time.
+  The tests that should have caught it were asserting through the legacy
+  `can_access_sample()`, which read the tables directly and therefore always
+  agreed with itself. The M2 session replaced that with a helper that ran a
+  full reseed, which bridged the gap just as effectively. Deleting the bridge
+  turned exactly two tests RED — and the *negative* tests (revoked and expired
+  deny access) had been passing the whole time for the wrong reason, because
+  nothing was ever granted. **A fail-closed bug hides inside its own negative
+  tests.** When a gap denies rather than allows, half the suite confirms it.
+- **State-reconciling, not event-driven.** The function takes "this sample's
+  access changed" and makes the grants agree. Callers do not say what they
+  did. That is what lets one function serve approve, auto-approve, expire,
+  tombstone-seal and reverse-tombstone without five different signatures —
+  and the deletion lifecycle needs the requester-less bulk form anyway.
+- **One query, two callers.** `_SAMPLE_ACCESS_SQL` gained optional
+  `:sample_id` / `:requester_id` filters instead of the sync growing its own
+  query. Two definitions of "who currently has access" would be free to drift,
+  and the drift would be invisible: both produce grant rows that `permit()`
+  reads identically. The `CAST(:x AS INTEGER)` wrappers are load-bearing —
+  PostgreSQL cannot infer a type for a NULL bind parameter.
+- **Deleting scoped by `source='direct'` and by the sample's own scope.**
+  Membership grants live at Lab scope with `source='reseed'`; per-sample
+  access at Sample scope with `source='direct'`. A delete predicate loose in
+  either dimension would strip a Lab Reader's lab access every time one shared
+  sample was revoked.
+
+**Watch out for:**
+
+- **`conn=None` is a supported call shape in this codebase.** `execute_write`
+  documents it as "an auto-committed internal transaction", and
+  `approve_deletion` accepts it — the federation deletion-propagation test
+  calls it that way. Wiring a function that required a real `Connection` into
+  that path failed with `AttributeError: 'NoneType' object has no attribute
+  'execute'` in one test out of 2600. Being stricter than the code calling you
+  is a compatibility break, not defensive programming.
+- **The uniqueness arbiter has no `source` column.** It is
+  `(principal_id, capability, scope_ref)`, so the same capability at the same
+  scope exists once regardless of which subsystem issued it, and
+  `ON CONFLICT DO NOTHING` silently skips the second. It does not bite today
+  because membership and per-sample grants never share a scope — but a future
+  preset that grants at Sample scope would collide, and the losing row would
+  vanish without a word. A test asserting otherwise is asserting against the
+  index, not the code.
+
+## M3 — deletion-governance policies, and the two that weren't — 2026-09-01
+
+**What was built:** `deletion.separation_of_duties` as a real DENY policy, the
+condition-language negation form it needs, and the conversion of three
+deletion-lifecycle routes onto capabilities. The other two policies §6.2
+describes did not ship, for different and specific reasons.
+
+**Key decisions:**
+
+- **A spec section describing three policies contained one.**
+  `no_publish_while_deleting` reads as a DENY on `submission:approve` — but
+  that capability is checked once at *Lab* scope, while the rule is per-sample
+  across the submission's whole set. `submissions.py:497` already enforces it
+  correctly as a set-level query returning a 422 that names each blocked
+  sample. A policy would have been strictly worse *and* wrong-shaped.
+  `no_federate_deleting` keys on `federation:push`, which exists nowhere in
+  the codebase outside an example string in a comment — no route, no grant, no
+  guard. Both are now their own backlog entries. **Checking whether a spec's
+  rule has a call site is part of implementing it**, and neither the backlog
+  nor the report caught this because both were derived from the same section.
+- **The first DENY in a shared policy set breaks an invariant nobody wrote
+  down as fragile.** `guards.py` passes the whole set on every call, and the
+  docstring justified it: *"a resource carrying none matches nothing, and the
+  set contains no DENY entry, so it can only ever widen."* Both clauses matter.
+  "Matches nothing" is true for equality and **false for negation** — absent is
+  not equal to `"ACTIVE"`, so a `{"not": "ACTIVE"}` DENY on a lab-scoped call
+  carrying no attributes fires and denies everything. The replacement invariant
+  is now written down and tested: a DENY may only read attributes
+  `SAMPLE_ATTRIBUTE_COLUMNS` loads, and may only key on a capability whose
+  routes resolve a Sample resource.
+- **Absent had to mean "the rule applies".** `_conditions_satisfied` was
+  equality-only, so `{"platform_admin_self_approve": False}` would not match a
+  context that never set the key — the separation-of-duties DENY would have
+  silently not fired for every caller but one. That is a rule failing OPEN on
+  the authorization path. Hence `{"not": v}`, mirroring the resource
+  predicates' `{"in": [...]}`.
+- **`visibility.py` held a second copy of the condition semantics.** A local
+  `_live()` duplicating `_conditions_satisfied`'s body. Extending one and not
+  the other would have split `permit()` from the SQL clause — the exact
+  divergence the M1 equivalence suite exists to catch, arriving through the
+  door that suite does not watch. It now calls the one definition.
+
+**Watch out for:**
+
+- **The preset is the source of truth, and the test that says so was right.**
+  A draft added `deletion:request` / `deletion:approve` to the
+  `instance_administrator` preset, reasoning from the B-CARE-3 design doc's §10
+  matrix ("Platform Admin (any)"). `test_reseed_presets_match_the_documented_ones`
+  rejected it, and reading §8.2's own note showed the omission was deliberate:
+  *"Instance Administrator is operational, not a consent authority."* On
+  Scenario T the consent authority is the Tribal authority; elsewhere the Lab
+  Lead holds the verb at lab scope. **Two design documents disagreed, and the
+  one that had already resolved the disagreement was the one I was editing
+  away from.** The preset change and the migration written to propagate it
+  were both reverted. When code and prose disagree, find out which one already
+  thought about it.
+- **Changing `PRESET_GRANTS` is inert without a migration.** Grants are rows,
+  not a live view of the preset. Any future preset edit needs a reseed
+  migration to reach existing deployments — the one written for this change
+  was deleted along with it, but the requirement stands.
+
+## M4-A — sharing agreements, landed dark — 2026-09-01
+
+**What was built:** the `sharing_agreements` / `sharing_agreement_grants`
+tables, `sync_agreement_grants()` projecting them into
+`authz_capability_grants` with `source='agreement'`, and
+`load_peer_principal()`. Wired into no request path.
+
+**Key decisions:**
+
+- **The third sync, and deliberately the same shape as the first two.**
+  `sync_membership_grants` (M2-B5) and `sync_sample_access_grants`
+  (M2-SAMPLE-ACCESS-SYNC) both take an operator-facing source table with its
+  own lifecycle and project it into `authz_capability_grants`, delete-then-
+  insert, scoped by `source`. Agreements are the same problem a third time.
+  Following the existing shape rather than inventing a fourth is most of what
+  made this small: `permit()` keeps one place to look, and a reviewer who
+  understands one sync understands all three.
+- **`load_peer_principal` is four lines and worth having anyway.**
+  `load_principal` was already kind-agnostic — grants are keyed by principal
+  id, and kind is an argument — so a peer needed no new loading path, and
+  building one would have been the second decision point §2.1 warns about. The
+  wrapper exists to be *findable*: someone asking "how does a peer get its
+  grants" should not have to already know the answer is the human loader with
+  a different enum.
+- **Reconciles per peer, not per agreement.** A peer may hold several
+  agreements, and the question the decision path asks is "what does this peer
+  hold" — which no single agreement can answer. Deactivating one must withdraw
+  exactly its grants and leave the siblings; a per-agreement sync would have
+  to diff across them to get that right.
+- **Two tables, not one with a JSONB `grants` blob.** The grants have the same
+  shape as every other grant in the system, so the sync is a projection rather
+  than a JSON parse whose schema drifts silently against the column it feeds.
+
+**Watch out for:**
+
+- **`federation_role` enum values are lowercase** (`'hub'`, `'spoke'`,
+  `'peer'`, `'data_source_lab'`) while the sharing-level and deletion-status
+  columns are TEXT+CHECK in upper case. A fixture inserting `'SPOKE'` fails
+  with `invalid input value for enum federation_role`. The house style moved
+  to TEXT+CHECK after that table was written; both conventions are live.
+- **`conditions` must be `json.dumps`'d on a `text()` insert.** The column is
+  JSONB and the driver will not adapt a bare dict through a textual statement.
+  A condition that does not survive the projection is a grant with no filter —
+  which is a silent widening, not an error.
+- **The peer id namespace is a UUID string, user ids are integers.** They
+  cannot collide today. The delete predicate is `principal_id AND source`
+  anyway, and only the source half is what keeps that from being a landmine if
+  the namespaces ever meet.
+
+## M4-B — the inbound half that was never built — 2026-09-01
+
+**What was built:** `POST /api/v1/federation/query` (peer-authenticated,
+agreement-filtered), `client._query_one` repointed at it,
+`FederationPushJob.may_push_sample()` composing `permit()` with the three
+gates, and — on that call site — `sovereignty.no_federate_deleting`.
+
+**Key decisions:**
+
+- **§7.4 described an integration that did not exist.** It reads as though the
+  inbound query already landed on the partner's `GET /api/v1/samples/`,
+  filtered by the peer principal — "not a separate code path". In fact
+  `/api/v1/samples/` authenticates a JWT cookie and nothing else, so a real
+  federated query would have **401'd**. This is the third time in this run of
+  work that a design document described a wired integration point ahead of the
+  code (M3's `federation:push`, M3's `no_publish_while_deleting` shape, this).
+  The pattern is worth naming: **a spec section written from the plan reads
+  identically to one written from the code.** Only grep tells them apart.
+- **The gap was invisible because the only tests were on the calling side.**
+  Every federation-key test hit `/api/v1/federation/*`; the client tests
+  mocked the partner with `respx.get(".../api/v1/samples/")`. So the suite
+  asserted the client called a URL, and nothing asserted anyone answered it.
+  Repointing the client turned 27 mocks red — which is the first time the
+  inbound contract was ever expressed as a test.
+- **Peer auth went beside the routes that already have it, not onto the
+  samples list.** The alternative was a second authentication mode on the
+  most-read endpoint in the system. What §7.4 actually cares about — that
+  federated visibility is the same *decision* as local visibility rather than
+  a parallel implementation — is preserved either way, because the filtering
+  is `sample_list_clause`, the identical compiler every local list uses.
+- **`may_push_sample` composes rather than absorbs.** `is_qualifying_sample`
+  kept its own function, its own name, and its six tests; the new function
+  adds the `permit()` half in front of it. Order is a cost decision, not a
+  correctness one — but a peer with no agreement should not have its rows
+  inspected at all.
+
+**Watch out for:**
+
+- **`{"not": v}` means opposite things on a DENY and on an ALLOW, and the
+  difference is whether absence is safe.** On `sovereignty.no_federate_deleting`
+  a missing `deletion_status` denies an export — fail closed, correct. The
+  same form on a Lab-scoped `submission:approve` would deny every approval.
+  The invariant in `DELETION_POLICIES` is what keeps them apart, and it is
+  tested rather than merely written down.
+- **`IS DISTINCT FROM`, never `<>`, when compiling a negation to SQL.** A NULL
+  column with `<>` yields NULL, which is falsy, so the term silently drops and
+  the DENY stops firing on exactly the rows it exists to catch. The per-row
+  and SQL halves would then disagree — and only on NULLs.
+- **`samples_deletion_active_requested_chk` couples status and timestamp:**
+  `(deletion_status = 'ACTIVE') = (deletion_requested_at IS NULL)`. A fixture
+  inserting a non-ACTIVE row without the timestamp is not merely rejected — it
+  was never a state the system could reach, so a test built on one would prove
+  nothing.
+
+## M2-DROP-PRE slice 1 — an audited escape that anyone could take — 2026-09-01
+
+**What was built:** `deletion:self_approve` as a real §4 capability, the route
+deriving §6.2-1b's escape from what the caller holds rather than what they
+sent, and `deletion.py`'s legacy `is_platform_admin` check removed.
+
+**Key decisions:**
+
+- **The bug was in M3, and inventorying M2-DROP is what surfaced it.** M3
+  moved separation-of-duties into a DENY policy with `platform_admin_self_approve`
+  as a Context condition — and the route set that condition straight from
+  `payload.platform_admin_self_approve`. The policy never checks the caller is
+  an admin, because a policy *cannot*: a condition is a fact about the request,
+  and the engine has no way to know whether the caller was entitled to assert
+  it. **Correct for an engine, dangerous for a router.** Verified directly:
+  a non-admin with `deletion:approve` at lab scope got ALLOW with the flag set.
+- **It was never exploitable, and that is exactly why it was dangerous.**
+  `deletion.py` still re-checked `is_platform_admin`, so end-to-end behaviour
+  was right. But that check was item 2 on M2-DROP's removal list. The hole
+  would have opened during a mechanical "convert the readers" pass, in a PR
+  about *removing columns*, where nobody would be looking for an authorization
+  change. Defence-in-depth hid the defect from the tests and would have
+  handed it to the drop.
+- **A regression test that passes without the fix proves nothing.** The first
+  version of the guard test passed either way, because `deletion.py` was still
+  catching it. Removing that legacy check — M2-DROP-PRE work regardless — is
+  what made the test isolate the fix. It now fails without the route change
+  and passes with it, which was verified by reverting the change and running
+  it, not by assuming.
+- **The escape is a capability, not a role check.** `deletion:self_approve` is
+  held only by `instance_administrator` and confers no approval authority of
+  its own — an actor without `deletion:approve` still cannot approve anything.
+  That keeps §8.2's "operational, not a consent authority" line true, and the
+  note now says so explicitly so the addition does not read as contradicting
+  the sentence above it.
+
+**Watch out for:**
+
+- **A policy condition is caller-supplied unless the router proves otherwise.**
+  Anything reaching `Context.conditions` from a request body is an assertion,
+  not a fact. If lifting a DENY depends on one, the router must AND it with a
+  held capability — the engine will not do it for you.
+- **Preset edits need a migration, every time.** `PRESET_GRANTS` is a template;
+  the grants are rows. `deletion:self_approve` reaches no existing admin until
+  a reseed runs, so the preset change ships with `c4d81a06f2b7`.
+- **Doc and code preset blocks must move together.**
+  `test_reseed_presets_match_the_documented_ones` compares §8.2's fenced block
+  against `PRESET_GRANTS`, and §8.2's continuation lines have a 16-space
+  indent contract the parser depends on.
+
+## M2-DROP-PRE slice 2 — deletion-plane verbs — 2026-09-01
+
+**What was built:** Five §4 capabilities (`sample:read_unscrubbed`,
+`deletion:read_report`, `deletion:reverse_tombstone`, `deletion:vacuum`,
+`submission:retract`) replacing the last in-line `is_platform_admin` /
+`is_lab_director` reads in `samples.py`.
+
+**Key decisions:**
+
+- **The record/content discriminator.** The open design question was a read
+  verb whose natural form (`sample:read_detail`) excludes instance admins by
+  §8.2 while the legacy flag admitted them. Resolved by asking what the route
+  returns, not how sensitive it is: an instance admin keeps a route that reads
+  or executes a governance *record* and loses one that returns sample *content*
+  or makes a consent decision. `deletion-report` keeps the admin (it is
+  lifecycle state plus an audit trail — the line `audit:read` already sits on);
+  `raw_fastq` and `retraction-requests` do not.
+- **`submission:retract` is not `submission:approve`.** Holder sets match
+  exactly on the non-admin path, so reuse was the lazy option. Rejected because
+  retraction is the deletion plane reaching outward: one verb for both would
+  hand repository-retraction to every future preset that gains submission
+  approval for submission reasons.
+- **Ownership needed a policy, not a preset.** `_require_lab_tie` had three
+  rungs — admin, owner, lab member. Two are grants; ownership cannot be, for
+  the reason already written on the `sample:read` rungs (a grant row per
+  sample). Added a `LADDER_POLICIES` `owner_id` ALLOW for
+  `deletion:read_report`, or an owner who had left the lab would have lost the
+  report — a narrowing nobody asked for.
+
+**Watch out for:**
+
+- **`admin@example.org` is a dual-role principal.** The baseline migration
+  seeds it as platform admin *and* Lab Director of lab 1. Every test acting
+  "as admin" therefore holds `instance_administrator` and `lab_lead` grants at
+  once and cannot distinguish them. Both deliberate narrowings in this batch
+  left the whole existing suite green. If a test needs to prove *which* grant
+  answered, build a principal with one shape — see
+  `tests/test_deletion_plane_capabilities.py`.
+- **Guard ordering vs 404.** `sample_resource()` raises for an unknown id and
+  the guard turns that into 403, so a `require_capability(sample_id=…)` placed
+  before the row fetch reports "not allowed" for a sample that does not exist.
+  All four converted routes fetch first.
+- **A route described in prose is not a counted route.** These four lived in a
+  "Residue — still on the legacy check" section, so `parse_map` never saw them
+  and the preflight row count stayed 128 while the map already discussed them.
+  Converting them moved it to 132.
+- **`_tombstone` test fixtures need `deletion_requested_at`.**
+  `samples_deletion_active_requested_chk` asserts
+  `(deletion_status = 'ACTIVE') = (deletion_requested_at IS NULL)`.
+
+## deletion:request ownership rung — 2026-09-01
+
+**What was built:** The `LADDER_POLICIES` ownership ALLOW for
+`deletion:request` that M3's comment said already existed, plus §5.3's
+ownership roster and `tests/authz/test_ownership_rung.py` enforcing it.
+
+**Key decisions:**
+
+- **The roster is a table in §5.3, not a registry constant in the test.** A
+  constant listing the rungs would restate the code beside the code and agree
+  with it by construction. The doc is the second recording of the decision, so
+  the guard is doc-vs-code — the pattern `test_catalog_preset_coverage.py`
+  already uses for §8.2's presets.
+- **`sample:update` is a recorded `no`, not an omission.** The legacy ladder
+  gave an owner everything; the capability model gives them read, report and
+  request. Editing metadata on a sample whose lab you have left is a write
+  into someone else's tenant, so it stays excluded — but as a row in the table
+  rather than as an absence.
+- **Requesting is not approving.** The rung is safe to add because
+  `deletion:approve` is a separate verb with §6.2-1b's DENY, which beats any
+  ALLOW unconditionally, so an owner reaching the request route cannot walk it
+  to a completed deletion.
+
+**Watch out for:**
+
+- **`_matches` compares capability by equality.** An ownership rung for
+  `sample:read_detail` does nothing for `deletion:request`. "Ownership implies
+  read/update" is prose that no mechanism implements; only the enumerated
+  verbs are reachable.
+- **The failure mode was a true-sounding comment.** M3 wrote "ownership is not
+  lost — it is `LADDER_POLICIES`' `owner_id` rung" and no rung existed. Nothing
+  threw, no test covered an owner outside the lab, and the narrowing shipped
+  silently. Grep for the rule before writing the comment that says where it
+  lives — Critical Rule 70, applied to policies rather than to capabilities.
+- **Verify a new guard by breaking it.** Flipping the roster's
+  `deletion:request` row to `no` must fail two of the four tests. A guard that
+  has never been seen to fail is not known to be a guard.
+
+## Instance-scope grant sync — role assignment that assigns something — 2026-09-01
+
+**What was built:** `sync_instance_grants()`, the Instance-scope twin of M2-B5's
+`sync_membership_grants()`, wired into the three sites that assign a role and
+issued no grants: `PATCH /users/{id}`, and both halves of `POST /auth/dev-login`.
+
+**Key decisions:**
+
+- **The precedence rule moved into `instance_preset()` and is shared with
+  `reseed()`.** `reseed()` read analysts as `is_data_analyst AND NOT
+  is_platform_admin`; a live path restating that in a second place would let a
+  principal's grants depend on whether a PATCH or a reseed wrote them last.
+  One function, two callers, and `reseed()` refactored to a single query so it
+  cannot drift.
+- **Assertions go through routes, not the grants table.** "Promote a user, then
+  have that user do the thing the role names" is what the change is for; the
+  grants table is how. The two came apart in the first place because nothing
+  was standing at the route end.
+- **`sample:update`-style narrowings need a probe that discriminates.** The
+  dev-login lab test first probed `GET /labs/{id}/members`, which needs
+  `user:manage`; it failed for a Lab Director holding correct grants. Switched
+  to `PATCH /labs/{id}` (`org:manage`), held by `lab_lead` and no other lab
+  preset, so a 200 means *these* grants landed rather than any grants at all.
+
+**Watch out for:**
+
+- **A write to a decommissioned decision input is worse than a no-op.** Nothing
+  has read `users.is_platform_admin` for a decision since M2-B1, so PATCHing it
+  returned 200, changed the field, changed nobody's access — and armed the next
+  `reseed()` to make it real later, with no signal at the time of the write.
+  When a column stops being authoritative, every writer of it becomes a bug.
+- **M2-B5 fixed `labs.py` and missed the identical code in `auth.py`.** Same
+  membership INSERT, same missing sync, one file over. When wiring a
+  cross-cutting call, grep for the *write*, not for the route.
+- **`GET /labs/{id}/members` and the three sibling member routes require
+  `user:manage` at Lab scope, which no lab preset holds.** So a Lab Lead cannot
+  list or manage their own lab's membership — only an instance admin can. Found
+  by accident here; not fixed, and not obviously intentional.
+
+## Lab Leads locked out of their own lab's roster — 2026-09-01
+
+**What was built:** `user:manage` added to the `lab_lead` preset, plus reseed
+migration `a7f1c30d54b9` and `tests/test_lab_lead_member_management.py`.
+
+**Root cause:** M2 replaced `require_lab_director(user, lab_id)` on the four
+`/labs/{id}/members` routes with `require_capability("user:manage")` at Lab
+scope. No lab preset held that verb, so the authority moved to instance admins
+and nobody noticed. M2-B5 then wired grant issuance into three of those four
+routes — correct code behind a door no lab principal could open.
+
+**Key decisions:**
+
+- **Reused `user:manage` rather than minting `lab:manage_members`.** The
+  precedent is one entry above it in the same preset: `org:manage` sits in
+  `lab_lead` scoped to their lab, with a comment saying the narrower vocabulary
+  is tidier and is a later call, "not a reason to leave directors locked out
+  now." Identical situation, so the same answer, and a new verb would have
+  meant four route changes, a catalog entry and a second preset edit.
+- **The safety argument is scope and nothing else.** `PATCH` and `DELETE
+  /users/{id}` request `user:manage` with **no scope argument**, which resolves
+  to `instance://self`. Containment runs downward, so a `lab://` grant cannot
+  reach the root. Because the entire fix rests on that asymmetry, it is pinned
+  by two negative tests — including a Lab Lead trying to set their own
+  `is_platform_admin` — rather than left to the reader.
+
+**Watch out for:**
+
+- **When a guard changes vocabulary, the holders change with it, and only the
+  route's own tests notice — if any test stands where the old holder stood.**
+  Second instance in two days, after the `deletion:request` ownership rung.
+  Both were verb swaps that silently moved authority; both were invisible
+  because the tests that covered the route were written from the new holder's
+  seat.
+- **A preset edit needs its reseed migration or it reaches nobody**, and this
+  one's downgrade must not blanket-delete `user:manage` — instance admins hold
+  it at `instance://self` from the cutover, and dropping those rows would leave
+  a deployment with no one able to administer users at all. Filtered on
+  `scope_ref LIKE '%/lab/%'`.
+
+## M2-DROP-PRE slice 3 — the tenant wall nobody called — 2026-09-01
+
+**What was built:** Nothing. `backend/backend/tenancy.py` was deleted, along with
+`tests/routers/test_tenancy.py` and the `TenancyMiddleware` registration in
+`main.py`, and three sentences in `access_model.md` that described the module as
+enforcing org isolation were corrected to describe what actually does.
+
+The entry planned a conversion: `require_org_access` bypassed the tenant wall on
+`is_platform_admin`, and per ADR 0015 that bypass should fall out of scope
+containment instead of a flag. The mechanism was right. The premise was not —
+`require_org_access` had no production callers. Neither did `get_org_context`.
+Nothing in the codebase read the `request.state.org_context` the middleware set
+on every non-exempt request, at the cost of one `get_current_user` DB lookup per
+request.
+
+**Key decisions:**
+
+- *Deleting beat converting, and the reason is Rule 70 rather than laziness.* A
+  correctly-implemented wall with no call site reads as done to every future
+  reader and cannot be exercised by any test. The three `is_platform_admin`
+  readers it carried were retired at zero conversion cost; 28 of 31 remain.
+- *Org isolation was never in danger, because it was never here.* It is
+  structural per ADR 0015: grants are rooted at `instance://self/org/N/…` and
+  `_scope_contains` matches only at a segment boundary, so a cross-org row is
+  refused by default-deny — no grant a tenant holds contains it.
+  `visibility_sql_clause` compiles the same relation for the list path. byop.py,
+  the entry's "mandatory IDOR case," had already converted to `permits()` under
+  M2-B3 and never used `require_org_access` at all.
+- *The doc said "DENY policy" and there is no such policy.* §5.4 claimed the
+  tenant wall was "a DENY policy keyed on cross-org access; no grant punches
+  through it." Both halves were false: `grep` over `authz/policy.py` finds no
+  cross-org policy, and an Instance-scoped grant does punch through, by design.
+  The bullet now says so, because "absolute" is the kind of word a future reader
+  builds on.
+
+**Watch out for:**
+
+- **A module can be wired into `main.py` and still be dead.** Registering the
+  middleware made `tenancy.py` look load-bearing from the import graph; only the
+  grep for consumers of `request.state.org_context` showed the cargo was never
+  picked up. Import-graph reachability is not enforcement.
+- **The doc did not lie so much as get written first.** §5.4's sentence and
+  `tenancy.py`'s docstring agree with each other perfectly, and both disagree
+  with the code. That is what a spec written from the phase plan looks like from
+  inside — self-consistent. Third instance recorded under Rule 70.
+- **`docs/review_log.md` does not exist** — and the way it stopped existing is
+  the finding. It was real: 404 lines at `8cbb993` (Phase 22 review), grown to
+  469 by `620a56e` (P0e closeout). It was deleted on 2026-05-08 by `06e67ee`,
+  *"Regenerate models_generated.py and jackpot_schema.json from cleaned YAML
+  with seed values genericized"* — a 20-file schema-regeneration commit that
+  also silently dropped three long-form docs (`review_log.md`,
+  `jackpot_cdc_dmi_stlt_overview.md`, `jackpot_template_system_design.md`,
+  ~1,955 lines between them). Nothing referenced them differently afterward, so
+  the dangling pointers sat for nearly four months while `CLAUDE.md` kept
+  instructing every session to write architectural plans into a file that was
+  not there.
+  Resolved this session by decision: **`learnings.md` is the log; the
+  `review_log.md` references are struck.** Eleven live pointers redirected
+  (`CLAUDE.md` ×4, `todo.md` ×3, the three `governance/` policy docs,
+  `jackpot-init-cli.md`); historical prose in `learnings.md`,
+  `jackpot_session_summary_and_backlog.md` and `docs/archived/` left alone,
+  because those describe what a past session did and rewriting them would
+  falsify the record. Verified before striking that the file's three still-open
+  items (action 17 stub routers, action 19 testcontainers DinD, B-FED-1) are
+  independently carried by `todo.md:902/913/917`, so nothing was orphaned.
+  The general lesson is about the commit, not the file: **a
+  regenerate-artifacts commit is exactly where a deletion hides**, because the
+  diffstat is expected to be enormous and nobody reads it. Worth a glance at
+  `--diff-filter=D` on any commit whose message promises only regeneration.
+- **P0c is not deleted, only its scaffolding.** If P0c later wants a
+  request-context carrier, note that it duplicates what `get_current_user` plus
+  the principal's grant scopes already give every route — that is why this went
+  rather than being converted. Rebuilding it is an hour if the need turns out to
+  be real.
+
+## M2-DROP-PRE slice 4 — who to tell, asked of the grant table — 2026-09-01
+
+**What was built:** `authz/principal.py::capability_holders(capability, scope)`
+— the reverse of `load_principal` — and the conversion of B-CARE-4's
+non-compliant-peer alert onto it. That alert was the last LOOKUP-class reader of
+`users.is_platform_admin`: a `SELECT id FROM users WHERE is_platform_admin =
+TRUE AND is_active = TRUE` used to address a notification.
+
+**Key decisions:**
+
+- *The verb is `federation:configure_peer`, not "the instance-admin preset".*
+  The backlog said "principals holding the instance_administrator preset at
+  instance scope", which would have hard-coded a preset name into a lookup. The
+  question the alert actually asks is "who can do something about this peer",
+  and the something is suspension — which writes
+  `federated_instances.federation_enabled`, a configure-peer act. Asking for the
+  verb means a deployment that grants it outside the preset gets alerted
+  correctly, and one that narrows the preset stops alerting people who can no
+  longer act.
+- *Containment runs one way and the SQL has to say so.* `_scope_contains`
+  transcribed is `:scope = scope_ref OR :scope LIKE RTRIM(scope_ref,'/') || '/%'`
+  — the GRANT scope contains the RESOURCE scope. Written backwards it would turn
+  every lab-scoped grant into instance-wide reach, so both directions are pinned
+  by tests, including the `org/1` vs `org/12` segment boundary.
+- *Conditional grants are excluded, not assumed satisfied.* A condition is a
+  fact about a request; a scheduled job has no request to check one against. The
+  engine already answers this — an unset `Context.now` costs a time-bounded
+  grant its effect rather than granting it unbounded — so the same discipline
+  applies. Refusing here can only shorten a notification list, never widen
+  access.
+- *It is documented as not a decision function, in the docstring, at length.*
+  It reads grants and cannot see DENY policies, so authorizing off it would
+  reintroduce the second decision point §2.1 exists to prevent — and it would
+  fail open, since a sovereignty DENY is invisible to it. The name says
+  "holders", which is exactly the shape someone reaches for when they want a
+  quick permission check.
+
+**Watch out for:**
+
+- **A `users` join is the only thing keeping peers out of a list of people.**
+  `authz_capability_grants.principal_id` is `TEXT` and holds user ids *and*
+  `federated_instances` UUIDs. A holder query that skipped the join would
+  eventually hand a UUID to `create_notification` as a `recipient_id`.
+- **The test that covered this route asserted on `u.is_platform_admin = TRUE`.**
+  It would have kept passing after the column was dropped and the code stopped
+  reading it — the assertion joined to `users`, not to the behaviour. Third
+  instance in this phase of a test standing on the seat the change is moving.
+  The replacement asserts against the grant, and a second test pins the
+  narrowing in both directions: a holder *without* the flag is alerted, a
+  flag-holder *without* the grant is not. Neither direction is observable
+  through the seeded `admin@example.org`, who holds both.
+- **An empty holder set is a silent failure**, so it logs. The audit row
+  (`FEDERATION_PEER_NONCOMPLIANT`) is written before the alert either way, so
+  the record survives a misconfigured deployment; what is lost is the push, and
+  nobody notices a notification they never got.
+
+---
+
+## M2-DROP-PRE slices 5–8 — the rest of the readers — 2026-09-02
+
+**What was built:** the remaining four slices of M2-DROP-PRE, retiring every
+production *reader* of `users.is_platform_admin` / `users.is_data_analyst`.
+The item is now shipped and M2-DROP is unblocked.
+
+**Key decisions:**
+
+- *Slice 5 — reads with no reader.* `guards.get_current_user` and
+  `imports.py`'s CSV-import lookup both selected the two columns into a dict
+  nothing consumed; the three real consumers each issued their own SELECT.
+  Same shape as slice 3: removable at zero conversion cost. The local-dev
+  fallback identity also advertised `is_platform_admin: True`, which conferred
+  nothing after M2-B1 but made a possibly-grantless `id=1` *read* as an admin —
+  the more dangerous half, because a field that looks like a bypass invites
+  someone to restore it as one.
+- *Slice 6 — the frontend was asking the wrong question, twice.* The plan was
+  "`/me` returns held capabilities"; reading the consumers said neither wanted
+  one. `access_requests.py` needed **nothing added** — the server has scoped
+  that list by `access:approve_request` since M2-B7, and the client-side
+  pre-filter was both redundant and wrong: a grant-holding non-director hit an
+  early `return` and never issued the request, and a caller who was both admin
+  and director fell into the per-lab loop and saw only those labs.
+  `pipelines.py` needed a *per-row* answer, because `_may_manage` admits an
+  instance grant, a lab grant at `owner_lab_id`, **or** the registrant — which
+  no flat capability list expresses. Building the `/me` field would have been a
+  third thing neither caller used.
+- *Slice 7 — a preset, not a flag pair.* `PATCH /users/{id}` takes
+  `instance_preset`. `INSTANCE_PRESETS` is deliberately a **subset** of
+  `PRESET_GRANTS`, enforced inside `sync_instance_preset` and not only at the
+  route: `lab_lead` is a real preset and an invalid thing to issue at the
+  instance root, where its `deletion:approve` and `sample:read_unscrubbed`
+  reach every sample on the deployment. A typo'd preset name must not be a
+  privilege escalation.
+- *Slice 8 — the role name stays, what it assigns changes.* dev-login keeps the
+  six APGAP names: Critical Rule 1's sacred values, they name
+  `permission_groups` rows, and they are the UAT matrix's vocabulary. None of
+  that ends at M2-DROP; the boolean pair they were *stored* as does.
+
+**Watch out for:**
+
+- **A test written against the code it describes proves nothing until it is
+  made to fail.** Slice 5's pin used a hand-rolled comment stripper that
+  treated the *closing* delimiter of a multi-line SQL literal as a docstring
+  opener and silently swallowed the rest of the module — it would not have
+  failed, it would have stopped looking. Replaced with `ast.parse`, which
+  cannot go blind. Slice 6's page test passed unchanged against pre-slice code
+  because `render()` runs at import, so the *other* tab issued the call the
+  assertion was standing on. Both were caught by making them red on purpose,
+  not by reading them.
+- **`extra="forbid"` is the half of a breaking rename that makes it worth
+  doing.** Pydantic drops unknown fields, so a stale client sending the old
+  body gets a 200 having assigned nothing. The first version of that test
+  covered only a body containing *only* the legacy field and so missed the
+  worse case: a partly-valid body 200s on the valid part while discarding the
+  role.
+- **A probe capability cannot detect over-granting.** Slice 8's first test
+  probed `sample:read_surveillance` for `surveillance_officer` — the one
+  capability it *shares* with `instance_administrator` — so wiring Data Analyst
+  to the admin preset would have passed. Assert the set equality the docstring
+  claims.
+- **Starting from a blank slate only tests the INSERT.** dev-login switches
+  identity repeatedly in one UAT run, and the Platform Admin → Lab Director
+  switch-down is the only path where `sync_instance_preset`'s DELETE is
+  load-bearing. No test covered it until slice 8 added one.
+- **`preflight.py`'s reads of the flags are deliberate and must survive
+  M2-DROP.** `legacy_ladder` and `legacy_visibility_sql_clause` are the frozen
+  pre-M2 oracle the divergence registry compares against, and they build the
+  flags from the `Persona` dataclass rather than a DB SELECT. Converting them
+  destroys the comparison that makes the registry mean anything.
+- **`INSTANCE_PRESETS` is derived from `INSTANCE_PRESET_FLAGS`,** which M2-DROP
+  deletes. Inline it as a literal frozenset in the same commit; forgetting
+  fails at import, which is the intent.
+
+## PHIN VADS snapshot — 2026-09-02
+
+**What was built:** `scripts/pull_phinvads.py` plus a committed 19 MB snapshot of
+CDC PHIN VADS at `schema/schema/phinvads/`, taken ahead of the 2026-11-30 sunset
+of every PHIN system. Acquisition only — nothing reads it.
+
+**Key decisions:**
+
+- **Scope drawn on authorship, not usefulness.** All 1,999 ValueSets and metadata
+  for all 221 CodeSystems, but full concept lists only for the CDC arc
+  `2.16.840.1.114222` (33 systems, 116,463 concepts). LOINC, SNOMED CT and
+  ICD-10-CM concept lists are excluded: they are not PHIN content, they outlive
+  the sunset under their own publishers, they carry their own redistribution
+  terms, and SNOMED CT alone is 47 MB from this API. The subsets *inside* a value
+  set are kept — that enumeration is CDC's curation.
+- **Deadline belongs to the acquisition, not the integration.** Once the bytes are
+  local, wiring them into the schema has no date attached. Splitting the two is
+  what made this a one-session item instead of a phase. `docs/architecture.md`
+  §21.2 says outright that the files are not an integration, because a directory
+  full of vocabularies reads as done.
+- **Gzip, not raw.** 84 MB raw, permanently, in every clone; GitHub warns past
+  50 MB per file. NDJSON still streams a record at a time through `gzip.open`.
+- **First redistributed entry in `THIRD_PARTY_LICENSES.md`.** That file's own note
+  predicted this case ("It stops being fine the first time a restricted source
+  lands here"). SRA is queried and never redistributed; this is committed.
+  Recorded the open question — whether enumerated SNOMED/LOINC member codes
+  travelling inside value sets need their own notice — against
+  `B-LICENSE-DATA-TERMS` instead of assuming it away.
+
+**Watch out for:**
+
+- **The WAF answers a blocked request with HTTP 200 and an HTML page.** Checking
+  the status code alone writes an empty NDJSON and a manifest attesting to it,
+  which is indistinguishable from success. `_get` validates the content type.
+  This was found by probing the live service, not by reading anything.
+- **Pagination is five resources per bundle behind an opaque `_getpages` token**
+  — server-side, not a client parameter. ~400 sequential requests, no bulk
+  export. A walk that stops at the first page returns five value sets and
+  reports success.
+- **`end-of-file-fixer` and `trailing-whitespace` are byte-level and do not
+  detect binaries.** The fixer appends a newline to anything not ending in one,
+  which corrupts a `.gz`. Both now exclude it. Caught before the first commit
+  only because the manifest's SHA-256 gave something to check against.
+- **The 11 value sets with no concepts are empty upstream too**, verified against
+  the live endpoint. Worth knowing before someone reads it as truncation.
+
+**The defect worth remembering.** The first commit's docstring promised the walk
+was "resumable via `--state`". There was no such flag; `pull()` wrote a checkpoint
+after every page and never read one back; `_write_ndjson` opens `"wt"` so prior
+progress would have been truncated regardless. Critical Rule 70 reproduced inside
+a brand-new file, by the person who had just read Rule 70.
+
+Two things it teaches beyond "review works":
+
+1. **The prose was written before the code and never re-read against it.** The
+   docstring described the design as intended. Nothing in ruff, pyright, the
+   tests, or a careful read of the diff distinguishes a docstring that describes
+   the code from one that describes the plan — only asking "what calls this?"
+   does. That is Rule 70's whole point, and it applies to your own new file, not
+   just to inherited docs.
+2. **Its test passed against the unimplemented feature.** The test asserted the
+   state file was *deleted* after a successful pull — true, and irrelevant. It
+   never asserted a pre-existing checkpoint changed where the walk *started*,
+   which is the only behaviour the feature claimed. Rule 74's shape exactly: a
+   check that cannot fail on the thing it is named after. Its replacement seeds a
+   stale checkpoint and asserts the walk still starts at the endpoint root, with
+   a stub server that has no route for the stale URL, so any future attempt to
+   honour it fails loudly.
+
+Resolved by **deleting** the mechanism, not building it. A correct resume must
+append to a half-written archive and recount it, and an append onto a truncated
+file yields a corrupt snapshot that looks exactly like a good one — the failure
+the rest of the module's tests exist to catch. It would have added the risk they
+defend against, to save thirteen minutes on a re-run that has never happened.
+
+**Also in this session:** `M5` moved `open` → `blocked_external`. It was the
+backlog's only open item, which made it read as the frontier, but it is the
+`permit()` adapter for the cryptWWDB HE compute path and that track is dormant —
+the plaintext mass-balance, the policy checker and the mapping doc all shipped,
+the compute path was never scheduled, and the remaining wastewater schema entries
+carry "re-scope deliberately if cryptWWDB work resumes".

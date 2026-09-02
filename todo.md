@@ -40,7 +40,7 @@ Phase 21 UI triage stays where it is — Session 5 debt, ship-blocker, not displ
 
 Instructions for Claude Code: Work through items in order within each phase.
 Check off each item only after `uv run pytest` passes. Never skip an item —
-if blocked, note the blocker in `docs/review_log.md` and move to the next
+if blocked, note the blocker in `docs/learnings.md` and move to the next
 unblocked item.
 
 ---
@@ -724,8 +724,8 @@ Upload page triage". Two real backend bugs found and fixed at root.
 
 ### UI-G: End-of-Phase-21 commit
 
-- [ ] `gac "feat(ui): Phase 21 page triage complete — see review_log.md"`
-- [ ] Update `docs/review_log.md` with the per-page status.
+- [ ] `gac "feat(ui): Phase 21 page triage complete — see learnings.md"`
+- [ ] Update `docs/learnings.md` with the per-page status.
 
 ---
 
@@ -835,8 +835,8 @@ Items, all complete:
 
 Four-agent parallel review (Critical Rules, spec drift, coverage, TODOs)
 followed by four sequential security/deploy commits. Findings synthesized
-into `docs/review_log.md` (commit `8cbb993`) — that file is the canonical
-output and carries the 19-item action list. Session 13 in
+into `docs/review_log.md` (commit `8cbb993`) — that file was the canonical
+output and carries the 19-item action list. (That file was deleted on 2026-05-08 as collateral in `06e67ee`, a schema-regeneration commit; recover it with `git show 06e67ee^:docs/review_log.md`. `docs/learnings.md` is the log going forward.) Session 13 in
 `jackpot_session_summary_and_backlog.md` and the Phase 22 entry in
 `learnings.md` carry the play-by-play.
 
@@ -2232,7 +2232,8 @@ This work is **ahead-of-schedule** relative to B-FED-1 / B-PRV-1 / B-CRY-1 in th
 
 - [x] **M0 — `permit()` engine, dark.** Shipped: `backend/backend/authz/` (engine.py, policy.py), migration `a7c3e91d54b0`, tests `tests/authz/test_permit.py` (14 passing). Build the decision function (`access_model.md` §5) plus the grants and policy tables (§2.2, §2.5) as new code, wired into no route. Unit-test against the §9 worked examples as fixtures. The old ladder still runs; this ships behind no flag because nothing calls it yet. De-risks all downstream work by proving the decision function correct in isolation. No ORM — raw SQL via `text()`, hand-written migrations (§5.2). (multi-session)
 - [x] **M1 — `visibility_sql_clause` companion.** Shipped 2026-08-29: `backend/backend/authz/visibility.py` (`visibility_sql_clause(principal, capability, alias)` pure SQL compiler, re-exported from `backend/backend/authz/__init__.py`), cross-checked vs `permit()` on the §9 fixtures in `tests/authz/test_visibility_sql_clause.py` (zero-divergence loop, deny-wins, default-deny, scope-boundary, PEER_INSTANCE/SERVICE, failure paths). Still dark.
-- [ ] **M2 — reseed + cutover (IRREVERSIBLE).** One change: (a) run the reseed script (`access_model.md` §10.2 — read each principal's old stored role, issue the matching preset grants; mapping table in §8.5); (b) rewrite every route guard from role-check to capability-check (§10.3 — see ACCESS-GUARD-MAP below); (c) switch list endpoints to the `visibility_sql_clause` companion; (d) drop the old booleans, the `PermissionGroups` enum, and the `permissions.py` ladder. No rollback-to-dual-running — safety comes from M0/M1 having proven the engine and companion, not from a shim. (multi-session; do not start until M0 + M1 are both proven)
+- [x] **M2 (part a) — catch-up reseed.** Shipped: migration `a1c7d94e6b28_m2_cutover_catchup_reseed.py` (pre-flight guard, counts logged including zeros, idempotent reseed); `backend/backend/permissions.py` deleted — dead in production since M2-B7, its legacy `visibility_sql_clause` frozen into `tests/authz/preflight.py` beside `legacy_ladder` so the equivalence proof keeps a comparator; staged-but-unreachable `backend/alembic/versions/20260829_reseed_roles_to_grants.py` removed (superseded by ADR 0016). Tests `tests/authz/test_cutover.py`. **Part (d) — dropping the booleans, the `PermissionGroups` enum and the ladder — did NOT ship and is now `M2-DROP`, blocked on M3:** eleven production modules still read `is_platform_admin` / `is_data_analyst`, and the endpoint map assigns several of them to M3. See `active_backlog.yaml` M2-DROP for the reader inventory. Also opened `M2-SAMPLE-ACCESS-SYNC` (approving a sample-access request issues no capability grant).
+- [ ] ~~**M2 — reseed + cutover (IRREVERSIBLE).**~~ (superseded by the split above) One change: (a) run the reseed script (`access_model.md` §10.2 — read each principal's old stored role, issue the matching preset grants; mapping table in §8.5); (b) rewrite every route guard from role-check to capability-check (§10.3 — see ACCESS-GUARD-MAP below); (c) switch list endpoints to the `visibility_sql_clause` companion; (d) drop the old booleans, the `PermissionGroups` enum, and the `permissions.py` ladder. No rollback-to-dual-running — safety comes from M0/M1 having proven the engine and companion, not from a shim. (multi-session; do not start until M0 + M1 are both proven)
 - [ ] **M3 — sovereignty policies.** Register the §6 policies: the deletion-lifecycle guards (no-publish-while-deleting, no-federate-deleting), the separation-of-duties DENY, and the Scenario-T Tribal-authority preset with its separation-of-duties carve-out (§8.3). Rides on the M0 engine and the already-shipped `deletion_status` lifecycle; additive, gated by `sovereignty_mode`. (1-2 sessions)
 - [ ] **M4 — federation Layer 2 (`sharing_agreements`).** Add the `sharing_agreements` table (net-new schema, hand-written migration, no ORM) and wire agreement-sourced grants into the engine (`access_model.md` §7.3). Federated L1 visibility stops being "PUBLIC/DISCOVERABLE only" and starts honoring per-peer agreements; lab-to-lab federation (§7.7) works on the data-holder's side at this point. Shipped FED-A/B flow code unchanged — what changes is the peer principal now has agreement grants for the engine to find. Sequences with or just after P0c. (multi-session)
 - [x] **P0c — Multi-tenancy middleware (major phase).** Shipped 2026-08-29: `backend/backend/tenancy.py` (`TenancyMiddleware` attaching `request.state.org_context` to every non-exempt request, `get_org_context` dependency [403 when no tenant], `require_org_access` org-isolation guard [404 cross-org per access_model.md §3.3/§5.4]); registered in `backend/backend/main.py`; BYOP IDOR fix in `backend/backend/routers/byop.py` (`_get_or_404_tenancy` on all five mutating endpoints — owner / owner-lab member / platform admin, else 404; `owner_lab_id` mapped from the P0b column; list + detail reads intentionally unscoped per design §9 catalog browse, documented inline); tests `tests/routers/test_tenancy.py` (12, happy + failure paths). Application-layer only — no schema migration (P0b's `c871b28bbdab` already carries `byop_pipelines.owner_lab_id`). Unblocks B-CARE-3 (and B-CARE-3i) + B-CARE-4. Per-endpoint `permit()` capability enforcement remains M2.
@@ -2241,7 +2242,7 @@ This work is **ahead-of-schedule** relative to B-FED-1 / B-PRV-1 / B-CRY-1 in th
 ### Supporting deliverables
 
 - [x] **ACCESS-GUARD-MAP** (shipped: `docs/endpoint_capability_map.md` + `require_capability` in `backend/backend/auth/guards.py`) Produce the endpoint→capability map for M2: walk every current `require_platform_admin` and lab-role guard call site and record the capability each route requires (e.g. `POST /federation/instances` → `federation:configure_peer` or `org:manage`; `POST /samples` → `sample:create` at target scope). One row per guarded route. Guards renamed to their capability (`require_capability(...)`), not kept as role-named aliases — a guard named `require_platform_admin` after the role is abolished re-invites role-assumption drift. (`access_model.md` §10.3) (1 session; prerequisite for M2)
-- [x] **ACCESS-SEED** (shipped: `backend/backend/authz/reseed.py` — `reseed(conn)` + `PRESET_GRANTS`/`BIOINFORMATICS_EXTRA`; staged migration `backend/alembic/versions/20260829_reseed_roles_to_grants.py` — calls `reseed` before every DROP, moves into the live `db/migrations/versions` chain at M2; tests `tests/authz/test_reseed.py`, 11 cases) The reseed script itself (`access_model.md` §10.2). Python, raw SQL via `text()`. Reads `is_platform_admin` / `is_data_analyst` / `lab_membership` rows, issues preset grants per the §8.5 mapping, then the containing migration drops the old columns/enum. Reads-then-drops in one migration so there is never a dual-authoritative window. (1 session, bundles into M2)
+- [x] **ACCESS-SEED** (shipped: `backend/backend/authz/reseed.py` — `reseed(conn)` + `PRESET_GRANTS`/`BIOINFORMATICS_EXTRA`; staged migration `backend/alembic/versions/20260829_reseed_roles_to_grants.py` — DELETED at M2, superseded by ADR 0016: it was parked outside the chain (`alembic.ini` points at `db/migrations`) to be moved in at M2, but ADR 0016 split reads-then-drops into two migrations (`b2f47c1a9e30` additive, `a1c7d94e6b28` catch-up) and M2 deferred the DROP entirely to `M2-DROP`, so a staged single-migration drop had become actively misleading; tests `tests/authz/test_reseed.py`, 11 cases) The reseed script itself (`access_model.md` §10.2). Python, raw SQL via `text()`. Reads `is_platform_admin` / `is_data_analyst` / `lab_membership` rows, issues preset grants per the §8.5 mapping, then the containing migration drops the old columns/enum. Reads-then-drops in one migration so there is never a dual-authoritative window. (1 session, bundles into M2)
 
 ### Open design items carried from access_model.md §11.4
 

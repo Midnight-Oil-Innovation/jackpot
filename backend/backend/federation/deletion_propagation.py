@@ -13,7 +13,9 @@ Implements the four §9 requirements from
    trust boundary: an unsigned receipt is not a receipt).
 3. Non-compliance flagged: un-acknowledged tombstone events past the SLA
    and vacuum events past 2× the SLA become ``NON_COMPLIANT``, audited,
-   and surfaced to platform admins via notifications.
+   and surfaced by notification to the principals holding
+   ``federation:configure_peer`` at instance scope — the people who can
+   actually act on the peer, rather than "platform admins" as a class.
 4. Operator policy applied: ``alert_only`` / ``suspend_on_n`` /
    ``hard_fail`` (suspension clears ``federated_instances
    .federation_enabled`` so suspended peers receive no new shares).
@@ -39,6 +41,8 @@ import httpx
 from pydantic import HttpUrl, TypeAdapter
 
 from backend.audit import AuditActions, log_audit
+from backend.authz.principal import capability_holders
+from backend.authz.scope import scope_uri
 from backend.config import get_settings
 from backend.credentials import credentials
 from backend.crypto.keys import load_keystore
@@ -328,7 +332,7 @@ def flag_noncompliant_events(conn=None) -> dict:
             metadata={"unacknowledged_events": total, "policy": policy},
             db_conn=conn,
         )
-        _alert_platform_admins(peer, total, conn)
+        _alert_operators(peer, total, conn)
         should_suspend = policy == "hard_fail" or (
             policy == "suspend_on_n" and total >= settings.federation_suspend_after_n_failures
         )
@@ -353,14 +357,34 @@ def flag_noncompliant_events(conn=None) -> dict:
     return {"flagged": len(flagged), "suspended": suspended}
 
 
-def _alert_platform_admins(peer: dict, unacknowledged: int, conn) -> None:
-    admins = execute_query(
-        "SELECT id FROM users WHERE is_platform_admin = TRUE AND is_active = TRUE",
-        conn=conn,
-    )
-    for admin in admins:
+def _alert_operators(peer: dict, unacknowledged: int, conn) -> None:
+    """Notify whoever can act on a non-compliant peer (M2-DROP-PRE).
+
+    "Act on" is the whole selection criterion, and it is why the lookup asks
+    for ``federation:configure_peer`` rather than for admins: the alert exists
+    because the peer may be about to be suspended, and suspension writes
+    ``federated_instances.federation_enabled`` — a configure-peer act. Anyone
+    holding that verb instance-wide can respond to this; anyone who does not,
+    cannot, whatever else they are.
+
+    Instance scope specifically: a peer is a principal, not a branch of the
+    scope tree (ADR 0015), so there is no narrower scope to ask at. A holder
+    granted the verb over one org is not an operator of the federation link.
+    """
+    operators = capability_holders("federation:configure_peer", scope_uri(), conn=conn)
+    if not operators:
+        # The audit row above is written either way, so the record survives;
+        # what is lost is the push. Worth saying out loud, because the failure
+        # is otherwise a notification that nobody notices not receiving.
+        logger.warning(
+            "federation: peer %s flagged non-compliant but no active principal holds "
+            "federation:configure_peer at instance scope — no operator was notified",
+            peer["name"],
+        )
+        return
+    for recipient_id in operators:
         create_notification(
-            recipient_id=admin["id"],
+            recipient_id=recipient_id,
             event_type="FEDERATION_PEER_NONCOMPLIANT",
             title=f"Federation peer {peer['name']} non-compliant",
             body=(

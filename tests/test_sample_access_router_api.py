@@ -2,7 +2,7 @@
 Session O — sample_access router end-to-end tests.
 
 Covers every endpoint introduced in Session O plus the access-grant
-expiry job and the can_access_sample() update:
+expiry job and per-sample detail access:
 
     POST   /api/v1/sample-access/requests
     GET    /api/v1/sample-access/requests
@@ -20,11 +20,13 @@ from __future__ import annotations
 import uuid
 
 import pytest
+from authz_helpers import grant_instance_preset, sync_grants_from_legacy_roles
 
+from backend.auth.guards import permits
+from backend.authz.reseed import instance_preset, sync_sample_access_grants
 from backend.config import get_settings
-from backend.database import execute_query, execute_write
+from backend.database import _get_engine, execute_query, execute_write
 from backend.jobs import run_access_request_job
-from backend.permissions import can_access_sample
 
 SEED_USER_ID = 1
 SEED_LAB_ID = 1
@@ -32,6 +34,34 @@ SEED_PROJECT_ID = 1
 
 
 # ────────────────────────── helpers ──────────────────────────
+
+
+def _sync_access(sample_id: int) -> None:
+    """What every route that touches sample_access_grants does afterwards.
+
+    The three grant-lifecycle tests below insert into the table directly
+    rather than going through approve, so they must stand in for the route.
+    Calling the real sync — not hand-writing capability grants — is the point:
+    a test that hand-wrote them could pass against a sync that no longer
+    produces them.
+    """
+    engine, _ = _get_engine()
+    with engine.begin() as conn:
+        sync_sample_access_grants(conn, sample_id=sample_id)
+
+
+def _can_read_detail(user_id: int, sample_id: int) -> bool:
+    """Detail access as production decides it since M2-B2.
+
+    Replaces ``permissions.can_access_sample``, deleted at the M2 cutover.
+
+    Deliberately does NOT run a reseed. Until M2-SAMPLE-ACCESS-SYNC this
+    helper bridged the gap by reseeding, which made these tests pass while
+    production denied every approved requester — the bridge hid the bug it
+    should have exposed. The access path each test exercises must now stand on
+    its own: a route that changes access issues or removes the grant itself.
+    """
+    return permits({"id": user_id}, "sample:read_detail", sample_id=sample_id)
 
 
 def _switch_user(email: str, monkeypatch) -> None:
@@ -46,16 +76,23 @@ def _make_user(
     is_data_analyst: bool = False,
 ) -> int:
     rows = execute_write(
-        "INSERT INTO users (email, name, organization_id, "
-        "is_platform_admin, is_data_analyst, is_active) "
-        "VALUES (:e, :e, 1, :pa, :da, TRUE) "
-        "ON CONFLICT (email) DO UPDATE SET "
-        "is_platform_admin = EXCLUDED.is_platform_admin, "
-        "is_data_analyst = EXCLUDED.is_data_analyst, is_active = TRUE "
+        "INSERT INTO users (email, name, organization_id, is_active) "
+        "VALUES (:e, :e, 1, TRUE) "
+        "ON CONFLICT (email) DO UPDATE SET is_active = TRUE "
         "RETURNING id",
-        {"e": email, "pa": is_platform_admin, "da": is_data_analyst},
+        {"e": email},
     )
-    return rows[0]["id"]
+    uid = rows[0]["id"]
+    # The role is the grants now, ahead of M2-DROP. Both directions: these
+    # helpers upsert on a re-used email, so a demotion must revoke.
+    # instance_preset() rather than a hand-written ternary: it exists to be
+    # the single answer to "which preset do these two flags mean", and a
+    # second copy of that precedence is exactly what Rule 73 is about.
+    grant_instance_preset(
+        uid,
+        instance_preset(is_platform_admin=is_platform_admin, is_data_analyst=is_data_analyst),
+    )
+    return uid
 
 
 def _add_membership(user_id: int, lab_id: int, role: str, *, is_director: bool = False) -> None:
@@ -455,6 +492,10 @@ async def test_list_requests_lab_director_sees_lab_requests(client, monkeypatch)
         {"sid": s["id"], "uid": uid_req, "owner": SEED_USER_ID},
     )
 
+    # M2-B7: the list scope is access:approve_request over the sample, so the
+    # director's membership has to exist as a grant — the is_lab_director flag
+    # is no longer read by the list any more than by the approve route.
+    sync_grants_from_legacy_roles()
     _switch_user(email_ld, monkeypatch)
     resp = await client.get(f"/api/v1/sample-access/requests?lab_id={other_lab}")
     assert resp.status_code == 200
@@ -522,6 +563,9 @@ async def test_approve_as_lab_director_creates_grant(client, monkeypatch):
     )
     req_id = inserted[0]["id"]
 
+    # The Lab Director membership reseeds to access:approve_request; the
+    # is_lab_director flag is not itself a decision input since M2-B1.
+    sync_grants_from_legacy_roles()
     _switch_user(email_ld, monkeypatch)
     resp = await client.post(f"/api/v1/sample-access/requests/{req_id}/approve")
     assert resp.status_code == 200, resp.text
@@ -539,8 +583,8 @@ async def test_approve_as_lab_director_creates_grant(client, monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_approve_grant_unlocks_can_access_sample(client, monkeypatch):
-    """Sanity check the can_access_sample() update — grant flips access from False to True."""
+async def test_approve_grant_unlocks_detail_access(client, monkeypatch):
+    """Approval flips detail access from denied to allowed."""
     sid = "O-APR-CAN"
     _cleanup_samples(sid)
     other_lab = _ensure_other_lab()
@@ -555,10 +599,9 @@ async def test_approve_grant_unlocks_can_access_sample(client, monkeypatch):
     uid_ld = _make_user(email_ld)
     _add_membership(uid_ld, other_lab, "Lab Director", is_director=True)
     uid_req = _make_user(email_req)
-    requester = {"id": uid_req, "is_platform_admin": False}
 
     # Before any request — DISCOVERABLE is visible but detail access is denied.
-    assert can_access_sample(requester, s) is False
+    assert _can_read_detail(uid_req, s["id"]) is False
 
     inserted = execute_write(
         "INSERT INTO sample_access_requests (sample_id, requester_id, owner_id, "
@@ -568,11 +611,14 @@ async def test_approve_grant_unlocks_can_access_sample(client, monkeypatch):
     )
     req_id = inserted[0]["id"]
 
+    # The Lab Director membership reseeds to access:approve_request; the
+    # is_lab_director flag is not itself a decision input since M2-B1.
+    sync_grants_from_legacy_roles()
     _switch_user(email_ld, monkeypatch)
     resp = await client.post(f"/api/v1/sample-access/requests/{req_id}/approve")
     assert resp.status_code == 200
 
-    assert can_access_sample(requester, s) is True
+    assert _can_read_detail(uid_req, s["id"]) is True
 
     _cleanup_users([email_ld, email_req])
     _cleanup_samples(sid)
@@ -662,6 +708,7 @@ async def test_deny_as_lab_director_sets_status(client, monkeypatch):
     )
     req_id = inserted[0]["id"]
 
+    sync_grants_from_legacy_roles()
     _switch_user(email_ld, monkeypatch)
     resp = await client.post(
         f"/api/v1/sample-access/requests/{req_id}/deny",
@@ -710,7 +757,7 @@ async def test_deny_as_non_director_returns_403(client, monkeypatch):
     _cleanup_samples(sid)
 
 
-# ────────────────────────── can_access_sample / expiry ──────────────────────────
+# ────────────────────────── detail access / expiry ──────────────────────────
 
 
 @pytest.mark.asyncio
@@ -734,8 +781,8 @@ async def test_expired_grant_blocks_access():
         "VALUES (:sid, :uid, :uid, NOW() - INTERVAL '1 day')",
         {"sid": s["id"], "uid": uid},
     )
-    user_dict = {"id": uid, "is_platform_admin": False}
-    assert can_access_sample(user_dict, s) is False
+    _sync_access(s["id"])
+    assert _can_read_detail(uid, s["id"]) is False
 
     _cleanup_users([email])
     _cleanup_samples(sid)
@@ -760,8 +807,8 @@ async def test_active_grant_allows_access():
         "VALUES (:sid, :uid, :uid, NOW() + INTERVAL '30 days')",
         {"sid": s["id"], "uid": uid},
     )
-    user_dict = {"id": uid, "is_platform_admin": False}
-    assert can_access_sample(user_dict, s) is True
+    _sync_access(s["id"])
+    assert _can_read_detail(uid, s["id"]) is True
 
     _cleanup_users([email])
     _cleanup_samples(sid)
@@ -786,8 +833,8 @@ async def test_revoked_grant_blocks_access():
         "VALUES (:sid, :uid, :uid, NOW() + INTERVAL '30 days', TRUE, NOW())",
         {"sid": s["id"], "uid": uid},
     )
-    user_dict = {"id": uid, "is_platform_admin": False}
-    assert can_access_sample(user_dict, s) is False
+    _sync_access(s["id"])
+    assert _can_read_detail(uid, s["id"]) is False
 
     _cleanup_users([email])
     _cleanup_samples(sid)

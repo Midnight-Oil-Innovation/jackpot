@@ -53,8 +53,8 @@ prioritizing a feature, accepting a non-standard integration contract,
 defining the canonical default value for a configurable parameter — must be:
 
 - Discussed in a public issue or PR before merge.
-- Linked from the relevant `docs/learnings.md` entry or the
-  `docs/review_log.md` decision log.
+- Linked from the relevant `docs/learnings.md` entry, which is the
+  decision log.
 - Justified on the merits, not on operator identity. ("This benefits
   operator X" is not, by itself, a sufficient justification; "this
   shape is correct because of generalizable reason Y, and operator X

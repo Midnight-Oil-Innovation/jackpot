@@ -5,10 +5,15 @@ from pydantic import BaseModel
 
 from backend import deletion
 from backend.audit import AuditActions, log_audit
-from backend.auth.guards import get_current_user, get_user_lab_membership
+from backend.auth.guards import (
+    get_current_user,
+    permits,
+    require_capability,
+)
+from backend.authz.principal import load_principal
+from backend.authz.visibility import sample_list_clause
 from backend.database import execute_query, execute_write, get_db_dep
 from backend.pagination import paginate
-from backend.permissions import can_access_sample, visibility_sql_clause
 from backend.responses import success, success_list
 from backend.storage import StorageError, generate_presigned_url
 from backend.validator import (
@@ -193,12 +198,17 @@ def _get_sample_files(sample_id: int, conn) -> list[dict]:
     )
 
 
-def _require_readable(user: dict, sample: dict | None, conn) -> dict:
-    """Raise 404 if missing, 403 if denied. Returns the sample row."""
+def _require_readable(user: dict, sample: dict | None) -> dict:
+    """Raise 404 if missing, 403 if denied. Returns the sample row.
+
+    M2-B2: the decision is ``sample:read_detail`` at Sample scope. The fetch
+    stays ahead of the guard so the 404 answers survive unchanged — an
+    archived or tombstoned sample is not found rather than forbidden, which
+    ``_get_sample``'s filter, not the authorization model, decides.
+    """
     if not sample:
         raise HTTPException(status_code=404, detail="Sample not found.")
-    if not can_access_sample(user, sample, conn):
-        raise HTTPException(status_code=403, detail="Access denied.")
+    require_capability("sample:read_detail")(user, sample_id=sample["id"])
     return sample
 
 
@@ -303,7 +313,11 @@ def list_samples(
 ):
     user = get_current_user(request)
 
-    vis_clause, vis_params = visibility_sql_clause(user)
+    # M2-B7: the list filter is now compiled from the same grants and policies
+    # permit() reads, rather than permissions.py's hand-written ladder. The
+    # samples JOIN labs below is not decoration — a sample's scope is derived
+    # from its lineage (ADR 0015) and the org segment comes from labs.
+    vis_clause, vis_params = sample_list_clause(load_principal(user["id"]))
     where, params = _build_sample_filters(
         vis_clause=vis_clause,
         vis_params=vis_params,
@@ -326,14 +340,14 @@ def list_samples(
 
     if select_all:
         rows = execute_query(
-            f"SELECT s.id FROM samples s WHERE {where_sql}",
+            f"SELECT s.id FROM samples s JOIN labs l ON l.id = s.lab_id WHERE {where_sql}",
             params,
             conn=db,
         )
         ids = [r["id"] for r in rows]
         return success(data={"ids": ids, "count": len(ids)})
 
-    base_query = f"SELECT s.* FROM samples s WHERE {where_sql}"
+    base_query = f"SELECT s.* FROM samples s JOIN labs l ON l.id = s.lab_id WHERE {where_sql}"
     results, total = paginate(
         base_query,
         params,
@@ -357,7 +371,7 @@ def get_sample(
     db=Depends(get_db_dep),  # noqa: B008
 ):
     user = get_current_user(request)
-    sample = _require_readable(user, _get_sample(sample_id, db), db)
+    sample = _require_readable(user, _get_sample(sample_id, db))
     files = _get_sample_files(sample_id, db)
     out = _serialise(sample)
     out["files"] = [_serialise(f) for f in files]
@@ -365,15 +379,17 @@ def get_sample(
 
 
 def _require_sample_writable(user: dict, sample: dict) -> None:
-    """Writes require lab membership (Lab Collaborator+) on the sample's lab,
-    or Platform Admin. Lab Readers cannot write. Raises HTTPException."""
-    if user.get("is_platform_admin"):
-        return
-    member = get_user_lab_membership(user["id"], sample["lab_id"])
-    if not member:
-        raise HTTPException(status_code=403, detail="Lab membership required to update.")
-    if member.get("permission_group_name") == "Lab Reader":
-        raise HTTPException(status_code=403, detail="Lab Reader cannot update samples.")
+    """Writes require ``sample:update`` at the sample's scope.
+
+    M2-B2. The three legacy rungs are all preserved by the preset mapping
+    rather than by branches here: Platform Admin holds it instance-wide, Lab
+    Collaborator and Bioinformatics User hold it through ``lab_member_rw``,
+    and ``lab_member_ro`` (Lab Reader) deliberately does not list it. The
+    single 403 replaces two differently-worded ones; the distinction was
+    never actionable and telling a caller which rung they failed on is a
+    membership disclosure.
+    """
+    require_capability("sample:update")(user, sample_id=sample["id"])
 
 
 async def _parse_sample_update_body(request: Request) -> dict:
@@ -484,13 +500,9 @@ def archive_sample(
     if not sample:
         raise HTTPException(status_code=404, detail="Sample not found.")
 
-    if not user.get("is_platform_admin"):
-        member = get_user_lab_membership(user["id"], sample["lab_id"])
-        if not member or not member.get("is_lab_director"):
-            raise HTTPException(
-                status_code=403,
-                detail="Lab Director or Platform Admin required to archive samples.",
-            )
+    # sample:archive sits in the lab_lead and instance_administrator presets
+    # only — the same two roles the director-or-admin branch admitted.
+    require_capability("sample:archive")(user, sample_id=sample_id)
 
     rows = execute_write(
         "UPDATE samples SET is_archived = TRUE, deleted_at = NOW(), "
@@ -520,7 +532,7 @@ def list_sample_files(
     db=Depends(get_db_dep),  # noqa: B008
 ):
     user = get_current_user(request)
-    sample = _require_readable(user, _get_sample(sample_id, db), db)
+    sample = _require_readable(user, _get_sample(sample_id, db))
     files = _get_sample_files(sample["id"], db)
     return success(data=[_serialise(f) for f in files])
 
@@ -550,7 +562,7 @@ def download_sample(
     db=Depends(get_db_dep),  # noqa: B008
 ):
     user = get_current_user(request)
-    sample = _require_readable(user, _get_sample(sample_id, db), db)
+    sample = _require_readable(user, _get_sample(sample_id, db))
 
     column_map = {
         "fastq_r1": "fastq_r1_uri",
@@ -565,14 +577,18 @@ def download_sample(
             detail=f"Unknown file_type '{file_type}'. Allowed: {sorted(column_map.keys())}.",
         )
 
-    # raw_fastq is pre-scrub and restricted to Lab Directors (and Platform Admin).
-    if file_type == "raw_fastq" and not user.get("is_platform_admin"):
-        member = get_user_lab_membership(user["id"], sample["lab_id"])
-        if not member or not member.get("is_lab_director"):
-            raise HTTPException(
-                status_code=403,
-                detail="Raw FASTQ access restricted to Lab Directors.",
-            )
+    # M2-DROP-PRE slice 2: the narrower pre-scrub restriction now has a verb.
+    # sample:read_unscrubbed sits INSIDE sample:read_detail — the route has
+    # already required that above — so this is a second, narrower check on the
+    # same resource rather than an alternative to the first.
+    #
+    # The platform-admin arm of the legacy branch is deliberately NOT carried
+    # over. §8.2's Instance Administrator holds no content-read verb, and
+    # admitting it to *pre-scrub* content while barring it from post-scrub
+    # detail is incoherent. An operator who needs raw reads holds Lab Lead at
+    # the lab, which is where the data actually lives.
+    if file_type == "raw_fastq":
+        require_capability("sample:read_unscrubbed")(user, sample_id=sample_id)
 
     uri = sample.get(column_map[file_type])
     if not uri:
@@ -625,28 +641,6 @@ def _get_sample_any_or_404(sample_id: int, db) -> dict:
     return sample
 
 
-def _require_lab_tie(user: dict, sample: dict) -> None:
-    """Requester authorization (§10): platform admin, owner, or lab member."""
-    if user.get("is_platform_admin") or sample.get("owner_id") == user["id"]:
-        return
-    if get_user_lab_membership(user["id"], sample["lab_id"]):
-        return
-    raise HTTPException(status_code=403, detail="Not authorized for this sample.")
-
-
-def _require_approval_authority(user: dict, sample: dict) -> None:
-    """Approver authorization (§10): platform admin or own-lab Lab Director."""
-    if user.get("is_platform_admin"):
-        return
-    member = get_user_lab_membership(user["id"], sample["lab_id"])
-    if member and member.get("is_lab_director"):
-        return
-    raise HTTPException(
-        status_code=403,
-        detail="Lab Director or Platform Admin required to approve deletions.",
-    )
-
-
 @router.post("/{sample_id}/request-deletion")
 def request_sample_deletion(
     sample_id: int,
@@ -656,7 +650,13 @@ def request_sample_deletion(
 ):
     user = get_current_user(request)
     sample = _get_sample_any_or_404(sample_id, db)
-    _require_lab_tie(user, sample)
+    # M3: the §10 "platform admin, owner, or lab member" ladder became a
+    # capability. Ownership survives as LADDER_POLICIES' owner_id rung for
+    # deletion:request specifically — M3 claimed that in this comment before
+    # the rung existed, and a rung for a different verb does nothing, because
+    # _matches compares capability by equality. §5.3's ownership row now
+    # enumerates every verb the rung carries and a test holds it to that.
+    require_capability("deletion:request")(user, sample_id=sample_id)
     row = deletion.request_deletion(sample, user, payload.reason, db)
     return success(data=_serialise(row))
 
@@ -670,7 +670,11 @@ def cancel_sample_deletion(
     user = get_current_user(request)
     sample = _get_sample_any_or_404(sample_id, db)
     if sample.get("deletion_requested_by_user_id") != user["id"]:
-        _require_approval_authority(user, sample)
+        # Cancelling someone else's request is an approval-authority act. It
+        # takes deletion:approve without the separation-of-duties condition:
+        # the DENY keys on the caller BEING the requester, and this branch
+        # runs only when they are not, so it cannot fire here.
+        require_capability("deletion:approve")(user, sample_id=sample_id)
     row = deletion.cancel_deletion(sample, user, db)
     return success(data=_serialise(row))
 
@@ -684,13 +688,26 @@ def approve_sample_deletion(
 ):
     user = get_current_user(request)
     sample = _get_sample_any_or_404(sample_id, db)
-    _require_approval_authority(user, sample)
-    row = deletion.approve_deletion(
-        sample,
-        user,
-        db,
-        self_approve=bool(payload and payload.platform_admin_self_approve),
+    # The flag is a REQUEST, not the decision. §6.2-1b's escape is for a
+    # Platform Admin; taking payload.platform_admin_self_approve at face value
+    # made the separation-of-duties DENY liftable by anyone who set it, which
+    # is the opposite of what an audited escape means. What the caller asked
+    # for is ANDed with what they actually hold.
+    self_approve = bool(payload and payload.platform_admin_self_approve) and permits(
+        user, "deletion:self_approve", sample_id=sample_id
     )
+    # M3: separation of duties is now deletion.separation_of_duties, a DENY
+    # policy (§6.2-1b), so the approver-differs-from-requester rule is decided
+    # by permit() rather than re-derived here. The self-approve flag travels as
+    # a Context condition because that is what the policy reads — passing it
+    # only to approve_deletion would leave the guard denying a call the route
+    # then went on to allow.
+    require_capability("deletion:approve")(
+        user,
+        sample_id=sample_id,
+        conditions={"platform_admin_self_approve": self_approve},
+    )
+    row = deletion.approve_deletion(sample, user, db, self_approve=self_approve)
     return success(data=_serialise(row))
 
 
@@ -701,11 +718,16 @@ def reverse_sample_tombstone(
     db=Depends(get_db_dep),  # noqa: B008
 ):
     user = get_current_user(request)
-    if not user.get("is_platform_admin"):
-        raise HTTPException(
-            status_code=403, detail="Platform Admin required to reverse a tombstone."
-        )
+    # M2-DROP-PRE slice 2. Operational, not consent: reversing a tombstone
+    # unmakes a purge that has not happened yet, and the sample is still whole.
+    # Kept separate from deletion:vacuum so a deployment can hand the execute
+    # half to an authority without the undo half (§8.3's shape); nobody holds
+    # them apart today.
+    # 404 before the guard: sample_resource raises for an unknown id and the
+    # guard turns that into 403, which would report "not allowed" for a sample
+    # that does not exist. Same ordering as deletion-report.
     sample = _get_sample_any_or_404(sample_id, db)
+    require_capability("deletion:reverse_tombstone")(user, sample_id=sample_id)
     row = deletion.reverse_tombstone(sample, user, db)
     return success(data=_serialise(row))
 
@@ -718,11 +740,13 @@ def vacuum_sample_now(
     db=Depends(get_db_dep),  # noqa: B008
 ):
     user = get_current_user(request)
-    if not user.get("is_platform_admin"):
-        raise HTTPException(status_code=403, detail="Platform Admin required to vacuum.")
+    # M2-DROP-PRE slice 2. Executes a decision the consent authority already
+    # made — the sample is TOMBSTONED before this route will touch it — which
+    # is why it sits with the operational admin and not behind deletion:approve.
+    sample = _get_sample_any_or_404(sample_id, db)
+    require_capability("deletion:vacuum")(user, sample_id=sample_id)
     if not payload.justification.strip():
         raise HTTPException(status_code=422, detail="A justification is required.")
-    sample = _get_sample_any_or_404(sample_id, db)
     row = deletion.vacuum_sample(
         sample, user["id"], db, trigger="vacuum-now", justification=payload.justification
     )
@@ -737,7 +761,17 @@ def sample_deletion_report(
 ):
     user = get_current_user(request)
     sample = _get_sample_any_or_404(sample_id, db)
-    _require_lab_tie(user, sample)
+    # M2-DROP-PRE slice 2. _require_lab_tie's three rungs — platform admin,
+    # owner, lab member — become one capability: the admin and member rungs
+    # are grants (§8.2 puts deletion:read_report in the Instance Administrator
+    # preset and in all three lab presets), and ownership is LADDER_POLICIES'
+    # owner_id rung, added alongside this route.
+    #
+    # The admin KEEPS this route where it loses the raw-FASTQ one above. The
+    # report is lifecycle state, erasure evidence and an audit trail — a
+    # governance record, not sample content — which is the same line audit:read
+    # already sits on.
+    require_capability("deletion:read_report")(user, sample_id=sample_id)
     return success(data=deletion.deletion_report(sample, db))
 
 
@@ -750,7 +784,15 @@ def create_retraction_request(
 ):
     user = get_current_user(request)
     sample = _get_sample_any_or_404(sample_id, db)
-    _require_approval_authority(user, sample)
+    # M2-DROP-PRE slice 2. Its own verb rather than a reuse of
+    # submission:approve: retraction is the deletion plane reaching outward
+    # (B-CARE-3g), and one verb for both would hand repository-retraction to
+    # every future preset that gains submission approval for submission
+    # reasons. The platform-admin arm is not carried over — asking a
+    # repository to withdraw a published record is the consent act §8.2's note
+    # keeps away from the operational admin, the same call M3 made for
+    # deletion:approve.
+    require_capability("submission:retract")(user, sample_id=sample_id)
     row = deletion.record_retraction_request(
         sample,
         user,

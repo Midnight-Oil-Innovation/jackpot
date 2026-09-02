@@ -162,8 +162,8 @@ def _other_project_id(lab_id: int) -> int:
 def _make_user(email: str, *, organization_id: int = 1) -> int:
     """Create a non-admin user. Lab membership is added separately."""
     rows = execute_write(
-        "INSERT INTO users (email, name, organization_id, is_platform_admin, is_active) "
-        "VALUES (:e, :e, :oid, FALSE, TRUE) "
+        "INSERT INTO users (email, name, organization_id, is_active) "
+        "VALUES (:e, :e, :oid, TRUE) "
         "ON CONFLICT (email) DO UPDATE SET is_active = TRUE RETURNING id",
         {"e": email, "oid": organization_id},
     )

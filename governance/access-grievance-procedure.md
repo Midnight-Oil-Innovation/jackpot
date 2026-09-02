@@ -84,7 +84,7 @@ For category 3 (CARE / sovereignty):
   upstream issue) when the grievance is about something outside the
   project's scope.
 - For category 2: a public statement of the decision and the reasoning,
-  added to `docs/learnings.md` or `docs/review_log.md`.
+  added to `docs/learnings.md`.
 
 ## Retaliation
 

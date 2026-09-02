@@ -28,6 +28,7 @@ from urllib.parse import urlparse
 from fastapi import HTTPException
 
 from backend.audit import AuditActions, log_audit
+from backend.authz.reseed import sync_sample_access_grants
 from backend.database import execute_query, execute_write
 from backend.federation.deletion_propagation import enqueue_deletion_events
 from backend.notifications import create_notification
@@ -180,16 +181,15 @@ def approve_deletion(sample: dict, actor: dict, conn, *, self_approve: bool = Fa
                 f"Sample is not deletion-requested (deletion_status={sample['deletion_status']})."
             ),
         )
-    if sample["deletion_requested_by_user_id"] == actor["id"] and not (
-        actor.get("is_platform_admin") and self_approve
-    ):
-        raise HTTPException(
-            status_code=403,
-            detail=(
-                "Approver must differ from the requester (platform admins may "
-                "self-approve with platform_admin_self_approve=true)."
-            ),
-        )
+    # Separation of duties (§6.2-1b) is decided by permit(), not here. M3 made
+    # it the deletion.separation_of_duties DENY policy; the route evaluates it
+    # with the self-approve condition derived from whether the caller holds
+    # deletion:self_approve, so re-deriving it from is_platform_admin would be
+    # a second, weaker copy of the rule reading a column M2-DROP removes.
+    #
+    # `self_approve` survives as a parameter because the audit metadata below
+    # records whether the escape was used, which is the whole point of calling
+    # it audited.
     pending = execute_query(
         "SELECT sub.id, sub.status FROM submissions sub "
         "JOIN submission_samples ss ON ss.submission_id = sub.id "
@@ -242,6 +242,10 @@ def _seal_derivatives(sample: dict, actor: dict, conn) -> None:
         {"id": sample["id"]},
         conn=conn,
     )
+    # Every requester at once — no requester_id filter. A tombstoned sample
+    # conveys access to nobody, and leaving capability grants behind would let
+    # the guard allow a read the access table has already withdrawn.
+    sync_sample_access_grants(conn, sample_id=sample["id"])
     memberships = execute_query(
         "SELECT * FROM dataset_files WHERE original_sample_id = :id",
         {"id": sample["id"]},
@@ -336,6 +340,9 @@ def _restore_sealed_grants(sample: dict, conn) -> None:
             {"ids": ids},
             conn=conn,
         )
+        # Reversing the tombstone restores the rows; the grants must follow or
+        # the restored access exists only in the access table.
+        sync_sample_access_grants(conn, sample_id=sample["id"])
 
 
 def _restore_dataset_memberships(sample: dict, conn) -> None:

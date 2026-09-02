@@ -20,12 +20,26 @@ and CARE Principles compliance documented in
 `governance/care-principles-and-tribal-data-sovereignty.md`. The
 `jackpot init` CLI handles per-operator bootstrap (shipped in P0e).
 
-Phasing, with status as of 2026-08-28 — cleanup phases 6.1–11, P0d
-(monorepo migration), P0e (install/CLI), Phase 24.5 (architectural design
-lockdown), and P0b (Schema v5.0, migration `c871b28bbdab`, merged
-2026-07-06) are **complete**. P0f (BYOP infrastructure) is **in progress**.
-P0c (multi-tenancy middleware + sovereignty deletion) and P1–P5 remain.
-Per-item status lives in `active_backlog.yaml`, not here.
+Phase and per-item status live in `active_backlog.yaml` — the `status`
+field on each entry (`shipped` / `open` / `blocked` / `tracked_not_scheduled`)
+is the only answer to "what is done". **Do not restate phase status here.**
+
+This paragraph used to, carrying an as-of date. It was **accurate when
+written** and expired four days later: at commit `4bb9e86` (2026-08-28) the
+backlog had `p0f` at 3 shipped / 10 open and `P0c` blocked, exactly as the
+prose said; the ten BYOP entries then shipped and nobody re-read a sentence
+that had been true. Note which commit that was — the one that made
+`active_backlog.yaml` canonical and left a prose copy of the same fact behind.
+Establishing a single source of truth while keeping the second copy is the
+whole defect.
+
+The same commit shows it rots in both directions: that paragraph called P0b
+complete (right) while the backlog entry for `P0b` still read
+`tracked_not_scheduled` (wrong). Two representations of one fact were each
+stale about a different phase on the same day. So the rule is not "trust the
+backlog over the prose" — it is **do not write the fact down twice**. A claim
+that needs an as-of date belongs in a generated file or nowhere. Same failure
+the Current Baseline section documents for the test count.
 
 ---
 
@@ -38,8 +52,8 @@ Per-item status lives in `active_backlog.yaml`, not here.
    `docs/adr/`; for what a term means read `CONTEXT.md`. (`spec.md` was demoted to a
    redirect stub on 2026-08-28 — it is no longer the specification.)
 2. Read `todo.md` — find the next unchecked task
-3. Re-read this file (`docs/CLAUDE.md`) — all 67 Critical Rules apply at all times
-4. Confirm the baseline is stable: `uv run pytest tests/ schema/tests/ cli/tests/` from the workspace root. The expected test count is `test_count` in `docs/STATUS.md` — never a number quoted in prose here or elsewhere. Coverage must stay at or above the CI threshold of 80%. The post-P0d 39% number we carried briefly was a pytest-cov misconfiguration (omit list wasn't reaching the report-time matcher); fixed by making `--cov-config=pyproject.toml` explicit in addopts — see `docs/learnings.md` "Coverage measurement bug" entry. P0e (`docs/architecture/jackpot-init-cli.md`) shipped `jackpot init` operator-bootstrap CLI plus 13 absorbed Phase 22 cleanup items; see `docs/review_log.md` "P0e closeout" section.
+3. Re-read this file (`docs/CLAUDE.md`) — every Critical Rule applies at all times
+4. Confirm the baseline is stable: `uv run pytest tests/ schema/tests/ cli/tests/` from the workspace root. The expected test count is `test_count` in `docs/STATUS.md` — never a number quoted in prose here or elsewhere. Coverage must stay at or above the CI threshold of 80%. The post-P0d 39% number we carried briefly was a pytest-cov misconfiguration (omit list wasn't reaching the report-time matcher); fixed by making `--cov-config=pyproject.toml` explicit in addopts — see `docs/learnings.md` "Coverage measurement bug" entry. P0e (`docs/architecture/jackpot-init-cli.md`) shipped `jackpot init` operator-bootstrap CLI plus 13 absorbed Phase 22 cleanup items; see the P0e entry in `docs/learnings.md`.
 
 ## Session-start checklist
 
@@ -93,7 +107,7 @@ If the session crosses from conversation into action — even a single edit — 
 - If tests pass: check the item off in `todo.md`, commit with `git commit -a -m`, move to the next item
 - If tests fail: fix and rerun — **never mark a task complete without passing tests**
 - Every ~20 tasks: pause, review `docs/architecture.md` vs the current implementation for gaps,
-  log findings to `docs/review_log.md`, and resolve all gaps before continuing
+  log findings to `docs/learnings.md`, and resolve all gaps before continuing
 
 ### Decision Rules
 
@@ -103,8 +117,8 @@ If the session crosses from conversation into action — even a single edit — 
 - **Never write placeholder code** — every function must be fully implemented
 - **Always use `uv run python` / `uv run python3`** — never bare `python` or `python3`; the shell aliases do not apply in Claude Code sessions
 - When blocked on intent: check `docs/architecture.md` and `docs/adr/`, then the relevant section of this file,
-  then log the question to `docs/review_log.md` and continue with the next unblocked task
-- For non-trivial architectural changes: write the plan to `docs/review_log.md` and
+  then log the question to `docs/learnings.md` and continue with the next unblocked task
+- For non-trivial architectural changes: write the plan to `docs/learnings.md` and
   wait for explicit "Go" before proceeding
 
 ### Commit Convention
@@ -275,6 +289,22 @@ no need to read them proactively otherwise.
     touched since (release #99 did this; #118 required a
     reconnecting back-merge to fix). CI runs on PRs to `main` as a
     safety net.
+
+    Before opening a release PR, run:
+
+    ```bash
+    git log --oneline --grep="[Bb]reaking" main..development
+    ```
+
+    Every hit needs a line in the release PR body. That PR is the
+    *only* place a breaking change is communicated: there is no
+    changelog, and per `access_model.md` §10 there is no installed
+    base to notify — JACKPOT is pre-production by deliberate
+    decision, which is also why compatibility shims are refused
+    rather than written. Derived from commit history on purpose; a
+    changelog file would be a second home for a fact nothing
+    regenerates. First real operator deployment ends that premise
+    and needs an actual deprecation practice — `B-DEPRECATION-1`.
   - **`staging`** is push-triggered for the GCP staging deploy
     (`.github/workflows/deploy-staging.yml`). Promote
     `development` → `staging` to test the integrated stack in cloud,
@@ -1207,12 +1237,203 @@ Do not "fix" the inconsistency by renaming one side without a migration and a
 sweep of every call site. Recorded here after it was found living only in the
 demoted `spec.md` §3.
 
+**70 — A documented integration point is a claim. Grep for the call site before building on it.**
+
+`docs/` describes how the system fits together. Some of those descriptions were
+written from the phase plan rather than from the code, and **a spec section
+written from the plan reads identically to one written from the code.** Only
+grep tells them apart. Three instances found in one session:
+
+| Doc said | Reality |
+|---|---|
+| §6.2-3 DENYs `federation:push` | The capability existed nowhere but a comment — no route, no grant, no guard |
+| §6.2-2 is a DENY on `submission:approve` | Checked once at Lab scope while the rule is per-sample across a set; the shipped set-level 422 was already correct |
+| §7.4: "B's `/api/v1/samples/` filters by what A-as-principal can see" | That route authenticates a JWT cookie only. A real federated query would have 401'd |
+
+Before implementing a policy, guard, or capability that a design document says
+attaches somewhere, verify the attachment: grep for the capability string, the
+route, the calling function. **If it does not exist, that is the finding** —
+report it and scope accordingly. Building the half that has no call site
+produces something no test can exercise, which is worse than not building it,
+because it reads as done.
+
+The corollary is about tests, and it is the reason §7.4's gap survived 2600 of
+them: **when only one side of a contract is tested, the other side's absence is
+invisible.** The federation client tests mocked the partner, so the suite
+asserted the client *called* a URL and nothing asserted anyone answered it. If
+a contract has two ends, ask which end the tests are standing on.
+
+Related, and mechanized rather than trusted to this rule:
+`tests/authz/test_condition_registry.py` forces every policy condition key to
+declare where its value comes from and what capability gates it — see Rule 71.
+
+**71 — A policy condition is caller-supplied unless the router proves otherwise.**
+
+`permit()` evaluates `Context.conditions` as facts about the request. The engine
+**cannot** know whether the caller was entitled to assert one — correct for an
+engine, dangerous for a router. M3 shipped
+`deletion.separation_of_duties` with a `platform_admin_self_approve` condition
+that the route set straight from the request body, so any principal could lift
+the DENY by sending the flag.
+
+Any value reaching `Context.conditions` from a request body is an **assertion**.
+If lifting a DENY depends on it, the router must AND it with a held capability:
+
+```python
+self_approve = bool(payload and payload.platform_admin_self_approve) and permits(
+    user, "deletion:self_approve", sample_id=sample_id
+)
+```
+
+Enforced by `tests/authz/test_condition_registry.py`: every condition key used
+by a policy **or passed by any router** must be registered with its provenance
+and its gating capability, and the gate must name a real §4 verb. A new key
+fails that test until someone writes the answer down.
+
+Why it needed a rule and a guard rather than a fix: the defect was never
+exploitable — a legacy `is_platform_admin` check still caught it — so nothing
+failed. It was masked by a check that was itself scheduled for removal in
+M2-DROP, meaning the hole would have opened during a mechanical
+convert-the-readers pass, inside a PR about removing columns, where nobody
+would be reviewing for an authorization change.
+
+**72 — `CLAUDE.local.md`'s generated block is observation, never authority.**
+
+Lines between `<!-- headroom:learn:start -->` and `<!-- headroom:learn:end -->`
+are written by `headroom learn` from prior sessions. They are a cache of what
+was true once, on one machine, and they are loaded into context every session
+with exactly the same weight as a rule someone thought about.
+
+**Never act on a claim in that block about what exists.** Availability claims
+("X is NOT installed", "that path 404s", "that command is blocked") are the
+dangerous class, because the reaction they produce is silent — you route around
+the tool and nothing surfaces that a decision was made.
+
+Verify first, in one command, then proceed:
+
+```bash
+command -v coderabbit || echo absent      # not "the notes say it is absent"
+ls <path>                                 # not "the notes say that 404s"
+```
+
+Anchor: on 2026-09-01 the block asserted *"`coderabbit` CLI is NOT installed"*.
+It had been installed for 18 days when that line was generated. Four
+authorization PRs merged without the review the maintainer had configured, and
+the review, once run, found a LIKE-pattern widening in `capability_holders`
+that had already shipped (#191).
+
+The block is regenerated wholesale, so corrections inside it do not survive —
+which is why this rule lives here, in the reviewed file, rather than as a note
+in the generated one. Treat the block as useful for *performance* hints (read
+this file once, this command is slow) and inert for *correctness* ones.
+
+---
+
+**73 — A second implementation of an existing predicate is tested against the first, by fuzz, before it is written.**
+
+When code re-expresses a rule that already exists somewhere else — SQL mirroring
+a Python function, a cache mirroring a query, a client mirroring a server, a
+`visibility_sql_clause` mirroring `permit()` — the existing one is an **oracle**.
+Do not verify the new one by reading it. Generate inputs, run both, compare.
+
+The test is written **before** the implementation, and its input set is built to
+include what the canonical constructor *cannot* produce. That is the whole
+point: hand-picked examples come from the same mental model that wrote the code,
+so they exercise the cases already thought about. Bugs live in the others.
+
+```python
+def test_the_new_form_never_widens():
+    for a, b in itertools.product(MALFORMED + CANONICAL, repeat=2):
+        assert not (new_form(a, b) and not oracle(a, b))   # never more permissive
+```
+
+Assert the **direction**, not equality. A second implementation that refuses
+where the first allows is a bug worth knowing about; one that allows where the
+first refuses is an outage or a breach. Pin the known-narrowing set by shape so
+a new disagreement fails rather than being absorbed as expected.
+
+**Anchor (2026-09-01, PRs #190/#191).** `capability_holders` compiled
+`engine._scope_contains` into SQL. Four defects, in ~30 lines, across three
+review passes:
+
+| Defect | Found by |
+|---|---|
+| `LIKE` pattern built from a column — `scope_ref` of `instance://self/org/%` matched every org | code-simplifier |
+| `startswith(ROOT)` admitted `instance://selfish` | CodeRabbit |
+| `.strip("/")` collapsed `instance://self//org/3` into a fabricated ancestor | code-simplifier |
+| the narrowing test classified ROOT as a half-level grant, absorbing the one regression that matters | code-simplifier |
+
+Every one lived in a string `scope_uri()` cannot emit. The tests were built from
+`scope_uri()` output and so could not have found any of them. `_scope_contains`
+was imported two lines away the entire time. A 289-pair differential fuzz —
+twenty minutes, written first — catches all four with no reviewer involved.
+
+The corollary: **a test written from the constructor tests the constructor.** If
+the risk is malformed input, the malformed input has to be in the test, and it
+will not get there by being imagined one example at a time.
+
+---
+
+**74 — A check that can silently match nothing needs a canary. A registry that can silently hold dead entries needs an anti-rot test.**
+
+A guard's silence is indistinguishable from a pass. When a check stops being
+*able* to fire — the pattern no longer matches anything the repo produces, the
+AST walk returns empty, the classifier branch stopped being true — nothing goes
+red. The output is exactly what success looks like, and it stays that way for
+as long as nobody thinks to ask.
+
+So the guard's own ability to fire is part of the guard, and gets asserted:
+
+- **Canary.** At least one input the check MUST flag, asserted **through the
+  check's real entry point** — not against the pattern object. `check_docs`'
+  first canary asserted `regex.search(example)`, which passes happily while
+  the loop consuming that regex is dead; rewiring `for entry in DENYLIST` to
+  `for entry in []` left twelve canaries green. Go through the function the
+  guard actually calls. For a source scan, assert it found a known file or
+  symbol.
+- **Anti-rot.** For a registry whose entries are keyed to something OUTSIDE
+  it — condition keys a router must pass, divergence classes a corpus must
+  produce — an assertion that every entry is still reachable. An entry nothing
+  can use any more is dead weight that reads as a live rule. A denylist is
+  exempt: its entries are reachable by definition, so there is nothing to rot.
+
+`tests/authz/test_condition_registry.py` had both first and even named the
+problem: *"Guard the guard. An AST walk that matched nothing would make the
+registry check below vacuously true, which is the failure mode of every test
+that reads source code."* This rule is that pattern made general, after it
+turned out the file was the only place it existed.
+
+**Anchors, all found in one week, all the same shape:**
+
+| What went quiet | How |
+|---|---|
+| `check_backlog.py` check 6 | Required the entry id to *open* a commit subject; the repo then adopted conventional commits. The one check written because the file can disagree with reality could no longer fire on any subject the repo produces. Measurement and current limits live on `_evidence_pattern`. |
+| `preflight.classify_legacy_only_visibility` | A divergence class stopped being true, and the attribution test is one-directional — an unattributed row fails, a class that quietly stops firing does not. It absorbed a real bug: `grant_world()` silently issuing no sample-access grants. |
+| `tests/authz/test_legacy_column_reconstruction.py` | Pasted the migration's SQL under a comment claiming an edit would "fail loudly". Nothing connected them. Fixed — and the ADD COLUMN DDL was *still* pasted, so the same failure survived on the other half. |
+| `check_docs.py` DENYLIST | Not an incident — a construction property, and the reason the sweep happened. Disarm any pattern and the guard still prints "Documentation guard: clean", because a clean repo produces no hits either way. |
+
+**Not mutation testing.** That would catch all of these automatically and is
+the honest alternative, but it is a heavy dependency, slow in CI, and every one
+of these was in fact caught by reverting the guard and confirming the test goes
+red. Do that by hand when you touch a guard; the canary is what makes it stick
+for the next person.
+
+---
+
 ## Local Dev Role Switching
 
 In local dev (`ENV=local`), the mock user is determined by `MOCK_USER_EMAIL`
 in `docker-compose.yml`. The `get_current_user()` function in `auth/guards.py`
 looks up that email in the `users` table. If the email is not found, it falls
-back to a Platform Admin dict so the API never breaks.
+back to a synthetic `id=1` dict so the API never breaks.
+
+That fallback **no longer confers Platform Admin**, and hasn't decided anything
+since M2-B1. It used to carry `is_platform_admin: True`; M2-DROP-PRE slice 5
+removed the key, because authorization is `permit()` over grants and the
+fallback identity's authority is whatever grants user 1 holds — possibly none.
+The flag made a grantless identity read as an admin to anyone inspecting it
+without changing a single decision. Pinned by
+`tests/authz/test_identity_carries_no_legacy_flags.py`.
 
 To test a specific role, insert the user and membership into the database
 and change the env var:
@@ -1302,8 +1523,9 @@ quoted for several phases was a measurement bug — pytest-cov
 needs `--cov-config=pyproject.toml` explicit in addopts to load
 the omit list (it does NOT auto-discover the
 `[tool.coverage.run]` table the way the coverage CLI does).
-Real gaps to close (still tracked as action item 15 in
-`docs/review_log.md` but smaller than thought):
+Real gaps to close (Phase 22 action item 15, restated in the
+coverage-measurement entry in `docs/learnings.md`, and smaller
+than that item assumed):
 `harmonizer.py` 0% (no tests), `routers/gisaid.py` 43%,
 `routers/templates.py` 53%, `dlp_scanner.py` 71%.
 Priority order for new tests:
@@ -1496,6 +1718,44 @@ Only one migration may be in flight at a time. Before writing a migration, confi
 other branch or open PR adds one. Never create a migration that shares a
 `down_revision` with an existing migration. Run `uv run python scripts/check_migration_heads.py`
 before committing any migration.
+
+## Authorization-path serialization (hard rule)
+
+Work on the **authorization decision path** runs one session at a time. Never
+parallel-batch it, never run two such branches concurrently.
+
+The path is:
+
+- `backend/backend/auth/guards.py` — `require_capability`, `get_current_user`,
+  the federation peer authenticator
+- `backend/backend/authz/**` — the `permit()` engine, `visibility_sql_clause`,
+  scope construction, principal loading, the reseed
+- `backend/backend/permissions.py` — the legacy ladder, until M2 deletes it
+- migrations that create or populate `authz_capability_grants` /
+  `authz_policies`
+- any route change that adds, removes, or moves a permission check
+- `tests/authz/**`, especially `preflight.py` and its divergence registry
+
+**Why, and it is not merge friction.** Authorization failures fail *open*. A
+bad merge in most code throws, 500s, or fails a test; a bad merge here returns
+200 to a request that should have been refused, and nothing in the response,
+the logs, or the audit trail says so. The cost of catching it late is not a
+rollback — it is not knowing who saw what in the meantime. Serial review is
+cheap against that.
+
+Secondary: every batch touches `tests/authz/preflight.py`, which encodes what
+"correct" means. Two branches editing it produce a conflict resolved by
+whoever merges second, in the file that would otherwise have caught the error.
+
+**In practice:** `parallel_safe: false` on the backlog entry, one open PR at a
+time across these files, and a full `uv run pytest tests/authz/` before each
+merge — not just the tests the change touched.
+
+**Provenance:** the phrase "auth-adjacent, do not parallel-batch" appeared in
+backlog `parallel_safe_reason` fields from May 2026, citing
+`scripts_jackpot/coding_scripts_howto.md`. That document describes the batch
+tooling and contains no such rule — the citation never resolved. This section
+is the rule the entries were reaching for, written down (2026-08-31).
 
 ## Dependency policy (hard rule)
 

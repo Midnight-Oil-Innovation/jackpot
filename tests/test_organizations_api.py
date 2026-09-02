@@ -7,10 +7,10 @@ from backend.database import execute_query, execute_write
 def _make_non_admin(email: str = "nonadmin@test.com") -> None:
     execute_write(
         """
-        INSERT INTO users (email, name, is_platform_admin, is_active, organization_id)
-        VALUES (:e, 'Non Admin', FALSE, TRUE, 1)
+        INSERT INTO users (email, name, is_active, organization_id)
+        VALUES (:e, 'Non Admin', TRUE, 1)
         ON CONFLICT (email) DO UPDATE
-        SET is_platform_admin = FALSE, is_active = TRUE, organization_id = 1
+        SET is_active = TRUE, organization_id = 1
         """,
         {"e": email},
     )
@@ -19,10 +19,10 @@ def _make_non_admin(email: str = "nonadmin@test.com") -> None:
 def _make_org_member(email: str, org_id: int) -> None:
     execute_write(
         """
-        INSERT INTO users (email, name, is_platform_admin, is_active, organization_id)
-        VALUES (:e, 'Org Member', FALSE, TRUE, :o)
+        INSERT INTO users (email, name, is_active, organization_id)
+        VALUES (:e, 'Org Member', TRUE, :o)
         ON CONFLICT (email) DO UPDATE
-        SET is_platform_admin = FALSE, organization_id = :o, is_active = TRUE
+        SET organization_id = :o, is_active = TRUE
         """,
         {"e": email, "o": org_id},
     )

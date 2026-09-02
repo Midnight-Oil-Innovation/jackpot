@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, Field
 
 from backend.audit import AuditActions, log_audit
-from backend.auth.guards import get_current_user
+from backend.auth.guards import get_current_user, permits
 from backend.database import execute_query, execute_write, get_db_dep
 from backend.pagination import paginate
 from backend.responses import error, success, success_list, success_message
@@ -149,7 +149,11 @@ def revoke_token(
         return error("NOT_FOUND", f"Token {token_id} not found.", status_code=404)
     before = rows[0]
 
-    if before["user_id"] != user["id"] and not user.get("is_platform_admin"):
+    # M2-B5: the SELF path stays auth-only by design (§4.7) — revoking your
+    # own token needs no capability, and gating the whole route would break
+    # every user's control of their own credentials. token:manage gates only
+    # the other half: reaching another principal's tokens.
+    if before["user_id"] != user["id"] and not permits(user, "token:manage"):
         raise HTTPException(status_code=403, detail="Not your token.")
 
     execute_write(

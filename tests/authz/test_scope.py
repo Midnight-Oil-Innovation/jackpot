@@ -1,0 +1,353 @@
+"""M2-PRE-1 — canonical scope-URI builder (access_model.md §3.1.1, ADR 0015).
+
+The builder's job is to make ``engine._scope_contains`` meaningful: prefix
+containment is only correct when every scope in the system is a path under one
+root. These tests pin the shape, the ancestor requirement, and the containment
+relation the shape is supposed to produce.
+"""
+
+import pytest
+
+from backend.authz.engine import _scope_contains
+from backend.authz.principal import strict_ancestors
+from backend.authz.scope import ROOT, ancestor_scopes, scope_uri
+
+
+class TestShape:
+    def test_root(self):
+        assert scope_uri() == "instance://self"
+
+    def test_each_level(self):
+        assert scope_uri(org=3) == "instance://self/org/3"
+        assert scope_uri(org=3, lab=7) == "instance://self/org/3/lab/7"
+        assert scope_uri(org=3, lab=7, project=12) == "instance://self/org/3/lab/7/project/12"
+        assert (
+            scope_uri(org=3, lab=7, project=12, sample=55)
+            == "instance://self/org/3/lab/7/project/12/sample/55"
+        )
+
+    def test_every_scope_is_rooted(self):
+        # One root per deployment. A peer instance is a principal, not a
+        # branch (§3.3), so no builder input can produce a second root.
+        for kwargs in ({}, {"org": 1}, {"org": 1, "lab": 2}):
+            assert scope_uri(**kwargs).startswith(ROOT)
+
+
+class TestAncestorsRequired:
+    @pytest.mark.parametrize(
+        "kwargs, missing",
+        [
+            ({"lab": 7}, "org"),
+            ({"project": 12}, "org"),
+            ({"org": 3, "project": 12}, "lab"),
+            ({"org": 3, "lab": 7, "sample": 55}, "project"),
+        ],
+    )
+    def test_level_without_its_ancestors_raises(self, kwargs, missing):
+        with pytest.raises(ValueError, match=missing):
+            scope_uri(**kwargs)
+
+
+class TestIdValidation:
+    @pytest.mark.parametrize("bad", ["3", "3/lab/7", 3.0, None.__class__])
+    def test_non_int_id_rejected(self, bad):
+        # A string id could carry a separator and forge containment.
+        with pytest.raises(TypeError):
+            scope_uri(org=bad)
+
+    def test_bool_rejected(self):
+        # bool is an int subclass; would render as "org/True".
+        with pytest.raises(TypeError):
+            scope_uri(org=True)
+
+    @pytest.mark.parametrize("bad", [0, -1])
+    def test_non_positive_id_rejected(self, bad):
+        with pytest.raises(ValueError, match="positive"):
+            scope_uri(org=bad)
+
+
+class TestContainment:
+    """The property the whole ADR exists for."""
+
+    def test_instance_contains_every_level(self):
+        for deeper in (
+            scope_uri(org=3),
+            scope_uri(org=3, lab=7),
+            scope_uri(org=3, lab=7, project=12),
+            scope_uri(org=3, lab=7, project=12, sample=55),
+        ):
+            assert _scope_contains(scope_uri(), deeper)
+
+    def test_admin_root_grant_reaches_a_lab_scoped_sample(self):
+        # The exact cell that made admin-bypass-vs-scoped-grants a cutover
+        # blocker: instance://self did not contain lab://N.
+        assert _scope_contains(scope_uri(), scope_uri(org=3, lab=7, project=12, sample=55))
+
+    def test_org_contains_its_labs_but_not_another_org(self):
+        assert _scope_contains(scope_uri(org=3), scope_uri(org=3, lab=7))
+        assert not _scope_contains(scope_uri(org=3), scope_uri(org=4, lab=7))
+
+    def test_lab_does_not_contain_a_sibling_lab(self):
+        assert not _scope_contains(scope_uri(org=3, lab=7), scope_uri(org=3, lab=8))
+
+    def test_containment_is_one_directional(self):
+        assert not _scope_contains(scope_uri(org=3, lab=7), scope_uri(org=3))
+
+    def test_segment_boundary_not_fooled_by_id_prefix(self):
+        # lab/7 must not contain lab/70 — the trap pure string prefixing falls
+        # into and the reason _scope_contains appends a separator.
+        assert not _scope_contains(scope_uri(org=3, lab=7), scope_uri(org=3, lab=70))
+        assert not _scope_contains(scope_uri(org=1), scope_uri(org=11, lab=2))
+
+
+# ── M2-B7: lab- and project-level scope SQL ──────────────────────────────
+
+
+def test_lab_scope_sql_shape():
+    from backend.authz.scope import lab_scope_sql
+
+    assert lab_scope_sql(labs="l") == (
+        "('instance://self/org/' || l.organization_id || '/lab/' || l.id)"
+    )
+
+
+def test_project_scope_sql_shape():
+    from backend.authz.scope import project_scope_sql
+
+    assert project_scope_sql(labs="l", rows="pr") == (
+        "('instance://self/org/' || l.organization_id"
+        " || '/lab/' || l.id"
+        " || '/project/' || pr.project_id)"
+    )
+
+
+def test_every_level_is_accepted_as_canonical():
+    from backend.authz.scope import (
+        is_canonical_scope_sql,
+        lab_scope_sql,
+        project_scope_sql,
+        scope_sql,
+    )
+
+    for expr in (
+        lab_scope_sql(labs="l"),
+        project_scope_sql(labs="l", rows="pr"),
+        scope_sql(labs="l", samples="s"),
+    ):
+        assert is_canonical_scope_sql(expr), expr
+
+
+def test_a_tampered_level_expression_is_still_refused():
+    """The point of byte-comparison: adding levels must not loosen the gate."""
+    from backend.authz.scope import is_canonical_scope_sql, lab_scope_sql
+
+    tampered = lab_scope_sql(labs="l").rstrip(")") + " || '' ) OR 1=1 --"
+    assert not is_canonical_scope_sql(tampered)
+
+
+def test_lab_scope_sql_contains_its_projects_and_samples():
+    """Containment is what makes a lab-level list filter correct: a lab-scoped
+    grant must cover rows named deeper in the tree."""
+    from backend.authz.engine import _scope_contains
+    from backend.authz.scope import scope_uri
+
+    lab = scope_uri(org=1, lab=7)
+    assert _scope_contains(lab, scope_uri(org=1, lab=7, project=3))
+    assert _scope_contains(lab, scope_uri(org=1, lab=7, project=3, sample=9))
+    assert not _scope_contains(lab, scope_uri(org=1, lab=8, project=3))
+
+
+def test_alias_must_be_an_identifier():
+    import pytest
+
+    from backend.authz.scope import lab_scope_sql, project_scope_sql
+
+    with pytest.raises(ValueError):
+        lab_scope_sql(labs="l; DROP TABLE labs")
+    with pytest.raises(ValueError):
+        project_scope_sql(labs="l", rows="x y")
+
+
+# ── ancestor_scopes: containment's dual ───────────────────────────────────
+
+
+def test_ancestor_scopes_enumerates_every_containing_scope():
+    assert ancestor_scopes(scope_uri(org=3, lab=7)) == [
+        "instance://self",
+        "instance://self/org/3",
+        "instance://self/org/3/lab/7",
+    ]
+    assert ancestor_scopes(scope_uri()) == ["instance://self"]
+
+
+def test_ancestor_scopes_agrees_with_scope_contains():
+    """The property that makes the SQL form correct: a grant contains a scope
+    exactly when it appears in that scope's ancestor list. Asserted over the
+    full tree rather than asserted about, because the two are one rule and the
+    SQL half stops being reviewable the moment they can disagree."""
+    every_scope = [
+        scope_uri(),
+        scope_uri(org=1),
+        scope_uri(org=2),
+        scope_uri(org=1, lab=5),
+        scope_uri(org=1, lab=50),
+        scope_uri(org=1, lab=5, project=9),
+        scope_uri(org=1, lab=5, project=9, sample=4),
+    ]
+    for grant in every_scope:
+        for resource in every_scope:
+            assert _scope_contains(grant, resource) == (grant in ancestor_scopes(resource)), (
+                f"{grant} vs {resource}"
+            )
+
+
+def test_ancestor_scopes_strips_a_trailing_slash_like_scope_contains():
+    assert ancestor_scopes("instance://self/org/3/") == [
+        "instance://self",
+        "instance://self/org/3",
+    ]
+
+
+def test_ancestor_scopes_does_not_interpret_a_non_canonical_scope():
+    """A scope carrying a LIKE metacharacter is a literal, not a pattern — it
+    contributes one ancestor naming itself and nothing wider."""
+    assert ancestor_scopes("instance://self/org/%") == [
+        "instance://self",
+        "instance://self/org/%",
+    ]
+
+
+def test_ancestor_scopes_requires_a_segment_boundary_at_the_root():
+    """``instance://selfish`` is not under ``instance://self``.
+
+    Found by review on the fix for the LIKE widening — the same mistake one
+    level up. A bare prefix test claimed the root as an ancestor (disagreeing
+    with ``_scope_contains``) and split the remainder into a fabricated
+    ``instance://self/ish/org``.
+    """
+
+    for impostor in ("instance://selfish", "instance://selfish/org/1"):
+        assert ancestor_scopes(impostor) == [impostor]
+        assert ROOT not in ancestor_scopes(impostor)
+        assert not _scope_contains(ROOT, impostor)
+
+
+# The invariant the SQL half depends on. `capability_holders` compiles
+# containment into `g.scope_ref = :exact OR RTRIM(g.scope_ref,'/') = ANY(:strict)`,
+# so that predicate — not `ancestor_scopes` alone — is what must agree with
+# `_scope_contains`. Restated here in Python and checked over the shapes
+# `scope_uri()` cannot produce, which is exactly where all three bugs in this
+# function's history have lived.
+def _sql_predicate(grant: str, resource: str) -> bool:
+    # strict_ancestors is imported from the production module, not re-derived:
+    # a second copy here would be free to drift from the parameters the query
+    # actually binds, and the test would keep passing while modelling a query
+    # nobody runs.
+    return grant == resource or grant.rstrip("/") in strict_ancestors(resource)
+
+
+def _is_half_level(scope: str) -> bool:
+    """A grant naming a level without its id (``.../org``).
+
+    ROOT names *zero* levels and is not one. The inline form this replaces
+    counted it as one, because ``"".split("/")`` is ``[""]`` — length 1, odd.
+    That mattered more than it looks: ROOT is the scope the only production
+    caller queries at, so a ROOT-grant regression would have been absorbed by
+    the narrowing test below as "expected family 1" instead of failing.
+    """
+    trimmed = scope.rstrip("/")
+    if not trimmed.startswith(f"{ROOT}/"):
+        return False
+    return len(trimmed[len(ROOT) + 1 :].split("/")) % 2 == 1
+
+
+_NON_CANONICAL = [
+    "",
+    ROOT,
+    f"{ROOT}/",
+    f"{ROOT}//",
+    "instance://selfish",
+    f"{ROOT}/org",
+    f"{ROOT}/org/1",
+    f"{ROOT}/org/1/",
+    f"{ROOT}//org/1",
+    f"{ROOT}/org/12",
+    f"{ROOT}/org/1/lab",
+    f"{ROOT}/org/1/lab/5",
+    f"{ROOT}/org/1/lab/5/project/9",
+    f"{ROOT}/org/1/lab/5/project/9/sample/2",
+    f"{ROOT}/org/%",
+    f"{ROOT}/org/_",
+    f"{ROOT}/org/1//lab/5",
+]
+
+
+def test_the_sql_predicate_never_widens_beyond_scope_contains():
+    """The one property that must hold: the SQL may refuse where the engine
+    allows (fail closed), never the reverse.
+
+    Every bug this function has had was a widening — the LIKE metacharacter,
+    the `instance://selfish` root, the collapsed `//`. Each was invisible to a
+    test built from `scope_uri()` output, because `scope_uri()` cannot produce
+    the input that triggers it. So this asserts over deliberately malformed
+    strings, and asserts the direction rather than equality.
+    """
+    widenings = [
+        (g, r)
+        for g in _NON_CANONICAL
+        for r in _NON_CANONICAL
+        if _sql_predicate(g, r) and not _scope_contains(g, r)
+    ]
+    assert widenings == []
+
+
+def test_the_known_narrowings_are_two_fail_closed_families():
+    """Where the SQL refuses and the engine allows, pinned so it cannot grow.
+
+    Exactly two families, neither reachable from ``scope_uri()``:
+
+    1. **A grant at a half-level** (``instance://self/org``). Pair-wise
+       enumeration never produces it as an ancestor. Pinned rather than fixed —
+       covering it means generating partial-level ancestors, which is the
+       "reconstruct something wider" move that produced the ``//`` bug.
+    2. **A resource with a trailing slash** (``instance://self/org/1/``). The
+       engine's prefix branch treats ``x`` as containing ``x/``; ``ancestor_scopes``
+       rstrips first, so it does not.
+
+    Both refuse access the engine would grant, which is the safe direction. The
+    test asserts the *shape* of every disagreement so a new one in some third
+    family fails here rather than being absorbed as "expected narrowing".
+    """
+    narrowings = {
+        (g, r)
+        for g in _NON_CANONICAL
+        for r in _NON_CANONICAL
+        if _scope_contains(g, r) and not _sql_predicate(g, r)
+    }
+    assert narrowings, "the families below are real; an empty set means the fuzz broke"
+    for grant, resource in narrowings:
+        trailing_slash_resource = resource != resource.rstrip("/")
+        assert _is_half_level(grant) or trailing_slash_resource, (
+            f"narrowing in a new family: {grant!r} -> {resource!r}"
+        )
+
+
+def test_a_doubled_separator_is_not_collapsed():
+    """`instance://self//org/3` is not `instance://self/org/3`.
+
+    Stripping the separator on the way in and rebuilding with a single one
+    fabricated an ancestor the engine rejects — the SQL would have returned a
+    holder `permit()` would refuse.
+    """
+    doubled = f"{ROOT}//org/3"
+    assert not _scope_contains(f"{ROOT}/org/3", doubled)
+    assert f"{ROOT}/org/3" not in ancestor_scopes(doubled)
+    assert ancestor_scopes(doubled) == [ROOT, f"{ROOT}//org", doubled]
+
+
+def test_ancestor_scopes_is_reflexive_at_a_half_level():
+    """`_scope_contains(x, x)` is true for every x, so x must appear in its own
+    ancestor list — including when the pair loop stops short of it."""
+    for scope in (f"{ROOT}/org", f"{ROOT}/org/1/lab", "instance://selfish"):
+        assert scope in ancestor_scopes(scope)
+        assert _scope_contains(scope, scope)

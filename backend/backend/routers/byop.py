@@ -38,7 +38,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import DateTime, Float, Integer, String, Text
 from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column
 
-from backend.auth.guards import get_current_user, get_user_lab_membership
+from backend.auth.guards import get_current_user, permits
 from backend.database import get_db_dep
 from backend.services.byop_sandbox import (
     OUTCOME_PASSED,
@@ -161,6 +161,14 @@ class ByopPipelineRead(BaseModel):
     cost_estimate_usd: float | None = None
     owner_lab_id: int | None = None
 
+    # Per-row, because the server's rule is per-row: _may_manage admits an
+    # instance-scoped grant, a lab-scoped one at owner_lab_id, OR the
+    # registrant. No flat "is admin" answer can express that, and the UI was
+    # asking the wrong question — it gated the mutate buttons on
+    # is_platform_admin, hiding them from a lab member the server would have
+    # let through (M2-DROP-PRE slice 6).
+    can_manage: bool = False
+
 
 router = APIRouter(prefix="/api/v1/byop", tags=["byop"])
 
@@ -275,9 +283,56 @@ def _get_or_404(db: Session, pipeline_id: int) -> ByopPipeline:
     return pipeline
 
 
-def _user_in_lab(user_id: int, lab_id: int) -> bool:
-    """Lab-membership lookup, isolated so the SQLite test harness can patch it."""
-    return get_user_lab_membership(user_id, lab_id) is not None
+def _may_manage(
+    current_user: dict, owner_lab_id: int | None, registered_by_user_id: str | None
+) -> bool:
+    """May this caller register or mutate this BYOP pipeline? (M2-B3)
+
+    One call replaces the three-branch ladder that preceded it —
+    platform-admin, registrant, lab member — because all three are now the
+    same question asked of ``permit()``:
+
+    - platform admin  -> ``pipeline:register_custom`` at instance scope, which
+                         contains every lab path by ordinary containment
+    - lab member      -> the same capability at the pipeline's ``owner_lab_id``.
+                         Narrower than before: §8.2 puts the verb in
+                         ``lab_lead``, so a Lab Collaborator no longer mutates
+                         a *lab-owned* pipeline — but see the next rung
+    - the registrant  -> an attribute-policy on ``registered_by_user_id``,
+                         which is what keeps a Bioinformatics User in control
+                         of the pipelines they registered themselves
+
+    ``owner_lab_id`` may be None: ``sharing_scope`` admits 'private', a
+    pipeline belonging to a person rather than a lab. That resolves to the
+    instance root, where only the registrant policy or an instance-wide grant
+    can match — which is the correct reading of a private pipeline, not a gap.
+
+    Isolated as one function so the SQLite router harness has a single seam to
+    patch, the role ``_user_in_lab`` used to play.
+    """
+    return permits(
+        current_user,
+        "pipeline:register_custom",
+        lab_id=owner_lab_id,
+        row_attributes={"registered_by_user_id": registered_by_user_id},
+    )
+
+
+def _to_read(pipeline: ByopPipeline, current_user: dict) -> ByopPipelineRead:
+    """Serialise a pipeline with the caller's per-row authority attached.
+
+    Computed on every endpoint rather than hardcoded True on the mutating
+    ones. Those callers have already passed ``_get_or_404_tenancy``, so the
+    answer is known — but writing it down a second time would be a second
+    implementation of ``_may_manage``, free to drift from the first (Rule 73).
+    One redundant evaluation on a path that already did the same work is the
+    cheaper side of that trade.
+    """
+    model = ByopPipelineRead.model_validate(pipeline)
+    model.can_manage = _may_manage(
+        current_user, pipeline.owner_lab_id, pipeline.registered_by_user_id
+    )
+    return model
 
 
 def _get_or_404_tenancy(db: Session, pipeline_id: int, current_user: dict) -> ByopPipeline:
@@ -290,13 +345,7 @@ def _get_or_404_tenancy(db: Session, pipeline_id: int, current_user: dict) -> By
     tenant must never learn the resource exists.
     """
     pipeline = _get_or_404(db, pipeline_id)
-    if current_user.get("is_platform_admin"):
-        return pipeline
-    if pipeline.registered_by_user_id == str(current_user["id"]):
-        return pipeline
-    if pipeline.owner_lab_id is not None and _user_in_lab(
-        current_user["id"], pipeline.owner_lab_id
-    ):
+    if _may_manage(current_user, pipeline.owner_lab_id, pipeline.registered_by_user_id):
         return pipeline
     raise HTTPException(status_code=404, detail=f"BYOP pipeline {pipeline_id} not found.")
 
@@ -316,21 +365,29 @@ def create_pipeline(
     payload: ByopPipelineCreate,
     db: Annotated[Session, Depends(get_db_dep)],
     current_user: Annotated[dict, Depends(get_current_user)],
-) -> ByopPipeline:
+) -> ByopPipelineRead:
     if payload.source_type not in SOURCE_TYPES:
         raise HTTPException(
             status_code=422,
             detail=f"source_type must be one of {sorted(SOURCE_TYPES)}.",
         )
-    # P0c tenancy: registering into a lab requires membership in that lab.
-    if (
-        payload.owner_lab_id is not None
-        and not current_user.get("is_platform_admin")
-        and not _user_in_lab(current_user["id"], payload.owner_lab_id)
+    # M2-B3: registering into a lab takes pipeline:register_custom AT that lab.
+    #
+    # Deliberately not _may_manage(): at creation the caller is always the
+    # registrant, so the registrant rung would match every time and the lab
+    # check would be vacuous — anyone could place a pipeline into any lab.
+    # That rung governs a row after it exists; the right to put one into
+    # someone else's lab is a grant question only.
+    #
+    # Registering with no lab (sharing_scope 'private') needs nothing beyond
+    # authentication: the row is the caller's own by construction, and
+    # _may_manage's registrant rung governs it from then on.
+    if payload.owner_lab_id is not None and not permits(
+        current_user, "pipeline:register_custom", lab_id=payload.owner_lab_id
     ):
         raise HTTPException(
             status_code=403,
-            detail=f"Not a member of lab {payload.owner_lab_id}.",
+            detail=f"Not authorized to register a pipeline into lab {payload.owner_lab_id}.",
         )
     manifest = _parse_manifest(payload.manifest_yaml)
     metadata = manifest.get("metadata") or {}
@@ -360,7 +417,7 @@ def create_pipeline(
     db.add(pipeline)
     db.commit()
     db.refresh(pipeline)
-    return pipeline
+    return _to_read(pipeline, current_user)
 
 
 @router.get("/pipelines", response_model=list[ByopPipelineRead])
@@ -369,7 +426,7 @@ def list_pipelines(
     current_user: Annotated[dict, Depends(get_current_user)],
     pipeline_status: str | None = None,
     engine_type: str | None = None,
-) -> list[ByopPipeline]:
+) -> list[ByopPipelineRead]:
     # P0c: list-all is INTENTIONALLY unscoped per design §9 — bioinformaticians
     # browse the whole pipeline catalog. Only mutations are tenancy-guarded.
     query = db.query(ByopPipeline)
@@ -377,7 +434,13 @@ def list_pipelines(
         query = query.filter(ByopPipeline.pipeline_status == pipeline_status)
     if engine_type is not None:
         query = query.filter(ByopPipeline.engine_type == engine_type)
-    return query.order_by(ByopPipeline.id).all()
+    # ponytail: one _may_manage per row, so one load_principal per row. The
+    # catalog is tens of rows on an explicitly-opened page. Hoisting means
+    # calling _allows with a hand-built Resource, which re-states the scope and
+    # row_attributes assembly inside require_capability — a second copy of the
+    # rule, per row (Rule 73). If the catalog grows, memoize load_principal per
+    # request instead; that keeps one implementation.
+    return [_to_read(p, current_user) for p in query.order_by(ByopPipeline.id).all()]
 
 
 @router.get("/pipelines/{pipeline_id}", response_model=ByopPipelineRead)
@@ -385,10 +448,10 @@ def get_pipeline(
     pipeline_id: int,
     db: Annotated[Session, Depends(get_db_dep)],
     current_user: Annotated[dict, Depends(get_current_user)],
-) -> ByopPipeline:
+) -> ByopPipelineRead:
     # P0c: detail read is INTENTIONALLY unscoped per design §9 (catalog browse);
     # mutations go through _get_or_404_tenancy instead.
-    return _get_or_404(db, pipeline_id)
+    return _to_read(_get_or_404(db, pipeline_id), current_user)
 
 
 @router.patch("/pipelines/{pipeline_id}", response_model=ByopPipelineRead)
@@ -398,7 +461,7 @@ def update_pipeline(
     payload: ByopPipelineUpdate,
     db: Annotated[Session, Depends(get_db_dep)],
     current_user: Annotated[dict, Depends(get_current_user)],
-) -> ByopPipeline:
+) -> ByopPipelineRead:
     pipeline = _get_or_404_tenancy(db, pipeline_id, current_user)
     if pipeline.pipeline_status == "ARCHIVED":
         raise HTTPException(status_code=409, detail="Archived pipelines are immutable.")
@@ -426,7 +489,7 @@ def update_pipeline(
 
     db.commit()
     db.refresh(pipeline)
-    return pipeline
+    return _to_read(pipeline, current_user)
 
 
 @router.delete("/pipelines/{pipeline_id}", response_model=ByopPipelineRead)
@@ -434,7 +497,7 @@ def delete_pipeline(
     pipeline_id: int,
     db: Annotated[Session, Depends(get_db_dep)],
     current_user: Annotated[dict, Depends(get_current_user)],
-) -> ByopPipeline:
+) -> ByopPipelineRead:
     """§8 — DELETE moves to ARCHIVED; there is no hard delete."""
     pipeline = _get_or_404_tenancy(db, pipeline_id, current_user)
     if pipeline.pipeline_status == "ARCHIVED":
@@ -442,7 +505,7 @@ def delete_pipeline(
     pipeline.pipeline_status = "ARCHIVED"
     db.commit()
     db.refresh(pipeline)
-    return pipeline
+    return _to_read(pipeline, current_user)
 
 
 @router.post("/pipelines/{pipeline_id}/revalidate", response_model=ByopPipelineRead)
@@ -450,7 +513,7 @@ def revalidate_pipeline(
     pipeline_id: int,
     db: Annotated[Session, Depends(get_db_dep)],
     current_user: Annotated[dict, Depends(get_current_user)],
-) -> ByopPipeline:
+) -> ByopPipelineRead:
     """§5.4 — re-run both stages on the stored manifest.
 
     Failure does not 422: per the design doc, failed re-validation
@@ -484,7 +547,7 @@ def revalidate_pipeline(
 
     db.commit()
     db.refresh(pipeline)
-    return pipeline
+    return _to_read(pipeline, current_user)
 
 
 @router.post("/pipelines/{pipeline_id}/deactivate", response_model=ByopPipelineRead)
@@ -492,7 +555,7 @@ def deactivate_pipeline(
     pipeline_id: int,
     db: Annotated[Session, Depends(get_db_dep)],
     current_user: Annotated[dict, Depends(get_current_user)],
-) -> ByopPipeline:
+) -> ByopPipelineRead:
     pipeline = _get_or_404_tenancy(db, pipeline_id, current_user)
     if pipeline.pipeline_status not in DEACTIVATABLE_STATES:
         raise HTTPException(
@@ -503,7 +566,7 @@ def deactivate_pipeline(
     pipeline.deactivated_at = _now()
     db.commit()
     db.refresh(pipeline)
-    return pipeline
+    return _to_read(pipeline, current_user)
 
 
 @router.post("/pipelines/{pipeline_id}/archive", response_model=ByopPipelineRead)
@@ -511,7 +574,7 @@ def archive_pipeline(
     pipeline_id: int,
     db: Annotated[Session, Depends(get_db_dep)],
     current_user: Annotated[dict, Depends(get_current_user)],
-) -> ByopPipeline:
+) -> ByopPipelineRead:
     pipeline = _get_or_404_tenancy(db, pipeline_id, current_user)
     if pipeline.pipeline_status not in ARCHIVABLE_STATES:
         raise HTTPException(
@@ -521,4 +584,4 @@ def archive_pipeline(
     pipeline.pipeline_status = "ARCHIVED"
     db.commit()
     db.refresh(pipeline)
-    return pipeline
+    return _to_read(pipeline, current_user)

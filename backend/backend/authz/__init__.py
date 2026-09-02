@@ -7,6 +7,15 @@ from .engine import (
     Resource,
     permit,
 )
+from .principal import (
+    lab_resource_scope,
+    load_principal,
+    pipeline_run_principal,
+    project_resource_scope,
+    sample_resource,
+    sample_resource_scope,
+)
+from .scope import ROOT, scope_uri
 from .visibility import visibility_sql_clause
 
 __all__ = [
@@ -18,4 +27,12 @@ __all__ = [
     "Context",
     "permit",
     "visibility_sql_clause",
+    "scope_uri",
+    "ROOT",
+    "load_principal",
+    "lab_resource_scope",
+    "pipeline_run_principal",
+    "project_resource_scope",
+    "sample_resource",
+    "sample_resource_scope",
 ]
