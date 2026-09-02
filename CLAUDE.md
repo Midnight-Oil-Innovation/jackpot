@@ -1299,6 +1299,51 @@ this file once, this command is slow) and inert for *correctness* ones.
 
 ---
 
+**73 — A second implementation of an existing predicate is tested against the first, by fuzz, before it is written.**
+
+When code re-expresses a rule that already exists somewhere else — SQL mirroring
+a Python function, a cache mirroring a query, a client mirroring a server, a
+`visibility_sql_clause` mirroring `permit()` — the existing one is an **oracle**.
+Do not verify the new one by reading it. Generate inputs, run both, compare.
+
+The test is written **before** the implementation, and its input set is built to
+include what the canonical constructor *cannot* produce. That is the whole
+point: hand-picked examples come from the same mental model that wrote the code,
+so they exercise the cases already thought about. Bugs live in the others.
+
+```python
+def test_the_new_form_never_widens():
+    for a, b in itertools.product(MALFORMED + CANONICAL, repeat=2):
+        assert not (new_form(a, b) and not oracle(a, b))   # never more permissive
+```
+
+Assert the **direction**, not equality. A second implementation that refuses
+where the first allows is a bug worth knowing about; one that allows where the
+first refuses is an outage or a breach. Pin the known-narrowing set by shape so
+a new disagreement fails rather than being absorbed as expected.
+
+**Anchor (2026-09-01, PRs #190/#191).** `capability_holders` compiled
+`engine._scope_contains` into SQL. Four defects, in ~30 lines, across three
+review passes:
+
+| Defect | Found by |
+|---|---|
+| `LIKE` pattern built from a column — `scope_ref` of `instance://self/org/%` matched every org | code-simplifier |
+| `startswith(ROOT)` admitted `instance://selfish` | CodeRabbit |
+| `.strip("/")` collapsed `instance://self//org/3` into a fabricated ancestor | code-simplifier |
+| the narrowing test classified ROOT as a half-level grant, absorbing the one regression that matters | code-simplifier |
+
+Every one lived in a string `scope_uri()` cannot emit. The tests were built from
+`scope_uri()` output and so could not have found any of them. `_scope_contains`
+was imported two lines away the entire time. A 289-pair differential fuzz —
+twenty minutes, written first — catches all four with no reviewer involved.
+
+The corollary: **a test written from the constructor tests the constructor.** If
+the risk is malformed input, the malformed input has to be in the test, and it
+will not get there by being imagined one example at a time.
+
+---
+
 ## Local Dev Role Switching
 
 In local dev (`ENV=local`), the mock user is determined by `MOCK_USER_EMAIL`
