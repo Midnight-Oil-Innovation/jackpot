@@ -40,6 +40,28 @@ epidemiological-forecasting schema additions; Phase 26's B-* adoption items
 
 ## Active P0 bugs (over-claimed in Phase 0, must be fixed)
 
+> **Disposition (2026-09-01) — all three closed; the item bodies below are the
+> verbatim 2026-05-11 text and are kept unedited for provenance.**
+>
+> - **FIX-1 — fixed.** `log_audit()` passes `conn=db_conn` to `execute_write()`
+>   (`backend/backend/audit.py:165`), as does `create_notification()`
+>   (`backend/backend/notifications.py:93`). The rollback regression test the item
+>   asked for is `tests/test_audit_notification_rollback.py`. Landed PR #43.
+> - **FIX-2 — fixed.** `execute_query()` takes `conn` and honours it
+>   (`backend/backend/database.py:50-53`), so the `_handle_workflow_complete()`
+>   call site is valid. Landed PR #43.
+> - **FIX-3 — obsolete, not doable, deliberately not scheduled.** Its premise was
+>   that the ConfigMap must hold the JSON-array form of `CORS_ORIGINS`; the
+>   Q-10 validator it cites is what removed that requirement. `Settings._parse_str_list`
+>   (`backend/backend/config.py:220-233`, Critical Rules 45/53) accepts a bare
+>   comma-separated string, a JSON array, an empty string, or a real list, so no
+>   ConfigMap shape can reproduce the crash. `deploy-staging.yml:162` sets
+>   `--set env.CORS_ORIGINS="$STAGING_CORS"` from the `STAGING_CORS_ORIGINS`
+>   environment var — a plain string by construction. The one residual behaviour
+>   is benign and different: an unset `STAGING_CORS_ORIGINS` yields `""`, hence an
+>   empty allowlist and no cross-origin access, which fails visibly at the browser
+>   rather than at startup. No backlog entry created.
+
 These two bugs are listed under Phase 0's "P0-1 through P0-16 all completed" line as `audit/notification transaction cohesion` and `execute_query conn param` — but inspection of the current code shows the fixes did not actually land. Same over-claim pattern as the JWT refresh endpoint (over-claimed in Phase 0, resolved 2026-05-05 in P1 PR #22). Block Phase IM-1 (called out as prerequisites in the Phase IM-1 prerequisites list) and degrade transactional correctness everywhere else.
 
 - [ ] **FIX-1** `log_audit()` and `create_notification()` accept `db_conn` but do not forward it to `execute_write()`. Audit and notification writes auto-commit in separate transactions from the operations they audit. Silent audit gap possible on write failure — if the parent operation rolls back, the audit row stays committed. Fix: thread `db_conn` through `execute_write(..., conn=db_conn)` in both helpers; add transaction-rollback test verifying that an audit row does NOT exist if the parent operation rolls back. Update the Phase 0 entry to drop the misleading completion claim. (1 session)
