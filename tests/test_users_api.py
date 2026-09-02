@@ -167,7 +167,7 @@ async def test_patch_user_self_cannot_promote_self(client, monkeypatch):
     _switch_user(monkeypatch, email)
     resp = await client.patch(
         f"/api/v1/users/{uid}",
-        json={"is_platform_admin": True},
+        json={"instance_preset": "instance_administrator"},
     )
     assert resp.status_code == 403
     assert resp.json()["error"]["code"] == "ACCESS_DENIED"
@@ -179,14 +179,17 @@ async def test_patch_user_self_cannot_promote_self(client, monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_patch_user_admin_can_flip_admin_flag(client):
+async def test_patch_user_admin_can_assign_the_instance_preset(client):
     email = "users_admin_flip@test.com"
     uid = _ensure_user(email)
     resp = await client.patch(
         f"/api/v1/users/{uid}",
-        json={"is_platform_admin": True},
+        json={"instance_preset": "instance_administrator"},
     )
     assert resp.status_code == 200
+    # The response still carries the legacy columns because it is SELECT *;
+    # M2-DROP removes them. What matters here is that assigning by preset
+    # name lands, which the column echoes until then.
     assert resp.json()["data"]["is_platform_admin"] is True
     _cleanup_user(email)
 

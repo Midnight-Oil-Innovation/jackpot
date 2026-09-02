@@ -572,6 +572,73 @@ def instance_preset(*, is_platform_admin: bool, is_data_analyst: bool) -> str | 
     return None
 
 
+#: Instance-scope preset -> the legacy flag pair that maps back to it.
+#:
+#: The forward map (:func:`instance_preset`) is many-to-one — a user carrying
+#: BOTH flags resolves to the admin preset — so the inverse is a choice of
+#: canonical representative rather than a true inverse. Written once and used
+#: in both directions so the two cannot drift; round-tripped in
+#: ``tests/test_role_assignment_grants.py``.
+#:
+#: M2-DROP deletes this: once the columns are gone the preset name is the only
+#: representation and nothing needs translating.
+INSTANCE_PRESET_FLAGS: dict[str, tuple[bool, bool]] = {
+    "instance_administrator": (True, False),
+    "surveillance_officer": (False, True),
+}
+
+#: The presets this deployment may issue at INSTANCE scope.
+#:
+#: Deliberately a subset of PRESET_GRANTS. The lab presets are real presets
+#: issued through membership (M2-B5), where the scope comes from the lab being
+#: joined; issuing one at the instance root would hand out lab_lead's
+#: deletion:approve and sample:read_unscrubbed over every sample on the
+#: deployment. This constant is what makes that unrepresentable rather than
+#: merely unreachable.
+#:
+#: Derived rather than written out beside the map above and checked with an
+#: assert: two literals that must agree can disagree, and a module-level
+#: assert is stripped by ``python -O`` — absent exactly where a mismatch would
+#: matter most. M2-DROP removes the map; inline this as a literal frozenset in
+#: the same commit, and forgetting fails at import rather than at runtime.
+INSTANCE_PRESETS: frozenset[str] = frozenset(INSTANCE_PRESET_FLAGS)
+
+
+def sync_instance_preset(conn: Connection, *, user_id: int, preset: str | None) -> int:
+    """Make one user's Instance-scope grants match ``preset``.
+
+    ``preset=None`` removes them — the user holds no Instance-scope role.
+
+    The preset-named form is primary; :func:`sync_instance_grants` is the
+    legacy flag-shaped door onto it, kept while ``auth/dev-login`` still
+    speaks in booleans. Delete-then-insert and ``source = 'reseed'``-scoped
+    for the reasons given on the membership twin: the point is that the row
+    and the grants agree afterwards, and a per-sample ``source = 'direct'``
+    grant on the same principal must survive untouched.
+
+    Returns the number of grants issued.
+    """
+    # INSTANCE_PRESETS, not PRESET_GRANTS: a lab preset is a valid preset and
+    # an invalid thing to issue here. See the constant for what that would
+    # hand out.
+    if preset is not None and preset not in INSTANCE_PRESETS:
+        raise ValueError(f"{preset!r} is not an Instance-scope preset")
+    conn.execute(
+        _DELETE_INSTANCE_GRANTS,
+        {
+            "principal_id": str(user_id),
+            "scope_ref": INSTANCE_SCOPE,
+            "source": GRANT_SOURCE,
+        },
+    )
+    if preset is None:
+        return 0
+    rows = _grant_rows(str(user_id), list(PRESET_GRANTS[preset]), INSTANCE_SCOPE)
+    for row in rows:
+        conn.execute(_INSERT_GRANT, row)
+    return len(rows)
+
+
 def sync_instance_grants(
     conn: Connection, *, user_id: int, is_platform_admin: bool, is_data_analyst: bool
 ) -> int:
@@ -591,21 +658,13 @@ def sync_instance_grants(
 
     Returns the number of grants issued.
     """
-    conn.execute(
-        _DELETE_INSTANCE_GRANTS,
-        {
-            "principal_id": str(user_id),
-            "scope_ref": INSTANCE_SCOPE,
-            "source": GRANT_SOURCE,
-        },
+    return sync_instance_preset(
+        conn,
+        user_id=user_id,
+        preset=instance_preset(
+            is_platform_admin=is_platform_admin, is_data_analyst=is_data_analyst
+        ),
     )
-    preset = instance_preset(is_platform_admin=is_platform_admin, is_data_analyst=is_data_analyst)
-    if preset is None:
-        return 0
-    rows = _grant_rows(str(user_id), list(PRESET_GRANTS[preset]), INSTANCE_SCOPE)
-    for row in rows:
-        conn.execute(_INSERT_GRANT, row)
-    return len(rows)
 
 
 def _membership_capabilities(group_name: str) -> list[str] | None:

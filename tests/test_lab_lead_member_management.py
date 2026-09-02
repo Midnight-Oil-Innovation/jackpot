@@ -170,7 +170,9 @@ async def test_lab_lead_cannot_manage_users_globally(client, roster, monkeypatch
 async def test_lab_lead_cannot_promote_themselves_to_platform_admin(client, roster, monkeypatch):
     """The same boundary from the direction someone would actually try."""
     _act_as(LEAD, monkeypatch)
-    resp = await client.patch(f"/api/v1/users/{roster[LEAD]}", json={"is_platform_admin": True})
+    resp = await client.patch(
+        f"/api/v1/users/{roster[LEAD]}", json={"instance_preset": "instance_administrator"}
+    )
     assert resp.status_code == 403, resp.text
     still = execute_query("SELECT is_platform_admin FROM users WHERE id = :i", {"i": roster[LEAD]})[
         0
