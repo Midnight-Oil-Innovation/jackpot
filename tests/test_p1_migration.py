@@ -71,8 +71,8 @@ def _table_exists(name: str) -> bool:
 def _seed_user(email: str = "p1mig_user@test.com") -> int:
     execute_write(
         """
-        INSERT INTO users (email, name, organization_id, is_platform_admin, is_active)
-        VALUES (:e, 'P1 Mig User', 1, FALSE, TRUE)
+        INSERT INTO users (email, name, organization_id, is_active)
+        VALUES (:e, 'P1 Mig User', 1, TRUE)
         ON CONFLICT (email) DO UPDATE SET is_active = TRUE
         """,
         {"e": email},

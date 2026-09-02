@@ -77,8 +77,7 @@ async def test_dev_login_existing_user_role_update():
     _cleanup_user(email)
     try:
         execute_write(
-            "INSERT INTO users (email, name, organization_id, is_platform_admin) "
-            "VALUES (:e, 'E1 Existing', 1, FALSE)",
+            "INSERT INTO users (email, name, organization_id) VALUES (:e, 'E1 Existing', 1)",
             {"e": email},
         )
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
@@ -103,11 +102,8 @@ async def test_dev_login_existing_user_role_update():
             )
         }
         assert "user:manage" in held, held
-        rows = execute_query(
-            "SELECT is_platform_admin FROM users WHERE email = :e",
-            {"e": email},
-        )
-        assert rows[0]["is_platform_admin"] is True
+        # The grants above ARE the assignment now; the column this used to
+        # read back is no longer written and M2-DROP removes it next.
     finally:
         _cleanup_user(email)
 

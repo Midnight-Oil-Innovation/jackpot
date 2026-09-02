@@ -3503,6 +3503,76 @@ sessions:
       what they actually query. Requires gen-pydantic regeneration plus the
       boolean-keyword patch (Critical Rules 3 and 20).
 
+  - id: B-PERMGROUPS-DROP
+    title: Retire permission_groups, or decide not to — the Rule 1 / §10.1 conflict
+    short_description: |
+      access_model.md §10.1 lists "the six-value APGAP permission-group enum
+      on lab_membership rows" among three things deleted outright by the
+      greenfield migration. CLAUDE.md Critical Rule 1 declares the same six
+      names sacred and forbids renaming them. Both are checked-in and
+      reviewed; they cannot both be followed. Someone has to decide which,
+      and M2-DROP deliberately did not.
+    phase: access_model_redesign
+    status: tracked_not_scheduled
+    depends_on:
+      - M2-DROP
+    blocked_by_external: null
+    parallel_safe: false
+    effort_sessions: 3
+    primary_files:
+      - backend/backend/authz/reseed.py
+      - backend/backend/routers/labs.py
+      - backend/backend/routers/auth.py
+      - backend/backend/routers/users.py
+      - backend/backend/auth/guards.py
+    test_files:
+      - tests/authz/preflight.py
+      - tests/test_lab_lead_member_management.py
+    source_of_truth_views:
+      - docs/access_model.md
+      - CLAUDE.md
+    pr_title_template: null
+    branch_name_template: null
+    role_framing: null
+    notes: |
+      Raised 2026-09-02 out of M2-DROP, which scoped itself to its TITLE (the
+      two boolean role columns) rather than its short_description (which also
+      said "and the PermissionGroups enum"). The reason for the split is not
+      caution, it is that the premise is wrong:
+
+      permission_groups is NOT a Postgres enum. It is a table
+      (baseline migration 5adf11b77c19:42) with lab_membership.permission_group_id
+      as an FK, and it carries 36 references across five backend modules. It
+      is the live INPUT to sync_membership_grants — the thing M2-B5 built —
+      and to dev-login's four lab roles. §10.1 was written before M2-B5 made
+      membership grants derive from it, so "delete outright" describes a
+      dependency graph that no longer holds.
+
+      Dropping it inside M2-DROP's irreversible migration would have repeated
+      exactly what the M2 entry's own notes record: containing the work on the
+      premise that nothing read the columns. It needs its own
+      reader-retirement campaign, the way M2-DROP-PRE was for the booleans —
+      eight slices, and three of those turned out to be deletions of code
+      with no call site.
+
+      What has to be decided FIRST, before any code:
+
+      1. Does §10.1 still mean it? The sentence may simply be stale. If the
+         answer is "permission_groups stays and §10.1 is corrected", this item
+         is a one-line doc fix and closes. Check that before scoping work.
+      2. If it goes, what replaces it as the membership vocabulary?
+         sync_membership_grants keys on permission_groups.name via
+         MEMBERSHIP_PRESETS; dev-login's _DEV_LOGIN_LAB_ROLES keys on the same
+         names; the E-1 UAT matrix drives them. A preset name could serve, but
+         then lab_membership needs a column that is not an FK to a table of
+         sacred names, and every seeded deployment needs migrating.
+      3. Critical Rule 1 has to be amended or the item cannot proceed. It is
+         in the binding file and says DO NOT rename. Amending a Critical Rule
+         is a deliberate act, not a side effect of a refactor.
+
+      Do not start (2) before (1) is answered. Most of the cost here is
+      migrating a vocabulary that may not need to move.
+
   - id: B-DEPRECATION-1
     title: API deprecation practice for the first real operator deployment
     short_description: |

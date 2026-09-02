@@ -36,8 +36,8 @@ CAP = "federation:configure_peer"
 def _user(prefix: str, *, active: bool = True) -> int:
     email = f"{prefix}-{uuid.uuid4().hex[:8]}@test.com"
     return execute_write(
-        "INSERT INTO users (email, name, organization_id, is_platform_admin, "
-        "is_data_analyst, is_active) VALUES (:e, :e, 1, FALSE, FALSE, :a) RETURNING id",
+        "INSERT INTO users (email, name, organization_id, is_active) "
+        "VALUES (:e, :e, 1, :a) RETURNING id",
         {"e": email, "a": active},
     )[0]["id"]
 

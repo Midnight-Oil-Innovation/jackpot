@@ -3,7 +3,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from backend.audit import AuditActions, log_audit
 from backend.auth.guards import get_current_user, permits, require_capability
-from backend.authz.reseed import INSTANCE_PRESET_FLAGS, INSTANCE_PRESETS, sync_instance_preset
+from backend.authz.reseed import INSTANCE_PRESETS, sync_instance_preset
 from backend.database import execute_query, execute_write, get_db_dep
 from backend.pagination import paginate
 from backend.responses import error, success, success_list, success_message
@@ -189,10 +189,9 @@ def update_user(
         return error("NOT_FOUND", f"User {user_id} not found.", status_code=404)
     before = before_rows[0]
 
-    # The preset is the API's unit; the legacy columns are still what
-    # reseed() reads, so a role write updates both until M2-DROP removes them
-    # and this translation with them. INSTANCE_PRESET_FLAGS is the single
-    # place the two representations are related.
+    # The preset is the only representation the API has, and the grants are
+    # the assignment. This used to also write the two legacy columns; it no
+    # longer does, ahead of M2-DROP removing them.
     if role_written:
         preset = payload.instance_preset
         if preset is not None and preset not in INSTANCE_PRESETS:
@@ -202,18 +201,18 @@ def update_user(
                 status_code=422,
             )
         updates.pop(_ROLE_FIELD, None)
-        # Indexed, not .get(preset, default): by this line preset is either
-        # None or a validated member, so a missing key would be a bug worth
-        # raising rather than silently demoting the user to no role.
-        updates["is_platform_admin"], updates["is_data_analyst"] = (
-            INSTANCE_PRESET_FLAGS[preset] if preset else (False, False)
-        )
 
-    set_clause = ", ".join(f"{k} = :{k}" for k in updates)
+    # A role-only PATCH now touches no column at all: instance_preset is not
+    # one, and it no longer writes the two it used to translate into. Before the
+    # drop `updates` was never empty here, so the SET clause was always
+    # well-formed; now it can be, and `SET , updated_at = ...` is a syntax
+    # error. The row still gets its updated_at bumped — a role assignment is
+    # a change to the user even when no column of theirs holds it.
+    set_clause = ", ".join([*(f"{k} = :{k}" for k in updates), "updated_at = NOW()"])
     params = dict(updates)
     params["id"] = user_id
     rows = execute_write(
-        f"UPDATE users SET {set_clause}, updated_at = NOW() WHERE id = :id RETURNING *",
+        f"UPDATE users SET {set_clause} WHERE id = :id RETURNING *",
         params,
         conn=db,
     )

@@ -37,9 +37,12 @@ from authz.preflight import (
     SAMPLE_PREFIX,
     UNIQUE_INDEX_DDL,
     classify_legacy_only_visibility,
+    drop_legacy_world,
+    grant_world,
     lab_scope,
     legacy_visibility_sql_clause,
     load_principal,
+    restore_legacy_world,
     run_matrix,
     seed_world,
     teardown_world,
@@ -90,8 +93,11 @@ def world(test_db_url):
     with engine.begin() as conn:
         conn.execute(text(UNIQUE_INDEX_DDL))
     w = seed_world()
-    with engine.begin() as conn:
-        reseed(conn, force=_FORCE_REASON)
+    # Grants come from the production sync functions, not from reseed().
+    # Nothing writes the columns reseed() translates, so there is nothing
+    # left to translate — see preflight.grant_world for why the Instance
+    # mapping still goes through instance_preset().
+    grant_world(w)
     yield w
     teardown_world(w)
     mp.undo()
@@ -136,6 +142,29 @@ EXPECTED_GRANT_SHAPE = {
 
 
 class TestReseedOnPostgres:
+    """Proves ``reseed()`` itself, which is still a live path.
+
+    Its migrations sit before ``d51c4361877d`` in the chain, so every fresh
+    install runs it with the legacy columns present. The test database is at
+    head, where they are gone, so this class restores that point in the chain
+    for its own use and removes them again afterwards — the rest of the suite
+    asserts they do not exist.
+    """
+
+    @pytest.fixture(autouse=True)
+    def _legacy_world(self, world):
+        added = restore_legacy_world(world)
+        try:
+            engine, _ = _get_engine()
+            with engine.begin() as conn:
+                reseed(conn, force=_FORCE_REASON)
+            yield
+        finally:
+            # If reseed raises, an un-finallied teardown leaves the columns
+            # behind for every later test in the session — which on the
+            # post-drop branch silently un-proves the drop.
+            drop_legacy_world(added)
+
     def test_grant_counts_and_shape_per_persona(self, world):
         for pkey, expected in EXPECTED_GRANT_SHAPE.items():
             rows = _grants(world, pkey)

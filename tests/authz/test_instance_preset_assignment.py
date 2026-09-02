@@ -123,5 +123,7 @@ async def test_the_legacy_booleans_are_no_longer_a_way_in(subject, body):
         {"p": str(subject)},
     )
     assert held == [], "a rejected body still issued grants"
-    row = execute_query("SELECT is_platform_admin FROM users WHERE id = :i", {"i": subject})
-    assert row[0]["is_platform_admin"] is False, "the legacy field still reached the column"
+    # Nothing writes the column the legacy field used to reach, and M2-DROP
+    # removes it next, so "it did not reach it" is structural. The grant
+    # assertion above is what still has content: a rejected body assigns
+    # nothing.

@@ -454,6 +454,18 @@ def _sample_access_rows(
 def reseed(conn: Connection, *, force: bool = False) -> None:
     """Translate every stored APGAP role into preset grants (§8.5 mapping).
 
+    **Historical-only once M2-DROP lands.** This reads
+    ``users.is_platform_admin`` and ``users.is_data_analyst``. Those columns
+    still exist at this commit — the writers were retired ahead of the drop,
+    which is a separate change — and once dropped this can only run at a
+    point in the chain BEFORE it. Every caller is a
+    migration that sits earlier in the chain, so ``alembic upgrade head`` from
+    an empty database still works (Critical Rule 44) — but calling this from
+    new code, or adding a migration after ``d51c4361877d`` that calls it, will
+    fail on a missing column. The membership half reads ``lab_membership``
+    joined to ``permission_groups``, which are still live; it is only the
+    Instance half that is frozen.
+
     Runs inside the caller's transaction (the migration provides it).
     Re-entrant: duplicate grants are skipped via ON CONFLICT DO NOTHING.
 
@@ -590,21 +602,6 @@ def instance_preset(*, is_platform_admin: bool, is_data_analyst: bool) -> str | 
     return None
 
 
-#: Instance-scope preset -> the legacy flag pair that maps back to it.
-#:
-#: The forward map (:func:`instance_preset`) is many-to-one — a user carrying
-#: BOTH flags resolves to the admin preset — so the inverse is a choice of
-#: canonical representative rather than a true inverse. Written once and used
-#: in both directions so the two cannot drift; round-tripped in
-#: ``tests/test_role_assignment_grants.py``.
-#:
-#: M2-DROP deletes this: once the columns are gone the preset name is the only
-#: representation and nothing needs translating.
-INSTANCE_PRESET_FLAGS: dict[str, tuple[bool, bool]] = {
-    "instance_administrator": (True, False),
-    "surveillance_officer": (False, True),
-}
-
 #: The presets this deployment may issue at INSTANCE scope.
 #:
 #: Deliberately a subset of PRESET_GRANTS. The lab presets are real presets
@@ -614,12 +611,11 @@ INSTANCE_PRESET_FLAGS: dict[str, tuple[bool, bool]] = {
 #: deployment. This constant is what makes that unrepresentable rather than
 #: merely unreachable.
 #:
-#: Derived rather than written out beside the map above and checked with an
-#: assert: two literals that must agree can disagree, and a module-level
-#: assert is stripped by ``python -O`` — absent exactly where a mismatch would
-#: matter most. M2-DROP removes the map; inline this as a literal frozenset in
-#: the same commit, and forgetting fails at import rather than at runtime.
-INSTANCE_PRESETS: frozenset[str] = frozenset(INSTANCE_PRESET_FLAGS)
+#: A literal again. It was derived from INSTANCE_PRESET_FLAGS — preset to
+#: legacy flag pair — which this change deleted, since nothing translates a
+#: preset into columns any more. Deriving it was what made forgetting to
+#: inline it fail at import rather than silently.
+INSTANCE_PRESETS: frozenset[str] = frozenset({"instance_administrator", "surveillance_officer"})
 
 
 def sync_instance_preset(conn: Connection, *, user_id: int, preset: str | None) -> int:

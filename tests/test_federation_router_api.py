@@ -23,7 +23,7 @@ from __future__ import annotations
 import httpx
 import pytest
 import respx
-from authz_helpers import sync_grants_from_legacy_roles
+from authz_helpers import ADMIN_PRESET, grant_instance_preset
 
 from backend.config import get_settings
 from backend.credentials import _reset_backend, _set_backend
@@ -58,17 +58,20 @@ def _switch_user(monkeypatch, email: str) -> None:
 def _ensure_user(email: str, *, is_platform_admin: bool = False) -> int:
     execute_write(
         """
-        INSERT INTO users (email, name, is_platform_admin, is_active, organization_id)
-        VALUES (:e, 'Test User', :a, TRUE, 1)
+        INSERT INTO users (email, name, is_active, organization_id)
+        VALUES (:e, 'Test User', TRUE, 1)
         ON CONFLICT (email) DO UPDATE
-        SET is_platform_admin = :a, is_active = TRUE, organization_id = 1
+        SET is_active = TRUE, organization_id = 1
         """,
-        {"e": email, "a": is_platform_admin},
+        {"e": email},
     )
     row = execute_query("SELECT id FROM users WHERE email = :e", {"e": email})
-    # Guards decide on grants since M2-B1; translate the role flags.
-    sync_grants_from_legacy_roles()
-    return row[0]["id"]
+    uid = row[0]["id"]
+    # The role is the grants now: this no longer writes the column and asks
+    # reseed() to translate it, ahead of M2-DROP removing it. Issued either
+    # way so a re-used email is demoted rather than keeping a stale grant.
+    grant_instance_preset(uid, ADMIN_PRESET if is_platform_admin else None)
+    return uid
 
 
 def _cleanup_user(email: str) -> None:

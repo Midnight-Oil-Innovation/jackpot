@@ -347,10 +347,9 @@ async def test_list_without_lab_id_shows_only_what_the_caller_can_read(client, m
     no grants sees an empty page rather than an error.
     """
     execute_write(
-        "INSERT INTO users (email, name, organization_id, "
-        "is_platform_admin, is_active) "
-        "VALUES ('i2-rt-nonadmin@test.com', 'NonAdmin', 1, FALSE, TRUE) "
-        "ON CONFLICT (email) DO UPDATE SET is_platform_admin = FALSE",
+        "INSERT INTO users (email, name, organization_id, is_active) "
+        "VALUES ('i2-rt-nonadmin@test.com', 'NonAdmin', 1, TRUE) "
+        "ON CONFLICT (email) DO UPDATE SET is_active = TRUE",
     )
     monkeypatch.setenv("MOCK_USER_EMAIL", "i2-rt-nonadmin@test.com")
     from backend.config import get_settings

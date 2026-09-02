@@ -36,8 +36,8 @@ def _mk_sample(sid: str) -> dict:
 
 def _mk_requester() -> int:
     return execute_write(
-        "INSERT INTO users (email, name, organization_id, is_platform_admin, is_active) "
-        "VALUES ('deletion-requester@example.org', 'Requester', 1, FALSE, TRUE) "
+        "INSERT INTO users (email, name, organization_id, is_active) "
+        "VALUES ('deletion-requester@example.org', 'Requester', 1, TRUE) "
         "ON CONFLICT (email) DO UPDATE SET is_active = TRUE RETURNING id",
     )[0]["id"]
 
@@ -405,8 +405,8 @@ async def test_non_admin_cannot_self_approve_via_the_request_flag(client, monkey
 
     email = "lab-lead-selfapprove@example.org"
     uid = execute_write(
-        "INSERT INTO users (email, name, organization_id, is_platform_admin, is_active) "
-        "VALUES (:e, 'Lab Lead', 1, FALSE, TRUE) "
+        "INSERT INTO users (email, name, organization_id, is_active) "
+        "VALUES (:e, 'Lab Lead', 1, TRUE) "
         "ON CONFLICT (email) DO UPDATE SET is_active = TRUE RETURNING id",
         {"e": email},
     )[0]["id"]

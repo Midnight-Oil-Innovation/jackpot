@@ -28,11 +28,7 @@ import pytest
 from httpx import ASGITransport, AsyncClient
 
 from backend.authz import ROOT
-from backend.authz.reseed import (
-    INSTANCE_PRESET_FLAGS,
-    PRESET_GRANTS,
-    instance_preset,
-)
+from backend.authz.reseed import PRESET_GRANTS, instance_preset
 from backend.config import get_settings
 from backend.database import execute_query, execute_write
 from backend.main import app
@@ -51,10 +47,9 @@ def _act_as(email: str, monkeypatch) -> None:
 
 def _mk_user(email: str) -> int:
     return execute_write(
-        "INSERT INTO users (email, name, organization_id, is_platform_admin, "
-        "is_data_analyst, is_active) VALUES (:e, :e, 1, FALSE, FALSE, TRUE) "
-        "ON CONFLICT (email) DO UPDATE SET is_platform_admin = FALSE, "
-        "is_data_analyst = FALSE, is_active = TRUE RETURNING id",
+        "INSERT INTO users (email, name, organization_id, is_active) "
+        "VALUES (:e, :e, 1, TRUE) "
+        "ON CONFLICT (email) DO UPDATE SET is_active = TRUE RETURNING id",
         {"e": email},
     )[0]["id"]
 
@@ -156,30 +151,28 @@ async def test_data_analyst_promotion_grants_the_surveillance_preset(client, use
     assert "sample:read_surveillance" in held, held
 
 
-def test_instance_preset_round_trips_through_the_flag_pair():
-    """The two representations of an Instance role must agree.
+def test_instance_preset_precedence_survives_the_column_drop():
+    """``reseed()`` still translates flags, so its precedence still matters.
 
-    ``instance_preset()`` maps flags to a preset and ``INSTANCE_PRESET_FLAGS``
-    maps back. The forward direction is many-to-one — a user carrying BOTH
-    flags is an admin, because that is how ``reseed()`` reads them — so the
-    inverse is a canonical representative rather than a true inverse, and the
-    round trip is the property that has to hold. Written as a differential
-    check because the alternative is two hand-maintained tables that agree
-    until someone edits one (Rule 73).
-
-    The precedence this pins used to be reachable from the API, when PATCH
-    took both booleans and a caller could send both at once. It no longer is —
-    a preset is singular — but ``reseed()`` still reads the columns and
-    translates them, so the precedence stays load-bearing until M2-DROP.
+    Nothing translates a preset into columns any more, so
+    ``INSTANCE_PRESET_FLAGS`` is gone and the round-trip this test used to
+    assert — preset to flag pair and back — has no second representation left
+    to round-trip against. What survives is
+    ``instance_preset()`` itself: ``reseed()`` calls it, ``reseed()`` runs from
+    migrations earlier in the chain than the drop, and it reads analysts as
+    ``is_data_analyst AND NOT is_platform_admin``. A user carrying both flags
+    in one of those pre-drop databases must resolve to the admin preset and
+    only that, or replaying the chain issues different grants than it used to.
     """
-    for preset, (admin_flag, analyst_flag) in INSTANCE_PRESET_FLAGS.items():
-        assert (
-            instance_preset(is_platform_admin=admin_flag, is_data_analyst=analyst_flag) == preset
-        ), f"{preset} does not round-trip through its flag pair"
-
+    assert instance_preset(is_platform_admin=True, is_data_analyst=False) == (
+        "instance_administrator"
+    )
+    assert instance_preset(is_platform_admin=False, is_data_analyst=True) == (
+        "surveillance_officer"
+    )
     assert instance_preset(is_platform_admin=False, is_data_analyst=False) is None
-    assert (
-        instance_preset(is_platform_admin=True, is_data_analyst=True) == "instance_administrator"
+    assert instance_preset(is_platform_admin=True, is_data_analyst=True) == (
+        "instance_administrator"
     ), "both flags must resolve to admin — reseed reads analysts as NOT is_platform_admin"
 
 

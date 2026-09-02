@@ -32,8 +32,8 @@ def _switch_user(email: str, monkeypatch) -> None:
 
 def _make_user(email: str) -> int:
     return execute_write(
-        "INSERT INTO users (email, name, organization_id, is_platform_admin, "
-        "is_data_analyst, is_active) VALUES (:e, :e, 1, FALSE, FALSE, TRUE) "
+        "INSERT INTO users (email, name, organization_id, is_active) "
+        "VALUES (:e, :e, 1, TRUE) "
         "ON CONFLICT (email) DO UPDATE SET is_active = TRUE RETURNING id",
         {"e": email},
     )[0]["id"]
