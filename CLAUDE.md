@@ -289,6 +289,22 @@ no need to read them proactively otherwise.
     touched since (release #99 did this; #118 required a
     reconnecting back-merge to fix). CI runs on PRs to `main` as a
     safety net.
+
+    Before opening a release PR, run:
+
+    ```bash
+    git log --oneline --grep="[Bb]reaking" main..development
+    ```
+
+    Every hit needs a line in the release PR body. That PR is the
+    *only* place a breaking change is communicated: there is no
+    changelog, and per `access_model.md` §10 there is no installed
+    base to notify — JACKPOT is pre-production by deliberate
+    decision, which is also why compatibility shims are refused
+    rather than written. Derived from commit history on purpose; a
+    changelog file would be a second home for a fact nothing
+    regenerates. First real operator deployment ends that premise
+    and needs an actual deprecation practice — `B-DEPRECATION-1`.
   - **`staging`** is push-triggered for the GCP staging deploy
     (`.github/workflows/deploy-staging.yml`). Promote
     `development` → `staging` to test the integrated stack in cloud,

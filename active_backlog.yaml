@@ -3537,6 +3537,56 @@ sessions:
       what they actually query. Requires gen-pydantic regeneration plus the
       boolean-keyword patch (Critical Rules 3 and 20).
 
+  - id: B-DEPRECATION-1
+    title: API deprecation practice for the first real operator deployment
+    short_description: |
+      Decide how a breaking API change is communicated once JACKPOT has
+      deployments that are not ours. Today the answer is "it is not, because
+      there are none" — access_model.md §10 makes pre-production with no
+      installed base an explicit decision, which is why compatibility shims
+      are refused rather than written and why there is no changelog. That
+      premise expires at the first operator install, and nothing currently
+      notices when it does.
+    phase: p0_series
+    status: tracked_not_scheduled
+    depends_on: []
+    blocked_by_external: First real operator deployment; until then the
+      premise the practice would replace is still true.
+    parallel_safe: true
+    effort_sessions: 1
+    primary_files:
+      - CLAUDE.md
+      - docs/access_model.md
+    test_files: []
+    source_of_truth_views:
+      - docs/access_model.md
+    pr_title_template:
+    branch_name_template:
+    role_framing:
+    notes: |
+      Raised 2026-09-02 out of M2-DROP-PRE slice 7 (PR #198), which removed
+      is_platform_admin / is_data_analyst from PATCH /users/{id} in favour of
+      instance_preset. Correct under §10 and it broke no in-tree caller — the
+      grep across frontend/, cli/ and deploy/ finds only /users/me — but it
+      is the first change in this repo that would have broken somebody, had
+      there been a somebody.
+
+      The interim control is a grep, documented in CLAUDE.md's branching
+      section: `git log --oneline --grep="[Bb]reaking" main..development`
+      before a release PR, every hit named in the PR body. Deliberately
+      derived from commit history rather than a CHANGELOG.md — one entry does
+      not earn a file, and a second home for a fact nothing regenerates is
+      the failure mode PR #195 was about.
+
+      What this item has to decide when it comes up, none of which is worth
+      deciding early: whether /api/v1 gets a sibling version or breaks in
+      place (Critical Rule 6 fixes the prefix but says nothing about
+      versioning policy); whether a deprecation window exists at all given
+      §10's no-shim stance, which is a statement about the authorization
+      model rather than about every API; and where operators are told —
+      release notes, jackpot init output, or a doctor check. Do not
+      pre-build a changelog for it.
+
   - id: B-LICENSE-DATA-TERMS
     title: Data-use terms for queried data sources (separate from code licensing)
     short_description: |
