@@ -3548,3 +3548,181 @@ sessions:
 
       Apache-2.0 is on the allowlist, so nothing is blocked today: the row is
       [candidate] and nothing imports it.
+
+  # ────────────────────────────────────────────────────────────────────────
+  # Deferred planning — recovered 2026-09-01 from an unmerged local branch
+  #
+  # Detail for all six lives in docs/planning_2026-05-11_deferred_phases.md,
+  # extracted from git tag planning/2026-05-11-round4-phase35 (912697c). That
+  # commit was local-only, never pushed, never PR'd; 99 of its item IDs existed
+  # nowhere else in the repo. These six entries are the scheduling surface so
+  # the work is discoverable from the session-start read; the doc is the detail.
+  #
+  # All six predate P0b (Schema v5.0), P0e, P0f and the access-model redesign.
+  # Item numbering, phase numbering and every "must land with P0b" claim in the
+  # doc is stale. Scope each against current reality before starting — do not
+  # take the doc's integration claims on trust (Critical Rule 70).
+  # ────────────────────────────────────────────────────────────────────────
+
+  - id: PLAN-EPY
+    title: Phase 35 — epidemic modeling and forecasting (EPISTORM stack)
+    short_description: |
+      18 EPY items: epydemix calibration + simulation pipelines, WhiteLabRt Rt
+      estimation, parsers, API, Streamlit calibration / Rt-dashboard / scenario-
+      explorer pages, CLI, wastewater cross-link. Carries the B-EPY-1, B-EPY-2,
+      B-WLR-1 and B-RTEVAL-1 adoption decisions and DEC-16 (default Rt method).
+      The license analysis is the expensive part to reconstruct: epydemix is
+      GPL-3.0, WhiteLabRt MIT, epydemix-data GPL-3.0, against JACKPOT's
+      AGPL-3.0 — GPL-3.0 into AGPL-3.0 is one-way.
+    phase: deferred_planning
+    status: tracked_not_scheduled
+    depends_on: []
+    blocked_by_external: null
+    parallel_safe: true
+    effort_sessions: 20
+    primary_files: []
+    test_files: []
+    source_of_truth_views:
+      - docs/planning_2026-05-11_deferred_phases.md
+      - docs/epistorm_integration.md
+    pr_title_template: null
+    branch_name_template: null
+    role_framing: null
+    notes: |
+      EPY-S1/S2/S3 (the schema half) DID land in docs/epistorm_integration.md
+      and docs/domain_reference.md; the 18 implementation items did not. That
+      partial migration is why this looked merged on a spot-check — grep for an
+      EPY-N item id, not for "EPISTORM", when judging what is already here.
+
+  - id: PLAN-WW
+    title: Wastewater surveillance module — schema, pipelines, parsers, UI
+    short_description: |
+      22 WW items across the Phase 24.5 schema additions (WW-4..WW-12) and
+      Phase 34 pipelines/parsers/UI (WW-14..WW-26). Includes the round-3
+      defect-fix pass: owning_lab_id for P0c RBAC, the WW-2a consumer refactor,
+      audit fields, and WW-11's migration correctness fixes (site dedupe,
+      county_names to county_fips information loss, lossy down-migration).
+      Owns DEC-11 (typed table vs pipeline_results JSONB), DEC-12 (v5.0 vs
+      v5.0+v5.1 split) and DEC-14 (existing wastewater_lineage_abundance rows).
+    phase: deferred_planning
+    status: tracked_not_scheduled
+    depends_on: []
+    blocked_by_external: null
+    parallel_safe: true
+    effort_sessions: 20
+    primary_files: []
+    test_files: []
+    source_of_truth_views:
+      - docs/planning_2026-05-11_deferred_phases.md
+      - docs/wastewater.md
+    pr_title_template: null
+    branch_name_template: null
+    role_framing: null
+    notes: |
+      Overlaps the shipped wastewater work (backend/backend/wastewater/,
+      docs/wastewater.md, the B-CWB-* entries above) by an unknown amount —
+      these items are from before that landed. First task is a reconciliation
+      pass, not implementation.
+
+  - id: PLAN-TEST
+    title: Testing infrastructure for ML, federation and statistical models
+    short_description: |
+      11 TEST items: Hypothesis property suites (TEST-6), backtest/replay
+      harness (TEST-7), sensitivity and calibration-recovery testing (TEST-8),
+      plus TEST-2..5 and TEST-9..12. Written to support the ML, federation and
+      forecasting phases; the statistical-model testing patterns are the part
+      with no equivalent anywhere in the current suite.
+    phase: deferred_planning
+    status: tracked_not_scheduled
+    depends_on: []
+    blocked_by_external: null
+    parallel_safe: true
+    effort_sessions: 10
+    primary_files: []
+    test_files: []
+    source_of_truth_views:
+      - docs/planning_2026-05-11_deferred_phases.md
+    pr_title_template: null
+    branch_name_template: null
+    role_framing: null
+    notes: |
+      Partly generic: TEST-6's property-based approach would pay off against the
+      authz engine today, independent of whether the ML phases ever run. Worth
+      lifting that one item out rather than waiting for the phase.
+
+  - id: PLAN-ML
+    title: ML / modeling infrastructure and federated ML analytics
+    short_description: |
+      ML-13..ML-19 plus FML-2 — Phase 29 (ML/modeling infrastructure) and Phase
+      30 (federated ML analytics). Owns DEC-2 (model_artifacts serialization
+      format), DEC-3 (federation aggregator hosting model), DEC-4 (pgvector on
+      Cloud SQL), DEC-5..DEC-9. The ML-1 model_artifacts / ML-3 inference_runs
+      schema items are referenced by PLAN-EPY's EPY-S1.
+    phase: deferred_planning
+    status: tracked_not_scheduled
+    depends_on: []
+    blocked_by_external: null
+    parallel_safe: true
+    effort_sessions: 12
+    primary_files: []
+    test_files: []
+    source_of_truth_views:
+      - docs/planning_2026-05-11_deferred_phases.md
+      - docs/federation.md
+    pr_title_template: null
+    branch_name_template: null
+    role_framing: null
+    notes: |
+      ML-1 and OBS-3 are referenced from docs/federation.md and
+      docs/schema_sufficiency_observatory.md, so parts of the schema half
+      landed. ML-13..19 did not.
+
+  - id: PLAN-DEMO
+    title: Demo and benchmark infrastructure
+    short_description: |
+      DEMO-3..DEMO-14 — Phase 31. Demo datasets, benchmark harness, and the
+      reproducible-demo path for showing the platform to collaborators. DEC-7
+      (whether operator-specific demo code ships in the operator-agnostic tree)
+      belongs here and bears on Critical Rule 55.
+    phase: deferred_planning
+    status: tracked_not_scheduled
+    depends_on: []
+    blocked_by_external: null
+    parallel_safe: true
+    effort_sessions: 8
+    primary_files: []
+    test_files: []
+    source_of_truth_views:
+      - docs/planning_2026-05-11_deferred_phases.md
+    pr_title_template: null
+    branch_name_template: null
+    role_framing: null
+    notes: |
+      DEC-7 is the one item here with a bearing on shipped code: demo fixtures
+      naming a specific operator would violate Rule 55 in the same way the
+      inherited violations P0e cleaned up did.
+
+  - id: PLAN-DOC
+    title: Outreach documents and coalition drafts
+    short_description: |
+      16 DOC items — Phase 33, plus DOC-16/17/18 (SFI outreach) added in the
+      round-4 pass. Coalition-facing drafts and the release-notes items
+      (DOC-12 documents the DEC-11 typed-table rationale). Action-pending
+      rather than engineering work: these are documents to write and send.
+    phase: deferred_planning
+    status: tracked_not_scheduled
+    depends_on: []
+    blocked_by_external: null
+    parallel_safe: true
+    effort_sessions: 6
+    primary_files: []
+    test_files: []
+    source_of_truth_views:
+      - docs/planning_2026-05-11_deferred_phases.md
+    pr_title_template: null
+    branch_name_template: null
+    role_framing: null
+    notes: |
+      Named individuals and institutions appear in these items. They are
+      outreach targets recorded in a planning doc, not commitments, and nothing
+      here has been checked against what was actually sent since 2026-05-11.
