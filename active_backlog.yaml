@@ -2848,42 +2848,61 @@ sessions:
   - id: M2-DROP
     title: Drop the legacy role columns (IRREVERSIBLE — manual flow only)
     short_description: |
-      The irreversible half carved out of M2. Drop users.is_platform_admin,
-      users.is_data_analyst, and the PermissionGroups enum — but only after
-      every remaining reader is off them. Inventory as of the M2 session:
+      SHIPPED 2026-09-02. Dropped users.is_platform_admin and
+      users.is_data_analyst, in migration d51c4361877d, after PR #201 retired
+      every live writer.
 
-        DECISION-PATH (must become permit()/permits() calls):
-          - tenancy.py:131        RETIRED by M2-DROP-PRE slice 3 — the module
-                                  was deleted, not converted. No route ever
-                                  called require_org_access; org isolation is
-                                  ADR 0015 scope containment and always was.
-          - deletion.py:184       platform-admin self-approve carve-out (M3)
-          - samples.py:582        raw_fastq Lab-Director restriction — still
-                                  awaiting a §4 verb; endpoint map Residue
-          - samples.py:643        _require_lab_tie (M3)
-          - samples.py:652        _require_approval_authority (M3)
-          - samples.py:717        reverse-tombstone admin-only (M3)
-          - samples.py:734        vacuum-now admin-only (M3)
+      It did NOT drop the PermissionGroups enum, which this description used
+      to advertise. That is not an enum — permission_groups is a table,
+      lab_membership FKs to it, and it is the live input to
+      sync_membership_grants and dev-login's lab roles — and access_model.md
+      §10.1's instruction to delete it contradicts Critical Rule 1, which
+      declares those six names sacred. Deferred to B-PERMGROUPS-DROP, whose
+      first question is whether §10.1 is simply stale: it predates M2-B5,
+      which made membership grants DERIVE from the table it says to delete.
 
-        LOOKUP (rewrite as a grant query):
-          - federation/deletion_propagation.py:358 — RETIRED by M2-DROP-PRE
-            slice 4. Now capability_holders("federation:configure_peer",
-            instance scope); the verb, not the preset, because the alert is
-            about a peer the recipient may need to suspend.
+      The per-site inventory this entry used to carry is preserved below as
+      HISTORY only. It was written at the M2 session and was stale in both
+      directions by the time the work ran — the accurate account is
+      M2-DROP-PRE's HANDOFF section plus PRs #201 and #202.
 
-        IDENTITY PLUMBING (stop selecting / stop writing):
-          - guards.py:41,42,72    mock-user fallback dict + the user SELECT
-          - imports.py:813        user SELECT
-          - auth.py:446-485,590   dev-login writes both columns; /me returns
-                                  them
-          - users.py:15,16,24,25  PATCH exposes both as admin-editable —
-                                  role ASSIGNMENT, which must become grant
-                                  issuance the way M2-B5 did for membership
+      HISTORY (as of the M2 session, superseded):
+        The irreversible half carved out of M2. Drop users.is_platform_admin,
+        users.is_data_analyst, and the PermissionGroups enum — but only after
+        every remaining reader is off them. Inventory as of the M2 session:
 
-      ORDER: convert every reader -> verify the full suite -> drop last, so a
-      failure earlier leaves the old model intact. Run the catch-up reseed
-      (a1c7d94e6b28) again immediately before the drop if any legacy write
-      path is still live at that point.
+          DECISION-PATH (must become permit()/permits() calls):
+            - tenancy.py:131        RETIRED by M2-DROP-PRE slice 3 — the module
+                                    was deleted, not converted. No route ever
+                                    called require_org_access; org isolation is
+                                    ADR 0015 scope containment and always was.
+            - deletion.py:184       platform-admin self-approve carve-out (M3)
+            - samples.py:582        raw_fastq Lab-Director restriction — still
+                                    awaiting a §4 verb; endpoint map Residue
+            - samples.py:643        _require_lab_tie (M3)
+            - samples.py:652        _require_approval_authority (M3)
+            - samples.py:717        reverse-tombstone admin-only (M3)
+            - samples.py:734        vacuum-now admin-only (M3)
+
+          LOOKUP (rewrite as a grant query):
+            - federation/deletion_propagation.py:358 — RETIRED by M2-DROP-PRE
+              slice 4. Now capability_holders("federation:configure_peer",
+              instance scope); the verb, not the preset, because the alert is
+              about a peer the recipient may need to suspend.
+
+          IDENTITY PLUMBING (stop selecting / stop writing):
+            - guards.py:41,42,72    mock-user fallback dict + the user SELECT
+            - imports.py:813        user SELECT
+            - auth.py:446-485,590   dev-login writes both columns; /me returns
+                                    them
+            - users.py:15,16,24,25  PATCH exposes both as admin-editable —
+                                    role ASSIGNMENT, which must become grant
+                                    issuance the way M2-B5 did for membership
+
+        ORDER: convert every reader -> verify the full suite -> drop last, so a
+        failure earlier leaves the old model intact. Run the catch-up reseed
+        (a1c7d94e6b28) again immediately before the drop if any legacy write
+        path is still live at that point.
     phase: access_model_redesign
     status: shipped
     depends_on:
