@@ -1,0 +1,21 @@
+{
+  "counts": {
+    "code_systems": 221,
+    "phin_authored_concept_files": 33,
+    "value_sets": 1999
+  },
+  "files": {
+    "code_systems.ndjson.gz": {
+      "bytes": 24202,
+      "sha256": "db5d252a390e62e495726475db18a8c707554ad37956fff7dcf08fc795757ba5"
+    },
+    "value_sets.ndjson.gz": {
+      "bytes": 19239707,
+      "sha256": "293ce8562f3b7216f73683d6941122359f71e69290b3dcc64d35e88ef2602236"
+    }
+  },
+  "note": "Snapshot of CDC PHIN VADS taken before the November 30, 2026 sunset of all PHIN systems. Concept lists for non-PHIN code systems (LOINC, SNOMED CT, ICD-*) are deliberately excluded \u2014 see scripts/pull_phinvads.py.",
+  "pulled_at": "2026-09-02T21:42:50Z",
+  "source": "https://phinvads.cdc.gov/baseStu3",
+  "sunset_date": "2026-11-30"
+}
