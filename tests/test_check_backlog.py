@@ -221,6 +221,48 @@ def test_advisory_ignores_a_bare_mention(tmp_path, monkeypatch):
     assert check_backlog.git_evidence_advisories([entry("P0c", "blocked")]) == []
 
 
+def _repo_with_subject(tmp_path, subject: str):
+    import subprocess
+
+    subprocess.run(["git", "init", "-q"], cwd=tmp_path, check=True)
+    subprocess.run(["git", "config", "user.email", "t@example.org"], cwd=tmp_path, check=True)
+    subprocess.run(["git", "config", "user.name", "t"], cwd=tmp_path, check=True)
+    (tmp_path / "f.txt").write_text("x\n")
+    subprocess.run(["git", "add", "f.txt"], cwd=tmp_path, check=True)
+    subprocess.run(["git", "commit", "-q", "-m", subject], cwd=tmp_path, check=True)
+
+
+def test_advisory_sees_an_id_behind_a_conventional_commit_prefix(tmp_path, monkeypatch):
+    """The gap that made this check stop firing entirely.
+
+    It required the id to OPEN the subject. The repo then adopted conventional
+    commits, and by 2026-09-02 zero of the last 40 subjects started with a bare
+    id — so the one check written because the file can disagree with reality
+    could no longer fire on any commit the repo produces. M2-DROP merged as
+    this subject, stayed marked open, and went unflagged.
+    """
+    _repo_with_subject(tmp_path, "feat(authz): M2-DROP — drop the legacy role columns (#202)")
+    monkeypatch.chdir(tmp_path)
+
+    advisories = check_backlog.git_evidence_advisories([entry("M2-DROP", "open")])
+
+    assert len(advisories) == 1, "an id behind a conventional-commit prefix is invisible again"
+
+
+def test_advisory_does_not_flag_a_parent_id_on_a_child_ids_commit(tmp_path, monkeypatch):
+    """``M2-DROP`` must not match inside ``M2-DROP-PRE``.
+
+    A word boundary sits between "P" and "-", so the obvious ``\b`` anchor
+    reads every M2-DROP-PRE commit as evidence that M2-DROP shipped — and this
+    repo ships parents and children weeks apart.
+    """
+    _repo_with_subject(tmp_path, "fix(authz): M2-DROP-PRE slice 8 — dev-login assigns a preset")
+    monkeypatch.chdir(tmp_path)
+
+    assert check_backlog.git_evidence_advisories([entry("M2-DROP", "open")]) == []
+    assert len(check_backlog.git_evidence_advisories([entry("M2-DROP-PRE", "open")])) == 1
+
+
 def test_advisory_is_silent_outside_a_git_repo(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     assert check_backlog.git_evidence_advisories([entry("P0b", "open")], ref="no-such-ref") == []

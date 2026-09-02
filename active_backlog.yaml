@@ -2885,7 +2885,7 @@ sessions:
       (a1c7d94e6b28) again immediately before the drop if any legacy write
       path is still live at that point.
     phase: access_model_redesign
-    status: open
+    status: shipped
     depends_on:
       - M2
       - M3
@@ -2908,7 +2908,29 @@ sessions:
     pr_title_function:
     branch_name_template: m2-drop-legacy-columns
     role_framing:
-    notes: "UNBLOCKED 2026-09-02: M2-DROP-PRE is complete through slice 8 (dev-login),
+    notes: "SHIPPED 2026-09-02 as PRs #201 (retire the writers) and #202 (the
+      migration). Split deliberately: this entry's own ORDER line says convert
+      every reader, verify the full suite, drop last, and doing the migration
+      first turned 177 tests red at once — where a real regression and fixture
+      noise are indistinguishable. #201 is green against the schema #202
+      removes, verified on a fresh container with a probe confirming the
+      columns present, so the drop flips one thing and reverting it leaves a
+      correct tree.
+
+      'shipped' here means MERGED, per this repo's convention: P0b — also a
+      schema migration — is shipped and dated by its merge, check 6 of
+      scripts/check_backlog.py treats a merged commit as shipped-evidence, and
+      blocked_by_external (null here) is the field that exists for work
+      gated on something outside the repo. APPLYING the migration is a
+      separate operational step, which is what 'manual flow only' in the title
+      warns about: note the PITR timestamp (Critical Rule 35) and run alembic
+      upgrade head against a restored copy before staging.
+
+      Scope: the two boolean columns only. permission_groups is NOT dropped —
+      see B-PERMGROUPS-DROP for why the §10.1 instruction to delete it
+      conflicts with Critical Rule 1 and may simply be stale.
+
+      Was UNBLOCKED 2026-09-02: M2-DROP-PRE is complete through slice 8 (dev-login),
       and no production reader of either column remains. Read M2-DROP-PRE's HANDOFF
       section for this item's real inventory — the per-site list in short_description
       predates slices 3-8 and is stale in both directions. Was blocked on M3 rather

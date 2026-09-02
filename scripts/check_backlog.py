@@ -188,10 +188,20 @@ def check(entries: list[dict]) -> list[Violation]:
 def git_evidence_advisories(entries: list[dict], ref: str = "HEAD") -> list[Violation]:
     """Non-shipped entries whose id opens a merged commit subject.
 
-    Deliberately narrow: the id must start the subject (the repo's
-    release-commit shape, e.g. "P0b (Schema v5.0): ...") or the subject must
-    say "mark <id> shipped". A bare mention anywhere matches things like
-    "P0c stub" and the commit that first added the entry, which is noise.
+    Deliberately narrow: the id must start the subject (the repo's older
+    release-commit shape, e.g. "P0b (Schema v5.0): ...") or start the subject
+    body after a conventional-commit prefix ("feat(authz): M2-DROP — ..."), or
+    the subject must say "mark <id> shipped". A bare mention ANYWHERE matches
+    things like "P0c stub" and the commit that first added the entry, which is
+    noise — so the prefix is the only thing allowed to precede the id.
+
+    The prefix clause was added 2026-09-02 after this check silently stopped
+    working. It required the id to open the subject, the repo adopted
+    conventional commits, and by then ZERO of the last 40 subjects started
+    with a bare id — so the one check written because the file can disagree
+    with reality could no longer fire. M2-DROP was the case that exposed it:
+    merged as "feat(authz): M2-DROP — drop the legacy role columns", still
+    marked open, and unflagged.
 
     Returns advisories, never hard violations — see the module docstring.
     """
@@ -211,9 +221,14 @@ def git_evidence_advisories(entries: list[dict], ref: str = "HEAD") -> list[Viol
         eid = entry.get("id")
         if not eid or len(eid) < 3 or entry.get("status") == "shipped":
             continue
-        pattern = re.compile(
-            rf"^(?:{re.escape(eid)}\b|.*\bmark {re.escape(eid)} shipped\b)", re.IGNORECASE
-        )
+        # (?![\w-]) not \b: a word boundary sits between "P" and "-", so
+        # "M2-DROP\b" matches inside "M2-DROP-PRE" and would flag the parent
+        # id on every child's commit.
+        eid_re = rf"{re.escape(eid)}(?![\w-])"
+        # Optional conventional-commit prefix: type, optional (scope),
+        # optional !, colon.
+        prefix = r"(?:\w+(?:\([^)]*\))?!?:\s*)?"
+        pattern = re.compile(rf"^(?:{prefix}{eid_re}|.*\bmark {eid_re} shipped\b)", re.IGNORECASE)
         for sha, subject in commits:
             if pattern.search(subject):
                 out.append(
