@@ -3609,7 +3609,7 @@ sessions:
     depends_on: []
     blocked_by_external: null
     parallel_safe: true
-    effort_sessions: 20
+    effort_sessions: 18
     primary_files: []
     test_files: []
     source_of_truth_views:
@@ -3619,10 +3619,37 @@ sessions:
     branch_name_template: null
     role_framing: null
     notes: |
-      Overlaps the shipped wastewater work (backend/backend/wastewater/,
-      docs/wastewater.md, the B-CWB-* entries above) by an unknown amount —
-      these items are from before that landed. First task is a reconciliation
-      pass, not implementation.
+      Reconciliation pass done 2026-09-01 — the overlap is small, and it is a
+      conflict rather than a duplication. Effort revised 20 -> 18 sessions.
+
+      Shipped, and NOT what the WW items describe:
+        - wastewater_target_concentration (migration c871b28bbdab step 7,
+          B-CWB-SCHEMA-1) is a thin readiness table: TEXT run_id/sample_id, no
+          FK, ~13 columns, built for the mass-balance equation in
+          backend/backend/wastewater/mass_balance.py. WW-3's
+          wastewater_target_results is a different table for the same job —
+          ~28 columns, real FKs, assay_method / variant_detection_method /
+          replicate fields, append-only. Two designs now exist for per-target
+          results and DEC-11 was decided against neither. Pick one before any
+          WW-3 work; a second table is the outcome to avoid.
+        - routers/wastewater.py is read-only, two GETs, no new tables. Its
+          /sites returns SELECT DISTINCT s.wwtp_name FROM samples — i.e. it is
+          built directly on the denormalization DEC-10 calls an architectural
+          bug, so WW-1 + WW-2 break this endpoint and both frontend pages.
+        - frontend/pages/wastewater.py (B-WW-1) and wastewater_multi_target.py
+          (B-WW-ADV-1) are consumers WW-2a must list; the doc's WW-2a
+          module list predates both.
+
+      Not shipped, confirmed by grep: no wastewater_collection_sites table
+      anywhere (WW-1), samples still carries wwtp_name (WW-2), no
+      wastewater_metagenomic_profiles (WW-4), no ww commands in cli/jackpot/cli/
+      (WW-26), no frontend/pages/wastewater/ package (WW-22..25), no
+      /api/v1/wastewater/{targets,metagenomic} routes (WW-20, WW-21).
+
+      So: WW-1/2/2a/11 are the load-bearing sequence and everything else queues
+      behind them, WW-3 is blocked on a table-design decision that did not exist
+      when the item was written, and WW-19 is now a rewrite of a shipped
+      endpoint rather than a new one.
 
   - id: PLAN-TEST
     title: Testing infrastructure for ML, federation and statistical models
