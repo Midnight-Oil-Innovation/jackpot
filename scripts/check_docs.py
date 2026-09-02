@@ -56,12 +56,14 @@ TRACKED_FACTS = (
     {
         "name": "test_count",
         "regex": re.compile(r"\b\d{2,}\s+tests?\s+(?:passing|passed)\b", re.IGNORECASE),
+        "example": "2350 tests passing",
         "mode": "forbid",
         "message": "hardcoded test-count baseline; reference the STATUS block instead",
     },
     {
         "name": "python_version",
         "regex": re.compile(r"\bPython\s+3\.(\d+)\b"),
+        "example": "Python 3.12",
         "mode": "pin",
         "status_key": "python_version",  # STATUS value like "3.12"
         "normalize_doc": lambda m: f"3.{m.group(1)}",
@@ -71,6 +73,7 @@ TRACKED_FACTS = (
     {
         "name": "schema_version",
         "regex": re.compile(r"\b[Ss]chema\s+v(\d+\.\d+)\b"),
+        "example": "schema v5.0",
         "mode": "pin",
         "status_key": "schema_version",  # STATUS value like "v5.0"
         "normalize_doc": lambda m: m.group(1),
@@ -84,15 +87,24 @@ TRACKED_FACTS = (
 )
 
 # Superseded-claim tripwire. Extend as new supersessions land.
+#: Every entry carries an ``example`` its regex MUST match.
+#:
+#: A denylist regex that stops matching is silent by construction — success
+#: and "this pattern is broken" look identical, because a clean repo produces
+#: no hits either way. The example is the canary: it is the only thing that
+#: fails when a pattern is typo'd or a rewrite narrows it to nothing.
+#: Asserted in tests/test_check_docs.py.
 DENYLIST = (
     {
         "regex": re.compile(r"\b(?:seven|7)\s+install\s+scenarios\b", re.IGNORECASE),
+        "example": "JACKPOT ships seven install scenarios",
         "message": (
             "superseded: the scenario taxonomy is four (A/B/C/D); runtime configs are not scenarios"
         ),
     },
     {
         "regex": re.compile(r"NSA\s+as\s+the\s+shared\s+bio", re.IGNORECASE),
+        "example": "we position NSA as the shared bio substrate",
         "message": (
             "superseded: NSA is cyber-only; removed from the bio detection path per the redesign"
         ),
@@ -101,12 +113,14 @@ DENYLIST = (
         "regex": re.compile(
             r"foundation[- ]model\s+embeddings\s+(?:are\s+)?rejected", re.IGNORECASE
         ),
+        "example": "foundation-model embeddings are rejected for AD",
         "message": "superseded: FM-embedding AD is the engine per the redesign",
     },
     {
         "regex": re.compile(
             r"\b(?:six|6)\s+(?:low-friction\s+)?ingest\s+(?:paths|methods)\b", re.IGNORECASE
         ),
+        "example": "six low-friction ingest paths",
         "message": (
             "superseded: there are four ingest endpoints (upload/csv/register/globus); "
             "SRA is register with an sra:// URI, and presign/confirm/sra endpoints never existed"
