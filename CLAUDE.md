@@ -1384,12 +1384,18 @@ as long as nobody thinks to ask.
 
 So the guard's own ability to fire is part of the guard, and gets asserted:
 
-- **Canary.** At least one input the check MUST flag. For a pattern, an
-  `example` field beside it that the regex has to match. For a source scan, an
-  assertion that it found a known file or symbol.
-- **Anti-rot.** For anything registry-shaped, an assertion that every entry is
-  still reachable — an entry nothing can use any more is dead weight that reads
-  as a live rule.
+- **Canary.** At least one input the check MUST flag, asserted **through the
+  check's real entry point** — not against the pattern object. `check_docs`'
+  first canary asserted `regex.search(example)`, which passes happily while
+  the loop consuming that regex is dead; rewiring `for entry in DENYLIST` to
+  `for entry in []` left twelve canaries green. Go through the function the
+  guard actually calls. For a source scan, assert it found a known file or
+  symbol.
+- **Anti-rot.** For a registry whose entries are keyed to something OUTSIDE
+  it — condition keys a router must pass, divergence classes a corpus must
+  produce — an assertion that every entry is still reachable. An entry nothing
+  can use any more is dead weight that reads as a live rule. A denylist is
+  exempt: its entries are reachable by definition, so there is nothing to rot.
 
 `tests/authz/test_condition_registry.py` had both first and even named the
 problem: *"Guard the guard. An AST walk that matched nothing would make the
@@ -1401,15 +1407,10 @@ turned out the file was the only place it existed.
 
 | What went quiet | How |
 |---|---|
-| `check_backlog.py` check 6 | Required the entry id to *open* a commit subject. The repo adopted conventional commits, and zero of the last 40 subjects could fire it. The one check written because the file can disagree with reality could no longer fire on anything the repo produces. |
+| `check_backlog.py` check 6 | Required the entry id to *open* a commit subject; the repo then adopted conventional commits. The one check written because the file can disagree with reality could no longer fire on any subject the repo produces. Measurement and current limits live on `_evidence_pattern`. |
 | `preflight.classify_legacy_only_visibility` | A divergence class stopped being true, and the attribution test is one-directional — an unattributed row fails, a class that quietly stops firing does not. It absorbed a real bug: `grant_world()` silently issuing no sample-access grants. |
-| `test_legacy_column_reconstruction.py` | Pasted the migration's SQL under a comment claiming an edit would "fail loudly". Nothing connected them. Fixed — and the ADD COLUMN DDL was *still* pasted, so the same failure survived on the other half. |
-| `check_docs.py` DENYLIST | A denylist is silent by construction: a clean repo produces no hits whether the pattern works or is broken. Disarming two patterns left the guard printing "Documentation guard: clean". |
-
-The last one is the clearest test of whether this rule is worth its weight:
-the sweep that added the canaries changed no behaviour and caught nothing that
-day — and a deliberately typo'd regex now fails in under a second, where before
-it would have reported clean forever.
+| `tests/authz/test_legacy_column_reconstruction.py` | Pasted the migration's SQL under a comment claiming an edit would "fail loudly". Nothing connected them. Fixed — and the ADD COLUMN DDL was *still* pasted, so the same failure survived on the other half. |
+| `check_docs.py` DENYLIST | Not an incident — a construction property, and the reason the sweep happened. Disarm any pattern and the guard still prints "Documentation guard: clean", because a clean repo produces no hits either way. |
 
 **Not mutation testing.** That would catch all of these automatically and is
 the honest alternative, but it is a heavy dependency, slow in CI, and every one

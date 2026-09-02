@@ -25,8 +25,11 @@ Checks:
                    blocker — blocked by assertion only.
 
   6. Git evidence (ADVISORY — reported, does not fail)
-                   A non-shipped entry whose id opens a merged commit subject.
-                   Advisory because the signal is suggestive, not conclusive.
+                   A non-shipped entry whose id LEADS a merged commit
+                   subject — at its start, or straight after a
+                   conventional-commit prefix. Advisory because the signal is
+                   suggestive, not conclusive; see _evidence_pattern for what
+                   it deliberately misses and what it knowingly over-admits.
 
 **What checks 1-5 cannot do.** They verify the file against itself. The
 2026-08-28 failure was the file disagreeing with *reality*: `P0c` was
@@ -207,13 +210,20 @@ def _evidence_pattern(eid: str) -> re.Pattern[str]:
       narrowed to exclude — so the second id stays out of reach.
     * **Reverts.** ``Revert "feat(authz): M2-DROP — ..."`` does not match, and
       should not: a revert is not evidence of shipping.
+
+    Knowingly over-admitted, since this section otherwise reads as exhaustive:
+    a doc commit leading with an id — ``docs: P0b (Schema v5.0) migration
+    spec`` — now counts as evidence. Two such subjects exist in this history,
+    harmless only because both entries are shipped and skipped. Tolerable
+    because the check is advisory; narrowing by commit TYPE, not by touching
+    the id part, is the fix if it ever gets noisy.
     """
     eid_re = rf"{re.escape(eid)}(?![\w-])"
     return re.compile(rf"(?:{_CC_PREFIX}{eid_re}|.*\bmark {eid_re} shipped\b)", re.IGNORECASE)
 
 
 def git_evidence_advisories(entries: list[dict], ref: str = "HEAD") -> list[Violation]:
-    """Non-shipped entries whose id opens a merged commit subject.
+    """Non-shipped entries whose id leads a merged commit subject.
 
     Deliberately narrow: the id must start the subject (the repo's older
     release-commit shape, e.g. "P0b (Schema v5.0): ...") or start the subject

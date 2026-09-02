@@ -142,31 +142,41 @@ def test_root_doc_is_checked_for_drift_not_silently_skipped(tmp_path, monkeypatc
 # silently stopped matching anything at all (Critical Rule 74).
 
 
-@pytest.mark.parametrize("entry", check_docs.DENYLIST, ids=lambda e: e["message"][:30])
-def test_every_denylist_pattern_matches_its_own_example(entry):
-    """A denylist regex that matches nothing is indistinguishable from success.
+#: A STATUS that disagrees with every pinned example, so `pin` facts fire too.
+#: A pin fact only produces a violation when the doc and STATUS differ, so a
+#: canary run against the real STATUS would assert nothing for two of three.
+_MISMATCHED_STATUS = {"python_version": "9.9", "schema_version": "v9.9"}
 
-    A clean repo produces no hits whether the pattern works or is broken, so
-    nothing else in this suite can tell the two apart. The example is the only
-    canary available.
+
+@pytest.mark.parametrize(
+    "entry",
+    (*check_docs.DENYLIST, *check_docs.TRACKED_FACTS),
+    ids=lambda e: e.get("name") or e["message"][:30],
+)
+def test_every_pattern_still_fires_through_the_guard(entry, tmp_path):
+    """Each pattern's example must trip `check_drift`, not merely match its regex.
+
+    The seam matters, and the first version of this test got it wrong. Asserting
+    ``entry["regex"].search(entry["example"])`` proves the regex object still
+    works — but the guard can go silent without any regex changing. Rewiring
+    ``for entry in DENYLIST`` to ``for entry in []`` left twelve such canaries
+    green while the denylist stopped being consulted at all, which is exactly
+    the failure Critical Rule 74 is about, committed inside the implementation
+    of Rule 74. Going through ``check_drift`` covers both the pattern and the
+    wiring.
+
+    Not covered, and deliberately: a ``normalize_doc``/``normalize_status``
+    pair that silently agrees would make a `pin` fact unable to fire while
+    still matching. Catching that needs an agreeing-and-disagreeing example
+    pair per fact, which is past the point Rule 74's own "not mutation
+    testing" paragraph concedes.
     """
-    assert entry["regex"].search(entry["example"]), (
-        f"denylist pattern no longer matches its own example {entry['example']!r} — "
-        "the tripwire is disarmed and the repo would look clean either way"
-    )
+    doc = tmp_path / "d.md"
+    doc.write_text(entry["example"] + "\n")
 
-
-@pytest.mark.parametrize("fact", check_docs.TRACKED_FACTS, ids=lambda f: f["name"])
-def test_every_tracked_fact_matches_its_own_example(fact):
-    """Same argument, for the drift patterns.
-
-    A `forbid` fact whose regex stopped matching lets the hardcoded value it
-    was written to ban back in; a `pin` fact whose regex stopped matching
-    stops comparing against STATUS entirely.
-    """
-    assert fact["regex"].search(fact["example"]), (
-        f"tracked fact {fact['name']!r} no longer matches its own example "
-        f"{fact['example']!r}; drift in this fact is now undetectable"
+    assert check_docs.check_drift(doc, _MISMATCHED_STATUS), (
+        f"{entry['example']!r} no longer trips the guard — the tripwire is "
+        "disarmed and the repo would look clean either way"
     )
 
 

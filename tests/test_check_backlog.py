@@ -235,11 +235,10 @@ def _repo_with_subject(tmp_path, subject: str):
 def test_advisory_sees_an_id_behind_a_conventional_commit_prefix(tmp_path, monkeypatch):
     """The gap that made this check stop firing entirely.
 
-    It required the id to OPEN the subject. The repo then adopted conventional
-    commits, and by 2026-09-02 zero of the last 40 subjects started with a bare
-    id — so the one check written because the file can disagree with reality
-    could no longer fire on any commit the repo produces. M2-DROP merged as
-    this subject, stayed marked open, and went unflagged.
+    It required the id to OPEN the subject, and the repo then adopted
+    conventional commits — see ``_evidence_pattern`` for the measurement and
+    for what the widened form still misses. M2-DROP merged as this subject,
+    stayed marked open, and went unflagged.
     """
     _repo_with_subject(tmp_path, "feat(authz): M2-DROP — drop the legacy role columns (#202)")
     monkeypatch.chdir(tmp_path)
