@@ -381,6 +381,7 @@ def _alert_operators(peer: dict, unacknowledged: int, conn) -> None:
             "federation:configure_peer at instance scope — no operator was notified",
             peer["name"],
         )
+        return
     for recipient_id in operators:
         create_notification(
             recipient_id=recipient_id,

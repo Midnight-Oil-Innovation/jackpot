@@ -13,7 +13,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 from backend.authz.engine import CapabilityGrant, Principal, PrincipalKind, Resource
-from backend.authz.scope import scope_uri
+from backend.authz.scope import ancestor_scopes, scope_uri
 from backend.database import execute_query
 
 _GRANTS_SQL = (
@@ -90,11 +90,18 @@ def load_principal(
 
 
 # The reverse of _GRANTS_SQL: not "what does this principal hold" but "who
-# holds this". The containment test is _scope_contains transcribed to SQL and
-# runs the same direction — the GRANT scope must contain the RESOURCE scope,
-# so `:scope LIKE scope_ref || '/%'` and never the other way round. The
-# rstrip mirrors the Python: a scope_ref stored with a trailing slash would
-# otherwise build a pattern with a doubled separator matching nothing.
+# holds this". Containment still runs the same direction — the GRANT scope
+# must contain the RESOURCE scope — but it is expressed as membership in the
+# resource's ancestor set rather than as a prefix pattern.
+#
+# The prefix form is the one to reach for and the one to avoid here. `:scope
+# LIKE RTRIM(g.scope_ref,'/') || '/%'` builds its pattern out of a column, so a
+# scope_ref holding a LIKE metacharacter becomes a wildcard grant: a row stored
+# as `instance://self/org/%` matched every org. It shipped that way in #190
+# and is now pinned by test_a_stored_scope_ref_is_data_not_a_pattern.
+# `visibility.py::_like_prefix` escapes for this reason; the fix here is to
+# have no pattern at all. A path has at most five ancestors, so equality over
+# an enumerated set says the same thing and cannot widen.
 #
 # The join to `users` is load-bearing rather than decorative: peer principals
 # share this table with an id that is a federated_instances UUID, and a caller
@@ -106,9 +113,27 @@ _CAPABILITY_HOLDERS_SQL = (
     "AND u.is_active = TRUE "
     "AND g.conditions = CAST('{}' AS JSONB) "
     "AND (g.not_after IS NULL OR g.not_after > :now) "
-    "AND (g.scope_ref = :scope OR :scope LIKE RTRIM(g.scope_ref, '/') || '/%') "
+    # Two branches because _scope_contains has two, and they do not treat a
+    # trailing slash alike: its equality branch compares raw strings, while its
+    # prefix branch rstrips the grant. A single RTRIM'd comparison collapsed
+    # them and made a grant stored as `instance://self/` match the resource
+    # `instance://self`, which the engine refuses — small, but a widening.
+    "AND (g.scope_ref = :exact OR RTRIM(g.scope_ref, '/') = ANY(CAST(:strict AS TEXT[]))) "
     "ORDER BY u.id"
 )
+
+
+def strict_ancestors(scope: str) -> list[str]:
+    """``scope``'s ancestors excluding itself — the second SQL branch's input.
+
+    Public, and imported by ``tests/authz/test_scope.py``, because the test
+    that proves the query never widens has to model the query's parameters.
+    A second copy of this line in the test would be free to drift from the
+    one the query actually uses, and the drift would be invisible: the test
+    would keep passing while describing a query nobody runs.
+    """
+    trimmed = scope.rstrip("/")
+    return [a for a in ancestor_scopes(scope) if a != trimmed]
 
 
 def capability_holders(capability: str, scope: str, *, conn: Any = None) -> list[int]:
@@ -135,7 +160,12 @@ def capability_holders(capability: str, scope: str, *, conn: Any = None) -> list
     """
     rows = execute_query(
         _CAPABILITY_HOLDERS_SQL,
-        {"cap": capability, "scope": scope, "now": datetime.now(UTC)},
+        {
+            "cap": capability,
+            "exact": scope,
+            "strict": strict_ancestors(scope),
+            "now": datetime.now(UTC),
+        },
         conn=conn,
     )
     return [r["id"] for r in rows]

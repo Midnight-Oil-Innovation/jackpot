@@ -9,7 +9,8 @@ relation the shape is supposed to produce.
 import pytest
 
 from backend.authz.engine import _scope_contains
-from backend.authz.scope import ROOT, scope_uri
+from backend.authz.principal import strict_ancestors
+from backend.authz.scope import ROOT, ancestor_scopes, scope_uri
 
 
 class TestShape:
@@ -165,3 +166,188 @@ def test_alias_must_be_an_identifier():
         lab_scope_sql(labs="l; DROP TABLE labs")
     with pytest.raises(ValueError):
         project_scope_sql(labs="l", rows="x y")
+
+
+# ── ancestor_scopes: containment's dual ───────────────────────────────────
+
+
+def test_ancestor_scopes_enumerates_every_containing_scope():
+    assert ancestor_scopes(scope_uri(org=3, lab=7)) == [
+        "instance://self",
+        "instance://self/org/3",
+        "instance://self/org/3/lab/7",
+    ]
+    assert ancestor_scopes(scope_uri()) == ["instance://self"]
+
+
+def test_ancestor_scopes_agrees_with_scope_contains():
+    """The property that makes the SQL form correct: a grant contains a scope
+    exactly when it appears in that scope's ancestor list. Asserted over the
+    full tree rather than asserted about, because the two are one rule and the
+    SQL half stops being reviewable the moment they can disagree."""
+    every_scope = [
+        scope_uri(),
+        scope_uri(org=1),
+        scope_uri(org=2),
+        scope_uri(org=1, lab=5),
+        scope_uri(org=1, lab=50),
+        scope_uri(org=1, lab=5, project=9),
+        scope_uri(org=1, lab=5, project=9, sample=4),
+    ]
+    for grant in every_scope:
+        for resource in every_scope:
+            assert _scope_contains(grant, resource) == (grant in ancestor_scopes(resource)), (
+                f"{grant} vs {resource}"
+            )
+
+
+def test_ancestor_scopes_strips_a_trailing_slash_like_scope_contains():
+    assert ancestor_scopes("instance://self/org/3/") == [
+        "instance://self",
+        "instance://self/org/3",
+    ]
+
+
+def test_ancestor_scopes_does_not_interpret_a_non_canonical_scope():
+    """A scope carrying a LIKE metacharacter is a literal, not a pattern — it
+    contributes one ancestor naming itself and nothing wider."""
+    assert ancestor_scopes("instance://self/org/%") == [
+        "instance://self",
+        "instance://self/org/%",
+    ]
+
+
+def test_ancestor_scopes_requires_a_segment_boundary_at_the_root():
+    """``instance://selfish`` is not under ``instance://self``.
+
+    Found by review on the fix for the LIKE widening — the same mistake one
+    level up. A bare prefix test claimed the root as an ancestor (disagreeing
+    with ``_scope_contains``) and split the remainder into a fabricated
+    ``instance://self/ish/org``.
+    """
+
+    for impostor in ("instance://selfish", "instance://selfish/org/1"):
+        assert ancestor_scopes(impostor) == [impostor]
+        assert ROOT not in ancestor_scopes(impostor)
+        assert not _scope_contains(ROOT, impostor)
+
+
+# The invariant the SQL half depends on. `capability_holders` compiles
+# containment into `g.scope_ref = :exact OR RTRIM(g.scope_ref,'/') = ANY(:strict)`,
+# so that predicate — not `ancestor_scopes` alone — is what must agree with
+# `_scope_contains`. Restated here in Python and checked over the shapes
+# `scope_uri()` cannot produce, which is exactly where all three bugs in this
+# function's history have lived.
+def _sql_predicate(grant: str, resource: str) -> bool:
+    # strict_ancestors is imported from the production module, not re-derived:
+    # a second copy here would be free to drift from the parameters the query
+    # actually binds, and the test would keep passing while modelling a query
+    # nobody runs.
+    return grant == resource or grant.rstrip("/") in strict_ancestors(resource)
+
+
+def _is_half_level(scope: str) -> bool:
+    """A grant naming a level without its id (``.../org``).
+
+    ROOT names *zero* levels and is not one. The inline form this replaces
+    counted it as one, because ``"".split("/")`` is ``[""]`` — length 1, odd.
+    That mattered more than it looks: ROOT is the scope the only production
+    caller queries at, so a ROOT-grant regression would have been absorbed by
+    the narrowing test below as "expected family 1" instead of failing.
+    """
+    trimmed = scope.rstrip("/")
+    if not trimmed.startswith(f"{ROOT}/"):
+        return False
+    return len(trimmed[len(ROOT) + 1 :].split("/")) % 2 == 1
+
+
+_NON_CANONICAL = [
+    "",
+    ROOT,
+    f"{ROOT}/",
+    f"{ROOT}//",
+    "instance://selfish",
+    f"{ROOT}/org",
+    f"{ROOT}/org/1",
+    f"{ROOT}/org/1/",
+    f"{ROOT}//org/1",
+    f"{ROOT}/org/12",
+    f"{ROOT}/org/1/lab",
+    f"{ROOT}/org/1/lab/5",
+    f"{ROOT}/org/1/lab/5/project/9",
+    f"{ROOT}/org/1/lab/5/project/9/sample/2",
+    f"{ROOT}/org/%",
+    f"{ROOT}/org/_",
+    f"{ROOT}/org/1//lab/5",
+]
+
+
+def test_the_sql_predicate_never_widens_beyond_scope_contains():
+    """The one property that must hold: the SQL may refuse where the engine
+    allows (fail closed), never the reverse.
+
+    Every bug this function has had was a widening — the LIKE metacharacter,
+    the `instance://selfish` root, the collapsed `//`. Each was invisible to a
+    test built from `scope_uri()` output, because `scope_uri()` cannot produce
+    the input that triggers it. So this asserts over deliberately malformed
+    strings, and asserts the direction rather than equality.
+    """
+    widenings = [
+        (g, r)
+        for g in _NON_CANONICAL
+        for r in _NON_CANONICAL
+        if _sql_predicate(g, r) and not _scope_contains(g, r)
+    ]
+    assert widenings == []
+
+
+def test_the_known_narrowings_are_two_fail_closed_families():
+    """Where the SQL refuses and the engine allows, pinned so it cannot grow.
+
+    Exactly two families, neither reachable from ``scope_uri()``:
+
+    1. **A grant at a half-level** (``instance://self/org``). Pair-wise
+       enumeration never produces it as an ancestor. Pinned rather than fixed —
+       covering it means generating partial-level ancestors, which is the
+       "reconstruct something wider" move that produced the ``//`` bug.
+    2. **A resource with a trailing slash** (``instance://self/org/1/``). The
+       engine's prefix branch treats ``x`` as containing ``x/``; ``ancestor_scopes``
+       rstrips first, so it does not.
+
+    Both refuse access the engine would grant, which is the safe direction. The
+    test asserts the *shape* of every disagreement so a new one in some third
+    family fails here rather than being absorbed as "expected narrowing".
+    """
+    narrowings = {
+        (g, r)
+        for g in _NON_CANONICAL
+        for r in _NON_CANONICAL
+        if _scope_contains(g, r) and not _sql_predicate(g, r)
+    }
+    assert narrowings, "the families below are real; an empty set means the fuzz broke"
+    for grant, resource in narrowings:
+        trailing_slash_resource = resource != resource.rstrip("/")
+        assert _is_half_level(grant) or trailing_slash_resource, (
+            f"narrowing in a new family: {grant!r} -> {resource!r}"
+        )
+
+
+def test_a_doubled_separator_is_not_collapsed():
+    """`instance://self//org/3` is not `instance://self/org/3`.
+
+    Stripping the separator on the way in and rebuilding with a single one
+    fabricated an ancestor the engine rejects — the SQL would have returned a
+    holder `permit()` would refuse.
+    """
+    doubled = f"{ROOT}//org/3"
+    assert not _scope_contains(f"{ROOT}/org/3", doubled)
+    assert f"{ROOT}/org/3" not in ancestor_scopes(doubled)
+    assert ancestor_scopes(doubled) == [ROOT, f"{ROOT}//org", doubled]
+
+
+def test_ancestor_scopes_is_reflexive_at_a_half_level():
+    """`_scope_contains(x, x)` is true for every x, so x must appear in its own
+    ancestor list — including when the pair loop stops short of it."""
+    for scope in (f"{ROOT}/org", f"{ROOT}/org/1/lab", "instance://selfish"):
+        assert scope in ancestor_scopes(scope)
+        assert _scope_contains(scope, scope)

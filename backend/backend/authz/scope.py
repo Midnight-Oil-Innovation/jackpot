@@ -67,6 +67,53 @@ def scope_uri(
     return "/".join(parts)
 
 
+def ancestor_scopes(scope: str) -> list[str]:
+    """Every scope that contains ``scope``, itself included (§3.1.1).
+
+    ``instance://self/org/3/lab/7`` yields the three scopes a grant could be
+    written at to reach it: the root, the org, and the lab.
+
+    This is ``engine._scope_contains`` turned inside out. Containment by
+    prefix has a dual — a path has a bounded, enumerable set of ancestors,
+    five levels at most — and the dual is what lets a "who holds this" query
+    match on equality instead of a pattern. That matters because the pattern
+    form reads its pattern from the grant row: a stored ``scope_ref``
+    containing ``%`` or ``_`` becomes a wildcard grant unless every metacharacter
+    is escaped, and an authorization query that widens when it should not is
+    the wrong place to be one ``REPLACE`` short. Equality cannot widen.
+
+    The trailing-slash rstrip mirrors ``_scope_contains``, which strips before
+    comparing; a caller that stored ``instance://self/`` still matches.
+    """
+    trimmed = scope.rstrip("/")
+    # The root test needs the same segment boundary the containment test uses.
+    # A bare `startswith(ROOT)` admits `instance://selfish`, which would both
+    # claim the root as an ancestor — disagreeing with `_scope_contains` — and
+    # split into a fabricated `instance://self/ish/org`.
+    if not trimmed.startswith(f"{ROOT}/"):
+        return [trimmed]
+    # Split AFTER the separator rather than stripping it: an empty segment is a
+    # real segment. `.strip("/")` collapsed `instance://self//org/3` into
+    # `instance://self/org/3` — an ancestor `_scope_contains` does not agree
+    # with, and therefore a grant the SQL would honour and the engine would
+    # refuse. Third instance of this shape in one file's history; the pattern
+    # is always "normalize on the way in and reconstruct something wider".
+    segments = trimmed[len(ROOT) + 1 :].split("/")
+    scopes = [ROOT]
+    # Segments run level/id, level/id — step in pairs so a partial trailing
+    # segment contributes nothing rather than half a level.
+    for i in range(0, len(segments) - 1, 2):
+        scopes.append(f"{scopes[-1]}/{segments[i]}/{segments[i + 1]}")
+    # `_scope_contains` is reflexive and the pair loop is not: a trailing
+    # half-level (`.../org`) stops the loop short of the scope itself, so a
+    # grant written at that exact scope would not find its own resource. The
+    # non-ROOT branch above already returns `[trimmed]` for this reason;
+    # without this the two branches disagree about reflexivity.
+    if scopes[-1] != trimmed:
+        scopes.append(trimmed)
+    return scopes
+
+
 # ── SQL form (M2-PRE-2) ──────────────────────────────────────────────────
 #
 # A sample's scope is DERIVED, not stored (ADR 0015): it is computed from the
