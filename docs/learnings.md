@@ -3827,3 +3827,85 @@ The item is now shipped and M2-DROP is unblocked.
 - **`INSTANCE_PRESETS` is derived from `INSTANCE_PRESET_FLAGS`,** which M2-DROP
   deletes. Inline it as a literal frozenset in the same commit; forgetting
   fails at import, which is the intent.
+
+## PHIN VADS snapshot — 2026-09-02
+
+**What was built:** `scripts/pull_phinvads.py` plus a committed 19 MB snapshot of
+CDC PHIN VADS at `schema/schema/phinvads/`, taken ahead of the 2026-11-30 sunset
+of every PHIN system. Acquisition only — nothing reads it.
+
+**Key decisions:**
+
+- **Scope drawn on authorship, not usefulness.** All 1,999 ValueSets and metadata
+  for all 221 CodeSystems, but full concept lists only for the CDC arc
+  `2.16.840.1.114222` (33 systems, 116,463 concepts). LOINC, SNOMED CT and
+  ICD-10-CM concept lists are excluded: they are not PHIN content, they outlive
+  the sunset under their own publishers, they carry their own redistribution
+  terms, and SNOMED CT alone is 47 MB from this API. The subsets *inside* a value
+  set are kept — that enumeration is CDC's curation.
+- **Deadline belongs to the acquisition, not the integration.** Once the bytes are
+  local, wiring them into the schema has no date attached. Splitting the two is
+  what made this a one-session item instead of a phase. `docs/architecture.md`
+  §21.2 says outright that the files are not an integration, because a directory
+  full of vocabularies reads as done.
+- **Gzip, not raw.** 84 MB raw, permanently, in every clone; GitHub warns past
+  50 MB per file. NDJSON still streams a record at a time through `gzip.open`.
+- **First redistributed entry in `THIRD_PARTY_LICENSES.md`.** That file's own note
+  predicted this case ("It stops being fine the first time a restricted source
+  lands here"). SRA is queried and never redistributed; this is committed.
+  Recorded the open question — whether enumerated SNOMED/LOINC member codes
+  travelling inside value sets need their own notice — against
+  `B-LICENSE-DATA-TERMS` instead of assuming it away.
+
+**Watch out for:**
+
+- **The WAF answers a blocked request with HTTP 200 and an HTML page.** Checking
+  the status code alone writes an empty NDJSON and a manifest attesting to it,
+  which is indistinguishable from success. `_get` validates the content type.
+  This was found by probing the live service, not by reading anything.
+- **Pagination is five resources per bundle behind an opaque `_getpages` token**
+  — server-side, not a client parameter. ~400 sequential requests, no bulk
+  export. A walk that stops at the first page returns five value sets and
+  reports success.
+- **`end-of-file-fixer` and `trailing-whitespace` are byte-level and do not
+  detect binaries.** The fixer appends a newline to anything not ending in one,
+  which corrupts a `.gz`. Both now exclude it. Caught before the first commit
+  only because the manifest's SHA-256 gave something to check against.
+- **The 11 value sets with no concepts are empty upstream too**, verified against
+  the live endpoint. Worth knowing before someone reads it as truncation.
+
+**The defect worth remembering.** The first commit's docstring promised the walk
+was "resumable via `--state`". There was no such flag; `pull()` wrote a checkpoint
+after every page and never read one back; `_write_ndjson` opens `"wt"` so prior
+progress would have been truncated regardless. Critical Rule 70 reproduced inside
+a brand-new file, by the person who had just read Rule 70.
+
+Two things it teaches beyond "review works":
+
+1. **The prose was written before the code and never re-read against it.** The
+   docstring described the design as intended. Nothing in ruff, pyright, the
+   tests, or a careful read of the diff distinguishes a docstring that describes
+   the code from one that describes the plan — only asking "what calls this?"
+   does. That is Rule 70's whole point, and it applies to your own new file, not
+   just to inherited docs.
+2. **Its test passed against the unimplemented feature.** The test asserted the
+   state file was *deleted* after a successful pull — true, and irrelevant. It
+   never asserted a pre-existing checkpoint changed where the walk *started*,
+   which is the only behaviour the feature claimed. Rule 74's shape exactly: a
+   check that cannot fail on the thing it is named after. Its replacement seeds a
+   stale checkpoint and asserts the walk still starts at the endpoint root, with
+   a stub server that has no route for the stale URL, so any future attempt to
+   honour it fails loudly.
+
+Resolved by **deleting** the mechanism, not building it. A correct resume must
+append to a half-written archive and recount it, and an append onto a truncated
+file yields a corrupt snapshot that looks exactly like a good one — the failure
+the rest of the module's tests exist to catch. It would have added the risk they
+defend against, to save thirteen minutes on a re-run that has never happened.
+
+**Also in this session:** `M5` moved `open` → `blocked_external`. It was the
+backlog's only open item, which made it read as the frontier, but it is the
+`permit()` adapter for the cryptWWDB HE compute path and that track is dormant —
+the plaintext mass-balance, the policy checker and the mapping doc all shipped,
+the compute path was never scheduled, and the remaining wastewater schema entries
+carry "re-scope deliberately if cryptWWDB work resumes".
