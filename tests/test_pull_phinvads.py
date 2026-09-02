@@ -97,22 +97,6 @@ def test_walk_follows_every_next_link_to_the_end():
     assert got[-1]["id"] == "c4"
 
 
-def test_walk_checkpoints_each_page_and_signals_the_end_with_none():
-    seen: list[str | None] = []
-    pages = {
-        f"{BASE}/ValueSet": bundle([value_set("a")], f"{BASE}/p2"),
-        f"{BASE}/p2": bundle([value_set("b")], None),
-    }
-
-    def handler(request: httpx.Request) -> httpx.Response:
-        return httpx.Response(200, json=pages[str(request.url)])
-
-    with client_for(handler) as client:
-        list(pull_phinvads.walk_bundle(client, f"{BASE}/ValueSet", on_page=seen.append))
-
-    assert seen == [f"{BASE}/p2", None]
-
-
 def test_limit_stops_the_walk_early():
     def handler(_request: httpx.Request) -> httpx.Response:
         return httpx.Response(200, json=bundle([value_set("x")], f"{BASE}/forever"))
@@ -265,7 +249,14 @@ def test_code_system_concepts_are_stripped_but_the_count_is_kept(tmp_path, monke
     assert len(kept["concept"]) == 4
 
 
-def test_resume_state_is_cleared_only_on_a_completed_pull(tmp_path, monkeypatch):
+def test_the_walk_always_starts_at_the_endpoint_root(tmp_path, monkeypatch):
+    """No resume, and nothing that looks like one.
+
+    An earlier draft wrote a per-page checkpoint file and a docstring promising
+    resumability, with no code that read either back. The stub server here has
+    exactly one ValueSet route, so a `pull()` that tried to start anywhere other
+    than the endpoint root would raise KeyError rather than pass quietly.
+    """
     handler = _stub_server(
         value_set_pages=[[value_set("vs1")]],
         code_systems=[code_system("2.16.840.1.114222.4.5.274")],
@@ -274,9 +265,8 @@ def test_resume_state_is_cleared_only_on_a_completed_pull(tmp_path, monkeypatch)
 
     out = tmp_path / "snap"
     out.mkdir()
-    state = out / ".pull_state.json"
-    state.write_text('{"next": "https://example.invalid/stale"}')
+    (out / ".pull_state.json").write_text('{"next": "https://example.invalid/stale"}')
 
-    pull_phinvads.pull(out, state_path=state)
+    manifest = pull_phinvads.pull(out)
 
-    assert not state.exists()
+    assert manifest["counts"]["value_sets"] == 1

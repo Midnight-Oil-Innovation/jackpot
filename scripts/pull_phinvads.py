@@ -37,15 +37,20 @@ PAGINATION
 The FHIR STU3 endpoint returns 5 resources per bundle (``restws.valueset
 .threshold``, server-side, not a client parameter) and pages with an opaque
 ``_getpages`` token on a ``next`` link. So ~400 sequential requests for the value
-sets. There is no bulk export. The walk is resumable via ``--state`` because a
-400-request serial walk against a government host will eventually meet a 502.
+sets. There is no bulk export.
+
+A failed run restarts from the beginning. The per-request retry ladder is the
+defence against the 502 a long serial walk against a government host will
+eventually meet; a whole-walk resume is deliberately not built, because it would
+have to append to a half-written archive and recount it, and an append onto a
+truncated file produces a corrupt snapshot that looks exactly like a good one —
+the failure mode this module's tests exist to prevent. A full re-run is ~15
+minutes.
 
 USAGE
 -----
     uv run python scripts/pull_phinvads.py --out schema/schema/phinvads
     uv run python scripts/pull_phinvads.py --out /tmp/probe --limit 3   # smoke
-
-Re-running with an existing state file resumes; ``--restart`` discards it.
 """
 
 from __future__ import annotations
@@ -56,7 +61,7 @@ import hashlib
 import json
 import sys
 import time
-from collections.abc import Callable, Iterable, Iterator
+from collections.abc import Iterable, Iterator
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -130,12 +135,11 @@ def walk_bundle(
     start_url: str,
     *,
     limit: int | None = None,
-    on_page: Callable[[str | None], None] | None = None,
 ) -> Iterator[dict[str, Any]]:
     """Yield every resource from a paged FHIR searchset bundle.
 
-    ``on_page`` is called with the next-page URL (or None at the end) after each
-    page is fully yielded, so a caller can checkpoint a resumable walk.
+    Following every ``next`` link is the whole job: a walk that stops at the
+    first page returns five resources and reports success.
     """
     url: str | None = start_url
     pages = 0
@@ -147,8 +151,6 @@ def walk_bundle(
                 yield resource
         url = _next_url(bundle)
         pages += 1
-        if on_page:
-            on_page(url)
         if limit is not None and pages >= limit:
             return
         if url:
@@ -191,9 +193,7 @@ def _write_ndjson(path: Path, resources: Iterable[dict[str, Any]], label: str) -
     return count
 
 
-def pull(
-    out_dir: Path, *, limit: int | None = None, state_path: Path | None = None
-) -> dict[str, Any]:
+def pull(out_dir: Path, *, limit: int | None = None) -> dict[str, Any]:
     """Pull the snapshot into ``out_dir`` and return the manifest."""
     out_dir.mkdir(parents=True, exist_ok=True)
     concepts_dir = out_dir / "code_system_concepts"
@@ -212,16 +212,12 @@ def pull(
         "files": {},
     }
 
-    def checkpoint(next_url: str | None) -> None:
-        if state_path:
-            state_path.write_text(json.dumps({"next": next_url}), encoding="utf-8")
-
     with httpx.Client(headers=headers, timeout=REQUEST_TIMEOUT, follow_redirects=True) as client:
         print("value sets...", flush=True)
         value_sets_path = out_dir / "value_sets.ndjson.gz"
         n_value_sets = _write_ndjson(
             value_sets_path,
-            walk_bundle(client, f"{BASE_URL}/ValueSet", limit=limit, on_page=checkpoint),
+            walk_bundle(client, f"{BASE_URL}/ValueSet", limit=limit),
             "value sets",
         )
 
@@ -262,8 +258,6 @@ def pull(
     (out_dir / "manifest.json").write_text(
         json.dumps(manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8"
     )
-    if state_path and state_path.exists():
-        state_path.unlink()
     return manifest
 
 
@@ -275,15 +269,10 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--limit", type=int, default=None, help="stop after N pages per bundle (smoke test)"
     )
-    parser.add_argument("--restart", action="store_true", help="discard any resume state")
     args = parser.parse_args(argv)
 
-    state_path = args.out / ".pull_state.json"
-    if args.restart and state_path.exists():
-        state_path.unlink()
-
     try:
-        manifest = pull(args.out, limit=args.limit, state_path=state_path)
+        manifest = pull(args.out, limit=args.limit)
     except PullError as exc:
         print(f"FAILED: {exc}", file=sys.stderr)
         return 1

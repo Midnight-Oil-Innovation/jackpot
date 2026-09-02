@@ -104,6 +104,3 @@ repomix-output.xml
 skills-lock.json
 *.bak.*
 .jackpot/
-
-# PHIN VADS pull resume state — transient, per-run (scripts/pull_phinvads.py)
-schema/schema/phinvads/.pull_state.json
