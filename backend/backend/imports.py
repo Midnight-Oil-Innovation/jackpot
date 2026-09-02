@@ -810,8 +810,7 @@ def execute_import(
     from backend.routers.ingest import run_csv_ingest  # noqa: PLC0415
 
     user_row = execute_query(
-        "SELECT id, email, name, is_platform_admin, is_data_analyst, "
-        "is_active, organization_id FROM users WHERE id = :uid LIMIT 1",
+        "SELECT id, email, name, is_active, organization_id FROM users WHERE id = :uid LIMIT 1",
         {"uid": user_id},
         conn=conn,
     )

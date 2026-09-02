@@ -1363,7 +1363,15 @@ will not get there by being imagined one example at a time.
 In local dev (`ENV=local`), the mock user is determined by `MOCK_USER_EMAIL`
 in `docker-compose.yml`. The `get_current_user()` function in `auth/guards.py`
 looks up that email in the `users` table. If the email is not found, it falls
-back to a Platform Admin dict so the API never breaks.
+back to a synthetic `id=1` dict so the API never breaks.
+
+That fallback **no longer confers Platform Admin**, and hasn't decided anything
+since M2-B1. It used to carry `is_platform_admin: True`; M2-DROP-PRE slice 5
+removed the key, because authorization is `permit()` over grants and the
+fallback identity's authority is whatever grants user 1 holds — possibly none.
+The flag made a grantless identity read as an admin to anyone inspecting it
+without changing a single decision. Pinned by
+`tests/authz/test_identity_carries_no_legacy_flags.py`.
 
 To test a specific role, insert the user and membership into the database
 and change the env var:
