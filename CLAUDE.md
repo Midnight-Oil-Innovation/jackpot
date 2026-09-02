@@ -20,12 +20,26 @@ and CARE Principles compliance documented in
 `governance/care-principles-and-tribal-data-sovereignty.md`. The
 `jackpot init` CLI handles per-operator bootstrap (shipped in P0e).
 
-Phasing, with status as of 2026-08-28 — cleanup phases 6.1–11, P0d
-(monorepo migration), P0e (install/CLI), Phase 24.5 (architectural design
-lockdown), and P0b (Schema v5.0, migration `c871b28bbdab`, merged
-2026-07-06) are **complete**. P0f (BYOP infrastructure) is **in progress**.
-P0c (multi-tenancy middleware + sovereignty deletion) and P1–P5 remain.
-Per-item status lives in `active_backlog.yaml`, not here.
+Phase and per-item status live in `active_backlog.yaml` — the `status`
+field on each entry (`shipped` / `open` / `blocked` / `tracked_not_scheduled`)
+is the only answer to "what is done". **Do not restate phase status here.**
+
+This paragraph used to, carrying an as-of date. It was **accurate when
+written** and expired four days later: at commit `4bb9e86` (2026-08-28) the
+backlog had `p0f` at 3 shipped / 10 open and `P0c` blocked, exactly as the
+prose said; the ten BYOP entries then shipped and nobody re-read a sentence
+that had been true. Note which commit that was — the one that made
+`active_backlog.yaml` canonical and left a prose copy of the same fact behind.
+Establishing a single source of truth while keeping the second copy is the
+whole defect.
+
+The same commit shows it rots in both directions: that paragraph called P0b
+complete (right) while the backlog entry for `P0b` still read
+`tracked_not_scheduled` (wrong). Two representations of one fact were each
+stale about a different phase on the same day. So the rule is not "trust the
+backlog over the prose" — it is **do not write the fact down twice**. A claim
+that needs an as-of date belongs in a generated file or nowhere. Same failure
+the Current Baseline section documents for the test count.
 
 ---
 
