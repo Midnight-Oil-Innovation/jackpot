@@ -590,10 +590,19 @@ def instance_preset(*, is_platform_admin: bool, is_data_analyst: bool) -> str | 
 
     The precedence is not cosmetic: :func:`reseed` reads analysts as
     ``is_data_analyst AND NOT is_platform_admin``, so a user carrying both
-    flags gets the admin preset and only that. This function exists so the
-    cutover path and the live path cannot answer that differently — a
-    principal's grants must not depend on whether a PATCH or a reseed wrote
-    them last.
+    flags gets the admin preset and only that.
+
+    It used to exist so the cutover path and the live path could not answer
+    that differently. The live path stopped reading the columns at
+    M2-DROP-PRE slices 7-8 and ``d51c4361877d`` dropped them, so there is no
+    second path left to disagree with. What keeps this function alive is
+    ``reseed()``, which still calls it and still runs from migrations earlier
+    in the chain than the drop — so every fresh install replays this
+    precedence, and a change to it changes what those installs grant.
+
+    M2-DROP-PRE's handoff listed this among the things to delete with the
+    columns. That was wrong: the columns' last READER is not the last caller
+    of the function that interprets them.
     """
     if is_platform_admin:
         return "instance_administrator"

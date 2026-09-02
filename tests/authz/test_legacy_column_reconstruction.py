@@ -20,28 +20,41 @@ mark every surveillance officer as a platform admin.
 
 from __future__ import annotations
 
+import importlib.util
+from pathlib import Path
+
 import pytest
 from sqlalchemy import text
 
 from backend.authz.reseed import PRESET_GRANTS, sync_instance_preset
 from backend.database import _get_engine, execute_query, execute_write
 
-INSTANCE_SCOPE = "instance://self"
-ADMIN_PROBE = "user:manage"
-ANALYST_PROBE = "anomaly:review"
 
-# Verbatim from the migration's downgrade(). Kept as one copy the test reads,
-# so a change to the migration that this file does not see fails loudly rather
-# than passing against a stale duplicate.
-RECONSTRUCT = """
-    UPDATE users u SET {column} = TRUE
-    WHERE EXISTS (
-        SELECT 1 FROM authz_capability_grants g
-        WHERE g.principal_id = u.id::text
-          AND g.capability = :cap
-          AND g.scope_ref = :scope
-    )
-"""
+def _migration():
+    """The migration module itself, loaded by path.
+
+    ``backend/db/migrations/versions/`` is not an importable package — alembic
+    loads revisions by file path and so does this. Importing rather than
+    copying is the entire point: the previous version of this file pasted the
+    reconstruction SQL and asserted in a comment that a migration edit would
+    "fail loudly", which was false. Nothing connected the two, so editing
+    downgrade() would have left these tests passing against a stale copy of
+    SQL that no longer existed.
+    """
+    root = Path(__file__).resolve().parents[2]
+    path = root / "backend/db/migrations/versions/d51c4361877d_m2_drop_legacy_role_columns.py"
+    spec = importlib.util.spec_from_file_location("m2_drop_migration", path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+_MIGRATION = _migration()
+INSTANCE_SCOPE = _MIGRATION.INSTANCE_SCOPE
+RECONSTRUCT = _MIGRATION.RECONSTRUCT_SQL
+RECONSTRUCT_FROM = dict(_MIGRATION.RECONSTRUCT_FROM)
+ADMIN_PROBE = RECONSTRUCT_FROM["is_platform_admin"]
+ANALYST_PROBE = RECONSTRUCT_FROM["is_data_analyst"]
 
 
 def test_the_probe_capabilities_each_belong_to_exactly_one_preset():

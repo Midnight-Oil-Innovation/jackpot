@@ -2772,7 +2772,10 @@ sessions:
       HANDOFF TO M2-DROP, corrected against the tree at 2026-09-02:
         - DELETE, in one commit with the column drop: the UPDATE/INSERT in
           auth.py (~462-499), the two updates[] assignments in users.py (~208),
-          INSTANCE_PRESET_FLAGS, sync_instance_grants, and instance_preset().
+          INSTANCE_PRESET_FLAGS and sync_instance_grants. NOT instance_preset():
+          this entry was wrong about that. reseed() still calls it and still
+          runs from migrations earlier in the chain than the drop, so every
+          fresh install replays its precedence. Corrected 2026-09-02.
           INSTANCE_PRESETS must survive — inline it as a literal frozenset in
           the same commit, since it is currently DERIVED from the map being
           deleted and forgetting fails at import (which is the intent).

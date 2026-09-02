@@ -61,6 +61,28 @@ depends_on: str | Sequence[str] | None = None
 
 INSTANCE_SCOPE = "instance://self"
 
+#: Legacy column -> the capability that reconstructs it, and only it.
+#:
+#: See the module docstring for why these two and not ``sample:read_surveillance``.
+RECONSTRUCT_FROM = (
+    ("is_platform_admin", "user:manage"),
+    ("is_data_analyst", "anomaly:review"),
+)
+
+#: The reconstruction itself, exported so the test exercises THIS statement
+#: rather than a copy of it. tests/authz/test_legacy_column_reconstruction.py
+#: imports this by file path; editing the SQL here without updating that test
+#: breaks it, which is the only thing that makes the safety net real.
+RECONSTRUCT_SQL = """
+    UPDATE users u SET {column} = TRUE
+    WHERE EXISTS (
+        SELECT 1 FROM authz_capability_grants g
+        WHERE g.principal_id = u.id::text
+          AND g.capability = :cap
+          AND g.scope_ref = :scope
+    )
+"""
+
 
 def upgrade() -> None:
     op.execute(sa.text("ALTER TABLE users DROP COLUMN IF EXISTS is_platform_admin"))
@@ -68,43 +90,15 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    op.execute(
-        sa.text(
-            "ALTER TABLE users ADD COLUMN IF NOT EXISTS "
-            "is_platform_admin BOOLEAN NOT NULL DEFAULT FALSE"
-        )
-    )
-    op.execute(
-        sa.text(
-            "ALTER TABLE users ADD COLUMN IF NOT EXISTS "
-            "is_data_analyst BOOLEAN NOT NULL DEFAULT FALSE"
-        )
-    )
-    # Reconstruct from the grants the columns were translated into. See the
-    # module docstring for why these two capabilities and not others.
-    op.execute(
-        sa.text(
-            """
-            UPDATE users u SET is_platform_admin = TRUE
-            WHERE EXISTS (
-                SELECT 1 FROM authz_capability_grants g
-                WHERE g.principal_id = u.id::text
-                  AND g.capability = 'user:manage'
-                  AND g.scope_ref = :scope
+    for column, capability in RECONSTRUCT_FROM:
+        op.execute(
+            sa.text(
+                f"ALTER TABLE users ADD COLUMN IF NOT EXISTS "
+                f"{column} BOOLEAN NOT NULL DEFAULT FALSE"
             )
-            """
-        ).bindparams(scope=INSTANCE_SCOPE)
-    )
-    op.execute(
-        sa.text(
-            """
-            UPDATE users u SET is_data_analyst = TRUE
-            WHERE EXISTS (
-                SELECT 1 FROM authz_capability_grants g
-                WHERE g.principal_id = u.id::text
-                  AND g.capability = 'anomaly:review'
-                  AND g.scope_ref = :scope
+        )
+        op.execute(
+            sa.text(RECONSTRUCT_SQL.format(column=column)).bindparams(
+                cap=capability, scope=INSTANCE_SCOPE
             )
-            """
-        ).bindparams(scope=INSTANCE_SCOPE)
-    )
+        )
