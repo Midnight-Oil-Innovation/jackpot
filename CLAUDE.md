@@ -1374,6 +1374,51 @@ will not get there by being imagined one example at a time.
 
 ---
 
+**74 — A check that can silently match nothing needs a canary. A registry that can silently hold dead entries needs an anti-rot test.**
+
+A guard's silence is indistinguishable from a pass. When a check stops being
+*able* to fire — the pattern no longer matches anything the repo produces, the
+AST walk returns empty, the classifier branch stopped being true — nothing goes
+red. The output is exactly what success looks like, and it stays that way for
+as long as nobody thinks to ask.
+
+So the guard's own ability to fire is part of the guard, and gets asserted:
+
+- **Canary.** At least one input the check MUST flag. For a pattern, an
+  `example` field beside it that the regex has to match. For a source scan, an
+  assertion that it found a known file or symbol.
+- **Anti-rot.** For anything registry-shaped, an assertion that every entry is
+  still reachable — an entry nothing can use any more is dead weight that reads
+  as a live rule.
+
+`tests/authz/test_condition_registry.py` had both first and even named the
+problem: *"Guard the guard. An AST walk that matched nothing would make the
+registry check below vacuously true, which is the failure mode of every test
+that reads source code."* This rule is that pattern made general, after it
+turned out the file was the only place it existed.
+
+**Anchors, all found in one week, all the same shape:**
+
+| What went quiet | How |
+|---|---|
+| `check_backlog.py` check 6 | Required the entry id to *open* a commit subject. The repo adopted conventional commits, and zero of the last 40 subjects could fire it. The one check written because the file can disagree with reality could no longer fire on anything the repo produces. |
+| `preflight.classify_legacy_only_visibility` | A divergence class stopped being true, and the attribution test is one-directional — an unattributed row fails, a class that quietly stops firing does not. It absorbed a real bug: `grant_world()` silently issuing no sample-access grants. |
+| `test_legacy_column_reconstruction.py` | Pasted the migration's SQL under a comment claiming an edit would "fail loudly". Nothing connected them. Fixed — and the ADD COLUMN DDL was *still* pasted, so the same failure survived on the other half. |
+| `check_docs.py` DENYLIST | A denylist is silent by construction: a clean repo produces no hits whether the pattern works or is broken. Disarming two patterns left the guard printing "Documentation guard: clean". |
+
+The last one is the clearest test of whether this rule is worth its weight:
+the sweep that added the canaries changed no behaviour and caught nothing that
+day — and a deliberately typo'd regex now fails in under a second, where before
+it would have reported clean forever.
+
+**Not mutation testing.** That would catch all of these automatically and is
+the honest alternative, but it is a heavy dependency, slow in CI, and every one
+of these was in fact caught by reverting the guard and confirming the test goes
+red. Do that by hand when you touch a guard; the canary is what makes it stick
+for the next person.
+
+---
+
 ## Local Dev Role Switching
 
 In local dev (`ENV=local`), the mock user is determined by `MOCK_USER_EMAIL`
