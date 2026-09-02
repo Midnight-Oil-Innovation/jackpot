@@ -189,8 +189,9 @@ def update_user(
         return error("NOT_FOUND", f"User {user_id} not found.", status_code=404)
     before = before_rows[0]
 
-    # The preset is the only representation now — M2-DROP removed the
-    # columns this used to also write, and the grants are the assignment.
+    # The preset is the only representation the API has, and the grants are
+    # the assignment. This used to also write the two legacy columns; it no
+    # longer does, ahead of M2-DROP removing them.
     if role_written:
         preset = payload.instance_preset
         if preset is not None and preset not in INSTANCE_PRESETS:
@@ -202,13 +203,12 @@ def update_user(
         updates.pop(_ROLE_FIELD, None)
 
     # A role-only PATCH now touches no column at all: instance_preset is not
-    # one, and M2-DROP removed the two it used to translate into. Before the
+    # one, and it no longer writes the two it used to translate into. Before the
     # drop `updates` was never empty here, so the SET clause was always
     # well-formed; now it can be, and `SET , updated_at = ...` is a syntax
     # error. The row still gets its updated_at bumped — a role assignment is
     # a change to the user even when no column of theirs holds it.
-    set_clause = ", ".join(f"{k} = :{k}" for k in updates)
-    set_clause = f"{set_clause}, updated_at = NOW()" if set_clause else "updated_at = NOW()"
+    set_clause = ", ".join([*(f"{k} = :{k}" for k in updates), "updated_at = NOW()"])
     params = dict(updates)
     params["id"] = user_id
     rows = execute_write(

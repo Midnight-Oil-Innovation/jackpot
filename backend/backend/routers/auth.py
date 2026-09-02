@@ -462,8 +462,9 @@ def _get_or_create_dev_user(
     Returns (user, created).
 
     The role name is APGAP's and stays (Critical Rule 1); what it maps to is
-    a preset, and the grants are the whole of the assignment. M2-DROP removed
-    the legacy columns this used to also write.
+    a preset, and the grants are the whole of the assignment. This used to
+    also write the two legacy columns; it no longer does, ahead of M2-DROP
+    removing them.
     """
     preset = _instance_preset_for(role)
     rows = execute_query(

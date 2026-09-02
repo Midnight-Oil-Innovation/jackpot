@@ -10,13 +10,9 @@ Access model (per spec.md §5 Session H):
 """
 
 import pytest
-from authz_helpers import (
-    ADMIN_PRESET,
-    ANALYST_PRESET,
-    grant_instance_preset,
-    sync_grants_from_legacy_roles,
-)
+from authz_helpers import grant_instance_preset, sync_grants_from_legacy_roles
 
+from backend.authz.reseed import instance_preset
 from backend.config import get_settings
 from backend.database import execute_query, execute_write
 
@@ -106,11 +102,14 @@ def _make_user(
         {"e": email},
     )
     uid = rows[0]["id"]
-    # The role is the grants now (M2-DROP). Both directions: these helpers
-    # upsert on a re-used email, so a demotion must revoke.
+    # The role is the grants now, ahead of M2-DROP. Both directions: these
+    # helpers upsert on a re-used email, so a demotion must revoke.
+    # instance_preset() rather than a hand-written ternary: it exists to be
+    # the single answer to "which preset do these two flags mean", and a
+    # second copy of that precedence is exactly what Rule 73 is about.
     grant_instance_preset(
         uid,
-        ADMIN_PRESET if is_platform_admin else (ANALYST_PRESET if is_data_analyst else None),
+        instance_preset(is_platform_admin=is_platform_admin, is_data_analyst=is_data_analyst),
     )
     return uid
 

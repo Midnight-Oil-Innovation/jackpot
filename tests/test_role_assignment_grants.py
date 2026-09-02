@@ -154,9 +154,10 @@ async def test_data_analyst_promotion_grants_the_surveillance_preset(client, use
 def test_instance_preset_precedence_survives_the_column_drop():
     """``reseed()`` still translates flags, so its precedence still matters.
 
-    M2-DROP removed the columns and ``INSTANCE_PRESET_FLAGS`` with them, so
-    the round-trip this test used to assert — preset to flag pair and back —
-    has no second representation left to round-trip against. What survives is
+    Nothing translates a preset into columns any more, so
+    ``INSTANCE_PRESET_FLAGS`` is gone and the round-trip this test used to
+    assert — preset to flag pair and back — has no second representation left
+    to round-trip against. What survives is
     ``instance_preset()`` itself: ``reseed()`` calls it, ``reseed()`` runs from
     migrations earlier in the chain than the drop, and it reads analysts as
     ``is_data_analyst AND NOT is_platform_admin``. A user carrying both flags

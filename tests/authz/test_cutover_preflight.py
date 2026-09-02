@@ -94,7 +94,7 @@ def world(test_db_url):
         conn.execute(text(UNIQUE_INDEX_DDL))
     w = seed_world()
     # Grants come from the production sync functions, not from reseed().
-    # M2-DROP removed the columns reseed() translates, so there is nothing
+    # Nothing writes the columns reseed() translates, so there is nothing
     # left to translate — see preflight.grant_world for why the Instance
     # mapping still goes through instance_preset().
     grant_world(w)
@@ -154,11 +154,16 @@ class TestReseedOnPostgres:
     @pytest.fixture(autouse=True)
     def _legacy_world(self, world):
         added = restore_legacy_world(world)
-        engine, _ = _get_engine()
-        with engine.begin() as conn:
-            reseed(conn, force=_FORCE_REASON)
-        yield
-        drop_legacy_world(added)
+        try:
+            engine, _ = _get_engine()
+            with engine.begin() as conn:
+                reseed(conn, force=_FORCE_REASON)
+            yield
+        finally:
+            # If reseed raises, an un-finallied teardown leaves the columns
+            # behind for every later test in the session — which on the
+            # post-drop branch silently un-proves the drop.
+            drop_legacy_world(added)
 
     def test_grant_counts_and_shape_per_persona(self, world):
         for pkey, expected in EXPECTED_GRANT_SHAPE.items():

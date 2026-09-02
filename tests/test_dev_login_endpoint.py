@@ -103,7 +103,7 @@ async def test_dev_login_existing_user_role_update():
         }
         assert "user:manage" in held, held
         # The grants above ARE the assignment now; the column this used to
-        # read back was removed by M2-DROP.
+        # read back is no longer written and M2-DROP removes it next.
     finally:
         _cleanup_user(email)
 

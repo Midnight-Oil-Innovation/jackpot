@@ -22,9 +22,9 @@ def _ensure_user(email: str, *, is_platform_admin: bool = False) -> int:
     )
     row = execute_query("SELECT id FROM users WHERE email = :e", {"e": email})
     uid = row[0]["id"]
-    # The role is the grants now (M2-DROP). Issued in both directions: these
-    # helpers upsert on a re-used email, so a demotion must revoke rather than
-    # leave a stale admin grant behind.
+    # The role is the grants now, ahead of M2-DROP. Issued in both
+    # directions: these helpers upsert on a re-used email, so a demotion must
+    # revoke rather than leave a stale admin grant behind.
     grant_instance_preset(uid, ADMIN_PRESET if is_platform_admin else None)
     return uid
 

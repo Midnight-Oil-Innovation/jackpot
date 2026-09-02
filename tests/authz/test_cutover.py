@@ -95,7 +95,8 @@ def test_preflight_is_clean_on_a_fresh_install():
     assert not any(counts.values()), f"fresh install is not clean: {counts}"
 
 
-#: Re-add the columns M2-DROP removed, inside the caller's transaction.
+#: Re-add the columns M2-DROP removes, inside the caller's transaction.
+#: A no-op while they still exist.
 #:
 #: Both tests below are about the CUTOVER — a user promoted through the legacy
 #: path between the additive migration and the catch-up reseed. That window is

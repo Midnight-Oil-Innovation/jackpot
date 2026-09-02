@@ -174,9 +174,8 @@ async def test_lab_lead_cannot_promote_themselves_to_platform_admin(client, rost
         f"/api/v1/users/{roster[LEAD]}", json={"instance_preset": "instance_administrator"}
     )
     assert resp.status_code == 403, resp.text
-    # No Instance-scope grant was issued. The column this used to read is
-    # gone; a lab lead holding user:manage at the instance root would be the
-    # escalation the 403 above is preventing.
+    # No Instance-scope grant was issued. A lab lead holding user:manage at
+    # the instance root would be the escalation the 403 above prevents.
     escalated = execute_query(
         "SELECT capability FROM authz_capability_grants "
         "WHERE principal_id = :p AND scope_ref = 'instance://self'",

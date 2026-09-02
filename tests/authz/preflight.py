@@ -38,6 +38,7 @@ from backend.authz.reseed import (
     instance_preset,
     sync_instance_preset,
     sync_membership_grants,
+    sync_sample_access_grants,
 )
 from backend.authz.scope import scope_uri
 from backend.database import _get_engine, execute_query, execute_write
@@ -128,8 +129,9 @@ def _personas() -> list[Persona]:
     ]
 
 
-#: DDL restoring the columns M2-DROP removed, for the tests that prove
-#: ``reseed()`` itself.
+#: DDL restoring the columns M2-DROP will remove, for the tests that prove
+#: ``reseed()`` itself. A no-op while they still exist — which is why the
+#: caller is told whether it added them.
 #:
 #: Not a shim: ``reseed()`` still runs on every fresh install — its migrations
 #: sit BEFORE ``d51c4361877d`` in the chain, so the columns exist when it runs
@@ -179,12 +181,13 @@ def restore_legacy_world(world: SeededWorld) -> bool:
     return added
 
 
-def drop_legacy_world(added: bool = True) -> None:
+def drop_legacy_world(added: bool) -> None:
     """Undo :func:`restore_legacy_world`, leaving the schema as it was found.
 
     ``added=False`` means the columns pre-existed — the pre-drop side of the
     chain — and dropping them would be this fixture vandalising the database
-    for every test after it.
+    for every test after it. No default: a caller who forgets to thread the
+    return value would otherwise get the destructive branch.
     """
     if not added:
         return
@@ -233,6 +236,24 @@ def grant_world(world: SeededWorld) -> None:
                     lab_id=world.lab_a if lab_key == "A" else world.lab_b,
                     group_name=group_name,
                 )
+        # reseed() does THREE things, and the third is easy to lose: an
+        # APPROVED sample_access_requests row and a live sample_access_grants
+        # row both have to become sample-scoped grants, or every approved
+        # access request stops granting anything. seed_world seeds both (P10
+        # on B-REQ and B-GRANT), so omitting this leaves P10 holding nothing
+        # and no test fails — the divergence matrix absorbs it as a
+        # legacy-only row.
+        for sample_id in (
+            conn.execute(
+                text(
+                    "SELECT sample_id FROM sample_access_requests "
+                    "UNION SELECT sample_id FROM sample_access_grants"
+                )
+            )
+            .scalars()
+            .all()
+        ):
+            sync_sample_access_grants(conn, sample_id=sample_id)
 
 
 @dataclass
@@ -267,7 +288,8 @@ def seed_world() -> SeededWorld:
 
     personas = {p.key: p for p in _personas()}
     for p in personas.values():
-        # No role columns: M2-DROP removed them. The Persona still carries the
+        # No role columns written: nothing reads them, and M2-DROP removes
+        # them next. The Persona still carries the
         # flags — ``legacy_ladder`` reads them and must keep seeing exactly
         # what it saw before — but they are now an input to the ORACLE only,
         # never a stored fact. See grant_world().
@@ -726,8 +748,6 @@ def classify_legacy_only_visibility(persona: Persona, sample_key: str) -> str | 
         return "reseed-reads-only-lab-membership"  # sharing-level rungs
     if sample_key == "B-SURV" and persona.is_data_analyst:
         return "reseed-reads-only-lab-membership"  # analyst×surveillance rung
-    if sample_key in {"B-REQ", "B-GRANT"} and persona.key == "P10":
-        return "reseed-reads-only-lab-membership"  # request/grant rungs
     if persona.key == "P12":
         return "project-membership-no-grants"
     if persona.key == "P9":

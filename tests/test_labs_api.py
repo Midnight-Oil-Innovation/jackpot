@@ -26,9 +26,9 @@ def _ensure_user(email: str, *, is_platform_admin: bool = False) -> int:
     )
     row = execute_query("SELECT id FROM users WHERE email = :e", {"e": email})
     uid = row[0]["id"]
-    # The role is the grants now — M2-DROP removed the column this used to
-    # write and then ask reseed() to translate. Issued either way so a
-    # re-used email is demoted rather than keeping a stale admin grant.
+    # The role is the grants now: this no longer writes the column and asks
+    # reseed() to translate it, ahead of M2-DROP removing it. Issued either
+    # way so a re-used email is demoted rather than keeping a stale grant.
     grant_instance_preset(uid, ADMIN_PRESET if is_platform_admin else None)
     return uid
 

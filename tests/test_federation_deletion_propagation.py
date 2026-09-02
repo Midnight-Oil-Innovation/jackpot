@@ -365,8 +365,9 @@ def test_the_alert_follows_the_grant(signer, monkeypatch):
     admin" assertion passed whichever of the two the code read, and the
     conversion needed a principal holding exactly one.
 
-    M2-DROP removed the column, so "holds the flag but no grant" is no longer
-    a state that can exist and that half of the narrowing became structural.
+    Nothing writes the column any more and M2-DROP removes it next, so
+    "holds the flag but no grant" is no longer a state a test can construct,
+    and that half of the narrowing became structural.
     What is still worth pinning is the other edge of the same property: a user
     who holds nothing is not alerted, so the alert cannot be selecting on
     something incidental like "is a user at all".

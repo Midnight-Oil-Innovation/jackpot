@@ -178,9 +178,9 @@ async def test_patch_user_self_cannot_promote_self(client, monkeypatch):
     assert resp.status_code == 403
     assert resp.json()["error"]["code"] == "ACCESS_DENIED"
 
-    # Nothing was assigned. The column is gone (M2-DROP), so the grants are
-    # where the fact lives — and an empty grant set is the stronger assertion
-    # anyway: the old one could pass while a grant had been issued.
+    # Nothing was assigned. The grants are where the fact lives now, and an
+    # empty grant set is the stronger assertion anyway: the old one could pass
+    # while a grant had been issued.
     held = execute_query(
         "SELECT capability FROM authz_capability_grants WHERE principal_id = :p",
         {"p": str(uid)},
@@ -198,8 +198,8 @@ async def test_patch_user_admin_can_assign_the_instance_preset(client):
         json={"instance_preset": "instance_administrator"},
     )
     assert resp.status_code == 200
-    # M2-DROP removed the columns the response used to echo, so the
-    # assignment is asserted where it now lives.
+    # The response no longer echoes the legacy columns, so the assignment is
+    # asserted where it now lives.
     held = {
         r["capability"]
         for r in execute_query(

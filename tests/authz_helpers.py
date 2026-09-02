@@ -35,12 +35,12 @@ def _ensure_grant_uniq(conn) -> None:
 def grant_instance_preset(user_id: int, preset: str | None = ADMIN_PRESET) -> None:
     """Give a test-created user their Instance-scope role.
 
-    Replaces the pre-M2-DROP idiom of inserting a user row with
-    ``is_platform_admin = TRUE`` and calling ``reseed()`` to translate it.
-    That column is gone, so there is nothing left to translate: the grants
-    ARE the role now, and this issues them through the same
-    ``sync_instance_preset`` the routes use — a test that hand-wrote grant
-    rows could pass against a production path that no longer produces them.
+    Replaces the idiom of inserting a user row with ``is_platform_admin =
+    TRUE`` and calling ``reseed()`` to translate it. Nothing writes that
+    column any more and M2-DROP will remove it, so the grants ARE the role:
+    this issues them through the same ``sync_instance_preset`` the routes
+    use — a test that hand-wrote grant rows could pass against a production
+    path that no longer produces them.
 
     ``preset=None`` removes the role, which is how a test asserts the
     negative case.

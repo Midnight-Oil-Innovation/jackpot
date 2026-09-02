@@ -454,9 +454,11 @@ def _sample_access_rows(
 def reseed(conn: Connection, *, force: bool = False) -> None:
     """Translate every stored APGAP role into preset grants (§8.5 mapping).
 
-    **Historical-only since M2-DROP.** This reads ``users.is_platform_admin``
-    and ``users.is_data_analyst``, which that migration dropped, so it can
-    only ever run at a point in the chain BEFORE it. Every caller is a
+    **Historical-only once M2-DROP lands.** This reads
+    ``users.is_platform_admin`` and ``users.is_data_analyst``. Those columns
+    still exist at this commit — the writers were retired ahead of the drop,
+    which is a separate change — and once dropped this can only run at a
+    point in the chain BEFORE it. Every caller is a
     migration that sits earlier in the chain, so ``alembic upgrade head`` from
     an empty database still works (Critical Rule 44) — but calling this from
     new code, or adding a migration after ``d51c4361877d`` that calls it, will
@@ -609,10 +611,10 @@ def instance_preset(*, is_platform_admin: bool, is_data_analyst: bool) -> str | 
 #: deployment. This constant is what makes that unrepresentable rather than
 #: merely unreachable.
 #:
-#: A literal again as of M2-DROP. It was derived from INSTANCE_PRESET_FLAGS —
-#: preset to legacy flag pair — which that migration deleted along with the
-#: columns; deriving it was what made forgetting to inline it fail at import
-#: rather than silently.
+#: A literal again. It was derived from INSTANCE_PRESET_FLAGS — preset to
+#: legacy flag pair — which this change deleted, since nothing translates a
+#: preset into columns any more. Deriving it was what made forgetting to
+#: inline it fail at import rather than silently.
 INSTANCE_PRESETS: frozenset[str] = frozenset({"instance_administrator", "surveillance_officer"})
 
 
