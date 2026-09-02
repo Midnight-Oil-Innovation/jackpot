@@ -2758,15 +2758,32 @@ sessions:
       (3 of 5) when either flag is re-added, since a test written against the code
       it describes otherwise proves nothing (Rule 73).
 
+      Slice 6 SHIPPED: the frontend off the column, and two bugs it was hiding.
+      The plan was "/me returns held capabilities"; reading the two consumers said
+      neither wants one. access_requests.py pre-filtered on directorship-or-admin
+      before calling GET /sample-access/requests, which since M2-B7 already scopes
+      to "your own, plus any request you hold access:approve_request over" — so the
+      pre-filter was redundant AND wrong twice: a grant-holding non-director hit an
+      early return and never issued the request, and a caller who was both admin
+      and director fell into the per-lab loop and saw only those labs. Deleted; the
+      server is the authority. pipelines.py gated the deactivate/archive controls
+      on is_platform_admin while the server's _may_manage admits an instance grant,
+      a lab grant at owner_lab_id, OR the registrant — per-row, so no flat
+      capability list can answer it. ByopPipelineRead now carries a computed
+      can_manage, uniformly on all 9 endpoints rather than hardcoded True on the
+      ones that already proved it (that would be a second implementation of
+      _may_manage, Rule 73). session.py's is_platform_admin() and
+      my_director_lab_ids() deleted, both callerless afterwards. Red-green verified
+      on all three: the two page tests fail against the pre-slice frontend, and the
+      can_manage registrant test fails when can_manage is reverted to the old
+      is_platform_admin answer.
+
       REMAINING, per site:
         - auth.py:446-485/590, users.py:15/16/24/25  role ASSIGNMENT, not
           plumbing: both write the flags and pair the write with
           sync_instance_grants, and users.py PATCH exposes them as admin-editable.
           These become preset-name inputs, the way M2-B5 did for membership. Each
           already has its own SELECT, so none depended on slice 5's removals.
-        - frontend/lib/session.py:47 reads is_platform_admin off GET /users/me
-          (SELECT *) to toggle UI in pipelines.py and access_requests.py. Needs
-          /me to return held capabilities or a preset name before the column goes.
         - 138 test references across 41 files. NOT all convertible:
           tests/authz/preflight.py's legacy_ladder and legacy_visibility_sql_clause
           read the flags deliberately, as the frozen pre-M2 oracle the divergence

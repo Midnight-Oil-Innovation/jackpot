@@ -30,7 +30,6 @@ import streamlit as st
 
 from frontend.components.badges import render_badge, run_status_badge
 from frontend.lib.api import ApiError, get_client
-from frontend.lib.session import is_platform_admin
 
 PAGE_TITLE = "Pipelines"
 SS_RUN_ID = "pipelines.run_id"
@@ -256,7 +255,6 @@ def _render_byop_catalog(client) -> None:
         hide_index=True,
     )
 
-    admin = is_platform_admin()
     for p in pipelines:
         with st.expander(p.get("display_name") or p.get("name")):
             st.markdown(
@@ -271,7 +269,11 @@ def _render_byop_catalog(client) -> None:
             )
             if p.get("description"):
                 st.caption(p["description"])
-            if admin:
+            # Per-row: the server admits an instance grant, a lab grant at
+            # owner_lab_id, or the registrant. This used to be
+            # is_platform_admin(), which hid the buttons from a lab member the
+            # server would have accepted.
+            if p.get("can_manage"):
                 col_deact, col_arch = st.columns(2)
                 with col_deact:
                     if st.button("Deactivate", key=f"byop.deact.{p['id']}"):

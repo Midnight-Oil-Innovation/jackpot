@@ -42,18 +42,6 @@ def my_user_id() -> int | None:
     return me["id"] if me else None
 
 
-def is_platform_admin() -> bool:
-    me = current_user()
-    return bool(me and me.get("is_platform_admin"))
-
-
-def my_director_lab_ids() -> list[int]:
-    me = current_user()
-    if not me:
-        return []
-    return [m["lab_id"] for m in me.get("lab_memberships") or [] if m.get("is_lab_director")]
-
-
 def clear_session_cache() -> None:
     for k in ("_jackpot_me",):
         st.session_state.pop(k, None)

@@ -352,3 +352,105 @@ def test_badges_produce_html():
     assert "COMPLETE" in scrub_badge("COMPLETE")
     assert "RUNNING" in run_status_badge("RUNNING")
     assert tier_badge(None).startswith("<span")
+
+
+# ---------------------------------------------------------------------------
+# M2-DROP-PRE slice 6 — the frontend stops asking "are you an admin?"
+# ---------------------------------------------------------------------------
+
+
+def test_incoming_requests_renders_for_a_non_director(stubbed_streamlit, monkeypatch):
+    """The approver tab must not gate on directorship or the admin flag.
+
+    ``GET /sample-access/requests`` already scopes to what the caller can
+    approve (M2-B7). The pre-filter this replaces returned early for anyone
+    who was neither a Lab Director nor a platform admin, so a principal
+    holding ``access:approve_request`` through a grant never reached the
+    request. Identity here holds neither: no memberships, no legacy flag.
+    """
+    client = FakeApiClient(
+        canned={
+            ("GET", "/api/v1/users/me"): {
+                "id": 7,
+                "email": "grantholder@example.org",
+                "name": "Grant Holder",
+                "lab_memberships": [],
+            },
+            ("GET", "/api/v1/sample-access/requests"): [
+                {"id": 99, "sample_id": 42, "requester_id": 8, "requested_duration_days": 30}
+            ],
+        }
+    )
+    import frontend.lib.api as api_mod
+    import frontend.lib.session as sess_mod
+
+    monkeypatch.setattr(api_mod, "get_client", lambda: client)
+    monkeypatch.setattr(sess_mod, "get_client", lambda: client)
+
+    page = _reload_page("frontend.pages.access_requests")
+    # Scoped to the explicit call: importing the page runs render(), and the
+    # *other* tab issues a lab_id-free request to the same endpoint. Asserting
+    # over the whole log stands on that call and passes no matter what this
+    # tab does — which it did, against the pre-slice code.
+    client.calls.clear()
+    page._render_incoming_tab(client)
+
+    assert client.calls == [("GET", "/api/v1/sample-access/requests", {"status": "PENDING"})], (
+        "expected exactly one unfiltered request: pre-slice this was [] for a "
+        "non-director, or carried a client-side lab_id filter for a director"
+    )
+
+
+def test_pipeline_manage_controls_follow_can_manage_not_admin(stubbed_streamlit, monkeypatch):
+    """Mutate controls render from the server's per-row answer, per row.
+
+    A caller who is not a platform admin but whose lab owns the pipeline can
+    deactivate and archive it — ``_may_manage`` admits the owning lab and the
+    registrant. Gating on ``is_platform_admin`` hid the controls from exactly
+    that person, and showed them for every row or none.
+
+    The identity here holds no legacy flag and no directorship, and the two
+    rows disagree: the controls must follow the rows, not the caller.
+    """
+    client = FakeApiClient(
+        canned={
+            ("GET", "/api/v1/users/me"): {
+                "id": 7,
+                "email": "labmember@example.org",
+                "name": "Lab Member",
+                "lab_memberships": [{"lab_id": 1, "is_lab_director": False, "lab_name": "L1"}],
+            },
+            ("GET", "/api/v1/byop/pipelines"): [
+                {
+                    "id": 1,
+                    "name": "mine",
+                    "display_name": "Mine",
+                    "pipeline_status": "ACTIVE",
+                    "can_manage": True,
+                },
+                {
+                    "id": 2,
+                    "name": "theirs",
+                    "display_name": "Theirs",
+                    "pipeline_status": "ACTIVE",
+                    "can_manage": False,
+                },
+            ],
+        }
+    )
+    import frontend.lib.api as api_mod
+    import frontend.lib.session as sess_mod
+
+    monkeypatch.setattr(api_mod, "get_client", lambda: client)
+    monkeypatch.setattr(sess_mod, "get_client", lambda: client)
+
+    page = _reload_page("frontend.pages.pipelines")
+    page._render_byop_catalog(client)
+
+    keys = {kw.get("key") for name, _, kw in stubbed_streamlit.calls if name == "button"}
+    assert {"byop.deact.1", "byop.arch.1"} <= keys, (
+        "manageable row lost its controls — a non-admin who may manage sees nothing"
+    )
+    assert not {"byop.deact.2", "byop.arch.2"} & keys, (
+        "unmanageable row offered controls the server would refuse"
+    )
