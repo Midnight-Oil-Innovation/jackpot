@@ -3251,10 +3251,18 @@ sessions:
       HEOperation enum membership) here. Gated on the cryptWWDB compute path
       being scheduled (Track 2).
     phase: access_model_redesign
-    status: open
+    status: blocked_external
     depends_on:
       - M2
-    blocked_by_external:
+    blocked_by_external: >
+      The cryptWWDB compute path (Track 2) is dormant. The plaintext
+      mass-balance work, the policy checker, and the mapping doc all shipped;
+      the homomorphic-encryption compute path they were built toward was never
+      scheduled, and the remaining wastewater schema entries carry
+      "re-scope deliberately if cryptWWDB work resumes". M5 is the adapter for
+      a caller that does not exist yet, so it is not on the frontier. Unpark it
+      when the HE compute path is scheduled; every in-file dependency has
+      already landed, so scheduling is the only gate.
     parallel_safe: false
     parallel_safe_reason: "Engine capability additions + federation/crypto adapter wiring."
     effort_sessions: 2
@@ -3507,6 +3515,43 @@ sessions:
       repo front door because the guard could not see it. README scenario
       table also still carried the old A-F+T taxonomy; replaced with A/B/C/D
       per ADR-0002. Three regression tests added to tests/test_check_docs.py.
+
+  - id: B-VADS-1
+    title: PHIN VADS vocabulary snapshot before the 2026-11-30 sunset
+    short_description: |
+      CDC sunsets all PHIN systems on 2026-11-30 and has named no successor,
+      so the PHIN VADS-authored value sets stop being fetchable from anywhere.
+      Acquisition has a deadline; integration does not. This item is the
+      acquisition only: scripts/pull_phinvads.py walks the FHIR STU3 endpoint
+      and commits a snapshot with provenance under schema/schema/phinvads/.
+      Nothing in the backend reads it yet - that is deliberate, and is the
+      remaining work, tracked separately once a consumer exists.
+    phase: p0_series
+    status: open
+    depends_on: []
+    blocked_by_external:
+    parallel_safe: true
+    parallel_safe_reason: "Data acquisition plus one script. Touches no shared module."
+    effort_sessions: 1
+    primary_files:
+      - scripts/pull_phinvads.py
+      - schema/schema/phinvads/
+    test_files:
+      - tests/test_pull_phinvads.py
+    source_of_truth_views:
+      - docs/architecture.md
+    pr_title_template:
+    branch_name_template: "feat/phinvads-snapshot"
+    role_framing:
+    notes: >
+      Carved out of P0i, which is otherwise unscheduled, because this is the
+      only part of P0i with an external deadline. Scope is drawn on authorship,
+      not usefulness: all ~1,999 ValueSets and metadata for all ~221
+      CodeSystems, but full concept lists only for the CDC arc
+      (2.16.840.1.114222). LOINC, SNOMED CT and ICD-10-CM concept lists are
+      excluded - they outlive the sunset, have their own publishers, and carry
+      redistribution terms that do not belong in an AGPL-3.0 tree without a
+      deliberate decision. SNOMED CT alone is 47 MB from this API.
 
   - id: B-EUK-COINFECT-SENTINEL
     title: '"Screened, none found" sentinel for coinfection_organisms'

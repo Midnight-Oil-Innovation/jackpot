@@ -19,9 +19,12 @@ repos:
       - id: trailing-whitespace
         # Pyright config + jackpot-course HTML use trailing whitespace
         # in <pre> blocks intentionally; don't strip those.
-        exclude: '\.(html|htm)$|^docs/STATUS\.md$'
+        # .gz: these hooks are byte-level and do not detect binaries — the
+        # end-of-file-fixer appends a newline to anything not ending in one,
+        # which corrupts the PHIN VADS snapshot archives.
+        exclude: '\.(html|htm|gz)$|^docs/STATUS\.md$'
       - id: end-of-file-fixer
-        exclude: '\.(html|htm)$|^docs/STATUS\.md$'
+        exclude: '\.(html|htm|gz)$|^docs/STATUS\.md$'
       - id: check-yaml
         # Helm templates use Go template syntax that isn't valid YAML
         # to a basic parser. Excluded from this hook; rely on

@@ -1369,9 +1369,11 @@ JACKPOT adopts external open-source components where they fill capability gaps. 
 | **TESSy AMR record-format export** | ECDC | Spec | Year 2+ | EU bridge for European deployments |
 | **NCBI SRA Human Scrubber (HRRT)** | NCBI | Public domain | Shipped | Already integrated as `ingest_scrubber.nf` |
 
-### 21.2 PHIN VADS — urgency note
+### 21.2 PHIN VADS — snapshot taken
 
-PHIN VADS (Public Health Information Network Vocabulary Access and Distribution System) sunsets November 30, 2026. JACKPOT must pull the vocabularies into the schema submodule as static reference data **before that date**. This is on the critical path for any deployments that rely on PHIN VADS-anchored surveillance terms.
+PHIN VADS (Public Health Information Network Vocabulary Access and Distribution System) sunsets November 30, 2026, along with every other PHIN system, and CDC has named no successor. The vocabularies are snapshotted as static reference data at `schema/schema/phinvads/`, produced by `scripts/pull_phinvads.py`; `schema/schema/phinvads/manifest.json` carries the provenance and the counts, and `schema/schema/phinvads/README.md` explains what was deliberately left out and why.
+
+Acquisition and integration are separate problems with separate deadlines. Only the acquisition had one, and it is done — **nothing reads the snapshot yet**. Wiring PHIN VADS-anchored terms into the LinkML schema or into validation is unscheduled work that can happen at any time, because the data is now local. Do not read the presence of these files as an integration.
 
 ---
 
