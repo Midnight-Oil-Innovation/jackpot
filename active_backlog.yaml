@@ -3527,7 +3527,9 @@ sessions:
       Nothing in the backend reads it yet - that is deliberate, and is the
       remaining work, tracked separately once a consumer exists.
     phase: p0_series
-    status: open
+    status: shipped
+    merged_at: "2026-09-02"
+    merge_sha: "b5505c4"
     depends_on: []
     blocked_by_external:
     parallel_safe: true
@@ -3552,6 +3554,11 @@ sessions:
       excluded - they outlive the sunset, have their own publishers, and carry
       redistribution terms that do not belong in an AGPL-3.0 tree without a
       deliberate decision. SNOMED CT alone is 47 MB from this API.
+
+      Shipped in PR #205: 1999/1999 value sets, 221/221 code systems, 33 CDC-arc
+      concept files (116,463 concepts), 19 MB gzipped. Only the ACQUISITION is
+      done. No consumer exists, by design - a follow-up item gets written when
+      one is wanted, and it has no deadline now that the data is local.
 
   - id: B-EUK-COINFECT-SENTINEL
     title: '"Screened, none found" sentinel for coinfection_organisms'
