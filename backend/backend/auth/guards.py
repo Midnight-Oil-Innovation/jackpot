@@ -34,12 +34,16 @@ def get_current_user(request: Request) -> dict:
         return (
             rows[0]
             if rows
+            # No legacy role flags. This dict used to carry
+            # is_platform_admin=True and that was how the fallback identity
+            # got its authority; since M2-B1 nothing decides on the flag, so
+            # the fallback's authority is whatever grants user 1 holds. Adding
+            # the key back would not restore a bypass, it would only re-create
+            # a field that reads like one (M2-DROP-PRE slice 5).
             else {
                 "id": 1,
                 "email": settings.mock_user_email,
                 "name": "Dev User",
-                "is_platform_admin": True,
-                "is_data_analyst": False,
                 "is_active": True,
                 "organization_id": 1,
             }
@@ -69,8 +73,7 @@ def get_current_user(request: Request) -> dict:
         raise HTTPException(status_code=401, detail="Invalid token type.")
 
     rows = execute_query(
-        "SELECT id, email, name, is_platform_admin, is_data_analyst, "
-        "is_active, organization_id FROM users "
+        "SELECT id, email, name, is_active, organization_id FROM users "
         "WHERE id = :uid AND is_active = TRUE LIMIT 1",
         {"uid": payload["sub"]},
     )
