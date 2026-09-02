@@ -147,6 +147,60 @@ def test_the_analyst_flag_is_rebuilt_from_the_grant(rebuilt):
     )
 
 
+def test_a_lab_scoped_analyst_capability_does_not_reconstruct_a_global_flag():
+    """Scope is load-bearing in the reconstruction, not decoration.
+
+    ``is_data_analyst`` was a deployment-wide flag and
+    ``surveillance_officer`` is an Instance-scope preset, so a lab-scoped
+    ``anomaly:review`` must not come back as a global analyst. No preset
+    issues one today, but a direct grant could — and widening a downgrade is
+    how a schema rollback turns into a privilege grant.
+
+    Pinned because a review proposed removing exactly this predicate.
+    """
+    uid = execute_write(
+        "INSERT INTO users (email, name, organization_id, is_active) "
+        "VALUES ('recon-labscoped@example.org', 'Lab Scoped', 1, TRUE) "
+        "ON CONFLICT (email) DO UPDATE SET is_active = TRUE RETURNING id",
+    )[0]["id"]
+    engine, _ = _get_engine()
+    try:
+        with engine.begin() as conn:
+            conn.execute(
+                text(
+                    "INSERT INTO authz_capability_grants "
+                    "(principal_id, capability, scope_ref, source) "
+                    "VALUES (:p, :cap, 'instance://self/org/1/lab/1', 'direct')"
+                ),
+                {"p": str(uid), "cap": ANALYST_PROBE},
+            )
+            conn.execute(
+                text(
+                    "ALTER TABLE users ADD COLUMN IF NOT EXISTS "
+                    "is_data_analyst BOOLEAN NOT NULL DEFAULT FALSE"
+                )
+            )
+            conn.execute(
+                text(RECONSTRUCT.format(column="is_data_analyst")),
+                {"cap": ANALYST_PROBE, "scope": INSTANCE_SCOPE},
+            )
+            row = (
+                conn.execute(text("SELECT is_data_analyst FROM users WHERE id = :i"), {"i": uid})
+                .mappings()
+                .one()
+            )
+        assert row["is_data_analyst"] is False, (
+            "a lab-scoped grant reconstructed a deployment-wide analyst flag"
+        )
+    finally:
+        with engine.begin() as conn:
+            conn.execute(text("ALTER TABLE users DROP COLUMN IF EXISTS is_data_analyst"))
+        execute_write(
+            "DELETE FROM authz_capability_grants WHERE principal_id = :p", {"p": str(uid)}
+        )
+        execute_write("DELETE FROM users WHERE id = :i", {"i": uid})
+
+
 def test_a_principal_holding_nothing_comes_back_with_neither_flag(rebuilt):
     row = _flags(rebuilt["plain"])
     assert row["is_platform_admin"] is False

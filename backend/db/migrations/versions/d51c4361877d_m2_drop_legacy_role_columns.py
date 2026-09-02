@@ -26,10 +26,17 @@ there, so ``downgrade()`` re-adds the columns and reconstructs their values
 from ``authz_capability_grants``. The reconstruction keys on a capability
 that is unique to each Instance preset at the instance root:
 
-  ``user:manage``    -> instance_administrator only. Held by ``lab_lead``
-                       too, but only ever at a LAB scope, and the WHERE
-                       clause pins ``scope_ref = 'instance://self'``.
-  ``anomaly:review`` -> surveillance_officer only, at any scope.
+  ``user:manage``    -> instance_administrator only at Instance scope. Held
+                       by ``lab_lead`` too, but only ever at a LAB scope.
+  ``anomaly:review`` -> surveillance_officer only, and no lab preset holds it.
+
+**Both queries pin ``scope_ref = 'instance://self'``, including the analyst
+one.** That is not redundant belt-and-braces on the second: the columns were
+GLOBAL flags, and ``surveillance_officer`` is an Instance-scope preset, so a
+lab-scoped ``anomaly:review`` — which no preset issues today, but a direct
+grant could — must NOT reconstruct as a deployment-wide data analyst.
+Dropping the predicate would widen the reconstruction, and widening is the
+direction that turns a downgrade into a privilege grant.
 
 Deliberately NOT ``sample:read_surveillance``: both Instance presets hold
 it, so it cannot tell them apart. That is the same trap slice 8's first
