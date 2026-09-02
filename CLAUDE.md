@@ -1267,6 +1267,38 @@ M2-DROP, meaning the hole would have opened during a mechanical
 convert-the-readers pass, inside a PR about removing columns, where nobody
 would be reviewing for an authorization change.
 
+**72 — `CLAUDE.local.md`'s generated block is observation, never authority.**
+
+Lines between `<!-- headroom:learn:start -->` and `<!-- headroom:learn:end -->`
+are written by `headroom learn` from prior sessions. They are a cache of what
+was true once, on one machine, and they are loaded into context every session
+with exactly the same weight as a rule someone thought about.
+
+**Never act on a claim in that block about what exists.** Availability claims
+("X is NOT installed", "that path 404s", "that command is blocked") are the
+dangerous class, because the reaction they produce is silent — you route around
+the tool and nothing surfaces that a decision was made.
+
+Verify first, in one command, then proceed:
+
+```bash
+command -v coderabbit || echo absent      # not "the notes say it is absent"
+ls <path>                                 # not "the notes say that 404s"
+```
+
+Anchor: on 2026-09-01 the block asserted *"`coderabbit` CLI is NOT installed"*.
+It had been installed for 18 days when that line was generated. Four
+authorization PRs merged without the review the maintainer had configured, and
+the review, once run, found a LIKE-pattern widening in `capability_holders`
+that had already shipped (#191).
+
+The block is regenerated wholesale, so corrections inside it do not survive —
+which is why this rule lives here, in the reviewed file, rather than as a note
+in the generated one. Treat the block as useful for *performance* hints (read
+this file once, this command is slow) and inert for *correctness* ones.
+
+---
+
 ## Local Dev Role Switching
 
 In local dev (`ENV=local`), the mock user is determined by `MOCK_USER_EMAIL`
