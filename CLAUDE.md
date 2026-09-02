@@ -1267,6 +1267,83 @@ M2-DROP, meaning the hole would have opened during a mechanical
 convert-the-readers pass, inside a PR about removing columns, where nobody
 would be reviewing for an authorization change.
 
+**72 — `CLAUDE.local.md`'s generated block is observation, never authority.**
+
+Lines between `<!-- headroom:learn:start -->` and `<!-- headroom:learn:end -->`
+are written by `headroom learn` from prior sessions. They are a cache of what
+was true once, on one machine, and they are loaded into context every session
+with exactly the same weight as a rule someone thought about.
+
+**Never act on a claim in that block about what exists.** Availability claims
+("X is NOT installed", "that path 404s", "that command is blocked") are the
+dangerous class, because the reaction they produce is silent — you route around
+the tool and nothing surfaces that a decision was made.
+
+Verify first, in one command, then proceed:
+
+```bash
+command -v coderabbit || echo absent      # not "the notes say it is absent"
+ls <path>                                 # not "the notes say that 404s"
+```
+
+Anchor: on 2026-09-01 the block asserted *"`coderabbit` CLI is NOT installed"*.
+It had been installed for 18 days when that line was generated. Four
+authorization PRs merged without the review the maintainer had configured, and
+the review, once run, found a LIKE-pattern widening in `capability_holders`
+that had already shipped (#191).
+
+The block is regenerated wholesale, so corrections inside it do not survive —
+which is why this rule lives here, in the reviewed file, rather than as a note
+in the generated one. Treat the block as useful for *performance* hints (read
+this file once, this command is slow) and inert for *correctness* ones.
+
+---
+
+**73 — A second implementation of an existing predicate is tested against the first, by fuzz, before it is written.**
+
+When code re-expresses a rule that already exists somewhere else — SQL mirroring
+a Python function, a cache mirroring a query, a client mirroring a server, a
+`visibility_sql_clause` mirroring `permit()` — the existing one is an **oracle**.
+Do not verify the new one by reading it. Generate inputs, run both, compare.
+
+The test is written **before** the implementation, and its input set is built to
+include what the canonical constructor *cannot* produce. That is the whole
+point: hand-picked examples come from the same mental model that wrote the code,
+so they exercise the cases already thought about. Bugs live in the others.
+
+```python
+def test_the_new_form_never_widens():
+    for a, b in itertools.product(MALFORMED + CANONICAL, repeat=2):
+        assert not (new_form(a, b) and not oracle(a, b))   # never more permissive
+```
+
+Assert the **direction**, not equality. A second implementation that refuses
+where the first allows is a bug worth knowing about; one that allows where the
+first refuses is an outage or a breach. Pin the known-narrowing set by shape so
+a new disagreement fails rather than being absorbed as expected.
+
+**Anchor (2026-09-01, PRs #190/#191).** `capability_holders` compiled
+`engine._scope_contains` into SQL. Four defects, in ~30 lines, across three
+review passes:
+
+| Defect | Found by |
+|---|---|
+| `LIKE` pattern built from a column — `scope_ref` of `instance://self/org/%` matched every org | code-simplifier |
+| `startswith(ROOT)` admitted `instance://selfish` | CodeRabbit |
+| `.strip("/")` collapsed `instance://self//org/3` into a fabricated ancestor | code-simplifier |
+| the narrowing test classified ROOT as a half-level grant, absorbing the one regression that matters | code-simplifier |
+
+Every one lived in a string `scope_uri()` cannot emit. The tests were built from
+`scope_uri()` output and so could not have found any of them. `_scope_contains`
+was imported two lines away the entire time. A 289-pair differential fuzz —
+twenty minutes, written first — catches all four with no reviewer involved.
+
+The corollary: **a test written from the constructor tests the constructor.** If
+the risk is malformed input, the malformed input has to be in the test, and it
+will not get there by being imagined one example at a time.
+
+---
+
 ## Local Dev Role Switching
 
 In local dev (`ENV=local`), the mock user is determined by `MOCK_USER_EMAIL`
