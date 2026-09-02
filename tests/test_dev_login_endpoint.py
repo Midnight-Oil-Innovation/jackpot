@@ -42,8 +42,9 @@ async def test_dev_login_local_mode_creates_user_and_returns_payload():
         assert resp.status_code == 200, resp.text
         body = resp.json()
         assert body["user"]["email"] == email
-        assert body["user"]["is_platform_admin"] is False
-        assert body["user"]["is_data_analyst"] is False
+        # A lab role carries no Instance-scope preset: its authority comes
+        # from the membership grants, not from anything at the instance root.
+        assert body["instance_preset"] is None
         assert body["active_role"] == "Lab Collaborator"
         assert body["membership"]["permission_group"] == "Lab Collaborator"
         assert body["membership"]["is_lab_director"] is False
@@ -87,9 +88,21 @@ async def test_dev_login_existing_user_role_update():
             )
         assert resp.status_code == 200
         body = resp.json()
-        assert body["user"]["is_platform_admin"] is True
+        assert body["instance_preset"] == "instance_administrator"
         assert body["membership"] is None
 
+        # The grants are the assignment. The legacy column is still written
+        # so reseed() stays consistent, and M2-DROP deletes both that write
+        # and this assertion.
+        uid = execute_query("SELECT id FROM users WHERE email = :e", {"e": email})[0]["id"]
+        held = {
+            r["capability"]
+            for r in execute_query(
+                "SELECT capability FROM authz_capability_grants WHERE principal_id = :p",
+                {"p": str(uid)},
+            )
+        }
+        assert "user:manage" in held, held
         rows = execute_query(
             "SELECT is_platform_admin FROM users WHERE email = :e",
             {"e": email},

@@ -15,10 +15,12 @@ pinned over source. The fallback dict is different — it IS the return value of
 ``get_current_user`` on the local branch, so it is asserted against the real
 call.
 
-The three real consumers of the columns are deliberately NOT covered here.
-They each issue their own SELECT and are M2-DROP's problem, not slice 5's:
-``routers/auth.py``'s dev-login response, ``routers/users.py``'s
-``RETURNING *``, and the frontend reading ``GET /api/v1/users/me``.
+The three consumers this file deliberately left alone at slice 5 —
+``routers/auth.py``'s dev-login response, ``routers/users.py``'s PATCH
+contract, and the frontend reading ``GET /api/v1/users/me`` — were retired
+by slices 6, 7 and 8 respectively. What remains anywhere in production is
+WRITES: ``auth.py`` and ``users.py`` keep the columns in step because
+``reseed()`` reads them, and M2-DROP deletes the writes with the columns.
 """
 
 from __future__ import annotations

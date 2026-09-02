@@ -72,7 +72,7 @@ def _ensure_platform_admin() -> None:
         "/api/v1/auth/dev-login",
         {"email": "admin@example.org", "role": "Platform Admin"},
     )
-    if not body.get("user", {}).get("is_platform_admin"):
+    if body.get("instance_preset") != "instance_administrator":
         print("could not switch to Platform Admin via dev-login", file=sys.stderr)
         sys.exit(2)
 

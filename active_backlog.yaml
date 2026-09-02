@@ -2743,96 +2743,58 @@ sessions:
       after the reader vanished; replaced, plus a narrowing pair (grant without
       flag IS alerted, flag without grant is NOT) that the seeded
       both-at-once admin could never have caught.
-      Slice 5 SHIPPED: the reads with no reader. guards.py's get_current_user
-      SELECT and imports.py's CSV-import user lookup both pulled both columns into
-      the dict they return, and nothing anywhere consumed either value — the three
-      real consumers (auth.py's dev-login response, users.py's RETURNING *, the
-      frontend via GET /users/me) each issue their own SELECT. Same shape as slice
-      3: readers with no call site, removable at zero conversion cost. The local-dev
-      fallback identity also advertised is_platform_admin: True, which conferred
-      nothing after M2-B1 but made a possibly-grantless id=1 read as an admin to
-      anyone inspecting it; CLAUDE.md's Local Dev Role Switching section said the
-      same thing and is corrected. Pinned by
-      tests/authz/test_identity_carries_no_legacy_flags.py, which asserts over
-      source text because a dead read has no runtime observable — verified to fail
-      (3 of 5) when either flag is re-added, since a test written against the code
-      it describes otherwise proves nothing (Rule 73).
+      Slice 8 SHIPPED — M2-DROP-PRE IS COMPLETE. dev-login was the last
+      role-ASSIGNMENT site. Its `role` param keeps the six APGAP names: those
+      are Critical Rule 1's sacred values, they name permission_groups rows,
+      and they are the vocabulary the E-1 UAT matrix drives — none of that
+      ends at M2-DROP. What ends is the boolean pair they were stored as. New
+      INSTANCE_ROLE_PRESETS bridges the two live vocabularies (the twin of
+      MEMBERSHIP_PRESETS for the roles that are not lab-scoped) and OUTLIVES
+      the drop, unlike INSTANCE_PRESET_FLAGS. _DEV_LOGIN_GLOBAL_ROLES is
+      derived from it so a role can never be accepted without a preset to
+      issue. The response reports instance_preset beside membership — the two
+      halves of what a session may do, at the two scopes that can carry it —
+      and `user` is identity only. Removing the response booleans made the
+      SELECT/RETURNING columns and the dict mutation dead, so those went too
+      (slice 5's shape, one file later). tests/e2e/scripts/
+      register_user_lab_project.py follows.
 
-      Slice 6 SHIPPED: the frontend off the column, and two bugs it was hiding.
-      The plan was "/me returns held capabilities"; reading the two consumers said
-      neither wants one. access_requests.py pre-filtered on directorship-or-admin
-      before calling GET /sample-access/requests, which since M2-B7 already scopes
-      to "your own, plus any request you hold access:approve_request over" — so the
-      pre-filter was redundant AND wrong twice: a grant-holding non-director hit an
-      early return and never issued the request, and a caller who was both admin
-      and director fell into the per-lab loop and saw only those labs. Deleted; the
-      server is the authority. pipelines.py gated the deactivate/archive controls
-      on is_platform_admin while the server's _may_manage admits an instance grant,
-      a lab grant at owner_lab_id, OR the registrant — per-row, so no flat
-      capability list can answer it. ByopPipelineRead now carries a computed
-      can_manage, uniformly on all 9 endpoints rather than hardcoded True on the
-      ones that already proved it (that would be a second implementation of
-      _may_manage, Rule 73). session.py's is_platform_admin() and
-      my_director_lab_ids() deleted, both callerless afterwards. Red-green verified
-      on all three: the two page tests fail against the pre-slice frontend, and the
-      can_manage registrant test fails when can_manage is reverted to the old
-      is_platform_admin answer.
+      NO PRODUCTION READER OF EITHER COLUMN REMAINS. What is left in
+      backend/backend is writes and one SELECT feeding a write: auth.py and
+      users.py write the columns so reseed() stays consistent, and reseed.py
+      reads them because translating them is its job. That is precisely
+      M2-DROP's inventory and nothing else.
 
-      Slice 7 SHIPPED: PATCH /users/{id} assigns a preset, not a flag pair.
-      Breaking contract change — is_platform_admin / is_data_analyst are gone from
-      UserUpdate, replaced by instance_preset taking a name from access_model.md
-      §8.2 (or an explicit null to remove the role, detected via model_fields_set
-      since exclude_none cannot distinguish null from absent). New INSTANCE_PRESETS
-      frozenset is deliberately a SUBSET of PRESET_GRANTS and is enforced in
-      sync_instance_preset, not only at the route: lab_lead is a real preset and an
-      invalid thing to issue at the instance root, where its deletion:approve and
-      sample:read_unscrubbed would reach every sample on the deployment. That
-      constant outlives M2-DROP; INSTANCE_PRESET_FLAGS, which maps each preset to
-      its canonical flag pair, does not — it exists only while reseed() still reads
-      the columns. INSTANCE_PRESETS is DERIVED from that map rather than written
-      out beside it: two literals that must agree can disagree, and the
-      module-level assert this replaced is stripped by python -O, absent exactly
-      where a mismatch would matter most. At M2-DROP it becomes a literal
-      frozenset in the same commit, and forgetting fails at import. The route
-      still WRITES the columns for the same reason, so the row and the grants agree
-      until the drop removes both.
-      Old-contract rejection is explicit rather than incidental: Pydantic ignores
-      unknown fields, so {"is_platform_admin": true} would otherwise 200 having
-      assigned nothing, leaving the caller believing they promoted someone who
-      holds none of it. UserUpdate sets extra="forbid" and it 422s. The first
-      version of that test only covered a body containing ONLY the legacy field,
-      which missed the worse cases: a partly-valid body 200s on the valid part
-      while discarding the role, and {instance_preset, is_data_analyst} would
-      have assigned a role other than the one asked for. Now parametrized over
-      all three. Red-green verified on both boundaries that matter —
-      widening validation from INSTANCE_PRESETS to PRESET_GRANTS turns all three
-      lab-preset cases red. test_admin_flag_wins_over_analyst_flag became a
-      round-trip property test on instance_preset() x INSTANCE_PRESET_FLAGS: the
-      both-flags precedence is no longer reachable through the API (a preset is
-      singular) but stays load-bearing for dev-login and reseed.
+      Verified by red-green at every slice, not by reading: slice 8 stubs out
+      sync_instance_preset and four tests go red, including one asserting the
+      response cannot name a role the principal does not hold.
 
+      HANDOFF TO M2-DROP, corrected against the tree at 2026-09-02:
+        - DELETE, in one commit with the column drop: the UPDATE/INSERT in
+          auth.py (~462-499), the two updates[] assignments in users.py (~208),
+          INSTANCE_PRESET_FLAGS, sync_instance_grants, and instance_preset().
+          INSTANCE_PRESETS must survive — inline it as a literal frozenset in
+          the same commit, since it is currently DERIVED from the map being
+          deleted and forgetting fails at import (which is the intent).
+        - reseed() becomes historical-only. Two migrations call it; both run
+          before any drop on a fresh DB, and after the drop it can never run
+          again. Say so in its docstring or someone will discover it.
+        - 46 test files reference the flags. NOT all convertible:
+          tests/authz/preflight.py's legacy_ladder and
+          legacy_visibility_sql_clause read them deliberately as the frozen
+          pre-M2 oracle the divergence registry compares against, and build
+          them from the Persona dataclass rather than a DB SELECT — so they
+          survive the drop untouched. Converting them destroys the comparison
+          that makes the registry mean anything.
+        - Most of the rest are INSERT INTO users (... is_platform_admin ...)
+          fixtures, which are mechanical.
 
-      REMAINING, per site:
-        - auth.py:446-485/590  the last role-ASSIGNMENT site. dev-login writes
-          both columns via sync_instance_grants and its response returns them;
-          its `role` param is already name-shaped ("Platform Admin"), so the
-          work is mapping that vocabulary onto preset names and dropping the
-          flags from the response body. tests/e2e/scripts/
-          register_user_lab_project.py:75 reads them and follows.
-        - users.py still WRITES the two columns (not exposes them) so reseed()
-          stays consistent; that write is M2-DROP's to delete, together with
-          INSTANCE_PRESET_FLAGS and sync_instance_grants.
-        - 138 test references across 41 files. NOT all convertible:
-          tests/authz/preflight.py's legacy_ladder and legacy_visibility_sql_clause
-          read the flags deliberately, as the frozen pre-M2 oracle the divergence
-          registry compares against. They build them from the Persona dataclass,
-          not a DB SELECT, so they survive the column drop untouched.
       reseed() reads the columns BY DESIGN and two migrations call it. Ordering
       holds on a fresh DB (both run before any drop), but after the drop
       reseed() can never run again — it becomes historical-only, and that
       should be stated in its docstring rather than discovered.
     phase: access_model_redesign
-    status: open
+    status: shipped
     depends_on:
       - M2
       - M3
@@ -2920,7 +2882,7 @@ sessions:
       (a1c7d94e6b28) again immediately before the drop if any legacy write
       path is still live at that point.
     phase: access_model_redesign
-    status: blocked
+    status: open
     depends_on:
       - M2
       - M3
@@ -2943,7 +2905,11 @@ sessions:
     pr_title_function:
     branch_name_template: m2-drop-legacy-columns
     role_framing:
-    notes: "Blocked on M3 rather than merely sequenced after it: the endpoint capability map assigns the deletion-lifecycle
+    notes: "UNBLOCKED 2026-09-02: M2-DROP-PRE is complete through slice 8 (dev-login),
+      and no production reader of either column remains. Read M2-DROP-PRE's HANDOFF
+      section for this item's real inventory — the per-site list in short_description
+      predates slices 3-8 and is stale in both directions. Was blocked on M3 rather
+      than merely sequenced after it: the endpoint capability map assigns the deletion-lifecycle
       checks (samples.py 643/652/717/734, deletion.py:184) to M3's sovereignty policies, and M3 depends_on M2. Dropping the
       columns before M3 converts those checks would break them. The M2 entry originally contained this work on the premise
       that nothing read the columns; see M2's notes for why that was wrong. access_model.md §10 (greenfield, no shim) still

@@ -15,7 +15,12 @@ from backend.auth.oauth import (
     issue_refresh_token,
     register_refresh_token,
 )
-from backend.authz.reseed import sync_instance_grants, sync_membership_grants
+from backend.authz.reseed import (
+    INSTANCE_PRESET_BY_ROLE,
+    INSTANCE_PRESET_FLAGS,
+    sync_instance_preset,
+    sync_membership_grants,
+)
 from backend.config import get_settings
 from backend.credentials import credentials
 from backend.database import execute_query, execute_write, get_db_dep
@@ -401,7 +406,9 @@ _DEV_LOGIN_LAB_ROLES = {
     "Lab Reader": ("Lab Reader", False),
     "Bioinformatics User": ("Bioinformatics User", False),
 }
-_DEV_LOGIN_GLOBAL_ROLES = frozenset({"Platform Admin", "Data Analyst"})
+# Derived from the role→preset map so a role can never be accepted here
+# without a preset to issue for it.
+_DEV_LOGIN_GLOBAL_ROLES = frozenset(INSTANCE_PRESET_BY_ROLE)
 _DEV_LOGIN_ALL_ROLES = _DEV_LOGIN_GLOBAL_ROLES | frozenset(_DEV_LOGIN_LAB_ROLES)
 
 
@@ -438,18 +445,32 @@ def _validate_dev_login_payload(payload: "DevLoginBody") -> tuple[str, str | Non
     return email, role
 
 
+def _instance_preset_for(role: str | None) -> str | None:
+    """The Instance-scope preset a dev-login role assigns, if any.
+
+    One derivation: the response reports what was assigned rather than
+    recomputing it beside the assignment, so the two cannot disagree.
+    """
+    return INSTANCE_PRESET_BY_ROLE.get(role) if role else None
+
+
 def _get_or_create_dev_user(
     email: str, name: str | None, role: str | None, db: Any
 ) -> tuple[dict, bool]:
-    """Look up the dev-login user by email, updating role flags if the
-    caller specified a role, or create one against the first organization.
-    Raises HTTPException(500) if no organization exists. Returns (user, created)."""
-    is_platform_admin = role == "Platform Admin"
-    is_data_analyst = role == "Data Analyst"
+    """Look up the dev-login user by email, assigning the Instance-scope
+    preset if the caller specified a global role, or create one against the
+    first organization. Raises HTTPException(500) if no organization exists.
+    Returns (user, created).
+
+    The role name is APGAP's and stays (Critical Rule 1); what it maps to is
+    a preset. The legacy columns are still written because ``reseed()`` reads
+    them until M2-DROP — the row and the grants have to agree — but nothing
+    decides on them, and the preset is what issues the capabilities.
+    """
+    preset = _instance_preset_for(role)
+    is_platform_admin, is_data_analyst = INSTANCE_PRESET_FLAGS[preset] if preset else (False, False)
     rows = execute_query(
-        "SELECT id, email, name, is_platform_admin, is_data_analyst, "
-        "is_active, organization_id "
-        "FROM users WHERE email = :e LIMIT 1",
+        "SELECT id, email, name, is_active, organization_id FROM users WHERE email = :e LIMIT 1",
         {"e": email},
         conn=db,
     )
@@ -461,17 +482,10 @@ def _get_or_create_dev_user(
                 {"pa": is_platform_admin, "da": is_data_analyst, "uid": user["id"]},
                 conn=db,
             )
-            user["is_platform_admin"] = is_platform_admin
-            user["is_data_analyst"] = is_data_analyst
-            # Writing the flags is the role assignment, so it has to issue the
-            # grants — dev-login exists to drive the full RBAC matrix from a
-            # script, and a role that grants nothing drives nothing.
-            sync_instance_grants(
-                db,
-                user_id=user["id"],
-                is_platform_admin=is_platform_admin,
-                is_data_analyst=is_data_analyst,
-            )
+            # Assigning the role is what issues the grants — dev-login exists
+            # to drive the full RBAC matrix from a script, and a role that
+            # grants nothing drives nothing.
+            sync_instance_preset(db, user_id=user["id"], preset=preset)
         return user, False
 
     org_rows = execute_query("SELECT id FROM organizations ORDER BY id LIMIT 1", {}, conn=db)
@@ -485,8 +499,7 @@ def _get_or_create_dev_user(
         "INSERT INTO users (email, name, organization_id, "
         "is_platform_admin, is_data_analyst) "
         "VALUES (:e, :n, :org, :pa, :da) "
-        "RETURNING id, email, name, is_platform_admin, is_data_analyst, "
-        "is_active, organization_id",
+        "RETURNING id, email, name, is_active, organization_id",
         {
             "e": email,
             "n": name or email.split("@", 1)[0],
@@ -497,12 +510,7 @@ def _get_or_create_dev_user(
         conn=db,
     )
     created_user = new_rows[0]
-    sync_instance_grants(
-        db,
-        user_id=created_user["id"],
-        is_platform_admin=is_platform_admin,
-        is_data_analyst=is_data_analyst,
-    )
+    sync_instance_preset(db, user_id=created_user["id"], preset=preset)
     return created_user, True
 
 
@@ -607,13 +615,27 @@ def dev_login(
     s.mock_user_email = email
 
     return {
+        # Identity only. The is_platform_admin / is_data_analyst booleans this
+        # object used to carry are gone: nothing has decided on them since
+        # M2-B1, so returning them described storage rather than authority.
         "user": {
             "id": user["id"],
             "email": user["email"],
             "name": user["name"],
-            "is_platform_admin": user["is_platform_admin"],
-            "is_data_analyst": user["is_data_analyst"],
         },
+        # The two halves of what this REQUEST assigned, at the two scopes
+        # that can carry it. `membership` is the lab-scoped authority;
+        # `instance_preset` is the instance-scoped one, null for a lab role
+        # because a lab role grants nothing at the instance root.
+        #
+        # Request-derived, like `active_role`: calling dev-login with no role
+        # reports null here even for a principal who already holds a preset.
+        # That is a narrowing from the old `user.is_platform_admin`, which was
+        # read off the row. Accepted because all three fields describe what
+        # this call did, and every documented UAT invocation passes a role —
+        # but it is a different question from "what does this user hold",
+        # which is `GET /users/me` plus the grants table.
         "membership": membership_info,
+        "instance_preset": _instance_preset_for(role),
         "active_role": role,
     }
