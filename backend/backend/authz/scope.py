@@ -90,14 +90,27 @@ def ancestor_scopes(scope: str) -> list[str]:
     # A bare `startswith(ROOT)` admits `instance://selfish`, which would both
     # claim the root as an ancestor — disagreeing with `_scope_contains` — and
     # split into a fabricated `instance://self/ish/org`.
-    if trimmed != ROOT and not trimmed.startswith(f"{ROOT}/"):
+    if not trimmed.startswith(f"{ROOT}/"):
         return [trimmed]
-    segments = trimmed[len(ROOT) :].strip("/").split("/")
+    # Split AFTER the separator rather than stripping it: an empty segment is a
+    # real segment. `.strip("/")` collapsed `instance://self//org/3` into
+    # `instance://self/org/3` — an ancestor `_scope_contains` does not agree
+    # with, and therefore a grant the SQL would honour and the engine would
+    # refuse. Third instance of this shape in one file's history; the pattern
+    # is always "normalize on the way in and reconstruct something wider".
+    segments = trimmed[len(ROOT) + 1 :].split("/")
     scopes = [ROOT]
     # Segments run level/id, level/id — step in pairs so a partial trailing
     # segment contributes nothing rather than half a level.
     for i in range(0, len(segments) - 1, 2):
         scopes.append(f"{scopes[-1]}/{segments[i]}/{segments[i + 1]}")
+    # `_scope_contains` is reflexive and the pair loop is not: a trailing
+    # half-level (`.../org`) stops the loop short of the scope itself, so a
+    # grant written at that exact scope would not find its own resource. The
+    # non-ROOT branch above already returns `[trimmed]` for this reason;
+    # without this the two branches disagree about reflexivity.
+    if scopes[-1] != trimmed:
+        scopes.append(trimmed)
     return scopes
 
 

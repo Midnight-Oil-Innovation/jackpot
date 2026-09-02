@@ -113,9 +113,27 @@ _CAPABILITY_HOLDERS_SQL = (
     "AND u.is_active = TRUE "
     "AND g.conditions = CAST('{}' AS JSONB) "
     "AND (g.not_after IS NULL OR g.not_after > :now) "
-    "AND RTRIM(g.scope_ref, '/') = ANY(:ancestors) "
+    # Two branches because _scope_contains has two, and they do not treat a
+    # trailing slash alike: its equality branch compares raw strings, while its
+    # prefix branch rstrips the grant. A single RTRIM'd comparison collapsed
+    # them and made a grant stored as `instance://self/` match the resource
+    # `instance://self`, which the engine refuses — small, but a widening.
+    "AND (g.scope_ref = :exact OR RTRIM(g.scope_ref, '/') = ANY(CAST(:strict AS TEXT[]))) "
     "ORDER BY u.id"
 )
+
+
+def strict_ancestors(scope: str) -> list[str]:
+    """``scope``'s ancestors excluding itself — the second SQL branch's input.
+
+    Public, and imported by ``tests/authz/test_scope.py``, because the test
+    that proves the query never widens has to model the query's parameters.
+    A second copy of this line in the test would be free to drift from the
+    one the query actually uses, and the drift would be invisible: the test
+    would keep passing while describing a query nobody runs.
+    """
+    trimmed = scope.rstrip("/")
+    return [a for a in ancestor_scopes(scope) if a != trimmed]
 
 
 def capability_holders(capability: str, scope: str, *, conn: Any = None) -> list[int]:
@@ -144,7 +162,8 @@ def capability_holders(capability: str, scope: str, *, conn: Any = None) -> list
         _CAPABILITY_HOLDERS_SQL,
         {
             "cap": capability,
-            "ancestors": ancestor_scopes(scope),
+            "exact": scope,
+            "strict": strict_ancestors(scope),
             "now": datetime.now(UTC),
         },
         conn=conn,
