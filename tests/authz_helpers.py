@@ -93,8 +93,14 @@ def sync_grants_from_legacy_roles() -> None:
                 lab_id=r["lab_id"],
                 group_name=r["group_name"],
             )
+        # Both tables: reseed.py notes a request can write sample_access_grants
+        # and nothing else, so a sample reachable only through the grants table
+        # would otherwise never be reconciled.
         samples = conn.execute(
-            text("SELECT DISTINCT sample_id FROM sample_access_requests")
+            text(
+                "SELECT sample_id FROM sample_access_requests "
+                "UNION SELECT sample_id FROM sample_access_grants"
+            )
         ).scalars()
         for sample_id in list(samples):
             sync_sample_access_grants(conn, sample_id=sample_id)

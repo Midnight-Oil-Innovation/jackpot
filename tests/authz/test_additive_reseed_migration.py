@@ -41,9 +41,15 @@ def test_baseline_admin_holds_instance_scoped_grants():
     """The seeded platform admin comes out of the migration with the §8.2 preset."""
     # Post-M2-DROP the baseline admin is identified by the grant the additive
     # migration issued, not by a column. Same subject, surviving evidence.
+    # Joined to users and pinned to the seeded account. Selecting any holder
+    # of user:manage at instance scope was fine when the column identified
+    # exactly one; the suite now creates instance admins of its own, so
+    # admins[0] would assert against whichever one the planner returned.
     admins = execute_query(
-        "SELECT DISTINCT principal_id AS id FROM authz_capability_grants "
-        "WHERE capability = 'user:manage' AND scope_ref = 'instance://self'"
+        "SELECT u.id FROM users u "
+        "JOIN authz_capability_grants g ON g.principal_id = u.id::text "
+        "WHERE g.capability = 'user:manage' AND g.scope_ref = 'instance://self' "
+        "AND u.email = 'admin@example.org'"
     )
     assert admins, "baseline migration seeds a platform admin"
 

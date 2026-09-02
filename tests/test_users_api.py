@@ -1,4 +1,5 @@
 import pytest
+from authz_helpers import ADMIN_PRESET, grant_instance_preset
 
 from backend.config import get_settings
 from backend.database import execute_query, execute_write
@@ -26,7 +27,12 @@ def _ensure_user(
         {"e": email, "n": name, "act": is_active},
     )
     row = execute_query("SELECT id FROM users WHERE email = :e", {"e": email})
-    return row[0]["id"]
+    uid = row[0]["id"]
+    # Wired rather than deleted even though no caller passes True today: a
+    # parameter that silently does nothing is worse than no parameter, and
+    # every sibling helper in the suite now confers the role this way.
+    grant_instance_preset(uid, ADMIN_PRESET if is_platform_admin else None)
+    return uid
 
 
 def _cleanup_user(email: str) -> None:
