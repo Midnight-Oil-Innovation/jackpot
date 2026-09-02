@@ -42,8 +42,11 @@ def _migration():
     SQL that no longer existed.
     """
     root = Path(__file__).resolve().parents[2]
-    path = root / "backend/db/migrations/versions/d51c4361877d_m2_drop_legacy_role_columns.py"
+    # Globbed on the revision id: alembic keys on that, not on the slug, so a
+    # rename of the descriptive half should not break this.
+    path = next(root.glob("backend/db/migrations/versions/d51c4361877d_*.py"))
     spec = importlib.util.spec_from_file_location("m2_drop_migration", path)
+    assert spec is not None and spec.loader is not None, f"revision file unreadable: {path}"
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
@@ -51,17 +54,18 @@ def _migration():
 
 _MIGRATION = _migration()
 INSTANCE_SCOPE = _MIGRATION.INSTANCE_SCOPE
-RECONSTRUCT = _MIGRATION.RECONSTRUCT_SQL
-RECONSTRUCT_FROM = dict(_MIGRATION.RECONSTRUCT_FROM)
-ADMIN_PROBE = RECONSTRUCT_FROM["is_platform_admin"]
-ANALYST_PROBE = RECONSTRUCT_FROM["is_data_analyst"]
+PROBES = dict(_MIGRATION.RECONSTRUCT_FROM)
+ADMIN_PROBE = PROBES["is_platform_admin"]
+ANALYST_PROBE = PROBES["is_data_analyst"]
 
 
-def test_the_probe_capabilities_each_belong_to_exactly_one_preset():
+def test_the_probe_capabilities_each_belong_to_exactly_one_instance_preset():
     """The premise the reconstruction rests on.
 
-    If a probe capability were held by both Instance presets it could not tell
-    them apart, and the downgrade would mislabel one as the other. This is the
+    "Instance preset" is the qualifier that matters: ``user:manage`` is also
+    in ``lab_lead``, but only ever at a LAB scope, which the reconstruction's
+    scope predicate excludes. If a probe were held by both INSTANCE presets it
+    could not tell them apart, and the downgrade would mislabel one as the other. This is the
     trap M2-DROP-PRE slice 8's first test fell into with
     ``sample:read_surveillance``, so it is asserted rather than assumed.
     """
@@ -76,67 +80,53 @@ def test_the_probe_capabilities_each_belong_to_exactly_one_preset():
     )
 
 
+def _user(email: str, name: str) -> int:
+    return execute_write(
+        "INSERT INTO users (email, name, organization_id, is_active) "
+        "VALUES (:e, :n, 1, TRUE) "
+        "ON CONFLICT (email) DO UPDATE SET is_active = TRUE RETURNING id",
+        {"e": email, "n": name},
+    )[0]["id"]
+
+
+def _drop_legacy_columns(conn) -> None:
+    for column, _ in _MIGRATION.RECONSTRUCT_FROM:
+        conn.execute(text(f"ALTER TABLE users DROP COLUMN IF EXISTS {column}"))
+
+
 @pytest.fixture
 def rebuilt():
-    """Two principals holding one preset each, then the downgrade's SQL."""
-    admin_id = execute_write(
-        "INSERT INTO users (email, name, organization_id, is_active) "
-        "VALUES ('recon-admin@example.org', 'Recon Admin', 1, TRUE) "
-        "ON CONFLICT (email) DO UPDATE SET is_active = TRUE RETURNING id",
-    )[0]["id"]
-    officer_id = execute_write(
-        "INSERT INTO users (email, name, organization_id, is_active) "
-        "VALUES ('recon-officer@example.org', 'Recon Officer', 1, TRUE) "
-        "ON CONFLICT (email) DO UPDATE SET is_active = TRUE RETURNING id",
-    )[0]["id"]
-    plain_id = execute_write(
-        "INSERT INTO users (email, name, organization_id, is_active) "
-        "VALUES ('recon-plain@example.org', 'Recon Plain', 1, TRUE) "
-        "ON CONFLICT (email) DO UPDATE SET is_active = TRUE RETURNING id",
-    )[0]["id"]
+    """Three principals holding one Instance role each, then the downgrade.
 
+    Calls the migration's own ``reconstruct()`` rather than re-issuing its
+    statements: the ADD COLUMN DDL is as much a part of the downgrade as the
+    UPDATE, and a test that pastes ``BOOLEAN NOT NULL DEFAULT FALSE`` stops
+    noticing when the column type changes.
+    """
+    ids = {
+        "admin": _user("recon-admin@example.org", "Recon Admin"),
+        "officer": _user("recon-officer@example.org", "Recon Officer"),
+        "plain": _user("recon-plain@example.org", "Recon Plain"),
+    }
     engine, _ = _get_engine()
-    with engine.begin() as conn:
-        sync_instance_preset(conn, user_id=admin_id, preset="instance_administrator")
-        sync_instance_preset(conn, user_id=officer_id, preset="surveillance_officer")
-        sync_instance_preset(conn, user_id=plain_id, preset=None)
-
-        # downgrade(): add the columns back, then rebuild from the grants.
-        conn.execute(
-            text(
-                "ALTER TABLE users ADD COLUMN IF NOT EXISTS "
-                "is_platform_admin BOOLEAN NOT NULL DEFAULT FALSE"
+    try:
+        with engine.begin() as conn:
+            sync_instance_preset(conn, user_id=ids["admin"], preset="instance_administrator")
+            sync_instance_preset(conn, user_id=ids["officer"], preset="surveillance_officer")
+            sync_instance_preset(conn, user_id=ids["plain"], preset=None)
+            _MIGRATION.reconstruct(conn)
+        yield ids
+    finally:
+        # try/finally, not a bare post-yield: a failure during SETUP would
+        # otherwise leave the columns ADDed on the shared users table for the
+        # rest of the session — a schema mutation every other authz test sees.
+        with engine.begin() as conn:
+            _drop_legacy_columns(conn)
+        for uid in ids.values():
+            execute_write(
+                "DELETE FROM authz_capability_grants WHERE principal_id = :p", {"p": str(uid)}
             )
-        )
-        conn.execute(
-            text(
-                "ALTER TABLE users ADD COLUMN IF NOT EXISTS "
-                "is_data_analyst BOOLEAN NOT NULL DEFAULT FALSE"
-            )
-        )
-        conn.execute(
-            text(RECONSTRUCT.format(column="is_platform_admin")),
-            {"cap": ADMIN_PROBE, "scope": INSTANCE_SCOPE},
-        )
-        conn.execute(
-            text(RECONSTRUCT.format(column="is_data_analyst")),
-            {"cap": ANALYST_PROBE, "scope": INSTANCE_SCOPE},
-        )
-
-    yield {"admin": admin_id, "officer": officer_id, "plain": plain_id}
-
-    with engine.begin() as conn:
-        conn.execute(text("ALTER TABLE users DROP COLUMN IF EXISTS is_platform_admin"))
-        conn.execute(text("ALTER TABLE users DROP COLUMN IF EXISTS is_data_analyst"))
-    for uid in rebuilt_ids(admin_id, officer_id, plain_id):
-        execute_write(
-            "DELETE FROM authz_capability_grants WHERE principal_id = :p", {"p": str(uid)}
-        )
-        execute_write("DELETE FROM users WHERE id = :i", {"i": uid})
-
-
-def rebuilt_ids(*ids: int) -> tuple[int, ...]:
-    return ids
+            execute_write("DELETE FROM users WHERE id = :i", {"i": uid})
 
 
 def _flags(user_id: int) -> dict:
@@ -171,11 +161,7 @@ def test_a_lab_scoped_analyst_capability_does_not_reconstruct_a_global_flag():
 
     Pinned because a review proposed removing exactly this predicate.
     """
-    uid = execute_write(
-        "INSERT INTO users (email, name, organization_id, is_active) "
-        "VALUES ('recon-labscoped@example.org', 'Lab Scoped', 1, TRUE) "
-        "ON CONFLICT (email) DO UPDATE SET is_active = TRUE RETURNING id",
-    )[0]["id"]
+    uid = _user("recon-labscoped@example.org", "Lab Scoped")
     engine, _ = _get_engine()
     try:
         with engine.begin() as conn:
@@ -187,16 +173,7 @@ def test_a_lab_scoped_analyst_capability_does_not_reconstruct_a_global_flag():
                 ),
                 {"p": str(uid), "cap": ANALYST_PROBE},
             )
-            conn.execute(
-                text(
-                    "ALTER TABLE users ADD COLUMN IF NOT EXISTS "
-                    "is_data_analyst BOOLEAN NOT NULL DEFAULT FALSE"
-                )
-            )
-            conn.execute(
-                text(RECONSTRUCT.format(column="is_data_analyst")),
-                {"cap": ANALYST_PROBE, "scope": INSTANCE_SCOPE},
-            )
+            _MIGRATION.reconstruct(conn)
             row = (
                 conn.execute(text("SELECT is_data_analyst FROM users WHERE id = :i"), {"i": uid})
                 .mappings()
@@ -207,7 +184,62 @@ def test_a_lab_scoped_analyst_capability_does_not_reconstruct_a_global_flag():
         )
     finally:
         with engine.begin() as conn:
-            conn.execute(text("ALTER TABLE users DROP COLUMN IF EXISTS is_data_analyst"))
+            _drop_legacy_columns(conn)
+        execute_write(
+            "DELETE FROM authz_capability_grants WHERE principal_id = :p", {"p": str(uid)}
+        )
+        execute_write("DELETE FROM users WHERE id = :i", {"i": uid})
+
+
+@pytest.mark.parametrize(
+    "extra_columns,extra_values,label",
+    [
+        ("not_after", "NOW() - INTERVAL '1 day'", "expired"),
+        ("conditions", "CAST('{\"x\": 1}' AS JSONB)", "conditional"),
+    ],
+    ids=["expired", "conditional"],
+)
+def test_a_grant_the_engine_would_refuse_does_not_reconstruct_a_flag(
+    extra_columns, extra_values, label
+):
+    """The reconstruction must refuse what ``permit()`` refuses.
+
+    ``principal._CAPABILITY_HOLDERS_SQL`` is the reviewed answer to "who holds
+    capability C at scope S", and it excludes expired grants and conditional
+    ones — a condition is a fact about a request, and a downgrade has no
+    request to evaluate it against. The first version of this migration
+    omitted both predicates, so an expired ``user:manage`` would have restored
+    ``is_platform_admin = TRUE``: a schema rollback handing out a role.
+
+    No preset issues such a grant (``sync_instance_preset`` sets
+    ``not_after=None`` and no conditions), which is exactly the reasoning that
+    was judged insufficient for scope. A direct grant can.
+    """
+    uid = _user(f"recon-{label}@example.org", f"Recon {label.title()}")
+    engine, _ = _get_engine()
+    try:
+        with engine.begin() as conn:
+            conn.execute(
+                text(
+                    "INSERT INTO authz_capability_grants "
+                    f"(principal_id, capability, scope_ref, source, {extra_columns}) "
+                    f"VALUES (:p, :cap, :scope, 'direct', {extra_values})"
+                ),
+                {"p": str(uid), "cap": ADMIN_PROBE, "scope": INSTANCE_SCOPE},
+            )
+            _MIGRATION.reconstruct(conn)
+            row = (
+                conn.execute(text("SELECT is_platform_admin FROM users WHERE id = :i"), {"i": uid})
+                .mappings()
+                .one()
+            )
+        assert row["is_platform_admin"] is False, (
+            f"a {label} grant reconstructed the admin flag — the downgrade is "
+            "more permissive than the engine it is rebuilding from"
+        )
+    finally:
+        with engine.begin() as conn:
+            _drop_legacy_columns(conn)
         execute_write(
             "DELETE FROM authz_capability_grants WHERE principal_id = :p", {"p": str(uid)}
         )
