@@ -250,7 +250,7 @@ def test_advisory_sees_an_id_behind_a_conventional_commit_prefix(tmp_path, monke
 
 
 def test_advisory_does_not_flag_a_parent_id_on_a_child_ids_commit(tmp_path, monkeypatch):
-    """``M2-DROP`` must not match inside ``M2-DROP-PRE``.
+    r"""``M2-DROP`` must not match inside ``M2-DROP-PRE``.
 
     A word boundary sits between "P" and "-", so the obvious ``\b`` anchor
     reads every M2-DROP-PRE commit as evidence that M2-DROP shipped — and this
@@ -261,6 +261,34 @@ def test_advisory_does_not_flag_a_parent_id_on_a_child_ids_commit(tmp_path, monk
 
     assert check_backlog.git_evidence_advisories([entry("M2-DROP", "open")]) == []
     assert len(check_backlog.git_evidence_advisories([entry("M2-DROP-PRE", "open")])) == 1
+
+
+@pytest.mark.parametrize(
+    "subject,should_match",
+    [
+        ("M2-DROP: drop the columns", True),
+        ("feat: M2-DROP — drop the columns", True),
+        ("feat(authz): M2-DROP — drop the columns (#202)", True),
+        ("feat(authz)!: M2-DROP — breaking", True),
+        ("chore(backlog): mark M2-DROP shipped (merge abc1234)", True),
+        # Deliberate misses, each documented on _evidence_pattern.
+        ("fix(authz): M2-DROP-PRE slice 8 — dev-login", False),
+        ('Revert "feat(authz): M2-DROP — drop the columns"', False),
+        ("feat(db): FED-D — table + M2-DROP follow-up", False),
+        ("docs: mention M2-DROP in passing", False),
+        ("feat(p0h-h3): per-launch override (M2-DROP stub)", False),
+    ],
+)
+def test_evidence_pattern_shapes(subject, should_match):
+    """The matcher's shape table, without spawning a git repo per case.
+
+    Extracted so a new commit convention costs one row here instead of another
+    ``git init``. The False rows are as load-bearing as the True ones: each is
+    a shape that, if it started matching, would re-admit the noise this check
+    was narrowed to exclude.
+    """
+    matched = bool(check_backlog._evidence_pattern("M2-DROP").match(subject))
+    assert matched is should_match, subject
 
 
 def test_advisory_is_silent_outside_a_git_repo(tmp_path, monkeypatch):

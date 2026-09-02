@@ -185,6 +185,33 @@ def check(entries: list[dict]) -> list[Violation]:
     return out
 
 
+#: Conventional-commit prefix: type, optional (scope), optional !, colon.
+#: A fact about the repo's commit convention, not about any one entry.
+_CC_PREFIX = r"(?:\w+(?:\([^)]*\))?!?:\s*)?"
+
+
+def _evidence_pattern(eid: str) -> re.Pattern[str]:
+    """Subjects that suggest ``eid`` shipped. Anchored: use with ``.match``.
+
+    ``(?![\\w-])`` rather than ``\b``: a word boundary sits between "P" and
+    "-", so ``M2-DROP\b`` matches inside ``M2-DROP-PRE``. This repo has at
+    least three such parent/child pairs — M2-DROP, B-CWB-MB-1, M2-B2 — each
+    shipped weeks apart from its child. Check 4 spells the same boundary.
+
+    Known and deliberate misses, recorded so nobody "fixes" them into false
+    positives:
+
+    * **Bundled ids.** ``feat(db): FED-D — ... + B-CWB-FED-1 ...`` fires for
+      the first id only, and this history really does bundle. Matching a
+      non-leading id is what re-admits "(P0c stub)" — the noise this check was
+      narrowed to exclude — so the second id stays out of reach.
+    * **Reverts.** ``Revert "feat(authz): M2-DROP — ..."`` does not match, and
+      should not: a revert is not evidence of shipping.
+    """
+    eid_re = rf"{re.escape(eid)}(?![\w-])"
+    return re.compile(rf"(?:{_CC_PREFIX}{eid_re}|.*\bmark {eid_re} shipped\b)", re.IGNORECASE)
+
+
 def git_evidence_advisories(entries: list[dict], ref: str = "HEAD") -> list[Violation]:
     """Non-shipped entries whose id opens a merged commit subject.
 
@@ -221,16 +248,9 @@ def git_evidence_advisories(entries: list[dict], ref: str = "HEAD") -> list[Viol
         eid = entry.get("id")
         if not eid or len(eid) < 3 or entry.get("status") == "shipped":
             continue
-        # (?![\w-]) not \b: a word boundary sits between "P" and "-", so
-        # "M2-DROP\b" matches inside "M2-DROP-PRE" and would flag the parent
-        # id on every child's commit.
-        eid_re = rf"{re.escape(eid)}(?![\w-])"
-        # Optional conventional-commit prefix: type, optional (scope),
-        # optional !, colon.
-        prefix = r"(?:\w+(?:\([^)]*\))?!?:\s*)?"
-        pattern = re.compile(rf"^(?:{prefix}{eid_re}|.*\bmark {eid_re} shipped\b)", re.IGNORECASE)
+        pattern = _evidence_pattern(eid)
         for sha, subject in commits:
-            if pattern.search(subject):
+            if pattern.match(subject):
                 out.append(
                     Violation(
                         eid,
