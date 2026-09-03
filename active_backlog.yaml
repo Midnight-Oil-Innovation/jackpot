@@ -3681,8 +3681,12 @@ sessions:
       - pipelines/pipelines/mira/
       - pipelines/pipelines/phoenix/
     test_files:
+      - pipelines/tests/test_mira_parsers.py
+      - pipelines/tests/test_phoenix_parsers.py
       - pipelines/tests/test_pipeline_integration_e2e.py
       - pipelines/tests/test_version_check.py
+      - pipelines/tests/fixtures/mira/
+      - pipelines/tests/fixtures/phoenix/
     source_of_truth_views:
       - docs/architecture.md
     pr_title_template:
@@ -3716,6 +3720,32 @@ sessions:
       whether the Session J jackpot_wrapper.nf + register.py shim is the
       intended end state or an abandoned first approach. Nothing in the
       backend requires it.
+
+      Test paths corrected again 2026-09-03, second error of the same kind.
+      A new wrapper registers in THREE places, and the shared files are the
+      smaller half of the work:
+
+        1. pipelines/tests/test_<name>_parsers.py - a per-wrapper test file.
+           Every one of the ten wrappers has one.
+        2. A PipelineCase row in _PIPELINE_CASES in
+           test_pipeline_integration_e2e.py, plus a fixture tree at
+           pipelines/tests/fixtures/<name>/. A row without a fixture fails
+           an explicit assertion (the test collects wrappers whose
+           FIXTURE_ROOT / fixture_subdir does not exist). expects_results
+           additionally catches a fixture that parses to nothing.
+        3. A (module, upstream) row in _WRAPPED_PIPELINES in
+           test_version_check.py, which parametrizes over it.
+
+      BLOCKED in practice on fixture input, even though status stays open.
+      The existing fixtures are hand-written, not captured runs - 54 files,
+      212 KB, synthetic values in genuinely real formats (the mycosnp Snippy
+      fixture is real snippy 4.6.0 key/value shape with invented counts). So
+      the bar is not a full pipeline run: it is the correct directory
+      nesting, the correct output filenames, and the real header line of
+      each TSV the parser reads. Nothing in this repo can confirm those for
+      MIRA-NF or PHoeNIx, and a session that invents them will write
+      fixtures and parsers from one guess, so its tests pass while proving
+      nothing. Get the two layouts before running this.
 
   - id: B-BATCH-LOCK-DIAG
     title: repo_lock blocks forever and silently; a stale holder reads as a hang
