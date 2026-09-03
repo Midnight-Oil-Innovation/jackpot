@@ -3696,6 +3696,63 @@ sessions:
       pipeline_catalog.id SERIAL mismatch tracked as todo.md "Item #8" -
       registering new zoo entries runs through that same resolution chain.
 
+  - id: B-BATCH-LOCK-DIAG
+    title: repo_lock blocks forever and silently; a stale holder reads as a hang
+    short_description: |
+      jackpot_batch.py cmd_prepare wraps worktree creation in
+      `with repo_lock()`, a blocking flock on
+      ~/Projects/operation_jackpot/.jackpot.lock with no timeout and no
+      message. When another process holds the lock, prepare prints
+      "Creating worktrees" and stops there indefinitely, which is
+      indistinguishable from slow work.
+    phase: p0_series
+    status: open
+    depends_on: []
+    blocked_by_external:
+    parallel_safe: true
+    parallel_safe_reason: "Tooling outside the repo tree. Touches no backend module, no test, no migration."
+    effort_sessions: 0.5
+    primary_files:
+      - "~/Projects/operation_jackpot/scripts_jackpot/jackpot_batch.py"
+    test_files:
+      - "~/Projects/operation_jackpot/scripts_jackpot/test_jackpot_batch.py"
+    source_of_truth_views: []
+    pr_title_template:
+    branch_name_template:
+    role_framing:
+    notes: >
+      Anchor, 2026-09-03: `jackpot-batch prepare B-ZOO-MIRA-PHOENIX` was
+      run twice and appeared to hang, the first time for over ten minutes
+      before being killed. The diagnosis offered at the time - that it was
+      sitting in the API-backed prompt-fill step - was wrong. It never got
+      past cmd_prepare's `with repo_lock()`. The lock was held by an
+      interactive zsh (PID 7598) started three days earlier on 2026-08-31,
+      with the lockfile open on ten descriptors, almost certainly an
+      aborted jackpot-loop or cc-jackpot run that leaked the FD. Confirmed
+      by fcntl.flock(LOCK_EX | LOCK_NB) returning BlockingIOError; the
+      maintainer killed the shell and the lock freed immediately.
+
+      The defect is not the leaked FD - that will happen again whenever a
+      session is aborted mid-lock. The defect is that a held lock and slow
+      work produce identical output, so the only way to tell them apart is
+      to know to reach for lsof and fcntl. That is the Critical Rule 74
+      shape applied to a tool rather than a test: the failure mode is
+      silence, and silence is what success also looks like.
+
+      Fix: try flock(LOCK_EX | LOCK_NB) first. On BlockingIOError, print
+      the holding PID and its start time (lsof on the lockfile, or
+      psutil), then either block with a visible "waiting for <pid>"
+      message or exit non-zero with instructions. A --force or
+      --lock-timeout flag is worth considering but is not the point; the
+      point is that the tool should say what it is waiting for.
+
+      Note this file's primary_files sit OUTSIDE the jackpot repo, in
+      ~/Projects/operation_jackpot/scripts_jackpot/. No other entry does
+      that. scripts/check_backlog.py does not validate path existence, so
+      it passes, but if a future guard starts checking paths this entry is
+      the one that breaks - move it to a tooling backlog then rather than
+      deleting the record.
+
   - id: B-EUK-COINFECT-SENTINEL
     title: '"Screened, none found" sentinel for coinfection_organisms'
     short_description: |
