@@ -3757,7 +3757,9 @@ sessions:
       "Creating worktrees" and stops there indefinitely, which is
       indistinguishable from slow work.
     phase: p0_series
-    status: open
+    status: shipped
+    merged_at: "2026-09-03"
+    merge_sha: "d0d960f"
     depends_on: []
     blocked_by_external:
     parallel_safe: true
@@ -3803,6 +3805,28 @@ sessions:
       it passes, but if a future guard starts checking paths this entry is
       the one that breaks - move it to a tooling backlog then rather than
       deleting the record.
+
+      Shipped 2026-09-03 as d0d960f. That SHA is in the scripts_jackpot
+      repo, NOT this one - scripts_jackpot is local-only with no remote, so
+      there is no PR and no merge commit here to point at. A reader who
+      greps this repo's history for d0d960f will find nothing; that is
+      expected, not a broken record.
+
+      repo_lock now tries LOCK_EX | LOCK_NB first and, on contention,
+      prints each holder's pid, start time and command before falling back
+      to the same blocking acquire. Behaviour is unchanged for a caller
+      that simply has to wait. _lock_holders is diagnostics-only: every
+      failure path returns [] rather than raising, so a missing lsof cannot
+      stop the caller taking the lock. Three tests drive a subprocess that
+      really holds an flock rather than a mock, and were confirmed to
+      discriminate by reverting to the pre-fix form - the contended test
+      goes red, the uncontended one stays green.
+
+      Left undone, and worth its own entry: test_jackpot_batch.py's
+      TestWorktreePath::test_matches_every_zsh_worktree_literal fails
+      because ~/.zshrc now builds the worktree path from ${slug} while the
+      test expects ${branch}. Pre-existing, unrelated to the lock, and
+      exactly the zsh/python drift that test exists to catch.
 
   - id: B-EUK-COINFECT-SENTINEL
     title: '"Screened, none found" sentinel for coinfection_organisms'
