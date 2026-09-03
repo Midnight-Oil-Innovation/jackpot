@@ -3560,6 +3560,142 @@ sessions:
       done. No consumer exists, by design - a follow-up item gets written when
       one is wanted, and it has no deadline now that the data is local.
 
+  - id: B-GA4GH-SERVICE-INFO
+    title: GA4GH service-info endpoint
+    short_description: |
+      GET /service-info per GA4GH service-info v1.0.0, unauthenticated at
+      the root beside /health, so a peer with no credentials can identify
+      the instance. Carved out of P0i as the one piece that was genuinely
+      missing, self-contained, and touching no shared module.
+    phase: p0_series
+    status: shipped
+    merged_at: "2026-09-03"
+    merge_sha: "TBD"
+    depends_on: []
+    blocked_by_external:
+    parallel_safe: true
+    parallel_safe_reason: "One endpoint in main.py plus four Settings fields. No auth path, no schema, no migration."
+    effort_sessions: 0.5
+    primary_files:
+      - backend/backend/main.py
+      - backend/backend/config.py
+    test_files:
+      - tests/test_service_info.py
+    source_of_truth_views:
+      - docs/architecture.md
+    pr_title_template:
+    branch_name_template: "feat/ga4gh-service-info"
+    role_framing:
+    notes: >
+      Deliberately outside the /api/v1 prefix of Critical Rule 6: the spec
+      fixes the path relative to the service base, and a JACKPOT-specific
+      path advertises nothing a GA4GH client can read. type.artifact is
+      "jackpot", not "drs"/"wes"/"beacon" - JACKPOT serves none of those
+      APIs, and claiming one would route a discovery client at endpoints
+      that do not exist. A test pins that negative.
+
+      One real defect found in review, not style: service_id and
+      host_organization_url relied on pydantic defaults, but an env var set
+      to the empty string beats a default and jackpot init writes
+      HOST_ORGANIZATION_NAME= unconditionally (cli/jackpot/init/writers.py).
+      A stock install would have served an empty GA4GH-required field -
+      non-conformant and silent. Every required field now re-applies its
+      fallback at the read site; tests/test_service_info.py covers the
+      blank-env shape and was confirmed to go red with the fallback
+      removed (Critical Rule 74).
+
+      No documentationUrl: the only available value is the repo URL, and
+      Critical Rule 55 names that org string in its forbidden list. The
+      field is optional in GA4GH.
+
+      Publishing host_organization_name diverges from
+      tests/test_i3c_public_settings.py, which forbids that value on the
+      unauthenticated /api/v1/settings/public dump. GA4GH requires
+      organization.name and discovery is the whole function of the
+      endpoint; the docstring records the divergence so the next reader
+      does not treat the I-3c test as policy and "fix" this.
+
+      Two stale rows in architecture.md 21.1 corrected in the same PR:
+      seqsender read "Adopt - Phase P0i" while fully wired, MycoSNP-NF read
+      "Adopt - Phase P0m" while sitting in the zoo with parsers. The 18.2
+      FAIR "Findable" row claimed met, citing this endpoint before it
+      existed - written from the plan, per Critical Rule 70.
+
+  - id: B-DRS-URI-1
+    title: DRS-style URI conventions - decide, then either resolve or reject
+    short_description: |
+      validator.py accepts drs:// alongside gs:// and s3://. Nothing
+      resolves it: backend/storage/ has gcs, s3 and local backends and no
+      DRS client. A file registered with a drs:// URI passes validation
+      and is unreadable by every downstream path.
+    phase: p0_series
+    status: open
+    depends_on: []
+    blocked_by_external:
+    parallel_safe: true
+    parallel_safe_reason: "Storage backend plus one validator branch. Touches no authorization path."
+    effort_sessions: 1
+    primary_files:
+      - backend/backend/validator.py
+      - backend/backend/storage/factory.py
+      - backend/backend/storage/base.py
+    test_files:
+      - tests/test_storage_drs.py
+    source_of_truth_views:
+      - docs/architecture.md
+    pr_title_template:
+    branch_name_template: "feat/drs-uri-resolution"
+    role_framing:
+    notes: >
+      architecture.md 21.1 rates this "Already 80% there; formalize as
+      standard". Grep says otherwise: the whole of DRS in this repo is one
+      string prefix in one validator branch (validator.py:387). Accepting
+      a scheme nothing can dereference is the weaker of the two options -
+      the decision is resolve or reject, and rejecting is one line if no
+      operator wants DRS ingest.
+
+      A DRS client is a real dependency decision (license plus deptrust per
+      the dependency policy) and DRS servers return signed URLs with their
+      own auth, so this is not the afternoon the doc implies. Size it after
+      deciding. The 18.2 FAIR row now states the real position rather than
+      claiming the scheme as met.
+
+  - id: B-ZOO-MIRA-PHOENIX
+    title: MIRA-NF and PHoeNIx pipeline wrappers in the zoo
+    short_description: |
+      The two remaining CDC pipelines in the P0i adoption list. Each needs
+      a wrapper directory matching the existing shape: jackpot_wrapper.nf,
+      per-output parsers emitting ParsedResult, apptainer_images.txt, and
+      SUPPORTED_PIPELINE_VERSIONS.
+    phase: p0_series
+    status: open
+    depends_on: []
+    blocked_by_external:
+    parallel_safe: true
+    parallel_safe_reason: "Two new directories under pipelines/pipelines/. No shared module edits beyond catalog registration."
+    effort_sessions: 2
+    primary_files:
+      - pipelines/pipelines/mira/
+      - pipelines/pipelines/phoenix/
+    test_files:
+      - tests/test_pipeline_parsers.py
+    source_of_truth_views:
+      - docs/architecture.md
+    pr_title_template:
+    branch_name_template: "feat/zoo-mira-phoenix"
+    role_framing:
+    notes: >
+      Real work, not a config edit: the parsers are written against actual
+      upstream output files, so each pipeline needs a sample output set to
+      write them from. MIRA-NF wraps IRMA (flu/SARS/RSV); PHoeNIx is
+      AMR/HAI bacteria. Follow pipelines/pipelines/mycosnp/ for the shape.
+      Ship one per PR - the two share no code and batching them only makes
+      the review harder.
+
+      Note the pipeline_default_profile.pipeline_id UUID vs
+      pipeline_catalog.id SERIAL mismatch tracked as todo.md "Item #8" -
+      registering new zoo entries runs through that same resolution chain.
+
   - id: B-EUK-COINFECT-SENTINEL
     title: '"Screened, none found" sentinel for coinfection_organisms'
     short_description: |
