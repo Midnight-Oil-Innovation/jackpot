@@ -325,6 +325,54 @@ async def _request_validation_to_envelope(
     )
 
 
+@app.get("/service-info")
+def service_info() -> dict:
+    """GA4GH service-info v1.0.0 (P0i).
+
+    Served unauthenticated at the root, like /health, because the point of
+    the endpoint is discovery by a peer that has no credentials yet. It is
+    deliberately outside the /api/v1 prefix of Critical Rule 6 — the spec
+    fixes the path relative to the service base, and a JACKPOT-specific
+    path would advertise nothing a GA4GH client knows how to read.
+
+    Publishing `host_organization_name` here is a deliberate divergence
+    from tests/test_i3c_public_settings.py, which forbids that same value
+    on the unauthenticated /api/v1/settings/public response under "no
+    operator identity". GA4GH requires `organization.name`, and being
+    identifiable to an unauthenticated peer is the entire function of this
+    endpoint. The I-3c rule is about a settings dump, not about identity.
+
+    `type.artifact` names JACKPOT, not a GA4GH standard API — rationale
+    and the assertion that holds it live in tests/test_service_info.py.
+
+    Every GA4GH-required field falls back to its neutral default here
+    rather than trusting Settings: an env var set to the empty string
+    beats a pydantic default, and `jackpot init` writes
+    HOST_ORGANIZATION_NAME= unconditionally (cli/jackpot/init/writers.py).
+    Without the fallbacks a stock install serves a non-conformant
+    document.
+    """
+    settings = get_settings()
+    body = {
+        "id": settings.service_id or "org.example.jackpot",
+        "name": "JACKPOT",
+        "type": {"group": "io.jackpot", "artifact": "jackpot", "version": "1"},
+        "organization": {
+            "name": settings.host_organization_name or "Example Organization",
+            "url": settings.host_organization_url or "https://example.org",
+        },
+        "version": __version__,
+        "description": (
+            "JACKPOT pathogen genomics platform for genomic epidemiology, "
+            "bioinformatics, and public health research."
+        ),
+        "environment": settings.env,
+    }
+    if settings.service_contact_url:
+        body["contactUrl"] = settings.service_contact_url
+    return body
+
+
 @app.get("/health")
 def health() -> JSONResponse:
     try:

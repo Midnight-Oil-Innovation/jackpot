@@ -31,7 +31,16 @@ class Settings(BaseSettings):
     credential_file_path: str = "~/.config/jackpot/credentials.yaml"
     credential_gcp_secret_prefix: str = "jackpot-cred-"
     credential_cache_ttl_seconds: int = 300
+    # Operator identity, published by GET /service-info (P0i). Operator-
+    # specific per Critical Rule 55, so every default is a neutral example
+    # value, not a JACKPOT-project one. service_id must be a reverse-domain
+    # string unique to the deployment. These defaults are NOT load-bearing:
+    # an env var set to the empty string beats a pydantic default, so
+    # main.py:service_info re-applies each fallback at the read site.
     host_organization_name: str = ""
+    service_id: str = "org.example.jackpot"
+    host_organization_url: str = "https://example.org"
+    service_contact_url: str = ""
     ncbi_api_key: str = ""
     jackpot_api_token: str = ""
     scheduler_enabled: bool = True
