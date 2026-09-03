@@ -380,8 +380,10 @@ def _check_numeric_ranges(data: dict, errors: list[str], warnings: list[str]) ->
 
 
 # Schemes a storage backend can actually dereference. Keep in step with
-# backend/storage/factory.py: recognising a scheme nothing can open tells a
-# submitter their URI is fine when no pipeline will ever read it.
+# backend/backend/storage/factory.py: recognising a scheme nothing can open
+# tells a submitter their URI is fine when no pipeline will ever read it.
+#
+# Must stay a tuple — str.startswith accepts only a tuple, not a list or set.
 #
 # drs:// was listed here until 2026-09-03 with no DRS client anywhere in the
 # tree (B-DRS-URI-1). The decision was to reject rather than resolve: a DRS
@@ -392,7 +394,7 @@ RESOLVABLE_URI_SCHEMES = ("gs://", "s3://")
 
 def _check_uri_schemes(data: dict, warnings: list[str]) -> None:
     """URI scheme check. Advisory — unrecognised schemes warn, never error."""
-    expected = ", ".join(s.rstrip(":/") + "://" for s in RESOLVABLE_URI_SCHEMES)
+    expected = ", ".join(RESOLVABLE_URI_SCHEMES)
     for uri_field in ("fastq_r1_uri", "fastq_r2_uri", "consensus_fasta_uri"):
         uri = data.get(uri_field)
         if uri and not uri.startswith(RESOLVABLE_URI_SCHEMES):
