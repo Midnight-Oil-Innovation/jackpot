@@ -3671,9 +3671,9 @@ sessions:
       apptainer_images.txt. No .nf file by default - only the Session J
       trio has one.
     phase: p0_series
-    status: open
+    status: blocked_external
     depends_on: []
-    blocked_by_external:
+    blocked_by_external: "Real MIRA-NF and PHoeNIx output layouts - directory nesting, output filenames, and the header line of each TSV the parser reads. Not obtainable from anything in this repo."
     parallel_safe: true
     parallel_safe_reason: "Two new directories under pipelines/pipelines/. No shared module edits beyond catalog registration."
     effort_sessions: 2
