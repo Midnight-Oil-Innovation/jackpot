@@ -3664,9 +3664,12 @@ sessions:
     title: MIRA-NF and PHoeNIx pipeline wrappers in the zoo
     short_description: |
       The two remaining CDC pipelines in the P0i adoption list. Each needs
-      a wrapper directory matching the existing shape: jackpot_wrapper.nf,
-      per-output parsers emitting ParsedResult, apptainer_images.txt, and
-      SUPPORTED_PIPELINE_VERSIONS.
+      a wrapper directory matching the shape all ten existing wrappers
+      share: a parsers/ package whose __init__ exports parse(),
+      collect_files() and the SUPPORTED_PIPELINE_VERSIONS constant, a
+      top-level __init__.py re-exporting those three, and
+      apptainer_images.txt. No .nf file by default - only the Session J
+      trio has one.
     phase: p0_series
     status: open
     depends_on: []
@@ -3678,7 +3681,8 @@ sessions:
       - pipelines/pipelines/mira/
       - pipelines/pipelines/phoenix/
     test_files:
-      - tests/test_pipeline_parsers.py
+      - pipelines/tests/test_pipeline_integration_e2e.py
+      - pipelines/tests/test_version_check.py
     source_of_truth_views:
       - docs/architecture.md
     pr_title_template:
@@ -3695,6 +3699,23 @@ sessions:
       Note the pipeline_default_profile.pipeline_id UUID vs
       pipeline_catalog.id SERIAL mismatch tracked as todo.md "Item #8" -
       registering new zoo entries runs through that same resolution chain.
+
+      Corrected 2026-09-03. This entry's first version was written from
+      pipelines/pipelines/README.md, which described the Session J-M plan
+      rather than the result: it promised a jackpot_wrapper.nf and a
+      SUPPORTED_PIPELINE_VERSIONS *file* in every wrapper directory. Seven
+      of ten wrappers have no .nf, the version list is a module constant,
+      and the tests live in pipelines/tests/ rather than tests/. The
+      session prompt generated from the bad entry duly instructed all four
+      wrong things while also saying "mirror mycosnp/ exactly". README
+      rewritten against the directories in the same PR. Critical Rule 70,
+      and a reminder that a README beside source sits outside
+      scripts/check_docs.py.
+
+      Open question the new wrapper must answer rather than inherit:
+      whether the Session J jackpot_wrapper.nf + register.py shim is the
+      intended end state or an abandoned first approach. Nothing in the
+      backend requires it.
 
   - id: B-BATCH-LOCK-DIAG
     title: repo_lock blocks forever and silently; a stale holder reads as a hang
