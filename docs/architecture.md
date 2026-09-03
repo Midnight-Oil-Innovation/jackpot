@@ -1184,7 +1184,7 @@ JACKPOT implements or interoperates with:
 
 | FAIR | Status | Notes |
 |---|---|---|
-| **F**indable | ✅ Met | Persistent IDs for samples and datasets; `/service-info` endpoint (P0i). **Not** DRS: `drs://` is accepted by `validator.py` and resolved by nothing — no storage backend handles the scheme. Formalizing it is open P0i work; Beacon v2 is Year 2+ |
+| **F**indable | ✅ Met | Persistent IDs for samples and datasets; `/service-info` endpoint (P0i). **Not** DRS: the `drs://` scheme was rejected on 2026-09-03 (B-DRS-URI-1) rather than resolved — no storage backend can dereference it. Beacon v2 is Year 2+ |
 | **A**ccessible | ✅ Met | Open API; AGPL-3.0 platform; data access via API token; signed URLs for direct download |
 | **I**nteroperable | ✅ Met (with continuing work) | LinkML schema with ontology anchoring; controlled vocabularies; PHA4GE alignment; PHES-ODM bridge (in progress) |
 | **R**eusable | ✅ Met | License metadata per sample (`data_use_terms`); DUO tags; citation requests on every sample |
@@ -1360,7 +1360,7 @@ JACKPOT adopts external open-source components where they fill capability gaps. 
 | **PHIN VADS vocabularies** | CDC | Data | Shipped | Snapshot committed under `schema/schema/phinvads/` ahead of the 2026-11-30 sunset (B-VADS-1). Acquisition only — no consumer reads it yet, see §21.2 |
 | **PHES-ODM data model** | Big-Life-Lab | MIT | Adopt — Phase P0m | Wastewater alignment for EU/Canadian deployments |
 | **GA4GH `/service-info`** | GA4GH | Apache-2.0 spec | Shipped | `GET /service-info` in `backend/backend/main.py`, unauthenticated at the root beside `/health` |
-| **DRS-style URI conventions** | GA4GH | Apache-2.0 spec | Open — Phase P0i | Validator-only: `drs://` is accepted by `validator.py` and resolved by no storage backend. Decide resolve-or-reject (B-DRS-URI-1) |
+| **DRS-style URI conventions** | GA4GH | Apache-2.0 spec | Rejected 2026-09-03 | Recognised by `validator.py` and dereferenceable by nothing. Rejected rather than resolved (B-DRS-URI-1): a DRS client is a dependency decision plus signed-URL auth, and no operator asked for it. Revisit alongside a real backend, never ahead of one |
 | **Sapporo-WES spike** | DDBJ | Apache-2.0 | Evaluate — Phase P0m (2-week spike) | Alternative to bespoke pipeline orchestration |
 | **Wave (self-hosted)** | Seqera | AGPL-3.0 | Adopt — Phase P0l | Container provisioning for pipelines; AGPL-on-AGPL clean |
 | **MultiQC** | Seqera | GPL-3.0 | Already in nf-core | Already used transitively |

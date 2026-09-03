@@ -1488,7 +1488,7 @@ class Sample(ConfiguredBaseModel):
     ncbi_submitted_at: Optional[datetime ] = Field(None)
     gisaid_submission_status: Optional[SubmissionStatusEnum] = Field(None, description="""GISAID EpiCoV/EpiFlu/EpiPox submission status""")
     gisaid_submitted_at: Optional[datetime ] = Field(None)
-    fastq_r1_uri: Optional[str] = Field(None, description="""Convenience field: URI of the primary (R1 or first) scrubbed read file. Populated automatically for simple 2-file paired runs. Supports gs:// (GCS) and drs:// (GA4GH DRS) schemes. Accepted extensions: .fastq, .fq, .fasta, .fa, .fna with optional .gz or .bz2 compression. For all other cases (multi-lane, nanopore, multiple unpaired), query the sample_files table for the complete file list.
+    fastq_r1_uri: Optional[str] = Field(None, description="""Convenience field: URI of the primary (R1 or first) scrubbed read file. Populated automatically for simple 2-file paired runs. Supports gs:// (GCS) and s3:// (S3-compatible) schemes. Accepted extensions: .fastq, .fq, .fasta, .fa, .fna with optional .gz or .bz2 compression. For all other cases (multi-lane, nanopore, multiple unpaired), query the sample_files table for the complete file list.
 """)
     fastq_r2_uri: Optional[str] = Field(None, description="""Convenience field: URI of the R2 FASTQ for simple paired runs. NULL for single-end, multi-lane, or nanopore samples. Query sample_files for the complete file list.
 """)
@@ -1672,7 +1672,7 @@ class HumanSample(Sample):
     ncbi_submitted_at: Optional[datetime ] = Field(None)
     gisaid_submission_status: Optional[SubmissionStatusEnum] = Field(None, description="""GISAID EpiCoV/EpiFlu/EpiPox submission status""")
     gisaid_submitted_at: Optional[datetime ] = Field(None)
-    fastq_r1_uri: Optional[str] = Field(None, description="""Convenience field: URI of the primary (R1 or first) scrubbed read file. Populated automatically for simple 2-file paired runs. Supports gs:// (GCS) and drs:// (GA4GH DRS) schemes. Accepted extensions: .fastq, .fq, .fasta, .fa, .fna with optional .gz or .bz2 compression. For all other cases (multi-lane, nanopore, multiple unpaired), query the sample_files table for the complete file list.
+    fastq_r1_uri: Optional[str] = Field(None, description="""Convenience field: URI of the primary (R1 or first) scrubbed read file. Populated automatically for simple 2-file paired runs. Supports gs:// (GCS) and s3:// (S3-compatible) schemes. Accepted extensions: .fastq, .fq, .fasta, .fa, .fna with optional .gz or .bz2 compression. For all other cases (multi-lane, nanopore, multiple unpaired), query the sample_files table for the complete file list.
 """)
     fastq_r2_uri: Optional[str] = Field(None, description="""Convenience field: URI of the R2 FASTQ for simple paired runs. NULL for single-end, multi-lane, or nanopore samples. Query sample_files for the complete file list.
 """)
@@ -1836,7 +1836,7 @@ class WildlifeSample(Sample):
     ncbi_submitted_at: Optional[datetime ] = Field(None)
     gisaid_submission_status: Optional[SubmissionStatusEnum] = Field(None, description="""GISAID EpiCoV/EpiFlu/EpiPox submission status""")
     gisaid_submitted_at: Optional[datetime ] = Field(None)
-    fastq_r1_uri: Optional[str] = Field(None, description="""Convenience field: URI of the primary (R1 or first) scrubbed read file. Populated automatically for simple 2-file paired runs. Supports gs:// (GCS) and drs:// (GA4GH DRS) schemes. Accepted extensions: .fastq, .fq, .fasta, .fa, .fna with optional .gz or .bz2 compression. For all other cases (multi-lane, nanopore, multiple unpaired), query the sample_files table for the complete file list.
+    fastq_r1_uri: Optional[str] = Field(None, description="""Convenience field: URI of the primary (R1 or first) scrubbed read file. Populated automatically for simple 2-file paired runs. Supports gs:// (GCS) and s3:// (S3-compatible) schemes. Accepted extensions: .fastq, .fq, .fasta, .fa, .fna with optional .gz or .bz2 compression. For all other cases (multi-lane, nanopore, multiple unpaired), query the sample_files table for the complete file list.
 """)
     fastq_r2_uri: Optional[str] = Field(None, description="""Convenience field: URI of the R2 FASTQ for simple paired runs. NULL for single-end, multi-lane, or nanopore samples. Query sample_files for the complete file list.
 """)
@@ -2002,7 +2002,7 @@ class CompanionAnimalSample(Sample):
     ncbi_submitted_at: Optional[datetime ] = Field(None)
     gisaid_submission_status: Optional[SubmissionStatusEnum] = Field(None, description="""GISAID EpiCoV/EpiFlu/EpiPox submission status""")
     gisaid_submitted_at: Optional[datetime ] = Field(None)
-    fastq_r1_uri: Optional[str] = Field(None, description="""Convenience field: URI of the primary (R1 or first) scrubbed read file. Populated automatically for simple 2-file paired runs. Supports gs:// (GCS) and drs:// (GA4GH DRS) schemes. Accepted extensions: .fastq, .fq, .fasta, .fa, .fna with optional .gz or .bz2 compression. For all other cases (multi-lane, nanopore, multiple unpaired), query the sample_files table for the complete file list.
+    fastq_r1_uri: Optional[str] = Field(None, description="""Convenience field: URI of the primary (R1 or first) scrubbed read file. Populated automatically for simple 2-file paired runs. Supports gs:// (GCS) and s3:// (S3-compatible) schemes. Accepted extensions: .fastq, .fq, .fasta, .fa, .fna with optional .gz or .bz2 compression. For all other cases (multi-lane, nanopore, multiple unpaired), query the sample_files table for the complete file list.
 """)
     fastq_r2_uri: Optional[str] = Field(None, description="""Convenience field: URI of the R2 FASTQ for simple paired runs. NULL for single-end, multi-lane, or nanopore samples. Query sample_files for the complete file list.
 """)
@@ -2169,7 +2169,7 @@ class LivestockSample(Sample):
     ncbi_submitted_at: Optional[datetime ] = Field(None)
     gisaid_submission_status: Optional[SubmissionStatusEnum] = Field(None, description="""GISAID EpiCoV/EpiFlu/EpiPox submission status""")
     gisaid_submitted_at: Optional[datetime ] = Field(None)
-    fastq_r1_uri: Optional[str] = Field(None, description="""Convenience field: URI of the primary (R1 or first) scrubbed read file. Populated automatically for simple 2-file paired runs. Supports gs:// (GCS) and drs:// (GA4GH DRS) schemes. Accepted extensions: .fastq, .fq, .fasta, .fa, .fna with optional .gz or .bz2 compression. For all other cases (multi-lane, nanopore, multiple unpaired), query the sample_files table for the complete file list.
+    fastq_r1_uri: Optional[str] = Field(None, description="""Convenience field: URI of the primary (R1 or first) scrubbed read file. Populated automatically for simple 2-file paired runs. Supports gs:// (GCS) and s3:// (S3-compatible) schemes. Accepted extensions: .fastq, .fq, .fasta, .fa, .fna with optional .gz or .bz2 compression. For all other cases (multi-lane, nanopore, multiple unpaired), query the sample_files table for the complete file list.
 """)
     fastq_r2_uri: Optional[str] = Field(None, description="""Convenience field: URI of the R2 FASTQ for simple paired runs. NULL for single-end, multi-lane, or nanopore samples. Query sample_files for the complete file list.
 """)
@@ -2335,7 +2335,7 @@ class VectorSample(Sample):
     ncbi_submitted_at: Optional[datetime ] = Field(None)
     gisaid_submission_status: Optional[SubmissionStatusEnum] = Field(None, description="""GISAID EpiCoV/EpiFlu/EpiPox submission status""")
     gisaid_submitted_at: Optional[datetime ] = Field(None)
-    fastq_r1_uri: Optional[str] = Field(None, description="""Convenience field: URI of the primary (R1 or first) scrubbed read file. Populated automatically for simple 2-file paired runs. Supports gs:// (GCS) and drs:// (GA4GH DRS) schemes. Accepted extensions: .fastq, .fq, .fasta, .fa, .fna with optional .gz or .bz2 compression. For all other cases (multi-lane, nanopore, multiple unpaired), query the sample_files table for the complete file list.
+    fastq_r1_uri: Optional[str] = Field(None, description="""Convenience field: URI of the primary (R1 or first) scrubbed read file. Populated automatically for simple 2-file paired runs. Supports gs:// (GCS) and s3:// (S3-compatible) schemes. Accepted extensions: .fastq, .fq, .fasta, .fa, .fna with optional .gz or .bz2 compression. For all other cases (multi-lane, nanopore, multiple unpaired), query the sample_files table for the complete file list.
 """)
     fastq_r2_uri: Optional[str] = Field(None, description="""Convenience field: URI of the R2 FASTQ for simple paired runs. NULL for single-end, multi-lane, or nanopore samples. Query sample_files for the complete file list.
 """)
@@ -2493,7 +2493,7 @@ class EnvironmentalSample(Sample):
     ncbi_submitted_at: Optional[datetime ] = Field(None)
     gisaid_submission_status: Optional[SubmissionStatusEnum] = Field(None, description="""GISAID EpiCoV/EpiFlu/EpiPox submission status""")
     gisaid_submitted_at: Optional[datetime ] = Field(None)
-    fastq_r1_uri: Optional[str] = Field(None, description="""Convenience field: URI of the primary (R1 or first) scrubbed read file. Populated automatically for simple 2-file paired runs. Supports gs:// (GCS) and drs:// (GA4GH DRS) schemes. Accepted extensions: .fastq, .fq, .fasta, .fa, .fna with optional .gz or .bz2 compression. For all other cases (multi-lane, nanopore, multiple unpaired), query the sample_files table for the complete file list.
+    fastq_r1_uri: Optional[str] = Field(None, description="""Convenience field: URI of the primary (R1 or first) scrubbed read file. Populated automatically for simple 2-file paired runs. Supports gs:// (GCS) and s3:// (S3-compatible) schemes. Accepted extensions: .fastq, .fq, .fasta, .fa, .fna with optional .gz or .bz2 compression. For all other cases (multi-lane, nanopore, multiple unpaired), query the sample_files table for the complete file list.
 """)
     fastq_r2_uri: Optional[str] = Field(None, description="""Convenience field: URI of the R2 FASTQ for simple paired runs. NULL for single-end, multi-lane, or nanopore samples. Query sample_files for the complete file list.
 """)
@@ -2685,7 +2685,7 @@ class WastewaterSample(EnvironmentalSample):
     ncbi_submitted_at: Optional[datetime ] = Field(None)
     gisaid_submission_status: Optional[SubmissionStatusEnum] = Field(None, description="""GISAID EpiCoV/EpiFlu/EpiPox submission status""")
     gisaid_submitted_at: Optional[datetime ] = Field(None)
-    fastq_r1_uri: Optional[str] = Field(None, description="""Convenience field: URI of the primary (R1 or first) scrubbed read file. Populated automatically for simple 2-file paired runs. Supports gs:// (GCS) and drs:// (GA4GH DRS) schemes. Accepted extensions: .fastq, .fq, .fasta, .fa, .fna with optional .gz or .bz2 compression. For all other cases (multi-lane, nanopore, multiple unpaired), query the sample_files table for the complete file list.
+    fastq_r1_uri: Optional[str] = Field(None, description="""Convenience field: URI of the primary (R1 or first) scrubbed read file. Populated automatically for simple 2-file paired runs. Supports gs:// (GCS) and s3:// (S3-compatible) schemes. Accepted extensions: .fastq, .fq, .fasta, .fa, .fna with optional .gz or .bz2 compression. For all other cases (multi-lane, nanopore, multiple unpaired), query the sample_files table for the complete file list.
 """)
     fastq_r2_uri: Optional[str] = Field(None, description="""Convenience field: URI of the R2 FASTQ for simple paired runs. NULL for single-end, multi-lane, or nanopore samples. Query sample_files for the complete file list.
 """)
@@ -2853,7 +2853,7 @@ class WaterSample(EnvironmentalSample):
     ncbi_submitted_at: Optional[datetime ] = Field(None)
     gisaid_submission_status: Optional[SubmissionStatusEnum] = Field(None, description="""GISAID EpiCoV/EpiFlu/EpiPox submission status""")
     gisaid_submitted_at: Optional[datetime ] = Field(None)
-    fastq_r1_uri: Optional[str] = Field(None, description="""Convenience field: URI of the primary (R1 or first) scrubbed read file. Populated automatically for simple 2-file paired runs. Supports gs:// (GCS) and drs:// (GA4GH DRS) schemes. Accepted extensions: .fastq, .fq, .fasta, .fa, .fna with optional .gz or .bz2 compression. For all other cases (multi-lane, nanopore, multiple unpaired), query the sample_files table for the complete file list.
+    fastq_r1_uri: Optional[str] = Field(None, description="""Convenience field: URI of the primary (R1 or first) scrubbed read file. Populated automatically for simple 2-file paired runs. Supports gs:// (GCS) and s3:// (S3-compatible) schemes. Accepted extensions: .fastq, .fq, .fasta, .fa, .fna with optional .gz or .bz2 compression. For all other cases (multi-lane, nanopore, multiple unpaired), query the sample_files table for the complete file list.
 """)
     fastq_r2_uri: Optional[str] = Field(None, description="""Convenience field: URI of the R2 FASTQ for simple paired runs. NULL for single-end, multi-lane, or nanopore samples. Query sample_files for the complete file list.
 """)
@@ -3019,7 +3019,7 @@ class AirSample(EnvironmentalSample):
     ncbi_submitted_at: Optional[datetime ] = Field(None)
     gisaid_submission_status: Optional[SubmissionStatusEnum] = Field(None, description="""GISAID EpiCoV/EpiFlu/EpiPox submission status""")
     gisaid_submitted_at: Optional[datetime ] = Field(None)
-    fastq_r1_uri: Optional[str] = Field(None, description="""Convenience field: URI of the primary (R1 or first) scrubbed read file. Populated automatically for simple 2-file paired runs. Supports gs:// (GCS) and drs:// (GA4GH DRS) schemes. Accepted extensions: .fastq, .fq, .fasta, .fa, .fna with optional .gz or .bz2 compression. For all other cases (multi-lane, nanopore, multiple unpaired), query the sample_files table for the complete file list.
+    fastq_r1_uri: Optional[str] = Field(None, description="""Convenience field: URI of the primary (R1 or first) scrubbed read file. Populated automatically for simple 2-file paired runs. Supports gs:// (GCS) and s3:// (S3-compatible) schemes. Accepted extensions: .fastq, .fq, .fasta, .fa, .fna with optional .gz or .bz2 compression. For all other cases (multi-lane, nanopore, multiple unpaired), query the sample_files table for the complete file list.
 """)
     fastq_r2_uri: Optional[str] = Field(None, description="""Convenience field: URI of the R2 FASTQ for simple paired runs. NULL for single-end, multi-lane, or nanopore samples. Query sample_files for the complete file list.
 """)
@@ -3192,7 +3192,7 @@ class SoilSample(EnvironmentalSample):
     ncbi_submitted_at: Optional[datetime ] = Field(None)
     gisaid_submission_status: Optional[SubmissionStatusEnum] = Field(None, description="""GISAID EpiCoV/EpiFlu/EpiPox submission status""")
     gisaid_submitted_at: Optional[datetime ] = Field(None)
-    fastq_r1_uri: Optional[str] = Field(None, description="""Convenience field: URI of the primary (R1 or first) scrubbed read file. Populated automatically for simple 2-file paired runs. Supports gs:// (GCS) and drs:// (GA4GH DRS) schemes. Accepted extensions: .fastq, .fq, .fasta, .fa, .fna with optional .gz or .bz2 compression. For all other cases (multi-lane, nanopore, multiple unpaired), query the sample_files table for the complete file list.
+    fastq_r1_uri: Optional[str] = Field(None, description="""Convenience field: URI of the primary (R1 or first) scrubbed read file. Populated automatically for simple 2-file paired runs. Supports gs:// (GCS) and s3:// (S3-compatible) schemes. Accepted extensions: .fastq, .fq, .fasta, .fa, .fna with optional .gz or .bz2 compression. For all other cases (multi-lane, nanopore, multiple unpaired), query the sample_files table for the complete file list.
 """)
     fastq_r2_uri: Optional[str] = Field(None, description="""Convenience field: URI of the R2 FASTQ for simple paired runs. NULL for single-end, multi-lane, or nanopore samples. Query sample_files for the complete file list.
 """)
@@ -3375,7 +3375,7 @@ class SurfaceSample(EnvironmentalSample):
     ncbi_submitted_at: Optional[datetime ] = Field(None)
     gisaid_submission_status: Optional[SubmissionStatusEnum] = Field(None, description="""GISAID EpiCoV/EpiFlu/EpiPox submission status""")
     gisaid_submitted_at: Optional[datetime ] = Field(None)
-    fastq_r1_uri: Optional[str] = Field(None, description="""Convenience field: URI of the primary (R1 or first) scrubbed read file. Populated automatically for simple 2-file paired runs. Supports gs:// (GCS) and drs:// (GA4GH DRS) schemes. Accepted extensions: .fastq, .fq, .fasta, .fa, .fna with optional .gz or .bz2 compression. For all other cases (multi-lane, nanopore, multiple unpaired), query the sample_files table for the complete file list.
+    fastq_r1_uri: Optional[str] = Field(None, description="""Convenience field: URI of the primary (R1 or first) scrubbed read file. Populated automatically for simple 2-file paired runs. Supports gs:// (GCS) and s3:// (S3-compatible) schemes. Accepted extensions: .fastq, .fq, .fasta, .fa, .fna with optional .gz or .bz2 compression. For all other cases (multi-lane, nanopore, multiple unpaired), query the sample_files table for the complete file list.
 """)
     fastq_r2_uri: Optional[str] = Field(None, description="""Convenience field: URI of the R2 FASTQ for simple paired runs. NULL for single-end, multi-lane, or nanopore samples. Query sample_files for the complete file list.
 """)
@@ -3542,7 +3542,7 @@ class FoodSample(EnvironmentalSample):
     ncbi_submitted_at: Optional[datetime ] = Field(None)
     gisaid_submission_status: Optional[SubmissionStatusEnum] = Field(None, description="""GISAID EpiCoV/EpiFlu/EpiPox submission status""")
     gisaid_submitted_at: Optional[datetime ] = Field(None)
-    fastq_r1_uri: Optional[str] = Field(None, description="""Convenience field: URI of the primary (R1 or first) scrubbed read file. Populated automatically for simple 2-file paired runs. Supports gs:// (GCS) and drs:// (GA4GH DRS) schemes. Accepted extensions: .fastq, .fq, .fasta, .fa, .fna with optional .gz or .bz2 compression. For all other cases (multi-lane, nanopore, multiple unpaired), query the sample_files table for the complete file list.
+    fastq_r1_uri: Optional[str] = Field(None, description="""Convenience field: URI of the primary (R1 or first) scrubbed read file. Populated automatically for simple 2-file paired runs. Supports gs:// (GCS) and s3:// (S3-compatible) schemes. Accepted extensions: .fastq, .fq, .fasta, .fa, .fna with optional .gz or .bz2 compression. For all other cases (multi-lane, nanopore, multiple unpaired), query the sample_files table for the complete file list.
 """)
     fastq_r2_uri: Optional[str] = Field(None, description="""Convenience field: URI of the R2 FASTQ for simple paired runs. NULL for single-end, multi-lane, or nanopore samples. Query sample_files for the complete file list.
 """)
@@ -3710,7 +3710,7 @@ class ProduceAgSample(EnvironmentalSample):
     ncbi_submitted_at: Optional[datetime ] = Field(None)
     gisaid_submission_status: Optional[SubmissionStatusEnum] = Field(None, description="""GISAID EpiCoV/EpiFlu/EpiPox submission status""")
     gisaid_submitted_at: Optional[datetime ] = Field(None)
-    fastq_r1_uri: Optional[str] = Field(None, description="""Convenience field: URI of the primary (R1 or first) scrubbed read file. Populated automatically for simple 2-file paired runs. Supports gs:// (GCS) and drs:// (GA4GH DRS) schemes. Accepted extensions: .fastq, .fq, .fasta, .fa, .fna with optional .gz or .bz2 compression. For all other cases (multi-lane, nanopore, multiple unpaired), query the sample_files table for the complete file list.
+    fastq_r1_uri: Optional[str] = Field(None, description="""Convenience field: URI of the primary (R1 or first) scrubbed read file. Populated automatically for simple 2-file paired runs. Supports gs:// (GCS) and s3:// (S3-compatible) schemes. Accepted extensions: .fastq, .fq, .fasta, .fa, .fna with optional .gz or .bz2 compression. For all other cases (multi-lane, nanopore, multiple unpaired), query the sample_files table for the complete file list.
 """)
     fastq_r2_uri: Optional[str] = Field(None, description="""Convenience field: URI of the R2 FASTQ for simple paired runs. NULL for single-end, multi-lane, or nanopore samples. Query sample_files for the complete file list.
 """)
@@ -3807,7 +3807,7 @@ Supported extensions (case-insensitive):
   .fasta, .fa, .fna            with optional .gz
 
     """
-    uri: str = Field(..., description="""gs:// or drs:// URI of the scrubbed file. UNIQUE — the same physical file cannot be registered twice.
+    uri: str = Field(..., description="""gs:// or s3:// URI of the scrubbed file. UNIQUE — the same physical file cannot be registered twice.
 """)
     raw_uri: Optional[str] = Field(None, description="""Pre-scrub URI. NULL after raw deletion (30-day lifecycle). Accessible to Lab Directors only.
 """)
