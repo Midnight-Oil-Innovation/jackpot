@@ -220,7 +220,7 @@
                     "type": "string"
                 },
                 "fastq_r1_uri": {
-                    "description": "Convenience field: URI of the primary (R1 or first) scrubbed read file. Populated automatically for simple 2-file paired runs. Supports gs:// (GCS) and drs:// (GA4GH DRS) schemes. Accepted extensions: .fastq, .fq, .fasta, .fa, .fna with optional .gz or .bz2 compression. For all other cases (multi-lane, nanopore, multiple unpaired), query the sample_files table for the complete file list.\n",
+                    "description": "Convenience field: URI of the primary (R1 or first) scrubbed read file. Populated automatically for simple 2-file paired runs. Supports gs:// (GCS) and s3:// (S3-compatible) schemes. Accepted extensions: .fastq, .fq, .fasta, .fa, .fna with optional .gz or .bz2 compression. For all other cases (multi-lane, nanopore, multiple unpaired), query the sample_files table for the complete file list.\n",
                     "type": "string"
                 },
                 "fastq_r2_uri": {
@@ -898,7 +898,7 @@
                     "type": "string"
                 },
                 "fastq_r1_uri": {
-                    "description": "Convenience field: URI of the primary (R1 or first) scrubbed read file. Populated automatically for simple 2-file paired runs. Supports gs:// (GCS) and drs:// (GA4GH DRS) schemes. Accepted extensions: .fastq, .fq, .fasta, .fa, .fna with optional .gz or .bz2 compression. For all other cases (multi-lane, nanopore, multiple unpaired), query the sample_files table for the complete file list.\n",
+                    "description": "Convenience field: URI of the primary (R1 or first) scrubbed read file. Populated automatically for simple 2-file paired runs. Supports gs:// (GCS) and s3:// (S3-compatible) schemes. Accepted extensions: .fastq, .fq, .fasta, .fa, .fna with optional .gz or .bz2 compression. For all other cases (multi-lane, nanopore, multiple unpaired), query the sample_files table for the complete file list.\n",
                     "type": "string"
                 },
                 "fastq_r2_uri": {
@@ -1544,7 +1544,7 @@
                     "type": "string"
                 },
                 "fastq_r1_uri": {
-                    "description": "Convenience field: URI of the primary (R1 or first) scrubbed read file. Populated automatically for simple 2-file paired runs. Supports gs:// (GCS) and drs:// (GA4GH DRS) schemes. Accepted extensions: .fastq, .fq, .fasta, .fa, .fna with optional .gz or .bz2 compression. For all other cases (multi-lane, nanopore, multiple unpaired), query the sample_files table for the complete file list.\n",
+                    "description": "Convenience field: URI of the primary (R1 or first) scrubbed read file. Populated automatically for simple 2-file paired runs. Supports gs:// (GCS) and s3:// (S3-compatible) schemes. Accepted extensions: .fastq, .fq, .fasta, .fa, .fna with optional .gz or .bz2 compression. For all other cases (multi-lane, nanopore, multiple unpaired), query the sample_files table for the complete file list.\n",
                     "type": "string"
                 },
                 "fastq_r2_uri": {
@@ -2234,7 +2234,7 @@
                     "type": "string"
                 },
                 "fastq_r1_uri": {
-                    "description": "Convenience field: URI of the primary (R1 or first) scrubbed read file. Populated automatically for simple 2-file paired runs. Supports gs:// (GCS) and drs:// (GA4GH DRS) schemes. Accepted extensions: .fastq, .fq, .fasta, .fa, .fna with optional .gz or .bz2 compression. For all other cases (multi-lane, nanopore, multiple unpaired), query the sample_files table for the complete file list.\n",
+                    "description": "Convenience field: URI of the primary (R1 or first) scrubbed read file. Populated automatically for simple 2-file paired runs. Supports gs:// (GCS) and s3:// (S3-compatible) schemes. Accepted extensions: .fastq, .fq, .fasta, .fa, .fna with optional .gz or .bz2 compression. For all other cases (multi-lane, nanopore, multiple unpaired), query the sample_files table for the complete file list.\n",
                     "type": "string"
                 },
                 "fastq_r2_uri": {
@@ -2809,7 +2809,7 @@
                     "type": "string"
                 },
                 "fastq_r1_uri": {
-                    "description": "Convenience field: URI of the primary (R1 or first) scrubbed read file. Populated automatically for simple 2-file paired runs. Supports gs:// (GCS) and drs:// (GA4GH DRS) schemes. Accepted extensions: .fastq, .fq, .fasta, .fa, .fna with optional .gz or .bz2 compression. For all other cases (multi-lane, nanopore, multiple unpaired), query the sample_files table for the complete file list.\n",
+                    "description": "Convenience field: URI of the primary (R1 or first) scrubbed read file. Populated automatically for simple 2-file paired runs. Supports gs:// (GCS) and s3:// (S3-compatible) schemes. Accepted extensions: .fastq, .fq, .fasta, .fa, .fna with optional .gz or .bz2 compression. For all other cases (multi-lane, nanopore, multiple unpaired), query the sample_files table for the complete file list.\n",
                     "type": "string"
                 },
                 "fastq_r2_uri": {
@@ -3491,7 +3491,7 @@
                     "type": "string"
                 },
                 "fastq_r1_uri": {
-                    "description": "Convenience field: URI of the primary (R1 or first) scrubbed read file. Populated automatically for simple 2-file paired runs. Supports gs:// (GCS) and drs:// (GA4GH DRS) schemes. Accepted extensions: .fastq, .fq, .fasta, .fa, .fna with optional .gz or .bz2 compression. For all other cases (multi-lane, nanopore, multiple unpaired), query the sample_files table for the complete file list.\n",
+                    "description": "Convenience field: URI of the primary (R1 or first) scrubbed read file. Populated automatically for simple 2-file paired runs. Supports gs:// (GCS) and s3:// (S3-compatible) schemes. Accepted extensions: .fastq, .fq, .fasta, .fa, .fna with optional .gz or .bz2 compression. For all other cases (multi-lane, nanopore, multiple unpaired), query the sample_files table for the complete file list.\n",
                     "type": "string"
                 },
                 "fastq_r2_uri": {
@@ -4476,7 +4476,7 @@
                     "type": "string"
                 },
                 "fastq_r1_uri": {
-                    "description": "Convenience field: URI of the primary (R1 or first) scrubbed read file. Populated automatically for simple 2-file paired runs. Supports gs:// (GCS) and drs:// (GA4GH DRS) schemes. Accepted extensions: .fastq, .fq, .fasta, .fa, .fna with optional .gz or .bz2 compression. For all other cases (multi-lane, nanopore, multiple unpaired), query the sample_files table for the complete file list.\n",
+                    "description": "Convenience field: URI of the primary (R1 or first) scrubbed read file. Populated automatically for simple 2-file paired runs. Supports gs:// (GCS) and s3:// (S3-compatible) schemes. Accepted extensions: .fastq, .fq, .fasta, .fa, .fna with optional .gz or .bz2 compression. For all other cases (multi-lane, nanopore, multiple unpaired), query the sample_files table for the complete file list.\n",
                     "type": "string"
                 },
                 "fastq_r2_uri": {
@@ -5132,7 +5132,7 @@
                     "type": "string"
                 },
                 "fastq_r1_uri": {
-                    "description": "Convenience field: URI of the primary (R1 or first) scrubbed read file. Populated automatically for simple 2-file paired runs. Supports gs:// (GCS) and drs:// (GA4GH DRS) schemes. Accepted extensions: .fastq, .fq, .fasta, .fa, .fna with optional .gz or .bz2 compression. For all other cases (multi-lane, nanopore, multiple unpaired), query the sample_files table for the complete file list.\n",
+                    "description": "Convenience field: URI of the primary (R1 or first) scrubbed read file. Populated automatically for simple 2-file paired runs. Supports gs:// (GCS) and s3:// (S3-compatible) schemes. Accepted extensions: .fastq, .fq, .fasta, .fa, .fna with optional .gz or .bz2 compression. For all other cases (multi-lane, nanopore, multiple unpaired), query the sample_files table for the complete file list.\n",
                     "type": "string"
                 },
                 "fastq_r2_uri": {
@@ -5643,7 +5643,7 @@
                     "type": "string"
                 },
                 "uri": {
-                    "description": "gs:// or drs:// URI of the scrubbed file. UNIQUE \u2014 the same physical file cannot be registered twice.\n",
+                    "description": "gs:// or s3:// URI of the scrubbed file. UNIQUE \u2014 the same physical file cannot be registered twice.\n",
                     "type": "string"
                 }
             },
@@ -5950,7 +5950,7 @@
                     "type": "string"
                 },
                 "fastq_r1_uri": {
-                    "description": "Convenience field: URI of the primary (R1 or first) scrubbed read file. Populated automatically for simple 2-file paired runs. Supports gs:// (GCS) and drs:// (GA4GH DRS) schemes. Accepted extensions: .fastq, .fq, .fasta, .fa, .fna with optional .gz or .bz2 compression. For all other cases (multi-lane, nanopore, multiple unpaired), query the sample_files table for the complete file list.\n",
+                    "description": "Convenience field: URI of the primary (R1 or first) scrubbed read file. Populated automatically for simple 2-file paired runs. Supports gs:// (GCS) and s3:// (S3-compatible) schemes. Accepted extensions: .fastq, .fq, .fasta, .fa, .fna with optional .gz or .bz2 compression. For all other cases (multi-lane, nanopore, multiple unpaired), query the sample_files table for the complete file list.\n",
                     "type": "string"
                 },
                 "fastq_r2_uri": {
@@ -6560,7 +6560,7 @@
                     "type": "string"
                 },
                 "fastq_r1_uri": {
-                    "description": "Convenience field: URI of the primary (R1 or first) scrubbed read file. Populated automatically for simple 2-file paired runs. Supports gs:// (GCS) and drs:// (GA4GH DRS) schemes. Accepted extensions: .fastq, .fq, .fasta, .fa, .fna with optional .gz or .bz2 compression. For all other cases (multi-lane, nanopore, multiple unpaired), query the sample_files table for the complete file list.\n",
+                    "description": "Convenience field: URI of the primary (R1 or first) scrubbed read file. Populated automatically for simple 2-file paired runs. Supports gs:// (GCS) and s3:// (S3-compatible) schemes. Accepted extensions: .fastq, .fq, .fasta, .fa, .fna with optional .gz or .bz2 compression. For all other cases (multi-lane, nanopore, multiple unpaired), query the sample_files table for the complete file list.\n",
                     "type": "string"
                 },
                 "fastq_r2_uri": {
@@ -7222,7 +7222,7 @@
                     "type": "string"
                 },
                 "fastq_r1_uri": {
-                    "description": "Convenience field: URI of the primary (R1 or first) scrubbed read file. Populated automatically for simple 2-file paired runs. Supports gs:// (GCS) and drs:// (GA4GH DRS) schemes. Accepted extensions: .fastq, .fq, .fasta, .fa, .fna with optional .gz or .bz2 compression. For all other cases (multi-lane, nanopore, multiple unpaired), query the sample_files table for the complete file list.\n",
+                    "description": "Convenience field: URI of the primary (R1 or first) scrubbed read file. Populated automatically for simple 2-file paired runs. Supports gs:// (GCS) and s3:// (S3-compatible) schemes. Accepted extensions: .fastq, .fq, .fasta, .fa, .fna with optional .gz or .bz2 compression. For all other cases (multi-lane, nanopore, multiple unpaired), query the sample_files table for the complete file list.\n",
                     "type": "string"
                 },
                 "fastq_r2_uri": {
@@ -7800,7 +7800,7 @@
                     "type": "string"
                 },
                 "fastq_r1_uri": {
-                    "description": "Convenience field: URI of the primary (R1 or first) scrubbed read file. Populated automatically for simple 2-file paired runs. Supports gs:// (GCS) and drs:// (GA4GH DRS) schemes. Accepted extensions: .fastq, .fq, .fasta, .fa, .fna with optional .gz or .bz2 compression. For all other cases (multi-lane, nanopore, multiple unpaired), query the sample_files table for the complete file list.\n",
+                    "description": "Convenience field: URI of the primary (R1 or first) scrubbed read file. Populated automatically for simple 2-file paired runs. Supports gs:// (GCS) and s3:// (S3-compatible) schemes. Accepted extensions: .fastq, .fq, .fasta, .fa, .fna with optional .gz or .bz2 compression. For all other cases (multi-lane, nanopore, multiple unpaired), query the sample_files table for the complete file list.\n",
                     "type": "string"
                 },
                 "fastq_r2_uri": {
@@ -8443,7 +8443,7 @@
                     "type": "string"
                 },
                 "fastq_r1_uri": {
-                    "description": "Convenience field: URI of the primary (R1 or first) scrubbed read file. Populated automatically for simple 2-file paired runs. Supports gs:// (GCS) and drs:// (GA4GH DRS) schemes. Accepted extensions: .fastq, .fq, .fasta, .fa, .fna with optional .gz or .bz2 compression. For all other cases (multi-lane, nanopore, multiple unpaired), query the sample_files table for the complete file list.\n",
+                    "description": "Convenience field: URI of the primary (R1 or first) scrubbed read file. Populated automatically for simple 2-file paired runs. Supports gs:// (GCS) and s3:// (S3-compatible) schemes. Accepted extensions: .fastq, .fq, .fasta, .fa, .fna with optional .gz or .bz2 compression. For all other cases (multi-lane, nanopore, multiple unpaired), query the sample_files table for the complete file list.\n",
                     "type": "string"
                 },
                 "fastq_r2_uri": {
@@ -9023,7 +9023,7 @@
                     "type": "string"
                 },
                 "fastq_r1_uri": {
-                    "description": "Convenience field: URI of the primary (R1 or first) scrubbed read file. Populated automatically for simple 2-file paired runs. Supports gs:// (GCS) and drs:// (GA4GH DRS) schemes. Accepted extensions: .fastq, .fq, .fasta, .fa, .fna with optional .gz or .bz2 compression. For all other cases (multi-lane, nanopore, multiple unpaired), query the sample_files table for the complete file list.\n",
+                    "description": "Convenience field: URI of the primary (R1 or first) scrubbed read file. Populated automatically for simple 2-file paired runs. Supports gs:// (GCS) and s3:// (S3-compatible) schemes. Accepted extensions: .fastq, .fq, .fasta, .fa, .fna with optional .gz or .bz2 compression. For all other cases (multi-lane, nanopore, multiple unpaired), query the sample_files table for the complete file list.\n",
                     "type": "string"
                 },
                 "fastq_r2_uri": {

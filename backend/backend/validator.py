@@ -379,16 +379,25 @@ def _check_numeric_ranges(data: dict, errors: list[str], warnings: list[str]) ->
                 errors.append(f"{field_name} must be numeric, got '{val}'.")
 
 
+# Schemes a storage backend can actually dereference. Keep in step with
+# backend/storage/factory.py: recognising a scheme nothing can open tells a
+# submitter their URI is fine when no pipeline will ever read it.
+#
+# drs:// was listed here until 2026-09-03 with no DRS client anywhere in the
+# tree (B-DRS-URI-1). The decision was to reject rather than resolve: a DRS
+# client is a dependency decision plus signed-URL auth, and no operator had
+# asked for it. Add it back alongside a real backend, never ahead of one.
+RESOLVABLE_URI_SCHEMES = ("gs://", "s3://")
+
+
 def _check_uri_schemes(data: dict, warnings: list[str]) -> None:
-    """URI scheme check."""
+    """URI scheme check. Advisory — unrecognised schemes warn, never error."""
+    expected = ", ".join(s.rstrip(":/") + "://" for s in RESOLVABLE_URI_SCHEMES)
     for uri_field in ("fastq_r1_uri", "fastq_r2_uri", "consensus_fasta_uri"):
         uri = data.get(uri_field)
-        if uri and not (
-            uri.startswith("gs://") or uri.startswith("s3://") or uri.startswith("drs://")
-        ):
+        if uri and not uri.startswith(RESOLVABLE_URI_SCHEMES):
             warnings.append(
-                f"{uri_field} '{uri}' does not use a recognised URI scheme "
-                "(expected gs://, s3://, or drs://)."
+                f"{uri_field} '{uri}' does not use a recognised URI scheme (expected {expected})."
             )
 
 

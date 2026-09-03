@@ -688,7 +688,7 @@ classes:
         description: >
           Convenience field: URI of the primary (R1 or first) scrubbed read file.
           Populated automatically for simple 2-file paired runs.
-          Supports gs:// (GCS) and drs:// (GA4GH DRS) schemes.
+          Supports gs:// (GCS) and s3:// (S3-compatible) schemes.
           Accepted extensions: .fastq, .fq, .fasta, .fa, .fna
           with optional .gz or .bz2 compression.
           For all other cases (multi-lane, nanopore, multiple unpaired),
@@ -1604,7 +1604,7 @@ classes:
         required: true
         identifier: true
         description: >
-          gs:// or drs:// URI of the scrubbed file. UNIQUE — the same
+          gs:// or s3:// URI of the scrubbed file. UNIQUE — the same
           physical file cannot be registered twice.
       raw_uri:
         description: >

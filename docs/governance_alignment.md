@@ -92,7 +92,7 @@ Source: Global Alliance for Genomics & Health (GA4GH) standards portfolio.
 | Standard | Function | JACKPOT status | Evidence (one line) |
 |---|---|---|---|
 | **DUO (Data Use Ontology)** | Machine-readable data-use restrictions | ✅ Met | `samples.data_use_terms` field + `DataUseTermsEnum`; per-dataset DUO codes; UI radio at submission pending (`B-PPX-1`). |
-| **DRS (Data Repository Service)** | Standardized data-access URIs across repositories | 🔶 Partial | `drs://` URI scheme accepted in `fastq_r1_uri` / `fastq_r2_uri`; DRS endpoint itself not implemented (Year 2 — interoperability with Terra, AnVIL). |
+| **DRS (Data Repository Service)** | Standardized data-access URIs across repositories | ❌ Not implemented | Neither the `drs://` scheme nor a DRS endpoint. The scheme was recognised by `validator.py` until 2026-09-03 with nothing able to dereference it, and was rejected rather than resolved (B-DRS-URI-1). Revisit with Terra/AnVIL interoperability, alongside a real client. |
 | **Phenopackets** | Standardized clinical phenotype + disease + biosample model | 🔶 Partial | `HumanSample` maps to Phenopacket Individual + Disease elements per schema (slot URIs); native Phenopacket export not implemented. |
 | **Beacon** | Federated query protocol for genomic data discovery | ❌ Gap | Not addressed; the closest analog is JACKPOT's planned Federation Level 1 query API (see Section 4 below). |
 | **htsget** | Streaming protocol for genomic data | ➖ N/A | JACKPOT serves files via signed URLs and DRS-compatible URIs; htsget streaming layer is out of scope for now. |
@@ -335,7 +335,9 @@ This section covers the four 🔶 Partial / ❌ Gap rows from matrix 1.3 that wa
 
 **GA4GH spec.** Standardized REST API for retrieving data objects by ID; URI scheme `drs://` for cross-platform references; access methods include signed URLs, byte-range requests, and direct passthrough.
 
-**JACKPOT current state.** `drs://` URI scheme accepted in `fastq_r1_uri` / `fastq_r2_uri`. The scheme is recognized by the resolver; pipeline executors can resolve `drs://` URIs to actual paths at compute-node time.
+**JACKPOT current state.** None. `drs://` was listed among the recognised URI schemes in `validator.py` and rejected on 2026-09-03 (B-DRS-URI-1).
+
+The sentence previously here — that the scheme "is recognized by the resolver" and that "pipeline executors can resolve `drs://` URIs to actual paths at compute-node time" — described no code that has ever existed. There is no resolver; `backend/storage/` ships gcs, s3 and local backends only. Written from the plan, per Critical Rule 70.
 
 **Gap.** No JACKPOT-side DRS endpoint that returns DRS-compliant JSON for a JACKPOT-hosted object. So an external GA4GH-DRS-aware client (Terra, AnVIL, Galaxy) can't fetch JACKPOT-hosted data via DRS — they'd need JACKPOT's native API instead.
 

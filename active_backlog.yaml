@@ -3629,7 +3629,9 @@ sessions:
       DRS client. A file registered with a drs:// URI passes validation
       and is unreadable by every downstream path.
     phase: p0_series
-    status: open
+    status: shipped
+    merged_at: "2026-09-03"
+    merge_sha: "TBD"
     depends_on: []
     blocked_by_external:
     parallel_safe: true
@@ -3659,6 +3661,32 @@ sessions:
       own auth, so this is not the afternoon the doc implies. Size it after
       deciding. The 18.2 FAIR row now states the real position rather than
       claiming the scheme as met.
+
+      DECIDED 2026-09-03: rejected, not resolved. drs:// is removed from the
+      recognised scheme list; RESOLVABLE_URI_SCHEMES in validator.py is now
+      ("gs://", "s3://") and is documented as tracking
+      backend/storage/factory.py. Recognising a scheme nothing can
+      dereference told a submitter their URI was fine when no pipeline could
+      ever open it. Resolving it would have meant a DRS client (a dependency
+      decision under the license + deptrust policy) plus signed-URL auth
+      handling, and no operator had asked for it. Add it back alongside a
+      real backend, never ahead of one.
+
+      Note the check has always been advisory - _check_uri_schemes appends
+      to warnings, never errors - so this narrows what JACKPOT CLAIMS to
+      support rather than adding a gate. A test pins that, so a later change
+      cannot quietly promote scheme recognition to a hard failure.
+
+      Scope was larger than the one-line prediction, because the claim had
+      four other homes: two LinkML descriptions (forcing a gen-pydantic
+      regeneration plus the Rule 20 boolean patch, and a gen-json-schema
+      run), the 21.1 and 18.2 rows in architecture.md, the DRS row and
+      current-state paragraph in governance_alignment.md, and the adoption
+      row in platform_landscape.md. governance_alignment.md 338 was the
+      worst of them: it asserted the scheme "is recognized by the resolver"
+      and that "pipeline executors can resolve drs:// URIs to actual paths
+      at compute-node time". No resolver has ever existed. Critical Rule 70
+      again, and the reason the one-line estimate was wrong.
 
   - id: B-ZOO-MIRA-PHOENIX
     title: MIRA-NF and PHoeNIx pipeline wrappers in the zoo
