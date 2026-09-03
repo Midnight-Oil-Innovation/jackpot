@@ -3570,7 +3570,7 @@ sessions:
     phase: p0_series
     status: shipped
     merged_at: "2026-09-03"
-    merge_sha: "TBD"
+    merge_sha: "502fac5"
     depends_on: []
     blocked_by_external:
     parallel_safe: true
