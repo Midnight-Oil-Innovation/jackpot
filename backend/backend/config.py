@@ -31,7 +31,15 @@ class Settings(BaseSettings):
     credential_file_path: str = "~/.config/jackpot/credentials.yaml"
     credential_gcp_secret_prefix: str = "jackpot-cred-"
     credential_cache_ttl_seconds: int = 300
+    # Operator identity, published by GET /service-info (P0i). Blank by
+    # design: the neutral defaults live at the single read site in
+    # main.py:service_info, which is the only place that can survive an
+    # env var set to the empty string. service_id must be a reverse-domain
+    # string unique to the deployment.
     host_organization_name: str = ""
+    service_id: str = ""
+    host_organization_url: str = ""
+    service_contact_url: str = ""
     ncbi_api_key: str = ""
     jackpot_api_token: str = ""
     scheduler_enabled: bool = True
@@ -244,6 +252,11 @@ class Settings(BaseSettings):
             required = [
                 ("google_oauth_client_id", self.google_oauth_client_id),
                 ("gcp_project_id", self.gcp_project_id),
+                # GET /service-info falls back to a shared example id when
+                # this is unset, which is fine for local and CI but would
+                # have every real deployment advertise the same GA4GH
+                # identity to its federation peers.
+                ("service_id", self.service_id),
             ]
             if missing := [n for n, v in required if not v]:
                 raise RuntimeError(f"Missing required config: {missing}")

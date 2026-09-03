@@ -1184,7 +1184,7 @@ JACKPOT implements or interoperates with:
 
 | FAIR | Status | Notes |
 |---|---|---|
-| **F**indable | ✅ Met | Persistent IDs for samples and datasets; `/service-info` endpoint; DRS-style URI scheme; Beacon v2 endpoint planned (Year 2+) |
+| **F**indable | ✅ Met | Persistent IDs for samples and datasets; `/service-info` endpoint (P0i). **Not** DRS: `drs://` is accepted by `validator.py` and resolved by nothing — no storage backend handles the scheme. Formalizing it is open P0i work; Beacon v2 is Year 2+ |
 | **A**ccessible | ✅ Met | Open API; AGPL-3.0 platform; data access via API token; signed URLs for direct download |
 | **I**nteroperable | ✅ Met (with continuing work) | LinkML schema with ontology anchoring; controlled vocabularies; PHA4GE alignment; PHES-ODM bridge (in progress) |
 | **R**eusable | ✅ Met | License metadata per sample (`data_use_terms`); DUO tags; citation requests on every sample |
@@ -1350,17 +1350,17 @@ JACKPOT adopts external open-source components where they fill capability gaps. 
 
 | Item | Source | License | Status | Justification |
 |---|---|---|---|---|
-| **seqsender** | CDC | Apache-2.0 | Adopt — Phase P0i | NCBI/GISAID submission with real working code |
+| **seqsender** | CDC | Apache-2.0 | Shipped | `backend/backend/submission_executors/seqsender.py`, driven from `jobs.py`. NCBI only — Seqsender has no ENA/Webin path |
 | **MIRA-NF pipeline** | CDC | Apache-2.0 | Adopt — Phase P0i | Flu/SARS/RSV via IRMA — major use case |
 | **PHoeNIx pipeline** | CDC | Apache-2.0 | Adopt — Phase P0i | AMR/HAI bacteria — high-value for state PHL deployments |
-| **MycoSNP-NF pipeline** | CDC | Apache-2.0 | Adopt — Phase P0m | Fungal (*C. auris*) — emerging surveillance need |
+| **MycoSNP-NF pipeline** | CDC | Apache-2.0 | Shipped | In the zoo at `pipelines/pipelines/mycosnp/` with snippy/typing/tree parsers |
 | **Aquascope pipeline** | CDC | Apache-2.0 | Adopt — Phase P0m | Wastewater SARS-CoV-2 with NWSS alignment |
 | **Tostadas pipeline** | CDC | Apache-2.0 | Adopt — Phase P0m | NCBI/GISAID submission via Liftoff/VADR/Bakta |
 | **MicrobeTrace** | CDC | Apache-2.0 | Adopt — Phase P0m | Browser-based outbreak visualization (iframe embed) |
-| **PHIN VADS vocabularies** | CDC | Data | **Phase P0i — urgent** | **Sunsets November 30, 2026; pull vocabularies as schema reference data before then** |
+| **PHIN VADS vocabularies** | CDC | Data | Shipped | Snapshot committed under `schema/schema/phinvads/` ahead of the 2026-11-30 sunset (B-VADS-1). Acquisition only — no consumer reads it yet, see §21.2 |
 | **PHES-ODM data model** | Big-Life-Lab | MIT | Adopt — Phase P0m | Wastewater alignment for EU/Canadian deployments |
-| **GA4GH `/service-info`** | GA4GH | Apache-2.0 spec | Adopt — Phase P0i | Cheapest federation win — makes JACKPOT discoverable |
-| **DRS-style URI conventions** | GA4GH | Apache-2.0 spec | Adopt — Phase P0i | Already 80% there; formalize as standard |
+| **GA4GH `/service-info`** | GA4GH | Apache-2.0 spec | Shipped | `GET /service-info` in `backend/backend/main.py`, unauthenticated at the root beside `/health` |
+| **DRS-style URI conventions** | GA4GH | Apache-2.0 spec | Open — Phase P0i | Validator-only: `drs://` is accepted by `validator.py` and resolved by no storage backend. Decide resolve-or-reject (B-DRS-URI-1) |
 | **Sapporo-WES spike** | DDBJ | Apache-2.0 | Evaluate — Phase P0m (2-week spike) | Alternative to bespoke pipeline orchestration |
 | **Wave (self-hosted)** | Seqera | AGPL-3.0 | Adopt — Phase P0l | Container provisioning for pipelines; AGPL-on-AGPL clean |
 | **MultiQC** | Seqera | GPL-3.0 | Already in nf-core | Already used transitively |
@@ -1559,7 +1559,7 @@ The May 2026 architectural reframing landed several new commitments that shape M
 
 **Phase P0h — Slurm executor support (Month 3-4).** Pairs with P0g. Slurm executor profile templates, Singularity/Apptainer image manifest support in pipeline zoo, weblog reachability documentation for cluster→API, end-to-end smoke test on a real Slurm cluster.
 
-**Phase P0i — Open-source adoptions: pipelines and tools (Month 3-4).** seqsender as pip dependency for NCBI/GISAID submission, MIRA-NF and PHoeNIx pipelines added to zoo, GA4GH `/service-info` endpoint, DRS-style URI scheme formalized, PHIN VADS vocabulary pull (urgent: Nov 30 2026 sunset).
+**Phase P0i — Open-source adoptions: pipelines and tools (Month 3-4).** MIRA-NF and PHoeNIx pipelines added to the zoo, DRS-style URI scheme formalized. The seqsender, `/service-info` and PHIN VADS pieces are done — §21.1's Status column is where that is recorded, not here.
 
 **Phase P0j — Apptainer-first deployment for Scenario B (Month 4).** Building on P0e. systemd-unit-file route, host-installed-Postgres/MinIO option, air-gapped image pre-staging, cluster-side configuration.
 
