@@ -47,8 +47,17 @@ async def test_service_info_does_not_claim_ga4gh_standard_apis(client):
 
 
 @pytest.mark.asyncio
-async def test_service_info_carries_no_operator_values_by_default(client):
-    """Critical Rule 55 — defaults must be operator-agnostic."""
+async def test_service_info_carries_no_operator_values_by_default(client, monkeypatch):
+    """Critical Rule 55 — the defaults must be operator-agnostic.
+
+    The input is pinned rather than read from the ambient environment: a
+    CI job exporting SERVICE_ID would otherwise make this guard pass or
+    fail for reasons unrelated to Rule 55, which is the Rule 74 shape —
+    a guard that quietly stops testing what its name says.
+    """
+    blank = Settings(service_id="", host_organization_url="")
+    monkeypatch.setattr("backend.main.get_settings", lambda: blank)
+
     body = (await client.get("/service-info")).json()
     assert "example" in body["id"]
     assert "example" in body["organization"]["url"]
@@ -77,3 +86,24 @@ async def test_service_info_stays_conformant_when_env_vars_are_blank(client, mon
     assert body["organization"]["name"]
     assert body["organization"]["url"]
     assert "contactUrl" not in body
+
+
+def test_production_refuses_to_start_without_a_configured_service_id():
+    """A shared GA4GH id across deployments is a federation-visible defect.
+
+    The endpoint's fallback keeps local and CI conformant, but a real
+    deployment publishing `org.example.jackpot` would be indistinguishable
+    from every other one to a peer. Production fails fast instead.
+    """
+    import pytest as _pytest
+
+    base = dict(
+        env="gcp",
+        google_oauth_client_id="x",
+        gcp_project_id="y",
+    )
+    with _pytest.raises(RuntimeError, match="service_id"):
+        Settings(**base, service_id="").validate_for_production()
+
+    # Configured: no raise.
+    Settings(**base, service_id="org.acme-health.jackpot").validate_for_production()

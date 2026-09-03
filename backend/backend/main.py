@@ -345,12 +345,9 @@ def service_info() -> dict:
     `type.artifact` names JACKPOT, not a GA4GH standard API — rationale
     and the assertion that holds it live in tests/test_service_info.py.
 
-    Every GA4GH-required field falls back to its neutral default here
-    rather than trusting Settings: an env var set to the empty string
-    beats a pydantic default, and `jackpot init` writes
-    HOST_ORGANIZATION_NAME= unconditionally (cli/jackpot/init/writers.py).
-    Without the fallbacks a stock install serves a non-conformant
-    document.
+    This is the only home for the neutral defaults of the GA4GH-required
+    fields; Settings holds them blank. Why, and what breaks without them,
+    is pinned by test_service_info_stays_conformant_when_env_vars_are_blank.
     """
     settings = get_settings()
     body = {

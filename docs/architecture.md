@@ -1357,10 +1357,10 @@ JACKPOT adopts external open-source components where they fill capability gaps. 
 | **Aquascope pipeline** | CDC | Apache-2.0 | Adopt — Phase P0m | Wastewater SARS-CoV-2 with NWSS alignment |
 | **Tostadas pipeline** | CDC | Apache-2.0 | Adopt — Phase P0m | NCBI/GISAID submission via Liftoff/VADR/Bakta |
 | **MicrobeTrace** | CDC | Apache-2.0 | Adopt — Phase P0m | Browser-based outbreak visualization (iframe embed) |
-| **PHIN VADS vocabularies** | CDC | Data | **Phase P0i — urgent** | **Sunsets November 30, 2026; pull vocabularies as schema reference data before then** |
+| **PHIN VADS vocabularies** | CDC | Data | Shipped | Snapshot committed under `schema/schema/phinvads/` ahead of the 2026-11-30 sunset (B-VADS-1). Acquisition only — no consumer reads it yet, see §21.2 |
 | **PHES-ODM data model** | Big-Life-Lab | MIT | Adopt — Phase P0m | Wastewater alignment for EU/Canadian deployments |
 | **GA4GH `/service-info`** | GA4GH | Apache-2.0 spec | Shipped | `GET /service-info` in `backend/backend/main.py`, unauthenticated at the root beside `/health` |
-| **DRS-style URI conventions** | GA4GH | Apache-2.0 spec | Adopt — Phase P0i | Already 80% there; formalize as standard |
+| **DRS-style URI conventions** | GA4GH | Apache-2.0 spec | Open — Phase P0i | Validator-only: `drs://` is accepted by `validator.py` and resolved by no storage backend. Decide resolve-or-reject (B-DRS-URI-1) |
 | **Sapporo-WES spike** | DDBJ | Apache-2.0 | Evaluate — Phase P0m (2-week spike) | Alternative to bespoke pipeline orchestration |
 | **Wave (self-hosted)** | Seqera | AGPL-3.0 | Adopt — Phase P0l | Container provisioning for pipelines; AGPL-on-AGPL clean |
 | **MultiQC** | Seqera | GPL-3.0 | Already in nf-core | Already used transitively |
