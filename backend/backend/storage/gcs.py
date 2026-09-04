@@ -5,7 +5,7 @@
 from __future__ import annotations
 
 from collections.abc import Iterable
-from datetime import timedelta
+from datetime import UTC, datetime, timedelta
 from typing import BinaryIO
 
 from google.api_core.exceptions import Forbidden, GoogleAPIError, NotFound
@@ -143,7 +143,11 @@ class GCSStorageBackend(StorageBackend):
         return StorageObject(
             key=key,
             size=blob.size or 0,
-            last_modified=blob.updated,
+            # blob.updated is Optional in the client's types: a blob that
+            # has not been reloaded carries no timestamp. StorageObject
+            # requires one, and epoch is the honest stand-in — it reads as
+            # "unknown" rather than inventing a plausible recent time.
+            last_modified=blob.updated or datetime.fromtimestamp(0, tz=UTC),
             content_type=blob.content_type,
             etag=blob.etag,
             metadata=dict(blob.metadata or {}),

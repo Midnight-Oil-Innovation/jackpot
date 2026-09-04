@@ -17,6 +17,7 @@ from backend.config import get_settings
 from backend.credentials import credentials
 from backend.storage.base import StorageBackend
 from backend.storage.exceptions import StorageError
+from backend.storage.gcs import GCSStorageBackend
 from backend.storage.local import LocalFSStorageBackend
 from backend.storage.s3 import S3StorageBackend
 from backend.storage.settings import (
@@ -66,10 +67,24 @@ def get_storage_backend(bucket: JackpotBucket = JackpotBucket.STAGING) -> Storag
             backend_name="s3",
         )
 
-    # GCS via S3-compatible HMAC credentials. Use get_optional so that a
-    # deployment relying on ambient/ADC credentials (no HMAC keys set)
-    # gets None here and lets boto3 resolve credentials itself, rather
-    # than crashing with CredentialNotFoundError on the first storage call.
+    if kind is StorageBackendType.GCS_NATIVE:
+        # The only path that can authenticate with Application Default
+        # Credentials, i.e. Workload Identity on GKE. botocore ships no GCP
+        # credential provider, so the HMAC path below cannot do ADC no
+        # matter what is configured; it needs static keys.
+        if not settings.gcp_project_id:
+            raise StorageError(
+                "storage_backend is 'gcs_native' but gcp_project_id is not set. "
+                "ADC needs a project to resolve against.",
+                backend="gcs",
+            )
+        return GCSStorageBackend(bucket_name=bucket_name, project=settings.gcp_project_id)
+
+    # GCS over the S3-compatible HMAC API. get_optional, not get, so a
+    # misconfigured deployment surfaces at the first storage call rather
+    # than at import. Note this path REQUIRES HMAC keys: boto3 falls back
+    # to the AWS credential chain, which resolves nothing on a GKE pod
+    # using Workload Identity. Use storage_backend="gcs_native" for ADC.
     return S3StorageBackend(
         bucket_name=bucket_name,
         region="auto",

@@ -39,6 +39,22 @@ class CredentialSpec:
     required_predicate: Callable[[Settings], bool] = field(default=lambda _settings: False)
 
 
+def _uses_gcs_hmac(settings: Settings) -> bool:
+    """True when this deployment reaches GCS over the S3-compatible API.
+
+    That path needs static HMAC keys: botocore has no GCP credential
+    provider, so boto3 falls back to the AWS chain and resolves nothing on
+    a Workload Identity pod. storage_backend="gcs_native" uses ADC instead
+    and needs none of this.
+
+    Imported inside the function because backend.storage's package __init__
+    pulls in the factory, which imports this module.
+    """
+    from backend.storage.settings import StorageBackendType, resolve_backend_type
+
+    return resolve_backend_type(settings) is StorageBackendType.GCS_VIA_S3 and settings.env == "gcp"
+
+
 # Storage-backend selection is no longer inferred from whether
 # `storage_endpoint` is set. get_backend_type() in
 # backend/storage/settings.py reads Settings.storage_backend and the
@@ -73,13 +89,13 @@ REQUIRED_CREDENTIALS: tuple[CredentialSpec, ...] = (
         key="gcs_hmac_access_key",
         description="HMAC access key for S3-compatible access to GCS buckets.",
         legacy_env_names=("GCS_HMAC_ACCESS_KEY",),
-        required_predicate=lambda s: not bool(s.storage_endpoint) and s.env == "gcp",
+        required_predicate=lambda s: _uses_gcs_hmac(s),
     ),
     CredentialSpec(
         key="gcs_hmac_secret",
         description="HMAC secret for S3-compatible access to GCS buckets.",
         legacy_env_names=("GCS_HMAC_SECRET",),
-        required_predicate=lambda s: not bool(s.storage_endpoint) and s.env == "gcp",
+        required_predicate=lambda s: _uses_gcs_hmac(s),
     ),
     CredentialSpec(
         key="local_storage_presign_secret",

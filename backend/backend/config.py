@@ -16,7 +16,7 @@ class Settings(BaseSettings):
     # produced B-STORAGE-LOCAL-FALLTHROUGH: an empty endpoint was read as
     # "therefore GCS", so an operator asking for local filesystem storage
     # got a client pointed at storage.googleapis.com. Name the backend.
-    storage_backend: Literal["local", "minio", "gcs", "s3"] | None = None
+    storage_backend: Literal["local", "minio", "gcs", "gcs_native", "s3"] | None = None
     storage_endpoint: str | None = None
     storage_access_key: str | None = None
     # Required when storage_backend == "local". No default on purpose:

@@ -4041,7 +4041,7 @@ sessions:
       that just moves an unverified claim to a new value.
 
   - id: B-STORAGE-DEAD-BACKENDS
-    title: GCSStorageBackend has no production caller - wire it or delete it
+    title: GCSStorageBackend wired for ADC/Workload Identity
     short_description: |
       backend/backend/storage/ ships four backend classes and factory.py
       instantiates one: S3StorageBackend, in both branches. GCSStorageBackend
@@ -4051,7 +4051,9 @@ sessions:
       LocalFSStorageBackend is NOT in scope here - it is unwired because of a
       live defect, tracked as B-STORAGE-LOCAL-FALLTHROUGH.
     phase: p0_series
-    status: open
+    status: shipped
+    merged_at: "2026-09-04"
+    merge_sha: "TBD"
     depends_on: ["B-STORAGE-LOCAL-FALLTHROUGH"]
     blocked_by_external:
     parallel_safe: true
@@ -4109,6 +4111,36 @@ sessions:
       as it is - present, tested, unreachable - is the one outcome to avoid,
       because its own green tests make the unreachability invisible and
       coverage counts it as exercised.
+
+      DECIDED 2026-09-04: wired, not deleted, and the reason is not
+      symmetry. botocore ships no GCP credential provider - verified, not
+      assumed - so with no HMAC keys boto3 resolves the AWS chain (AWS_*
+      env, ~/.aws, IMDS) and finds nothing on a GKE pod using Workload
+      Identity. The S3-over-HMAC path therefore REQUIRES long-lived static
+      keys. docs/architecture.md 199 names Workload Identity Federation as
+      the cloud-native auth model for Scenario C, and GCSStorageBackend
+      (google.cloud.storage, already a declared dependency) is the only
+      backend that can honour it.
+
+      The factory comment on the HMAC branch claimed the opposite - that
+      passing no keys "lets boto3 resolve credentials itself" for "a
+      deployment relying on ambient/ADC credentials". That has never been
+      possible. Corrected in the same change; it is the reason this looked
+      like a dead-code question rather than a missing capability.
+
+      storage_backend="gcs_native" now selects it, guarded on
+      gcp_project_id so ADC fails at construction rather than on the first
+      upload. The pre-existing pyright error in gcs.py (blob.updated is
+      Optional) is fixed, since the module is reachable code now.
+
+      A FOURTH copy of the storage predicate turned up while doing this:
+      the gcs_hmac_* credential predicates read
+      `not bool(s.storage_endpoint) and s.env == "gcp"`, so they would have
+      demanded HMAC keys from a native-ADC deployment. settings.py now
+      exposes resolve_backend_type(settings) as a pure function and the
+      predicates consult it. That is three separate sessions in which this
+      one predicate was found copied somewhere new - the count is the
+      argument for the shared resolver, not any single site.
 
   - id: B-ZOO-WRAPPER-CONTRACT
     title: Document the three registration points a new zoo wrapper must hit

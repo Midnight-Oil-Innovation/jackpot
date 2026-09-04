@@ -52,6 +52,32 @@ def get_bucket_name(bucket: JackpotBucket) -> str:
     return mapping[bucket]
 
 
+def resolve_backend_type(settings) -> StorageBackendType:
+    """Which backend a given Settings selects. Pure; takes the config.
+
+    Split from get_backend_type() so callers holding a Settings — notably
+    the credential predicates in backend/credentials/registry.py — ask the
+    same question instead of re-deriving it. Four independent copies of
+    this predicate is what B-STORAGE-LOCAL-FALLTHROUGH was.
+    """
+    match settings.storage_backend:
+        case "local":
+            return StorageBackendType.LOCAL
+        case "minio" | "s3":
+            return StorageBackendType.S3
+        case "gcs":
+            return StorageBackendType.GCS_VIA_S3
+        case "gcs_native":
+            return StorageBackendType.GCS_NATIVE
+        case _:
+            # Unset: config predates STORAGE_BACKEND. Infer, as before.
+            return (
+                StorageBackendType.S3
+                if settings.storage_endpoint
+                else StorageBackendType.GCS_VIA_S3
+            )
+
+
 def get_backend_type() -> StorageBackendType:
     """Which kind of backend this deployment is configured for.
 
@@ -61,18 +87,4 @@ def get_backend_type() -> StorageBackendType:
     local install ended up with a GCS client AND gs:// provenance
     (B-STORAGE-LOCAL-FALLTHROUGH). Callers ask this; nobody re-derives it.
     """
-    settings = get_settings()
-    match settings.storage_backend:
-        case "local":
-            return StorageBackendType.LOCAL
-        case "minio" | "s3":
-            return StorageBackendType.S3
-        case "gcs":
-            return StorageBackendType.GCS_VIA_S3
-        case _:
-            # Unset: config predates STORAGE_BACKEND. Infer, as before.
-            return (
-                StorageBackendType.S3
-                if settings.storage_endpoint
-                else StorageBackendType.GCS_VIA_S3
-            )
+    return resolve_backend_type(get_settings())
