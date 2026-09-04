@@ -3994,6 +3994,103 @@ sessions:
       caller of the thing you are about to change" applies to predicates,
       not just functions. The first pass changed one caller of an idea.
 
+  - id: B-SCENARIO-TAXONOMY-SPLIT
+    title: The install-scenario taxonomy is four in the ADR and seven in the code
+    short_description: |
+      ADR-0002 is canonical and says four scenarios, A/B/C/D, with D = CI
+      test, "reduced from seven in the May 2026 consolidation". The code
+      never followed: SCENARIO_REGISTRY still holds A-F plus T, where D is
+      "Hosted multi-tenant SaaS" and CI is F. The same letter means
+      different deployments in the two taxonomies, so a reader of the
+      canonical ADR who runs `jackpot init --scenario D` gets a hosted
+      multi-tenant SaaS install rather than a CI harness. Decide which
+      taxonomy is real, then make one side match.
+    phase: p0_series
+    status: open
+    depends_on: []
+    blocked_by_external:
+    parallel_safe: false
+    parallel_safe_reason: >
+      Touches the scenario registry, its tests, the docs guard denylist and
+      the generated STATUS field at once. Any parallel branch editing
+      install docs or instances/ conflicts on the meaning of the letters.
+    effort_sessions: 2
+    primary_files:
+      - schema/jackpot_scenarios/scenarios.py
+      - scripts/gen_status.py
+      - scripts/check_docs.py
+      - CLAUDE.md
+      - docs/adr/0002-four-install-scenarios.md
+    test_files:
+      - schema/tests/test_scenarios.py
+      - tests/test_check_docs.py
+    source_of_truth_views:
+      - docs/adr/0002-four-install-scenarios.md
+      - docs/architecture.md
+    pr_title_template:
+    branch_name_template: "refactor/scenario-taxonomy"
+    role_framing:
+    notes: >
+      Found 2026-09-03 when the maintainer asked "Isn't Scenario D for CI?"
+      after I had written "Scenario F (CI)" into B-STORAGE-CI-LOCAL and
+      repeated it in three PR bodies. I took it from Critical Rule 56
+      without checking the ADR. Per ADR-0002 the maintainer was right; per
+      SCENARIO_REGISTRY I was. Both were accurately reporting their own
+      source.
+
+      What makes this worth an entry rather than a doc fix is that BOTH
+      sides are mechanized, and they enforce opposite answers:
+
+        - scripts/check_docs.py DENYLIST forbids the phrase "seven install
+          scenarios" in docs, with the message "superseded: the scenario
+          taxonomy is four (A/B/C/D)".
+        - schema/tests/test_scenarios.py asserts
+          len(ALL_SCENARIOS) == 7 and the key set {A,B,C,D,E,F,T}.
+
+      So the docs guard fails anyone who writes down what the code does,
+      and the test fails anyone who makes the code match the ADR. Neither
+      guard is wrong about its own side; there is no state of the repo in
+      which both are describing the same system. That is the thing to fix,
+      and it cannot be fixed by editing prose.
+
+      The user-visible failure mode, which distinguishes this from the
+      documentation drift found elsewhere this session: the letters
+      collide. ADR-0002 D = CI test; SCENARIO_REGISTRY D = Hosted
+      multi-tenant SaaS. `jackpot init --scenario D` is a valid command
+      under both readings and produces a different install for each. It
+      fails silently - the install succeeds, it is simply not the one
+      asked for.
+
+      docs/STATUS.md's `scenario_count: 4` is not measured. It is the
+      literal "scenario_count: 4" at scripts/gen_status.py:53. The one
+      generated artifact that could have caught the split instead asserts
+      the ADR's number as a constant, which is the defect the Current
+      Baseline section of CLAUDE.md warns about for the test count. Derive
+      it from SCENARIO_REGISTRY as part of this work, whichever way the
+      decision goes, so the number cannot disagree with the code again.
+
+      THE DECISION, which should not be guessed:
+
+      (a) Consolidate the code to four. Matches the canonical ADR and the
+          docs guard. Means deciding what happens to E (Federation
+          member), F (CI) and T (Tribal sovereignty) - ADR-0002 says
+          federation, multi-tenancy and sovereignty became RUNTIME
+          CONFIGURATIONS applied to A/B/C, so on that reading E and T are
+          already meant to be flags rather than scenarios, and CI becomes
+          D. Requires a migration story for anyone who ran
+          `jackpot init --scenario F` or T, and instances/ci is currently
+          the committed artifact set for F (see B-STORAGE-CI-LOCAL and
+          Critical Rule 56, which both say "Scenario F").
+
+      (b) Amend ADR-0002 to describe seven. Cheapest, and honest if the
+          consolidation was reconsidered - but nothing records a decision
+          to reverse it, and an ADR marked Canonical should not be edited
+          to match code that drifted from it without saying why.
+
+      Sequencing note: B-STORAGE-CI-LOCAL asks "what is instances/ci for",
+      which cannot be answered while the letter naming it means two
+      things. Do this first.
+
   - id: B-STORAGE-CI-LOCAL
     title: Nothing can actually produce a filesystem-backed install yet
     short_description: |
@@ -4005,7 +4102,7 @@ sessions:
       and resolves through the legacy inference.
     phase: p0_series
     status: open
-    depends_on: ["B-STORAGE-LOCAL-FALLTHROUGH"]
+    depends_on: ["B-STORAGE-LOCAL-FALLTHROUGH", "B-SCENARIO-TAXONOMY-SPLIT"]
     blocked_by_external:
     parallel_safe: true
     parallel_safe_reason: "CLI writer plus one committed instance dir. No backend module, no schema, no migration."
@@ -4049,6 +4146,14 @@ sessions:
       green CI runs - is not what CI runs. Either wire it up or stop
       describing it that way; changing the storage lines without settling
       that just moves an unverified claim to a new value.
+
+      Blocked on B-SCENARIO-TAXONOMY-SPLIT as of 2026-09-03. This entry's
+      third question - what is instances/ci for - names a directory whose
+      scenario letter means two different deployments depending on whether
+      you read ADR-0002 (D = CI) or SCENARIO_REGISTRY (F = CI). Both this
+      entry and Critical Rule 56 say "Scenario F", which is the code's
+      answer, not the canonical ADR's. Settle the taxonomy first or the
+      answer here is written against a letter that is about to change.
 
   - id: B-STORAGE-DEAD-BACKENDS
     title: GCSStorageBackend wired for ADC/Workload Identity
