@@ -306,7 +306,7 @@ def _gather_operator_overrides(
     "scenario_code",
     type=str,
     required=True,
-    help="Scenario code. " + _scenario_choices() + ". Use `jackpot init detect` first if unsure.",
+    help=f"Scenario code. {_scenario_choices()}. Use `jackpot init detect` first if unsure.",
 )
 @click.option(
     "--instance-name",
