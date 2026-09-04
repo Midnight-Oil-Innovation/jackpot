@@ -29,30 +29,46 @@ JACKPOT formally adopts both. This document walks through how each CARE
 principle maps to specific JACKPOT architectural and default-behavior
 decisions.
 
-## The Scenario T deployment
+## The sovereignty policy set
 
-Scenario T (Tribal-sovereignty deployment) is a variant of Scenario A
-(single-lab on a laptop) or Scenario E (federation member) that makes
-sovereignty-aware defaults the out-of-the-box experience. An operator
-running Scenario T does not need to remember to flip a series of toggles
-to make their deployment CARE-aligned; the toggles default to the
-sovereignty-respecting position and require explicit configuration to
+CARE-aligned operation is a set of runtime policies, not a deployment
+scenario. An operator picks the infrastructure shape that matches them —
+usually A, self-hosted commodity — and enables the sovereignty policies
+afterwards. ADR-0006 records that decision and supersedes the original
+"Scenario T" design, in which sovereignty was an install-time scenario of
+its own.
+
+The intent the old design carried is preserved: an operator should not
+have to remember to flip a series of toggles individually. The policies
+below are meant to be enabled as a named set, defaulting to the
+sovereignty-respecting position and requiring explicit configuration to
 relax.
 
-The Scenario T defaults in detail:
+**Implementation status, measured 2026-09-03.** This table is a design
+commitment. Four of these behaviours have no enforcement in the codebase
+today, and the table says so per row rather than leaving the reader to
+assume. Status is against `backend/backend/` and `cli/`; see
+`B-CARE-CLAIMS-RECONCILE` and `B-SOVEREIGNTY-POLICY-PRESET`.
 
-| Behavior | Scenario A/E default | Scenario T default |
-|---|---|---|
-| Sample auto-publish to NCBI/INSDC | Per sharing-level | OFF — explicit per-sample approval required |
-| Federation peering | Off | Off — and federation discovery defaults to manual whitelist |
-| Sample sharing-level default | PRIVATE | PRIVATE, with sovereignty annotation visible at the access-request prompt |
-| Data-back from external analysis | Per scenario | OFF by default |
-| Deletion-on-request semantics | Soft-delete (`deleted_at` set) | Hard delete via tombstone-and-vacuum lifecycle |
-| Pipeline result retention | Per scenario | Per-pipeline configurable; default 1 year then archive |
-| Audit log retention | 7 years | 7 years; never purged of *deletion events*, even after vacuum |
+| Behavior | Default without the policy | Sovereignty-respecting position | Status |
+|---|---|---|---|
+| Sample auto-publish to NCBI/INSDC | Per sharing-level | OFF — explicit per-sample approval required | ❌ Not built — no reader for `auto_publish_to_insdc` |
+| Federation peering | Off | Off — and federation discovery defaults to manual whitelist | 🔶 Partial — `whitelist:manage` and an allowlist projection exist; not expressed as policy |
+| Sample sharing-level default | PRIVATE | PRIVATE, with sovereignty annotation visible at the access-request prompt | 🔶 Partial — sharing levels enforced; the annotation is not built |
+| Data-back from external analysis | Per deployment | OFF by default | ❌ Not built |
+| Deletion-on-request semantics | Soft-delete (`deleted_at` set) | Hard delete via tombstone-and-vacuum lifecycle | ✅ Built — `backend/backend/deletion.py`, wired into jobs and the authz reseed |
+| Pipeline result retention | Per deployment | Per-pipeline configurable; default 1 year then archive | ❌ Not built |
+| Audit log retention | 7 years | 7 years; never purged of *deletion events*, even after vacuum | 🔶 Partial — the audit trail is written on every state change (Critical Rule 4); there is no read path and no retention policy |
 
-These defaults are encoded in the Scenario T install profile that
-`jackpot init` writes when the operator selects Scenario T.
+The one marked ✅ is the load-bearing one. ADR-0007 identifies Authority
+to Control as the principle the schema must serve, because withdrawn-consent
+data has to actually leave the system — which is why soft deletion alone is
+insufficient and the tombstone-and-vacuum lifecycle exists.
+
+There is not yet a mechanism that applies these as a named set.
+`B-SOVEREIGNTY-POLICY-PRESET` covers it. Until then the individual
+behaviours that exist are configured on their own, and the ones that do
+not exist cannot be configured at all.
 
 ## C — Collective Benefit → JACKPOT defaults
 
@@ -62,17 +78,17 @@ analyze it.
 
 **JACKPOT alignment.**
 
-- **Citation defaults.** Scenario T deployments require citation
+- **Citation defaults.** Deployments with the sovereignty policies enabled require citation
   attribution in any sample-export envelope (`benefits-sharing-
   framework.md`). The originating Tribe's name appears as a structured
   field, not as a free-text afterthought.
 - **Data-back to source.** When a downstream analysis (typing,
   cluster assignment, AMR profile, novel-organism detection) is
-  computed on a sample originating from a Scenario T instance, the
+  computed on a sample originating from such a deployment, the
   result flows back to the originating Tribe. The Tribe sees the
   result attached to its sample without having to harvest it from a
   paper.
-- **Operator-side benefit-sharing policies.** Scenario T operators are
+- **Operator-side benefit-sharing policies.** These operators are
   encouraged to publish a deployment-local
   `docs/operator-benefits-sharing.md` describing how data benefits flow
   back to the Tribal community. The platform makes this discoverable
@@ -86,15 +102,15 @@ shared, and retired.
 
 **JACKPOT alignment.**
 
-- **Tribal authority owns the deployment.** Scenario T runs in
+- **Tribal authority owns the deployment.** A sovereignty-policy deployment runs in
   infrastructure controlled by the Tribal authority, not in a
   centralized service. The serving Tribe holds the database, the
   storage, the OAuth provider, the encryption keys.
 - **No auto-publish.** The defaults table above documents that
-  Scenario T deployments never auto-publish samples to public
+  These deployments never auto-publish samples to public
   repositories. Each export is an explicit decision, recorded with
   approver identity in the audit log.
-- **Per-sample sharing-level granularity.** Even within a Scenario T
+- **Per-sample sharing-level granularity.** Even within such a
   deployment, individual samples can be marked PRIVATE, INTERNAL
   (across the deployment), CONSORTIUM (peers in a defined sharing
   agreement), or PUBLIC. The default is PRIVATE.
@@ -119,12 +135,12 @@ passive obligation to avoid harm.
 
 **JACKPOT alignment.**
 
-- **Pre-publish checklist.** Scenario T deployments include a
+- **Pre-publish checklist.** These deployments include a
   pre-publish checklist that surfaces CARE-relevant questions before
   any public-repository submission: Has the Tribal Research Review
   Board (or equivalent) approved? Is the citation form correct? Is
   the post-publish data-back arrangement documented? The checklist is
-  required, not optional, for Scenario T submissions.
+  required, not optional, for their submissions.
 - **Federation-aware deletion propagation.** When a Tribal authority
   deletes a sample, the deletion event propagates to any federation
   peers that received the sample. Peers are expected to honor the
@@ -137,11 +153,11 @@ passive obligation to avoid harm.
   internal record is gone.
 - **Project-side responsibility.** The JACKPOT project commits to:
   - Engaging with CARE-Principles-trained reviewers (potentially
-    external consultants) when handling Scenario T-relevant grievances
+    external consultants) when handling sovereignty-relevant grievances
     (`access-grievance-procedure.md`).
   - Naming a Tribal/CARE seat on the future advisory board
     (`advisory-board.md`).
-  - Never using Scenario T deployments as case studies, marketing
+  - Never using these deployments as case studies, marketing
     references, or grant exhibits without explicit consent from the
     serving Tribe.
 
@@ -154,10 +170,10 @@ primary concern at all stages of the data life cycle.
 
 - **Defaults that fail safe.** When an operator deployment-config is
   ambiguous, the platform defaults to the *more* restrictive
-  interpretation in Scenario T. Example: if a sample's sharing-level
+  interpretation under these policies. Example: if a sample's sharing-level
   is missing from a CSV import, the platform sets PRIVATE, not the
   permissive equivalent.
-- **DLP-gate hard requirement.** Scenario T deployments cannot disable
+- **DLP-gate hard requirement.** These deployments cannot disable
   the DLP free-text scanner (Critical Rule 43). This is a structural
   protection against accidental PII leakage in metadata fields.
 - **No leakage via derived data.** Pipeline results that include
@@ -172,7 +188,7 @@ primary concern at all stages of the data life cycle.
   access to their accumulated data. The platform's data-portability
   guarantees (`platform-shutdown-data-portability-plan.md`) apply
   symmetrically — operators can leave as easily as they can stay.
-- **No model-training use.** Scenario T data is never used by the
+- **No model-training use.** This data is never used by the
   project for model training, reference-dataset assembly, or any other
   project-side analytics. This is true for all scenarios but called
   out explicitly here because the temptation is highest for
@@ -191,8 +207,9 @@ as follows:
 | Tribal lab data analyst | Data Analyst | Read access plus pipeline-launch authority |
 | Tribal IT operator | Bioinformatics User | Infrastructure and pipeline maintenance |
 
-The mapping is operator-configurable via `jackpot init`'s Scenario T
-flow. The default mapping above is a reference; serving Tribes are
+The mapping is operator-configurable. It is not tied to an install
+scenario: ADR-0006 makes sovereignty runtime policy, so the roles are
+assigned in the running deployment rather than chosen at install. The default mapping above is a reference; serving Tribes are
 expected to adapt it to their own organizational structure.
 
 ## What this document is not

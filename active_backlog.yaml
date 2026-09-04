@@ -4005,7 +4005,8 @@ sessions:
       mark each primitive built / partial / declared, and re-key the
       table onto policy toggles rather than scenario letters.
     phase: p0_series
-    status: open
+    status: shipped
+    merged_at: "2026-09-03"
     depends_on: []
     blocked_by_external:
     parallel_safe: true
@@ -4079,6 +4080,28 @@ sessions:
       written while three documents disagree about what the list is.
       Reconciling first makes the preset a transcription rather than a
       judgement call.
+
+      SHIPPED 2026-09-03. The governance table is re-keyed off scenario
+      letters onto "default without the policy" vs "sovereignty-respecting
+      position", with a Status column per row: 1 built, 3 partial, 3 not
+      built. Fourteen further "Scenario T" references through the four
+      principle sections were re-keyed; the only one left is the sentence
+      explaining that the design was superseded.
+
+      Both ADRs keep their decisions and lose the false tense. ADR-0007's
+      "the platform ships the enforcement primitives" becomes "are to be
+      shipped ... rather than gated behind an edition or a scenario", with
+      the measurement recorded beneath it. ADR-0006's list is now
+      explicitly not an inventory of shipped features.
+
+      Sharing-level and audit turned out to be PARTIAL rather than the
+      binary the entry assumed: sharing levels are enforced but the
+      sovereignty annotation is not built, and the audit trail is written
+      on every state change while nothing reads it back. Recording the
+      halves separately is more useful than either "built" or "missing".
+
+      merge_sha is deliberately absent until the follow-up commit - the
+      convention this session established in check_merge_sha.
 
   - id: B-SOVEREIGNTY-POLICY-PRESET
     title: CARE/sovereignty defaults have no home outside scenario T
