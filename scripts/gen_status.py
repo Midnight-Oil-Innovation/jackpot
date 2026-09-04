@@ -8,6 +8,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+from jackpot_scenarios.scenarios import SCENARIO_REGISTRY
+
 
 def sh(cmd: str, default: str = "unknown") -> str:
     try:
@@ -50,7 +52,11 @@ def main() -> int:
         "",
         f"python_version: {sys.version_info.major}.{sys.version_info.minor}",
         "schema_version: v5.0",
-        "scenario_count: 4",
+        # Derived, never a literal: it read 'scenario_count: 4' from ADR-0002
+        # while the registry held seven, so the one generated artifact that
+        # could have surfaced that split was asserting the ADR's number as a
+        # constant. See B-SCENARIO-TAXONOMY-SPLIT.
+        f"scenario_count: {len(SCENARIO_REGISTRY)}",
         f"alembic_head: {alembic_head()}",
         f"test_count: {test_count()}",
         "",

@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 
+import pytest
 from click.testing import CliRunner
 
 from jackpot.cli.init import init
@@ -320,3 +321,42 @@ class TestConfigureRerunsArePreservingByDefault:
         assert result.exit_code == 0
         assert "# operator note" in toml_file.read_text()
         assert "preserved" in result.output
+
+
+# ── scenario codes are never shown bare (B-SCENARIO-TAXONOMY-SPLIT) ────────
+
+
+def test_scenario_help_names_every_code():
+    """Bare letters look self-explanatory and are not.
+
+    ADR-0002 assigns D to the CI harness; SCENARIO_REGISTRY assigns it to
+    hosted multi-tenant SaaS. Both are valid input, so a reader of the
+    canonical ADR can type a correct-looking code and install something
+    else with no error. Until the taxonomy is settled, the names are what
+    make that visible at the moment of choosing.
+    """
+    from jackpot_scenarios.scenarios import SCENARIO_REGISTRY
+
+    from jackpot.cli.init import _scenario_choices
+
+    rendered = _scenario_choices()
+    for code, scenario in SCENARIO_REGISTRY.items():
+        assert f"{code}={scenario.name}" in rendered, f"{code} shown without its name"
+
+
+@pytest.mark.parametrize("command", ["detect", "configure"])
+def test_rendered_help_names_the_scenarios(runner: CliRunner, command: str):
+    """Canary (Critical Rule 74), asserted on the surface a user sees.
+
+    The tests above only inspect _scenario_choices(); if a help string went
+    back to the bare "(A | B | C | D | E | F | T)" they would all still
+    pass. This checks what click actually renders, which is where the
+    ambiguity would reach an operator.
+    """
+    # click wraps at 80 columns and breaks on hyphens: the rendered help
+    # already splits "T=Tribal-\nsovereignty deployment". Collapse whitespace,
+    # and assert on a token textwrap has no break point inside, so this fails
+    # for the reason it names rather than because a name got longer.
+    out = " ".join(runner.invoke(init, [command, "--help"]).output.split())
+    assert "A | B | C | D" not in out, "a bare-letter scenario list is back in --help"
+    assert "D=Hosted" in out, "D's real meaning is not shown"

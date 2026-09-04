@@ -46,6 +46,21 @@ from jackpot.init.github_vars import (
 )
 from jackpot.init.writers import write_instance
 
+
+def _scenario_choices() -> str:
+    """ "A=Single laptop / academic dev, B=..." straight from the registry.
+
+    The help used to read "(A | B | C | D | E | F | T)". Bare letters look
+    self-explanatory and are not: ADR-0002 assigns D to the CI harness while
+    the registry assigns it to hosted multi-tenant SaaS, so a reader of the
+    canonical ADR can type a valid code and install something else without an
+    error (B-SCENARIO-TAXONOMY-SPLIT). Names make the mismatch visible at the
+    moment of choosing, and deriving them means this help cannot drift from
+    the registry the way the prose did.
+    """
+    return ", ".join(f"{c}={SCENARIO_REGISTRY[c].name}" for c in sorted(SCENARIO_REGISTRY))
+
+
 _INSTANCE_NAME_RE = _re.compile(r"^[A-Za-z0-9][A-Za-z0-9_-]*$")
 
 
@@ -116,7 +131,7 @@ def init() -> None:
     type=str,
     default=None,
     help=(
-        "Skip the detector questions and use this scenario directly (A | B | C | D | E | F | T)."
+        "Skip the detector questions and use this scenario directly. " + _scenario_choices() + "."
     ),
 )
 @click.option(
@@ -172,9 +187,7 @@ def scenario_info_cmd(code: str, as_json: bool) -> None:
     """
     code_upper = code.strip().upper()
     if code_upper not in SCENARIO_REGISTRY:
-        raise click.UsageError(
-            f"Unknown scenario {code!r}. Valid: {', '.join(sorted(SCENARIO_REGISTRY))}"
-        )
+        raise click.UsageError(f"Unknown scenario {code!r}. Valid: {_scenario_choices()}")
 
     scenario = SCENARIO_REGISTRY[code_upper]  # type: ignore[index]
 
@@ -293,7 +306,7 @@ def _gather_operator_overrides(
     "scenario_code",
     type=str,
     required=True,
-    help="Scenario code (A | B | C | D | E | F | T). Use `jackpot init detect` first if unsure.",
+    help=f"Scenario code. {_scenario_choices()}. Use `jackpot init detect` first if unsure.",
 )
 @click.option(
     "--instance-name",
@@ -354,7 +367,7 @@ def configure_cmd(
     scenario_code_upper = scenario_code.strip().upper()
     if scenario_code_upper not in SCENARIO_REGISTRY:
         raise click.UsageError(
-            f"Unknown --scenario {scenario_code!r}. Valid: {', '.join(sorted(SCENARIO_REGISTRY))}"
+            f"Unknown --scenario {scenario_code!r}. Valid: {_scenario_choices()}"
         )
     scenario = SCENARIO_REGISTRY[scenario_code_upper]  # type: ignore[index]
 
@@ -490,7 +503,7 @@ def secrets_cmd(
     if scenario_code not in SCENARIO_REGISTRY:
         raise click.UsageError(
             f"jackpot.toml references unknown scenario {scenario_code!r}. "
-            f"Valid: {', '.join(sorted(SCENARIO_REGISTRY))}"
+            f"Valid: {_scenario_choices()}"
         )
     scenario = SCENARIO_REGISTRY[scenario_code]  # type: ignore[index]
 

@@ -3,7 +3,7 @@
 
 python_version: 3.12
 schema_version: v5.0
-scenario_count: 4
+scenario_count: 7
 alembic_head: d51c4361877d
-test_count: 2802
+test_count: 2805
 

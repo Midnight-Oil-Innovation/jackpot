@@ -72,8 +72,9 @@ repos:
         entry: uv run python scripts/gen_status.py
         language: system
         pass_filenames: false
-        # Only the two inputs that actually vary: test_count comes from a
-        # pytest collect, alembic_head from the versions directory. Everything
+        # Only the three inputs that actually vary: test_count comes from a
+        # pytest collect, alembic_head from the versions directory, and
+        # scenario_count from the scenario registry. Everything
         # else in STATUS.md is a constant or comes from the interpreter, so a
         # docs-only or source-only commit does not pay the ~3.4s collect.
         #
@@ -85,4 +86,4 @@ repos:
         # Why it exists: `make status` embeds a test count, so it is only
         # correct if run AFTER the last test is added. Running it mid-work and
         # then adding tests broke CI's guardrails job twice in one session.
-        files: ^((tests|schema/tests|cli/tests)/.*|backend/db/migrations/versions/.*)\.py$
+        files: ^((tests|schema/tests|cli/tests)/.*|backend/db/migrations/versions/.*|schema/jackpot_scenarios/scenarios)\.py$
