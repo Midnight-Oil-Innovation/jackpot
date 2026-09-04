@@ -3856,18 +3856,91 @@ sessions:
       test expects ${branch}. Pre-existing, unrelated to the lock, and
       exactly the zsh/python drift that test exists to catch.
 
-  - id: B-STORAGE-DEAD-BACKENDS
-    title: GCSStorageBackend and LocalFSStorageBackend have no production caller
+  - id: B-STORAGE-LOCAL-FALLTHROUGH
+    title: Selecting local filesystem storage silently yields a GCS client
     short_description: |
-      backend/backend/storage/ ships four backend classes. factory.py has
-      exactly two branches and both return S3StorageBackend - S3-compatible
-      when storage_endpoint is set, GCS via HMAC otherwise. GCSStorageBackend
-      and LocalFSStorageBackend are referenced only by their own definitions
-      and by tests. Decide whether each is a real deployment target or dead
-      code, then wire it or delete it.
+      storage_backend="local" is the ScenarioDefaults default and is chosen
+      by two shipped scenarios. init writes STORAGE_ENDPOINT= (empty) for
+      it, and factory.py branches on `if settings.storage_endpoint:` -
+      falling through to S3StorageBackend against
+      https://storage.googleapis.com. An operator who asks for local
+      filesystem storage gets a cloud client, with no error and no warning.
     phase: p0_series
     status: open
     depends_on: []
+    blocked_by_external:
+    parallel_safe: true
+    parallel_safe_reason: "Storage factory plus one CLI writer branch. No authorization path, no schema, no migration."
+    effort_sessions: 1
+    primary_files:
+      - backend/backend/storage/factory.py
+      - backend/backend/storage/local.py
+      - cli/jackpot/init/writers.py
+      - schema/jackpot_scenarios/scenarios.py
+    test_files:
+      - tests/storage/test_factory_selection.py
+      - tests/storage/test_local.py
+    source_of_truth_views:
+      - docs/architecture.md
+    pr_title_template:
+    branch_name_template: "fix/local-storage-fallthrough"
+    role_framing:
+    notes: >
+      Reproduced 2026-09-03, not inferred:
+
+        Settings(storage_endpoint=None) -> get_storage_backend()
+        -> S3StorageBackend, endpoint_url=https://storage.googleapis.com
+
+      The chain: scenarios.py:124 defaults storage_backend to "local";
+      writers.py:180 emits STORAGE_ENDPOINT= for anything that is not
+      minio; factory.py treats empty endpoint as "not S3-compatible,
+      therefore GCS via HMAC". Three reasonable-looking steps compose into
+      an install that reaches for Google Cloud Storage when the operator
+      asked for a directory on disk. LocalFSStorageBackend exists to serve
+      exactly this choice and is instantiated by nothing outside tests.
+
+      Two shipped scenarios select storage_backend="local":
+      the CI scenario (F) and the tribal-sovereignty deployment. The
+      sovereignty profile is the one that matters. A deployment whose
+      entire premise is that data does not leave the operator's control
+      currently constructs a client aimed at a Google endpoint. It has
+      presumably never failed loudly because nothing in CI writes an object
+      through the real backend, which is the same reason the reachability
+      of LocalFSStorageBackend was never questioned - see
+      B-STORAGE-DEAD-BACKENDS.
+
+      CLAUDE.md Critical Rule 56 carries the same misunderstanding: it
+      describes instances/ci as using "filesystem storage (STORAGE_ENDPOINT
+      empty in .env.local)". Empty STORAGE_ENDPOINT does not select
+      filesystem storage; it selects GCS. The rule needs correcting in the
+      same change, or it will re-teach the bug to the next reader.
+
+      Fix shape, to be confirmed against docs/architecture.md 159 and 418
+      which both list local filesystem as an install-time storage option:
+      factory.py needs an explicit branch on the selected backend rather
+      than an inference from endpoint emptiness. That likely means
+      Settings carries storage_backend as a first-class value instead of
+      the factory guessing from STORAGE_ENDPOINT. Wire LocalFSStorageBackend
+      to it. Do NOT "fix" this by deleting local.py.
+
+      Add a test asserting the selection matrix directly - each
+      storage_backend value maps to the class and endpoint it should - so
+      the mapping stops being a property nobody can see. The absence of
+      such a test is why three composable steps went unnoticed.
+
+  - id: B-STORAGE-DEAD-BACKENDS
+    title: GCSStorageBackend has no production caller - wire it or delete it
+    short_description: |
+      backend/backend/storage/ ships four backend classes and factory.py
+      instantiates one: S3StorageBackend, in both branches. GCSStorageBackend
+      is referenced only by its own definition and by tests, and GCS already
+      works through the S3-compatible HMAC path, so a native client needs a
+      justification beyond symmetry. Decide: wire it or delete it.
+      LocalFSStorageBackend is NOT in scope here - it is unwired because of a
+      live defect, tracked as B-STORAGE-LOCAL-FALLTHROUGH.
+    phase: p0_series
+    status: open
+    depends_on: ["B-STORAGE-LOCAL-FALLTHROUGH"]
     blocked_by_external:
     parallel_safe: true
     parallel_safe_reason: "Storage layer only. No authorization path, no schema, no migration."
@@ -3875,11 +3948,9 @@ sessions:
     primary_files:
       - backend/backend/storage/factory.py
       - backend/backend/storage/gcs.py
-      - backend/backend/storage/local.py
       - backend/backend/credentials/registry.py
     test_files:
       - tests/storage/test_gcs.py
-      - tests/storage/test_local.py
       - tests/storage/test_base.py
     source_of_truth_views:
       - docs/architecture.md
@@ -3905,13 +3976,27 @@ sessions:
       flip this" - so the fact was known, written down once, in the one
       place nobody looks for a storage question.
 
-      The decision is per class, not global. LocalFSStorageBackend has an
-      obvious future in Scenario A/B installs with no object store, which
-      is an argument for wiring it to a factory branch rather than deleting
-      it. GCSStorageBackend is the weaker case: GCS already works through
-      the S3-compatible HMAC path, so a native GCS client would need a
-      reason beyond symmetry. Whichever way each goes, the outcome to avoid
-      is leaving them exactly as they are.
+      NARROWED 2026-09-04, before any session ran against it. The original
+      entry lumped LocalFSStorageBackend in as possible dead code and the
+      generated prompt turned that into an explicit instruction: if
+      architecture.md does not name the backend, delete local.py and its
+      tests. Inspecting the prompt is what caught it.
+
+      LocalFSStorageBackend is not dead code. It is the backend that should
+      serve storage_backend="local" - the ScenarioDefaults default, selected
+      by the CI and tribal-sovereignty scenarios - and the reason nothing
+      instantiates it is a defect, now tracked as
+      B-STORAGE-LOCAL-FALLTHROUGH. Deleting it would have removed the fix
+      for a live bug inside a PR captioned as tidy-up. This entry depends on
+      that one so the ordering cannot be lost.
+
+      What remains here is GCSStorageBackend alone, and it is a genuine
+      question rather than a defect: GCS is already reachable through the
+      S3-compatible HMAC path, so the native client either earns a factory
+      branch for a reason someone can state, or it goes. Leaving it exactly
+      as it is - present, tested, unreachable - is the one outcome to avoid,
+      because its own green tests make the unreachability invisible and
+      coverage counts it as exercised.
 
   - id: B-ZOO-WRAPPER-CONTRACT
     title: Document the three registration points a new zoo wrapper must hit
