@@ -3866,7 +3866,9 @@ sessions:
       https://storage.googleapis.com. An operator who asks for local
       filesystem storage gets a cloud client, with no error and no warning.
     phase: p0_series
-    status: open
+    status: shipped
+    merged_at: "2026-09-04"
+    merge_sha: "TBD"
     depends_on: []
     blocked_by_external:
     parallel_safe: true
@@ -3927,6 +3929,98 @@ sessions:
       storage_backend value maps to the class and endpoint it should - so
       the mapping stops being a property nobody can see. The absence of
       such a test is why three composable steps went unnoticed.
+
+      SHIPPED 2026-09-04. Settings gained storage_backend (Literal, default
+      None), local_storage_root and local_storage_public_url_base;
+      factory.py branches on the named choice and builds
+      LocalFSStorageBackend for "local", raising StorageError naming
+      local_storage_root when it is unset. storage_backend=None keeps the
+      old inference so a config predating the setting is unchanged - the
+      inference survives only as a compatibility path, never as the way a
+      backend is chosen.
+
+      credentials/registry.py's local_storage_presign_secret predicate was
+      the "flip this when storage_factory grows that backend" placeholder;
+      it is now `s.storage_backend == "local"`. Whoever wrote C-1 left the
+      shape of this fix ready, which is worth noticing: the entry treated
+      LocalFSStorageBackend as possibly-dead code when the registry had
+      already recorded it as pending work.
+
+      tests/storage/test_factory_selection.py asserts the matrix directly.
+      Its helper pins every selection-relevant field rather than
+      inheriting them, because tests/conftest.py:54 sets STORAGE_ENDPOINT
+      for the whole session - the legacy-inference test passed for the
+      wrong reason on its first run. Confirmed to discriminate: removing
+      the local branch reddens exactly the three local tests.
+
+      NOT done here, deliberately. instances/ci/.env.local still carries
+      only an empty STORAGE_ENDPOINT, so the CI instance resolves through
+      the legacy path rather than filesystem storage. Making it genuinely
+      local needs STORAGE_BACKEND, LOCAL_STORAGE_ROOT and a committed
+      presign secret, and nothing in .github/workflows/ consumes that file
+      (only cli/tests/ reference instances/ci), so the change would be
+      unverifiable by CI. Critical Rule 56 now states this rather than
+      asserting filesystem storage it does not have. Also not done:
+      cli/jackpot/init/writers.py emits STORAGE_BACKEND into the Helm
+      values payload only, never into .env.local, so `jackpot init` still
+      cannot produce a filesystem-backed Compose install. Both are
+      B-STORAGE-CI-LOCAL.
+
+  - id: B-STORAGE-CI-LOCAL
+    title: Nothing can actually produce a filesystem-backed install yet
+    short_description: |
+      The backend can now select local storage (B-STORAGE-LOCAL-FALLTHROUGH)
+      but nothing emits the config that selects it. jackpot init writes
+      STORAGE_BACKEND into the Helm values payload only, never into
+      .env.local, so a Compose install cannot ask for filesystem storage.
+      instances/ci/.env.local still carries only an empty STORAGE_ENDPOINT
+      and resolves through the legacy inference.
+    phase: p0_series
+    status: open
+    depends_on: ["B-STORAGE-LOCAL-FALLTHROUGH"]
+    blocked_by_external:
+    parallel_safe: true
+    parallel_safe_reason: "CLI writer plus one committed instance dir. No backend module, no schema, no migration."
+    effort_sessions: 1
+    primary_files:
+      - cli/jackpot/init/writers.py
+      - instances/ci/.env.local
+      - CLAUDE.md
+    test_files:
+      - cli/tests/test_init_writers.py
+    source_of_truth_views: []
+    pr_title_template:
+    branch_name_template: "fix/init-emits-storage-backend"
+    role_framing:
+    notes: >
+      Split out of B-STORAGE-LOCAL-FALLTHROUGH on 2026-09-04 rather than
+      bundled into it, because the two halves have different risk. The
+      backend half is covered by tests/storage/test_factory_selection.py
+      and provable in-process. This half is not verifiable by CI at all,
+      which is the finding as much as the fix.
+
+      writers.py:258 puts STORAGE_BACKEND in the Helm values dict.
+      writers.py:180 writes .env.local and emits STORAGE_ENDPOINT with no
+      companion STORAGE_BACKEND line. So `jackpot init --scenario A` (or
+      the sovereignty scenario, which defaults storage_backend="local")
+      produces a Compose env that cannot name its own backend, and the
+      backend falls back to inference. Scenario A defaults to minio so it
+      works by accident; the sovereignty scenario does not.
+
+      instances/ci/.env.local needs STORAGE_BACKEND=local,
+      LOCAL_STORAGE_ROOT, and a presign secret before Critical Rule 56's
+      "filesystem storage" description becomes true. The secret is
+      committable under the same reasoning Rule 56 already applies to the
+      fixed JWT signing key, but note it must be at least 32 characters or
+      LocalFSStorageBackend raises at construction.
+
+      The uncomfortable part, worth confirming before doing the work:
+      nothing in .github/workflows/ reads instances/ci/.env.local. Only
+      cli/tests/ reference instances/ci at all. So Scenario F's committed
+      artifact set - the thing Rule 56 describes as producing reproducible
+      green CI runs - is not what CI runs. Either wire it up or stop
+      describing it that way; changing the storage lines without settling
+      that just moves an unverified claim to a new value.
 
   - id: B-STORAGE-DEAD-BACKENDS
     title: GCSStorageBackend has no production caller - wire it or delete it

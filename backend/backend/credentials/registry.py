@@ -86,9 +86,12 @@ REQUIRED_CREDENTIALS: tuple[CredentialSpec, ...] = (
         description="HMAC signing secret for presigned URLs in the local "
         "filesystem storage backend.",
         legacy_env_names=("JACKPOT_PRESIGN_SECRET",),
-        # No factory branch instantiates LocalFSStorageBackend yet; flip this
-        # to a real predicate when storage_factory grows that backend.
-        required_predicate=lambda _s: False,
+        # Flipped 2026-09-04 (B-STORAGE-LOCAL-FALLTHROUGH): the factory
+        # now builds LocalFSStorageBackend when storage_backend == "local",
+        # and that backend refuses a secret shorter than 32 chars, so a
+        # misconfigured deployment should fail at startup rather than on
+        # the first presigned URL.
+        required_predicate=lambda s: s.storage_backend == "local",
     ),
     # I-3a: backend-driven submission execution credentials. Required
     # only when the operator opts in via Settings.allow_backend_submission
