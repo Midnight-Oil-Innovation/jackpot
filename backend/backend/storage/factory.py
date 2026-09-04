@@ -23,8 +23,8 @@ from backend.storage.s3 import S3StorageBackend
 from backend.storage.settings import (
     JackpotBucket,
     StorageBackendType,
-    get_backend_type,
     get_bucket_name,
+    resolve_backend_type,
 )
 
 
@@ -37,10 +37,9 @@ def get_storage_backend(bucket: JackpotBucket = JackpotBucket.STAGING) -> Storag
     settings = get_settings()
     bucket_name = get_bucket_name(bucket)
 
-    # get_backend_type() is the only place that answers "which backend";
-    # it handles both the named choice and the legacy inference for a
-    # config predating STORAGE_BACKEND.
-    kind = get_backend_type()
+    # Resolve from the Settings already in hand rather than fetching the
+    # config a second time through get_backend_type().
+    kind = resolve_backend_type(settings)
 
     if kind is StorageBackendType.LOCAL:
         if not settings.local_storage_root:

@@ -18,7 +18,6 @@ import pytest
 
 import backend.storage.factory as factory
 import backend.storage.gcs as gcs_mod
-import backend.storage.settings as storage_settings
 from backend.config import Settings
 from backend.storage.exceptions import StorageError
 from backend.storage.gcs import GCSStorageBackend
@@ -47,11 +46,6 @@ def _backend_for(**overrides):
     settings = Settings(**{**pinned, **overrides})
     with (
         patch.object(factory, "get_settings", lambda: settings),
-        # get_backend_type() resolves through its own module-level import,
-        # so patching only the factory's view leaves the resolver reading
-        # ambient config — the same class of leak the pinning above exists
-        # to stop.
-        patch.object(storage_settings, "get_settings", lambda: settings),
         patch.object(factory.credentials, "get", lambda *a, **k: PRESIGN),
         patch.object(factory.credentials, "get_optional", lambda *a, **k: None),
     ):
@@ -187,7 +181,6 @@ class TestNativeGcsBackend:
         The HMAC credentials stay required for storage_backend='gcs', which
         genuinely cannot work without them.
         """
-        from backend.config import Settings
         from backend.credentials.registry import REQUIRED_CREDENTIALS
 
         hmac_specs = [c for c in REQUIRED_CREDENTIALS if c.key.startswith("gcs_hmac")]
@@ -199,6 +192,12 @@ class TestNativeGcsBackend:
             assert spec.required_predicate(
                 Settings(storage_backend="gcs", env="gcp", storage_endpoint=None)
             ), f"{spec.key} must stay required on the HMAC path"
+            # Behaviour change worth pinning: the old predicate keyed off
+            # `not storage_endpoint`, so an explicit gcs backend with an
+            # endpoint set was told it needed no keys. It does.
+            assert spec.required_predicate(
+                Settings(storage_backend="gcs", env="gcp", storage_endpoint="http://x:9000")
+            ), f"{spec.key} must be required for an explicit gcs backend"
 
     def test_gcs_native_reports_gs_uris(self):
         with patch.object(gcs_mod, "gcs_module"):
