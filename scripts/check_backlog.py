@@ -115,6 +115,51 @@ def find_cycles(entries: list[dict]) -> list[list[str]]:
     return cycles
 
 
+# A git short SHA as this file records it: hex, 7-40 chars. Deliberately
+# strict about the TYPE too, because every way this field has broken was a
+# silent YAML coercion rather than a typo a human would spot:
+#
+#   merge_sha: .inf        -> float('inf')   (two entries; provenance gone)
+#   merge_sha: 2296650     -> int            (two entries)
+#   merge_sha: cd94b28 real guard. Legacy...  -> prose glued on, from a bad
+#                                                edit that ate a notes line
+#   merge_sha: "TBD"       -> a placeholder that reads as data
+#
+# All six were live on 2026-09-04 and none had ever failed anything.
+_SHA_RE = re.compile(r"^[0-9a-f]{7,40}$")
+_SHA_PLACEHOLDERS = {"tbd", "todo", "xxx", "n/a", "na", "none", "pending", "?"}
+
+
+def check_merge_sha(entries: list[dict]) -> list[Violation]:
+    """merge_sha, when present, is a quoted hex SHA and nothing else."""
+    out: list[Violation] = []
+    for entry in entries:
+        raw = entry.get("merge_sha")
+        if raw is None:
+            continue
+        eid = entry.get("id", "?")
+        if not isinstance(raw, str):
+            out.append(
+                Violation(
+                    eid,
+                    f"merge_sha parsed as {type(raw).__name__} ({raw!r}) — quote it: "
+                    'merge_sha: "abc1234"',
+                )
+            )
+        elif raw.strip().lower() in _SHA_PLACEHOLDERS:
+            out.append(
+                Violation(
+                    eid,
+                    f"merge_sha is the placeholder {raw!r}. The SHA does not exist "
+                    "until the PR merges — omit the field and add it in the "
+                    "follow-up commit, rather than writing a value that reads as data.",
+                )
+            )
+        elif not _SHA_RE.match(raw):
+            out.append(Violation(eid, f"merge_sha {raw!r} is not a 7-40 char hex SHA"))
+    return out
+
+
 def check(entries: list[dict]) -> list[Violation]:
     out: list[Violation] = []
 
@@ -184,6 +229,8 @@ def check(entries: list[dict]) -> list[Violation]:
             out.append(
                 Violation(eid, "status is 'blocked' with no depends_on and no blocked_by_external")
             )
+
+    out.extend(check_merge_sha(entries))
 
     return out
 
