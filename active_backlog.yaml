@@ -3994,6 +3994,92 @@ sessions:
       caller of the thing you are about to change" applies to predicates,
       not just functions. The first pass changed one caller of an idea.
 
+  - id: B-CARE-CLAIMS-RECONCILE
+    title: Reconcile the CARE/sovereignty claims with what is enforced
+    short_description: |
+      ADR-0006 names six runtime sovereignty policies, the governance
+      document's defaults table lists seven behaviours, and SCENARIO_T
+      implements four fields. One of the six is built. The governance
+      table is keyed to Scenario T and Scenario A/E, both of which
+      ADR-0006 supersedes and the consolidation deletes. Docs only:
+      mark each primitive built / partial / declared, and re-key the
+      table onto policy toggles rather than scenario letters.
+    phase: p0_series
+    status: open
+    depends_on: []
+    blocked_by_external:
+    parallel_safe: true
+    parallel_safe_reason: "Three documents. No code, no schema, no tests beyond the docs guard."
+    effort_sessions: 0.5
+    primary_files:
+      - governance/care-principles-and-tribal-data-sovereignty.md
+      - docs/adr/0006-sovereignty-as-runtime-policy.md
+      - docs/adr/0007-care-principles-adopted.md
+    test_files: []
+    source_of_truth_views:
+      - docs/architecture.md
+    pr_title_template:
+    branch_name_template: "docs/care-claims-reconcile"
+    role_framing:
+    notes: >
+      Found 2026-09-03 while scoping B-SOVEREIGNTY-POLICY-PRESET. Measured,
+      by grep across backend/backend/ and cli/, against ADR-0006's list of
+      six:
+
+        deletion-on-request (tombstone-and-vacuum)  BUILT. deletion.py,
+          wired into jobs, config and the authz reseed. samples.py:721 and
+          reseed.py:96 distinguish operational acts from consent acts. This
+          is ADR-0007's "load-bearing" one and it is real.
+        federation restrictions                     PARTIAL. whitelist:manage
+          capability and an allowlist projection exist, but nothing
+          expresses them as a sovereignty policy.
+        no auto-publish to NCBI/INSDC               NOT BUILT. Zero hits for
+          auto_publish. ScenarioDefaults.auto_publish_to_insdc has no reader.
+        audit visibility                            NOT BUILT. audit.py
+          exposes log_audit and nothing else; no router reads the audit log
+          back. The trail exists; visibility of it does not.
+        residency enforcement                       NOT BUILT. Zero hits.
+        revocable consent                           NOT BUILT. Zero hits;
+          every "consent" match is a comment reasoning about deletion.
+
+      What to correct:
+
+        1. governance/care-principles-and-tribal-data-sovereignty.md keys
+           its defaults table to "Scenario T" vs "Scenario A/E" and closes
+           with "These defaults are encoded in the Scenario T install
+           profile that `jackpot init` writes". ADR-0006 supersedes that
+           design explicitly and B-SCENARIO-TAXONOMY-SPLIT deletes both
+           letters. Re-key onto policy toggles.
+        2. ADR-0007 says in the present tense that "the platform ships the
+           enforcement primitives for all deployments (residency, revocable
+           consent, no-auto-publish defaults, federation restrictions,
+           audit portal)". Four of those five do not exist. Say which ship
+           and which are committed-to.
+        3. Reconcile the three lists into one, and note that
+           auto_publish_to_insdc is a field nothing reads.
+
+      Scope discipline. The document's own "What this document is not"
+      section is careful and honest - it calls itself "a project-side
+      commitment to design the platform in a CARE-aligned way" and
+      disclaims "an assertion that JACKPOT-the-platform discharges any
+      sovereignty obligation". So this is NOT a case of misrepresenting
+      protections to a partner, and an earlier framing of it that way was
+      overstated and withdrawn. What is wrong is narrower: a superseded
+      mechanism named as current, and an aspirational primitives list
+      written in the present tense.
+
+      Explicitly NOT in scope: building residency enforcement, revocable
+      consent, auto-publish gating or audit visibility. Each is a real
+      feature and deserves its own entry. Note ADR-0007 calls Authority to
+      Control load-bearing, and that half IS built - the unbuilt four are
+      not the centre of the commitment.
+
+      Sequencing: do this before B-SOVEREIGNTY-POLICY-PRESET. The preset's
+      content is "which toggles exist and what each does", which cannot be
+      written while three documents disagree about what the list is.
+      Reconciling first makes the preset a transcription rather than a
+      judgement call.
+
   - id: B-SOVEREIGNTY-POLICY-PRESET
     title: CARE/sovereignty defaults have no home outside scenario T
     short_description: |
@@ -4007,7 +4093,7 @@ sessions:
       wearing a scenario's clothes.
     phase: p0_series
     status: open
-    depends_on: []
+    depends_on: ["B-CARE-CLAIMS-RECONCILE"]
     blocked_by_external:
     parallel_safe: false
     parallel_safe_reason: >
