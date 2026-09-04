@@ -35,7 +35,7 @@ import re as _re
 from pathlib import Path
 
 import click
-from jackpot_scenarios.scenarios import SCENARIO_REGISTRY
+from jackpot_scenarios.scenarios import SCENARIO_REGISTRY, retired_code_hint
 
 from jackpot.init.backend_submission import prompt_for_backend_submission
 from jackpot.init.detector import prompt_for_scenario
@@ -87,12 +87,9 @@ def _validate_instance_name(instance_name: str) -> str:
 # override via --instance-name.
 _DEFAULT_INSTANCE_NAME = {
     "A": "local",
-    "B": "production",
+    "B": "hpc",
     "C": "production",
-    "D": "production",
-    "E": "production",
-    "F": "ci",
-    "T": "tribal",
+    "D": "ci",
 }
 
 # Operator-identity fields the configure prompts ask for, in display
@@ -367,7 +364,8 @@ def configure_cmd(
     scenario_code_upper = scenario_code.strip().upper()
     if scenario_code_upper not in SCENARIO_REGISTRY:
         raise click.UsageError(
-            f"Unknown --scenario {scenario_code!r}. Valid: {_scenario_choices()}"
+            (retired_code_hint(scenario_code) or f"Unknown --scenario {scenario_code!r}.")
+            + f" Valid: {_scenario_choices()}"
         )
     scenario = SCENARIO_REGISTRY[scenario_code_upper]  # type: ignore[index]
 

@@ -17,7 +17,12 @@ from jackpot_scenarios.detector import (
     DetectorAnswers,
     infer_scenario,
 )
-from jackpot_scenarios.scenarios import SCENARIO_REGISTRY, Scenario, ScenarioCode
+from jackpot_scenarios.scenarios import (
+    SCENARIO_REGISTRY,
+    Scenario,
+    ScenarioCode,
+    retired_code_hint,
+)
 
 
 @dataclass(frozen=True)
@@ -145,6 +150,7 @@ def prompt_for_scenario(
         except KeyError as e:
             raise click.UsageError(
                 f"Unknown --scenario {explicit_code!r}. "
+                f"{retired_code_hint(explicit_code) or ''} "
                 f"Valid: {', '.join(sorted(SCENARIO_REGISTRY))}"
             ) from e
         return PromptResult(scenario=scenario, detection=None, overridden=False)

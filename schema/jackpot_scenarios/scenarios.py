@@ -28,8 +28,13 @@ from pydantic import BaseModel, ConfigDict, Field
 CURRENT_SCHEMA_VERSION = "1.0"
 
 
-ScenarioCode = Literal["A", "B", "C", "D", "E", "F", "T"]
-ComposeProfile = Literal["laptop", "single-org", "multi-tenant", "ci", "tribal"]
+# Four install-time infrastructure shapes. Federation, multi-org tenancy and
+# CARE/sovereignty are NOT scenarios — architecture.md 3.6: "scenarios
+# describe install-time infrastructure configurations; everything else is
+# runtime policy". They were registry D, E and T until 2026-09-03; see
+# B-SCENARIO-TAXONOMY-SPLIT.
+ScenarioCode = Literal["A", "B", "C", "D"]
+ComposeProfile = Literal["laptop", "single-org", "hpc", "ci"]
 StorageBackend = Literal["local", "minio", "gcs", "s3"]
 PipelineExecutor = Literal["local", "gcp_batch", "aws_batch", "k8s_jobs"]
 AuthMethod = Literal["mock", "oauth", "sso"]
@@ -191,10 +196,12 @@ class Scenario(BaseModel):
 
 SCENARIO_A = Scenario(
     code="A",
-    name="Single laptop / academic dev",
+    name="Self-hosted commodity infrastructure",
     description=(
-        "Single bioinformatician on a laptop. Docker Compose stack, no "
-        "cloud dependencies, mock auth, MinIO storage, local Nextflow."
+        "Standard servers, not HPC and not managed Kubernetes. Spans a "
+        "single bioinformatician on a laptop through an agency datacenter "
+        "running JACKPOT across several Linux servers — scale is a replica "
+        "setting, not a different scenario (architecture.md 3.2)."
     ),
     defaults=ScenarioDefaults(
         host_organization_name="Local Dev Lab",
@@ -216,12 +223,51 @@ SCENARIO_A = Scenario(
 
 SCENARIO_B = Scenario(
     code="B",
-    name="Single organisation on cloud",
+    name="HPC cluster",
     description=(
-        "A single public-health org running on GCP/AWS/Azure. OAuth, "
-        "managed Postgres, GCS storage, GCP Batch for pipelines, DLP on."
+        "University or institutional HPC. Apptainer rather than Docker — "
+        "forced by cluster policy, not a preference (architecture.md 3.1) — "
+        "institutional Lustre/GPFS storage rather than object storage, and "
+        "Slurm/PBS for execution. Operated by an RC team."
     ),
     defaults=ScenarioDefaults(
+        host_organization_name="Research Computing",
+        host_organization_email="rc@example.org",
+        deployment_url="http://localhost:8000",
+        cors_origins=["http://localhost:8501"],
+        compose_profile="hpc",
+        replica_count=1,
+        # Institutional parallel filesystem, mounted. Not object storage:
+        # an HPC operator has Lustre or GPFS and no S3 endpoint.
+        storage_backend="local",
+        # The install-time default only. Any scenario can add executor
+        # profiles post-install (architecture.md 1058), which is how a
+        # laptop reaches a Slurm cluster.
+        pipeline_executor="local",
+        auth_method="oauth",
+        oauth_provider="okta",
+        database_engine="postgres-local",
+        database_pitr_enabled=False,
+        database_backup_retention_days=30,
+        scheduler_enabled=True,
+        federation_role="off",
+    ),
+)
+
+SCENARIO_C = Scenario(
+    code="C",
+    name="Single-organisation cloud",
+    description=(
+        "Cloud-native Kubernetes (GKE/EKS/AKS) run by an org's IT or cloud "
+        "operations team. Object storage, managed Postgres, cloud IdP. "
+        "Multi-org tenancy is a runtime configuration of this scenario, not "
+        "a separate one (architecture.md 3.6)."
+    ),
+    defaults=ScenarioDefaults(
+        host_organization_name="Example Organization",
+        host_organization_email="admin@example.org",
+        deployment_url="https://jackpot.example.org",
+        cors_origins=["https://jackpot.example.org"],
         compose_profile="single-org",
         replica_count=2,
         storage_backend="gcs",
@@ -231,30 +277,6 @@ SCENARIO_B = Scenario(
         database_engine="cloud-sql",
         database_pitr_enabled=True,
         database_backup_retention_days=14,
-        dlp_enabled=True,
-        scheduler_enabled=True,
-        federation_role="off",
-    ),
-)
-
-SCENARIO_C = Scenario(
-    code="C",
-    name="Multi-lab agency",
-    description=(
-        "Multi-lab agency (typical state health department, Big Cities "
-        "Health Coalition member). Same posture as B with more replicas, "
-        "longer backup retention, multiple seeded labs."
-    ),
-    defaults=ScenarioDefaults(
-        compose_profile="single-org",
-        replica_count=3,
-        storage_backend="gcs",
-        pipeline_executor="gcp_batch",
-        auth_method="oauth",
-        oauth_provider="google",
-        database_engine="cloud-sql",
-        database_pitr_enabled=True,
-        database_backup_retention_days=30,
         dlp_enabled=True,
         scheduler_enabled=True,
         federation_role="off",
@@ -263,60 +285,12 @@ SCENARIO_C = Scenario(
 
 SCENARIO_D = Scenario(
     code="D",
-    name="Hosted multi-tenant SaaS",
-    description=(
-        "Hosted SaaS provider serving multiple tenants. SSO auth, "
-        "multi-tenancy middleware enabled, billing module on. Gated on "
-        "P0c multi-tenancy schema before bootstrap is complete."
-    ),
-    defaults=ScenarioDefaults(
-        compose_profile="multi-tenant",
-        replica_count=5,
-        storage_backend="gcs",
-        pipeline_executor="gcp_batch",
-        auth_method="sso",
-        oauth_provider=None,
-        database_engine="cloud-sql",
-        database_pitr_enabled=True,
-        database_backup_retention_days=30,
-        dlp_enabled=True,
-        scheduler_enabled=True,
-        federation_role="off",
-    ),
-)
-
-SCENARIO_E = Scenario(
-    code="E",
-    name="Federation member",
-    description=(
-        "JACKPOT instance that peers with other JACKPOT instances. Same "
-        "shape as B/C plus federation router on. Generates an ed25519 "
-        "keypair at install time (Decision 5)."
-    ),
-    defaults=ScenarioDefaults(
-        compose_profile="single-org",
-        replica_count=2,
-        storage_backend="gcs",
-        pipeline_executor="gcp_batch",
-        auth_method="oauth",
-        oauth_provider="google",
-        database_engine="cloud-sql",
-        database_pitr_enabled=True,
-        database_backup_retention_days=14,
-        dlp_enabled=True,
-        scheduler_enabled=True,
-        federation_role="member",
-        federation_enabled=True,
-    ),
-)
-
-SCENARIO_F = Scenario(
-    code="F",
     name="CI / e2e test harness",
     description=(
-        "Synthetic test environment. Mock auth, filesystem storage, no "
-        "DLP, no NCBI/GISAID, no federation, no scheduler. The "
-        "instances/ci/ directory is committed (Critical Rule 56)."
+        "Not an operator-facing install: configuration is generated "
+        "programmatically by the test harness rather than through the "
+        "interactive jackpot init flow (architecture.md 3.5). Local "
+        "containers, filesystem storage, mock auth, no cloud dependency."
     ),
     defaults=ScenarioDefaults(
         host_organization_name="CI Test Organization",
@@ -331,42 +305,36 @@ SCENARIO_F = Scenario(
         oauth_provider=None,
         database_engine="postgres-local",
         database_pitr_enabled=False,
+        # No scheduler, no DLP: the harness drives jobs itself.
         scheduler_enabled=False,
-        federation_role="off",
         dlp_enabled=False,
+        federation_role="off",
     ),
 )
 
-SCENARIO_T = Scenario(
-    code="T",
-    name="Tribal-sovereignty deployment",
-    description=(
-        "Tribal nation, Tribal Epidemiology Center, or Indigenous-data-"
-        "sovereignty deployment. CARE Principles enforced: "
-        "deletion-on-request ON, auto-publish OFF, federation OFF by "
-        "default, consent workflow ON. "
-        "See governance/care-principles-and-tribal-data-sovereignty.md."
+
+#: What the pre-2026-09-03 letters became. No compatibility shim — per
+#: access_model.md 10 there is no installed base — but the retired letters
+#: are still in committed docs and in instances/ci/README.md, so a person
+#: who types one deserves the answer rather than "unknown scenario".
+RETIRED_SCENARIO_CODES: dict[str, str] = {
+    "E": (
+        "E (Federation member) is not a scenario. Federation services ship in "
+        "every install; add peers post-install with `jackpot peers add`. "
+        "Install the infrastructure shape that matches you (A, B or C)."
     ),
-    defaults=ScenarioDefaults(
-        compose_profile="tribal",
-        replica_count=1,
-        storage_backend="local",
-        pipeline_executor="local",
-        auth_method="oauth",
-        oauth_provider="google",
-        database_engine="postgres-local",
-        database_pitr_enabled=True,
-        database_backup_retention_days=30,
-        dlp_enabled=True,
-        scheduler_enabled=True,
-        federation_role="off",
-        federation_enabled=False,
-        deletion_on_request=True,
-        auto_publish_to_insdc=False,
-        care_principles_enforced=True,
-        consent_workflow_enabled=True,
+    "F": "F (CI test harness) is now D.",
+    "T": (
+        "T (Tribal sovereignty) is not a scenario. CARE enforcement, "
+        "deletion-on-request and consent workflow are runtime policy on any "
+        "scenario — usually A. See architecture.md 22."
     ),
-)
+}
+
+
+def retired_code_hint(code: str) -> str | None:
+    """Explain a retired scenario letter, or None if it was never one."""
+    return RETIRED_SCENARIO_CODES.get(code.strip().upper())
 
 
 ALL_SCENARIOS: tuple[Scenario, ...] = (
@@ -374,9 +342,6 @@ ALL_SCENARIOS: tuple[Scenario, ...] = (
     SCENARIO_B,
     SCENARIO_C,
     SCENARIO_D,
-    SCENARIO_E,
-    SCENARIO_F,
-    SCENARIO_T,
 )
 
 
