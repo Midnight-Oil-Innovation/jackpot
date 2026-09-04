@@ -2163,7 +2163,7 @@ sessions:
       leaks lab existence, which org isolation treats as the secret (§3.2). preflight.py froze the old ladder as legacy_ladder()
       so the divergence registry keeps meaning something; TestRealGuardIsPermitBacked asserts guard == permit() per cell.
       Also fixed two pre-existing test-hygiene bugs the change surfaced: the preflight teardown deleted ALL grants, and fixtures
-      must materialize grants after creating a user or membership. Recovered 2026-09-04: the fragment 'real guard. Legacy columns still exist, so this batch is revertible.' was found glued onto this entry's merge_sha line, where YAML read it as part of the SHA. Preserved here rather than deleted; the sentence it belonged to is lost, so it is not reconstructed."
+      must materialize grants after creating a user or membership. Recovered 2026-09-03: the fragment 'real guard. Legacy columns still exist, so this batch is revertible.' was found glued onto this entry's merge_sha line, where YAML read it as part of the SHA. Preserved here rather than deleted; the sentence it belonged to is lost, so it is not reconstructed."
     merged_at: '2026-08-31'
     merge_sha: "cd94b28"
 
@@ -2216,7 +2216,7 @@ sessions:
       SQL halves can evaluate them — a lambda would have been unimplementable in SQL. requires_capability added for the principal
       half of the surveillance rung. Ownership shipped as a POLICY, deviating from §5's mapping table which calls it a Sample-scope
       grant: as a grant it would need a row written per sample creation and deleted per transfer. Unmapped attribute RAISES
-      — a dropped term widens an ALLOW and neuters a DENY. Recovered 2026-09-04: the fragment 'cross-checked on the same fixtures as M1.' was found glued onto this entry's merge_sha line, where YAML read it as part of the SHA. Preserved here rather than deleted; the sentence it belonged to is lost, so it is not reconstructed."
+      — a dropped term widens an ALLOW and neuters a DENY. Recovered 2026-09-03: the fragment 'cross-checked on the same fixtures as M1.' was found glued onto this entry's merge_sha line, where YAML read it as part of the SHA. Preserved here rather than deleted; the sentence it belonged to is lost, so it is not reconstructed."
     merged_at: '2026-08-31'
     merge_sha: "f1dcfe2"
 
@@ -2292,7 +2292,7 @@ sessions:
       grant with NO clock denies. Stored as a column, not a conditions key, since conditions mean equality and expiry is a
       comparison. Exposed the real coupling hazard of a migration calling app code — not deleting reseed() but CHANGING ITS
       SHAPE, which broke b2f47c1a9e30 on a fresh DB; fixed with an idempotent ALTER there plus c93e1f5a7b02 for already-migrated
-      databases. Recovered 2026-09-04: the fragment 'expiry is enforced.' was found glued onto this entry's merge_sha line, where YAML read it as part of the SHA. Preserved here rather than deleted; the sentence it belonged to is lost, so it is not reconstructed."
+      databases. Recovered 2026-09-03: the fragment 'expiry is enforced.' was found glued onto this entry's merge_sha line, where YAML read it as part of the SHA. Preserved here rather than deleted; the sentence it belonged to is lost, so it is not reconstructed."
     merged_at: '2026-08-31'
     merge_sha: "8470010"
 
@@ -3877,7 +3877,7 @@ sessions:
       filesystem storage gets a cloud client, with no error and no warning.
     phase: p0_series
     status: shipped
-    merged_at: "2026-09-04"
+    merged_at: "2026-09-03"
     merge_sha: "7b6d511"
     depends_on: []
     blocked_by_external:
@@ -3940,7 +3940,7 @@ sessions:
       the mapping stops being a property nobody can see. The absence of
       such a test is why three composable steps went unnoticed.
 
-      SHIPPED 2026-09-04. Settings gained storage_backend (Literal, default
+      SHIPPED 2026-09-03. Settings gained storage_backend (Literal, default
       None), local_storage_root and local_storage_public_url_base;
       factory.py branches on the named choice and builds
       LocalFSStorageBackend for "local", raising StorageError naming
@@ -4021,7 +4021,7 @@ sessions:
     branch_name_template: "fix/init-emits-storage-backend"
     role_framing:
     notes: >
-      Split out of B-STORAGE-LOCAL-FALLTHROUGH on 2026-09-04 rather than
+      Split out of B-STORAGE-LOCAL-FALLTHROUGH on 2026-09-03 rather than
       bundled into it, because the two halves have different risk. The
       backend half is covered by tests/storage/test_factory_selection.py
       and provable in-process. This half is not verifiable by CI at all,
@@ -4062,7 +4062,7 @@ sessions:
       live defect, tracked as B-STORAGE-LOCAL-FALLTHROUGH.
     phase: p0_series
     status: shipped
-    merged_at: "2026-09-04"
+    merged_at: "2026-09-03"
     merge_sha: "170ce0c"
     depends_on: ["B-STORAGE-LOCAL-FALLTHROUGH"]
     blocked_by_external:
@@ -4100,7 +4100,7 @@ sessions:
       flip this" - so the fact was known, written down once, in the one
       place nobody looks for a storage question.
 
-      NARROWED 2026-09-04, before any session ran against it. The original
+      NARROWED 2026-09-03, before any session ran against it. The original
       entry lumped LocalFSStorageBackend in as possible dead code and the
       generated prompt turned that into an explicit instruction: if
       architecture.md does not name the backend, delete local.py and its
@@ -4122,7 +4122,7 @@ sessions:
       because its own green tests make the unreachability invisible and
       coverage counts it as exercised.
 
-      DECIDED 2026-09-04: wired, not deleted, and the reason is not
+      DECIDED 2026-09-03: wired, not deleted, and the reason is not
       symmetry. botocore ships no GCP credential provider - verified, not
       assumed - so with no HMAC keys boto3 resolves the AWS chain (AWS_*
       env, ~/.aws, IMDS) and finds nothing on a GKE pod using Workload
@@ -4162,7 +4162,7 @@ sessions:
       row - currently exists only in one backlog entry's notes.
     phase: p0_series
     status: shipped
-    merged_at: "2026-09-04"
+    merged_at: "2026-09-03"
     merge_sha: "5b30742"
     depends_on: []
     blocked_by_external:
@@ -4212,7 +4212,7 @@ sessions:
       (fixed in PR #210). Widening the guard is a separate decision -
       B-DOC-GUARD-SCOPE drew that line deliberately.
 
-      Shipped 2026-09-04 as 5b30742. Writing it turned up something the
+      Shipped 2026-09-03 as 5b30742. Writing it turned up something the
       entry did not predict: only ONE of the three registration points is
       enforced. test_pipeline_integration_e2e.py checks both directions -
       a wrapper on disk missing from _PIPELINE_CASES fails, and a matrix
@@ -4257,7 +4257,7 @@ sessions:
     branch_name_template:
     role_framing:
     notes: >
-      Observed 2026-09-04 on srt 1.0.0 and Claude Code 2.1.259, running
+      Observed 2026-09-03 on srt 1.0.0 and Claude Code 2.1.259, running
       `jackpot-batch run` against a single approved prompt:
 
         ✗ Sandbox canary failed: API Error: Can't reach the API server

@@ -24,7 +24,11 @@ Checks:
                    `blocked` with neither unmet dependencies nor an external
                    blocker — blocked by assertion only.
 
-  6. Git evidence (ADVISORY — reported, does not fail)
+  6. merge_sha     When present, a quoted 7-40 char hex SHA and nothing
+                   else. Never validated until 2026-09-03, by which point
+                   six live entries were malformed and none had ever failed
+                   anything — see the comment on _SHA_RE.
+  7. Git evidence (ADVISORY — reported, does not fail)
                    A non-shipped entry whose id LEADS a merged commit
                    subject — at its start, or straight after a
                    conventional-commit prefix. Advisory because the signal is
@@ -125,9 +129,12 @@ def find_cycles(entries: list[dict]) -> list[list[str]]:
 #                                                edit that ate a notes line
 #   merge_sha: "TBD"       -> a placeholder that reads as data
 #
-# All six were live on 2026-09-04 and none had ever failed anything.
-_SHA_RE = re.compile(r"^[0-9a-f]{7,40}$")
-_SHA_PLACEHOLDERS = {"tbd", "todo", "xxx", "n/a", "na", "none", "pending", "?"}
+# All six were live on 2026-09-03 and none had ever failed anything.
+# fullmatch, not match with ^...$: `$` matches before a trailing newline, and
+# `merge_sha: |` yields exactly "abc1234\n". The first version of this guard
+# accepted that — the one YAML coercion it let through was the same kind it
+# was written to stop.
+_SHA_RE = re.compile(r"[0-9a-f]{7,40}")
 
 
 def check_merge_sha(entries: list[dict]) -> list[Violation]:
@@ -146,17 +153,15 @@ def check_merge_sha(entries: list[dict]) -> list[Violation]:
                     'merge_sha: "abc1234"',
                 )
             )
-        elif raw.strip().lower() in _SHA_PLACEHOLDERS:
+        elif not _SHA_RE.fullmatch(raw):
             out.append(
                 Violation(
                     eid,
-                    f"merge_sha is the placeholder {raw!r}. The SHA does not exist "
-                    "until the PR merges — omit the field and add it in the "
-                    "follow-up commit, rather than writing a value that reads as data.",
+                    f"merge_sha {raw!r} is not a 7-40 char hex SHA. If the PR has not "
+                    "merged yet, omit the field rather than writing a placeholder — "
+                    "the SHA does not exist until merge, and a placeholder reads as data.",
                 )
             )
-        elif not _SHA_RE.match(raw):
-            out.append(Violation(eid, f"merge_sha {raw!r} is not a 7-40 char hex SHA"))
     return out
 
 
@@ -325,7 +330,7 @@ def main() -> int:
     ap.add_argument(
         "--no-git",
         action="store_true",
-        help="skip the advisory git-evidence pass (check 6)",
+        help="skip the advisory git-evidence pass (check 7)",
     )
     ap.add_argument("paths", nargs="*", type=Path, help="ignored; lets pre-commit pass filenames")
     args = ap.parse_args()
