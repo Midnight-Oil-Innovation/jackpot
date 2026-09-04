@@ -4007,6 +4007,7 @@ sessions:
     phase: p0_series
     status: shipped
     merged_at: "2026-09-03"
+    merge_sha: "7d0bbea"
     depends_on: []
     blocked_by_external:
     parallel_safe: true
