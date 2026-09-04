@@ -39,12 +39,12 @@ class CredentialSpec:
     required_predicate: Callable[[Settings], bool] = field(default=lambda _settings: False)
 
 
-# The factory's existing storage-backend selection is binary: if
-# `storage_endpoint` is set, use S3-compatible (MinIO, AWS S3, MinIO under
-# Docker Compose for local dev); otherwise use GCS via S3-compatible HMAC
-# credentials (production GCP). The predicates below reflect that signal.
-# When the storage factory grows additional backends (LocalFS, native GCS)
-# the predicates are the right place to extend.
+# Storage-backend selection is no longer inferred from whether
+# `storage_endpoint` is set. get_backend_type() in
+# backend/storage/settings.py reads Settings.storage_backend and the
+# factory dispatches on it, so the predicates below key off that same
+# field. The one backend still unwired is the native GCS client — see
+# B-STORAGE-DEAD-BACKENDS.
 REQUIRED_CREDENTIALS: tuple[CredentialSpec, ...] = (
     CredentialSpec(
         key="jwt_signing_key",
@@ -86,9 +86,12 @@ REQUIRED_CREDENTIALS: tuple[CredentialSpec, ...] = (
         description="HMAC signing secret for presigned URLs in the local "
         "filesystem storage backend.",
         legacy_env_names=("JACKPOT_PRESIGN_SECRET",),
-        # No factory branch instantiates LocalFSStorageBackend yet; flip this
-        # to a real predicate when storage_factory grows that backend.
-        required_predicate=lambda _s: False,
+        # Flipped 2026-09-04 (B-STORAGE-LOCAL-FALLTHROUGH): the factory
+        # now builds LocalFSStorageBackend when storage_backend == "local",
+        # and that backend refuses a secret shorter than 32 chars, so a
+        # misconfigured deployment should fail at startup rather than on
+        # the first presigned URL.
+        required_predicate=lambda s: s.storage_backend == "local",
     ),
     # I-3a: backend-driven submission execution credentials. Required
     # only when the operator opts in via Settings.allow_backend_submission

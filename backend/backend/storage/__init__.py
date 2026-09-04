@@ -44,7 +44,6 @@ from backend.storage.settings import (
     StorageBackendType,
     get_backend_type,
     get_bucket_name,
-    get_uri_prefix,
 )
 
 
@@ -101,7 +100,7 @@ def stage_file(fileobj: BinaryIO, destination_key: str) -> str:
         raise StorageError(
             f"Failed to stage file '{destination_key}' to staging bucket: {exc}"
         ) from exc
-    return f"{get_uri_prefix()}://{get_bucket_name(JackpotBucket.STAGING)}/{destination_key}"
+    return backend.get_uri(destination_key)
 
 
 def move_to_sequences(staging_key: str, sequences_key: str) -> str:
@@ -128,7 +127,7 @@ def move_to_sequences(staging_key: str, sequences_key: str) -> str:
     except Exception as exc:
         raise StorageError(f"Failed to move '{staging_key}' to sequences: {exc}") from exc
 
-    return f"{get_uri_prefix()}://{get_bucket_name(JackpotBucket.SEQUENCES)}/{sequences_key}"
+    return dst.get_uri(sequences_key)
 
 
 def _backend_for_bucket(bucket_name: str) -> StorageBackend:
@@ -213,7 +212,6 @@ __all__ = [
     # Buckets
     "JackpotBucket",
     "get_bucket_name",
-    "get_uri_prefix",
     "get_backend_type",
     "StorageBackendType",
     # Factory

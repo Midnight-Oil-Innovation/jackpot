@@ -10,8 +10,22 @@ from pydantic_settings import BaseSettings, NoDecode
 class Settings(BaseSettings):
     env: str = "local"
     database_url: str = "postgresql://jackpot:jackpot@localhost:5432/jackpot_db"
+    # Which backend get_storage_backend() builds. None means "infer from
+    # storage_endpoint", the pre-2026-09-04 behaviour, kept so a config
+    # that never names a backend keeps working. That inference is what
+    # produced B-STORAGE-LOCAL-FALLTHROUGH: an empty endpoint was read as
+    # "therefore GCS", so an operator asking for local filesystem storage
+    # got a client pointed at storage.googleapis.com. Name the backend.
+    storage_backend: Literal["local", "minio", "gcs", "s3"] | None = None
     storage_endpoint: str | None = None
     storage_access_key: str | None = None
+    # Required when storage_backend == "local". No default on purpose:
+    # a wrong guess here writes an operator's data somewhere they did not
+    # choose, which is the failure this whole item is about.
+    local_storage_root: str = ""
+    # Base URL presigned local-storage URLs are built against. Falls back
+    # to jackpot_api_url when unset.
+    local_storage_public_url_base: str = ""
     storage_bucket_sequences: str = "jackpot-sequences"
     storage_bucket_raw: str = "jackpot-raw"
     storage_bucket_staging: str = "jackpot-staging"
