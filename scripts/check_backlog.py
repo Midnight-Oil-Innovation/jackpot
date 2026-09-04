@@ -24,7 +24,11 @@ Checks:
                    `blocked` with neither unmet dependencies nor an external
                    blocker — blocked by assertion only.
 
-  6. Git evidence (ADVISORY — reported, does not fail)
+  6. merge_sha     When present, a quoted 7-40 char hex SHA and nothing
+                   else. Never validated until 2026-09-03, by which point
+                   six live entries were malformed and none had ever failed
+                   anything — see the comment on _SHA_RE.
+  7. Git evidence (ADVISORY — reported, does not fail)
                    A non-shipped entry whose id LEADS a merged commit
                    subject — at its start, or straight after a
                    conventional-commit prefix. Advisory because the signal is
@@ -115,6 +119,52 @@ def find_cycles(entries: list[dict]) -> list[list[str]]:
     return cycles
 
 
+# A git short SHA as this file records it: hex, 7-40 chars. Deliberately
+# strict about the TYPE too, because every way this field has broken was a
+# silent YAML coercion rather than a typo a human would spot:
+#
+#   merge_sha: .inf        -> float('inf')   (two entries; provenance gone)
+#   merge_sha: 2296650     -> int            (two entries)
+#   merge_sha: cd94b28 real guard. Legacy...  -> prose glued on, from a bad
+#                                                edit that ate a notes line
+#   merge_sha: "TBD"       -> a placeholder that reads as data
+#
+# All six were live on 2026-09-03 and none had ever failed anything.
+# fullmatch, not match with ^...$: `$` matches before a trailing newline, and
+# `merge_sha: |` yields exactly "abc1234\n". The first version of this guard
+# accepted that — the one YAML coercion it let through was the same kind it
+# was written to stop.
+_SHA_RE = re.compile(r"[0-9a-f]{7,40}")
+
+
+def check_merge_sha(entries: list[dict]) -> list[Violation]:
+    """merge_sha, when present, is a quoted hex SHA and nothing else."""
+    out: list[Violation] = []
+    for entry in entries:
+        raw = entry.get("merge_sha")
+        if raw is None:
+            continue
+        eid = entry.get("id", "?")
+        if not isinstance(raw, str):
+            out.append(
+                Violation(
+                    eid,
+                    f"merge_sha parsed as {type(raw).__name__} ({raw!r}) — quote it: "
+                    'merge_sha: "abc1234"',
+                )
+            )
+        elif not _SHA_RE.fullmatch(raw):
+            out.append(
+                Violation(
+                    eid,
+                    f"merge_sha {raw!r} is not a 7-40 char hex SHA. If the PR has not "
+                    "merged yet, omit the field rather than writing a placeholder — "
+                    "the SHA does not exist until merge, and a placeholder reads as data.",
+                )
+            )
+    return out
+
+
 def check(entries: list[dict]) -> list[Violation]:
     out: list[Violation] = []
 
@@ -184,6 +234,8 @@ def check(entries: list[dict]) -> list[Violation]:
             out.append(
                 Violation(eid, "status is 'blocked' with no depends_on and no blocked_by_external")
             )
+
+    out.extend(check_merge_sha(entries))
 
     return out
 
@@ -278,7 +330,7 @@ def main() -> int:
     ap.add_argument(
         "--no-git",
         action="store_true",
-        help="skip the advisory git-evidence pass (check 6)",
+        help="skip the advisory git-evidence pass (check 7)",
     )
     ap.add_argument("paths", nargs="*", type=Path, help="ignored; lets pre-commit pass filenames")
     args = ap.parse_args()

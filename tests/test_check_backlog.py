@@ -306,3 +306,69 @@ def test_entries_are_parsed_from_every_top_level_list(tmp_path):
     )
     parsed = check_backlog.load_entries(path)
     assert [e["id"] for e in parsed] == ["A-1"]
+
+
+# ── merge_sha ──────────────────────────────────────────────────────────────
+#
+# Every way this field broke was a silent YAML coercion, not a typo. Six live
+# entries were malformed on 2026-09-03 and none had ever failed anything:
+# two parsed as float('inf'), two as int, three carried prose glued on by a
+# bad edit, and the "TBD" placeholder was flagged by an external reviewer on
+# four consecutive PRs while the guard said nothing.
+
+
+@pytest.mark.parametrize(
+    ("raw", "expected"),
+    [
+        (float("inf"), "parsed as float"),
+        (2296650, "parsed as int"),
+        (True, "parsed as bool"),
+        ("TBD", "not a 7-40 char hex SHA"),
+        ("pending", "not a 7-40 char hex SHA"),
+        ("cd94b28 real guard. Legacy columns still exist.", "not a 7-40 char hex SHA"),
+        ("nothex1", "not a 7-40 char hex SHA"),
+        ("abc123", "not a 7-40 char hex SHA"),  # too short
+        ("ABC1234", "not a 7-40 char hex SHA"),  # uppercase
+        ("a" * 41, "not a 7-40 char hex SHA"),  # too long
+        # `$` matches before a trailing newline, and `merge_sha: |` in YAML
+        # yields exactly this. The first version of the guard accepted it.
+        ("abc1234\n", "not a 7-40 char hex SHA"),
+    ],
+)
+def test_malformed_merge_sha_is_reported(raw, expected):
+    assert expected in messages([entry("A-1", "shipped", merge_sha=raw)])
+
+
+@pytest.mark.parametrize("raw", ["abc1234", "0123456", "2296650", "a" * 40])
+def test_wellformed_merge_sha_passes(raw):
+    assert "merge_sha" not in messages([entry("A-1", "shipped", merge_sha=raw)])
+
+
+def test_absent_merge_sha_is_allowed():
+    """Omitting it is the correct state between shipping and the follow-up.
+
+    The SHA does not exist until the PR merges, so absence is honest where
+    "TBD" reads as data. This is the behaviour the placeholder check pushes
+    people towards, so it has to stay legal.
+    """
+    e = entry("A-1", "shipped")
+    e.pop("merge_sha", None)
+    assert "merge_sha" not in messages([e])
+
+
+def test_the_guard_can_actually_fire():
+    """Canary (Critical Rule 74).
+
+    Every test above reaches the check through messages(), which happens to
+    call check(). That is a coincidence of the helper, not an assertion: a
+    refactor pointing messages() at check_merge_sha directly would disarm
+    all of them at once and stay green. This names the real entry point so
+    it cannot.
+
+    (An earlier version of this docstring claimed the tests above would
+    still pass if check() stopped calling the sub-function. They would not.
+    A canary defended by a reason that does not survive inspection is the
+    thing Rule 74 is about.)
+    """
+    assert check_backlog.check([entry("A-1", "shipped", merge_sha=".inf-like")]) != []
+    assert check_backlog.check([entry("A-1", "shipped", merge_sha=float("inf"))]) != []
