@@ -3994,20 +3994,91 @@ sessions:
       caller of the thing you are about to change" applies to predicates,
       not just functions. The first pass changed one caller of an idea.
 
-  - id: B-SCENARIO-TAXONOMY-SPLIT
-    title: The install-scenario taxonomy is four in the ADR and seven in the code
+  - id: B-SOVEREIGNTY-POLICY-PRESET
+    title: CARE/sovereignty defaults have no home outside scenario T
     short_description: |
-      ADR-0002 is canonical and says four scenarios, A/B/C/D, with D = CI
-      test, "reduced from seven in the May 2026 consolidation". The code
-      never followed: SCENARIO_REGISTRY still holds A-F plus T, where D is
-      "Hosted multi-tenant SaaS" and CI is F. The same letter means
-      different deployments in the two taxonomies, so a reader of the
-      canonical ADR who runs `jackpot init --scenario D` gets a hosted
-      multi-tenant SaaS install rather than a CI harness. Decide which
-      taxonomy is real, then make one side match.
+      architecture.md 3.6 calls Indigenous data sovereignty "a runtime
+      policy configuration applicable to any scenario", and ADR-0006 makes
+      sovereignty-as-runtime-policy a canonical decision. No such
+      configuration object exists. The four CARE defaults -
+      care_principles_enforced, consent_workflow_enabled,
+      deletion_on_request, auto_publish_to_insdc=False - appear only in
+      SCENARIO_T's defaults and its tests. Scenario T is a policy preset
+      wearing a scenario's clothes.
     phase: p0_series
     status: open
     depends_on: []
+    blocked_by_external:
+    parallel_safe: false
+    parallel_safe_reason: >
+      Blocks B-SCENARIO-TAXONOMY-SPLIT and touches the same registry file.
+      Also the sovereignty surface, where a silent gap is least acceptable.
+    effort_sessions: 2
+    primary_files:
+      - schema/jackpot_scenarios/scenarios.py
+      - cli/jackpot/cli/init.py
+      - governance/care-principles-and-tribal-data-sovereignty.md
+    test_files:
+      - schema/tests/test_scenarios.py
+      - cli/tests/test_init_writers.py
+    source_of_truth_views:
+      - docs/architecture.md
+      - docs/adr/0006-sovereignty-as-runtime-policy.md
+      - docs/adr/0007-care-principles-adopted.md
+    pr_title_template:
+    branch_name_template: "feat/sovereignty-policy-preset"
+    role_framing:
+    notes: >
+      Found 2026-09-03 while consolidating the scenario registry to the
+      canonical four. Deleting T would have removed the only expression of
+      the CARE defaults with nothing to replace it - the mirror of Critical
+      Rule 70: not building a half with no call site, but deleting the only
+      call site of a documented capability. The consolidation is parked on
+      branch refactor/scenario-taxonomy (commit 6b60a65) until this lands,
+      so the deletion never precedes its replacement.
+
+      Verified by grep: care_principles_enforced and
+      consent_workflow_enabled appear in schema/jackpot_scenarios/
+      scenarios.py and its tests, and nowhere else in backend/, cli/ or
+      schema/. There is no preset, no applier, and no `jackpot policy`
+      command. "Configure sovereignty policies post-install"
+      (architecture.md 3.6) currently means setting four fields by hand
+      with nothing naming them as a set.
+
+      What this needs to answer:
+
+        1. Where the preset lives. A named ScenarioDefaults overlay in
+           scenarios.py is the smallest thing that could work, but a policy
+           is not an install-time default, so it may belong beside the
+           multi-tenancy middleware config instead.
+        2. How it is applied. architecture.md 3.6 says post-install, which
+           implies a CLI verb (`jackpot policy apply sovereignty`?) or a
+           config file stanza, not an init-time question.
+        3. Whether it is one preset or several. ADR-0007 adopts CARE;
+           governance/care-principles-and-tribal-data-sovereignty.md maps
+           CARE to JACKPOT defaults. Residency and revocable consent may
+           want separate toggles rather than one bundle.
+
+      Do NOT resolve this by keeping scenario T. That is what produced the
+      taxonomy split: a runtime policy modelled as an install scenario,
+      which then had to be maintained as one. The point of the preset is
+      that a Tribal Nation health department picks the infrastructure that
+      matches them - usually A - and applies the policy, exactly as
+      architecture.md 3.6 describes.
+
+  - id: B-SCENARIO-TAXONOMY-SPLIT
+    title: The install-scenario taxonomy is four in the ADR and seven in the code
+    short_description: |
+      Three canonical documents say four scenarios A/B/C/D with D = CI, and
+      say federation, multi-tenancy and sovereignty are runtime policy:
+      ADR-0002, the CLAUDE.md preamble, and architecture.md 3.1-3.6, which
+      carries a scenario table, a subsection per scenario, and an explicit
+      list of patterns that are NOT scenarios. Only SCENARIO_REGISTRY
+      disagrees: it holds A-F plus T, where D is "Hosted multi-tenant SaaS"
+      and CI is F. Consolidate the code to match the documents.
+    phase: p0_series
+    status: open
+    depends_on: ["B-SOVEREIGNTY-POLICY-PRESET"]
     blocked_by_external:
     parallel_safe: false
     parallel_safe_reason: >
@@ -4069,28 +4140,77 @@ sessions:
       it from SCENARIO_REGISTRY as part of this work, whichever way the
       decision goes, so the number cannot disagree with the code again.
 
-      THE DECISION, which should not be guessed:
+      NOT A DECISION - corrected 2026-09-03. The entry originally offered
+      "amend ADR-0002 to describe seven" as a legitimate option. It is not.
+      I had read the ADR and stopped; architecture.md 3 documents the four
+      in operational detail - the scenario table at 3.1 (B is HPC,
+      "Apptainer forced by HPC policy"), per-scenario subsections covering
+      what `jackpot init` asks, storage per scenario, containers per
+      scenario, workspace per scenario - and 3.6 states the commitment
+      outright: "scenarios describe install-time infrastructure
+      configurations; everything else is runtime policy". Amending the ADR
+      would mean rewriting all of that. The code is the only source that
+      disagrees, so the code moves.
 
-      (a) Consolidate the code to four. Matches the canonical ADR and the
-          docs guard. Means deciding what happens to E (Federation
-          member), F (CI) and T (Tribal sovereignty) - ADR-0002 says
-          federation, multi-tenancy and sovereignty became RUNTIME
-          CONFIGURATIONS applied to A/B/C, so on that reading E and T are
-          already meant to be flags rather than scenarios, and CI becomes
-          D. Requires a migration story for anyone who ran
-          `jackpot init --scenario F` or T, and instances/ci is currently
-          the committed artifact set for F (see B-STORAGE-CI-LOCAL and
-          Critical Rule 56, which both say "Scenario F").
+      architecture.md 3.6 names the three duplicates explicitly:
 
-      (b) Amend ADR-0002 to describe seven. Cheapest, and honest if the
-          consolidation was reconsidered - but nothing records a decision
-          to reverse it, and an ADR marked Canonical should not be edited
-          to match code that drifted from it without saying why.
+        - "Hosted SaaS / multi-org tenancy ... This is Scenario A (or C)
+          with multi-org tenancy enabled ... Same install path; different
+          runtime configuration."   -> registry D
+        - "Federation member ... Activation happens when peers are added
+          post-install via `jackpot peers add`"   -> registry E
+        - "CARE-aligned governance ... a runtime policy configuration
+          applicable to any scenario"   -> registry T
 
-      Sequencing note: B-STORAGE-CI-LOCAL asks "what is instances/ci for",
-      which cannot be answered while the letter naming it means two
-      things. Do this first.
+      Measured deltas against registry B (single-org cloud), which show how
+      thin the extra scenarios are:
 
+        registry C (Multi-lab agency)   2 fields: replica_count 2->3,
+                                        backup retention 14->30
+        registry E (Federation member)  2 fields: federation_enabled,
+                                        federation_role
+        registry D (Hosted SaaS)        5 fields: compose profile, replicas,
+                                        auth_method oauth->sso
+        registry T (Sovereignty)        9 fields, of which 3 are the CARE
+                                        policy flags and 6 just say
+                                        "self-hosted, not cloud"
+
+      registry C is not an install shape at all - architecture.md 3.2 says
+      A covers "a single user on a laptop through an agency datacenter
+      running it across several Linux servers", so agency scale is a
+      setting on A, not a scenario.
+
+      TARGET MAPPING:
+
+        A self-hosted commodity   <- registry A (agency scale becomes a
+                                     replica setting, absorbing registry C)
+        B HPC                     <- MISSING, must be built
+        C single-org cloud        <- registry B
+        D CI test                 <- registry F
+        profiles, not scenarios   <- registry D, E, T deleted
+
+      On B: an earlier note here said "HPC does not exist". That overstated
+      it. Slurm execution is a PROFILE and shipped in P0g/P0h -
+      architecture.md 1058: "All scenarios support multiple profiles. A
+      Scenario A laptop can submit jobs to a Slurm cluster by configuring a
+      Slurm profile post-install." What is missing is B's INSTALL-time
+      identity: Apptainer instead of Docker (architecture.md 3.1 and the
+      container table at 496, where Apptainer is "required"), institutional
+      Lustre/GPFS storage, systemd units instead of compose, JupyterHub on
+      institutional HPC. That is P0j's subject.
+
+      Blast radius beyond the registry: cli/jackpot/cli/init.py's
+      _DEFAULT_INSTANCE_NAME is keyed by all seven codes; roughly eight
+      cli/tests files use literal "E"/"F"/"T"; instances/ci/jackpot.toml
+      and its README declare code "F"; Critical Rule 56 says "Scenario F";
+      docker-compose.yml's header says the file "serves all 7 install
+      scenarios" and its `profiles:` keys include multi-tenant and tribal.
+      ComposeProfile needs an hpc member and loses multi-tenant/tribal.
+
+      No compatibility shim for retired codes, per access_model.md 10 (no
+      installed base). But `jackpot init --scenario F` should say what F
+      became rather than "Unknown scenario", since the retired letters are
+      in committed docs and in instances/ci/README.md.
   - id: B-STORAGE-CI-LOCAL
     title: Nothing can actually produce a filesystem-backed install yet
     short_description: |
