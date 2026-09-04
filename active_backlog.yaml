@@ -3994,6 +3994,78 @@ sessions:
       caller of the thing you are about to change" applies to predicates,
       not just functions. The first pass changed one caller of an idea.
 
+  - id: B-SOVEREIGNTY-POLICY-PRESET
+    title: CARE/sovereignty defaults have no home outside scenario T
+    short_description: |
+      architecture.md 3.6 calls Indigenous data sovereignty "a runtime
+      policy configuration applicable to any scenario", and ADR-0006 makes
+      sovereignty-as-runtime-policy a canonical decision. No such
+      configuration object exists. The four CARE defaults -
+      care_principles_enforced, consent_workflow_enabled,
+      deletion_on_request, auto_publish_to_insdc=False - appear only in
+      SCENARIO_T's defaults and its tests. Scenario T is a policy preset
+      wearing a scenario's clothes.
+    phase: p0_series
+    status: open
+    depends_on: []
+    blocked_by_external:
+    parallel_safe: false
+    parallel_safe_reason: >
+      Blocks B-SCENARIO-TAXONOMY-SPLIT and touches the same registry file.
+      Also the sovereignty surface, where a silent gap is least acceptable.
+    effort_sessions: 2
+    primary_files:
+      - schema/jackpot_scenarios/scenarios.py
+      - cli/jackpot/cli/init.py
+      - governance/care-principles-and-tribal-data-sovereignty.md
+    test_files:
+      - schema/tests/test_scenarios.py
+      - cli/tests/test_init_writers.py
+    source_of_truth_views:
+      - docs/architecture.md
+      - docs/adr/0006-sovereignty-as-runtime-policy.md
+      - docs/adr/0007-care-principles-adopted.md
+    pr_title_template:
+    branch_name_template: "feat/sovereignty-policy-preset"
+    role_framing:
+    notes: >
+      Found 2026-09-03 while consolidating the scenario registry to the
+      canonical four. Deleting T would have removed the only expression of
+      the CARE defaults with nothing to replace it - the mirror of Critical
+      Rule 70: not building a half with no call site, but deleting the only
+      call site of a documented capability. The consolidation is parked on
+      branch refactor/scenario-taxonomy (commit 6b60a65) until this lands,
+      so the deletion never precedes its replacement.
+
+      Verified by grep: care_principles_enforced and
+      consent_workflow_enabled appear in schema/jackpot_scenarios/
+      scenarios.py and its tests, and nowhere else in backend/, cli/ or
+      schema/. There is no preset, no applier, and no `jackpot policy`
+      command. "Configure sovereignty policies post-install"
+      (architecture.md 3.6) currently means setting four fields by hand
+      with nothing naming them as a set.
+
+      What this needs to answer:
+
+        1. Where the preset lives. A named ScenarioDefaults overlay in
+           scenarios.py is the smallest thing that could work, but a policy
+           is not an install-time default, so it may belong beside the
+           multi-tenancy middleware config instead.
+        2. How it is applied. architecture.md 3.6 says post-install, which
+           implies a CLI verb (`jackpot policy apply sovereignty`?) or a
+           config file stanza, not an init-time question.
+        3. Whether it is one preset or several. ADR-0007 adopts CARE;
+           governance/care-principles-and-tribal-data-sovereignty.md maps
+           CARE to JACKPOT defaults. Residency and revocable consent may
+           want separate toggles rather than one bundle.
+
+      Do NOT resolve this by keeping scenario T. That is what produced the
+      taxonomy split: a runtime policy modelled as an install scenario,
+      which then had to be maintained as one. The point of the preset is
+      that a Tribal Nation health department picks the infrastructure that
+      matches them - usually A - and applies the policy, exactly as
+      architecture.md 3.6 describes.
+
   - id: B-SCENARIO-TAXONOMY-SPLIT
     title: The install-scenario taxonomy is four in the ADR and seven in the code
     short_description: |
@@ -4006,7 +4078,7 @@ sessions:
       and CI is F. Consolidate the code to match the documents.
     phase: p0_series
     status: open
-    depends_on: []
+    depends_on: ["B-SOVEREIGNTY-POLICY-PRESET"]
     blocked_by_external:
     parallel_safe: false
     parallel_safe_reason: >
