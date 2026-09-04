@@ -46,6 +46,55 @@ loads `(parse, collect_files, SUPPORTED_PIPELINE_VERSIONS)` from each
 wrapper; `test_version_check.py` asserts every wrapper declares a
 non-empty version list.
 
+## Adding a wrapper: three registration points
+
+Writing the `parsers/` package is not enough. A new wrapper is invisible
+to the suite until it is registered in all three places, and each is in a
+different file:
+
+1. **`pipelines/tests/test_<name>_parsers.py`** — a per-wrapper test
+   file. All ten existing wrappers have one; there is no shared parser
+   test to extend instead. **Nothing enforces this** — skip it and the
+   suite stays green with your parsers untested.
+
+2. **A `PipelineCase` row in `_PIPELINE_CASES`** in
+   `test_pipeline_integration_e2e.py`, **plus a fixture tree at
+   `pipelines/tests/fixtures/<name>/`**. This one is self-enforcing from
+   both directions: the test walks `pipelines/pipelines/` and fails on
+   any wrapper missing from the matrix, then fails again on any matrix
+   row whose fixture directory does not exist. Leave `expects_results` at
+   its default unless the pipeline genuinely emits nothing — it is what
+   catches a fixture that parses to zero `ParsedResult`s because a
+   subdirectory got renamed.
+
+3. **A `(module, upstream)` row in `_WRAPPED_PIPELINES`** in
+   `test_version_check.py`, which parametrizes over it. **Nothing
+   enforces this either** — there is no disk-completeness check, so a
+   wrapper absent from the list simply never has its
+   `SUPPORTED_PIPELINE_VERSIONS` checked, and the version gate the file
+   exists to provide is bypassed without a word.
+
+Note the asymmetry: **2 is the only one that fails if you forget it.**
+Points 1 and 3 are registries keyed to something outside themselves, and
+omission from either is silent — the exact failure mode Critical Rule 74
+describes. Until they grow their own completeness checks, this list is
+what stands in for them, so add all three in the same commit.
+
+### What a fixture has to be
+
+Lower than it looks. The 54 committed fixture files are **hand-written,
+not captured runs** — synthetic values in genuinely real formats. The
+mycosnp Snippy fixture is real `snippy 4.6.0` key/value shape with a
+fabricated timestamp and invented variant counts; the typing TSV has the
+real column names with made-up allele calls.
+
+So what a new wrapper needs is the **directory nesting, the output
+filenames, and the real header line of each table the parser reads**. It
+does not need a pipeline execution. Getting those three wrong is the
+expensive mistake, because parser and fixture then agree with each other
+and with nothing else — the tests pass while proving nothing about real
+output.
+
 ## Why this file is worded defensively
 
 Until 2026-09-03 it claimed every wrapper directory contained
