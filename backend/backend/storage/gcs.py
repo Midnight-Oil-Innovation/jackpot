@@ -5,7 +5,7 @@
 from __future__ import annotations
 
 from collections.abc import Iterable
-from datetime import timedelta
+from datetime import UTC, datetime, timedelta
 from typing import BinaryIO
 
 from google.api_core.exceptions import Forbidden, GoogleAPIError, NotFound
@@ -33,6 +33,29 @@ def _validate_key(key: str) -> None:
         raise StorageError(f"Storage key must not contain backslashes: {key}", key=key)
     if any(seg == ".." for seg in key.split("/")):
         raise StorageError(f"Storage key must not contain '..' segments: {key}", key=key)
+
+
+def _storage_object(blob, key: str) -> StorageObject:
+    """Build a StorageObject from a GCS blob.
+
+    One home for the Optional-timestamp question. `blob.updated` is
+    Optional — a blob that has not been reloaded carries no timestamp —
+    while StorageObject requires one. Epoch is the honest stand-in: it
+    reads as "unknown" rather than inventing a plausible recent time.
+
+    Extracted because the two construction sites answered that question
+    differently, and pyright only caught one of them: list_blobs() yields
+    Any, so it never saw the Optional. Same field, two answers, one file —
+    the shape of the bug this change set is named after.
+    """
+    return StorageObject(
+        key=key,
+        size=blob.size or 0,
+        last_modified=blob.updated or datetime.fromtimestamp(0, tz=UTC),
+        content_type=blob.content_type,
+        etag=blob.etag,
+        metadata=dict(blob.metadata or {}),
+    )
 
 
 class GCSStorageBackend(StorageBackend):
@@ -140,26 +163,12 @@ class GCSStorageBackend(StorageBackend):
                 f"Object not found: {key}", key=key, backend=self.backend_name
             )
 
-        return StorageObject(
-            key=key,
-            size=blob.size or 0,
-            last_modified=blob.updated,
-            content_type=blob.content_type,
-            etag=blob.etag,
-            metadata=dict(blob.metadata or {}),
-        )
+        return _storage_object(blob, key)
 
     def list_objects(self, prefix: str = "") -> Iterable[StorageObject]:
         try:
             for blob in self._client.list_blobs(self._bucket, prefix=prefix):
-                yield StorageObject(
-                    key=blob.name,
-                    size=blob.size or 0,
-                    last_modified=blob.updated,
-                    content_type=blob.content_type,
-                    etag=blob.etag,
-                    metadata=dict(blob.metadata or {}),
-                )
+                yield _storage_object(blob, blob.name)
         except GoogleAPIError as e:
             raise StorageBackendUnavailableError(str(e), backend=self.backend_name) from e
 

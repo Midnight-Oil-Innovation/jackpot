@@ -39,12 +39,36 @@ class CredentialSpec:
     required_predicate: Callable[[Settings], bool] = field(default=lambda _settings: False)
 
 
+def _uses_gcs_hmac(settings: Settings) -> bool:
+    """True when this deployment reaches GCS over the S3-compatible API.
+
+    That path needs static HMAC keys: botocore has no GCP credential
+    provider, so boto3 falls back to the AWS chain and resolves nothing on
+    a Workload Identity pod. storage_backend="gcs_native" uses ADC instead
+    and needs none of this.
+
+    Imported inside the function to keep google-cloud-storage and boto3 out
+    of the credential registry's import graph: backend.storage's package
+    __init__ pulls in the factory, which imports both.
+
+    An earlier version of this comment claimed a module-level import would
+    cycle. It would not — hoisting it and importing backend.storage,
+    backend.storage.factory, backend.credentials.registry,
+    backend.credentials.factory and backend.main all succeed. The chain
+    does not close because backend/credentials/__init__.py never imports
+    this module. Import weight is the real reason; the cycle was not.
+    """
+    from backend.storage.settings import StorageBackendType, resolve_backend_type
+
+    return resolve_backend_type(settings) is StorageBackendType.GCS_VIA_S3 and settings.env == "gcp"
+
+
 # Storage-backend selection is no longer inferred from whether
-# `storage_endpoint` is set. get_backend_type() in
-# backend/storage/settings.py reads Settings.storage_backend and the
-# factory dispatches on it, so the predicates below key off that same
-# field. The one backend still unwired is the native GCS client — see
-# B-STORAGE-DEAD-BACKENDS.
+# `storage_endpoint` is set. resolve_backend_type() in
+# backend/storage/settings.py answers it from Settings.storage_backend,
+# and the predicates below consult that same function rather than
+# re-deriving the condition — which they previously did, wrongly, for the
+# gcs_hmac_* pair.
 REQUIRED_CREDENTIALS: tuple[CredentialSpec, ...] = (
     CredentialSpec(
         key="jwt_signing_key",
@@ -73,13 +97,13 @@ REQUIRED_CREDENTIALS: tuple[CredentialSpec, ...] = (
         key="gcs_hmac_access_key",
         description="HMAC access key for S3-compatible access to GCS buckets.",
         legacy_env_names=("GCS_HMAC_ACCESS_KEY",),
-        required_predicate=lambda s: not bool(s.storage_endpoint) and s.env == "gcp",
+        required_predicate=_uses_gcs_hmac,
     ),
     CredentialSpec(
         key="gcs_hmac_secret",
         description="HMAC secret for S3-compatible access to GCS buckets.",
         legacy_env_names=("GCS_HMAC_SECRET",),
-        required_predicate=lambda s: not bool(s.storage_endpoint) and s.env == "gcp",
+        required_predicate=_uses_gcs_hmac,
     ),
     CredentialSpec(
         key="local_storage_presign_secret",

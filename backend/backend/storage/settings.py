@@ -11,16 +11,16 @@ from __future__ import annotations
 
 import enum
 
-from backend.config import get_settings
+from backend.config import Settings, get_settings
 
 
 class StorageBackendType(str, enum.Enum):
-    """Which kind of storage backend the configured endpoint represents.
+    """Which storage backend a deployment is configured for.
 
-    Inferred from existing config:
-    - storage_endpoint set       -> S3-compatible (MinIO, AWS S3, Ceph, etc.)
-    - storage_endpoint not set   -> GCS via S3-compatible HMAC creds
-    - reserved for future        -> LOCAL, native GCS
+    Selected by name via Settings.storage_backend and resolved by
+    resolve_backend_type(). Endpoint-emptiness inference survives only as
+    the legacy path for a config that predates that setting; it is not how
+    a backend is chosen. All four members are reachable.
     """
 
     S3 = "s3"
@@ -52,16 +52,19 @@ def get_bucket_name(bucket: JackpotBucket) -> str:
     return mapping[bucket]
 
 
-def get_backend_type() -> StorageBackendType:
-    """Which kind of backend this deployment is configured for.
+def resolve_backend_type(settings: Settings) -> StorageBackendType:
+    """Which backend a given Settings selects. The single home for that
+    question.
 
-    The single home for that question. It used to be answered
-    independently here, in get_uri_prefix() and in the factory, all three
-    by inferring from whether storage_endpoint was empty — which is how a
-    local install ended up with a GCS client AND gs:// provenance
-    (B-STORAGE-LOCAL-FALLTHROUGH). Callers ask this; nobody re-derives it.
+    It used to be answered independently in the factory, in
+    get_uri_prefix(), in S3StorageBackend.get_uri() and in the gcs_hmac_*
+    credential predicates — four copies, all inferring from whether
+    storage_endpoint was empty, which is how a local install ended up with
+    a GCS client AND gs:// provenance (B-STORAGE-LOCAL-FALLTHROUGH).
+
+    Pure and takes the config, so callers holding a Settings — notably the
+    credential predicates, which are handed one — ask rather than re-derive.
     """
-    settings = get_settings()
     match settings.storage_backend:
         case "local":
             return StorageBackendType.LOCAL
@@ -69,6 +72,8 @@ def get_backend_type() -> StorageBackendType:
             return StorageBackendType.S3
         case "gcs":
             return StorageBackendType.GCS_VIA_S3
+        case "gcs_native":
+            return StorageBackendType.GCS_NATIVE
         case _:
             # Unset: config predates STORAGE_BACKEND. Infer, as before.
             return (
@@ -76,3 +81,14 @@ def get_backend_type() -> StorageBackendType:
                 if settings.storage_endpoint
                 else StorageBackendType.GCS_VIA_S3
             )
+
+
+def get_backend_type() -> StorageBackendType:
+    """resolve_backend_type() against the process-wide Settings.
+
+    Convenience for callers that do not already hold a Settings. Anything
+    that does should call resolve_backend_type directly — going through
+    here fetches the config a second time, which is how a test ended up
+    needing to patch get_settings in two modules.
+    """
+    return resolve_backend_type(get_settings())

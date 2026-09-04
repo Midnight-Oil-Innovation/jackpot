@@ -17,9 +17,10 @@ from unittest.mock import patch
 import pytest
 
 import backend.storage.factory as factory
-import backend.storage.settings as storage_settings
+import backend.storage.gcs as gcs_mod
 from backend.config import Settings
 from backend.storage.exceptions import StorageError
+from backend.storage.gcs import GCSStorageBackend
 from backend.storage.local import LocalFSStorageBackend
 from backend.storage.s3 import S3StorageBackend
 
@@ -45,11 +46,6 @@ def _backend_for(**overrides):
     settings = Settings(**{**pinned, **overrides})
     with (
         patch.object(factory, "get_settings", lambda: settings),
-        # get_backend_type() resolves through its own module-level import,
-        # so patching only the factory's view leaves the resolver reading
-        # ambient config — the same class of leak the pinning above exists
-        # to stop.
-        patch.object(storage_settings, "get_settings", lambda: settings),
         patch.object(factory.credentials, "get", lambda *a, **k: PRESIGN),
         patch.object(factory.credentials, "get_optional", lambda *a, **k: None),
     ):
@@ -146,3 +142,64 @@ class TestUriProvenance:
     def test_s3_backend_reports_s3(self):
         backend = _backend_for(storage_backend="minio", storage_endpoint="http://minio:9000")
         assert backend.get_uri("k").startswith("s3://")
+
+
+class TestNativeGcsBackend:
+    """B-STORAGE-DEAD-BACKENDS — wired, not deleted, and here is the reason.
+
+    The S3-over-HMAC path cannot authenticate with Application Default
+    Credentials. `botocore` ships no GCP credential provider at all: with
+    no keys, boto3 resolves the AWS chain (AWS_* env, ~/.aws, IMDS) and
+    finds nothing on a GKE pod using Workload Identity. So that path
+    *requires* long-lived static HMAC keys.
+
+    `docs/architecture.md:199` names Workload Identity Federation as the
+    cloud-native auth model for Scenario C, and GCSStorageBackend —
+    `google.cloud.storage`, already a declared dependency — is the only
+    backend that can honour it. That is a reason beyond symmetry, which is
+    what the entry asked for before wiring rather than deleting.
+    """
+
+    def test_gcs_native_selects_the_google_client(self):
+        with patch.object(gcs_mod, "gcs_module") as fake_gcs:
+            backend = _backend_for(storage_backend="gcs_native", gcp_project_id="proj")
+            assert isinstance(backend, GCSStorageBackend)
+        fake_gcs.Client.assert_called_once_with(project="proj")
+
+    def test_gcs_native_requires_a_project(self):
+        """ADC needs a project; failing at construction beats failing on
+        the first upload with a Google-side error."""
+        with (
+            patch.object(gcs_mod, "gcs_module"),
+            pytest.raises(StorageError, match="gcp_project_id"),
+        ):
+            _backend_for(storage_backend="gcs_native", gcp_project_id="")
+
+    def test_gcs_native_needs_no_hmac_credentials(self):
+        """The point of the native path: no static keys.
+
+        The HMAC credentials stay required for storage_backend='gcs', which
+        genuinely cannot work without them.
+        """
+        from backend.credentials.registry import REQUIRED_CREDENTIALS
+
+        hmac_specs = [c for c in REQUIRED_CREDENTIALS if c.key.startswith("gcs_hmac")]
+        assert hmac_specs, "expected gcs_hmac_* credential specs"
+        for spec in hmac_specs:
+            assert not spec.required_predicate(
+                Settings(storage_backend="gcs_native", env="gcp", storage_endpoint=None)
+            ), f"{spec.key} must not be required on the native path"
+            assert spec.required_predicate(
+                Settings(storage_backend="gcs", env="gcp", storage_endpoint=None)
+            ), f"{spec.key} must stay required on the HMAC path"
+            # Behaviour change worth pinning: the old predicate keyed off
+            # `not storage_endpoint`, so an explicit gcs backend with an
+            # endpoint set was told it needed no keys. It does.
+            assert spec.required_predicate(
+                Settings(storage_backend="gcs", env="gcp", storage_endpoint="http://x:9000")
+            ), f"{spec.key} must be required for an explicit gcs backend"
+
+    def test_gcs_native_reports_gs_uris(self):
+        with patch.object(gcs_mod, "gcs_module"):
+            backend = _backend_for(storage_backend="gcs_native", gcp_project_id="proj")
+        assert backend.get_uri("k").startswith("gs://")
