@@ -39,12 +39,12 @@ class CredentialSpec:
     required_predicate: Callable[[Settings], bool] = field(default=lambda _settings: False)
 
 
-# The factory's existing storage-backend selection is binary: if
-# `storage_endpoint` is set, use S3-compatible (MinIO, AWS S3, MinIO under
-# Docker Compose for local dev); otherwise use GCS via S3-compatible HMAC
-# credentials (production GCP). The predicates below reflect that signal.
-# When the storage factory grows additional backends (LocalFS, native GCS)
-# the predicates are the right place to extend.
+# Storage-backend selection is no longer inferred from whether
+# `storage_endpoint` is set. get_backend_type() in
+# backend/storage/settings.py reads Settings.storage_backend and the
+# factory dispatches on it, so the predicates below key off that same
+# field. The one backend still unwired is the native GCS client — see
+# B-STORAGE-DEAD-BACKENDS.
 REQUIRED_CREDENTIALS: tuple[CredentialSpec, ...] = (
     CredentialSpec(
         key="jwt_signing_key",

@@ -3966,6 +3966,24 @@ sessions:
       cannot produce a filesystem-backed Compose install. Both are
       B-STORAGE-CI-LOCAL.
 
+      Review found the fix was HALF DONE, which is the lesson worth
+      keeping. The same predicate lived in three places and only the
+      factory was corrected: get_uri_prefix() still answered "gs" from an
+      empty storage_endpoint, so a local install wrote bytes to disk and
+      recorded gs://jackpot-staging/<key> against the sample. Wrong
+      provenance persisted to the database is worse than a wrong client -
+      a sovereignty deployment would have claimed its data sat in Google's
+      cloud. S3StorageBackend.get_uri() was a third answer again,
+      hardcoding s3:// even when serving GCS.
+
+      Now: get_backend_type() is the single resolver, the factory
+      dispatches on it, get_uri_prefix() is deleted, and stage_file(),
+      move_to_sequences() and the execution-log uploader ask
+      backend.get_uri(key) instead of assembling {prefix}://{bucket}/{key}
+      themselves. Critical Rule 73 - and a reminder that "grep every
+      caller of the thing you are about to change" applies to predicates,
+      not just functions. The first pass changed one caller of an idea.
+
   - id: B-STORAGE-CI-LOCAL
     title: Nothing can actually produce a filesystem-backed install yet
     short_description: |

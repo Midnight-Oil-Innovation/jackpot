@@ -2119,14 +2119,11 @@ async def _upload_execution_log(
     """
     import io
 
-    from backend.storage import JackpotBucket, get_storage_backend, get_uri_prefix
-    from backend.storage.settings import get_bucket_name
+    from backend.storage import JackpotBucket, get_storage_backend
 
     timestamp = completed_at.strftime("%Y%m%dT%H%M%SZ")
     object_key = f"executions/{submission_id}/execution_{timestamp}_attempt{attempt}.log"
     backend = get_storage_backend(JackpotBucket.SUBMISSIONS)
-    bucket_name = get_bucket_name(JackpotBucket.SUBMISSIONS)
-    uri_prefix = get_uri_prefix()
 
     def _do_upload() -> None:
         backend.upload(
@@ -2141,7 +2138,7 @@ async def _upload_execution_log(
         )
 
     await asyncio.to_thread(_do_upload)
-    return f"{uri_prefix}://{bucket_name}/{object_key}"
+    return backend.get_uri(object_key)
 
 
 __all__ = [

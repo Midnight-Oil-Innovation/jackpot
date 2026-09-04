@@ -19,7 +19,12 @@ from backend.storage.base import StorageBackend
 from backend.storage.exceptions import StorageError
 from backend.storage.local import LocalFSStorageBackend
 from backend.storage.s3 import S3StorageBackend
-from backend.storage.settings import JackpotBucket, get_bucket_name
+from backend.storage.settings import (
+    JackpotBucket,
+    StorageBackendType,
+    get_backend_type,
+    get_bucket_name,
+)
 
 
 @cache
@@ -31,9 +36,12 @@ def get_storage_backend(bucket: JackpotBucket = JackpotBucket.STAGING) -> Storag
     settings = get_settings()
     bucket_name = get_bucket_name(bucket)
 
-    # Explicit selection wins. `None` falls through to the legacy
-    # inference below so a config predating STORAGE_BACKEND is unchanged.
-    if settings.storage_backend == "local":
+    # get_backend_type() is the only place that answers "which backend";
+    # it handles both the named choice and the legacy inference for a
+    # config predating STORAGE_BACKEND.
+    kind = get_backend_type()
+
+    if kind is StorageBackendType.LOCAL:
         if not settings.local_storage_root:
             raise StorageError(
                 "storage_backend is 'local' but local_storage_root is not set. "
@@ -46,9 +54,7 @@ def get_storage_backend(bucket: JackpotBucket = JackpotBucket.STAGING) -> Storag
             public_url_base=(settings.local_storage_public_url_base or settings.jackpot_api_url),
         )
 
-    if settings.storage_backend in {"minio", "s3"} or (
-        settings.storage_backend is None and settings.storage_endpoint
-    ):
+    if kind is StorageBackendType.S3:
         # S3-compatible (MinIO, AWS S3, Ceph RGW, etc.)
         return S3StorageBackend(
             bucket_name=bucket_name,
@@ -60,7 +66,6 @@ def get_storage_backend(bucket: JackpotBucket = JackpotBucket.STAGING) -> Storag
             backend_name="s3",
         )
 
-    # storage_backend == "gcs", or unset with no endpoint configured.
     # GCS via S3-compatible HMAC credentials. Use get_optional so that a
     # deployment relying on ambient/ADC credentials (no HMAC keys set)
     # gets None here and lets boto3 resolve credentials itself, rather

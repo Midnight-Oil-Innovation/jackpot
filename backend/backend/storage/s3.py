@@ -214,7 +214,12 @@ class S3StorageBackend(StorageBackend):
             raise StorageError(str(e), key=key, backend=self.backend_name) from e
 
     def get_uri(self, key: str) -> str:
-        return f"s3://{self.bucket_name}/{key}"
+        # This class serves GCS too, over the S3-compatible HMAC API, and
+        # the URI has to name the service the bytes are in rather than the
+        # protocol used to reach it. Hardcoding s3:// disagreed with the
+        # get_uri_prefix() that every call site actually used.
+        scheme = "gs" if self.backend_name == "gcs" else "s3"
+        return f"{scheme}://{self.bucket_name}/{key}"
 
     def health_check(self) -> bool:
         try:

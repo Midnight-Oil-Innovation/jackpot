@@ -17,7 +17,9 @@ from unittest.mock import patch
 import pytest
 
 import backend.storage.factory as factory
+import backend.storage.settings as storage_settings
 from backend.config import Settings
+from backend.storage.exceptions import StorageError
 from backend.storage.local import LocalFSStorageBackend
 from backend.storage.s3 import S3StorageBackend
 
@@ -43,6 +45,11 @@ def _backend_for(**overrides):
     settings = Settings(**{**pinned, **overrides})
     with (
         patch.object(factory, "get_settings", lambda: settings),
+        # get_backend_type() resolves through its own module-level import,
+        # so patching only the factory's view leaves the resolver reading
+        # ambient config — the same class of leak the pinning above exists
+        # to stop.
+        patch.object(storage_settings, "get_settings", lambda: settings),
         patch.object(factory.credentials, "get", lambda *a, **k: PRESIGN),
         patch.object(factory.credentials, "get_optional", lambda *a, **k: None),
     ):
@@ -94,12 +101,48 @@ def test_unset_backend_preserves_the_legacy_inference():
     assert _backend_for().backend_name == "gcs"
 
 
-def test_local_without_a_configured_root_fails_loudly(monkeypatch):
+def test_local_without_a_configured_root_fails_loudly():
     """Silence is what made the original bug expensive.
 
     An operator who selects local storage and configures no root must get
     an error naming the setting, not a surprise default under the CWD.
+    Pinned to StorageError specifically: a bare `Exception` would also pass
+    on an ImportError or a signature change, which is not what this asserts.
     """
-    with pytest.raises(Exception) as exc:
+    with pytest.raises(StorageError, match="local_storage_root"):
         _backend_for(storage_backend="local", local_storage_root="")
-    assert "local_storage_root" in str(exc.value)
+
+
+class TestUriProvenance:
+    """The same predicate lived in three places; only the factory was fixed.
+
+    `get_uri_prefix()` inferred `gs` from an empty `storage_endpoint`, so a
+    local install wrote bytes to disk and recorded
+    `gs://jackpot-staging/<key>` against the sample — wrong provenance
+    persisted to the database, which is worse than a wrong client. For a
+    sovereignty deployment it claims data sits in Google's cloud when it
+    never left the building.
+
+    Critical Rule 73: the fix is one resolver the call sites share, not a
+    third copy that happens to agree today.
+    """
+
+    def test_local_storage_never_reports_a_cloud_uri(self, tmp_path):
+        backend = _backend_for(storage_backend="local", local_storage_root=str(tmp_path))
+        uri = backend.get_uri("some/key.fastq.gz")
+        assert uri.startswith("file://"), uri
+        assert "gs://" not in uri and "s3://" not in uri
+
+    def test_gcs_backend_reports_gs_not_s3(self):
+        """S3StorageBackend serves GCS via HMAC, but the URI must say gs://.
+
+        It hardcoded s3:// regardless of backend_name, disagreeing with the
+        get_uri_prefix() that call sites actually used — a third answer to
+        the same question.
+        """
+        backend = _backend_for(storage_backend="gcs")
+        assert backend.get_uri("k").startswith("gs://")
+
+    def test_s3_backend_reports_s3(self):
+        backend = _backend_for(storage_backend="minio", storage_endpoint="http://minio:9000")
+        assert backend.get_uri("k").startswith("s3://")

@@ -53,14 +53,26 @@ def get_bucket_name(bucket: JackpotBucket) -> str:
 
 
 def get_backend_type() -> StorageBackendType:
-    """Infer which kind of backend we're talking to from existing config."""
-    settings = get_settings()
-    if settings.storage_endpoint:
-        return StorageBackendType.S3
-    return StorageBackendType.GCS_VIA_S3
+    """Which kind of backend this deployment is configured for.
 
-
-def get_uri_prefix() -> str:
-    """Return 's3' or 'gs' based on configured backend."""
+    The single home for that question. It used to be answered
+    independently here, in get_uri_prefix() and in the factory, all three
+    by inferring from whether storage_endpoint was empty — which is how a
+    local install ended up with a GCS client AND gs:// provenance
+    (B-STORAGE-LOCAL-FALLTHROUGH). Callers ask this; nobody re-derives it.
+    """
     settings = get_settings()
-    return "s3" if settings.storage_endpoint else "gs"
+    match settings.storage_backend:
+        case "local":
+            return StorageBackendType.LOCAL
+        case "minio" | "s3":
+            return StorageBackendType.S3
+        case "gcs":
+            return StorageBackendType.GCS_VIA_S3
+        case _:
+            # Unset: config predates STORAGE_BACKEND. Infer, as before.
+            return (
+                StorageBackendType.S3
+                if settings.storage_endpoint
+                else StorageBackendType.GCS_VIA_S3
+            )

@@ -20,16 +20,15 @@ from backend.jobs import _upload_execution_log
 @pytest.mark.asyncio
 async def test_upload_returns_canonical_uri():
     fake_backend = MagicMock()
+    # The helper returns backend.get_uri(key) rather than assembling
+    # "{prefix}://{bucket}/{key}" itself — one URI answer per backend,
+    # instead of a second copy that has to agree (B-STORAGE-LOCAL-FALLTHROUGH).
+    fake_backend.get_uri.side_effect = lambda key: f"s3://jackpot-submissions/{key}"
     # Patch on the `backend.storage` namespace because the helper does
     # `from backend.storage import ...` at call time; the name is
     # resolved against `backend.storage.__init__`'s re-exports.
     with (
         patch("backend.storage.get_storage_backend", return_value=fake_backend),
-        patch("backend.storage.get_uri_prefix", return_value="s3"),
-        patch(
-            "backend.storage.settings.get_bucket_name",
-            return_value="jackpot-submissions",
-        ),
     ):
         uri = await _upload_execution_log(
             submission_id=42,
@@ -58,10 +57,12 @@ async def test_upload_object_key_segments_by_submission_id():
     """Different submission IDs land under their own subkey for diagnostic
     discoverability via S3 list_objects."""
     fake_backend = MagicMock()
+    # The helper returns backend.get_uri(key) rather than assembling
+    # "{prefix}://{bucket}/{key}" itself — one URI answer per backend,
+    # instead of a second copy that has to agree (B-STORAGE-LOCAL-FALLTHROUGH).
+    fake_backend.get_uri.side_effect = lambda key: f"s3://jackpot-submissions/{key}"
     with (
         patch("backend.storage.get_storage_backend", return_value=fake_backend),
-        patch("backend.storage.get_uri_prefix", return_value="s3"),
-        patch("backend.storage.settings.get_bucket_name", return_value="bucket"),
     ):
         uri_a = await _upload_execution_log(
             submission_id=1,
