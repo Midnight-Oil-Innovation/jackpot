@@ -3856,6 +3856,121 @@ sessions:
       test expects ${branch}. Pre-existing, unrelated to the lock, and
       exactly the zsh/python drift that test exists to catch.
 
+  - id: B-STORAGE-DEAD-BACKENDS
+    title: GCSStorageBackend and LocalFSStorageBackend have no production caller
+    short_description: |
+      backend/backend/storage/ ships four backend classes. factory.py has
+      exactly two branches and both return S3StorageBackend - S3-compatible
+      when storage_endpoint is set, GCS via HMAC otherwise. GCSStorageBackend
+      and LocalFSStorageBackend are referenced only by their own definitions
+      and by tests. Decide whether each is a real deployment target or dead
+      code, then wire it or delete it.
+    phase: p0_series
+    status: open
+    depends_on: []
+    blocked_by_external:
+    parallel_safe: true
+    parallel_safe_reason: "Storage layer only. No authorization path, no schema, no migration."
+    effort_sessions: 1
+    primary_files:
+      - backend/backend/storage/factory.py
+      - backend/backend/storage/gcs.py
+      - backend/backend/storage/local.py
+      - backend/backend/credentials/registry.py
+    test_files:
+      - tests/storage/test_gcs.py
+      - tests/storage/test_local.py
+      - tests/storage/test_base.py
+    source_of_truth_views:
+      - docs/architecture.md
+    pr_title_template:
+    branch_name_template: "refactor/storage-backend-reachability"
+    role_framing:
+    notes: >
+      Found 2026-09-03 while rejecting drs:// (B-DRS-URI-1). The
+      justification written for that change said storage "ships gcs, s3 and
+      local backends", which is true of the modules and false of the
+      reachable code. Every URI JACKPOT can actually open is opened by
+      S3StorageBackend.
+
+      This is the Critical Rule 70 shape turned inward: two modules that
+      read as live infrastructure, are covered by their own passing tests,
+      and cannot be reached from any production entry point. The tests are
+      what make it invisible - test_gcs.py and test_local.py are green, so
+      nothing signals that the thing under test is unreachable. Coverage
+      counts them as exercised.
+
+      credentials/registry.py:89 already carries the admission in a
+      comment - "No factory branch instantiates LocalFSStorageBackend yet;
+      flip this" - so the fact was known, written down once, in the one
+      place nobody looks for a storage question.
+
+      The decision is per class, not global. LocalFSStorageBackend has an
+      obvious future in Scenario A/B installs with no object store, which
+      is an argument for wiring it to a factory branch rather than deleting
+      it. GCSStorageBackend is the weaker case: GCS already works through
+      the S3-compatible HMAC path, so a native GCS client would need a
+      reason beyond symmetry. Whichever way each goes, the outcome to avoid
+      is leaving them exactly as they are.
+
+  - id: B-ZOO-WRAPPER-CONTRACT
+    title: Document the three registration points a new zoo wrapper must hit
+    short_description: |
+      pipelines/pipelines/README.md describes what an existing wrapper
+      contains and what the shared tests load, but not what a NEW wrapper
+      has to register. That contract - a per-wrapper test file, a
+      PipelineCase row backed by a fixture tree, and a _WRAPPED_PIPELINES
+      row - currently exists only in one backlog entry's notes.
+    phase: p0_series
+    status: open
+    depends_on: []
+    blocked_by_external:
+    parallel_safe: true
+    parallel_safe_reason: "One README. No code."
+    effort_sessions: 0.5
+    primary_files:
+      - pipelines/pipelines/README.md
+    test_files: []
+    source_of_truth_views: []
+    pr_title_template:
+    branch_name_template: "docs/zoo-wrapper-contract"
+    role_framing:
+    notes: >
+      Split out of B-ZOO-MIRA-PHOENIX on 2026-09-03 rather than left in it.
+      The three registration points were discovered twice in one session -
+      the first correction to that entry named the wrong test paths, the
+      second named all three - and both times the cost was that the
+      information had no general home. A per-item entry is the wrong place
+      for a contract every future wrapper must satisfy; the next author
+      will read the README, not a backlog entry for two CDC pipelines.
+
+      What to document:
+
+        1. pipelines/tests/test_<name>_parsers.py - a per-wrapper test file.
+           All ten wrappers have one.
+        2. A PipelineCase row in _PIPELINE_CASES in
+           test_pipeline_integration_e2e.py, plus a fixture tree at
+           pipelines/tests/fixtures/<name>/. A row without a fixture fails
+           an explicit assertion; expects_results additionally catches a
+           fixture that parses to nothing.
+        3. A (module, upstream) row in _WRAPPED_PIPELINES in
+           test_version_check.py, which parametrizes over it.
+
+      Worth stating the fixture bar too, because it is lower than it looks
+      and the wrong guess in either direction is expensive. The 54
+      committed fixture files are hand-written, not captured runs -
+      synthetic values in genuinely real formats. The mycosnp Snippy
+      fixture is real snippy 4.6.0 key/value shape with a fabricated
+      timestamp and invented variant counts. So a new wrapper needs correct
+      directory nesting, correct output filenames and real TSV header
+      lines; it does not need a pipeline execution.
+
+      Note the README itself sits outside scripts/check_docs.py, which
+      scans docs/ plus repo-root markdown only. That is how its previous
+      text drifted from Session J to 2026-09-03 without tripping anything
+      (fixed in PR #210). Widening the guard is a separate decision -
+      B-DOC-GUARD-SCOPE drew that line deliberately.
+
   - id: B-EUK-COINFECT-SENTINEL
     title: '"Screened, none found" sentinel for coinfection_organisms'
     short_description: |
