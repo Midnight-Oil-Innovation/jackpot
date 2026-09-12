@@ -618,8 +618,7 @@ CREATE TABLE IF NOT EXISTS saved_searches (
 );
 
 INSERT INTO domain_whitelist (domain, description)
-VALUES ('example.org', 'Example Org'),
-       ('gmail.com',   'Local dev — REMOVE IN PRODUCTION')
+VALUES ('example.org', 'Example Org')
 ON CONFLICT DO NOTHING;
 
 INSERT INTO organizations (display_name)
