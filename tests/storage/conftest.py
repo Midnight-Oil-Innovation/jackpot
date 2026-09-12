@@ -42,7 +42,7 @@ from testcontainers.core.waiting_utils import wait_for_logs
 def minio_container() -> Generator[DockerContainer, None, None]:
     """Run a MinIO container for the test session."""
     container = (
-        DockerContainer("minio/minio:RELEASE.2024-09-13T20-26-02Z")
+        DockerContainer("quay.io/minio/minio:RELEASE.2024-09-13T20-26-02Z")
         .with_command("server /data --console-address :9001")
         .with_env("MINIO_ROOT_USER", "minioadmin")
         .with_env("MINIO_ROOT_PASSWORD", "minioadmin")
