@@ -50,7 +50,7 @@ services:
       retries: 5
 
   minio:
-    image: minio/minio:latest
+    image: quay.io/minio/minio:latest
     platform: linux/arm64
     container_name: jackpot_minio
     profiles: ["laptop", "ci"]
@@ -70,7 +70,7 @@ services:
       retries: 3
 
   minio_init:
-    image: minio/mc:latest
+    image: quay.io/minio/mc:latest
     platform: linux/arm64
     container_name: jackpot_minio_init
     profiles: ["laptop", "ci"]
