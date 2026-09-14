@@ -56,6 +56,13 @@ config/operator.local.yaml
 # workflow at the local copy).
 deploy/helm/jackpot-api/values-*.local.yaml
 
+# Per-machine agent notes. `headroom learn` writes CLAUDE.local.md and
+# assumes it is ignored ("Ensure CLAUDE.local.md is in your .gitignore
+# so it stays personal" — learn/writer.py). It was tracked from 57f190e
+# onward by a bulk `git add` in a docs pass, which published one
+# machine's absolute paths and made every learn run a commit.
+CLAUDE.local.md
+
 # Terraform
 .terraform/
 *.tfstate

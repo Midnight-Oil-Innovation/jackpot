@@ -1324,10 +1324,37 @@ authorization PRs merged without the review the maintainer had configured, and
 the review, once run, found a LIKE-pattern widening in `capability_holders`
 that had already shipped (#191).
 
-The block is regenerated wholesale, so corrections inside it do not survive —
-which is why this rule lives here, in the reviewed file, rather than as a note
-in the generated one. Treat the block as useful for *performance* hints (read
-this file once, this command is slow) and inert for *correctness* ones.
+This rule lives here, in the reviewed file, rather than as a note in the
+generated one, because a note inside the block is not reliably durable. Treat
+the block as useful for *performance* hints (read this file once, this command
+is slow) and inert for *correctness* ones.
+
+**Delete the wrong section. Do not edit inside it.** This rule used to say the
+block is "regenerated wholesale, so corrections inside it do not survive",
+which implied nothing could be done to it — and is why the coderabbit line sat
+there for eleven days after being identified as false. The block is rebuilt
+every run, but `_merge_recommendations` in headroom's `learn/writer.py` carries
+prior sections forward **by heading**:
+
+```python
+new_sections = {r.section for r in new_recommendations}
+carried = [p for p in prior if p.section not in new_sections]
+```
+
+A section the current run does not re-derive survives untouched, indefinitely —
+which is exactly how a false claim persists. A section deleted by hand stays
+deleted unless some later run re-derives that same heading from new transcript
+evidence. So deleting is durable; editing a line *inside* a section is not,
+because the next run to produce that heading replaces the section whole.
+
+Second recurrence, 2026-09-12: the same `coderabbit` CLI line was still in the
+block. It did no damage that time only because `~/.claude/hooks/review-gate.sh`
+now blocks `gh pr create` on a Python diff until a review has run, so both PRs
+that day got the CodeRabbit pass the block said was impossible. A hook that
+makes a false claim unactionable is worth more than a rule saying not to
+believe it — prefer that shape of fix where one is available. The `Tooling not
+available` section was deleted from `CLAUDE.local.md` in the same commit as
+this paragraph.
 
 ---
 
