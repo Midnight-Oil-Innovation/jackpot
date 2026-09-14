@@ -83,7 +83,8 @@ class Sample:
         )
         # Backend returns either bytes (local/MinIO) or a JSON
         # {"presigned_url": "https://..."} (GCS/S3). Handle both.
-        dest_path = Path(dest_dir).resolve() / chosen["filename"]
+        # .name only — a server-supplied filename must not escape dest_dir
+        dest_path = Path(dest_dir).resolve() / Path(chosen["filename"]).name
         dest_path.parent.mkdir(parents=True, exist_ok=True)
 
         if isinstance(download_response, dict) and "presigned_url" in download_response:
