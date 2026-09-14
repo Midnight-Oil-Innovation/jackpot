@@ -91,10 +91,6 @@
 *~1,633 tokens/session saved*
 - Sequential single-line `Edit` calls on the same file are the top repeated pattern here (13x on `course/modules/06-when-things-break.html`, 11x on `scripts/verify_licenses.py`, 10x on `code_quality_report.sh`). Read the file region once, then apply all edits for that file in one pass (multiple Edits in a single message, or one `python3 - <<'EOF'` rewrite) before re-reading or re-running checks.
 
-### Tooling not available
-*~900 tokens/session saved*
-- `coderabbit` CLI is NOT installed. `coderabbit:code-review` will fail at the `coderabbit --version` check — use `mattpocock-skills:code-review` (Standards + Spec axes as parallel subagents) instead.
-
 ### Background jobs and CI waits
 *~800 tokens/session saved*
 - `sleep N && <cmd>` is blocked by a hook. To wait, use `until <condition>; do :; done` with a bounded loop, or `run_in_background: true`.
