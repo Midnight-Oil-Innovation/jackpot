@@ -29,7 +29,12 @@ from backend.authz.engine import (
     _conditions_satisfied,
     _unexpired,
 )
-from backend.authz.policy import _DB_NOT_WIRED, PRINCIPAL_ID, _principal_holds
+from backend.authz.policy import (
+    _DB_NOT_WIRED,
+    PRINCIPAL_ID,
+    _principal_holds,
+    check_predicate_form,
+)
 from backend.authz.scope import (
     is_canonical_scope_sql,
     lab_scope_sql,
@@ -73,6 +78,8 @@ def _attr_sql(
             )
         if not _COLUMN_RE.match(column):
             raise ValueError(f"column for {attr!r} must be table.column, got {column!r}")
+        check_predicate_form(attr, expected)
+
         key = f"{prefix}_{i}"
         if expected == PRINCIPAL_ID:
             params[key] = principal_id
@@ -88,7 +95,18 @@ def _attr_sql(
             for j, v in enumerate(expected["in"]):
                 params[f"{key}_{j}"] = v
                 names.append(f":{key}_{j}")
-            if names:
+            if names and any(v is None for v in expected["in"]):
+                # `col IN (NULL)` is NULL, not true. The oracle's `actual not
+                # in [...]` treats None as an ordinary member, so the NULL
+                # case has to be spelled out or the two halves disagree —
+                # narrower inside an ALLOW, and wider inside a DENY, which is
+                # negated at the clause level.
+                non_null = [n for n, v in zip(names, expected["in"], strict=True) if v is not None]
+                if non_null:
+                    terms.append(f"({column} IN ({', '.join(non_null)}) OR {column} IS NULL)")
+                else:
+                    terms.append(f"{column} IS NULL")
+            elif names:
                 terms.append(f"{column} IN ({', '.join(names)})")
             else:
                 # Nothing is a member of the empty set, which is exactly what
@@ -99,6 +117,10 @@ def _attr_sql(
                 # which accepts `IN ()` as an always-false extension and so
                 # agrees with the oracle for the wrong reason.
                 terms.append("1 = 0")
+        elif expected is None:
+            # Same reason as the IN case: `col = NULL` is NULL, never true,
+            # while the oracle's `actual != expected` matches None to None.
+            terms.append(f"{column} IS NULL")
         else:
             params[key] = expected
             terms.append(f"{column} = :{key}")

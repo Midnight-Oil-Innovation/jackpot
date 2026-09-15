@@ -44,6 +44,21 @@ PREDICATES = [
     {"sharing_level": {"not": "PUBLIC"}},
     {"sharing_level": {"not": None}},
     {"sharing_level": PRINCIPAL_ID},
+    # NULL is a value to the oracle and an absence to SQL — `col = NULL` and
+    # `col IN (NULL)` are both NULL, never true. The disagreement is narrower
+    # inside an ALLOW and wider inside a DENY, which is negated at clause level.
+    {"sharing_level": None},
+    {"sharing_level": {"in": [None]}},
+    {"sharing_level": {"in": ["PUBLIC", None]}},
+]
+
+# Predicates that name two forms at once. Neither half defines this shape, and
+# they resolved it in opposite orders — policy.py tested "in" first,
+# visibility.py tested "not" first — so the dict compiled to a different rule
+# than it evaluated. Both halves must now refuse it rather than pick.
+AMBIGUOUS_PREDICATES = [
+    {"sharing_level": {"in": [], "not": "PUBLIC"}},
+    {"sharing_level": {"in": ["PUBLIC"], "not": "PUBLIC"}},
 ]
 
 
@@ -99,6 +114,35 @@ def test_no_predicate_compiles_to_empty_in(predicate: dict) -> None:
     params: dict = {}
     term = _attr_sql(predicate, COLUMNS, PRINCIPAL.id, "p", params)
 
-    assert "IN ()" not in term.replace("IN( )", "IN ()"), (
-        f"{predicate!r} compiled to {term!r}, which PostgreSQL rejects"
-    )
+    assert "IN ()" not in term, f"{predicate!r} compiled to {term!r}, which PostgreSQL rejects"
+
+
+@pytest.mark.parametrize("predicate", AMBIGUOUS_PREDICATES)
+def test_both_halves_refuse_a_predicate_naming_two_forms(predicate: dict) -> None:
+    """Refusing beats choosing, and refusing in both places beats refusing in one.
+
+    Before this, `{"in": [], "not": "PUBLIC"}` against a PRIVATE row was
+    SQL=True / oracle=False — the SQL half admitting a row permit() refuses,
+    which is the disclosure direction. Measured, not theorised.
+    """
+    with pytest.raises(ValueError):
+        _attr_sql(predicate, COLUMNS, PRINCIPAL.id, "p", {})
+    with pytest.raises(ValueError):
+        _oracle_says(predicate, "PRIVATE")
+
+
+def test_deny_direction_is_the_inverse(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A narrowing divergence is a WIDENING once the term is negated.
+
+    visibility.py negates attribute terms for DENY policies, so the direction
+    assertion above — written for ALLOW — reverses meaning there. Both live
+    DENY policies read nullable columns, which is exactly where the NULL
+    disagreements lived. Equality is what actually protects a DENY, so this
+    asserts it over the whole matrix rather than trusting the one direction.
+    """
+    for predicate, value in itertools.product(PREDICATES, ATTR_VALUES):
+        sql, oracle = _sql_says(predicate, value), _oracle_says(predicate, value)
+        assert sql == oracle, (
+            f"{predicate!r} against {value!r} diverges (sql={sql} oracle={oracle}); "
+            "inside a DENY this becomes a widening"
+        )
