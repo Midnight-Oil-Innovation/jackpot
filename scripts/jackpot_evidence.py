@@ -134,6 +134,14 @@ def _ensure_dirs():
         # it elsewhere. Same shape as _mkdir_and_secure in backend/crypto.
         fd = os.open(directory, os.O_DIRECTORY | os.O_NOFOLLOW)
         try:
+            # Refuse to adopt a real directory someone else created here.
+            # Without this, an attacker pre-creating the path gets their
+            # directory silently "secured" and then written into.
+            if os.fstat(fd).st_uid != os.geteuid():
+                raise PermissionError(
+                    f"{directory} is owned by uid {os.fstat(fd).st_uid}, "
+                    f"not {os.geteuid()}; refusing to adopt it."
+                )
             os.fchmod(fd, 0o700)
         finally:
             os.close(fd)
