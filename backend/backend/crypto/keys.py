@@ -64,16 +64,21 @@ def _write_0600(path: Path, data: bytes) -> None:
     """Write ``data`` to ``path``, which never exists more open than 0600.
 
     ``write_text()`` then ``chmod()`` leaves the file at the process umask —
-    0644 on a typical machine — for the moment in between. Creating the fd
-    with the mode closes that window; the ``chmod`` after is for the case
-    where a restrictive umask left the file narrower than asked, and for a
-    file that already existed (``O_CREAT`` does not change an existing
-    file's mode).
+    0644 on a typical machine — for the moment in between.
+
+    The mode argument to ``os.open`` only applies when the file is created,
+    so it is not on its own enough: an existing 0644 key file is truncated
+    and rewritten at 0644, exposing the *replacement* key until a later
+    chmod. ``os.fchmod`` on the descriptor, before any bytes are written,
+    covers both cases. Doing it on the descriptor rather than the path also
+    means a symlink swapped in mid-write cannot redirect the permission
+    change — and ``O_NOFOLLOW`` refuses a symlink at the final path
+    outright, matching ``_mkdir_and_secure`` above.
     """
-    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC | os.O_NOFOLLOW, 0o600)
     with os.fdopen(fd, "wb") as handle:
+        os.fchmod(handle.fileno(), 0o600)
         handle.write(data)
-    os.chmod(path, 0o600)
 
 
 class KeystoreBackend(ABC):

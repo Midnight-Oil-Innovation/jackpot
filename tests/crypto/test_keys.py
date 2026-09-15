@@ -272,3 +272,26 @@ def test_filesystem_keystore_files_are_created_private_not_chmodded_private(
     # later chmod saved them — the window this guards against.
     assert stat.S_IMODE(os.stat(keystore_dir / "k.key").st_mode) == 0o600
     assert stat.S_IMODE(os.stat(keystore_dir / "k.meta.json").st_mode) == 0o600
+
+
+@pytest.mark.skipif(os.geteuid() == 0, reason="root bypasses permission bits")
+def test_filesystem_keystore_narrows_a_preexisting_world_readable_file(
+    keystore_dir: Path, no_chmod
+) -> None:
+    """os.open's mode argument only applies on creation.
+
+    A key file already sitting at 0644 is truncated and rewritten in place,
+    so without an explicit fchmod the *replacement* key material is written
+    out world-readable.
+    """
+    keystore_dir.mkdir(parents=True, exist_ok=True)
+    stale = keystore_dir / "k.key"
+    # 0644 via the creation mode — chmod is neutered by the fixture, and
+    # umask is 0, so this lands exactly as asked.
+    os.close(os.open(stale, os.O_WRONLY | os.O_CREAT, 0o644))
+    assert stat.S_IMODE(os.stat(stale).st_mode) == 0o644
+
+    ks = FilesystemKeystore(directory=keystore_dir)
+    ks.store_key("k", b"\xbb" * 32)
+
+    assert stat.S_IMODE(os.stat(stale).st_mode) == 0o600
