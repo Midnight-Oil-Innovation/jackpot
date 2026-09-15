@@ -241,3 +241,89 @@ def test_keystore_backend_is_abstract() -> None:
 def test_hooks_compatibility_via_protocol() -> None:
     hooks: AISCryptoHooks = _FixedActionHooks(RotationAction.ALLOW)
     assert isinstance(hooks, AISCryptoHooks)
+
+
+@pytest.fixture
+def no_chmod(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
+    """umask 0 and a neutered chmod, leaving only the mode at creation.
+
+    Asserting the finished file is 0600 proves nothing: write-then-chmod
+    ends at 0600 too, which is why every existing permission test here
+    passed while the window was open. Taking chmod away is what separates
+    "created private" from "made private afterwards".
+    """
+    previous = os.umask(0)
+    real_fchmod = os.fchmod
+
+    def _fchmod_regular_files_only(fd: int, mode: int) -> None:
+        # Directories still need it — FilesystemKeystore's _mkdir_and_secure
+        # locks the keystore dir this way. Only the file route is closed,
+        # otherwise an implementation could pass by tightening after
+        # creation, which is the very thing under test.
+        if stat.S_ISREG(os.fstat(fd).st_mode):
+            return
+        real_fchmod(fd, mode)
+
+    monkeypatch.setattr(os, "chmod", lambda *args, **kwargs: None)
+    monkeypatch.setattr(Path, "chmod", lambda self, mode: None)
+    monkeypatch.setattr(os, "fchmod", _fchmod_regular_files_only)
+    # Guard the guard (Rule 74). If either monkeypatch ever stops taking —
+    # a module-scope `from os import chmod`, a helper reaching through
+    # shutil — every assertion below goes green against defective code, and
+    # green is indistinguishable from working.
+    probe = tmp_path / ".chmod_canary"
+    os.close(os.open(probe, os.O_WRONLY | os.O_CREAT, 0o644))
+    os.chmod(probe, 0o600)
+    probe.chmod(0o600)
+    fd = os.open(probe, os.O_WRONLY)
+    try:
+        os.fchmod(fd, 0o600)
+    finally:
+        os.close(fd)
+    assert stat.S_IMODE(os.stat(probe).st_mode) == 0o644, (
+        "chmod or fchmod is still live — this fixture no longer isolates the creation mode"
+    )
+    try:
+        yield
+    finally:
+        os.umask(previous)
+
+
+def test_filesystem_keystore_metadata_sidecar_is_created_private(
+    keystore_dir: Path, no_chmod
+) -> None:
+    ks = FilesystemKeystore(directory=keystore_dir)
+    ks.store_key("k", b"\xaa" * 32)
+
+    # The sidecar is the assertion with signal: it was the write_text() one,
+    # so 0666 here means the bytes hit the disk world-readable and only a
+    # later chmod saved them.
+    assert stat.S_IMODE(os.stat(keystore_dir / "k.meta.json").st_mode) == 0o600
+    # The key file cannot fail this line — it used os.open(..., 0o600) before
+    # this branch and mkstemp after. Kept as the pair, not as the guard; the
+    # key file's real coverage is the overwrite test below.
+    assert stat.S_IMODE(os.stat(keystore_dir / "k.key").st_mode) == 0o600
+
+
+def test_filesystem_keystore_narrows_a_preexisting_world_readable_file(
+    keystore_dir: Path, no_chmod
+) -> None:
+    """os.open's mode argument only applies on creation.
+
+    A key file already sitting at 0644 would, under an in-place rewrite, be
+    truncated and rewritten at its existing mode — publishing the
+    *replacement* key material. _write_0600 never writes through the live
+    file: mkstemp creates a fresh 0600 one and os.replace swaps it in, so
+    the old mode does not survive the write.
+    """
+    keystore_dir.mkdir(parents=True, exist_ok=True)
+    stale = keystore_dir / "k.key"
+    # 0644 via the creation mode — chmod is neutered by the fixture, and
+    # umask is 0, so this lands exactly as asked.
+    os.close(os.open(stale, os.O_WRONLY | os.O_CREAT, 0o644))
+    assert stat.S_IMODE(os.stat(stale).st_mode) == 0o644
+
+    ks = FilesystemKeystore(directory=keystore_dir)
+    ks.store_key("k", b"\xbb" * 32)
+
+    assert stat.S_IMODE(os.stat(stale).st_mode) == 0o600

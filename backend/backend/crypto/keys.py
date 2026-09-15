@@ -17,6 +17,7 @@ import json
 import logging
 import os
 import stat
+import tempfile
 from abc import ABC, abstractmethod
 from datetime import UTC, datetime
 from pathlib import Path
@@ -58,6 +59,37 @@ def _mkdir_and_secure(path: Path) -> None:
         os.fchmod(fd, stat.S_IRWXU)
     finally:
         os.close(fd)
+
+
+def _write_0600(path: Path, data: bytes) -> None:
+    """Write ``data`` to ``path``, which never exists more open than 0600.
+
+    Same shape as ``jackpot.core.private_file.write_private`` in the CLI
+    package, deliberately: two answers to "write a file nobody else can
+    read" is one too many, and the packages cannot import each other.
+
+    ``write_text()`` then ``chmod()`` leaves the file at the process umask —
+    0644 on a typical machine — for the moment in between. Nor is the mode
+    argument to ``os.open`` enough on its own: it applies only on creation,
+    so an existing 0644 key is truncated and rewritten at 0644, exposing the
+    *replacement* key.
+
+    ``mkstemp`` sidesteps both. The OS creates it 0600 before any byte
+    lands, and ``os.replace`` swaps it into place atomically — over a
+    symlink rather than through it, and without ever truncating the live
+    file. That last part matters here more than it does in the CLI:
+    ``load_key`` ends at ``read_bytes()`` with no length check, so a crash
+    or ENOSPC partway through an in-place rewrite would leave a short key
+    that loads silently.
+    """
+    fd, tmp = tempfile.mkstemp(dir=path.parent, prefix=f".{path.name}.")
+    try:
+        with os.fdopen(fd, "wb") as handle:
+            handle.write(data)
+        os.replace(tmp, path)
+    except BaseException:
+        Path(tmp).unlink(missing_ok=True)
+        raise
 
 
 class KeystoreBackend(ABC):
@@ -108,17 +140,12 @@ class FilesystemKeystore(KeystoreBackend):
     def store_key(self, key_id: str, key_bytes: bytes, *, key_type: str = "signing") -> None:
         key_path = self._key_path(key_id)
         meta_path = self._meta_path(key_id)
-        # Open with restrictive mode to avoid a brief 0644 window before chmod.
-        fd = os.open(key_path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
-        with os.fdopen(fd, "wb") as f:
-            f.write(key_bytes)
-        os.chmod(key_path, 0o600)
+        _write_0600(key_path, key_bytes)
         meta = {
             "created_at": datetime.now(UTC).isoformat(),
             "key_type": key_type,
         }
-        meta_path.write_text(json.dumps(meta))
-        os.chmod(meta_path, 0o600)
+        _write_0600(meta_path, json.dumps(meta).encode())
 
     def load_key(self, key_id: str, *, operation: str = "use") -> bytes:
         key_path = self._key_path(key_id)

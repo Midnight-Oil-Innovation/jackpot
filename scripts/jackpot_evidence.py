@@ -119,12 +119,32 @@ def logs_dir() -> Path:
 
 
 def _ensure_dirs():
+    # mode= so a new directory is born 0700 rather than being narrowed
+    # afterwards. It applies to the leaf only — anything parents=True creates
+    # on the way gets 0777 & ~umask — so name each level explicitly, and keep
+    # the chmod for levels that already existed (exist_ok=True won't narrow
+    # those).
     root = state_root()
-    root.mkdir(parents=True, exist_ok=True)
-    os.chmod(root, 0o700)
-    logs = logs_dir()
-    logs.mkdir(parents=True, exist_ok=True)
-    os.chmod(logs, 0o700)
+    # root.parent is `.jackpot` (or whatever JACKPOT_STATE_ROOT names) — never
+    # walk higher than that; the repo directory above it is not ours to narrow.
+    for directory in (root.parent, root, logs_dir()):
+        directory.mkdir(mode=0o700, parents=True, exist_ok=True)
+        # fchmod on a descriptor opened O_NOFOLLOW, not a path-based chmod:
+        # chmod follows symlinks, so a pre-planted link here would redirect
+        # it elsewhere. Same shape as _mkdir_and_secure in backend/crypto.
+        fd = os.open(directory, os.O_DIRECTORY | os.O_NOFOLLOW)
+        try:
+            # Refuse to adopt a real directory someone else created here.
+            # Without this, an attacker pre-creating the path gets their
+            # directory silently "secured" and then written into.
+            if os.fstat(fd).st_uid != os.geteuid():
+                raise PermissionError(
+                    f"{directory} is owned by uid {os.fstat(fd).st_uid}, "
+                    f"not {os.geteuid()}; refusing to adopt it."
+                )
+            os.fchmod(fd, 0o700)
+        finally:
+            os.close(fd)
 
 
 def _prune_logs():
