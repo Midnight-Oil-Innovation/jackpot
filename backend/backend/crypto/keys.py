@@ -69,8 +69,32 @@ def _mkdir_and_secure(path: Path) -> None:
 # survives it, so there is nothing left to normalise or resolve afterwards.
 _KEY_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
 
+# ponytail: case-sensitivity is the filesystem's, not ours. On APFS/NTFS
+# "Alpha" and "alpha" are two key_ids and one file, so store_key("alpha")
+# overwrites the key stored as "Alpha" — verified on macOS. Harmless while the
+# only caller is trusted operator config; it becomes a key-substitution
+# primitive the day a key_id arrives from a peer. Narrowing to [a-z0-9] would
+# close it and would reject ids like "KEY-2026"; revisit together.
+
 # Two of these plus ".meta.json" must fit a 255-byte filename.
 _KEY_ID_MAX_LENGTH = 200
+
+
+def _read_nofollow(path: Path) -> bytes:
+    """Read ``path``, refusing to follow a symlink at the final component.
+
+    _checked_key_id guarantees the key_id names a file *inside* the keystore.
+    It cannot guarantee the file *is* inside it: a symlink planted at
+    ``<dir>/alpha.key`` reads through to anywhere. The directory is 0700 and
+    ownership-checked, so this is not a boundary today — but _mkdir_and_secure
+    went to O_NOFOLLOW lengths against exactly this shape, and the write side
+    is already safe because os.replace swaps over a link rather than through
+    it. Leaving only the read path following links is the kind of asymmetry
+    that reads as deliberate later.
+    """
+    fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW)
+    with os.fdopen(fd, "rb") as handle:
+        return handle.read()
 
 
 def _checked_key_id(key_id: str) -> str:
@@ -218,10 +242,13 @@ class FilesystemKeystore(KeystoreBackend):
             )
         # ALLOW falls through
 
-        return key_path.read_bytes()
+        return _read_nofollow(key_path)
 
     def list_keys(self) -> list[str]:
-        return sorted(p.stem for p in self.directory.glob("*.key"))
+        # Filter through the same predicate load_key applies, so everything
+        # listed can actually be loaded. A stray `.hidden.key` in the directory
+        # otherwise yields an id that this class's own load_key rejects.
+        return sorted(p.stem for p in self.directory.glob("*.key") if _KEY_ID_RE.fullmatch(p.stem))
 
     def delete_key(self, key_id: str) -> None:
         key_path = self._key_path(key_id)

@@ -393,11 +393,58 @@ def test_no_accepted_key_id_can_name_a_path_outside_the_keystore(keystore_dir: P
     root = keystore_dir.resolve()
 
     pieces = ["", ".", "..", "/", "\\", "a", "-", "_", "~", "%2e"]
-    for a, b, c in itertools.product(pieces, repeat=3):
+    accepted = 0
+    for (a, b, c), builder in itertools.product(
+        itertools.product(pieces, repeat=3),
+        # _meta_path is the same construction with the longer suffix — asserting
+        # only _key_path would leave the tighter of the two length cases untested.
+        (ks._key_path, ks._meta_path),
+    ):
         key_id = a + b + c
         try:
-            path = ks._key_path(key_id)
+            path = builder(key_id)
         except ValueError:
             continue  # refused — nothing to escape with
+        accepted += 1
         assert path.resolve().parent == root, f"{key_id!r} escaped to {path}"
-        assert path.name.endswith(".key")
+
+    # Guard the guard (Rule 74). Every id being refused would satisfy the loop
+    # above while asserting nothing — narrowing _KEY_ID_RE to `^$` would leave
+    # this test green. 86 accepts today (43 ids x 2 builders).
+    assert accepted >= 40, f"only {accepted} ids accepted — is the validator refusing everything?"
+
+
+def test_filesystem_keystore_refuses_to_read_through_a_symlinked_key(
+    keystore_dir: Path, tmp_path: Path
+) -> None:
+    """A validated name is not a validated file.
+
+    _checked_key_id keeps the key_id from naming anything outside the
+    keystore. It says nothing about what the resulting path points at, so
+    the read has to refuse the link itself.
+    """
+    ks = FilesystemKeystore(directory=keystore_dir)
+    ks.store_key("alpha", b"\xaa" * 32)
+
+    elsewhere = tmp_path / "somebody_elses_secret"
+    elsewhere.write_bytes(b"\xbb" * 32)
+    planted = keystore_dir / "alpha.key"
+    planted.unlink()
+    planted.symlink_to(elsewhere)
+
+    with pytest.raises(OSError):
+        ks.load_key("alpha")
+
+
+def test_filesystem_keystore_list_keys_only_returns_loadable_ids(
+    keystore_dir: Path,
+) -> None:
+    ks = FilesystemKeystore(directory=keystore_dir)
+    ks.store_key("alpha", b"\xaa" * 32)
+    (keystore_dir / ".hidden.key").write_bytes(b"\xcc" * 32)
+
+    listed = ks.list_keys()
+
+    assert listed == ["alpha"]
+    for key_id in listed:
+        ks.load_key(key_id)  # must not raise — the round trip is total
