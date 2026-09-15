@@ -295,9 +295,11 @@ def test_filesystem_keystore_narrows_a_preexisting_world_readable_file(
 ) -> None:
     """os.open's mode argument only applies on creation.
 
-    A key file already sitting at 0644 is truncated and rewritten in place,
-    so without an explicit fchmod the *replacement* key material is written
-    out world-readable.
+    A key file already sitting at 0644 would, under an in-place rewrite, be
+    truncated and rewritten at its existing mode — publishing the
+    *replacement* key material. _write_0600 never writes through the live
+    file: mkstemp creates a fresh 0600 one and os.replace swaps it in, so
+    the old mode does not survive the write.
     """
     keystore_dir.mkdir(parents=True, exist_ok=True)
     stale = keystore_dir / "k.key"

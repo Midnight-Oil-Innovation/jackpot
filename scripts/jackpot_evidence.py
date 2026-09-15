@@ -129,7 +129,14 @@ def _ensure_dirs():
     # walk higher than that; the repo directory above it is not ours to narrow.
     for directory in (root.parent, root, logs_dir()):
         directory.mkdir(mode=0o700, parents=True, exist_ok=True)
-        os.chmod(directory, 0o700)
+        # fchmod on a descriptor opened O_NOFOLLOW, not a path-based chmod:
+        # chmod follows symlinks, so a pre-planted link here would redirect
+        # it elsewhere. Same shape as _mkdir_and_secure in backend/crypto.
+        fd = os.open(directory, os.O_DIRECTORY | os.O_NOFOLLOW)
+        try:
+            os.fchmod(fd, 0o700)
+        finally:
+            os.close(fd)
 
 
 def _prune_logs():
