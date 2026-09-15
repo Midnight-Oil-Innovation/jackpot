@@ -45,12 +45,25 @@ PIECES = [
     "%",  # LIKE wildcard, must be matched literally
     "_",  # LIKE single-char wildcard, must be matched literally
     "\\",  # the ESCAPE character itself
-    "",
+]
+
+
+# Products of PIECES cap at two fragments, so the shape production actually
+# stores — instance://self/org/1/lab/2 — is not reachable by composition. The
+# corpus read as if it exercised real scope shapes without containing one.
+CANONICAL = [
+    "instance://self",
+    "instance://self/org/1",
+    "instance://self/org/1/lab/2",
+    "instance://self/org/1/lab/2/project/3",
+    "instance://self/org/11",
+    "instance://selfish/org/1",
 ]
 
 
 def _corpus() -> list[str]:
     seen = {"".join(c) for n in (1, 2) for c in itertools.product(PIECES, repeat=n)}
+    seen.update(CANONICAL)
     return sorted(seen)
 
 
@@ -86,9 +99,11 @@ def test_the_pragma_is_actually_in_effect(conn) -> None:
     is not production's, and its agreement stops meaning anything. Silence
     from a check that can no longer fire looks exactly like a pass.
     """
-    conn.execute("DELETE FROM r")
-    conn.execute("INSERT INTO r (scope) VALUES ('ABC')")
-    assert not conn.execute("SELECT 1 FROM r WHERE scope LIKE 'abc'").fetchall()
+    # Through _sql_says, not a hand-written LIKE against the fixture. Asserting
+    # on a literal query is the check_docs defect Rule 74 was written from: it
+    # stays green if _sql_says is ever rewired to open its own connection, which
+    # is exactly the change that would silently drop the pragma.
+    assert not _sql_says(conn, "instance://self", "INSTANCE://SELF/org/1")
 
 
 def test_the_corpus_reaches_strict_containment(conn) -> None:
@@ -115,23 +130,45 @@ def test_the_corpus_reaches_strict_containment(conn) -> None:
 
 
 @pytest.mark.parametrize("grant", CORPUS)
-def test_sql_containment_never_admits_more_than_the_oracle(conn, grant: str) -> None:
-    """The direction that is a disclosure.
-
-    A row the SQL admits but permit() would refuse is data leaving the
-    deployment. The reverse is a row missing from a list — visible, and a bug,
-    but not a breach. Equality is asserted separately.
-    """
-    for resource in CORPUS:
-        assert not (_sql_says(conn, grant, resource) and not _scope_contains(grant, resource)), (
-            f"SQL admits a scope the engine refuses: grant={grant!r} resource={resource!r}"
-        )
-
-
-@pytest.mark.parametrize("grant", CORPUS)
 def test_sql_containment_agrees_with_the_oracle(conn, grant: str) -> None:
     for resource in CORPUS:
         assert _sql_says(conn, grant, resource) == _scope_contains(grant, resource), (
             f"grant={grant!r} resource={resource!r}: "
             f"sql={_sql_says(conn, grant, resource)} oracle={_scope_contains(grant, resource)}"
         )
+
+
+def test_a_null_lineage_column_drops_the_row_from_every_list(conn) -> None:
+    """The shape this fuzz structurally cannot reach, pinned.
+
+    Production never passes a plain column to ``_scope_term``. It passes
+    ``scope_sql()`` (scope.py), a ``||`` concatenation of lineage ids:
+
+        'instance://self/org/' || labs.organization_id || '/lab/' || ...
+
+    In SQL, one NULL operand makes the whole concatenation NULL, so both arms
+    of ``(col = :p OR col LIKE :pre)`` evaluate NULL and the row disappears
+    from every list endpoint — without ``_scope_contains`` ever being consulted.
+    The corpus above cannot see this: it binds a TEXT column and always inserts
+    a non-NULL value.
+
+    Narrowing, so rows vanish rather than leak, and not currently reachable:
+    every lineage column is NOT NULL in the DDL (``samples.project_id INTEGER
+    NOT NULL`` and its siblings). That constraint is the only thing holding
+    this shut, and nothing else connects it to this behaviour — so it is
+    written down here, where someone making a lineage column nullable, or
+    "fixing" _scope_term to tolerate NULL, will find out why it matters.
+    """
+    conn.execute("DROP TABLE IF EXISTS lineage")
+    conn.execute("CREATE TABLE lineage (org_id INT, lab_id INT, id INT)")
+    conn.execute("INSERT INTO lineage VALUES (1, 2, 40)")  # complete
+    conn.execute("INSERT INTO lineage VALUES (1, NULL, 41)")  # one NULL
+
+    scope_expr = "('instance://self/org/' || lineage.org_id || '/lab/' || lineage.lab_id)"
+    params: dict = {}
+    term = _scope_term(scope_expr, "instance://self/org/1", "p", params)
+    visible = {row[0] for row in conn.execute(f"SELECT id FROM lineage WHERE {term}", params)}
+
+    assert visible == {40}
+    # ...while the oracle says the NULL row's intended scope IS contained.
+    assert _scope_contains("instance://self/org/1", "instance://self/org/1/lab/2")
