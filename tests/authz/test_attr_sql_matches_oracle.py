@@ -96,7 +96,23 @@ def test_sql_is_never_more_permissive_than_the_oracle(predicate: dict, value) ->
 
 @pytest.mark.parametrize(("predicate", "value"), list(itertools.product(PREDICATES, ATTR_VALUES)))
 def test_sql_and_oracle_agree(predicate: dict, value) -> None:
-    """Full equality, so a narrowing divergence fails too rather than passing quietly."""
+    """Full equality, so a narrowing divergence fails too rather than passing quietly.
+
+    Equality rather than a DENY-specific direction, and that took two tries to
+    settle. visibility.py wraps attribute terms in `NOT (...)` for a DENY, so a
+    term narrower than the oracle is a DENY that cannot fire — which argues for
+    asserting the inverse direction separately. Both attempts at such a test
+    turned out to be entailed by this one: mutating `_attr_sql` every way that
+    broke them broke this first. Equality is the strongest statement about
+    truth values, and everything directional follows from it.
+
+    What it cannot see is NULL. This compares `bool(rows)`, which folds SQL
+    NULL into False, and a term that is NULL rather than FALSE behaves
+    differently only once negated. `test_the_null_inventory_is_still_accurate`
+    is the guard for that, and it is not redundant: replacing `col = :k` with
+    `COALESCE(col, '~~') = :k` leaves every assertion here passing and fails
+    only that one.
+    """
     assert _sql_says(predicate, value) == _oracle_says(predicate, value), (
         f"{predicate!r} against {value!r}: "
         f"sql={_sql_says(predicate, value)} oracle={_oracle_says(predicate, value)}"
@@ -149,27 +165,19 @@ def _sql_term_value(predicate: dict, value):
         conn.close()
 
 
-def _deny_keeps_row(predicate: dict, value) -> bool:
-    """Does the row survive `NOT (term)` — how visibility.py composes a DENY."""
-    params: dict = {}
-    term = _attr_sql(predicate, COLUMNS, PRINCIPAL.id, "p", params)
-    conn = sqlite3.connect(":memory:")
-    try:
-        conn.execute("CREATE TABLE s (sharing_level TEXT)")
-        conn.execute("INSERT INTO s (sharing_level) VALUES (:v)", {"v": value})
-        return bool(conn.execute(f"SELECT 1 FROM s WHERE NOT ({term})", params).fetchall())
-    finally:
-        conn.close()
-
-
-# Predicate/value pairs whose term evaluates to SQL NULL. Negated for a DENY,
-# `NOT (NULL)` is NULL, so the row drops out of the list although permit() does
-# not deny it: rows disappear that should be visible. Narrowing, so availability
-# rather than disclosure, and it predates this branch.
+# Every (predicate, value) whose term evaluates to SQL NULL rather than to
+# TRUE or FALSE. This is an inventory, not an exception list: the assertion
+# below holds for all of these too. It exists so that a term newly going
+# three-valued — or newly stopping — fails a test instead of passing quietly,
+# which is the only way the NULL cases are visible at all under `bool(rows)`.
 #
-# Pinned by shape rather than tolerated, so a NEW disagreement fails here
-# instead of being absorbed as expected (Rule 73).
-KNOWN_DENY_NARROWING = {
+# What NULL costs: visibility.py composes a DENY as `NOT (term)`, and
+# `NOT (NULL)` is NULL, so the row drops out of the list. Against a DENY that
+# is over-firing, not under-firing — rows disappear that permit() allows.
+# In the real clause each deny term is AND-ed with scope and condition terms
+# first, and `NULL AND FALSE` is FALSE, so this is a property of the term in
+# isolation rather than a demonstrated end-to-end defect.
+NULL_VALUED_TERMS = {
     (repr({"sharing_level": "PUBLIC"}), None),
     (repr({"sharing_level": {"in": ["PUBLIC"]}}), None),
     (repr({"sharing_level": {"in": ["PUBLIC", "PRIVATE"]}}), None),
@@ -178,35 +186,13 @@ KNOWN_DENY_NARROWING = {
 }
 
 
-@pytest.mark.parametrize(("predicate", "value"), list(itertools.product(PREDICATES, ATTR_VALUES)))
-def test_a_deny_never_keeps_a_row_permit_denies(predicate: dict, value) -> None:
-    """The direction that matters for a DENY, which is the inverse of ALLOW.
-
-    visibility.py wraps attribute terms in `NOT (...)` for DENY policies, so a
-    term narrower than the oracle becomes a DENY that stops firing. The first
-    version of this test asserted plain equality in a loop — identical to the
-    test above it, negating nothing, and blind to a three-valued term.
-    """
-    denied_by_oracle = _oracle_says(predicate, value)
-    kept_by_sql = _deny_keeps_row(predicate, value)
-
-    if (repr(predicate), value) in KNOWN_DENY_NARROWING:
-        assert _sql_term_value(predicate, value) is None
-        assert not kept_by_sql and not denied_by_oracle
-        return
-
-    assert not (kept_by_sql and denied_by_oracle), (
-        f"DENY {predicate!r} against {value!r}: SQL keeps a row permit() denies"
-    )
-
-
-def test_the_pinned_narrowing_set_is_still_reachable() -> None:
+def test_the_null_inventory_is_still_accurate() -> None:
     """Anti-rot (Rule 74). An entry nothing can produce is a dead rule reading live."""
     reachable = {
         (repr(p), v)
         for p, v in itertools.product(PREDICATES, ATTR_VALUES)
         if _sql_term_value(p, v) is None
     }
-    assert reachable == KNOWN_DENY_NARROWING, (
-        "the pinned set no longer matches the terms that actually evaluate to NULL"
+    assert reachable == NULL_VALUED_TERMS, (
+        "the inventory no longer matches the terms that evaluate to NULL"
     )
