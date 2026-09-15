@@ -241,3 +241,34 @@ def test_keystore_backend_is_abstract() -> None:
 def test_hooks_compatibility_via_protocol() -> None:
     hooks: AISCryptoHooks = _FixedActionHooks(RotationAction.ALLOW)
     assert isinstance(hooks, AISCryptoHooks)
+
+
+@pytest.fixture
+def no_chmod(monkeypatch: pytest.MonkeyPatch):
+    """umask 0 and a neutered chmod, leaving only the mode at creation.
+
+    Asserting the finished file is 0600 proves nothing: write-then-chmod
+    ends at 0600 too, which is why every existing permission test here
+    passed while the window was open. Taking chmod away is what separates
+    "created private" from "made private afterwards".
+    """
+    previous = os.umask(0)
+    monkeypatch.setattr(os, "chmod", lambda *args, **kwargs: None)
+    monkeypatch.setattr(Path, "chmod", lambda self, mode: None)
+    try:
+        yield
+    finally:
+        os.umask(previous)
+
+
+@pytest.mark.skipif(os.geteuid() == 0, reason="root bypasses permission bits")
+def test_filesystem_keystore_files_are_created_private_not_chmodded_private(
+    keystore_dir: Path, no_chmod
+) -> None:
+    ks = FilesystemKeystore(directory=keystore_dir)
+    ks.store_key("k", b"\xaa" * 32)
+
+    # 0666 here means the bytes hit the disk world-readable and only a
+    # later chmod saved them — the window this guards against.
+    assert stat.S_IMODE(os.stat(keystore_dir / "k.key").st_mode) == 0o600
+    assert stat.S_IMODE(os.stat(keystore_dir / "k.meta.json").st_mode) == 0o600

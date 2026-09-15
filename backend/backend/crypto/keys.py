@@ -60,6 +60,22 @@ def _mkdir_and_secure(path: Path) -> None:
         os.close(fd)
 
 
+def _write_0600(path: Path, data: bytes) -> None:
+    """Write ``data`` to ``path``, which never exists more open than 0600.
+
+    ``write_text()`` then ``chmod()`` leaves the file at the process umask —
+    0644 on a typical machine — for the moment in between. Creating the fd
+    with the mode closes that window; the ``chmod`` after is for the case
+    where a restrictive umask left the file narrower than asked, and for a
+    file that already existed (``O_CREAT`` does not change an existing
+    file's mode).
+    """
+    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(fd, "wb") as handle:
+        handle.write(data)
+    os.chmod(path, 0o600)
+
+
 class KeystoreBackend(ABC):
     """Common interface across filesystem / Secret Manager / PKCS#11 backends."""
 
@@ -108,17 +124,12 @@ class FilesystemKeystore(KeystoreBackend):
     def store_key(self, key_id: str, key_bytes: bytes, *, key_type: str = "signing") -> None:
         key_path = self._key_path(key_id)
         meta_path = self._meta_path(key_id)
-        # Open with restrictive mode to avoid a brief 0644 window before chmod.
-        fd = os.open(key_path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
-        with os.fdopen(fd, "wb") as f:
-            f.write(key_bytes)
-        os.chmod(key_path, 0o600)
+        _write_0600(key_path, key_bytes)
         meta = {
             "created_at": datetime.now(UTC).isoformat(),
             "key_type": key_type,
         }
-        meta_path.write_text(json.dumps(meta))
-        os.chmod(meta_path, 0o600)
+        _write_0600(meta_path, json.dumps(meta).encode())
 
     def load_key(self, key_id: str, *, operation: str = "use") -> bytes:
         key_path = self._key_path(key_id)

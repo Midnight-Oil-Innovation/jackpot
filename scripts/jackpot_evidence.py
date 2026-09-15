@@ -119,11 +119,13 @@ def logs_dir() -> Path:
 
 
 def _ensure_dirs():
+    # mode= on the mkdir so a new directory is born 0700; the chmod stays
+    # for one that already exists, since exist_ok=True won't narrow it.
     root = state_root()
-    root.mkdir(parents=True, exist_ok=True)
+    root.mkdir(mode=0o700, parents=True, exist_ok=True)
     os.chmod(root, 0o700)
     logs = logs_dir()
-    logs.mkdir(parents=True, exist_ok=True)
+    logs.mkdir(mode=0o700, parents=True, exist_ok=True)
     os.chmod(logs, 0o700)
 
 
