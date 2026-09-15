@@ -244,7 +244,7 @@ def test_hooks_compatibility_via_protocol() -> None:
 
 
 @pytest.fixture
-def no_chmod(monkeypatch: pytest.MonkeyPatch):
+def no_chmod(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
     """umask 0 and a neutered chmod, leaving only the mode at creation.
 
     Asserting the finished file is 0600 proves nothing: write-then-chmod
@@ -255,6 +255,17 @@ def no_chmod(monkeypatch: pytest.MonkeyPatch):
     previous = os.umask(0)
     monkeypatch.setattr(os, "chmod", lambda *args, **kwargs: None)
     monkeypatch.setattr(Path, "chmod", lambda self, mode: None)
+    # Guard the guard (Rule 74). If either monkeypatch ever stops taking —
+    # a module-scope `from os import chmod`, a helper reaching through
+    # shutil — every assertion below goes green against defective code, and
+    # green is indistinguishable from working.
+    probe = tmp_path / ".chmod_canary"
+    os.close(os.open(probe, os.O_WRONLY | os.O_CREAT, 0o644))
+    os.chmod(probe, 0o600)
+    probe.chmod(0o600)
+    assert stat.S_IMODE(os.stat(probe).st_mode) == 0o644, (
+        "chmod is still live — this fixture no longer isolates the creation mode"
+    )
     try:
         yield
     finally:
@@ -262,16 +273,20 @@ def no_chmod(monkeypatch: pytest.MonkeyPatch):
 
 
 @pytest.mark.skipif(os.geteuid() == 0, reason="root bypasses permission bits")
-def test_filesystem_keystore_files_are_created_private_not_chmodded_private(
+def test_filesystem_keystore_metadata_sidecar_is_created_private(
     keystore_dir: Path, no_chmod
 ) -> None:
     ks = FilesystemKeystore(directory=keystore_dir)
     ks.store_key("k", b"\xaa" * 32)
 
-    # 0666 here means the bytes hit the disk world-readable and only a
-    # later chmod saved them — the window this guards against.
-    assert stat.S_IMODE(os.stat(keystore_dir / "k.key").st_mode) == 0o600
+    # The sidecar is the assertion with signal: it was the write_text() one,
+    # so 0666 here means the bytes hit the disk world-readable and only a
+    # later chmod saved them.
     assert stat.S_IMODE(os.stat(keystore_dir / "k.meta.json").st_mode) == 0o600
+    # The key file cannot fail this line — it used os.open(..., 0o600) before
+    # this branch and mkstemp after. Kept as the pair, not as the guard; the
+    # key file's real coverage is the overwrite test below.
+    assert stat.S_IMODE(os.stat(keystore_dir / "k.key").st_mode) == 0o600
 
 
 @pytest.mark.skipif(os.geteuid() == 0, reason="root bypasses permission bits")

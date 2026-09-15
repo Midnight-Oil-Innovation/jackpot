@@ -30,7 +30,7 @@ def permissive_umask():
 
 
 @pytest.fixture
-def no_chmod(permissive_umask, monkeypatch):
+def no_chmod(permissive_umask, monkeypatch, tmp_path):
     """Take chmod away, leaving only the mode the file was created with.
 
     Asserting the finished file is 0600 proves nothing — write-then-chmod
@@ -41,6 +41,17 @@ def no_chmod(permissive_umask, monkeypatch):
     """
     monkeypatch.setattr(os, "chmod", lambda *args, **kwargs: None)
     monkeypatch.setattr(Path, "chmod", lambda self, mode: None)
+    # Guard the guard (Rule 74). If either monkeypatch ever stops taking —
+    # a module-scope `from os import chmod`, a helper reaching through
+    # shutil — every assertion below goes green against defective code, and
+    # green is indistinguishable from working.
+    probe = tmp_path / ".chmod_canary"
+    os.close(os.open(probe, os.O_WRONLY | os.O_CREAT, 0o644))
+    os.chmod(probe, 0o600)
+    probe.chmod(0o600)
+    assert stat.S_IMODE(os.stat(probe).st_mode) == 0o644, (
+        "chmod is still live — this fixture no longer isolates the creation mode"
+    )
 
 
 @pytest.mark.skipif(os.geteuid() == 0, reason="root bypasses permission bits")

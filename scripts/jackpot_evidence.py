@@ -119,14 +119,17 @@ def logs_dir() -> Path:
 
 
 def _ensure_dirs():
-    # mode= on the mkdir so a new directory is born 0700; the chmod stays
-    # for one that already exists, since exist_ok=True won't narrow it.
+    # mode= so a new directory is born 0700 rather than being narrowed
+    # afterwards. It applies to the leaf only — anything parents=True creates
+    # on the way gets 0777 & ~umask — so name each level explicitly, and keep
+    # the chmod for levels that already existed (exist_ok=True won't narrow
+    # those).
     root = state_root()
-    root.mkdir(mode=0o700, parents=True, exist_ok=True)
-    os.chmod(root, 0o700)
-    logs = logs_dir()
-    logs.mkdir(mode=0o700, parents=True, exist_ok=True)
-    os.chmod(logs, 0o700)
+    # root.parent is `.jackpot` (or whatever JACKPOT_STATE_ROOT names) — never
+    # walk higher than that; the repo directory above it is not ours to narrow.
+    for directory in (root.parent, root, logs_dir()):
+        directory.mkdir(mode=0o700, parents=True, exist_ok=True)
+        os.chmod(directory, 0o700)
 
 
 def _prune_logs():

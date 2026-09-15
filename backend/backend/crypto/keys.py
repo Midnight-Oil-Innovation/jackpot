@@ -17,6 +17,7 @@ import json
 import logging
 import os
 import stat
+import tempfile
 from abc import ABC, abstractmethod
 from datetime import UTC, datetime
 from pathlib import Path
@@ -63,22 +64,32 @@ def _mkdir_and_secure(path: Path) -> None:
 def _write_0600(path: Path, data: bytes) -> None:
     """Write ``data`` to ``path``, which never exists more open than 0600.
 
-    ``write_text()`` then ``chmod()`` leaves the file at the process umask —
-    0644 on a typical machine — for the moment in between.
+    Same shape as ``jackpot.core.private_file.write_private`` in the CLI
+    package, deliberately: two answers to "write a file nobody else can
+    read" is one too many, and the packages cannot import each other.
 
-    The mode argument to ``os.open`` only applies when the file is created,
-    so it is not on its own enough: an existing 0644 key file is truncated
-    and rewritten at 0644, exposing the *replacement* key until a later
-    chmod. ``os.fchmod`` on the descriptor, before any bytes are written,
-    covers both cases. Doing it on the descriptor rather than the path also
-    means a symlink swapped in mid-write cannot redirect the permission
-    change — and ``O_NOFOLLOW`` refuses a symlink at the final path
-    outright, matching ``_mkdir_and_secure`` above.
+    ``write_text()`` then ``chmod()`` leaves the file at the process umask —
+    0644 on a typical machine — for the moment in between. Nor is the mode
+    argument to ``os.open`` enough on its own: it applies only on creation,
+    so an existing 0644 key is truncated and rewritten at 0644, exposing the
+    *replacement* key.
+
+    ``mkstemp`` sidesteps both. The OS creates it 0600 before any byte
+    lands, and ``os.replace`` swaps it into place atomically — over a
+    symlink rather than through it, and without ever truncating the live
+    file. That last part matters here more than it does in the CLI:
+    ``load_key`` ends at ``read_bytes()`` with no length check, so a crash
+    or ENOSPC partway through an in-place rewrite would leave a short key
+    that loads silently.
     """
-    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC | os.O_NOFOLLOW, 0o600)
-    with os.fdopen(fd, "wb") as handle:
-        os.fchmod(handle.fileno(), 0o600)
-        handle.write(data)
+    fd, tmp = tempfile.mkstemp(dir=path.parent, prefix=f".{path.name}.")
+    try:
+        with os.fdopen(fd, "wb") as handle:
+            handle.write(data)
+        os.replace(tmp, path)
+    except BaseException:
+        Path(tmp).unlink(missing_ok=True)
+        raise
 
 
 class KeystoreBackend(ABC):
