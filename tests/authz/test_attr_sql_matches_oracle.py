@@ -82,19 +82,6 @@ def _oracle_says(predicate: dict, value) -> bool:
 
 
 @pytest.mark.parametrize(("predicate", "value"), list(itertools.product(PREDICATES, ATTR_VALUES)))
-def test_sql_is_never_more_permissive_than_the_oracle(predicate: dict, value) -> None:
-    """Assert the direction, not equality.
-
-    SQL refusing a row the oracle allows is a visible bug. SQL allowing one
-    the oracle refuses is a disclosure — the asymmetry is the whole reason
-    this is a direction and not an ``==``.
-    """
-    assert not (_sql_says(predicate, value) and not _oracle_says(predicate, value)), (
-        f"SQL admitted a row the oracle refuses: {predicate!r} against {value!r}"
-    )
-
-
-@pytest.mark.parametrize(("predicate", "value"), list(itertools.product(PREDICATES, ATTR_VALUES)))
 def test_sql_and_oracle_agree(predicate: dict, value) -> None:
     """Full equality, so a narrowing divergence fails too rather than passing quietly.
 
@@ -127,6 +114,13 @@ def test_no_predicate_compiles_to_empty_in(predicate: dict) -> None:
     in SQLite, so every result-based assertion above passes on an empty list
     while production raises. Read the emitted text instead.
     """
+    # Guard the guard (Rule 74). Only `{"in": []}` can produce `IN ()`, so
+    # dropping that one entry from PREDICATES would leave this printing green
+    # over ten vacuous parametrizations — verified, it does — and the NULL
+    # inventory would not notice, because the empty-in term is not NULL-valued.
+    # Assert the case still exists, not merely that the loop found nothing.
+    assert _attr_sql({"sharing_level": {"in": []}}, COLUMNS, PRINCIPAL.id, "p", {}) == "1 = 0"
+
     params: dict = {}
     term = _attr_sql(predicate, COLUMNS, PRINCIPAL.id, "p", params)
 
