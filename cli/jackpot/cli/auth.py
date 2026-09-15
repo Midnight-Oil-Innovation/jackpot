@@ -113,6 +113,7 @@ def auth_logout(profile: str) -> None:
     import toml
 
     from jackpot.cli.config import CONFIG_FILE
+    from jackpot.core.private_file import write_private
 
     if not CONFIG_FILE.exists():
         click.echo("No config file found — already logged out.")
@@ -124,7 +125,10 @@ def auth_logout(profile: str) -> None:
         return
 
     del raw[profile]
-    CONFIG_FILE.write_text(toml.dumps(raw))
+    # Truncating an existing file keeps its mode, so this was not a widening —
+    # but it is the token file, and "only write_private writes it" is the
+    # invariant the next reader will assume.
+    write_private(CONFIG_FILE, toml.dumps(raw))
     click.echo(f"Logged out of profile '{profile}'.")
 
 

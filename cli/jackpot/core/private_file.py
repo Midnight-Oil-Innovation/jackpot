@@ -21,8 +21,9 @@ def write_private(path: Path, content: bytes | str, *, mode: int = 0o600) -> Non
     creates 0600 before any content lands in it, and ``os.replace`` moves it
     into place. The replace is atomic and carries the temp file's mode with it,
     so an existing file at a wider mode is narrowed in the same step rather
-    than after the fact. A crash mid-write leaves the previous file intact
-    instead of a truncated one.
+    than after the fact. A process dying mid-write leaves the previous file
+    rather than a truncated one — there is no fsync, so this says nothing
+    about power loss, and durability is not what the helper is for.
     """
     data = content.encode() if isinstance(content, str) else content
     path.parent.mkdir(parents=True, exist_ok=True)
