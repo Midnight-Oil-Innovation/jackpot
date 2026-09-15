@@ -17,6 +17,37 @@ if TYPE_CHECKING:
 _DB_NOT_WIRED = "DB-backed policy loading not wired in M0 — inject policies= in tests"
 
 
+_PREDICATE_FORMS = ("in", "not")
+
+
+def check_predicate_form(attr: str, expected: object) -> None:
+    """Reject a predicate that names more than one form.
+
+    ``{"in": [...], "not": v}`` is not a defined form, and the two halves
+    resolved it differently: this module tested ``in`` first, visibility.py
+    tested ``not`` first, so such a dict compiled to a different rule than it
+    evaluated — in one direction, SQL admitting a row permit() refuses.
+
+    Raising is the fail-closed answer and matches how an unmapped attribute is
+    already handled ("an attribute with no column mapping RAISES rather than
+    being silently skipped"). No seeded policy uses two keys, so this refuses
+    only predicates nobody has written yet — which is the point: the next
+    person to write one gets an error instead of a silent disagreement
+    between the Python and SQL halves.
+
+    Both halves call this, rather than each checking for itself. A second
+    copy is how the orders drifted apart in the first place.
+    """
+    if not isinstance(expected, dict):
+        return
+    named = [form for form in _PREDICATE_FORMS if form in expected]
+    if len(named) > 1:
+        raise ValueError(
+            f"resource predicate for {attr!r} names more than one form ({named}); "
+            "use exactly one of 'in' or 'not'."
+        )
+
+
 PRINCIPAL_ID = {"principal_id": True}
 """Sentinel for a resource predicate comparing an attribute to the principal.
 
@@ -37,6 +68,7 @@ def _attr_matches(predicate: dict[str, Any], resource: "Resource", principal: "P
     failure M1 exists to prevent.
     """
     for attr, expected in predicate.items():
+        check_predicate_form(attr, expected)
         actual = resource.attributes.get(attr)
         if expected == PRINCIPAL_ID:
             # Compare as strings: principal ids are strings, row ids are ints.
