@@ -344,6 +344,7 @@ TRAVERSING_KEY_IDS = [
     "a" * 300,  # ENAMETOOLONG rather than a clean refusal
     "key with space",
     "key;rm -rf /",
+    "alpha\n",  # `$` matches before a final newline; fullmatch does not
 ]
 
 

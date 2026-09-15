@@ -91,7 +91,9 @@ def _checked_key_id(key_id: str) -> str:
         raise ValueError(f"key_id must be a string, got {type(key_id).__name__}")
     if len(key_id) > _KEY_ID_MAX_LENGTH:
         raise ValueError(f"key_id is {len(key_id)} characters; the limit is {_KEY_ID_MAX_LENGTH}")
-    if not _KEY_ID_RE.match(key_id):
+    # fullmatch, not match: `$` also matches before a final newline, so
+    # `match` accepts "alpha\n" and writes a filename with a newline in it.
+    if not _KEY_ID_RE.fullmatch(key_id):
         raise ValueError(
             f"key_id {key_id!r} is not a plain name: it must start with a letter or "
             "digit and contain only letters, digits, dot, underscore and hyphen."
