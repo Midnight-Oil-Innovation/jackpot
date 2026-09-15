@@ -23,6 +23,7 @@ import os
 import subprocess
 from pathlib import Path
 
+import container_images
 import pytest
 import sqlalchemy as sa
 from testcontainers.postgres import PostgresContainer
@@ -96,7 +97,7 @@ def test_seed_skipped_when_users_table_empty():
     cleanly with zero execution_profiles rows. The DO $$ block guards
     on a non-NULL seed_user_id; the IF wrapping the INSERT means the
     upgrade succeeds when the table is empty."""
-    with PostgresContainer("postgres:16") as pg:
+    with PostgresContainer(container_images.POSTGRES) as pg:
         db_url = pg.get_connection_url()
         # Bring DB to the previous revision (everything but P0g).
         _alembic_upgrade(PREV, db_url)

@@ -29,6 +29,7 @@ import time
 from collections.abc import Generator
 
 import boto3
+import container_images
 import pytest
 import requests
 from botocore.client import Config as BotoConfig
@@ -42,7 +43,7 @@ from testcontainers.core.waiting_utils import wait_for_logs
 def minio_container() -> Generator[DockerContainer, None, None]:
     """Run a MinIO container for the test session."""
     container = (
-        DockerContainer("quay.io/minio/minio:RELEASE.2024-09-13T20-26-02Z")
+        DockerContainer(container_images.MINIO)
         .with_command("server /data --console-address :9001")
         .with_env("MINIO_ROOT_USER", "minioadmin")
         .with_env("MINIO_ROOT_PASSWORD", "minioadmin")
@@ -126,7 +127,7 @@ def fake_gcs_container() -> Generator[DockerContainer, None, None]:
     external_url = f"http://127.0.0.1:{port}"
 
     container = (
-        DockerContainer("fsouza/fake-gcs-server:1.49.2")
+        DockerContainer(container_images.FAKE_GCS)
         .with_command(f"-scheme http -port 4443 -backend memory -external-url {external_url}")
         .with_bind_ports(4443, port)
     )
