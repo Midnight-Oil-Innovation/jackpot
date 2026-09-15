@@ -16,6 +16,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import re
 import stat
 import tempfile
 from abc import ABC, abstractmethod
@@ -59,6 +60,43 @@ def _mkdir_and_secure(path: Path) -> None:
         os.fchmod(fd, stat.S_IRWXU)
     finally:
         os.close(fd)
+
+
+# A key_id becomes a filename. Anything that is not a plain name can leave the
+# keystore directory: `../x` climbs out, `sub/x` descends, a leading dot both
+# hides the key and collides with the `.<name>.` prefix _write_0600's mkstemp
+# uses. Start on alphanumeric and stay in that set — no separator of any kind
+# survives it, so there is nothing left to normalise or resolve afterwards.
+_KEY_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
+
+# Two of these plus ".meta.json" must fit a 255-byte filename.
+_KEY_ID_MAX_LENGTH = 200
+
+
+def _checked_key_id(key_id: str) -> str:
+    """Return ``key_id`` if it can only ever name a file inside the keystore.
+
+    Raises ValueError otherwise. Every path-building method routes through
+    here rather than each validating for itself: the read and delete sides
+    construct their own paths, so guarding only ``store_key`` would leave
+    ``load_key`` able to read whatever the caller named.
+
+    Today the sole caller is ``settings.federation_signing_key_id``, which is
+    operator config and therefore trusted — this is not closing a live hole.
+    It is closing the one that opens the first time a key_id arrives from a
+    federation peer or an admin endpoint, which is a change nobody would think
+    to review as a path-traversal question.
+    """
+    if not isinstance(key_id, str):
+        raise ValueError(f"key_id must be a string, got {type(key_id).__name__}")
+    if len(key_id) > _KEY_ID_MAX_LENGTH:
+        raise ValueError(f"key_id is {len(key_id)} characters; the limit is {_KEY_ID_MAX_LENGTH}")
+    if not _KEY_ID_RE.match(key_id):
+        raise ValueError(
+            f"key_id {key_id!r} is not a plain name: it must start with a letter or "
+            "digit and contain only letters, digits, dot, underscore and hyphen."
+        )
+    return key_id
 
 
 def _write_0600(path: Path, data: bytes) -> None:
@@ -132,10 +170,10 @@ class FilesystemKeystore(KeystoreBackend):
         self.hooks: AISCryptoHooks = hooks if hooks is not None else NullAISCryptoHooks()
 
     def _key_path(self, key_id: str) -> Path:
-        return self.directory / f"{key_id}.key"
+        return self.directory / f"{_checked_key_id(key_id)}.key"
 
     def _meta_path(self, key_id: str) -> Path:
-        return self.directory / f"{key_id}.meta.json"
+        return self.directory / f"{_checked_key_id(key_id)}.meta.json"
 
     def store_key(self, key_id: str, key_bytes: bytes, *, key_type: str = "signing") -> None:
         key_path = self._key_path(key_id)
