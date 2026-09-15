@@ -88,7 +88,17 @@ def _attr_sql(
             for j, v in enumerate(expected["in"]):
                 params[f"{key}_{j}"] = v
                 names.append(f":{key}_{j}")
-            terms.append(f"{column} IN ({', '.join(names)})")
+            if names:
+                terms.append(f"{column} IN ({', '.join(names)})")
+            else:
+                # Nothing is a member of the empty set, which is exactly what
+                # the oracle says: policy._attr_matches evaluates
+                # `actual not in []` as True and refuses the row. Emitting
+                # `IN ()` instead would be a PostgreSQL syntax error — and
+                # invisible here, because the cross-check suite runs on SQLite,
+                # which accepts `IN ()` as an always-false extension and so
+                # agrees with the oracle for the wrong reason.
+                terms.append("1 = 0")
         else:
             params[key] = expected
             terms.append(f"{column} = :{key}")
