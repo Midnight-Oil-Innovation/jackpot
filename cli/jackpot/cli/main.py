@@ -53,9 +53,10 @@ def config_set(api_url: str, profile: str) -> None:
     import toml
 
     from jackpot.cli.config import CONFIG_DIR, CONFIG_FILE
+    from jackpot.core.private_file import write_private
 
-    CONFIG_DIR.mkdir(parents=True, exist_ok=True)
-    CONFIG_DIR.chmod(0o700)
+    CONFIG_DIR.mkdir(mode=0o700, parents=True, exist_ok=True)
+    CONFIG_DIR.chmod(0o700)  # narrow it too if it predates the mode= above
 
     raw = {}
     if CONFIG_FILE.exists():
@@ -65,8 +66,8 @@ def config_set(api_url: str, profile: str) -> None:
     existing["api_url"] = api_url
     raw[profile] = existing
 
-    CONFIG_FILE.write_text(toml.dumps(raw))
-    CONFIG_FILE.chmod(0o600)
+    # Same file, same token, same reason as config.save_config.
+    write_private(CONFIG_FILE, toml.dumps(raw))
 
     click.echo(f"Set api_url for profile '{profile}': {api_url}")
     click.echo(f"Config saved to {CONFIG_FILE}")

@@ -27,6 +27,7 @@ from pathlib import Path
 import toml
 
 from jackpot.core.exceptions import ConfigError, TokenExpiredError
+from jackpot.core.private_file import write_private
 
 CONFIG_DIR = Path.home() / ".jackpot"
 CONFIG_FILE = CONFIG_DIR / "config.toml"
@@ -126,8 +127,8 @@ def save_config(
 ) -> None:
     """Write or update a profile in the config file."""
     profile = profile or get_profile()
-    CONFIG_DIR.mkdir(parents=True, exist_ok=True)
-    CONFIG_DIR.chmod(0o700)  # restrict access to owner
+    CONFIG_DIR.mkdir(mode=0o700, parents=True, exist_ok=True)
+    CONFIG_DIR.chmod(0o700)  # narrow it too if it predates the mode= above
 
     raw = {}
     if CONFIG_FILE.exists():
@@ -137,8 +138,9 @@ def save_config(
     if token_expires:
         raw[profile]["token_expires"] = token_expires
 
-    CONFIG_FILE.write_text(toml.dumps(raw))
-    CONFIG_FILE.chmod(0o600)  # restrict to owner read/write
+    # The file holds an API token — never let it exist world-readable,
+    # not even for the moment between write_text and chmod.
+    write_private(CONFIG_FILE, toml.dumps(raw))
 
 
 def show_config(profile: str | None = None) -> dict:

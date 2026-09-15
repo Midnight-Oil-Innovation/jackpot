@@ -33,6 +33,7 @@ from jackpot_scenarios.scenarios import Scenario
 from nacl.encoding import RawEncoder
 from nacl.signing import SigningKey
 
+from jackpot.core.private_file import write_private
 from jackpot.init.writers import is_secret_path
 
 
@@ -104,12 +105,7 @@ def write_secret_file(
     Click prompt; tests can pass `lambda _: True` / `lambda _: False`.
     """
     if not path.exists():
-        path.parent.mkdir(parents=True, exist_ok=True)
-        if isinstance(content, str):
-            path.write_text(content)
-        else:
-            path.write_bytes(content)
-        path.chmod(perms)
+        write_private(path, content, mode=perms)
         return SecretWriteRecord(path=path, action="wrote_new")
 
     # File exists.
@@ -120,11 +116,7 @@ def write_secret_file(
     if not confirm_overwrite(path):
         return SecretWriteRecord(path=path, action="preserved")
 
-    if isinstance(content, str):
-        path.write_text(content)
-    else:
-        path.write_bytes(content)
-    path.chmod(perms)
+    write_private(path, content, mode=perms)
     return SecretWriteRecord(path=path, action="regenerated")
 
 
@@ -145,8 +137,8 @@ def populate_secrets(
     The CLI plugs in a Click prompt; tests pass deterministic stubs.
     """
     secrets_dir = instance_dir / "secrets"
-    secrets_dir.mkdir(parents=True, exist_ok=True)
-    secrets_dir.chmod(0o700)
+    secrets_dir.mkdir(mode=0o700, parents=True, exist_ok=True)
+    secrets_dir.chmod(0o700)  # narrow it too if it predates the mode= above
 
     records: list[SecretWriteRecord] = []
 
@@ -180,10 +172,8 @@ def populate_secrets(
             # gets mislabeled as "regenerated".
             was_present = private_key_path.exists()
             private_pem, public_pem = generate_ed25519_keypair()
-            private_key_path.write_bytes(private_pem)
-            private_key_path.chmod(0o600)
-            public_key_path.write_bytes(public_pem)
-            public_key_path.chmod(0o644)  # public — readable
+            write_private(private_key_path, private_pem)
+            write_private(public_key_path, public_pem, mode=0o644)  # public — readable
             action = "regenerated" if was_present else "wrote_new"
             records.append(SecretWriteRecord(path=private_key_path, action=action))
             records.append(SecretWriteRecord(path=public_key_path, action=action))

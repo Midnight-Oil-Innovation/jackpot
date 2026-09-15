@@ -27,6 +27,8 @@ from jackpot_scenarios.scenarios import (
     ScenarioDefaults,
 )
 
+from jackpot.core.private_file import write_private
+
 
 # Files that hold or generate SECRET values. Any path matching either
 # rule below is treated as a secret per Decision 7 (never silently
@@ -65,11 +67,13 @@ def write_with_idempotency_check(
         if not is_secret_path(path) and not overwrite_non_secrets:
             return False
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(content)
     if is_secret_path(path):
         # 0600 — owner read/write only. Filesystem-level enforcement
-        # of "secrets are not for the world."
-        path.chmod(0o600)
+        # of "secrets are not for the world." write_private, not
+        # write_text-then-chmod, so the file is never briefly wider.
+        write_private(path, content)
+    else:
+        path.write_text(content)
     return True
 
 
