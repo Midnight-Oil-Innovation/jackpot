@@ -16,6 +16,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import re
 import stat
 import tempfile
 from abc import ABC, abstractmethod
@@ -59,6 +60,69 @@ def _mkdir_and_secure(path: Path) -> None:
         os.fchmod(fd, stat.S_IRWXU)
     finally:
         os.close(fd)
+
+
+# A key_id becomes a filename. Anything that is not a plain name can leave the
+# keystore directory: `../x` climbs out, `sub/x` descends, a leading dot both
+# hides the key and collides with the `.<name>.` prefix _write_0600's mkstemp
+# uses. Start on alphanumeric and stay in that set — no separator of any kind
+# survives it, so there is nothing left to normalise or resolve afterwards.
+_KEY_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
+
+# ponytail: case-sensitivity is the filesystem's, not ours. On APFS/NTFS
+# "Alpha" and "alpha" are two key_ids and one file, so store_key("alpha")
+# overwrites the key stored as "Alpha" — verified on macOS. Harmless while the
+# only caller is trusted operator config; it becomes a key-substitution
+# primitive the day a key_id arrives from a peer. Narrowing to [a-z0-9] would
+# close it and would reject ids like "KEY-2026"; revisit together.
+
+# Two of these plus ".meta.json" must fit a 255-byte filename.
+_KEY_ID_MAX_LENGTH = 200
+
+
+def _read_nofollow(path: Path) -> bytes:
+    """Read ``path``, refusing to follow a symlink at the final component.
+
+    _checked_key_id guarantees the key_id names a file *inside* the keystore.
+    It cannot guarantee the file *is* inside it: a symlink planted at
+    ``<dir>/alpha.key`` reads through to anywhere. The directory is 0700 and
+    ownership-checked, so this is not a boundary today — but _mkdir_and_secure
+    went to O_NOFOLLOW lengths against exactly this shape, and the write side
+    is already safe because os.replace swaps over a link rather than through
+    it. Leaving only the read path following links is the kind of asymmetry
+    that reads as deliberate later.
+    """
+    fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW)
+    with os.fdopen(fd, "rb") as handle:
+        return handle.read()
+
+
+def _checked_key_id(key_id: str) -> str:
+    """Return ``key_id`` if it can only ever name a file inside the keystore.
+
+    Raises ValueError otherwise. Every path-building method routes through
+    here rather than each validating for itself: the read and delete sides
+    construct their own paths, so guarding only ``store_key`` would leave
+    ``load_key`` able to read whatever the caller named.
+
+    Today the sole caller is ``settings.federation_signing_key_id``, which is
+    operator config and therefore trusted — this is not closing a live hole.
+    It is closing the one that opens the first time a key_id arrives from a
+    federation peer or an admin endpoint, which is a change nobody would think
+    to review as a path-traversal question.
+    """
+    if not isinstance(key_id, str):
+        raise ValueError(f"key_id must be a string, got {type(key_id).__name__}")
+    if len(key_id) > _KEY_ID_MAX_LENGTH:
+        raise ValueError(f"key_id is {len(key_id)} characters; the limit is {_KEY_ID_MAX_LENGTH}")
+    # fullmatch, not match: `$` also matches before a final newline, so
+    # `match` accepts "alpha\n" and writes a filename with a newline in it.
+    if not _KEY_ID_RE.fullmatch(key_id):
+        raise ValueError(
+            f"key_id {key_id!r} is not a plain name: it must start with a letter or "
+            "digit and contain only letters, digits, dot, underscore and hyphen."
+        )
+    return key_id
 
 
 def _write_0600(path: Path, data: bytes) -> None:
@@ -132,10 +196,10 @@ class FilesystemKeystore(KeystoreBackend):
         self.hooks: AISCryptoHooks = hooks if hooks is not None else NullAISCryptoHooks()
 
     def _key_path(self, key_id: str) -> Path:
-        return self.directory / f"{key_id}.key"
+        return self.directory / f"{_checked_key_id(key_id)}.key"
 
     def _meta_path(self, key_id: str) -> Path:
-        return self.directory / f"{key_id}.meta.json"
+        return self.directory / f"{_checked_key_id(key_id)}.meta.json"
 
     def store_key(self, key_id: str, key_bytes: bytes, *, key_type: str = "signing") -> None:
         key_path = self._key_path(key_id)
@@ -178,10 +242,13 @@ class FilesystemKeystore(KeystoreBackend):
             )
         # ALLOW falls through
 
-        return key_path.read_bytes()
+        return _read_nofollow(key_path)
 
     def list_keys(self) -> list[str]:
-        return sorted(p.stem for p in self.directory.glob("*.key"))
+        # Filter through the same predicate load_key applies, so everything
+        # listed can actually be loaded. A stray `.hidden.key` in the directory
+        # otherwise yields an id that this class's own load_key rejects.
+        return sorted(p.stem for p in self.directory.glob("*.key") if _KEY_ID_RE.fullmatch(p.stem))
 
     def delete_key(self, key_id: str) -> None:
         key_path = self._key_path(key_id)

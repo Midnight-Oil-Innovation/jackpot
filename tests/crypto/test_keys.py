@@ -4,6 +4,7 @@
 
 from __future__ import annotations
 
+import itertools
 import json
 import logging
 import os
@@ -327,3 +328,123 @@ def test_filesystem_keystore_narrows_a_preexisting_world_readable_file(
     ks.store_key("k", b"\xbb" * 32)
 
     assert stat.S_IMODE(os.stat(stale).st_mode) == 0o600
+
+
+# --- key_id must not be able to name a path outside the keystore -------------
+
+TRAVERSING_KEY_IDS = [
+    "../escaped",
+    "../../etc/cron.d/evil",
+    "sub/dir/key",
+    "..",
+    ".",
+    "",
+    ".hidden",  # collides with the mkstemp prefix, and hides the key
+    "key\x00.png",  # NUL truncation in the syscall layer
+    "a" * 300,  # ENAMETOOLONG rather than a clean refusal
+    "key with space",
+    "key;rm -rf /",
+    "alpha\n",  # `$` matches before a final newline; fullmatch does not
+]
+
+
+@pytest.mark.parametrize("key_id", TRAVERSING_KEY_IDS)
+def test_filesystem_keystore_refuses_key_ids_that_are_not_plain_names(
+    keystore_dir: Path, key_id: str
+) -> None:
+    """Every method that turns a key_id into a path must refuse these.
+
+    Checking store_key alone would leave the read side open: load_key and
+    delete_key build their own paths, so each is asserted separately.
+    """
+    ks = FilesystemKeystore(directory=keystore_dir)
+
+    with pytest.raises(ValueError):
+        ks.store_key(key_id, b"\xaa" * 32)
+    with pytest.raises(ValueError):
+        ks.load_key(key_id)
+    with pytest.raises(ValueError):
+        ks.delete_key(key_id)
+
+
+def test_filesystem_keystore_still_accepts_ordinary_key_ids(keystore_dir: Path) -> None:
+    """The other direction — a validator that refuses everything is not a fix.
+
+    Includes the one id the codebase actually uses today
+    (settings.federation_signing_key_id defaults to "federation-signing").
+    """
+    ks = FilesystemKeystore(directory=keystore_dir)
+
+    for key_id in ("federation-signing", "k", "peer_key.v2", "KEY-2026"):
+        ks.store_key(key_id, b"\xaa" * 32)
+        assert ks.load_key(key_id) == b"\xaa" * 32
+        assert key_id in ks.list_keys()
+
+
+def test_no_accepted_key_id_can_name_a_path_outside_the_keystore(keystore_dir: Path) -> None:
+    """Directional property over generated input, not a hand-picked list.
+
+    The list above came from the same head that wrote the regex, so it can
+    only contain cases already thought of. This composes separators, dots and
+    prefixes mechanically and asserts the one direction that matters: if the
+    id is accepted, the path it builds resolves inside the keystore.
+    """
+    ks = FilesystemKeystore(directory=keystore_dir)
+    root = keystore_dir.resolve()
+
+    pieces = ["", ".", "..", "/", "\\", "a", "-", "_", "~", "%2e"]
+    accepted = 0
+    for (a, b, c), builder in itertools.product(
+        itertools.product(pieces, repeat=3),
+        # _meta_path is the same construction with the longer suffix — asserting
+        # only _key_path would leave the tighter of the two length cases untested.
+        (ks._key_path, ks._meta_path),
+    ):
+        key_id = a + b + c
+        try:
+            path = builder(key_id)
+        except ValueError:
+            continue  # refused — nothing to escape with
+        accepted += 1
+        assert path.resolve().parent == root, f"{key_id!r} escaped to {path}"
+
+    # Guard the guard (Rule 74). Every id being refused would satisfy the loop
+    # above while asserting nothing — narrowing _KEY_ID_RE to `^$` would leave
+    # this test green. 86 accepts today (43 ids x 2 builders).
+    assert accepted >= 40, f"only {accepted} ids accepted — is the validator refusing everything?"
+
+
+def test_filesystem_keystore_refuses_to_read_through_a_symlinked_key(
+    keystore_dir: Path, tmp_path: Path
+) -> None:
+    """A validated name is not a validated file.
+
+    _checked_key_id keeps the key_id from naming anything outside the
+    keystore. It says nothing about what the resulting path points at, so
+    the read has to refuse the link itself.
+    """
+    ks = FilesystemKeystore(directory=keystore_dir)
+    ks.store_key("alpha", b"\xaa" * 32)
+
+    elsewhere = tmp_path / "somebody_elses_secret"
+    elsewhere.write_bytes(b"\xbb" * 32)
+    planted = keystore_dir / "alpha.key"
+    planted.unlink()
+    planted.symlink_to(elsewhere)
+
+    with pytest.raises(OSError):
+        ks.load_key("alpha")
+
+
+def test_filesystem_keystore_list_keys_only_returns_loadable_ids(
+    keystore_dir: Path,
+) -> None:
+    ks = FilesystemKeystore(directory=keystore_dir)
+    ks.store_key("alpha", b"\xaa" * 32)
+    (keystore_dir / ".hidden.key").write_bytes(b"\xcc" * 32)
+
+    listed = ks.list_keys()
+
+    assert listed == ["alpha"]
+    for key_id in listed:
+        ks.load_key(key_id)  # must not raise — the round trip is total
