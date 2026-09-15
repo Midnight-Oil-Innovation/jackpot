@@ -4,10 +4,11 @@
 
 CI pre-pulls these with retries before running pytest, because testcontainers
 otherwise pulls them lazily mid-run, where a registry hiccup fails the whole
-job with an error that has nothing to do with the diff. That happened twice in
-one week: `minio/minio` disappeared from Docker Hub when MinIO withdrew the
-namespace, and then quay.io 404'd transiently on a tag that had worked an hour
-earlier.
+job with a traceback that has nothing to do with the diff. Two incidents in one
+week prompted it, and they are not the same kind: `minio/minio` disappeared
+when MinIO withdrew the Docker Hub namespace, which no retry can help (that one
+was fixed by moving to quay.io); then quay.io 404'd transiently on a tag that
+had worked an hour earlier, which is the class retries do fix.
 
 The workflow reads this file by running it (`python tests/container_images.py`)
 rather than repeating the names, so the pre-pull list cannot drift away from
