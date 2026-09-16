@@ -85,10 +85,18 @@ Confirm that is what you are hitting, then add your address:
 
 ```bash
 # Is the endpoint refusing you, or is something else wrong?
-gcloud container clusters describe <cluster> --region <region>     --format='value(masterAuthorizedNetworksConfig)'
+# masterAuthorizedNetworksConfig is the deprecated field; ask for both so
+# this works against current and older clusters. A diagnostic that prints
+# nothing reads as "no restriction configured", which is the wrong answer.
+gcloud container clusters describe <cluster> --region <region> \
+    --format='value(controlPlaneEndpointsConfig.ipEndpointsConfig.authorizedNetworksConfig,
+                    masterAuthorizedNetworksConfig)'
 
 # Your current egress address
-curl -s https://ifconfig.me
+# -4 is not optional: on a dual-stack host curl may return an IPv6 address,
+# and appending /32 to one authorises a prefix rather than your host — on a
+# field GKE expects to hold IPv4 CIDRs to begin with.
+curl -4 -sS https://ifconfig.me
 
 # Add it in terraform.tfvars and apply — not in the console, which
 # terraform will revert on the next run (Critical Rule 37).
