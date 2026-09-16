@@ -81,9 +81,15 @@ data "google_project" "this" {
 
 locals {
   # Accounts a Batch job might run as. Ordered for readability only.
+  # The scrubber account is deliberately NOT here. It exists for SRA Human
+  # Scrubber GKE Jobs (Critical Rules 31-32), which run as a Kubernetes service
+  # account bound by Workload Identity — a different mechanism that needs no
+  # actAs from the API. Nothing in pipeline_config references it. Listing it
+  # would let a compromised API pod run arbitrary Batch workloads under the
+  # account that reads unscrubbed data, which is the widening this change
+  # exists to remove.
   batch_runtime_accounts = {
     nextflow        = google_service_account.nextflow.email
-    scrubber        = google_service_account.scrubber.email
     default_compute = "${data.google_project.this.number}-compute@developer.gserviceaccount.com"
   }
 }
