@@ -32,9 +32,12 @@ members = ["backend", "cli", "schema"]
 asyncio_mode  = "auto"
 testpaths     = ["tests", "schema/tests", "cli/tests"]
 pythonpath    = [".", "backend", "tests"]  # "tests" so tests/container_images.py
-                                           # imports without depending on pytest's
-                                           # prepend mode and the absence of
-                                           # tests/__init__.py
+                                           # keeps importing if tests/ ever gains
+                                           # an __init__.py or the import mode
+                                           # changes. Both conftests resolve it
+                                           # without this today, by accident of
+                                           # layout — this is what stops that
+                                           # being load-bearing.
 # --cov: bare flag (no path arg) reads `[tool.coverage.run]` from
 # pyproject.toml. The previous `--cov=backend` form was a path-based
 # source spec that silently bypassed the omit list, producing a

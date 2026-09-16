@@ -19,6 +19,8 @@ until a registry blip reddened an unrelated PR.
 
 from __future__ import annotations
 
+from testcontainers.core.config import testcontainers_config
+
 # MinIO moved off Docker Hub; quay.io is their own registry. See #232.
 MINIO = "quay.io/minio/minio:RELEASE.2024-09-13T20-26-02Z"
 
@@ -28,7 +30,23 @@ FAKE_GCS = "fsouza/fake-gcs-server:1.49.2"
 
 POSTGRES = "postgres:16"
 
-ALL = (MINIO, FAKE_GCS, POSTGRES)
+# testcontainers starts a ryuk reaper alongside *every* container unless
+# TESTCONTAINERS_RYUK_DISABLED is set. Nothing in this repo sets it and the
+# library default is False, so CI pulls this too — lazily, mid-run, from Docker
+# Hub, which is the registry whose namespace withdrawal started all of this.
+# Without it here the pre-pull step can be entirely green and the pytest step
+# still die on the failure this step exists to prevent.
+#
+# Read from the library rather than written out, so a testcontainers bump
+# cannot leave a stale tag here that pulls fine and protects nothing.
+#
+# The alternative is TESTCONTAINERS_RYUK_DISABLED=true in CI — a GitHub runner
+# is destroyed after the job, so the reaper has nothing to reap. That is a
+# change to cleanup semantics, which does not belong in a PR about pull
+# retries; listed here instead.
+RYUK = testcontainers_config.ryuk_image
+
+ALL = (MINIO, FAKE_GCS, POSTGRES, RYUK)
 
 
 if __name__ == "__main__":
