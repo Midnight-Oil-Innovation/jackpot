@@ -54,10 +54,46 @@ resource "google_project_iam_member" "api_batch_admin" {
   member  = "serviceAccount:${google_service_account.api.email}"
 }
 
-resource "google_project_iam_member" "api_sa_user" {
-  project = var.project_id
-  role    = "roles/iam.serviceAccountUser"
-  member  = "serviceAccount:${google_service_account.api.email}"
+# ── actAs, scoped to the accounts a Batch job can run as ────────────────────
+#
+# These were project-level roles/iam.serviceAccountUser. Combined with
+# roles/batch.jobsEditor above, that let a compromised API or Nextflow pod
+# launch a Batch job running as ANY service account in the project — including
+# the deploy account and Terraform's own. Submitting a Batch job needs actAs
+# only on the account the job will run as, so the grants are bound to those
+# accounts instead of to the project.
+#
+# Which account is that? It is not statically knowable from Terraform:
+# gcp_batch.config.j2 emits batch.serviceAccountEmail only when an execution
+# profile sets config_overrides.service_account, which is operator data in the
+# execution_profiles table. Unset, GCP Batch falls back to the default compute
+# account. So the bindings cover the plausible targets — this module's own
+# accounts and the default compute account — and nothing else.
+#
+# Safe to narrow now precisely because it is not yet load-bearing:
+# pipeline_config/batch_submitter.py::submit_to_batch is a stub that logs and
+# returns a pseudo job id ("Session Q wires up the real gcloud Batch call"), so
+# no actAs call is made today. Narrowing after Batch is wired would be a change
+# with a live path under it; this one has none.
+data "google_project" "this" {
+  project_id = var.project_id
+}
+
+locals {
+  # Accounts a Batch job might run as. Ordered for readability only.
+  batch_runtime_accounts = {
+    nextflow        = google_service_account.nextflow.email
+    scrubber        = google_service_account.scrubber.email
+    default_compute = "${data.google_project.this.number}-compute@developer.gserviceaccount.com"
+  }
+}
+
+resource "google_service_account_iam_member" "api_acts_as" {
+  for_each = local.batch_runtime_accounts
+
+  service_account_id = "projects/${var.project_id}/serviceAccounts/${each.value}"
+  role               = "roles/iam.serviceAccountUser"
+  member             = "serviceAccount:${google_service_account.api.email}"
 }
 
 resource "google_project_iam_member" "nextflow_batch_admin" {
@@ -66,10 +102,12 @@ resource "google_project_iam_member" "nextflow_batch_admin" {
   member  = "serviceAccount:${google_service_account.nextflow.email}"
 }
 
-resource "google_project_iam_member" "nextflow_sa_user" {
-  project = var.project_id
-  role    = "roles/iam.serviceAccountUser"
-  member  = "serviceAccount:${google_service_account.nextflow.email}"
+resource "google_service_account_iam_member" "nextflow_acts_as" {
+  for_each = local.batch_runtime_accounts
+
+  service_account_id = "projects/${var.project_id}/serviceAccounts/${each.value}"
+  role               = "roles/iam.serviceAccountUser"
+  member             = "serviceAccount:${google_service_account.nextflow.email}"
 }
 
 resource "google_project_iam_member" "nextflow_logging_writer" {
