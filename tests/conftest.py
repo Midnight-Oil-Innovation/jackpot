@@ -2,6 +2,7 @@ import os
 import subprocess
 from pathlib import Path
 
+import container_images
 import pytest
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
@@ -20,7 +21,7 @@ _BACKEND_DIR = Path(__file__).resolve().parent.parent / "backend"
 
 @pytest.fixture(scope="session")
 def postgres_container():
-    with PostgresContainer("postgres:16") as pg:
+    with PostgresContainer(container_images.POSTGRES) as pg:
         yield pg
 
 
