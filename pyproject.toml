@@ -91,7 +91,7 @@ omit = [
 
 [tool.ruff]
 line-length    = 100
-target-version = "py311"
+target-version = "py312"
 extend-exclude = [
     "backend/backend/models_generated.py",
     "backend/db/migrations/versions/*.py",

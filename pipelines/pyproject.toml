@@ -3,7 +3,7 @@ name = "jackpot-nf"
 version = "0.1.0"
 description = "JACKPOT Nextflow plugin, pipeline wrappers, and shared parsers"
 readme = "README.md"
-requires-python = ">=3.11"
+requires-python = ">=3.12"
 license = { text = "AGPL-3.0-or-later" }
 authors = [{ name = "JACKPOT Maintainers" }]
 dependencies = [
@@ -39,7 +39,7 @@ addopts = "-m 'not integration'"
 
 [tool.ruff]
 line-length = 100
-target-version = "py311"
+target-version = "py312"
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "B", "UP"]

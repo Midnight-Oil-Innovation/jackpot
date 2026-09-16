@@ -25,6 +25,7 @@ from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, Field, ValidationError, field_validator
+from sqlalchemy.exc import IntegrityError
 
 from backend.audit import AuditActions, log_audit
 from backend.auth.guards import (
@@ -1376,7 +1377,17 @@ def register_custom_pipeline(
             },
             conn=db,
         )
-    except Exception as exc:  # duplicate (project_id, pipeline_name) → UniqueViolation
+    # IntegrityError, not Exception: the broad catch reported a dropped
+    # connection or a serialization failure as "already registered", which is a
+    # lie to the client and hides the real fault behind a 409 nobody
+    # investigates. Same idiom as routers/profiles.py.
+    #
+    # What this still catches, deliberately: IntegrityError covers FK, NOT NULL
+    # and CHECK violations as well as the unique constraint, and all of them do
+    # mean "this row conflicts with the schema". What it now excludes is the
+    # DatabaseError siblings that are not constraint violations at all —
+    # OperationalError, InterfaceError, DataError, ProgrammingError.
+    except IntegrityError as exc:  # duplicate (project_id, pipeline_name)
         logger.info(
             "BYOP insert failed for %s/%s: %s",
             payload.project_id,
