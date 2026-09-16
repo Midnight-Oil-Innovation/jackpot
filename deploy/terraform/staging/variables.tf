@@ -31,19 +31,18 @@ variable "master_authorized_networks" {
   description = <<-EOT
     CIDRs allowed to reach the GKE public control-plane endpoint.
 
-    Empty means no EXTERNAL network is authorised — GKE continues to allowlist
-    the cluster's own node IPs regardless, so this governs access from outside
-    the cluster, which is the part that was open.
-
-    That is the fail-closed reading and it is now what the module implements:
-    the authorized-networks block is emitted unconditionally, so an empty list
-    denies rather than permits. Before, the block was skipped when the list was
-    empty, which left the endpoint reachable from 0.0.0.0/0.
+    Empty authorises no external network. That is the module's behaviour as of
+    the fail-closed change — see modules/gke/main.tf for why it takes two
+    fields rather than one.
 
     Deploying from GitHub-hosted runners needs an entry here: their egress IPs
     are dynamic, so either authorise the ranges you accept, or move the deploy
-    onto Connect Gateway / a self-hosted runner. Choosing to accept anything
-    now requires writing 0.0.0.0/0 explicitly, where a reviewer can see it.
+    onto Connect Gateway / a self-hosted runner. Accepting anything now means
+    writing 0.0.0.0/0 explicitly, where a reviewer and a plan diff both see it.
+
+    This also governs break-glass access: `kubectl` and `helm` from an
+    operator's laptop go through the same endpoint, including the Rule 49
+    rollback for a wedged release. See deploy/docs/staging_access.md.
   EOT
   type = list(object({
     cidr_block   = string

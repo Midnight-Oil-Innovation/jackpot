@@ -68,6 +68,39 @@ gcloud container clusters get-credentials <your-gke-cluster> \
     --region us-central1
 ```
 
+## If `kubectl` hangs: authorized networks
+
+`get-credentials` talks to `container.googleapis.com` and will succeed even when
+you cannot reach the cluster — the first real symptom is `kubectl` hanging until
+timeout, which reads like a flake rather than a refusal.
+
+The control-plane endpoint only accepts the CIDRs in
+`master_authorized_networks`, and an empty list accepts none. That is
+deliberate (the module used to leave the endpoint open to `0.0.0.0/0` whenever
+the list was empty), but it applies to break-glass access too — including the
+Rule 49 `helm rollback` for a release wedged in `pending-upgrade`, at exactly
+the moment you least want an IAM detour.
+
+Confirm that is what you are hitting, then add your address:
+
+```bash
+# Is the endpoint refusing you, or is something else wrong?
+gcloud container clusters describe <cluster> --region <region>     --format='value(masterAuthorizedNetworksConfig)'
+
+# Your current egress address
+curl -s https://ifconfig.me
+
+# Add it in terraform.tfvars and apply — not in the console, which
+# terraform will revert on the next run (Critical Rule 37).
+#   master_authorized_networks = [
+#     { cidr_block = "<your-ip>/32", display_name = "operator-break-glass" },
+#   ]
+```
+
+A home or cafe address is as dynamic as a runner's. If you need reliable
+incident access, the durable answers are Connect Gateway or a bastion with a
+static egress IP, not a growing list of `/32`s.
+
 ## Seeding secret values after `terraform apply`
 
 After the staging Terraform is applied, the Secret Manager resources exist but

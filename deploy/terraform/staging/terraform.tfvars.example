@@ -9,7 +9,8 @@ backups_region = "us-east1"
 db_password = "CHANGE_ME_BEFORE_APPLY"
 
 # Lock the GKE control-plane endpoint to your office / home / CI CIDRs.
-# Empty list = open. Populate before production.
+# Empty list = no external access. Populate with the ranges you accept, or
+# the deploy pipeline and your own kubectl will both be refused.
 master_authorized_networks = [
   # { cidr_block = "203.0.113.0/32", display_name = "operator-home-net" },
   # { cidr_block = "198.51.100.0/24", display_name = "gh-actions-nat" },

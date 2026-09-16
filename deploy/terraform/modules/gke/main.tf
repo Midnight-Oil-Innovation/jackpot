@@ -35,18 +35,24 @@ resource "google_container_cluster" "this" {
   }
 
   # Emitted unconditionally. Previously this block appeared only when the list
-  # was non-empty, which inverted the meaning of the default: omitting the
-  # block leaves the public control-plane endpoint reachable from 0.0.0.0/0,
-  # so `master_authorized_networks = []` — the variable's own default — meant
-  # "anyone" rather than "no one". The only thing standing between a default
-  # `terraform apply` and a world-reachable control plane was a comment in
-  # terraform.tfvars.example.
+  # was non-empty, which inverted the meaning of the variable's own default:
+  # omitting the block leaves the public control-plane endpoint reachable from
+  # 0.0.0.0/0, so `master_authorized_networks = []` meant "anyone".
   #
-  # With the block always present, an empty list authorises no external CIDR.
-  # Not literally "nothing": GKE keeps allowlisting the cluster's own node IPs
-  # whatever this list says, so intra-cluster reachability is unaffected. The
-  # change is to arbitrary external access, which is what was open.
+  # Two fields are needed to close it, not one. An empty cidr_blocks list on
+  # its own still admits Google Cloud's external ranges — any GCE VM with a
+  # public IP, in any project — because gcp_public_cidrs_access_enabled
+  # defaults to true. It is Optional+Computed, so Terraform neither sets it nor
+  # reports drift when someone flips it in the console; pinning it here is both
+  # the fix and the drift detector.
+  #
+  # GKE still allowlists the cluster's own node IPs regardless. This governs
+  # external access, which is the part that was open. The fully closed shape is
+  # enable_private_endpoint = true plus Connect Gateway — a larger change.
+  #
+  # Operator-facing consequences live on the variable, not here.
   master_authorized_networks_config {
+    gcp_public_cidrs_access_enabled = false
     dynamic "cidr_blocks" {
       for_each = var.master_authorized_networks
       content {
