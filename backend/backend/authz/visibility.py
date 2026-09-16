@@ -230,7 +230,21 @@ def visibility_sql_clause(
 
     allow_sql = " OR ".join(allow_terms) if allow_terms else "1 = 0"  # default-deny
     if deny_terms:
-        return f"(NOT ({' OR '.join(deny_terms)}) AND ({allow_sql}))", params
+        # COALESCE, because a DENY term over a NULL column is NULL rather than
+        # FALSE, and `NOT (NULL)` is NULL — which excludes the row. permit()
+        # reaches the opposite verdict: _attr_matches is total and answers
+        # False for a predicate that does not match, so the DENY simply does
+        # not apply. Without this the rule over-fires on exactly the rows it
+        # has nothing to say about.
+        #
+        # Reachable with shipped policy and shipped schema, not hypothetically:
+        # the separation-of-duties DENY reads deletion_requested_by_user_id,
+        # which is NULL for every sample with no deletion request pending.
+        #
+        # `1 = 0` rather than FALSE for the same portability reason as
+        # _attr_sql's empty-IN case.
+        deny_sql = " OR ".join(deny_terms)
+        return f"(NOT COALESCE({deny_sql}, 1 = 0) AND ({allow_sql}))", params
     return f"({allow_sql})", params
 
 
