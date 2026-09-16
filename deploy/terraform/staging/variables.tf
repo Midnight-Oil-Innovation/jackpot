@@ -28,7 +28,22 @@ variable "db_password" {
 }
 
 variable "master_authorized_networks" {
-  description = "CIDRs allowed to reach the GKE public control-plane endpoint."
+  description = <<-EOT
+    CIDRs allowed to reach the GKE public control-plane endpoint.
+
+    Empty authorises no external network. That is the module's behaviour as of
+    the fail-closed change — see modules/gke/main.tf for why it takes two
+    fields rather than one.
+
+    Deploying from GitHub-hosted runners needs an entry here: their egress IPs
+    are dynamic, so either authorise the ranges you accept, or move the deploy
+    onto Connect Gateway / a self-hosted runner. Accepting anything now means
+    writing 0.0.0.0/0 explicitly, where a reviewer and a plan diff both see it.
+
+    This also governs break-glass access: `kubectl` and `helm` from an
+    operator's laptop go through the same endpoint, including the Rule 49
+    rollback for a wedged release. See deploy/docs/staging_access.md.
+  EOT
   type = list(object({
     cidr_block   = string
     display_name = string
