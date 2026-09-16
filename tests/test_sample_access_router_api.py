@@ -377,6 +377,194 @@ async def test_create_request_duplicate_pending_returns_409(client, monkeypatch)
 
 
 @pytest.mark.asyncio
+async def test_create_request_losing_the_race_does_not_duplicate(client, monkeypatch):
+    """Two concurrent requests must not both become PENDING rows.
+
+    The SELECT above the INSERT answers the sequential case. It cannot answer
+    the concurrent one, and before migration 64c8dda7c914 nothing downstream
+    could either — the table had only a SERIAL primary key and foreign keys, so
+    the loser wrote a second PENDING row silently. No error, no log, and a
+    reviewer saw the same request twice.
+
+    The window is simulated rather than raced: the duplicate check is patched
+    to report "none pending" while one is in fact pending, which is exactly
+    what the losing request observes. The assertion that matters is the row
+    count, not the status code — a 409 with two rows in the table would still
+    be the bug.
+    """
+    from backend.routers import sample_access
+
+    sid = "O-CR-RACE"
+    _cleanup_samples(sid)
+    other_lab = _ensure_other_lab()
+    s = _insert_sample(
+        sid,
+        lab_id=other_lab,
+        project_id=_other_project_id(other_lab),
+        sharing_level="DISCOVERABLE",
+    )
+    email = f"race-{uuid.uuid4().hex[:6]}@test.com"
+    _cleanup_users([email])
+    uid = _make_user(email)
+    _switch_user(email, monkeypatch)
+
+    body = {
+        "sample_id": s["id"],
+        "justification": "First time asking.",
+        "requested_duration_days": 14,
+    }
+    assert (await client.post("/api/v1/sample-access/requests", json=body)).status_code == 201
+
+    checked: list[bool] = []
+    real_query = sample_access.execute_query
+
+    def _reports_none_pending(sql, *args, **kwargs):
+        if "status = 'PENDING'" in sql:
+            checked.append(True)
+            return []
+        return real_query(sql, *args, **kwargs)
+
+    monkeypatch.setattr(sample_access, "execute_query", _reports_none_pending)
+
+    second = await client.post("/api/v1/sample-access/requests", json=body)
+
+    assert checked, "the duplicate check never ran — the window was not simulated"
+    assert second.status_code == 409
+    rows = execute_query(
+        "SELECT id FROM sample_access_requests "
+        "WHERE sample_id = :sid AND requester_id = :uid AND status = 'PENDING'",
+        {"sid": s["id"], "uid": uid},
+    )
+    assert len(rows) == 1, f"the race wrote {len(rows)} pending rows"
+
+    _cleanup_users([email])
+    _cleanup_samples(sid)
+
+
+@pytest.mark.asyncio
+async def test_a_foreign_key_violation_is_not_reported_as_a_duplicate(client, monkeypatch):
+    """IntegrityError alone is too broad on this table.
+
+    sample_id, requester_id and owner_id are all foreign keys, so catching
+    IntegrityError wholesale would tell a caller "you already have a pending
+    request" when what actually failed was a reference to a row that no longer
+    exists — the same mislabelling that made the original `except Exception` a
+    lie, one level further down.
+    """
+    from sqlalchemy.exc import IntegrityError
+
+    from backend.routers import sample_access
+
+    class _Diag:
+        # psycopg2's real Diagnostics is read-only, so the constraint name a
+        # driver would report is stood in for here.
+        constraint_name = "sample_access_requests_owner_id_fkey"
+
+    class _ForeignKeyViolationError(Exception):
+        diag = _Diag()
+
+    sid = "O-CR-FK"
+    _cleanup_samples(sid)
+    other_lab = _ensure_other_lab()
+    s = _insert_sample(
+        sid,
+        lab_id=other_lab,
+        project_id=_other_project_id(other_lab),
+        sharing_level="DISCOVERABLE",
+    )
+    email = f"fk-{uuid.uuid4().hex[:6]}@test.com"
+    _cleanup_users([email])
+    _make_user(email)
+    _switch_user(email, monkeypatch)
+
+    def _fk_violation(*args, **kwargs):
+        raise IntegrityError(
+            "INSERT ...", {}, _ForeignKeyViolationError("violates foreign key constraint")
+        )
+
+    monkeypatch.setattr(sample_access, "execute_write", _fk_violation)
+
+    with pytest.raises(IntegrityError):
+        await client.post(
+            "/api/v1/sample-access/requests",
+            json={
+                "sample_id": s["id"],
+                "justification": "Asking once.",
+                "requested_duration_days": 14,
+            },
+        )
+
+    _cleanup_users([email])
+    _cleanup_samples(sid)
+
+
+@pytest.mark.asyncio
+async def test_a_concurrently_reviewed_request_is_not_approved_twice(
+    client, as_platform_admin, monkeypatch
+):
+    """Approving a request already reviewed by someone else must not re-approve it.
+
+    approve/deny read req_row["status"], check it is PENDING, then UPDATE on
+    `id` alone. Under READ COMMITTED two reviewers both see PENDING; the second
+    blocks on the row lock and then re-evaluates only its WHERE — so it
+    overwrote the first reviewer's identity and inserted a SECOND row into
+    sample_access_grants, which has no unique constraint to stop it.
+
+    The assertion that matters is the grant count. A 409 with two grants would
+    still be the bug, and approve-then-deny would leave the request DENIED with
+    a live grant beside it.
+    """
+    from backend.routers import sample_access
+
+    sid = "O-CR-REVIEW-RACE"
+    _cleanup_samples(sid)
+    other_lab = _ensure_other_lab()
+    s = _insert_sample(
+        sid,
+        lab_id=other_lab,
+        project_id=_other_project_id(other_lab),
+        sharing_level="DISCOVERABLE",
+    )
+    email = f"revrace-{uuid.uuid4().hex[:6]}@test.com"
+    _cleanup_users([email])
+    _make_user(email)
+    _switch_user(email, monkeypatch)
+    created = await client.post(
+        "/api/v1/sample-access/requests",
+        json={
+            "sample_id": s["id"],
+            "justification": "Asking once.",
+            "requested_duration_days": 14,
+        },
+    )
+    assert created.status_code == 201
+    req_id = created.json()["data"]["id"]
+
+    _switch_user("admin@example.org", monkeypatch)
+    first = await client.post(f"/api/v1/sample-access/requests/{req_id}/approve")
+    assert first.status_code == 200
+
+    # The second reviewer's read still says PENDING — exactly what it observes
+    # when it read before the first reviewer committed.
+    stale = dict(
+        execute_query("SELECT * FROM sample_access_requests WHERE id = :id", {"id": req_id})[0]
+    )
+    stale["status"] = "PENDING"
+    monkeypatch.setattr(sample_access, "_fetch_request", lambda *a, **k: stale)
+
+    second = await client.post(f"/api/v1/sample-access/requests/{req_id}/approve")
+
+    assert second.status_code == 409
+    grants = execute_query(
+        "SELECT id FROM sample_access_grants WHERE request_id = :r", {"r": req_id}
+    )
+    assert len(grants) == 1, f"the race wrote {len(grants)} grant rows"
+
+    _cleanup_users([email])
+    _cleanup_samples(sid)
+
+
+@pytest.mark.asyncio
 async def test_create_request_missing_sample_returns_404(client, as_platform_admin):
     body = {
         "sample_id": 999_999_999,

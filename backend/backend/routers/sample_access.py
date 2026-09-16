@@ -23,6 +23,7 @@ from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, Field
+from sqlalchemy.exc import IntegrityError
 
 from backend.audit import AuditActions, log_audit
 from backend.auth.guards import get_current_user, permits
@@ -172,28 +173,53 @@ def create_access_request(
             status_code=409,
         )
 
-    rows = execute_write(
-        """
-        INSERT INTO sample_access_requests
-            (sample_id, requester_id, owner_id, status,
-             justification, requested_duration_days,
-             auto_approve_after, purpose)
-        VALUES
-            (:sid, :uid, :owner, 'PENDING',
-             :just, :dur,
-             NOW() + (:days || ' days')::INTERVAL, :just)
-        RETURNING *
-        """,
-        {
-            "sid": sample["id"],
-            "uid": user["id"],
-            "owner": sample["owner_id"],
-            "just": payload.justification,
-            "dur": payload.requested_duration_days,
-            "days": str(AUTO_APPROVE_WINDOW.days),
-        },
-        conn=db,
-    )
+    # The SELECT above answers the ordinary case with a clean 409; it cannot
+    # answer the concurrent one. Migration 64c8dda7c914 adds a partial unique
+    # index on (sample_id, requester_id) WHERE status = 'PENDING', so the loser
+    # of a race hits the constraint instead of writing a second PENDING row.
+    # Catching it here turns that into the same 409 rather than a 500.
+    try:
+        rows = execute_write(
+            """
+            INSERT INTO sample_access_requests
+                (sample_id, requester_id, owner_id, status,
+                 justification, requested_duration_days,
+                 auto_approve_after, purpose)
+            VALUES
+                (:sid, :uid, :owner, 'PENDING',
+                 :just, :dur,
+                 NOW() + (:days || ' days')::INTERVAL, :just)
+            RETURNING *
+            """,
+            {
+                "sid": sample["id"],
+                "uid": user["id"],
+                "owner": sample["owner_id"],
+                "just": payload.justification,
+                "dur": payload.requested_duration_days,
+                "days": str(AUTO_APPROVE_WINDOW.days),
+            },
+            conn=db,
+        )
+    except IntegrityError as exc:
+        # Unobservable today because the handler returns, kept so the session
+        # stays usable for whoever adds a statement below it — same reasoning
+        # as routers/domain_whitelist.py.
+        db.rollback()
+        # IntegrityError is still too broad on this table: sample_id,
+        # requester_id and owner_id are all foreign keys, so a violation of any
+        # of them would be reported to the caller as "you already have a
+        # pending request". That is the same mislabelling that made the old
+        # `except Exception` a lie, one level further down — so match on the
+        # constraint and re-raise anything else.
+        constraint = getattr(getattr(exc.orig, "diag", None), "constraint_name", None)
+        if constraint != "sample_access_requests_one_pending_uniq":
+            raise
+        return error(
+            "CONFLICT",
+            "You already have a pending access request for this sample.",
+            status_code=409,
+        )
     req_row = rows[0]
 
     # Notify every Lab Director on the owning lab. The Platform Admin path
@@ -390,6 +416,13 @@ def approve_access_request(
         )
 
     duration_days = req_row.get("requested_duration_days") or 90
+    # `AND status = 'PENDING'` makes the UPDATE the decision, not the read
+    # above it. Under READ COMMITTED two reviewers both see PENDING; the second
+    # blocks on the row lock, then re-evaluates only its WHERE — so without the
+    # predicate it overwrites the first reviewer's identity, and approve-then-
+    # deny leaves the request DENIED with a live grant row beside it.
+    # sample_access_grants has no unique constraint to stop the duplicate, so
+    # this is the only thing that can. Same shape as jobs.py's expiry sweep.
     updated = execute_write(
         """
         UPDATE sample_access_requests
@@ -399,13 +432,23 @@ def approve_access_request(
             reviewed_by_id = :uid,
             reviewed_at = NOW(),
             access_expires_at = NOW() + (:days || ' days')::INTERVAL
-        WHERE id = :id
+        WHERE id = :id AND status = 'PENDING'
         RETURNING *
         """,
         {"uid": user["id"], "days": str(duration_days), "id": request_id},
         conn=db,
     )
-    new_req = updated[0] if updated else req_row
+    if not updated:
+        # Lost the race: another reviewer moved it out of PENDING between the
+        # read and the write. Returning the state-conflict 409 the check above
+        # already returns, rather than silently reporting success on a row this
+        # request did not change.
+        return error(
+            "INVALID_STATE",
+            "Request was reviewed concurrently; re-read it before approving.",
+            status_code=409,
+        )
+    new_req = updated[0]
 
     grant_rows = execute_write(
         """
@@ -504,6 +547,13 @@ def deny_access_request(
         )
 
     reason = payload.denial_reason if payload else None
+    # `AND status = 'PENDING'` makes the UPDATE the decision, not the read
+    # above it. Under READ COMMITTED two reviewers both see PENDING; the second
+    # blocks on the row lock, then re-evaluates only its WHERE — so without the
+    # predicate it overwrites the first reviewer's identity, and approve-then-
+    # deny leaves the request DENIED with a live grant row beside it.
+    # sample_access_grants has no unique constraint to stop the duplicate, so
+    # this is the only thing that can. Same shape as jobs.py's expiry sweep.
     updated = execute_write(
         """
         UPDATE sample_access_requests
@@ -513,13 +563,23 @@ def deny_access_request(
             reviewed_by_id = :uid,
             reviewed_at = NOW(),
             denial_reason = :reason
-        WHERE id = :id
+        WHERE id = :id AND status = 'PENDING'
         RETURNING *
         """,
         {"uid": user["id"], "reason": reason, "id": request_id},
         conn=db,
     )
-    new_req = updated[0] if updated else req_row
+    if not updated:
+        # Lost the race: another reviewer moved it out of PENDING between the
+        # read and the write. Returning the state-conflict 409 the check above
+        # already returns, rather than silently reporting success on a row this
+        # request did not change.
+        return error(
+            "INVALID_STATE",
+            "Request was reviewed concurrently; re-read it before denying.",
+            status_code=409,
+        )
+    new_req = updated[0]
 
     create_notification(
         recipient_id=req_row["requester_id"],
