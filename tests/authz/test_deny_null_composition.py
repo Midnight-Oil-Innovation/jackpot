@@ -25,19 +25,18 @@ import pytest
 from authz.scopes import SCOPE_EXPR
 from backend.authz import CapabilityGrant, Context, Decision, Principal, PrincipalKind, permit
 from backend.authz.engine import Resource
-from backend.authz.policy import PRINCIPAL_ID
+from backend.authz.policy import DELETION_POLICIES, PRINCIPAL_ID
 from backend.authz.visibility import visibility_sql_clause
 
 CAPABILITY = "deletion:approve"
 PRINCIPAL_UID = "7"
 
-# Verbatim shape from policy.ACTIVE_POLICIES.
-SELF_APPROVAL_DENY = {
-    "effect": "DENY",
-    "capability": CAPABILITY,
-    "scope_ref": "instance://self",
-    "resource": {"deletion_requested_by_user_id": PRINCIPAL_ID},
-}
+# Taken from the shipped policy set rather than copied. A hand-written copy
+# under a comment claiming it is "verbatim" is Rule 74's third anchor exactly:
+# the shipped policy also carries an "id" and a "conditions" key, so the copy
+# was already not verbatim, and if DELETION_POLICIES changes shape a copy keeps
+# passing against a policy that no longer exists.
+(SELF_APPROVAL_DENY,) = [p for p in DELETION_POLICIES if p["capability"] == CAPABILITY]
 ATTR_COLUMNS = {"deletion_requested_by_user_id": "s.deletion_requested_by_user_id"}
 
 # (sample_id, deletion_requested_by_user_id)
@@ -116,7 +115,7 @@ def test_list_and_permit_agree_on_every_row(sample_id: int, requester: int | Non
     assert (sample_id in _sql_visible(principal)) == _permits(principal, sample_id, requester)
 
 
-def test_the_deny_still_fires_on_the_row_it_exists_for(conn=None) -> None:
+def test_the_deny_still_fires_on_the_row_it_exists_for() -> None:
     """Narrowing the fix must not neuter the rule.
 
     Sample 2 is the principal's own deletion request. If a NULL-safety change
@@ -137,3 +136,102 @@ def test_rows_the_deny_has_nothing_to_say_about_stay_visible() -> None:
 
     assert 1 in visible, "a sample with no deletion request must remain listable"
     assert 3 in visible, "a deletion requested by someone else is approvable"
+
+
+# ── the invariant the COALESCE makes load-bearing ────────────────────────────
+
+# Every predicate form the language supports, including the ones no shipped
+# policy uses. The forms that matter are those whose oracle MATCHES on a NULL
+# attribute: those must compile to NULL-total SQL, or COALESCE turns a firing
+# DENY into a silent pass.
+PREDICATE_FORMS = [
+    {"attr": "X"},
+    {"attr": None},
+    {"attr": {"in": []}},
+    {"attr": {"in": ["X"]}},
+    {"attr": {"in": ["X", "Y"]}},
+    {"attr": {"in": [None]}},
+    {"attr": {"in": ["X", None]}},
+    {"attr": {"not": "X"}},
+    {"attr": {"not": None}},
+    {"attr": PRINCIPAL_ID},
+]
+ATTR_VALUES = ["X", "Y", None, PRINCIPAL_UID]
+
+
+def _deny_sql_hides(predicate: dict, value) -> bool:
+    """Run the real DENY composition over a one-row table."""
+    policy = {
+        "effect": "DENY",
+        "capability": CAPABILITY,
+        "scope_ref": "instance://self",
+        "resource": predicate,
+    }
+    frag, params = visibility_sql_clause(
+        _principal(),
+        CAPABILITY,
+        SCOPE_EXPR,
+        context=Context(),
+        policies=[policy],
+        attribute_columns={"attr": "s.attr"},
+    )
+    conn = sqlite3.connect(":memory:")
+    try:
+        conn.execute("CREATE TABLE labs (id INTEGER PRIMARY KEY, organization_id INTEGER)")
+        conn.execute(
+            "CREATE TABLE samples (id INTEGER PRIMARY KEY, lab_id INTEGER, "
+            "project_id INTEGER, attr TEXT)"
+        )
+        conn.execute("INSERT INTO labs (id, organization_id) VALUES (1, 1)")
+        conn.execute(
+            "INSERT INTO samples (id, lab_id, project_id, attr) VALUES (1, 1, 2, :v)",
+            {"v": value},
+        )
+        rows = conn.execute(
+            f"SELECT s.id FROM samples s JOIN labs l ON l.id = s.lab_id WHERE {frag}", params
+        ).fetchall()
+        return not rows
+    finally:
+        conn.close()
+
+
+def _oracle_denies(predicate: dict, value) -> bool:
+    policy = {
+        "effect": "DENY",
+        "capability": CAPABILITY,
+        "scope_ref": "instance://self",
+        "resource": predicate,
+    }
+    resource = Resource(
+        scope="instance://self/org/1/lab/1/project/2/sample/1", attributes={"attr": value}
+    )
+    decision = permit(_principal(), CAPABILITY, resource, Context(), policies=[policy])
+    return decision is not Decision.ALLOW
+
+
+@pytest.mark.parametrize("predicate", PREDICATE_FORMS)
+@pytest.mark.parametrize("value", ATTR_VALUES)
+def test_a_deny_hides_exactly_what_permit_denies(predicate: dict, value) -> None:
+    """Differential over every predicate form (Rule 73).
+
+    COALESCE(deny_chain, FALSE) is only correct while NULL implies the oracle
+    said False. That holds today because the three forms whose oracle matches
+    a NULL attribute — ``None``, ``{"not": v}``, ``{"in": [..., None]}`` —
+    compile to IS NULL / IS DISTINCT FROM / an IS NULL disjunct, all total.
+
+    Nothing enforced that. Before the COALESCE a NULL term failed closed, so a
+    non-total compilation was merely a hidden row; now it is a DENY that stops
+    firing. This is what catches the next branch added to _attr_matches without
+    a matching total compilation in _attr_sql.
+    """
+    assert _deny_sql_hides(predicate, value) == _oracle_denies(predicate, value), (
+        f"DENY {predicate!r} against {value!r}: "
+        f"sql_hides={_deny_sql_hides(predicate, value)} "
+        f"oracle_denies={_oracle_denies(predicate, value)}"
+    )
+
+
+def test_the_fuzz_reaches_both_verdicts() -> None:
+    """Guard the guard. A corpus that never denies would pass against anything."""
+    verdicts = {_oracle_denies(p, v) for p in PREDICATE_FORMS for v in ATTR_VALUES}
+    assert verdicts == {True, False}

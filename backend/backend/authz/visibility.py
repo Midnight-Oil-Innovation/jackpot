@@ -237,9 +237,27 @@ def visibility_sql_clause(
         # not apply. Without this the rule over-fires on exactly the rows it
         # has nothing to say about.
         #
-        # Reachable with shipped policy and shipped schema, not hypothetically:
-        # the separation-of-duties DENY reads deletion_requested_by_user_id,
-        # which is NULL for every sample with no deletion request pending.
+        # Latent, not live, and the distinction is worth keeping straight: no
+        # shipped list endpoint compiles a DENY today. sample_list_clause
+        # passes LADDER_POLICIES (ALLOW-only) and the lab/project helpers pass
+        # []; the only ACTIVE_POLICIES consumers — guards.py and
+        # federation/push.py — call permit(), not this compiler. The defect is
+        # real here and fires the day a DENY enters a list's policy set, which
+        # sample_list_clause's own docstring says must eventually match the
+        # guard's set.
+        #
+        # The shape it fires on: the separation-of-duties DENY reads
+        # deletion_requested_by_user_id, NULL for every sample with no deletion
+        # request pending.
+        #
+        # This inverts the direction of the safety margin. Before, a predicate
+        # form that yielded NULL where the oracle matched failed CLOSED (the
+        # row hid, agreeing with the DENY). Now it fails OPEN. That makes
+        # "any form whose oracle matches on NULL must compile to NULL-total
+        # SQL" load-bearing — IS NULL, IS DISTINCT FROM, and the IN-with-None
+        # disjunct are total today, and test_deny_null_composition.py fuzzes
+        # the property so the next branch added to _attr_matches cannot quietly
+        # break it.
         #
         # `1 = 0` rather than FALSE for the same portability reason as
         # _attr_sql's empty-IN case.
