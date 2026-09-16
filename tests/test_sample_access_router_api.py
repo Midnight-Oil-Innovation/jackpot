@@ -499,6 +499,72 @@ async def test_a_foreign_key_violation_is_not_reported_as_a_duplicate(client, mo
 
 
 @pytest.mark.asyncio
+async def test_a_concurrently_reviewed_request_is_not_approved_twice(
+    client, as_platform_admin, monkeypatch
+):
+    """Approving a request already reviewed by someone else must not re-approve it.
+
+    approve/deny read req_row["status"], check it is PENDING, then UPDATE on
+    `id` alone. Under READ COMMITTED two reviewers both see PENDING; the second
+    blocks on the row lock and then re-evaluates only its WHERE — so it
+    overwrote the first reviewer's identity and inserted a SECOND row into
+    sample_access_grants, which has no unique constraint to stop it.
+
+    The assertion that matters is the grant count. A 409 with two grants would
+    still be the bug, and approve-then-deny would leave the request DENIED with
+    a live grant beside it.
+    """
+    from backend.routers import sample_access
+
+    sid = "O-CR-REVIEW-RACE"
+    _cleanup_samples(sid)
+    other_lab = _ensure_other_lab()
+    s = _insert_sample(
+        sid,
+        lab_id=other_lab,
+        project_id=_other_project_id(other_lab),
+        sharing_level="DISCOVERABLE",
+    )
+    email = f"revrace-{uuid.uuid4().hex[:6]}@test.com"
+    _cleanup_users([email])
+    _make_user(email)
+    _switch_user(email, monkeypatch)
+    created = await client.post(
+        "/api/v1/sample-access/requests",
+        json={
+            "sample_id": s["id"],
+            "justification": "Asking once.",
+            "requested_duration_days": 14,
+        },
+    )
+    assert created.status_code == 201
+    req_id = created.json()["data"]["id"]
+
+    _switch_user("admin@example.org", monkeypatch)
+    first = await client.post(f"/api/v1/sample-access/requests/{req_id}/approve")
+    assert first.status_code == 200
+
+    # The second reviewer's read still says PENDING — exactly what it observes
+    # when it read before the first reviewer committed.
+    stale = dict(
+        execute_query("SELECT * FROM sample_access_requests WHERE id = :id", {"id": req_id})[0]
+    )
+    stale["status"] = "PENDING"
+    monkeypatch.setattr(sample_access, "_fetch_request", lambda *a, **k: stale)
+
+    second = await client.post(f"/api/v1/sample-access/requests/{req_id}/approve")
+
+    assert second.status_code == 409
+    grants = execute_query(
+        "SELECT id FROM sample_access_grants WHERE request_id = :r", {"r": req_id}
+    )
+    assert len(grants) == 1, f"the race wrote {len(grants)} grant rows"
+
+    _cleanup_users([email])
+    _cleanup_samples(sid)
+
+
+@pytest.mark.asyncio
 async def test_create_request_missing_sample_returns_404(client, as_platform_admin):
     body = {
         "sample_id": 999_999_999,

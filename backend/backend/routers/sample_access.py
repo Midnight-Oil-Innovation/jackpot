@@ -416,6 +416,13 @@ def approve_access_request(
         )
 
     duration_days = req_row.get("requested_duration_days") or 90
+    # `AND status = 'PENDING'` makes the UPDATE the decision, not the read
+    # above it. Under READ COMMITTED two reviewers both see PENDING; the second
+    # blocks on the row lock, then re-evaluates only its WHERE — so without the
+    # predicate it overwrites the first reviewer's identity, and approve-then-
+    # deny leaves the request DENIED with a live grant row beside it.
+    # sample_access_grants has no unique constraint to stop the duplicate, so
+    # this is the only thing that can. Same shape as jobs.py's expiry sweep.
     updated = execute_write(
         """
         UPDATE sample_access_requests
@@ -425,13 +432,23 @@ def approve_access_request(
             reviewed_by_id = :uid,
             reviewed_at = NOW(),
             access_expires_at = NOW() + (:days || ' days')::INTERVAL
-        WHERE id = :id
+        WHERE id = :id AND status = 'PENDING'
         RETURNING *
         """,
         {"uid": user["id"], "days": str(duration_days), "id": request_id},
         conn=db,
     )
-    new_req = updated[0] if updated else req_row
+    if not updated:
+        # Lost the race: another reviewer moved it out of PENDING between the
+        # read and the write. Returning the state-conflict 409 the check above
+        # already returns, rather than silently reporting success on a row this
+        # request did not change.
+        return error(
+            "INVALID_STATE",
+            "Request was reviewed concurrently; re-read it before approveing.",
+            status_code=409,
+        )
+    new_req = updated[0]
 
     grant_rows = execute_write(
         """
@@ -530,6 +547,13 @@ def deny_access_request(
         )
 
     reason = payload.denial_reason if payload else None
+    # `AND status = 'PENDING'` makes the UPDATE the decision, not the read
+    # above it. Under READ COMMITTED two reviewers both see PENDING; the second
+    # blocks on the row lock, then re-evaluates only its WHERE — so without the
+    # predicate it overwrites the first reviewer's identity, and approve-then-
+    # deny leaves the request DENIED with a live grant row beside it.
+    # sample_access_grants has no unique constraint to stop the duplicate, so
+    # this is the only thing that can. Same shape as jobs.py's expiry sweep.
     updated = execute_write(
         """
         UPDATE sample_access_requests
@@ -539,13 +563,23 @@ def deny_access_request(
             reviewed_by_id = :uid,
             reviewed_at = NOW(),
             denial_reason = :reason
-        WHERE id = :id
+        WHERE id = :id AND status = 'PENDING'
         RETURNING *
         """,
         {"uid": user["id"], "reason": reason, "id": request_id},
         conn=db,
     )
-    new_req = updated[0] if updated else req_row
+    if not updated:
+        # Lost the race: another reviewer moved it out of PENDING between the
+        # read and the write. Returning the state-conflict 409 the check above
+        # already returns, rather than silently reporting success on a row this
+        # request did not change.
+        return error(
+            "INVALID_STATE",
+            "Request was reviewed concurrently; re-read it before denying.",
+            status_code=409,
+        )
+    new_req = updated[0]
 
     create_notification(
         recipient_id=req_row["requester_id"],
