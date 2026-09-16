@@ -36,6 +36,7 @@ jobs:
   test:
     name: Backend + workspace tests
     runs-on: ubuntu-latest
+    timeout-minutes: 30
 
     services:
       postgres:
@@ -137,6 +138,7 @@ jobs:
   cli-test:
     name: CLI tests (separate coverage scope)
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v7
 
@@ -158,6 +160,7 @@ jobs:
   pipelines-test:
     name: Pipelines parser tests (jackpot-nf)
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     # pipelines/ keeps its own pyproject.toml outside the workspace per
     # the P0d plan. Run its tests in their own job so a parser change
     # does not need to flow through the backend test matrix.
