@@ -201,11 +201,20 @@ def create_access_request(
             },
             conn=db,
         )
-    except IntegrityError:
+    except IntegrityError as exc:
         # Unobservable today because the handler returns, kept so the session
         # stays usable for whoever adds a statement below it — same reasoning
         # as routers/domain_whitelist.py.
         db.rollback()
+        # IntegrityError is still too broad on this table: sample_id,
+        # requester_id and owner_id are all foreign keys, so a violation of any
+        # of them would be reported to the caller as "you already have a
+        # pending request". That is the same mislabelling that made the old
+        # `except Exception` a lie, one level further down — so match on the
+        # constraint and re-raise anything else.
+        constraint = getattr(getattr(exc.orig, "diag", None), "constraint_name", None)
+        if constraint != "sample_access_requests_one_pending_uniq":
+            raise
         return error(
             "CONFLICT",
             "You already have a pending access request for this sample.",

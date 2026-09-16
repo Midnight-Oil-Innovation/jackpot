@@ -442,6 +442,63 @@ async def test_create_request_losing_the_race_does_not_duplicate(client, monkeyp
 
 
 @pytest.mark.asyncio
+async def test_a_foreign_key_violation_is_not_reported_as_a_duplicate(client, monkeypatch):
+    """IntegrityError alone is too broad on this table.
+
+    sample_id, requester_id and owner_id are all foreign keys, so catching
+    IntegrityError wholesale would tell a caller "you already have a pending
+    request" when what actually failed was a reference to a row that no longer
+    exists — the same mislabelling that made the original `except Exception` a
+    lie, one level further down.
+    """
+    from sqlalchemy.exc import IntegrityError
+
+    from backend.routers import sample_access
+
+    class _Diag:
+        # psycopg2's real Diagnostics is read-only, so the constraint name a
+        # driver would report is stood in for here.
+        constraint_name = "sample_access_requests_owner_id_fkey"
+
+    class _ForeignKeyViolationError(Exception):
+        diag = _Diag()
+
+    sid = "O-CR-FK"
+    _cleanup_samples(sid)
+    other_lab = _ensure_other_lab()
+    s = _insert_sample(
+        sid,
+        lab_id=other_lab,
+        project_id=_other_project_id(other_lab),
+        sharing_level="DISCOVERABLE",
+    )
+    email = f"fk-{uuid.uuid4().hex[:6]}@test.com"
+    _cleanup_users([email])
+    _make_user(email)
+    _switch_user(email, monkeypatch)
+
+    def _fk_violation(*args, **kwargs):
+        raise IntegrityError(
+            "INSERT ...", {}, _ForeignKeyViolationError("violates foreign key constraint")
+        )
+
+    monkeypatch.setattr(sample_access, "execute_write", _fk_violation)
+
+    with pytest.raises(IntegrityError):
+        await client.post(
+            "/api/v1/sample-access/requests",
+            json={
+                "sample_id": s["id"],
+                "justification": "Asking once.",
+                "requested_duration_days": 14,
+            },
+        )
+
+    _cleanup_users([email])
+    _cleanup_samples(sid)
+
+
+@pytest.mark.asyncio
 async def test_create_request_missing_sample_returns_404(client, as_platform_admin):
     body = {
         "sample_id": 999_999_999,
