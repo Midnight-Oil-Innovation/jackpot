@@ -117,6 +117,36 @@ async def test_add_domain_duplicate_returns_409(client):
 
 
 @pytest.mark.asyncio
+async def test_add_domain_loses_the_race_with_409_not_500(client, monkeypatch):
+    """Two admins adding the same domain at once must still get the 409.
+
+    The endpoint SELECTs for an existing row and then INSERTs. `domain` is
+    `TEXT NOT NULL UNIQUE`, so when both requests pass the check the loser hits
+    the constraint and — before this — raised an unhandled IntegrityError,
+    surfacing as a 500 for a case the endpoint already answers with a clean 409
+    when the requests are sequential.
+
+    The window is simulated rather than raced: the existence check is patched
+    to report "not present" while the row is in fact there, which is exactly
+    the state the losing request observes. A real concurrent test would be
+    timing-dependent and would not pin the behaviour any better.
+    """
+    from backend.routers import domain_whitelist
+
+    _cleanup_domain("race.example")
+    first = await client.post("/api/v1/domain-whitelist/", json={"domain": "race.example"})
+    assert first.status_code == 201
+
+    monkeypatch.setattr(domain_whitelist, "execute_query", lambda *a, **k: [])
+
+    second = await client.post("/api/v1/domain-whitelist/", json={"domain": "race.example"})
+
+    assert second.status_code == 409
+    assert second.json()["error"]["code"] == "CONFLICT"
+    _cleanup_domain("race.example")
+
+
+@pytest.mark.asyncio
 async def test_add_domain_non_admin_returns_403(client, monkeypatch):
     email = "whitelist_nonadmin_add@test.com"
     _ensure_user(email)
