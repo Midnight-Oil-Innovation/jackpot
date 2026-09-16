@@ -94,6 +94,12 @@ def add_domain(
             conn=db,
         )
     except IntegrityError:
+        # Nothing after this needs the session — the handler returns — so this
+        # rollback is currently unobservable, and removing it leaves every test
+        # green. It stays because the alternative is a landmine: after a failed
+        # statement the session is in InFailedSqlTransaction, so the first
+        # person to audit the conflict or read anything here gets an
+        # InternalError from a line that looks innocent.
         db.rollback()
         return error(
             "CONFLICT",
