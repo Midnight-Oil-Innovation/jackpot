@@ -178,8 +178,23 @@ def _now() -> datetime:
 
 
 def _env_set(var: str, default: set[str]) -> set[str]:
-    raw = os.environ.get(var, "")
-    return {item.strip() for item in raw.split(",") if item.strip()} or default
+    """Parse a comma-separated policy variable, distinguishing unset from empty.
+
+    `{...} or default` conflated the two: an operator setting
+    JACKPOT_BYOP_ALLOWED_LICENSES="" to allow no licence at all got
+    DEFAULT_ALLOWED_LICENSES back, turning a restriction into a permission.
+    Unset means "no policy expressed, use the default"; set-and-empty means
+    "nothing is allowed", and only the caller's default should decide the
+    first case.
+
+    Downstream is already fail-closed — byop_validator.check_license rejects
+    any licence not in the set, so an empty set rejects everything. The defect
+    was in deciding what the operator had asked for, not in enforcing it.
+    """
+    raw = os.environ.get(var)
+    if raw is None:
+        return default
+    return {item.strip() for item in raw.split(",") if item.strip()}
 
 
 def _parse_manifest(manifest_yaml: str) -> dict:
