@@ -25,7 +25,7 @@ from backend.database import get_db_dep
 from backend.routers import byop
 from backend.routers.byop import Base, router
 from backend.services.byop_sandbox import SandboxResult, StepResult
-from backend.services.byop_validator import CheckResult, ValidationReport
+from backend.services.byop_validator import CheckResult, ValidationReport, check_license
 
 USER = {"id": 1, "email": "bioinfo@example.org", "is_platform_admin": False}
 
@@ -410,3 +410,54 @@ def test_can_manage_is_false_for_a_stranger_to_the_row(
 
     assert [p["can_manage"] for p in body] == [False]
     assert client.post("/api/v1/byop/pipelines/1/deactivate").status_code == 404
+
+
+# ── operator policy from the environment ─────────────────────────────────────
+
+
+class TestEnvSetHonoursAnEmptyValue:
+    """An operator setting a policy var to empty means "nothing", not "default".
+
+    `_env_set` read the variable with a `""` fallback and then did
+    `{...} or default`, so an explicitly empty value was indistinguishable
+    from an unset one and fell back to the permissive defaults. Setting
+    JACKPOT_BYOP_ALLOWED_LICENSES="" to allow no licence at all silently
+    restored DEFAULT_ALLOWED_LICENSES — the operator's restriction inverted
+    into a permission.
+
+    Downstream is already fail-closed: byop_validator.check_license rejects
+    any licence `not in allowed_licenses`, so an empty set rejects everything.
+    The defect was entirely in deciding what the operator asked for.
+    """
+
+    def test_unset_uses_the_default(self, monkeypatch):
+        monkeypatch.delenv("JACKPOT_TEST_POLICY", raising=False)
+
+        assert byop._env_set("JACKPOT_TEST_POLICY", {"a", "b"}) == {"a", "b"}
+
+    def test_empty_means_empty_not_default(self, monkeypatch):
+        monkeypatch.setenv("JACKPOT_TEST_POLICY", "")
+
+        assert byop._env_set("JACKPOT_TEST_POLICY", {"a", "b"}) == set()
+
+    def test_whitespace_only_is_also_empty(self, monkeypatch):
+        monkeypatch.setenv("JACKPOT_TEST_POLICY", "   ,  , ")
+
+        assert byop._env_set("JACKPOT_TEST_POLICY", {"a", "b"}) == set()
+
+    def test_values_are_split_and_stripped(self, monkeypatch):
+        monkeypatch.setenv("JACKPOT_TEST_POLICY", " mit , apache-2.0 ,, mit ")
+
+        assert byop._env_set("JACKPOT_TEST_POLICY", {"a"}) == {"mit", "apache-2.0"}
+
+    def test_an_empty_licence_allowlist_rejects_every_licence(self, monkeypatch):
+        """The property the operator was actually asking for, end to end."""
+        monkeypatch.setenv("JACKPOT_BYOP_ALLOWED_LICENSES", "")
+
+        allowed = byop._env_set("JACKPOT_BYOP_ALLOWED_LICENSES", byop.DEFAULT_ALLOWED_LICENSES)
+        # metadata.license, not a top-level key: check_license reads
+        # manifest["metadata"]["license"], so a flat dict fails on the missing
+        # key and the assertion below would hold whatever the allowlist said.
+        result = check_license({"metadata": {"license": "MIT"}}, allowed)
+
+        assert not result.passed
