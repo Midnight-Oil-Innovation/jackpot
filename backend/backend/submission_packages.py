@@ -630,7 +630,10 @@ def generate_package(
             status_code=422, detail="Submission has no samples — add samples first."
         )
 
-    cap = settings.submission_max_samples_per_package or 1000
+    # No `or 1000`: the field is `int = 1000` in config.py, so the fallback
+    # was dead for every value except 0 — where it overrode an operator
+    # asking for zero with the permissive default.
+    cap = settings.submission_max_samples_per_package
     if len(samples) > cap:
         raise HTTPException(
             status_code=422,

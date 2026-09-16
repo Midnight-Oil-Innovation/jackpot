@@ -221,7 +221,8 @@ def create_import_session(
     abandon an existing session before starting a new one.
     """
     settings = get_settings()
-    cap = (settings.import_session_max_file_size_mb or 10) * 1024 * 1024
+    # `or 10` fired only at 0, turning "no uploads" into 10 MB.
+    cap = settings.import_session_max_file_size_mb * 1024 * 1024
     if len(file_bytes) == 0:
         raise HTTPException(status_code=400, detail="File is empty.")
     if len(file_bytes) > cap:
@@ -247,7 +248,8 @@ def create_import_session(
         {"uid": user_id},
         conn=conn,
     )
-    max_per_user = settings.import_session_max_per_user or 5
+    # `or 5` fired only at 0, turning "nobody opens import sessions" into 5.
+    max_per_user = settings.import_session_max_per_user
     if len(existing) >= max_per_user:
         raise HTTPException(
             status_code=409,
