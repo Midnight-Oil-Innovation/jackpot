@@ -1388,6 +1388,10 @@ def register_custom_pipeline(
     # DatabaseError siblings that are not constraint violations at all —
     # OperationalError, InterfaceError, DataError, ProgrammingError.
     except IntegrityError as exc:  # duplicate (project_id, pipeline_name)
+        # Same reasoning as routers/domain_whitelist.py: unobservable today
+        # because the handler returns, kept so the session is usable for
+        # whoever adds a statement below it.
+        db.rollback()
         logger.info(
             "BYOP insert failed for %s/%s: %s",
             payload.project_id,

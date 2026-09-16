@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, Query, Request
 from pydantic import BaseModel, Field
+from sqlalchemy.exc import IntegrityError
 
 from backend.audit import AuditActions, log_audit
 from backend.auth.guards import get_current_user, require_capability
@@ -76,15 +77,35 @@ def add_domain(
             status_code=409,
         )
 
-    rows = execute_write(
-        """
-        INSERT INTO domain_whitelist (domain, description)
-        VALUES (:domain, :description)
-        RETURNING *
-        """,
-        {"domain": normalised, "description": payload.description or ""},
-        conn=db,
-    )
+    # The SELECT above answers the ordinary case with a clean 409. It cannot
+    # answer the concurrent one: two admins adding the same domain both pass the
+    # check, and `domain` is TEXT NOT NULL UNIQUE, so the loser hits the
+    # constraint. Catching it here turns that into the same 409 rather than an
+    # unhandled IntegrityError surfacing as a 500 — the constraint is the real
+    # arbiter, the SELECT is just the fast path with a better message.
+    try:
+        rows = execute_write(
+            """
+            INSERT INTO domain_whitelist (domain, description)
+            VALUES (:domain, :description)
+            RETURNING *
+            """,
+            {"domain": normalised, "description": payload.description or ""},
+            conn=db,
+        )
+    except IntegrityError:
+        # Nothing after this needs the session — the handler returns — so this
+        # rollback is currently unobservable, and removing it leaves every test
+        # green. It stays because the alternative is a landmine: after a failed
+        # statement the session is in InFailedSqlTransaction, so the first
+        # person to audit the conflict or read anything here gets an
+        # InternalError from a line that looks innocent.
+        db.rollback()
+        return error(
+            "CONFLICT",
+            f"Domain '{normalised}' is already whitelisted.",
+            status_code=409,
+        )
     row = rows[0]
     log_audit(
         action=AuditActions.ADD_WHITELIST_DOMAIN,

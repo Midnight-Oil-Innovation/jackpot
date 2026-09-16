@@ -117,6 +117,56 @@ async def test_add_domain_duplicate_returns_409(client):
 
 
 @pytest.mark.asyncio
+async def test_add_domain_loses_the_race_with_409_not_500(client, monkeypatch):
+    """Two admins adding the same domain at once must still get the 409.
+
+    The endpoint SELECTs for an existing row and then INSERTs. `domain` is
+    `TEXT NOT NULL UNIQUE`, so when both requests pass the check the loser hits
+    the constraint and — before this — raised an unhandled IntegrityError,
+    surfacing as a 500 for a case the endpoint already answers with a clean 409
+    when the requests are sequential.
+
+    The window is simulated rather than raced: the existence check is patched
+    to report "not present" while the row is in fact there, which is exactly
+    the state the losing request observes. A real concurrent test would be
+    timing-dependent and would not pin the behaviour any better.
+    """
+    from backend.routers import domain_whitelist
+
+    _cleanup_domain("race.example")
+    first = await client.post("/api/v1/domain-whitelist/", json={"domain": "race.example"})
+    assert first.status_code == 201
+
+    # Record the call, so these assertions cannot pass via the ordinary
+    # duplicate path with the patch silently inactive — deleting the setattr
+    # left the test green before this.
+    checked: list[bool] = []
+
+    def _reports_absent(*args, **kwargs):
+        checked.append(True)
+        return []
+
+    monkeypatch.setattr(domain_whitelist, "execute_query", _reports_absent)
+
+    second = await client.post("/api/v1/domain-whitelist/", json={"domain": "race.example"})
+
+    assert checked, "the existence check never ran — the window was not simulated"
+    assert second.status_code == 409
+    assert second.json()["error"]["code"] == "CONFLICT"
+
+    # The constraint held: the losing request wrote nothing and audited nothing,
+    # rather than being turned away after a partial write.
+    rows = execute_query("SELECT id FROM domain_whitelist WHERE domain = :d", {"d": "race.example"})
+    assert len(rows) == 1
+    audits = execute_query(
+        "SELECT id FROM audit_log WHERE action = :a AND resource_id = :r",
+        {"a": "ADD_WHITELIST_DOMAIN", "r": str(rows[0]["id"])},
+    )
+    assert len(audits) == 1, "the 409 path must not write a second audit row"
+    _cleanup_domain("race.example")
+
+
+@pytest.mark.asyncio
 async def test_add_domain_non_admin_returns_403(client, monkeypatch):
     email = "whitelist_nonadmin_add@test.com"
     _ensure_user(email)
