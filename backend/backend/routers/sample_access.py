@@ -23,6 +23,7 @@ from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, Field
+from sqlalchemy.exc import IntegrityError
 
 from backend.audit import AuditActions, log_audit
 from backend.auth.guards import get_current_user, permits
@@ -172,28 +173,44 @@ def create_access_request(
             status_code=409,
         )
 
-    rows = execute_write(
-        """
-        INSERT INTO sample_access_requests
-            (sample_id, requester_id, owner_id, status,
-             justification, requested_duration_days,
-             auto_approve_after, purpose)
-        VALUES
-            (:sid, :uid, :owner, 'PENDING',
-             :just, :dur,
-             NOW() + (:days || ' days')::INTERVAL, :just)
-        RETURNING *
-        """,
-        {
-            "sid": sample["id"],
-            "uid": user["id"],
-            "owner": sample["owner_id"],
-            "just": payload.justification,
-            "dur": payload.requested_duration_days,
-            "days": str(AUTO_APPROVE_WINDOW.days),
-        },
-        conn=db,
-    )
+    # The SELECT above answers the ordinary case with a clean 409; it cannot
+    # answer the concurrent one. Migration 64c8dda7c914 adds a partial unique
+    # index on (sample_id, requester_id) WHERE status = 'PENDING', so the loser
+    # of a race hits the constraint instead of writing a second PENDING row.
+    # Catching it here turns that into the same 409 rather than a 500.
+    try:
+        rows = execute_write(
+            """
+            INSERT INTO sample_access_requests
+                (sample_id, requester_id, owner_id, status,
+                 justification, requested_duration_days,
+                 auto_approve_after, purpose)
+            VALUES
+                (:sid, :uid, :owner, 'PENDING',
+                 :just, :dur,
+                 NOW() + (:days || ' days')::INTERVAL, :just)
+            RETURNING *
+            """,
+            {
+                "sid": sample["id"],
+                "uid": user["id"],
+                "owner": sample["owner_id"],
+                "just": payload.justification,
+                "dur": payload.requested_duration_days,
+                "days": str(AUTO_APPROVE_WINDOW.days),
+            },
+            conn=db,
+        )
+    except IntegrityError:
+        # Unobservable today because the handler returns, kept so the session
+        # stays usable for whoever adds a statement below it — same reasoning
+        # as routers/domain_whitelist.py.
+        db.rollback()
+        return error(
+            "CONFLICT",
+            "You already have a pending access request for this sample.",
+            status_code=409,
+        )
     req_row = rows[0]
 
     # Notify every Lab Director on the owning lab. The Platform Admin path
