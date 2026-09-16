@@ -1213,22 +1213,31 @@ async def test_custom_pipeline_duplicate_returns_409(client, as_platform_admin):
 
 
 @pytest.mark.asyncio
-async def test_a_non_duplicate_failure_is_not_reported_as_a_duplicate(client, monkeypatch):
+async def test_a_non_duplicate_failure_is_not_reported_as_a_duplicate(
+    client, as_platform_admin, monkeypatch
+):
     """The other direction, which the broad catch could not distinguish.
 
-    `except Exception` reported every insert failure as DUPLICATE_PIPELINE — a
-    dropped connection, a serialization failure, a constraint on some other
-    column. The client is told the pipeline is already registered, and the real
-    fault is hidden behind a 409 nobody investigates.
+    `except Exception` reported a dropped connection or a serialization failure
+    as DUPLICATE_PIPELINE. The client is told the pipeline is already
+    registered, and the real fault hides behind a 409 nobody investigates.
+
+    The injected error is an OperationalError rather than a bare RuntimeError,
+    so this exercises the class that actually shows up when a connection drops
+    — and pins that it is not an IntegrityError subclass. Both descend from
+    DatabaseError, which is exactly why `except Exception` could not tell them
+    apart and a reader might assume the narrowed catch still does.
     """
+    from sqlalchemy.exc import OperationalError
+
     from backend.routers import pipelines
 
     def _boom(*args, **kwargs):
-        raise RuntimeError("connection reset")
+        raise OperationalError("INSERT ...", {}, Exception("connection reset"))
 
     monkeypatch.setattr(pipelines, "execute_write", _boom)
 
-    with pytest.raises(RuntimeError, match="connection reset"):
+    with pytest.raises(OperationalError, match="connection reset"):
         await client.post(
             "/api/v1/pipelines/custom",
             json={
