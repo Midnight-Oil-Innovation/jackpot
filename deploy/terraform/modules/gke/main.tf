@@ -34,15 +34,22 @@ resource "google_container_cluster" "this" {
     master_ipv4_cidr_block  = var.master_ipv4_cidr_block
   }
 
-  dynamic "master_authorized_networks_config" {
-    for_each = length(var.master_authorized_networks) > 0 ? [1] : []
-    content {
-      dynamic "cidr_blocks" {
-        for_each = var.master_authorized_networks
-        content {
-          cidr_block   = cidr_blocks.value.cidr_block
-          display_name = cidr_blocks.value.display_name
-        }
+  # Emitted unconditionally. Previously this block appeared only when the list
+  # was non-empty, which inverted the meaning of the default: omitting the
+  # block leaves the public control-plane endpoint reachable from 0.0.0.0/0,
+  # so `master_authorized_networks = []` — the variable's own default — meant
+  # "anyone" rather than "no one". The only thing standing between a default
+  # `terraform apply` and a world-reachable control plane was a comment in
+  # terraform.tfvars.example.
+  #
+  # With the block always present, an empty list authorises nothing, which is
+  # the fail-closed reading and matches what the variable name says.
+  master_authorized_networks_config {
+    dynamic "cidr_blocks" {
+      for_each = var.master_authorized_networks
+      content {
+        cidr_block   = cidr_blocks.value.cidr_block
+        display_name = cidr_blocks.value.display_name
       }
     }
   }
