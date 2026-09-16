@@ -103,4 +103,16 @@ def test_the_two_sets_still_differ_somewhere() -> None:
         "the sets are identical — the parity test above can no longer fail"
     )
     differing = {p["capability"] for p in ACTIVE_POLICIES if p not in LADDER_POLICIES}
-    assert differing, "no capability distinguishes the sets"
+
+    # Not merely "the sets differ somewhere" — they must differ on a capability
+    # the parametrized test actually walks. Measured: mutate both DENY policies
+    # to read an unmapped attribute, which drops them out of
+    # POLICY_CAPABILITIES, then revert sample_list_clause to the narrower set —
+    # the parity test goes fully vacuous at 6 passed while a "differ somewhere"
+    # canary stays green. What prevents that today lives in another file
+    # (test_sovereignty_policies.py::test_every_deny_reads_only_loaded_attributes),
+    # and a canary leaning on a neighbour's invariant is not a canary.
+    assert differing & set(POLICY_CAPABILITIES), (
+        "no parametrized capability distinguishes the sets — the parity test "
+        "above can no longer fail"
+    )

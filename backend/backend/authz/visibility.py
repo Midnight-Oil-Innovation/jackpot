@@ -237,14 +237,13 @@ def visibility_sql_clause(
         # not apply. Without this the rule over-fires on exactly the rows it
         # has nothing to say about.
         #
-        # Latent, not live, and the distinction is worth keeping straight: no
-        # shipped list endpoint compiles a DENY today. sample_list_clause
-        # passes LADDER_POLICIES (ALLOW-only) and the lab/project helpers pass
-        # []; the only ACTIVE_POLICIES consumers — guards.py and
-        # federation/push.py — call permit(), not this compiler. The defect is
-        # real here and fires the day a DENY enters a list's policy set, which
-        # sample_list_clause's own docstring says must eventually match the
-        # guard's set.
+        # Reachable from lists as of the policy-set parity change:
+        # sample_list_clause now passes ACTIVE_POLICIES, the same set
+        # auth/guards.py evaluates, so a DENY keyed to a capability a list
+        # filters on is compiled here rather than silently dropped. No list
+        # passes deletion:approve or federation:push today, so the branch is
+        # still unreached in practice — but it is now one policy away, not one
+        # refactor away, which is why the NULL handling below is not optional.
         #
         # The shape it fires on: the separation-of-duties DENY reads
         # deletion_requested_by_user_id, NULL for every sample with no deletion
