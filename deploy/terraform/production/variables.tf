@@ -31,11 +31,14 @@ variable "master_authorized_networks" {
   description = <<-EOT
     CIDRs allowed to reach the GKE public control-plane endpoint.
 
-    Empty means NO network is authorised. That is the fail-closed reading and
-    it is now what the module implements — the authorized-networks block is
-    emitted unconditionally, so an empty list denies rather than permits.
-    Before, the block was skipped when the list was empty, which left the
-    endpoint reachable from 0.0.0.0/0.
+    Empty means no EXTERNAL network is authorised — GKE continues to allowlist
+    the cluster's own node IPs regardless, so this governs access from outside
+    the cluster, which is the part that was open.
+
+    That is the fail-closed reading and it is now what the module implements:
+    the authorized-networks block is emitted unconditionally, so an empty list
+    denies rather than permits. Before, the block was skipped when the list was
+    empty, which left the endpoint reachable from 0.0.0.0/0.
 
     Deploying from GitHub-hosted runners needs an entry here: their egress IPs
     are dynamic, so either authorise the ranges you accept, or move the deploy

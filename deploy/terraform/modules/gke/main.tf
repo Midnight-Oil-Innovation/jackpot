@@ -42,8 +42,10 @@ resource "google_container_cluster" "this" {
   # `terraform apply` and a world-reachable control plane was a comment in
   # terraform.tfvars.example.
   #
-  # With the block always present, an empty list authorises nothing, which is
-  # the fail-closed reading and matches what the variable name says.
+  # With the block always present, an empty list authorises no external CIDR.
+  # Not literally "nothing": GKE keeps allowlisting the cluster's own node IPs
+  # whatever this list says, so intra-cluster reachability is unaffected. The
+  # change is to arbitrary external access, which is what was open.
   master_authorized_networks_config {
     dynamic "cidr_blocks" {
       for_each = var.master_authorized_networks
