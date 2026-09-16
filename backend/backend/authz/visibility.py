@@ -294,7 +294,18 @@ def sample_list_clause(
     Not I/O: the principal is loaded by the caller, which keeps this module a
     pure compiler.
     """
-    from backend.authz.policy import LADDER_POLICIES
+    # ACTIVE_POLICIES, not LADDER_POLICIES — the docstring above names the
+    # policy set as one of the three parts that must match the row-wise guard,
+    # and auth/guards.py passes ACTIVE_POLICIES. Passing the narrower set meant
+    # every DENY it carries was invisible to lists.
+    #
+    # No behaviour changes today: LADDER_POLICIES is a subset, and for every
+    # sample-rooted capability the two filter to identical policies. They differ
+    # only on deletion:approve and federation:push, whose DENYs no list filtered
+    # on. The point is the future — a DENY added on sample:read is now honoured
+    # by lists instead of being silently dropped, which is exactly the "drifts
+    # wider, no error, no audit entry" case the docstring warns about.
+    from backend.authz.policy import ACTIVE_POLICIES
     from backend.authz.principal import SAMPLE_ATTRIBUTE_COLUMNS
 
     columns = {
@@ -306,7 +317,7 @@ def sample_list_clause(
         capability,
         scope_sql(samples=samples, labs=labs),
         context=context or Context(conditions={}, now=datetime.now(UTC)),
-        policies=LADDER_POLICIES,
+        policies=ACTIVE_POLICIES,
         attribute_columns=columns,
     )
 
