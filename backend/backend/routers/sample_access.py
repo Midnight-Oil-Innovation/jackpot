@@ -445,7 +445,7 @@ def approve_access_request(
         # request did not change.
         return error(
             "INVALID_STATE",
-            "Request was reviewed concurrently; re-read it before approveing.",
+            "Request was reviewed concurrently; re-read it before approving.",
             status_code=409,
         )
     new_req = updated[0]
