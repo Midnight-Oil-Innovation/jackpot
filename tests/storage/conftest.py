@@ -4,25 +4,22 @@
 
 Spins up real services in containers using testcontainers:
 - MinIO for S3 / MinIO tests (dynamic port mapping)
-- fake-gcs-server for GCS tests (FIXED host port 4443 — see notes)
+- fake-gcs-server for GCS tests (host port chosen up front — see notes)
 
 Local filesystem tests use pytest's tmp_path fixture (no container needed).
 
-Why fake-gcs-server uses a fixed host port:
+Why fake-gcs-server needs its host port decided before the container starts:
 fake-gcs-server generates resumable-upload continuation URLs server-side and
-returns them to the client. Those URLs need to be reachable from the client.
-The -external-url flag tells fake-gcs-server what URL to put in those
-responses. We need to know the URL before starting the container, which means
-we need to know the host port before starting the container, which means we
-have to bind to a fixed port. Default: 4443 (matching the in-container port).
-If port 4443 is already in use on your machine, the test will fail with a
-port-binding error and you'll need to free the port (or override via the
-JACKPOT_TEST_FAKE_GCS_PORT env var).
+returns them to the client. The -external-url flag tells it what URL to put in
+those responses, so we must know the host port before starting the container
+and cannot use testcontainers' usual after-the-fact port mapping. We ask the
+OS for a free port rather than pinning one, which keeps the suite off whatever
+already owns 4443 and lets pytest-xdist workers run in parallel.
 """
 
 from __future__ import annotations
 
-import os
+import contextlib
 import secrets
 import socket
 import time
@@ -88,74 +85,96 @@ def minio_bucket(minio_endpoint: str) -> Generator[str, None, None]:
             pass
 
 
-# ---------- fake-gcs-server (fixed host port) ----------
+# ---------- fake-gcs-server (host port chosen before start) ----------
+
+# How long one port attempt waits for the server to answer before the
+# fixture assumes the port was lost and tries another. Named so the
+# retry canary can shrink it instead of paying 10s per deliberate miss.
+_PROBE_TIMEOUT_SECONDS = 10.0
 
 
-def _get_fake_gcs_port() -> int:
-    """The fixed host port for fake-gcs-server.
-
-    Override with JACKPOT_TEST_FAKE_GCS_PORT env var if 4443 is taken.
-    """
-    return int(os.environ.get("JACKPOT_TEST_FAKE_GCS_PORT", "4443"))
-
-
-def _check_port_available(port: int) -> None:
-    """Raise a clear error if the host port is already in use."""
-    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    try:
-        sock.bind(("127.0.0.1", port))
-    except OSError as e:
-        raise RuntimeError(
-            f"Host port {port} is in use; fake-gcs-server cannot bind to it. "
-            f"Free the port, or set JACKPOT_TEST_FAKE_GCS_PORT to a free port. "
-            f"Underlying error: {e}"
-        ) from e
-    finally:
-        sock.close()
+def _free_host_port() -> int:
+    """Ask the OS for a free host port and release it immediately."""
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+        sock.bind(("127.0.0.1", 0))
+        return sock.getsockname()[1]
 
 
 @pytest.fixture(scope="session")
-def fake_gcs_container() -> Generator[DockerContainer, None, None]:
-    """Run a fake-gcs-server container, bound to a fixed host port.
+def fake_gcs_container() -> Generator[tuple[DockerContainer, int], None, None]:
+    """Run fake-gcs-server on a host port chosen before the container starts.
 
     -external-url tells fake-gcs-server what URL to advertise in upload
     continuation responses, which is critical for resumable uploads to work.
+    So the port must be known up front, and that leaves a window between
+    releasing the probe socket and docker binding the port. Retry rather
+    than fail: under `pytest -n auto` several workers probe at the same
+    moment and the OS can hand the same just-freed port to two of them,
+    which is the flake this whole fixture exists to avoid.
     """
-    port = _get_fake_gcs_port()
-    _check_port_available(port)
+    last_err: Exception | None = None
+    for _ in range(5):
+        port = _free_host_port()
+        container = (
+            DockerContainer(container_images.FAKE_GCS)
+            .with_command(
+                f"-scheme http -port 4443 -backend memory -external-url http://127.0.0.1:{port}"
+            )
+            .with_bind_ports(4443, port)
+        )
+        try:
+            container.start()
+            wait_for_logs(container, "server started", timeout=30)
+            _wait_until_fake_gcs_ready(f"http://127.0.0.1:{port}", _PROBE_TIMEOUT_SECONDS)
+        except Exception as e:
+            # A lost-port collision does NOT surface as a start() failure under
+            # every docker backend — colima happily starts the container and
+            # the symptom is a server nothing can reach. So the reachability
+            # probe is what the retry keys on, not the start call.
+            last_err = e
+            with contextlib.suppress(Exception):
+                container.stop()
+            continue
+        try:
+            yield container, port
+        finally:
+            container.stop()
+        return
+    raise RuntimeError(f"fake-gcs-server could not bind a usable host port in 5 tries: {last_err}")
 
-    external_url = f"http://127.0.0.1:{port}"
 
-    container = (
-        DockerContainer(container_images.FAKE_GCS)
-        .with_command(f"-scheme http -port 4443 -backend memory -external-url {external_url}")
-        .with_bind_ports(4443, port)
-    )
-    container.start()
-    try:
-        wait_for_logs(container, "server started", timeout=30)
-        yield container
-    finally:
-        container.stop()
+def _wait_until_fake_gcs_ready(endpoint: str, timeout: float) -> None:
+    """Block until FAKE-GCS-SERVER — not merely something — answers on `endpoint`.
 
+    The identity check is the point. This probe is what the retry loop keys on,
+    so anything it accepts is treated as "the port is ours". An earlier version
+    accepted any 200 *or 404*, which means an unrelated service holding the port
+    and returning a 404 would have been read as success: the retry would not
+    fire and every storage test would run against a stranger.
 
-@pytest.fixture(scope="session")
-def fake_gcs_endpoint(fake_gcs_container: DockerContainer) -> str:
-    """The URL clients should use to reach fake-gcs-server."""
-    port = _get_fake_gcs_port()
-    endpoint = f"http://127.0.0.1:{port}"
-
-    deadline = time.time() + 30
+    The pinned image answers /storage/v1/b with 200 and {"kind": "storage#buckets"}.
+    """
+    deadline = time.time() + timeout
     last_err: Exception | None = None
     while time.time() < deadline:
         try:
             r = requests.get(f"{endpoint}/storage/v1/b", timeout=2)
-            if r.status_code in (200, 404):
-                return endpoint
-        except requests.RequestException as e:
+            if r.status_code == 200 and r.json().get("kind") == "storage#buckets":
+                return
+            last_err = RuntimeError(
+                f"port answered, but not as fake-gcs-server: HTTP {r.status_code} {r.text[:80]!r}"
+            )
+        except (requests.RequestException, ValueError) as e:
             last_err = e
-            time.sleep(0.5)
-    raise RuntimeError(f"fake-gcs-server did not become ready: {last_err}")
+        time.sleep(0.5)
+    raise RuntimeError(f"fake-gcs-server did not become ready on {endpoint}: {last_err}")
+
+
+@pytest.fixture(scope="session")
+def fake_gcs_endpoint(fake_gcs_container: tuple[DockerContainer, int]) -> str:
+    """The URL clients should use to reach fake-gcs-server."""
+    _container, port = fake_gcs_container
+    return f"http://127.0.0.1:{port}"
 
 
 @pytest.fixture
