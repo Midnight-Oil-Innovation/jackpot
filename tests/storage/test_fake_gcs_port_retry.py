@@ -12,8 +12,10 @@ can reach, so the loop never retried and the allocator was called exactly once.
 
 from __future__ import annotations
 
+import http.server
 import importlib.util
 import socket
+import threading
 from collections.abc import Generator
 from pathlib import Path
 from typing import Any
@@ -62,6 +64,64 @@ def test_retry_recovers_when_the_chosen_port_is_taken(
             "A collision must be detected and retried, not swallowed."
         )
         assert port != occupied_port
+        assert container is not None
+    finally:
+        fixture.close()
+
+
+class _NotFakeGcs(http.server.BaseHTTPRequestHandler):
+    """A stranger on the port. Answers 404, which the old probe accepted."""
+
+    def do_GET(self) -> None:  # noqa: N802 - BaseHTTPRequestHandler's API
+        self.send_response(404)
+        self.end_headers()
+        self.wfile.write(b"not fake-gcs-server")
+
+    def log_message(self, *args: object) -> None:
+        pass
+
+
+@pytest.fixture
+def port_held_by_a_stranger() -> Generator[int, None, None]:
+    """A port answering HTTP 404 — reachable, but not fake-gcs-server."""
+    server = http.server.HTTPServer(("127.0.0.1", 0), _NotFakeGcs)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        yield server.server_address[1]
+    finally:
+        server.shutdown()
+        server.server_close()
+
+
+def test_retry_fires_when_the_port_answers_but_is_not_fake_gcs(
+    port_held_by_a_stranger: int, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A reachable port is not a correct port.
+
+    The readiness probe is the retry's trigger, so whatever it accepts is
+    treated as ours. It used to accept any 200 or 404 — this stub returns 404,
+    so the fixture would have bound a stranger's port and every storage test
+    would have run against it.
+    """
+    real_free_port = storage_conftest._free_host_port
+    attempts: list[int] = []
+
+    def hand_out_the_strangers_port_twice() -> int:
+        attempts.append(1)
+        return port_held_by_a_stranger if len(attempts) <= 2 else real_free_port()
+
+    monkeypatch.setattr(storage_conftest, "_free_host_port", hand_out_the_strangers_port_twice)
+    monkeypatch.setattr(storage_conftest, "_PROBE_TIMEOUT_SECONDS", 1.0)
+
+    fixture: Any = storage_conftest.fake_gcs_container.__wrapped__()
+    container, port = next(fixture)
+    try:
+        assert len(attempts) == 3, (
+            f"the retry did not fire: allocator called {len(attempts)}x. A port that "
+            "answers 404 is not fake-gcs-server and must not be accepted as ready."
+        )
+        assert port != port_held_by_a_stranger
         assert container is not None
     finally:
         fixture.close()

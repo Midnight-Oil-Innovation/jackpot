@@ -125,7 +125,7 @@ def fake_gcs_container() -> Generator[tuple[DockerContainer, int], None, None]:
         try:
             container.start()
             wait_for_logs(container, "server started", timeout=30)
-            _wait_until_reachable(f"http://127.0.0.1:{port}", _PROBE_TIMEOUT_SECONDS)
+            _wait_until_fake_gcs_ready(f"http://127.0.0.1:{port}", _PROBE_TIMEOUT_SECONDS)
         except Exception as e:
             # A lost-port collision does NOT surface as a start() failure under
             # every docker backend — colima happily starts the container and
@@ -143,18 +143,30 @@ def fake_gcs_container() -> Generator[tuple[DockerContainer, int], None, None]:
     raise RuntimeError(f"fake-gcs-server could not bind a usable host port in 5 tries: {last_err}")
 
 
-def _wait_until_reachable(endpoint: str, timeout: float) -> None:
-    """Block until fake-gcs-server answers on `endpoint`, or raise."""
+def _wait_until_fake_gcs_ready(endpoint: str, timeout: float) -> None:
+    """Block until FAKE-GCS-SERVER — not merely something — answers on `endpoint`.
+
+    The identity check is the point. This probe is what the retry loop keys on,
+    so anything it accepts is treated as "the port is ours". An earlier version
+    accepted any 200 *or 404*, which means an unrelated service holding the port
+    and returning a 404 would have been read as success: the retry would not
+    fire and every storage test would run against a stranger.
+
+    The pinned image answers /storage/v1/b with 200 and {"kind": "storage#buckets"}.
+    """
     deadline = time.time() + timeout
     last_err: Exception | None = None
     while time.time() < deadline:
         try:
             r = requests.get(f"{endpoint}/storage/v1/b", timeout=2)
-            if r.status_code in (200, 404):
+            if r.status_code == 200 and r.json().get("kind") == "storage#buckets":
                 return
-        except requests.RequestException as e:
+            last_err = RuntimeError(
+                f"port answered, but not as fake-gcs-server: HTTP {r.status_code} {r.text[:80]!r}"
+            )
+        except (requests.RequestException, ValueError) as e:
             last_err = e
-            time.sleep(0.5)
+        time.sleep(0.5)
     raise RuntimeError(f"fake-gcs-server did not become ready on {endpoint}: {last_err}")
 
 
