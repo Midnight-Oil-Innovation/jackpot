@@ -10,6 +10,7 @@ from typing import BinaryIO
 
 from google.api_core.exceptions import Forbidden, GoogleAPIError, NotFound
 from google.cloud import storage as gcs_module
+from requests.exceptions import RequestException
 
 from backend.storage.base import (
     DownloadResult,
@@ -164,6 +165,14 @@ class GCSStorageBackend(StorageBackend):
         except Forbidden as e:
             raise StoragePermissionError(str(e), key=key, backend=self.backend_name) from e
         except GoogleAPIError as e:
+            raise StorageBackendUnavailableError(str(e), key=key, backend=self.backend_name) from e
+        # delete() alone defaults to DEFAULT_RETRY_IF_GENERATION_SPECIFIED and we
+        # pass no generation, so retry is off and nothing turns the transport
+        # error into a GoogleAPIError -- the raw requests exception escaped.
+        # exists/stat/list_objects retry unconditionally and surface RetryError,
+        # caught above. Not fixed by passing retry=DEFAULT_RETRY: a DELETE with
+        # no generation precondition is not idempotent, so the library gates it.
+        except RequestException as e:
             raise StorageBackendUnavailableError(str(e), key=key, backend=self.backend_name) from e
 
     def stat(self, key: str) -> StorageObject:
