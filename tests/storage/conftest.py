@@ -96,7 +96,15 @@ def _get_fake_gcs_port() -> int:
 
     Override with JACKPOT_TEST_FAKE_GCS_PORT env var if 4443 is taken.
     """
-    return int(os.environ.get("JACKPOT_TEST_FAKE_GCS_PORT", "4443"))
+    explicit = os.environ.get("JACKPOT_TEST_FAKE_GCS_PORT")
+    if explicit:
+        return int(explicit)
+    # Under pytest-xdist every worker builds its own container, and a fixed
+    # port means they fight over 4443 — seven storage tests fail with a
+    # port-binding error that reads like a flake. Offset per worker so the
+    # suite can run in parallel; gw0 keeps 4443 so serial runs are unchanged.
+    worker = os.environ.get("PYTEST_XDIST_WORKER", "gw0")
+    return 4443 + int(worker.removeprefix("gw") or 0)
 
 
 def _check_port_available(port: int) -> None:

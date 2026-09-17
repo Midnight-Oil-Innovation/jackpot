@@ -109,6 +109,52 @@ If the session crosses from conversation into action — even a single edit — 
 - Every ~20 tasks: pause, review `docs/architecture.md` vs the current implementation for gaps,
   log findings to `docs/learnings.md`, and resolve all gaps before continuing
 
+### Merge autonomy
+
+Claude opens the PR, waits for CI, and **merges without asking** for:
+
+- documentation, comments, and docstrings
+- tests, fixtures, and test tooling
+- CI workflow and lint/type configuration
+- dependency bumps that pass `scripts/verify_licenses.py` and deptrust
+- a single-file fix accompanied by a test verified to fail without it
+
+Claude **stops and asks** for:
+
+- anything under `backend/backend/authz/**`, `auth/guards.py`, or a route that
+  adds, removes or moves a permission check
+- migrations
+- IAM, Terraform, or anything that changes what a deployment exposes
+- a change to an API contract or a response shape
+- any fix where the right answer is a design choice rather than a mechanical one
+
+The dividing line is not size, it is whether being wrong is recoverable by
+reading the diff. A wrong docstring is visible; a wrong `WHERE` clause on a
+visibility query returns 200 and tells nobody. On the 20 PRs of the September
+review-triage run, three would have needed a human: the DENY/NULL composition,
+the GKE control-plane default, and the access-request transition guard.
+
+When Claude merges without asking it still reports the PR number, the merge SHA,
+and what it changed — autonomy is about not blocking, not about going quiet.
+
+### Test loop
+
+Iterate with `uv run pytest <target> -q --no-cov -p no:cacheprovider -n auto`.
+The `-n auto` matters: the full suite is 125s serially and 66s across workers.
+Parallel runs give each worker its own testcontainers, which is why
+`tests/storage/conftest.py` offsets the fake-gcs-server port by worker — a
+fixed port made seven storage tests fail in a way that reads like a flake.
+
+The canonical pre-PR run stays serial and with coverage, because that is what CI
+measures: `uv run pytest tests/ schema/tests/ cli/tests/ -q`. `-n auto` is not in
+`addopts` on purpose — CI runners have fewer cores and that combination is
+unmeasured there.
+
+**Before committing anything that touches tests or migrations**, run
+`uv run python scripts/gen_status.py && git add docs/STATUS.md`. The pre-commit
+hook regenerates `docs/STATUS.md` and then fails the commit because a file
+changed, so skipping this costs a second commit attempt every single time.
+
 ### Decision Rules
 
 - **Never ask for confirmation** on anything resolvable by reading this file and running tests
