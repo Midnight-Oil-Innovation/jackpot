@@ -8,9 +8,10 @@ import io
 from unittest.mock import Mock
 
 import pytest
+import requests
 from google.resumable_media import DataCorruption
 
-from backend.storage.exceptions import StorageError
+from backend.storage.exceptions import StorageBackendUnavailableError, StorageError
 from backend.storage.gcs import GCSStorageBackend
 
 
@@ -63,3 +64,29 @@ def test_checksum_mismatch_surfaces_as_storage_error(
     # Corrupt bytes mean the backend answered, so this must NOT be the
     # unavailable variant — a caller retrying on that would retry forever.
     assert type(excinfo.value) is StorageError
+
+
+def test_delete_transport_failure_surfaces_as_backend_unavailable(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A transport failure on delete() must surface as StorageBackendUnavailableError.
+
+    delete() is the one method here with retry off by default -- it is
+    conditional on a generation, and JACKPOT passes none -- so nothing
+    translated the transport error into google.api_core's hierarchy and the raw
+    requests exception reached the caller. See the handler in gcs.py.
+    """
+    backend = _offline_backend()
+    blob = Mock()
+    exc = requests.exceptions.ConnectionError("connection refused")
+    blob.delete.side_effect = exc
+    monkeypatch.setattr(backend._bucket, "blob", lambda _key: blob)
+
+    with pytest.raises(StorageBackendUnavailableError) as excinfo:
+        backend.delete("a/b.txt")
+
+    # Identity, not isinstance, and it is the anti-vacuity guard. If the
+    # monkeypatch ever lapses, the real blob hits the dead port and raises its
+    # own ConnectionError, which the fix maps to this same type -- so every
+    # other assertion here would pass on nothing.
+    assert excinfo.value.__cause__ is exc
