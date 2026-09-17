@@ -22,9 +22,9 @@ repos:
         # .gz: these hooks are byte-level and do not detect binaries — the
         # end-of-file-fixer appends a newline to anything not ending in one,
         # which corrupts the PHIN VADS snapshot archives.
-        exclude: '\.(html|htm|gz)$|^docs/STATUS\.md$'
+        exclude: '\.(html|htm|gz)$|^docs/STATUS\.md$|^docs/reviewer_benchmark/cases/.*\.diff$'
       - id: end-of-file-fixer
-        exclude: '\.(html|htm|gz)$|^docs/STATUS\.md$'
+        exclude: '\.(html|htm|gz)$|^docs/STATUS\.md$|^docs/reviewer_benchmark/cases/.*\.diff$'
       - id: check-yaml
         # Helm templates use Go template syntax that isn't valid YAML
         # to a basic parser. Excluded from this hook; rely on
