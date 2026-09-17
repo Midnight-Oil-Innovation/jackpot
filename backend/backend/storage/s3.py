@@ -101,7 +101,13 @@ class S3StorageBackend(StorageBackend):
             raise StorageBackendUnavailableError(str(e), key=key, backend=self.backend_name) from e
         except ClientError as e:
             raise self._classify_client_error(e, key) from e
-        except BotoCoreError as e:
+        # Not BotoCoreError: the managed transfers (upload_fileobj /
+        # download_fileobj) fail from s3transfer, whose exceptions share no
+        # ancestor with BotoCoreError or ClientError and so escaped every
+        # handler here, breaking the StorageError-only contract in
+        # exceptions.py. s3transfer exposes no base class to name, so the
+        # catch is positional; the try holds two library calls, nothing of ours.
+        except Exception as e:
             raise StorageError(str(e), key=key, backend=self.backend_name) from e
 
         return UploadResult(
@@ -120,7 +126,9 @@ class S3StorageBackend(StorageBackend):
             raise StorageBackendUnavailableError(str(e), key=key, backend=self.backend_name) from e
         except ClientError as e:
             raise self._classify_client_error(e, key) from e
-        except BotoCoreError as e:
+        # Not BotoCoreError — see upload(); download_fileobj is the other
+        # managed transfer.
+        except Exception as e:
             raise StorageError(str(e), key=key, backend=self.backend_name) from e
 
         return DownloadResult(
