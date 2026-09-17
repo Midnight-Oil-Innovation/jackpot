@@ -107,6 +107,16 @@ class GCSStorageBackend(StorageBackend):
             raise StoragePermissionError(str(e), key=key, backend=self.backend_name) from e
         except GoogleAPIError as e:
             raise StorageBackendUnavailableError(str(e), key=key, backend=self.backend_name) from e
+        # Not GoogleAPIError: upload_from_file is a resumable transfer, and a
+        # checksum mismatch leaves it as google.resumable_media.DataCorruption,
+        # which blob.py re-raises bare and which shares no ancestor with
+        # GoogleAPIError -- so it escaped every handler here, breaking the
+        # StorageError-only contract in exceptions.py. Plain StorageError, not
+        # StorageBackendUnavailableError: corrupt bytes arrived, so the backend
+        # was reachable, and a caller retrying on "unavailable" would retry the
+        # one failure a retry cannot fix.
+        except Exception as e:
+            raise StorageError(str(e), key=key, backend=self.backend_name) from e
 
         return UploadResult(
             key=key,
@@ -127,6 +137,10 @@ class GCSStorageBackend(StorageBackend):
             raise StoragePermissionError(str(e), key=key, backend=self.backend_name) from e
         except GoogleAPIError as e:
             raise StorageBackendUnavailableError(str(e), key=key, backend=self.backend_name) from e
+        # See upload() -- download_to_file is the other resumable transfer, and
+        # DataCorruption escapes it the same way.
+        except Exception as e:
+            raise StorageError(str(e), key=key, backend=self.backend_name) from e
 
         return DownloadResult(
             key=key,
@@ -198,5 +212,5 @@ class GCSStorageBackend(StorageBackend):
         try:
             self._bucket.reload()
             return True
-        except (GoogleAPIError, Exception):
+        except Exception:
             return False
