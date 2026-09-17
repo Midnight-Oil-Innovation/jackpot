@@ -21,6 +21,26 @@ claims the window is handled. B hides a one-line widening *inside* a security
 improvement, so scoring the overall direction fails it. C separates reviewers
 that reason about this schema from ones that pattern-match on `except` blocks.
 
+## What this measures — and what it does not
+
+**Diff review with no repo context.** Each case is a diff fragment; the reviewer
+does not get the surrounding file. That is deliberate — it is the job CodeRabbit
+does in the PR loop — but it makes the benchmark unfair to tools built for a
+different job, and a low score here must not be read as "this reviewer is bad".
+
+The clearest example is in the table below. `qwen3-coder:30b` scores 0/3 on diff
+review, and is also the model behind `code_check_opencode.sh`, which reviews one
+**whole file at a time with full content** — and that scan produced the report
+that drove roughly nineteen PRs of real fixes. Same model, opposite verdicts,
+because whole-file scanning and diff review are different tasks. Case C needed to
+know the table has three foreign keys; case A needed to know the file already
+existed. Neither fact is in the diff.
+
+So: use this to choose a **diff reviewer**. To judge a whole-file scanner, build
+a second case set from pre-existing defects with full files, and score recall —
+a scanner may earn its place at 50% precision if triage is cheap, where a diff
+reviewer at 50% precision mostly wastes the reviewer's time.
+
 ## Running
 
 ```bash
@@ -41,6 +61,10 @@ are not free, because each one costs someone the time to disprove it.
 |---|---|---|---|
 | CodeRabbit CLI | **3 / 3** | 0 | 2–4 min, rate-limited at 3 runs |
 | `qwen3-coder:30b` | 0 / 3 | 4 on case C, all wrong on inspection | ~12 s/case |
+
+`qwen3-coder:30b`'s 0/3 is a statement about diff review only — see the section
+above. The same model, given whole files, generated the report behind ~19 merged
+PRs of confirmed fixes.
 | `gemma4:31b` | 0 / 3 | restated the diff; timed out on C | >3 min/case |
 | `kimi-k2.7-code:cloud` | untested | — | 402, needs Ollama credits |
 | `glm-5.2:cloud` | untested | — | 402, needs Ollama credits |
@@ -52,6 +76,25 @@ The four false positives on case C are worth reading in
 `C_exception_breadth.expected.md`: one of them ("SQL injection via
 `(:days || ' days')::INTERVAL`") is confident, plausible, and wrong, because
 `:days` is a bound parameter. That is the expensive kind.
+
+## A failure mode this benchmark cannot see
+
+The scanner it is contrasted with had a defect that no score would have caught:
+`code_check_opencode.sh` passed files as `@path`, which makes opencode hand the
+model a `read` **tool**. `qwen3-coder:30b` cannot emit valid tool-call syntax, so
+the read never executed — the output stopped after a malformed `<function=read>`
+and the file was never reviewed. **21 of 167 outputs in the 2026-08-04 scan
+failed this way**, invisibly, because a stub looks like any other file in a
+directory of 167.
+
+Fixed by inlining file content instead of referencing it, plus a completion
+check that greps each output for leaked tool-call syntax and reports
+`incomplete: N` at the end. Verified on an 84 KB file that previously failed: it
+now produces a real review citing functions from its *tail*.
+
+The lesson generalises past this script. **A reviewer that cannot read the code
+produces output that looks like a review.** Any harness that runs one has to
+assert the read happened, not just that the process exited zero.
 
 ## Operational notes
 
