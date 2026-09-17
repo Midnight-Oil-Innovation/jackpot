@@ -142,8 +142,10 @@ and what it changed — autonomy is about not blocking, not about going quiet.
 Iterate with `uv run pytest <target> -q --no-cov -p no:cacheprovider -n auto`.
 The `-n auto` matters: the full suite is 125s serially and 66s across workers.
 Parallel runs give each worker its own testcontainers, which is why
-`tests/storage/conftest.py` offsets the fake-gcs-server port by worker — a
-fixed port made seven storage tests fail in a way that reads like a flake.
+`tests/storage/conftest.py` asks the OS for a free host port for
+fake-gcs-server instead of pinning 4443 — a fixed port made storage tests fail
+in a way that reads like a flake, whether the squatter was another xdist worker
+or something unrelated on the machine.
 
 The canonical pre-PR run stays serial and with coverage, because that is what CI
 measures: `uv run pytest tests/ schema/tests/ cli/tests/ -q`. `-n auto` is not in

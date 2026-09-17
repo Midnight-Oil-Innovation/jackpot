@@ -4,25 +4,21 @@
 
 Spins up real services in containers using testcontainers:
 - MinIO for S3 / MinIO tests (dynamic port mapping)
-- fake-gcs-server for GCS tests (FIXED host port 4443 — see notes)
+- fake-gcs-server for GCS tests (host port chosen up front — see notes)
 
 Local filesystem tests use pytest's tmp_path fixture (no container needed).
 
-Why fake-gcs-server uses a fixed host port:
+Why fake-gcs-server needs its host port decided before the container starts:
 fake-gcs-server generates resumable-upload continuation URLs server-side and
-returns them to the client. Those URLs need to be reachable from the client.
-The -external-url flag tells fake-gcs-server what URL to put in those
-responses. We need to know the URL before starting the container, which means
-we need to know the host port before starting the container, which means we
-have to bind to a fixed port. Default: 4443 (matching the in-container port).
-If port 4443 is already in use on your machine, the test will fail with a
-port-binding error and you'll need to free the port (or override via the
-JACKPOT_TEST_FAKE_GCS_PORT env var).
+returns them to the client. The -external-url flag tells it what URL to put in
+those responses, so we must know the host port before starting the container
+and cannot use testcontainers' usual after-the-fact port mapping. We ask the
+OS for a free port rather than pinning one, which keeps the suite off whatever
+already owns 4443 and lets pytest-xdist workers run in parallel.
 """
 
 from __future__ import annotations
 
-import os
 import secrets
 import socket
 import time
@@ -88,56 +84,30 @@ def minio_bucket(minio_endpoint: str) -> Generator[str, None, None]:
             pass
 
 
-# ---------- fake-gcs-server (fixed host port) ----------
-
-
-def _get_fake_gcs_port() -> int:
-    """The fixed host port for fake-gcs-server.
-
-    Override with JACKPOT_TEST_FAKE_GCS_PORT env var if 4443 is taken.
-    """
-    explicit = os.environ.get("JACKPOT_TEST_FAKE_GCS_PORT")
-    if explicit:
-        return int(explicit)
-    # Under pytest-xdist every worker builds its own container, and a fixed
-    # port means they fight over 4443 — seven storage tests fail with a
-    # port-binding error that reads like a flake. Offset per worker so the
-    # suite can run in parallel; gw0 keeps 4443 so serial runs are unchanged.
-    worker = os.environ.get("PYTEST_XDIST_WORKER", "gw0")
-    return 4443 + int(worker.removeprefix("gw") or 0)
-
-
-def _check_port_available(port: int) -> None:
-    """Raise a clear error if the host port is already in use."""
-    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    try:
-        sock.bind(("127.0.0.1", port))
-    except OSError as e:
-        raise RuntimeError(
-            f"Host port {port} is in use; fake-gcs-server cannot bind to it. "
-            f"Free the port, or set JACKPOT_TEST_FAKE_GCS_PORT to a free port. "
-            f"Underlying error: {e}"
-        ) from e
-    finally:
-        sock.close()
+# ---------- fake-gcs-server (host port chosen before start) ----------
 
 
 @pytest.fixture(scope="session")
-def fake_gcs_container() -> Generator[DockerContainer, None, None]:
-    """Run a fake-gcs-server container, bound to a fixed host port.
+def fake_gcs_port() -> int:
+    """A free host port to bind fake-gcs-server to, picked before it starts."""
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+        sock.bind(("127.0.0.1", 0))
+        return sock.getsockname()[1]
+
+
+@pytest.fixture(scope="session")
+def fake_gcs_container(fake_gcs_port: int) -> Generator[DockerContainer, None, None]:
+    """Run a fake-gcs-server container, bound to the chosen host port.
 
     -external-url tells fake-gcs-server what URL to advertise in upload
     continuation responses, which is critical for resumable uploads to work.
     """
-    port = _get_fake_gcs_port()
-    _check_port_available(port)
-
-    external_url = f"http://127.0.0.1:{port}"
+    external_url = f"http://127.0.0.1:{fake_gcs_port}"
 
     container = (
         DockerContainer(container_images.FAKE_GCS)
         .with_command(f"-scheme http -port 4443 -backend memory -external-url {external_url}")
-        .with_bind_ports(4443, port)
+        .with_bind_ports(4443, fake_gcs_port)
     )
     container.start()
     try:
@@ -148,10 +118,9 @@ def fake_gcs_container() -> Generator[DockerContainer, None, None]:
 
 
 @pytest.fixture(scope="session")
-def fake_gcs_endpoint(fake_gcs_container: DockerContainer) -> str:
+def fake_gcs_endpoint(fake_gcs_container: DockerContainer, fake_gcs_port: int) -> str:
     """The URL clients should use to reach fake-gcs-server."""
-    port = _get_fake_gcs_port()
-    endpoint = f"http://127.0.0.1:{port}"
+    endpoint = f"http://127.0.0.1:{fake_gcs_port}"
 
     deadline = time.time() + 30
     last_err: Exception | None = None
