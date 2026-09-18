@@ -5,10 +5,12 @@
 from __future__ import annotations
 
 import io
+from datetime import timedelta
 from unittest.mock import Mock
 
 import pytest
 import requests
+from google.auth.exceptions import RefreshError
 from google.resumable_media import DataCorruption
 
 from backend.storage.exceptions import StorageBackendUnavailableError, StorageError
@@ -90,3 +92,57 @@ def test_delete_transport_failure_surfaces_as_backend_unavailable(
     # own ConnectionError, which the fix maps to this same type -- so every
     # other assertion here would pass on nothing.
     assert excinfo.value.__cause__ is exc
+
+
+@pytest.mark.parametrize("method", ["exists", "delete", "stat", "list_objects", "presign_url"])
+def test_credential_failure_surfaces_as_storage_error(
+    method: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A credential that will not refresh must still surface as StorageError.
+
+    google.auth.exceptions.RefreshError descends from GoogleAuthError, which
+    shares no ancestor with GoogleAPIError and which DEFAULT_RETRY's predicate
+    declines -- so no retry wraps it either. It escaped every handler in these
+    five methods. upload/download were already covered by their positional
+    catch.
+    """
+    backend = _offline_backend()
+    exc = RefreshError("could not refresh the access token")
+    blob = Mock()
+    monkeypatch.setattr(backend._bucket, "blob", lambda _key: blob)
+
+    if method == "exists":
+        blob.exists.side_effect = exc
+    elif method == "delete":
+        blob.delete.side_effect = exc
+    elif method == "stat":
+        monkeypatch.setattr(backend._bucket, "get_blob", Mock(side_effect=exc))
+    elif method == "list_objects":
+        monkeypatch.setattr(backend._client, "list_blobs", Mock(side_effect=exc))
+    else:
+        blob.generate_signed_url.side_effect = exc
+
+    with pytest.raises(StorageError) as excinfo:
+        if method == "exists":
+            backend.exists("a/b.txt")
+        elif method == "delete":
+            backend.delete("a/b.txt")
+        elif method == "stat":
+            backend.stat("a/b.txt")
+        elif method == "list_objects":
+            list(backend.list_objects())
+        else:
+            backend.presign_url("a/b.txt", timedelta(minutes=5))
+
+    # Identity, and it is the anti-vacuity guard. Every one of these methods
+    # fails on its own against the dead port -- delete and presign_url at once,
+    # exists/stat/list_objects after a ~70s retry -- and each of those failures
+    # is already a StorageError, so pytest.raises alone would pass on the wrong
+    # one. `exc` is reachable only through the stub, so `is exc` holds only if
+    # the stub fired.
+    assert excinfo.value.__cause__ is exc
+
+    # And plain StorageError, not the Unavailable subclass: a credential that
+    # will not refresh is not a reachability problem, and pytest.raises accepts
+    # any subclass, so nothing above pins which mapping ran.
+    assert type(excinfo.value) is StorageError

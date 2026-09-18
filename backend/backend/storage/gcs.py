@@ -155,6 +155,14 @@ class GCSStorageBackend(StorageBackend):
             return self._bucket.blob(key).exists()
         except GoogleAPIError as e:
             raise StorageBackendUnavailableError(str(e), key=key, backend=self.backend_name) from e
+        # Positional, as in upload(): a credential that will not refresh raises
+        # google.auth.GoogleAuthError, which is neither a GoogleAPIError nor
+        # anything DEFAULT_RETRY's predicate will wrap, so it matched nothing
+        # above. The try holds one library call, so catching broadly hides no
+        # local bug -- and unlike naming GoogleAuthError it also holds for the
+        # next alien hierarchy, which is what exceptions.py actually promises.
+        except Exception as e:
+            raise StorageError(str(e), key=key, backend=self.backend_name) from e
 
     def delete(self, key: str) -> None:
         _validate_key(key)
@@ -174,6 +182,8 @@ class GCSStorageBackend(StorageBackend):
         # no generation precondition is not idempotent, so the library gates it.
         except RequestException as e:
             raise StorageBackendUnavailableError(str(e), key=key, backend=self.backend_name) from e
+        except Exception as e:
+            raise StorageError(str(e), key=key, backend=self.backend_name) from e
 
     def stat(self, key: str) -> StorageObject:
         _validate_key(key)
@@ -181,6 +191,8 @@ class GCSStorageBackend(StorageBackend):
             blob = self._bucket.get_blob(key)
         except GoogleAPIError as e:
             raise StorageBackendUnavailableError(str(e), key=key, backend=self.backend_name) from e
+        except Exception as e:
+            raise StorageError(str(e), key=key, backend=self.backend_name) from e
         if blob is None:
             raise StorageObjectNotFoundError(
                 f"Object not found: {key}", key=key, backend=self.backend_name
@@ -194,6 +206,10 @@ class GCSStorageBackend(StorageBackend):
                 yield _storage_object(blob, blob.name)
         except GoogleAPIError as e:
             raise StorageBackendUnavailableError(str(e), backend=self.backend_name) from e
+        # See exists(). _storage_object is ours and inside the try, so a bug in it
+        # surfaces as StorageError too -- the chained cause still names it.
+        except Exception as e:
+            raise StorageError(str(e), backend=self.backend_name) from e
 
     def presign_url(
         self,
@@ -213,6 +229,8 @@ class GCSStorageBackend(StorageBackend):
             )
         except GoogleAPIError as e:
             raise StorageBackendUnavailableError(str(e), key=key, backend=self.backend_name) from e
+        except Exception as e:
+            raise StorageError(str(e), key=key, backend=self.backend_name) from e
 
     def get_uri(self, key: str) -> str:
         return f"gs://{self.bucket_name}/{key}"
