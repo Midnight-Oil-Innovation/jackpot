@@ -182,9 +182,17 @@ async def lifespan(app: FastAPI):
         # pipelines (design doc §5.4 — upstream-rot detection).
         register_byop_revalidation(scheduler)
         scheduler.start()
-    yield
-    if scheduler.running:
-        scheduler.shutdown()
+
+    try:
+        yield
+    finally:
+        # finally, not a bare trailing statement: an exception raised by
+        # anything holding the lifespan open -- a later startup hook, a
+        # server-level error, a cancelled serving task -- used to propagate
+        # straight past the shutdown call and leave the scheduler running
+        # with its jobs still firing against a half-torn-down process.
+        if scheduler.running:
+            scheduler.shutdown()
 
 
 app = FastAPI(
