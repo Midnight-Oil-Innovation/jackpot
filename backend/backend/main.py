@@ -98,6 +98,7 @@ async def lifespan(app: FastAPI):
             "interval",
             seconds=60,
             id="scrubber_queue",
+            replace_existing=True,
         )
         scheduler.add_job(
             run_access_request_job,
@@ -105,6 +106,7 @@ async def lifespan(app: FastAPI):
             hour=2,
             minute=0,
             id="access_request_expiry",
+            replace_existing=True,
         )
         scheduler.add_job(
             compute_full_content_hash,
