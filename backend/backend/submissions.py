@@ -509,6 +509,26 @@ def add_samples_to_submission(
             ),
         )
 
+    # Critical Rule 43: a sample whose metadata the DLP scan flagged is
+    # blocked from export until the flagged fields are fixed or a Lab
+    # Director overrides. Refusing here as well as in
+    # validate_submission_readiness is what makes the refusal legible --
+    # the submitter learns which samples are the problem while they are
+    # still choosing them, rather than at package generation.
+    flagged = execute_query(
+        "SELECT sample_id FROM samples WHERE id = ANY(:ids) AND pii_scan_status = 'PII_DETECTED'",
+        {"ids": sample_ids},
+        conn=conn,
+    )
+    if flagged:
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                "Samples flagged for PII by the DLP scan cannot be submitted "
+                "to external repositories: " + ", ".join(s["sample_id"] for s in flagged)
+            ),
+        )
+
     inserted: list[dict] = []
     for sid in sample_ids:
         # ON CONFLICT DO NOTHING keeps the call idempotent.
@@ -664,12 +684,19 @@ def validate_submission_readiness(submission_id: int, conn) -> SubmissionValidat
 
     per_sample: list[SampleValidationIssue] = []
     for row in rows:
-        missing = [f for f in required if _field_missing(row.get(f))]
-        if missing:
+        issues = [f"missing required field: {f}" for f in required if _field_missing(row.get(f))]
+        # Critical Rule 43, and the reason the gate in
+        # add_samples_to_submission is not sufficient on its own: the DLP
+        # scan is asynchronous, so a sample that was PENDING when it was
+        # attached can be flagged afterwards. This is the check that runs
+        # against what the package is actually about to contain.
+        if row.get("pii_scan_status") == "PII_DETECTED":
+            issues.append("flagged for PII by the DLP scan")
+        if issues:
             per_sample.append(
                 SampleValidationIssue(
                     sample_id=row.get("sample_id") or str(row.get("id")),
-                    issues=[f"missing required field: {f}" for f in missing],
+                    issues=issues,
                 )
             )
 

@@ -96,6 +96,19 @@ def export_gisaid_csv(
     if not samples:
         raise HTTPException(status_code=404, detail="No samples found.")
 
+    # Critical Rule 43: flagged samples are blocked from export. Refusing the
+    # whole request rather than filtering the flagged rows out of the CSV --
+    # a submitter who asked for 40 samples and got 38 has no way to know, and
+    # the omission would surface as a gap in GISAID rather than as an error.
+    flagged = [s["sample_id"] for s in samples if s.get("pii_scan_status") == "PII_DETECTED"]
+    if flagged:
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                "Samples flagged for PII by the DLP scan cannot be exported: " + ", ".join(flagged)
+            ),
+        )
+
     output = io.StringIO()
     writer = csv.DictWriter(output, fieldnames=GISAID_SARS_COV2_COLUMNS, extrasaction="ignore")
     writer.writeheader()

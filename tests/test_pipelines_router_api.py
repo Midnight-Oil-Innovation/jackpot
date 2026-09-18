@@ -145,6 +145,7 @@ def _insert_sample(
     source_type: str = "Human",
     scrub_status: str = "COMPLETE",
     quality_status: str = "ANALYZABLE",
+    pii_scan_status: str = "PENDING",  # the column default; never a hard block
 ) -> dict:
     rows = execute_write(
         """
@@ -153,13 +154,13 @@ def _insert_sample(
              type_of_experiment, library_preparation_method, sequencing_protocol,
              sequencing_platform, sequencing_lab, date_collected, date_sequenced,
              collection_facility, collection_location_country, sharing_level,
-             fastq_r1_uri, scrub_status, quality_status)
+             fastq_r1_uri, scrub_status, quality_status, pii_scan_status)
         VALUES
             (:sid, :lid, :pid, :oid, :src, :org,
              'WGS', 'ARTIC', 'https://www.protocols.io/view/artic-v4-1',
              'Illumina', 'Example Sequencing Lab', '2026-01-15', '2026-01-17',
              'Example Hospital', 'United States', 'PRIVATE',
-             'gs://jackpot-sequences/test/R1.fastq.gz', :scrub, :qual)
+             'gs://jackpot-sequences/test/R1.fastq.gz', :scrub, :qual, :pii)
         RETURNING *
         """,
         {
@@ -171,6 +172,7 @@ def _insert_sample(
             "org": organism_name,
             "scrub": scrub_status,
             "qual": quality_status,
+            "pii": pii_scan_status,
         },
     )
     return rows[0]
@@ -1403,4 +1405,59 @@ async def test_promote_zoo_to_lab_invalid_state_returns_400(client, as_platform_
         assert resp.status_code == 400
         assert resp.json()["error"]["code"] == "INVALID_PROMOTION"
     finally:
+        _cleanup_catalog_by_id(cat_id)
+
+
+@pytest.mark.asyncio
+async def test_launch_refuses_a_pii_flagged_sample(client, as_platform_admin):
+    """Critical Rule 43 at the launch route, not just the pure function.
+
+    The check reads ``pii_scan_status`` off the row the router selects, so
+    the unit tests in ``tests/test_pipeline_pii_block.py`` pass unchanged
+    if the column is dropped from that SELECT. This is the end that pins
+    the wiring: the catalog opts into nothing, so the 422 can only come
+    from the PII block.
+    """
+    prefix = _unique("PII")
+    _cleanup_samples(prefix)
+    sample = _insert_sample(f"{prefix}-A", pii_scan_status="PII_DETECTED")
+    cat_id = _insert_catalog(pipeline_name=_unique("jp-pii"), compatibility_rules={})
+    try:
+        resp = await client.post(
+            "/api/v1/pipelines/launch",
+            json={
+                "pipeline_id": cat_id,
+                "sample_ids": [sample["sample_id"]],
+                "project_id": SEED_PROJECT_ID,
+            },
+        )
+        assert resp.status_code == 422, resp.text
+        blocks = resp.json()["error"]["detail"]["hard_blocks"]
+        assert [b["sample_id"] for b in blocks] == [f"{prefix}-A"]
+        assert "PII" in blocks[0]["reason"]
+    finally:
+        _cleanup_samples(prefix)
+        _cleanup_catalog_by_id(cat_id)
+
+
+@pytest.mark.asyncio
+async def test_launch_allows_a_sample_the_scan_has_not_reached(client, as_platform_admin):
+    """PENDING must not block a launch — see _check_pii_scan_status."""
+    prefix = _unique("PIIP")
+    _cleanup_samples(prefix)
+    sample = _insert_sample(f"{prefix}-A", pii_scan_status="PENDING")
+    cat_id = _insert_catalog(pipeline_name=_unique("jp-piip"), compatibility_rules={})
+    try:
+        resp = await client.post(
+            "/api/v1/pipelines/launch",
+            json={
+                "pipeline_id": cat_id,
+                "sample_ids": [sample["sample_id"]],
+                "project_id": SEED_PROJECT_ID,
+            },
+        )
+        assert resp.status_code == 201, resp.text
+        _cleanup_run(resp.json()["data"]["run_id"])
+    finally:
+        _cleanup_samples(prefix)
         _cleanup_catalog_by_id(cat_id)
