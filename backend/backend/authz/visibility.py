@@ -1,6 +1,9 @@
 """SQL list-filtering companion to ``permit()`` (access_model.md §5.2).
 
-Dark in M1: wired into no route. ``visibility_sql_clause()`` is a pure
+``sample_list_clause()`` is what ``GET /api/v1/samples/`` filters on
+(``routers/samples.py``); the docstring said "dark in M1: wired into no
+route" for some time after that stopped being true.
+``visibility_sql_clause()`` is a pure
 compiler — it takes a principal and a capability and produces a
 parameterized WHERE fragment (``:name`` bind convention, ready for
 ``sqlalchemy.text()``) that evaluates TRUE for exactly the rows

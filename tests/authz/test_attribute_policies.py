@@ -24,13 +24,19 @@ from backend.authz import (
     visibility_sql_clause,
 )
 from backend.authz.policy import LADDER_POLICIES
+from backend.authz.principal import SAMPLE_ATTRIBUTE_COLUMNS
 from backend.authz.scope import scope_uri
 
-ATTR_COLUMNS = {
-    "sharing_level": "s.sharing_level",
-    "surveillance_relevant": "s.surveillance_relevant",
-    "owner_id": "s.owner_id",
-}
+# The shared map, not a local copy. A copy is what broke when Rule 43's query
+# gate (#266) added a fourth attribute to the policies: the two halves cannot
+# name different columns, which is the whole reason principal.py owns one map,
+# and a test file holding its own defeats that for the test.
+ATTR_COLUMNS = SAMPLE_ATTRIBUTE_COLUMNS
+
+#: Every row below is clean. Rule 43's suspension of these rungs is this
+#: file's neighbour, test_pii_flag_suspends_open_rungs.py; here the flag is
+#: held constant so the rungs are what varies.
+CLEAN = "COMPLETE"
 
 # (sharing_level, surveillance_relevant, owner_id) for one lab-1 sample.
 ROWS = [
@@ -64,6 +70,7 @@ def _resource(row, i):
             "sharing_level": sharing,
             "surveillance_relevant": surveillance,
             "owner_id": owner,
+            "pii_scan_status": CLEAN,
         },
     )
 
@@ -80,14 +87,16 @@ def _sql_visible(principal, capability):
     conn.execute("CREATE TABLE labs (id INTEGER PRIMARY KEY, organization_id INTEGER)")
     conn.execute(
         "CREATE TABLE samples (id INTEGER PRIMARY KEY, lab_id INTEGER, project_id INTEGER, "
-        "sharing_level TEXT, surveillance_relevant BOOLEAN, owner_id INTEGER)"
+        "sharing_level TEXT, surveillance_relevant BOOLEAN, owner_id INTEGER, "
+        "pii_scan_status TEXT, deletion_status TEXT, deletion_requested_by_user_id INTEGER)"
     )
     conn.execute("INSERT INTO labs (id, organization_id) VALUES (1, 1)")
     for i, (sharing, surveillance, owner) in enumerate(ROWS, start=1):
         conn.execute(
             "INSERT INTO samples (id, lab_id, project_id, sharing_level, "
-            "surveillance_relevant, owner_id) VALUES (?, 1, 2, ?, ?, ?)",
-            (i, sharing, 1 if surveillance else 0, owner),
+            "surveillance_relevant, owner_id, pii_scan_status) "
+            "VALUES (?, 1, 2, ?, ?, ?, ?)",
+            (i, sharing, 1 if surveillance else 0, owner, CLEAN),
         )
     got = {
         r[0]

@@ -180,6 +180,23 @@ def evaluate_deny(
 
 _ROOT = "instance://self"
 
+#: Critical Rule 43's query gate, carried by every rung that opens a row to a
+#: principal with no tie to it. The rule is "a flagged sample is blocked from
+#: queries until a Lab Director overrides or the submitter fixes the flagged
+#: fields", and both of those exits require *reading* the sample first — so it
+#: cannot be a DENY. Deny-wins admits no exception, and a DENY on
+#: sample:read_detail would blind the submitter and the Lab Director along with
+#: everyone else. Suspending the open rungs leaves ownership and the lab-scoped
+#: grants untouched, which is exactly the population Rule 43 names as the way
+#: out.
+#:
+#: ``{"not": ...}`` against the flagged value rather than ``{"in": [...]}`` of
+#: the good ones: PENDING means the scan job has not reached the row yet, and
+#: an allowlist would make every freshly ingested PUBLIC sample invisible for
+#: one job interval — a narrowing nobody asked for, in a gate about PII that
+#: has not been found.
+_NOT_FLAGGED = {"not": "PII_DETECTED"}
+
 LADDER_POLICIES: list[dict[str, Any]] = [
     # PUBLIC is readable by anyone — §5 names this as THE example of an ALLOW
     # policy granting a path the scope-grants alone would not.
@@ -187,13 +204,19 @@ LADDER_POLICIES: list[dict[str, Any]] = [
         "effect": "ALLOW",
         "capability": "sample:read",
         "scope_ref": _ROOT,
-        "resource": {"sharing_level": "PUBLIC"},
+        "resource": {
+            "sharing_level": "PUBLIC",
+            "pii_scan_status": _NOT_FLAGGED,
+        },
     },
     {
         "effect": "ALLOW",
         "capability": "sample:read_detail",
         "scope_ref": _ROOT,
-        "resource": {"sharing_level": "PUBLIC"},
+        "resource": {
+            "sharing_level": "PUBLIC",
+            "pii_scan_status": _NOT_FLAGGED,
+        },
     },
     # DISCOVERABLE is list-visible only. can_see_sample allows it;
     # can_access_sample explicitly does not ("DISCOVERABLE alone is NOT
@@ -203,7 +226,10 @@ LADDER_POLICIES: list[dict[str, Any]] = [
         "effect": "ALLOW",
         "capability": "sample:read",
         "scope_ref": _ROOT,
-        "resource": {"sharing_level": "DISCOVERABLE"},
+        "resource": {
+            "sharing_level": "DISCOVERABLE",
+            "pii_scan_status": _NOT_FLAGGED,
+        },
     },
     # Surveillance oversight: the legacy rung was `is_data_analyst AND
     # surveillance_relevant`. The flag becomes a held capability, so the rule
@@ -214,14 +240,20 @@ LADDER_POLICIES: list[dict[str, Any]] = [
         "effect": "ALLOW",
         "capability": "sample:read",
         "scope_ref": _ROOT,
-        "resource": {"surveillance_relevant": True},
+        "resource": {
+            "surveillance_relevant": True,
+            "pii_scan_status": _NOT_FLAGGED,
+        },
         "requires_capability": "sample:read_surveillance",
     },
     {
         "effect": "ALLOW",
         "capability": "sample:read_detail",
         "scope_ref": _ROOT,
-        "resource": {"surveillance_relevant": True},
+        "resource": {
+            "surveillance_relevant": True,
+            "pii_scan_status": _NOT_FLAGGED,
+        },
         "requires_capability": "sample:read_surveillance",
     },
     # Ownership. §5's mapping table calls this "a Sample-scope grant", but

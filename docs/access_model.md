@@ -134,10 +134,10 @@ Resource:
     id:          int | str
     scope_ref:   ScopeRef        # where this resource sits in the tree
     attributes:  dict[str, Any]  # everything policies read: sharing_level, surveillance_relevant,
-                                 # contains_pii, organism, deletion_status, owner_id, ...
+                                 # pii_scan_status, organism, deletion_status, owner_id, ...
 ```
 
-A sample's `attributes` carries the fields today's `_base_access` ladder reads (`sharing_level`, `surveillance_relevant`, `owner_id`) plus the new ones the model needs (`deletion_status`, `contains_pii`, `origin_instance` for federated data). The resource's `scope_ref` is what the containment check uses; its `attributes` are what the attribute-policies (§2.5) read.
+A sample's `attributes` carries the fields today's `_base_access` ladder reads (`sharing_level`, `surveillance_relevant`, `owner_id`) plus the new ones the model needs (`deletion_status`, `pii_scan_status`, `origin_instance` for federated data). The column is `pii_scan_status`, not the `contains_pii` this section named until #266 — no such column or attribute ever existed, which is the §2.4 instance of Critical Rule 70: a name written from the plan reads exactly like one written from the code. The resource's `scope_ref` is what the containment check uses; its `attributes` are what the attribute-policies (§2.5) read.
 
 ### 2.5 Policy — the *contextual rules*
 
@@ -312,6 +312,20 @@ Each capability is `domain:action`. Where a capability mutates state, the table 
 | `sample:soft_delete` | Soft-delete (recoverable) | `SOFT_DELETE_SAMPLE` |
 | `sample:hard_delete` | Permanent deletion | `HARD_DELETE_SAMPLE` |
 | `sample:pii_override` | Release a sample the DLP scan flagged (Critical Rule 43) — moves `pii_scan_status` from `PII_DETECTED` to `OVERRIDDEN`, unblocking queries, pipelines and export. Confers no read authority of its own | `OVERRIDE_PII_FLAG` |
+
+Rule 43's *query* half is not a capability at all. `PII_DETECTED` suspends the
+three `LADDER_POLICIES` rungs that open a row to a principal with no tie to it
+— PUBLIC (`sample:read`, `sample:read_detail`), DISCOVERABLE (`sample:read`),
+and surveillance-relevance (`sample:read`, `sample:read_detail`) — by carrying
+`{"not": "PII_DETECTED"}` on `pii_scan_status` in each rung's `resource`
+predicate. It is deliberately not a DENY: deny-wins admits no exception, and a
+DENY on `sample:read_detail` would blind the submitter and the Lab Director
+along with everyone else — the two people Rule 43 names as the way out. The
+`owner_id` rungs and the lab-scoped grants are untouched, so the row's own
+people keep seeing it; a stranger, a federated peer (§7.4) and a
+surveillance-relevance reader do not. An individually-approved cross-lab
+access grant is a *grant*, not a policy, so no resource predicate narrows it —
+suspending those would need the DENY this gate refuses to be.
 
 `sample:read_surveillance` is the capability that the immune-platform and federation consuming-workflows depend on (§6, §7). It is the clean replacement for the `is_data_analyst` boolean — instead of a global flag, it is a capability granted at Instance scope to whoever does surveillance oversight.
 
