@@ -298,6 +298,9 @@ def authenticate_federation_peer(request: Request, conn: Any = None) -> dict[str
     presented = request.headers.get(FEDERATION_KEY_HEADER)
     if not presented:
         return None
+    # Strip after the emptiness check, not before: a whitespace-only header is
+    # truthy, and it has to reach the per-row blank-secret guard below.
+    presented = presented.strip()
 
     rows = execute_query(
         "SELECT * FROM federated_instances WHERE federation_enabled = TRUE",
@@ -320,7 +323,21 @@ def authenticate_federation_peer(request: Request, conn: Any = None) -> dict[str
         # or an editor often carry a trailing newline in the store, which
         # would otherwise permanently fail the constant-time comparison and
         # lock out a correctly-configured peer.
-        if hmac.compare_digest(presented.strip(), expected.strip()):
+        expected = expected.strip()
+        # ...which is also why a blank stored secret has to be refused here
+        # rather than left to the comparison. A whitespace-only header strips
+        # to "" and so does this secret, making both sides of compare_digest
+        # equal and authenticating the caller as that peer. Skip, matching the
+        # treatment of a row with no secret_name: a misconfigured instance
+        # authenticates nobody.
+        if not expected:
+            logger.warning(
+                "federation auth: instance %s has a blank stored secret (%s); skipping",
+                row.get("name"),
+                secret_name,
+            )
+            continue
+        if hmac.compare_digest(presented, expected):
             return row
     return None
 

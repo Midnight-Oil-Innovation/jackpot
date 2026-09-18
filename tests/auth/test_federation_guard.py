@@ -173,6 +173,42 @@ def test_authenticate_matches_correct_instance_among_many(fed_credentials):
     assert row["name"] == "b"
 
 
+@pytest.mark.parametrize("stored_secret", ["", "\n", "   "])
+def test_authenticate_rejects_whitespace_header_against_blank_secret(
+    fed_credentials, stored_secret
+):
+    """A stored secret that strips to "" must never match. See guards.py.
+
+    Blank values reach the guard from FileBackend (YAML ``key: ""``) and
+    from a GCP secret with an empty payload; EnvVarBackend cannot produce
+    one -- it treats a blank env var as not-set.
+    """
+    fed_credentials.set("fed/peer/key", stored_secret)
+    _register_instance(name="peer", api_key_secret_name="fed/peer/key")
+
+    request = _build_request({FEDERATION_KEY_HEADER: "   "})
+    assert authenticate_federation_peer(request) is None
+
+
+def test_authenticate_still_matches_a_secret_stored_with_a_trailing_newline(
+    fed_credentials,
+):
+    """Pins the trailing-newline tolerance the blank-secret guard sits on.
+
+    Dropping ``expected.strip()`` while keeping ``if not expected`` still
+    passes the test above and silently locks out every peer whose secret
+    was stored with a trailing newline. This is the test that goes red.
+    """
+    fed_credentials.set("fed/peer/key", "peer-secret\n")
+    peer = _register_instance(name="peer", api_key_secret_name="fed/peer/key")
+
+    request = _build_request({FEDERATION_KEY_HEADER: "peer-secret"})
+    row = authenticate_federation_peer(request)
+
+    assert row is not None
+    assert row["id"] == peer["id"]
+
+
 # ---------------------------------------------------------------------------
 # require_federation_peer
 # ---------------------------------------------------------------------------
