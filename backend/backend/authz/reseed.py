@@ -174,6 +174,13 @@ PRESET_GRANTS: dict[str, list[str]] = {
         # hand repository-retraction to every future preset that gains
         # submission approval for submission reasons.
         "submission:retract",
+        # Critical Rule 43's named escape: a flagged sample is blocked "until a
+        # Lab Director overrides". Lab-scoped, and in this preset alone -- the
+        # instance administrator holds no content-plane sample verb (§8.2's
+        # note), and deciding that flagged free text is safe to release means
+        # reading it, which is the judgment §8.2 keeps inside the lab. It sits
+        # next to sample:read_unscrubbed for the same reason.
+        "sample:pii_override",
     ],
     "lab_member_rw": [
         # M2-B4. §8.2's note on this preset says a member "can run pipelines

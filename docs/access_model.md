@@ -311,6 +311,7 @@ Each capability is `domain:action`. Where a capability mutates state, the table 
 | `sample:archive` | Archive a sample | `ARCHIVE_SAMPLE` |
 | `sample:soft_delete` | Soft-delete (recoverable) | `SOFT_DELETE_SAMPLE` |
 | `sample:hard_delete` | Permanent deletion | `HARD_DELETE_SAMPLE` |
+| `sample:pii_override` | Release a sample the DLP scan flagged (Critical Rule 43) — moves `pii_scan_status` from `PII_DETECTED` to `OVERRIDDEN`, unblocking queries, pipelines and export. Confers no read authority of its own | `OVERRIDE_PII_FLAG` |
 
 `sample:read_surveillance` is the capability that the immune-platform and federation consuming-workflows depend on (§6, §7). It is the clean replacement for the `is_data_analyst` boolean — instead of a global flag, it is a capability granted at Instance scope to whoever does surveillance oversight.
 
@@ -877,7 +878,7 @@ Preset "Lab Lead":
                 pipeline:read, pipeline:register_custom, org:manage,
                 lab:read, org:read, import:read, import:manage,
                 sample:read_unscrubbed, deletion:read_report,
-                submission:retract, user:manage
+                submission:retract, user:manage, sample:pii_override
   note: deletion:approve here is the ordinary intra-lab path; the §6.2 1b
         separation-of-duties DENY still forbids approving one's own request.
         The three M2-DROP-PRE verbs land here because the routes they name all

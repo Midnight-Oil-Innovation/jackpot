@@ -484,6 +484,8 @@ class PIIScanStatusEnum(str, Enum):
     PII_DETECTED = "PII_DETECTED"
 
     FAILED = "FAILED"
+    # Flagged for PII, then released by a Lab Director holding sample:pii_override. Distinct from COMPLETE, which means the scan found nothing
+    OVERRIDDEN = "OVERRIDDEN"
 
 
 

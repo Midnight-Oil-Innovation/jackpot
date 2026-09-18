@@ -4115,7 +4115,8 @@
                 "PENDING",
                 "COMPLETE",
                 "PII_DETECTED",
-                "FAILED"
+                "FAILED",
+                "OVERRIDDEN"
             ],
             "title": "PIIScanStatusEnum",
             "type": "string"

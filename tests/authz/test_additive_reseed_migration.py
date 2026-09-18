@@ -10,6 +10,9 @@ runs*. `reseed()` being correct in isolation says nothing about whether the
 cutover will actually have grants to check against.
 """
 
+import importlib.util
+from pathlib import Path
+
 from sqlalchemy import text
 
 from backend.authz.reseed import GRANT_SOURCE, PRESET_GRANTS
@@ -129,5 +132,79 @@ def test_downgrade_removes_only_what_the_migration_issued():
                 )
             ).scalar_one()
             assert survived == 1, "downgrade must not remove grants it did not issue"
+        finally:
+            trans.rollback()
+
+
+def test_cab9f75533cb_issues_the_pii_override_grant_to_lab_directors():
+    """The Critical Rule 43 override migration, run against a savepoint.
+
+    Observed by deleting the grant and re-issuing it rather than by reading a
+    migrated database: ``b2f47c1a9e30`` above calls ``reseed()``, which reads
+    ``PRESET_GRANTS`` live, so on a database built from empty the seeded Lab
+    Director already holds ``sample:pii_override`` before cab9f75533cb runs.
+    Asserting the row exists after ``upgrade head`` would pass with the
+    migration's WHERE clause pointed at a permission group that does not exist
+    — verified by hand, Critical Rule 74. The deployments that need these rows
+    are the ones where ``b2f47c1a9e30`` ran against the older preset.
+    """
+    module_path = (
+        Path(__file__).resolve().parents[2]
+        / "backend/db/migrations/versions"
+        / "cab9f75533cb_grant_sample_pii_override_to_lab_leads.py"
+    )
+    spec = importlib.util.spec_from_file_location("_mig_cab9f75533cb", module_path)
+    assert spec and spec.loader
+    migration = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(migration)
+
+    lab_scope = scope_uri(org=1, lab=1)
+    engine, _ = _get_engine()
+    with engine.begin() as conn:
+        trans = conn.begin_nested()
+        try:
+            director = conn.execute(
+                text(
+                    "SELECT lm.user_id FROM lab_membership lm "
+                    "JOIN permission_groups pg ON pg.id = lm.permission_group_id "
+                    "JOIN users u ON u.id = lm.user_id "
+                    "WHERE pg.name = 'Lab Director' AND u.email = 'admin@example.org' "
+                    "AND lm.lab_id = 1"
+                )
+            ).scalar_one()
+
+            conn.execute(
+                text("DELETE FROM authz_capability_grants WHERE capability = 'sample:pii_override'")
+            )
+            assert not conn.execute(
+                text(
+                    "SELECT 1 FROM authz_capability_grants WHERE capability = 'sample:pii_override'"
+                )
+            ).first()
+
+            migration.issue_grants(conn)
+
+            row = conn.execute(
+                text(
+                    "SELECT source FROM authz_capability_grants "
+                    "WHERE capability = 'sample:pii_override' "
+                    "AND principal_id = :p AND scope_ref = :s"
+                ),
+                {"p": str(director), "s": lab_scope},
+            ).first()
+            assert row, "the seeded Lab Director must hold the override at their lab"
+            # source = 'reseed' so a later membership sync owns the row rather
+            # than leaving it behind when the membership changes.
+            assert row[0] == GRANT_SOURCE
+
+            # Lab-scoped, not instance-scoped: an instance grant would confer
+            # the verb over every lab on the deployment.
+            assert not conn.execute(
+                text(
+                    "SELECT 1 FROM authz_capability_grants "
+                    "WHERE capability = 'sample:pii_override' AND scope_ref = :s"
+                ),
+                {"s": scope_uri()},
+            ).first()
         finally:
             trans.rollback()
