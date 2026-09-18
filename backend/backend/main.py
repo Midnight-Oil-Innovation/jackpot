@@ -19,6 +19,7 @@ from backend.jobs import (
     propagate_federation_deletion_events_job,
     release_embargoed_submissions,
     run_access_request_job,
+    run_pii_scan_job,
     run_scrubber_queue_job,
     vacuum_tombstoned_samples_job,
     verify_file_references,
@@ -113,6 +114,14 @@ async def lifespan(app: FastAPI):
             "interval",
             seconds=get_settings().full_hash_interval_seconds,
             id="compute_full_content_hash",
+            replace_existing=True,
+            max_instances=1,
+        )
+        scheduler.add_job(
+            run_pii_scan_job,
+            "interval",
+            seconds=get_settings().pii_scan_interval_seconds,
+            id="pii_scan",
             replace_existing=True,
             max_instances=1,
         )

@@ -86,6 +86,10 @@ class Settings(BaseSettings):
     compute_sra_full_hash: bool = False
     skip_remote_full_hash: bool = False
 
+    # Critical Rule 43: DLP metadata scan background job
+    pii_scan_interval_seconds: int = 300
+    pii_scan_max_seconds_per_tick: int = 600
+
     # Phase P0f F-5: verify_file_references background job
     verification_interval_seconds: int = 86400  # 24 hours
     verification_files_per_tick: int = 100

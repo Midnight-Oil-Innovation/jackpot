@@ -17,6 +17,7 @@ Supported jobs
 - ``verify_file_references``        — F-5 broken-file detector
 - ``release_embargoed_submissions`` — I-2 embargo release
 - ``run_access_request_job``        — sample-access auto-approve / expiry
+- ``run_pii_scan_job``              — Rule 43 DLP metadata scan
 
 Exit codes
 ----------
@@ -39,6 +40,7 @@ _JOBS = {
         "from backend.jobs import release_embargoed_submissions as j"
     ),
     "run_access_request_job": "from backend.jobs import run_access_request_job as j",
+    "run_pii_scan_job": "from backend.jobs import run_pii_scan_job as j",
 }
 
 

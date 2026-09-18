@@ -23,6 +23,7 @@ from backend.audit import AuditActions, log_audit
 from backend.authz.reseed import sync_sample_access_grants
 from backend.config import get_settings
 from backend.database import execute_query, execute_write, get_db
+from backend.dlp_scanner import scan_sample_metadata
 from backend.file_fingerprint import cheap_fingerprint
 from backend.notifications import NotificationEvents, create_notification
 from backend.submission_executors.redaction import redact_credential_values_bytes
@@ -55,6 +56,11 @@ def _get_repo_lock(repo: str) -> asyncio.Lock:
 logger = logging.getLogger(__name__)
 
 FULL_HASH_CHUNK_SIZE = 8 * 1024 * 1024  # 8 MB streaming buffer for SHA-256.
+
+# Cap on rows loaded per PII-scan tick. ``SELECT *`` on samples is wide,
+# and the wall-clock budget below would stop the loop long before a
+# larger batch was consumed anyway.
+PII_SCAN_ROWS_PER_TICK = 500
 
 # Phase P0f F-9: streaming-copy chunk size for ``promote_file_storage``.
 # The runtime value is ``settings.promote_chunk_size_mb * 1024 * 1024``;
@@ -2211,3 +2217,127 @@ def vacuum_tombstoned_samples_job() -> dict:
     if vacuumed or retried:
         logger.info("vacuum job: %s vacuumed, %s retries cleared", vacuumed, retried)
     return {"vacuumed": vacuumed, "retries_cleared": retried}
+
+
+async def run_pii_scan_job() -> dict[str, int]:
+    """Scan samples sitting at ``pii_scan_status = 'PENDING'`` for PII.
+
+    Critical Rule 43 says every free-text field is DLP-scanned and that
+    ``pii_scan_status`` works like ``scrub_status``. Ingest sets PENDING
+    (``routers/ingest.py``) and, until this job existed, nothing ever
+    moved a row off it — ``backend/dlp_scanner.py`` had no production
+    call site at all (issue #261). This is the half that calls it.
+
+    Three outcomes per row, and the distinction between the last two is
+    the whole point: ``scan_sample_metadata`` reports an API outage as
+    ``DLPScanResult(clean=False, error=...)``, so branching on ``clean``
+    alone would mark every sample PII_DETECTED while Cloud DLP is down.
+
+    What PII_DETECTED then *does* is, as of this commit, nothing: Rule 43
+    says such samples are blocked from queries, pipelines and export until
+    a Lab Director overrides, and no code enforces that yet — grep the
+    column, the only readers are this job and ``validator.py``'s
+    ``VALID_PII_STATUSES``. The enforcement half is a visibility filter,
+    which is authorization-path work and lands separately. Setting the
+    flag correctly is still the prerequisite for it.
+
+    Returns a counts dict for monitoring. Idempotent: the UPDATE is
+    conditional on the row still being PENDING, and a row that has left
+    PENDING is never re-selected.
+    """
+    settings = get_settings()
+    counters = {"scanned": 0, "flagged": 0, "errors": 0, "skipped": 0, "raced": 0}
+
+    if not settings.dlp_enabled:
+        # Deliberately a no-op rather than writing COMPLETE. The scanner
+        # short-circuits to clean=True when DLP is off, so running anyway
+        # would durably record "scanned, no PII" for samples nothing ever
+        # looked at -- and they would never be re-selected once an
+        # operator turned DLP on. PENDING is the honest state for them.
+        return counters
+
+    deadline = monotonic() + settings.pii_scan_max_seconds_per_tick
+    rows = execute_query(
+        # SELECT * because the scanner decides which columns are free text
+        # from the LinkML schema, not from a list kept in sync by hand.
+        "SELECT * FROM samples "
+        "WHERE pii_scan_status = 'PENDING' AND deleted_at IS NULL "
+        "ORDER BY ingest_timestamp ASC "
+        "LIMIT :limit",
+        {"limit": PII_SCAN_ROWS_PER_TICK},
+    )
+
+    for row in rows:
+        if monotonic() >= deadline:
+            counters["skipped"] += 1
+            continue
+
+        # scan_sample_metadata is a blocking HTTPS call to Cloud DLP
+        # (~200-500ms each); calling it directly would stall the whole
+        # scheduler for the length of the batch.
+        result = await asyncio.to_thread(scan_sample_metadata, row)
+
+        if result.error is not None:
+            # The exception string is deliberately not repeated here.
+            # dlp_scanner already logs it once, and it is str(e) off a
+            # Cloud DLP client error -- an INVALID_ARGUMENT body can echo
+            # the request back, and the request is the free-text being
+            # scanned. One copy in the logs is one too many already; two
+            # is this job's doing.
+            logger.warning(
+                "run_pii_scan_job: scan failed for sample %s, left PENDING "
+                "(dlp_scanner logged the cause)",
+                row["sample_id"],
+            )
+            counters["errors"] += 1
+            continue
+
+        status = "COMPLETE" if result.clean else "PII_DETECTED"
+        with get_db() as db:
+            # RETURNING per Critical Rule 40, and load-bearing: the WHERE
+            # clause is what makes a racing tick or a manual trigger
+            # harmless, so an empty result means this row was decided by
+            # someone else. Auditing "PENDING -> PII_DETECTED" for a write
+            # that did not happen would put a fact in the audit log that
+            # is not one.
+            updated = execute_write(
+                "UPDATE samples SET pii_scan_status = :status "
+                "WHERE id = :id AND pii_scan_status = 'PENDING' "
+                "RETURNING id",
+                {"status": status, "id": row["id"]},
+                conn=db,
+            )
+            if not updated:
+                counters["raced"] += 1
+                continue
+            if not result.clean:
+                log_audit(
+                    action=AuditActions.PII_SCAN_FLAGGED,
+                    actor_id=None,
+                    resource_type="sample",
+                    resource_id=str(row["id"]),
+                    before={"pii_scan_status": "PENDING"},
+                    after={"pii_scan_status": status},
+                    # Field names and infoTypes only. The matched text is
+                    # the PII; the scanner redacts it to first+last
+                    # character for audit, and even that does not need to
+                    # be here to act on the finding.
+                    metadata={
+                        "findings": [
+                            {
+                                "field_name": f.field_name,
+                                "info_type": f.info_type,
+                                "likelihood": f.likelihood,
+                            }
+                            for f in result.findings
+                        ]
+                    },
+                    db_conn=db,
+                )
+                counters["flagged"] += 1
+
+        counters["scanned"] += 1
+
+    if any(counters.values()):
+        logger.info("run_pii_scan_job: %s", json.dumps(counters))
+    return counters
