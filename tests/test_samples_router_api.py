@@ -172,6 +172,16 @@ def _insert_sample(
     return rows[0]
 
 
+def _pii_status(sample_pk: int) -> str:
+    """Read the column back, rather than trusting a refusal's status code.
+
+    A guard that returns 403 while still writing the row is the failure the
+    negative tests below are actually about.
+    """
+    rows = execute_query("SELECT pii_scan_status FROM samples WHERE id = :id", {"id": sample_pk})
+    return rows[0]["pii_scan_status"]
+
+
 @pytest.fixture
 def as_platform_admin(monkeypatch):
     _switch_user("admin@example.org", monkeypatch)
@@ -817,4 +827,164 @@ async def test_patching_a_clean_sample_does_not_send_it_back_for_scanning(
     resp = await client.patch(f"/api/v1/samples/{s['id']}", json={"comments": "edited"})
     assert resp.status_code == 200, resp.text
     assert resp.json()["data"]["pii_scan_status"] == "COMPLETE"
+    _cleanup_samples(sid)
+
+
+# ─────────────── Critical Rule 43 — the Lab Director override ────────────────
+
+
+def _make_lab_director(email: str, monkeypatch) -> int:
+    _cleanup_users([email])
+    uid = _make_user(email)
+    _add_membership(uid, SEED_LAB_ID, "Lab Director", is_director=True)
+    sync_grants_from_legacy_roles()
+    _switch_user(email, monkeypatch)
+    return uid
+
+
+@pytest.mark.asyncio
+async def test_a_lab_director_can_release_a_flagged_sample(client, monkeypatch):
+    """Rule 43's first way off PII_DETECTED, and the reason for OVERRIDDEN.
+
+    The new status is not COMPLETE: the scanner reporting it found nothing
+    and a person deciding what it found is releasable are different facts,
+    and only one of them needs a name attached.
+    """
+    sid = "H-PII-OVERRIDE"
+    email = "pii_director@test.com"
+    _cleanup_samples(sid)
+    s = _insert_sample(sid, comments="call Jane Roe", pii_scan_status="PII_DETECTED")
+    uid = _make_lab_director(email, monkeypatch)
+
+    resp = await client.post(
+        f"/api/v1/samples/{s['id']}/pii-override",
+        json={"reason": "Reviewed; the name is the submitting PI, not a subject."},
+    )
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["data"]["pii_scan_status"] == "OVERRIDDEN"
+
+    rows = execute_query(
+        "SELECT actor_id, metadata FROM audit_log WHERE resource_type = 'sample' "
+        "AND resource_id = :rid AND action = 'OVERRIDE_PII_FLAG' ORDER BY id DESC LIMIT 1",
+        {"rid": str(s["id"])},
+    )
+    assert rows, "the override must be audited — it is the record of the decision"
+    assert rows[0]["actor_id"] == uid
+    assert "submitting PI" in rows[0]["metadata"]["reason"]
+
+    _cleanup_samples(sid)
+    _cleanup_users([email])
+
+
+@pytest.mark.asyncio
+async def test_a_collaborator_cannot_release_a_flagged_sample(client, monkeypatch):
+    sid = "H-PII-OVERRIDE-DENY"
+    email = "pii_collab@test.com"
+    _cleanup_samples(sid)
+    s = _insert_sample(sid, pii_scan_status="PII_DETECTED")
+    _cleanup_users([email])
+    uid = _make_user(email)
+    _add_membership(uid, SEED_LAB_ID, "Lab Collaborator", is_director=False)
+    sync_grants_from_legacy_roles()
+    _switch_user(email, monkeypatch)
+
+    resp = await client.post(
+        f"/api/v1/samples/{s['id']}/pii-override", json={"reason": "looks fine to me"}
+    )
+    assert resp.status_code == 403, resp.text
+    assert _pii_status(s["id"]) == "PII_DETECTED"
+
+    _cleanup_samples(sid)
+    _cleanup_users([email])
+
+
+@pytest.mark.asyncio
+async def test_the_platform_admin_does_not_hold_the_override(client, monkeypatch):
+    """Deliberate, and the canary for it.
+
+    ``sample:pii_override`` is in the lab_lead preset alone. The instance
+    administrator holds no content-plane sample verb (§8.2's note), and
+    judging whether flagged free text is releasable means reading it. If
+    someone later adds the verb to the admin preset, this test is what says
+    so — nothing else would notice.
+
+    A fresh admin with no lab membership, NOT the ``as_platform_admin``
+    fixture: the baseline migration seeds ``admin@example.org`` as Lab
+    Director of lab 1 as well, so that identity holds the verb through its
+    membership. Reusing it would make this pass on the admin preset's
+    behalf while actually proving nothing about the admin preset.
+    """
+    sid = "H-PII-OVERRIDE-ADMIN"
+    email = "pii_pure_admin@test.com"
+    _cleanup_samples(sid)
+    _cleanup_users([email])
+    s = _insert_sample(sid, pii_scan_status="PII_DETECTED")
+    _make_user(email, is_platform_admin=True)
+    _switch_user(email, monkeypatch)
+
+    resp = await client.post(
+        f"/api/v1/samples/{s['id']}/pii-override", json={"reason": "admin override"}
+    )
+    assert resp.status_code == 403, resp.text
+    assert _pii_status(s["id"]) == "PII_DETECTED"
+    _cleanup_samples(sid)
+    _cleanup_users([email])
+
+
+@pytest.mark.asyncio
+async def test_releasing_a_sample_that_was_never_flagged_is_refused(client, monkeypatch):
+    """409, not a no-op.
+
+    On PENDING it would pre-empt a scan that has not run yet; on COMPLETE it
+    would record a decision nobody had to make.
+    """
+    sid = "H-PII-OVERRIDE-UNFLAGGED"
+    email = "pii_director2@test.com"
+    _cleanup_samples(sid)
+    s = _insert_sample(sid, pii_scan_status="PENDING")
+    _make_lab_director(email, monkeypatch)
+
+    resp = await client.post(
+        f"/api/v1/samples/{s['id']}/pii-override", json={"reason": "pre-emptive"}
+    )
+    assert resp.status_code == 409, resp.text
+    assert _pii_status(s["id"]) == "PENDING"
+
+    _cleanup_samples(sid)
+    _cleanup_users([email])
+
+
+@pytest.mark.asyncio
+async def test_an_override_without_a_reason_is_refused(client, monkeypatch):
+    """The reason is the whole audit value of the endpoint."""
+    sid = "H-PII-OVERRIDE-NOREASON"
+    email = "pii_director3@test.com"
+    _cleanup_samples(sid)
+    s = _insert_sample(sid, pii_scan_status="PII_DETECTED")
+    _make_lab_director(email, monkeypatch)
+
+    resp = await client.post(f"/api/v1/samples/{s['id']}/pii-override", json={"reason": "   "})
+    assert resp.status_code == 422, resp.text
+    assert _pii_status(s["id"]) == "PII_DETECTED"
+
+    _cleanup_samples(sid)
+    _cleanup_users([email])
+
+
+@pytest.mark.asyncio
+async def test_an_overridden_sample_is_not_sent_back_for_scanning_by_an_edit(
+    client, as_platform_admin
+):
+    """The PATCH requeue fires on PII_DETECTED only.
+
+    Requeueing an overridden sample would let a later scan silently revoke a
+    decision a person made and signed for.
+    """
+    sid = "H-PII-OVERRIDE-PATCH"
+    _cleanup_samples(sid)
+    s = _insert_sample(sid, pii_scan_status="OVERRIDDEN")
+
+    resp = await client.patch(f"/api/v1/samples/{s['id']}", json={"comments": "edited"})
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["data"]["pii_scan_status"] == "OVERRIDDEN"
     _cleanup_samples(sid)

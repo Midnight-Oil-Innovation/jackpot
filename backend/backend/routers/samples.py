@@ -542,6 +542,76 @@ def archive_sample(
     return success(data={"id": sample_id, "is_archived": True})
 
 
+class PIIOverrideBody(BaseModel):
+    reason: str
+
+
+@router.post("/{sample_id}/pii-override")
+def override_pii_flag(
+    sample_id: int,
+    payload: PIIOverrideBody,
+    request: Request,
+    db=Depends(get_db_dep),  # noqa: B008
+):
+    """Release a DLP-flagged sample (Critical Rule 43).
+
+    Rule 43 blocks a flagged sample from queries, pipelines and export
+    "until a Lab Director overrides or the submitter fixes the flagged
+    fields". PATCH is the second path; this is the first.
+
+    ``OVERRIDDEN`` is its own status rather than a write back to
+    ``COMPLETE`` because the two mean different things: COMPLETE is the
+    scanner reporting it found nothing, OVERRIDDEN is a person deciding
+    what it found is acceptable to release. Collapsing them would make
+    "which flagged samples were released, and by whom" a question only
+    the audit log could answer. It also keeps the six Rule 43 gates
+    unchanged -- every one tests ``== 'PII_DETECTED'``, so an overridden
+    sample simply stops matching.
+    """
+    user = get_current_user(request)
+    sample = _get_sample(sample_id, db)
+    if not sample:
+        raise HTTPException(status_code=404, detail="Sample not found.")
+
+    require_capability("sample:pii_override")(user, sample_id=sample_id)
+
+    reason = payload.reason.strip()
+    if not reason:
+        raise HTTPException(
+            status_code=422,
+            detail="An override reason is required — it is the record of the decision.",
+        )
+
+    # Refusing anything but PII_DETECTED rather than treating the override as
+    # idempotent: on a PENDING sample it would pre-empt a scan that has not
+    # run, and on COMPLETE it would record a decision nobody had to make.
+    current = sample.get("pii_scan_status")
+    if current != "PII_DETECTED":
+        raise HTTPException(
+            status_code=409,
+            detail=f"Sample is not flagged for PII (pii_scan_status={current!r}).",
+        )
+
+    rows = execute_write(
+        "UPDATE samples SET pii_scan_status = 'OVERRIDDEN' WHERE id = :_id RETURNING *",
+        {"_id": sample_id},
+        conn=db,
+    )
+    overridden = rows[0] if rows else sample
+
+    log_audit(
+        action=AuditActions.OVERRIDE_PII_FLAG,
+        actor_id=user["id"],
+        resource_type="sample",
+        resource_id=str(sample_id),
+        before=_serialise(sample),
+        after=_serialise(overridden),
+        metadata={"reason": reason},
+        db_conn=db,
+    )
+    return success(data=_serialise(overridden))
+
+
 @router.get("/{sample_id}/files")
 def list_sample_files(
     sample_id: int,

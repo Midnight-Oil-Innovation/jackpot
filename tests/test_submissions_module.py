@@ -746,3 +746,39 @@ def test_a_sample_flagged_after_attachment_fails_readiness():
     assert any("PII" in i for i in issue.issues)
     _cleanup_submissions()
     _cleanup_samples()
+
+
+def test_an_overridden_sample_can_be_submitted_and_passes_readiness():
+    """The payoff of the Lab Director override (cab9f75533cb).
+
+    Rule 43 blocks a flagged sample "until a Lab Director overrides or the
+    submitter fixes the flagged fields". The route writes ``OVERRIDDEN``
+    rather than ``COMPLETE`` so the row keeps saying a person made the call;
+    it only unblocks anything because all three gates on this path test
+    ``== 'PII_DETECTED'``. Both of them are asserted here — the add-time gate
+    and the readiness gate — because the route's 200 says nothing about
+    either.
+    """
+    _cleanup_submissions()
+    _cleanup_samples()
+    first = _insert_sample("I2-SAMPLE-PII-OVERRIDDEN-A", pii_scan_status="OVERRIDDEN")
+    second = _insert_sample("I2-SAMPLE-PII-OVERRIDDEN-B", pii_scan_status="OVERRIDDEN")
+    with get_db() as db:
+        sub = create_submission(
+            user_id=SEED_USER_ID,
+            lab_id=SEED_LAB_ID,
+            target_repository="NCBI",
+            title="I2-PII-OVERRIDDEN",
+            sample_ids=[first],
+            conn=db,
+        )
+        add_samples_to_submission(
+            submission_id=sub["id"],
+            sample_ids=[second],
+            actor_id=SEED_USER_ID,
+            conn=db,
+        )
+        assert len(get_submission(sub["id"], db)["samples"]) == 2
+        assert validate_submission_readiness(sub["id"], db).valid is True
+    _cleanup_submissions()
+    _cleanup_samples()

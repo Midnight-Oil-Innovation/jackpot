@@ -64,3 +64,18 @@ def test_only_the_flagged_sample_of_a_batch_is_blocked() -> None:
     )
 
     assert [b["sample_id"] for b in report.hard_blocks] == ["FLAGGED-1"]
+
+
+def test_an_overridden_sample_is_not_blocked() -> None:
+    """The payoff half of the Lab Director override (cab9f75533cb).
+
+    ``POST /api/v1/samples/{id}/pii-override`` writes ``OVERRIDDEN`` rather
+    than ``COMPLETE`` so the audit trail can distinguish "the scanner found
+    nothing" from "a person decided what it found is releasable". That only
+    unblocks anything because every Rule 43 gate tests ``== 'PII_DETECTED'``
+    — a claim about the other end of the contract, so it is asserted here
+    rather than inferred from the route's 200.
+    """
+    report = compute_pipeline_compatibility(_CATALOG, [_sample("OVERRIDDEN")])
+
+    assert not report.is_hard_blocked

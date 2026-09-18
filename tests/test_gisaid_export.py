@@ -193,6 +193,27 @@ async def test_a_flagged_sample_refuses_the_whole_export(client, cleanup_sample)
 
 
 @pytest.mark.asyncio
+async def test_an_overridden_sample_exports(client, cleanup_sample):
+    """The payoff of the Lab Director override (cab9f75533cb).
+
+    ``OVERRIDDEN`` is a distinct status rather than a write back to
+    ``COMPLETE``, so "which flagged samples were released, and by whom" stays
+    answerable from the row and not only from the audit log. It unblocks
+    export because this gate tests ``== 'PII_DETECTED'`` — the other end of
+    that contract, asserted rather than assumed.
+    """
+    sample = _insert_sars_cov2_sample("EX-GISAID-PII-OVERRIDDEN", pii_scan_status="OVERRIDDEN")
+    cleanup_sample.append(sample["id"])
+
+    resp = await client.post(
+        f"/api/v1/gisaid/export/{SEED_LAB_ID}",
+        params={"pathogen": "SARS-CoV-2"},
+        json=[sample["id"]],
+    )
+    assert resp.status_code == 200, resp.text
+
+
+@pytest.mark.asyncio
 async def test_an_unscanned_sample_still_exports(client, cleanup_sample):
     """PENDING is not a refusal — see the pipeline-gate reasoning.
 
