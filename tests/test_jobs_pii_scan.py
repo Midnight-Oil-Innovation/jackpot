@@ -78,7 +78,8 @@ def test_a_dlp_outage_leaves_the_row_pending() -> None:
     # through the patch, so a scan that never ran would give errors=0 here
     # and pass every "no write happened" assertion below for the wrong
     # reason.
-    mocks["scan_sample_metadata"].assert_called_once_with(ROW)
+    assert mocks["scan_sample_metadata"].call_args.args[0] is ROW
+    assert mocks["scan_sample_metadata"].call_count == 1
     assert counters == _counters(errors=1)
     mocks["execute_write"].assert_not_called()
     mocks["log_audit"].assert_not_called()
@@ -180,3 +181,17 @@ def test_a_row_decided_by_another_tick_is_not_audited_again() -> None:
     assert counters == _counters(raced=1)
     mocks["execute_write"].assert_called_once()
     mocks["log_audit"].assert_not_called()
+
+
+def test_the_scan_call_is_bounded_by_what_is_left_of_the_tick_budget() -> None:
+    """The deadline check alone bounds nothing once the call is in flight.
+
+    ``scan_sample_metadata`` is a blocking HTTPS request; without a timeout
+    one hung call runs past ``pii_scan_max_seconds_per_tick``, and
+    ``max_instances=1`` turns that into ticks that never start.
+    """
+    with _patches(scan_result=DLPScanResult(clean=True), budget_seconds=30) as mocks:
+        asyncio.run(run_pii_scan_job())
+
+    (_row, timeout), _kwargs = mocks["scan_sample_metadata"].call_args
+    assert 0 < timeout <= 30

@@ -2268,14 +2268,19 @@ async def run_pii_scan_job() -> dict[str, int]:
     )
 
     for row in rows:
-        if monotonic() >= deadline:
+        remaining = deadline - monotonic()
+        if remaining <= 0:
             counters["skipped"] += 1
             continue
 
         # scan_sample_metadata is a blocking HTTPS call to Cloud DLP
         # (~200-500ms each); calling it directly would stall the whole
-        # scheduler for the length of the batch.
-        result = await asyncio.to_thread(scan_sample_metadata, row)
+        # scheduler for the length of the batch. The remaining budget goes
+        # to the API call as its timeout -- checking the deadline only
+        # before the call leaves one hung request able to run the tick
+        # arbitrarily long, and max_instances=1 turns that into skipped
+        # ticks rather than a slow one.
+        result = await asyncio.to_thread(scan_sample_metadata, row, remaining)
 
         if result.error is not None:
             # The exception string is deliberately not repeated here.
