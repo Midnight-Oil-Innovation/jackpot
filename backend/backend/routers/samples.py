@@ -471,8 +471,8 @@ async def update_sample(
     # PENDING so run_pii_scan_job re-decides it. Without this a flagged sample
     # is stuck behind a Lab Director even after the offending text is gone,
     # because nothing else moves a row back into the job's queue.
-    rescan = bool(updates.keys() & get_scannable_fields()) and (
-        sample.get("pii_scan_status") == "PII_DETECTED"
+    rescan = sample.get("pii_scan_status") == "PII_DETECTED" and bool(
+        updates.keys() & get_scannable_fields()
     )
 
     set_fragments = [f"{k} = :{k}" for k in sorted(updates)]

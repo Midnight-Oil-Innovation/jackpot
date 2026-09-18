@@ -525,7 +525,7 @@ def add_samples_to_submission(
             status_code=422,
             detail=(
                 "Samples flagged for PII by the DLP scan cannot be submitted "
-                "to external repositories: " + ", ".join(f["sample_id"] for f in flagged)
+                "to external repositories: " + ", ".join(s["sample_id"] for s in flagged)
             ),
         )
 
