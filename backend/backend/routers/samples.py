@@ -592,12 +592,26 @@ def override_pii_flag(
             detail=f"Sample is not flagged for PII (pii_scan_status={current!r}).",
         )
 
+    # The status is in the WHERE as well as in the check above, and the check
+    # above stays for the message: between the two, a PATCH that fixes the
+    # flagged field requeues the sample to PENDING (see update_sample), and an
+    # unconditional UPDATE would force it back to OVERRIDDEN -- recording a
+    # decision about text that no longer exists, with a "before" snapshot the
+    # audit row would present as current.
     rows = execute_write(
-        "UPDATE samples SET pii_scan_status = 'OVERRIDDEN' WHERE id = :_id RETURNING *",
+        "UPDATE samples SET pii_scan_status = 'OVERRIDDEN' "
+        "WHERE id = :_id AND pii_scan_status = 'PII_DETECTED' RETURNING *",
         {"_id": sample_id},
         conn=db,
     )
-    overridden = rows[0] if rows else sample
+    if not rows:
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                "Sample is no longer flagged for PII — it changed while the override was in flight."
+            ),
+        )
+    overridden = rows[0]
 
     log_audit(
         action=AuditActions.OVERRIDE_PII_FLAG,

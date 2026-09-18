@@ -15,6 +15,7 @@ from authz_helpers import grant_instance_preset, sync_grants_from_legacy_roles
 from backend.authz.reseed import instance_preset
 from backend.config import get_settings
 from backend.database import execute_query, execute_write
+from backend.routers import samples as samples_router
 
 # ─────────────────────────── fixtures / helpers ────────────────────────────
 
@@ -988,3 +989,34 @@ async def test_an_overridden_sample_is_not_sent_back_for_scanning_by_an_edit(
     assert resp.status_code == 200, resp.text
     assert resp.json()["data"]["pii_scan_status"] == "OVERRIDDEN"
     _cleanup_samples(sid)
+
+
+@pytest.mark.asyncio
+async def test_an_override_racing_a_fix_does_not_force_the_status_back(client, monkeypatch):
+    """The UPDATE carries the status in its WHERE, not just the pre-check.
+
+    Rule 43's two exits race each other: a PATCH that fixes the flagged field
+    requeues the sample to PENDING, and an override that read PII_DETECTED a
+    moment earlier would otherwise write OVERRIDDEN over it — recording a
+    decision about text that no longer exists, with a ``before`` snapshot the
+    audit row presents as current. Simulated by handing the route a stale read
+    rather than by timing two requests.
+    """
+    sid = "H-PII-OVERRIDE-RACE"
+    email = "pii_director_race@test.com"
+    _cleanup_samples(sid)
+    s = _insert_sample(sid, pii_scan_status="PII_DETECTED")
+    _make_lab_director(email, monkeypatch)
+
+    # What the route read a moment before the PATCH landed — the row as
+    # inserted, still flagged.
+    stale = dict(s)
+    execute_write("UPDATE samples SET pii_scan_status = 'PENDING' WHERE id = :id", {"id": s["id"]})
+    monkeypatch.setattr(samples_router, "_get_sample", lambda sample_id, db: stale)
+
+    resp = await client.post(f"/api/v1/samples/{s['id']}/pii-override", json={"reason": "released"})
+    assert resp.status_code == 409, resp.text
+    assert _pii_status(s["id"]) == "PENDING"
+
+    _cleanup_samples(sid)
+    _cleanup_users([email])

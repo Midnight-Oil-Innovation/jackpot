@@ -13,15 +13,16 @@ migration ran before M2-DROP; ``reseed()`` still reads
 with ``UndefinedColumn``. Its own docstring says as much. What is wanted here
 is one verb for one group anyway, so this issues exactly that: an INSERT ...
 SELECT over the same ``lab_membership`` JOIN ``permission_groups`` pair the
-membership half of ``reseed()`` reads, ``ON CONFLICT DO NOTHING`` against
-``authz_capability_grants_principal_capability_scope_uniq``. No deletes, no
-other capability touched.
+membership half of ``reseed()`` reads, ``ON CONFLICT DO NOTHING``. No deletes,
+no other capability touched.
 
 The group name and the capability are literals rather than reads of
 ``MEMBERSHIP_PRESETS`` / ``PRESET_GRANTS``: a migration must produce the same
 rows in five years that it produces today, and a preset is editable. Only
-``scope_uri`` is imported, because re-expressing the scope path in SQL would
-be a second implementation of the one thing that decides containment.
+``lab_scope_sql`` is imported, because re-expressing the scope path in SQL
+would be a second implementation of the one thing that decides containment —
+and that function is the sanctioned SQL form, pinned by
+``is_canonical_scope_sql`` (Critical Rule 73).
 
 The ``pii_scan_status`` column needs no DDL — it is ``TEXT NOT NULL DEFAULT
 'PENDING'`` with no CHECK constraint, so the new ``OVERRIDDEN`` value is a
@@ -38,7 +39,7 @@ from collections.abc import Sequence
 from alembic import op
 from sqlalchemy import text
 
-from backend.authz.scope import scope_uri
+from backend.authz.scope import lab_scope_sql
 
 revision: str = "cab9f75533cb"
 down_revision: str | None = "64c8dda7c914"
@@ -56,13 +57,16 @@ _CAPABILITY = "sample:pii_override"
 # them. Written out so the migration does not import reseed at all.
 _SOURCE = "reseed"
 
-_INSERT = text(
-    """
-    INSERT INTO authz_capability_grants
-        (principal_id, capability, scope_ref, source, not_after)
-    VALUES (:principal_id, :capability, :scope_ref, :source, NULL)
-    ON CONFLICT DO NOTHING
-    """
+_ISSUE = text(
+    "INSERT INTO authz_capability_grants "
+    "    (principal_id, capability, scope_ref, source, not_after) "
+    "SELECT lm.user_id::text, :capability, "
+    f"       {lab_scope_sql(labs='l')}, :source, NULL "
+    "FROM lab_membership lm "
+    "JOIN permission_groups pg ON pg.id = lm.permission_group_id "
+    "JOIN labs l ON l.id = lm.lab_id "
+    "WHERE pg.name = :group_name "
+    "ON CONFLICT DO NOTHING"
 )
 
 
@@ -78,36 +82,17 @@ def issue_grants(conn) -> int:
     migration does nothing", which is exactly the shape Critical Rule 74 is
     about. Existing deployments, where ``b2f47c1a9e30`` ran against the older
     preset, are the ones that need these rows.
+
+    Returns the number of rows actually inserted — memberships that already
+    held the grant conflict away and are not counted.
     """
-    memberships = conn.execute(
-        text(
-            "SELECT lm.user_id, lm.lab_id, l.organization_id "
-            "FROM lab_membership lm "
-            "JOIN permission_groups pg ON pg.id = lm.permission_group_id "
-            "JOIN labs l ON l.id = lm.lab_id "
-            "WHERE pg.name = :group_name"
-        ),
-        {"group_name": _GROUP},
-    ).fetchall()
+    inserted = conn.execute(
+        _ISSUE,
+        {"capability": _CAPABILITY, "source": _SOURCE, "group_name": _GROUP},
+    ).rowcount
 
-    for user_id, lab_id, org_id in memberships:
-        conn.execute(
-            _INSERT,
-            {
-                "principal_id": str(user_id),
-                "capability": _CAPABILITY,
-                "scope_ref": scope_uri(org=org_id, lab=lab_id),
-                "source": _SOURCE,
-            },
-        )
-
-    logger.info(
-        "%s: %d %r memberships read, one grant attempted each",
-        _CAPABILITY,
-        len(memberships),
-        _GROUP,
-    )
-    return len(memberships)
+    logger.info("%s: %d grants issued to %r members", _CAPABILITY, inserted, _GROUP)
+    return inserted
 
 
 def upgrade() -> None:
