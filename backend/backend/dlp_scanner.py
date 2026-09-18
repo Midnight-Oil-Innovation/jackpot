@@ -181,12 +181,16 @@ def _likelihood_meets_threshold(likelihood: str) -> bool:
         return False
 
 
-def scan_sample_metadata(sample: dict[str, Any]) -> DLPScanResult:
+def scan_sample_metadata(sample: dict[str, Any], timeout: float | None = None) -> DLPScanResult:
     """
     Scan a single sample's metadata for PII using Cloud DLP.
 
     In local dev (DLP_ENABLED=false), returns CLEAN immediately.
     In production, calls the Cloud DLP API.
+
+    ``timeout`` bounds the Cloud DLP call in seconds. Callers working to a
+    wall-clock budget (``run_pii_scan_job``) pass what is left of it; None
+    leaves the client library's own default in place.
     """
     from backend.config import get_settings
 
@@ -204,6 +208,7 @@ def scan_sample_metadata(sample: dict[str, Any]) -> DLPScanResult:
 
     try:
         import google.cloud.dlp_v2 as dlp
+        from google.api_core import gapic_v1
 
         client = dlp.DlpServiceClient()
         parent = f"projects/{settings.gcp_project_id}/locations/global"
@@ -224,7 +229,11 @@ def scan_sample_metadata(sample: dict[str, Any]) -> DLPScanResult:
                 "parent": parent,
                 "inspect_config": inspect_config,
                 "item": item,
-            }
+            },
+            # DEFAULT rather than None: None means "no deadline at all" to
+            # the client library, which is the opposite of what a caller
+            # who passed nothing wants.
+            timeout=gapic_v1.method.DEFAULT if timeout is None else timeout,
         )
 
         findings: list[DLPFinding] = []
