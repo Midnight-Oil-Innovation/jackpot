@@ -149,6 +149,14 @@ class S3StorageBackend(StorageBackend):
             raise self._classify_client_error(e, key) from e
         except EndpointConnectionError as e:
             raise StorageBackendUnavailableError(str(e), key=key, backend=self.backend_name) from e
+        # Positional, as in upload(): NoCredentialsError is neither a ClientError
+        # nor an EndpointConnectionError, so it matched nothing above. Note that
+        # being a BotoCoreError is not the distinction -- EndpointConnectionError
+        # is one too. The try holds one library call, so catching broadly hides
+        # no local bug, and unlike naming BotoCoreError it also holds for the
+        # next alien hierarchy, which is what exceptions.py actually promises.
+        except Exception as e:
+            raise StorageError(str(e), key=key, backend=self.backend_name) from e
 
     def delete(self, key: str) -> None:
         _validate_key(key)
@@ -161,6 +169,8 @@ class S3StorageBackend(StorageBackend):
             if isinstance(err, StorageObjectNotFoundError):
                 return
             raise err from e
+        except Exception as e:
+            raise StorageError(str(e), key=key, backend=self.backend_name) from e
 
     def stat(self, key: str) -> StorageObject:
         _validate_key(key)
@@ -170,6 +180,8 @@ class S3StorageBackend(StorageBackend):
             raise self._classify_client_error(e, key) from e
         except EndpointConnectionError as e:
             raise StorageBackendUnavailableError(str(e), key=key, backend=self.backend_name) from e
+        except Exception as e:
+            raise StorageError(str(e), key=key, backend=self.backend_name) from e
 
         return StorageObject(
             key=key,
@@ -195,6 +207,10 @@ class S3StorageBackend(StorageBackend):
             raise StorageBackendUnavailableError(str(e), backend=self.backend_name) from e
         except ClientError as e:
             raise self._classify_client_error(e, None) from e
+        # See exists(). The StorageObject construction is ours and inside the try,
+        # so a bug in it would surface as StorageError -- the cause still names it.
+        except Exception as e:
+            raise StorageError(str(e), backend=self.backend_name) from e
 
     def presign_url(
         self,

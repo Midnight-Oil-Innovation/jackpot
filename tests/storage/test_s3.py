@@ -10,6 +10,7 @@ from unittest.mock import Mock
 import boto3.exceptions
 import pytest
 import s3transfer.exceptions
+from botocore.exceptions import NoCredentialsError
 
 from backend.storage.exceptions import StorageError
 from backend.storage.s3 import S3StorageBackend
@@ -74,4 +75,45 @@ def test_managed_transfer_failures_surface_as_storage_errors(
     # Load-bearing, not decoration: if the monkeypatch ever stops taking effect,
     # head_object reaches the dead endpoint and raises StorageBackendUnavailableError,
     # which is a StorageError — so pytest.raises above would pass on nothing.
+    assert excinfo.value.__cause__ is exc
+
+
+@pytest.mark.parametrize("method", ["exists", "delete", "stat", "list_objects"])
+def test_credential_failure_surfaces_as_storage_error(
+    method: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A missing or unusable credential must still surface as StorageError.
+
+    NoCredentialsError is a BotoCoreError, which shares no ancestor with
+    ClientError -- and these four methods caught only ClientError and
+    EndpointConnectionError, so it escaped. upload/download were already
+    covered by their positional catch, and presign_url/health_check name
+    BotoCoreError outright.
+    """
+    backend = _offline_backend()
+    exc = NoCredentialsError()
+
+    if method == "list_objects":
+        paginator = Mock()
+        paginator.paginate.side_effect = exc
+        monkeypatch.setattr(backend._client, "get_paginator", Mock(return_value=paginator))
+    else:
+        api = {"exists": "head_object", "delete": "delete_object", "stat": "head_object"}[method]
+        monkeypatch.setattr(backend._client, api, Mock(side_effect=exc))
+
+    with pytest.raises(StorageError) as excinfo:
+        if method == "exists":
+            backend.exists("a/b.txt")
+        elif method == "delete":
+            backend.delete("a/b.txt")
+        elif method == "stat":
+            backend.stat("a/b.txt")
+        else:
+            list(backend.list_objects())
+
+    # Identity, and it is the anti-vacuity guard. All four methods fail on their
+    # own against the dead endpoint, as StorageBackendUnavailableError -- itself
+    # a StorageError, so pytest.raises alone would pass on the wrong failure.
+    # `exc` is reachable only through the stub, so `is exc` holds only if the
+    # stub fired.
     assert excinfo.value.__cause__ is exc
