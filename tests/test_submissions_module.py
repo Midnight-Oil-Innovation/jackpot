@@ -709,3 +709,40 @@ def test_an_unscanned_sample_can_still_be_submitted():
         assert len(get_submission(sub["id"], db)["samples"]) == 1
     _cleanup_submissions()
     _cleanup_samples()
+
+
+def test_a_sample_flagged_after_attachment_fails_readiness():
+    """The scan is asynchronous, so the add-time gate cannot be the only one.
+
+    A sample attached while PENDING can be flagged by ``run_pii_scan_job``
+    afterwards. ``validate_submission_readiness`` is what
+    ``generate_package`` runs against the samples the package is actually
+    about to contain, so the block has to land here too.
+    """
+    _cleanup_submissions()
+    _cleanup_samples()
+    sid = _insert_sample("I2-SAMPLE-PII-LATE", pii_scan_status="PENDING")
+    with get_db() as db:
+        sub = create_submission(
+            user_id=SEED_USER_ID,
+            lab_id=SEED_LAB_ID,
+            target_repository="NCBI",
+            title="I2-PII-LATE",
+            sample_ids=[sid],
+            conn=db,
+        )
+        assert validate_submission_readiness(sub["id"], db).valid is True
+
+        # What the scan job does on its next tick.
+        execute_write(
+            "UPDATE samples SET pii_scan_status = 'PII_DETECTED' WHERE id = :id",
+            {"id": sid},
+            conn=db,
+        )
+        result = validate_submission_readiness(sub["id"], db)
+
+    assert result.valid is False
+    issue = next(s for s in result.per_sample if s.sample_id == "I2-SAMPLE-PII-LATE")
+    assert any("PII" in i for i in issue.issues)
+    _cleanup_submissions()
+    _cleanup_samples()
