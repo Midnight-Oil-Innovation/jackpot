@@ -14,6 +14,7 @@ Production: calls GCP Cloud DLP API.
 
 import json
 import logging
+import re
 import time
 from dataclasses import dataclass, field
 from typing import Any
@@ -44,6 +45,12 @@ MIN_LIKELIHOOD = "LIKELY"
 FIELD_EXCEPTIONS: dict[str, list[str]] = {
     "pi_name": ["PERSON_NAME"],
 }
+
+# GCP project IDs: 6-30 characters, lowercase letter first, letters, digits
+# and hyphens after, no trailing hyphen. Checked rather than trusted because
+# the failure mode of a malformed one is indistinguishable at the client from
+# a sample Cloud DLP refuses -- see the guard in scan_sample_metadata.
+_PROJECT_ID_RE = re.compile(r"^[a-z][a-z0-9-]{4,28}[a-z0-9]$")
 
 LIKELIHOOD_ORDER = [
     "VERY_UNLIKELY",
@@ -233,18 +240,23 @@ def scan_sample_metadata(sample: dict[str, Any], timeout: float | None = None) -
     if not settings.dlp_enabled:
         return DLPScanResult(clean=True, scan_time_ms=0.0)
 
-    if not settings.gcp_project_id:
-        # Without it the request carries parent="projects//locations/global"
-        # and Cloud DLP answers INVALID_ARGUMENT -- for every row, on a
-        # misconfiguration that has nothing to do with any of them. The
-        # classifier below would read that as the sample's fault and the
-        # job would write FAILED across the whole backlog, which is
-        # terminal. gcp_project_id is only required when env == "gcp"
-        # (config.validate_for_production), so a scenario A or B operator
-        # who turns DLP_ENABLED on is one env var away from this.
+    if not _PROJECT_ID_RE.match(settings.gcp_project_id):
+        # An empty or malformed id builds a parent Cloud DLP rejects with
+        # INVALID_ARGUMENT -- for every row, on a misconfiguration that has
+        # nothing to do with any of them. The classifier below reads that
+        # as the sample's own fault and the job writes FAILED across the
+        # whole backlog, which is terminal. Config does not catch it:
+        # gcp_project_id defaults to "" and is only required at all when
+        # env == "gcp" (config.validate_for_production), which checks
+        # presence and not shape. Refusing here leaves every row PENDING
+        # with a message naming the setting, which is what a deployment
+        # error should look like.
         return DLPScanResult(
             clean=False,
-            error="DLP_ENABLED is set but gcp_project_id is not configured",
+            error=(
+                "DLP_ENABLED is set but gcp_project_id is missing or malformed: "
+                f"{settings.gcp_project_id!r}"
+            ),
             scan_time_ms=(time.monotonic() - start) * 1000,
         )
 

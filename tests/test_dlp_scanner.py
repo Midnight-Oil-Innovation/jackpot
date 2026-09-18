@@ -6,6 +6,8 @@ local-dev bypass path, field discovery, content building,
 offset mapping, and redaction logic.
 """
 
+import pytest
+
 from backend.dlp_scanner import (
     DLPFinding,
     DLPScanResult,
@@ -417,14 +419,26 @@ class TestPermanentErrorClassification:
 
         assert result.permanent is False
 
-    def test_an_unconfigured_project_never_reaches_the_classifier(self, monkeypatch):
+    @pytest.mark.parametrize(
+        "project_id",
+        [
+            "",
+            "PROD-Project",  # uppercase
+            "my project",  # space
+            "ab",  # under 6 characters
+            "9-starts-with-digit",
+            "trailing-hyphen-",
+        ],
+    )
+    def test_a_malformed_project_never_reaches_the_classifier(self, monkeypatch, project_id):
         """The row is not what is wrong, so it must not be marked FAILED.
 
         `parent` is built from `gcp_project_id`, which defaults to "" and
-        is only required when env == "gcp". An operator who sets
-        DLP_ENABLED without it sends "projects//locations/global" and
-        gets INVALID_ARGUMENT back for every row -- which the classifier
-        would read as each sample's own fault, marking the entire backlog
+        is only required when env == "gcp" -- and config checks presence,
+        not shape. An operator who sets DLP_ENABLED with it missing or
+        mistyped sends a parent Cloud DLP rejects and gets
+        INVALID_ARGUMENT back for every row, which the classifier would
+        read as each sample's own fault, marking the entire backlog
         FAILED. FAILED only comes back out of an edit to the sample, so
         that is not recoverable in bulk.
         """
@@ -434,7 +448,7 @@ class TestPermanentErrorClassification:
         from backend.config import get_settings
 
         monkeypatch.setenv("DLP_ENABLED", "true")
-        monkeypatch.setenv("GCP_PROJECT_ID", "")
+        monkeypatch.setenv("GCP_PROJECT_ID", project_id)
         get_settings.cache_clear()
 
         def _never(*_args, **_kwargs):
@@ -449,6 +463,16 @@ class TestPermanentErrorClassification:
         assert result.clean is False
         assert result.permanent is False
         assert "gcp_project_id" in (result.error or "")
+
+    def test_a_well_formed_project_id_is_not_refused(self, monkeypatch):
+        """The guard fails every scan when it fires, so it must not fire on
+        a real deployment. `_scan_raising` runs with GCP_PROJECT_ID set to
+        a valid id and reaches the client, which is what proves it."""
+        from google.api_core.exceptions import InvalidArgument
+
+        result = self._scan_raising(monkeypatch, InvalidArgument("payload"))
+
+        assert "gcp_project_id" not in (result.error or "")
 
     def test_the_classifier_can_still_resolve_the_classes_it_looks_for(self):
         """Rule 74 canary, and the only thing that can catch this failure.
