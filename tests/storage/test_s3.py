@@ -117,3 +117,8 @@ def test_credential_failure_surfaces_as_storage_error(
     # `exc` is reachable only through the stub, so `is exc` holds only if the
     # stub fired.
     assert excinfo.value.__cause__ is exc
+
+    # And plain StorageError, not the Unavailable subclass: a credential that
+    # will not refresh is not a reachability problem, and pytest.raises accepts
+    # any subclass, so nothing above pins which mapping ran.
+    assert type(excinfo.value) is StorageError
