@@ -9,6 +9,8 @@ Access model (per spec.md §5 Session H):
   host-operator oversight (``surveillance_relevant``), or an APPROVED access request.
 """
 
+from urllib.parse import quote
+
 import pytest
 from authz_helpers import grant_instance_preset, sync_grants_from_legacy_roles
 
@@ -1018,5 +1020,130 @@ async def test_an_override_racing_a_fix_does_not_force_the_status_back(client, m
     assert resp.status_code == 409, resp.text
     assert _pii_status(s["id"]) == "PENDING"
 
+    _cleanup_samples(sid)
+    _cleanup_users([email])
+
+
+# ───────────────── Rule 43's query gate: the open rungs close ──────────────
+#
+# The gate is five resource predicates in LADDER_POLICIES, tested row-wise and
+# SQL-wise in tests/authz/test_pii_flag_suspends_open_rungs.py. What those
+# cannot show is that the route reads the same verdict, which is the point of
+# the three below: /{id} and the list are separate code paths (permit() vs
+# visibility_sql_clause) and Rule 73 is about exactly that pair disagreeing.
+
+_PII_ORGANISM = "Rule43 query-gate organism"
+# Its own value: a list test that aborts before its cleanup would otherwise
+# leave a row the owner test's narrowing filter picks up.
+_OWNER_ORGANISM = "Rule43 query-gate organism, owned"
+
+
+@pytest.mark.asyncio
+async def test_a_stranger_cannot_read_a_flagged_public_sample(client, monkeypatch):
+    """PUBLIC is what let the stranger in; the flag takes that rung away.
+
+    And it comes back on OVERRIDDEN — same request, same principal, one
+    column different — because a gate nothing reopens is a gate that hides
+    the sample forever.
+    """
+    sid = "H-PII-GATE-DETAIL"
+    email = "pii_stranger@test.com"
+    _cleanup_samples(sid)
+    _cleanup_users([email])
+    other_lab = _ensure_other_lab()
+    s = _insert_sample(
+        sid,
+        lab_id=other_lab,
+        project_id=_ensure_other_project(other_lab),
+        sharing_level="PUBLIC",
+        pii_scan_status="PII_DETECTED",
+    )
+    _make_user(email)
+    _switch_user(email, monkeypatch)
+
+    resp = await client.get(f"/api/v1/samples/{s['id']}")
+    assert resp.status_code == 403, resp.text
+
+    execute_write(
+        "UPDATE samples SET pii_scan_status = 'OVERRIDDEN' WHERE id = :id", {"id": s["id"]}
+    )
+    released = await client.get(f"/api/v1/samples/{s['id']}")
+    assert released.status_code == 200, released.text
+
+    _cleanup_users([email])
+    _cleanup_samples(sid)
+
+
+@pytest.mark.asyncio
+async def test_the_list_drops_a_flagged_sample_and_keeps_its_clean_twin(client, monkeypatch):
+    """Two PUBLIC samples differing only in the flag — one comes back.
+
+    The clean twin is what makes this a test of the flag rather than of the
+    fixture: a list that returned neither would pass a one-sample assertion.
+    """
+    prefix = "H-PII-GATE-LIST-"
+    email = "pii_lister@test.com"
+    _cleanup_samples(prefix)
+    _cleanup_users([email])
+    other_lab = _ensure_other_lab()
+    other_project = _ensure_other_project(other_lab)
+    for suffix, status in (("CLEAN", "COMPLETE"), ("FLAGGED", "PII_DETECTED")):
+        _insert_sample(
+            f"{prefix}{suffix}",
+            lab_id=other_lab,
+            project_id=other_project,
+            sharing_level="PUBLIC",
+            organism_name=_PII_ORGANISM,
+            pii_scan_status=status,
+        )
+    _make_user(email)
+    _switch_user(email, monkeypatch)
+
+    resp = await client.get(f"/api/v1/samples/?organism_name={quote(_PII_ORGANISM)}")
+    assert resp.status_code == 200, resp.text
+    returned = {row["sample_id"] for row in resp.json()["data"]}
+    assert returned == {f"{prefix}CLEAN"}
+
+    _cleanup_users([email])
+    _cleanup_samples(prefix)
+
+
+@pytest.mark.asyncio
+async def test_the_owner_still_sees_their_own_flagged_sample(client, monkeypatch):
+    """The half of Rule 43 a DENY would have broken.
+
+    "until the submitter fixes the flagged fields" is only reachable if the
+    submitter can still read the fields. The suspension is on the rungs that
+    open a row to someone with no tie to it, and ownership is not one of
+    those — asserted here against the route, not against permit(), because
+    the route is where a later DENY would show up.
+    """
+    sid = "H-PII-GATE-OWNER"
+    email = "pii_owner@test.com"
+    _cleanup_samples(sid)
+    _cleanup_users([email])
+    uid = _make_user(email)
+    other_lab = _ensure_other_lab()
+    s = _insert_sample(
+        sid,
+        lab_id=other_lab,
+        project_id=_ensure_other_project(other_lab),
+        owner_id=uid,
+        sharing_level="PRIVATE",
+        organism_name=_OWNER_ORGANISM,
+        pii_scan_status="PII_DETECTED",
+    )
+    _switch_user(email, monkeypatch)
+
+    resp = await client.get(f"/api/v1/samples/{s['id']}")
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["data"]["pii_scan_status"] == "PII_DETECTED"
+
+    listed = await client.get(f"/api/v1/samples/?organism_name={quote(_OWNER_ORGANISM)}")
+    assert listed.status_code == 200, listed.text
+    assert {row["sample_id"] for row in listed.json()["data"]} == {sid}
+
+    # Samples first here, unlike the tests above: this user owns the row, and
+    # samples_owner_id_fkey has no ON DELETE.
     _cleanup_samples(sid)
     _cleanup_users([email])

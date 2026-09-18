@@ -28,7 +28,7 @@ _PROJECT_LINEAGE_SQL = (
     "FROM projects p JOIN labs l ON l.id = p.lab_id WHERE p.id = :pid"
 )
 
-# The three attribute columns are selected alongside the lineage because the
+# The attribute columns are selected alongside the lineage because the
 # attribute-policies (policy.LADDER_POLICIES) read them on every sample-scoped
 # decision. Fetching them here keeps the guard at one query: a second round
 # trip per request buys nothing, and a guard that fetched the scope but not the
@@ -38,7 +38,7 @@ _PROJECT_LINEAGE_SQL = (
 _SAMPLE_LINEAGE_SQL = (
     "SELECT l.organization_id, s.lab_id, s.project_id, "
     "s.sharing_level, s.surveillance_relevant, s.owner_id, "
-    "s.deletion_status, s.deletion_requested_by_user_id "
+    "s.deletion_status, s.deletion_requested_by_user_id, s.pii_scan_status "
     "FROM samples s JOIN labs l ON l.id = s.lab_id WHERE s.id = :sid"
 )
 
@@ -56,6 +56,12 @@ SAMPLE_ATTRIBUTE_COLUMNS: dict[str, str] = {
     # must be loaded here, or the DENY is deciding on absence.
     "deletion_status": "s.deletion_status",
     "deletion_requested_by_user_id": "s.deletion_requested_by_user_id",
+    # Critical Rule 43's query gate. Read by the PUBLIC, DISCOVERABLE and
+    # surveillance rungs in LADDER_POLICIES, which is why it is loaded rather
+    # than left to a route: those are ALLOW policies carrying a
+    # {"not": "PII_DETECTED"} term, and a negation over an attribute nobody
+    # loaded is TRUE, so the gate would be silently absent instead of loud.
+    "pii_scan_status": "s.pii_scan_status",
 }
 
 
