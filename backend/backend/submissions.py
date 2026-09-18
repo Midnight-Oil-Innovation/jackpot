@@ -509,6 +509,26 @@ def add_samples_to_submission(
             ),
         )
 
+    # Critical Rule 43: a sample whose metadata the DLP scan flagged is
+    # blocked from export until the flagged fields are fixed or a Lab
+    # Director overrides. Refusing here rather than at /generate is what
+    # makes the refusal legible -- the submitter learns which samples are
+    # the problem while they are still choosing them, not from a package
+    # that silently came out short.
+    flagged = execute_query(
+        "SELECT sample_id FROM samples WHERE id = ANY(:ids) AND pii_scan_status = 'PII_DETECTED'",
+        {"ids": sample_ids},
+        conn=conn,
+    )
+    if flagged:
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                "Samples flagged for PII by the DLP scan cannot be submitted "
+                "to external repositories: " + ", ".join(f["sample_id"] for f in flagged)
+            ),
+        )
+
     inserted: list[dict] = []
     for sid in sample_ids:
         # ON CONFLICT DO NOTHING keeps the call idempotent.

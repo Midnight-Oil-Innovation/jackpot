@@ -13,6 +13,7 @@ from backend.auth.guards import (
 from backend.authz.principal import load_principal
 from backend.authz.visibility import sample_list_clause
 from backend.database import execute_query, execute_write, get_db_dep
+from backend.dlp_scanner import get_scannable_fields
 from backend.pagination import paginate
 from backend.responses import success, success_list
 from backend.storage import StorageError, generate_presigned_url
@@ -465,7 +466,18 @@ async def update_sample(
     _require_sample_writable(user, sample)
     updates = await _parse_sample_update_body(request)
 
+    # Critical Rule 43's other way off PII_DETECTED: "the submitter fixes the
+    # flagged fields". Editing any DLP-scanned field returns the sample to
+    # PENDING so run_pii_scan_job re-decides it. Without this a flagged sample
+    # is stuck behind a Lab Director even after the offending text is gone,
+    # because nothing else moves a row back into the job's queue.
+    rescan = bool(updates.keys() & get_scannable_fields()) and (
+        sample.get("pii_scan_status") == "PII_DETECTED"
+    )
+
     set_fragments = [f"{k} = :{k}" for k in sorted(updates)]
+    if rescan:
+        set_fragments.append("pii_scan_status = 'PENDING'")
     query = f"UPDATE samples SET {', '.join(set_fragments)} WHERE id = :_id RETURNING *"
     params = {**updates, "_id": sample_id}
     rows = execute_write(query, params, conn=db)
@@ -483,7 +495,12 @@ async def update_sample(
         resource_id=str(sample_id),
         before=_serialise(sample),
         after=_serialise(final),
-        metadata={"fields": sorted(updates.keys())},
+        metadata={
+            "fields": sorted(updates.keys()),
+            # An edit that returns a flagged sample to the scan queue is the
+            # one PATCH that changes what the sample is allowed to do.
+            **({"pii_rescan_requeued": True} if rescan else {}),
+        },
         db_conn=db,
     )
     return success(data=_serialise(final))

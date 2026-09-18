@@ -751,3 +751,70 @@ async def test_list_returns_pagination_not_stub(client, as_platform_admin):
     assert "router" not in body  # stub had {"router": "samples"}
     assert body.get("success") is True
     assert "data" in body
+
+
+@pytest.mark.asyncio
+async def test_patching_a_scanned_field_requeues_a_flagged_sample(client, as_platform_admin):
+    """Critical Rule 43's second way off PII_DETECTED: the submitter fixes it.
+
+    Nothing else moves a row back into ``run_pii_scan_job``'s queue, so
+    without this a sample whose offending text is already gone stays
+    blocked from pipelines and export behind a Lab Director override.
+    """
+    sid = "H-PATCH-PII"
+    _cleanup_samples(sid)
+    s = _insert_sample(sid, comments="call Jane Roe", pii_scan_status="PII_DETECTED")
+
+    resp = await client.patch(
+        f"/api/v1/samples/{s['id']}",
+        json={"comments": "redacted"},
+    )
+    assert resp.status_code == 200, resp.text
+    # The PATCH response is built from the second UPDATE in
+    # _recompute_sample_derived_fields, so it reflects the requeue too.
+    assert resp.json()["data"]["pii_scan_status"] == "PENDING"
+
+    rows = execute_query(
+        "SELECT metadata FROM audit_log WHERE resource_type = 'sample' "
+        "AND resource_id = :rid AND action = 'UPDATE_SAMPLE' ORDER BY id DESC LIMIT 1",
+        {"rid": str(s["id"])},
+    )
+    assert rows[0]["metadata"]["pii_rescan_requeued"] is True
+    _cleanup_samples(sid)
+
+
+@pytest.mark.asyncio
+async def test_patching_a_field_the_dlp_never_reads_leaves_the_flag(client, as_platform_admin):
+    """``host_sex`` is enum-backed, so the scan never looked at it.
+
+    Editing it cannot have removed the PII, and clearing the flag would
+    hand every flagged submitter a one-field way around the block.
+    """
+    sid = "H-PATCH-PII-NOOP"
+    _cleanup_samples(sid)
+    s = _insert_sample(sid, comments="call Jane Roe", pii_scan_status="PII_DETECTED")
+
+    resp = await client.patch(f"/api/v1/samples/{s['id']}", json={"host_sex": "F"})
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["data"]["pii_scan_status"] == "PII_DETECTED"
+    _cleanup_samples(sid)
+
+
+@pytest.mark.asyncio
+async def test_patching_a_clean_sample_does_not_send_it_back_for_scanning(
+    client, as_platform_admin
+):
+    """Only PII_DETECTED is requeued — COMPLETE stays COMPLETE.
+
+    Re-scanning every edit would be defensible policy, but it is not this
+    change, and doing it accidentally would put the whole platform's edit
+    traffic through Cloud DLP.
+    """
+    sid = "H-PATCH-PII-CLEAN"
+    _cleanup_samples(sid)
+    s = _insert_sample(sid, pii_scan_status="COMPLETE")
+
+    resp = await client.patch(f"/api/v1/samples/{s['id']}", json={"comments": "edited"})
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["data"]["pii_scan_status"] == "COMPLETE"
+    _cleanup_samples(sid)

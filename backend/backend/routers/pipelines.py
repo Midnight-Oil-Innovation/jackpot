@@ -320,7 +320,8 @@ def _authorize_and_resolve_launch_inputs(
     # Resolve requested samples — use sample_id (string) since that's canonical
     sample_rows = execute_query(
         "SELECT id, sample_id, organism_name, source_type, scrub_status, "
-        "quality_status, lab_id FROM samples WHERE sample_id = ANY(:ids)",
+        "pii_scan_status, quality_status, lab_id FROM samples "
+        "WHERE sample_id = ANY(:ids)",
         {"ids": payload.sample_ids},
         conn=db,
     )

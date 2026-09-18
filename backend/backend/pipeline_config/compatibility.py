@@ -59,6 +59,29 @@ def _check_scrub_status(sid: str, scrub_status: str, require_scrub: bool) -> dic
     return None
 
 
+def _check_pii_scan_status(sid: str, pii_scan_status: str) -> dict | None:
+    """Block a flagged sample from pipeline input (Critical Rule 43).
+
+    Unconditional, unlike ``_check_scrub_status`` above: scrubbing is a
+    per-pipeline requirement a catalog entry opts into, while PII in the
+    metadata is a property of the sample that no pipeline is entitled to
+    consume. PENDING is deliberately not blocked -- ``run_pii_scan_job``
+    leaves rows there during a Cloud DLP outage, and refusing every launch
+    for the duration would make the scanner's availability the platform's
+    availability.
+    """
+    if pii_scan_status == "PII_DETECTED":
+        return {
+            "sample_id": sid,
+            "reason": (
+                "Sample metadata was flagged for PII by the DLP scan. Fix the "
+                "flagged fields or obtain a Lab Director override before using "
+                "it as pipeline input."
+            ),
+        }
+    return None
+
+
 def _check_quality_tier(
     sid: str, quality_status: str, min_quality: str | None, tier_rank: dict[str, int]
 ) -> dict | None:
@@ -103,6 +126,7 @@ def _evaluate_sample(
     sid = sample.get("sample_id") or str(sample.get("id") or "?")
     source_type = (sample.get("source_type") or "").strip()
     scrub_status = (sample.get("scrub_status") or "").strip()
+    pii_scan_status = (sample.get("pii_scan_status") or "").strip()
     quality_status = (sample.get("quality_status") or "").strip()
     organism = (sample.get("organism_name") or "").strip()
 
@@ -111,6 +135,7 @@ def _evaluate_sample(
         for b in (
             _check_source_type(sid, source_type, allowed_sources),
             _check_scrub_status(sid, scrub_status, require_scrub),
+            _check_pii_scan_status(sid, pii_scan_status),
         )
         if b
     ]
@@ -139,7 +164,9 @@ def compute_pipeline_compatibility(
       * ``organisms``            → soft-warn samples whose organism_name is not in the list
 
     Unknown keys are ignored. ``rules`` may be missing or an empty dict —
-    in that case every sample is compatible with no warnings.
+    in that case every sample is compatible with no warnings, except for the
+    PII check, which is not rule-driven: a sample flagged by the DLP scan is
+    hard-blocked whatever the catalog entry says (Critical Rule 43).
     """
     report = CompatibilityReport()
     rules = _parse_compatibility_rules(catalog_row)

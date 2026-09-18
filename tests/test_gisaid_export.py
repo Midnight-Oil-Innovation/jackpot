@@ -166,3 +166,45 @@ async def test_gisaid_export_non_human_source_uses_host_species(client, cleanup_
     rows = list(csv.DictReader(io.StringIO(resp.text)))
     # Non-Human source_type → Host populated from host_species.
     assert rows[0]["Host"] == "Mustela furo"
+
+
+@pytest.mark.asyncio
+async def test_a_flagged_sample_refuses_the_whole_export(client, cleanup_sample):
+    """Critical Rule 43 blocks flagged samples from export.
+
+    The refusal covers the whole request rather than dropping the flagged
+    rows from the CSV: a submitter who asked for two samples and got one
+    has no way to notice, and the omission would surface as a gap in
+    GISAID instead of as an error here.
+    """
+    clean = _insert_sars_cov2_sample("EX-GISAID-PII-CLEAN")
+    flagged = _insert_sars_cov2_sample("EX-GISAID-PII-BAD", pii_scan_status="PII_DETECTED")
+    cleanup_sample.extend([clean["id"], flagged["id"]])
+
+    resp = await client.post(
+        f"/api/v1/gisaid/export/{SEED_LAB_ID}",
+        params={"pathogen": "SARS-CoV-2"},
+        json=[clean["id"], flagged["id"]],
+    )
+    assert resp.status_code == 422, resp.text
+    detail = str(resp.json())
+    assert "EX-GISAID-PII-BAD" in detail
+    assert "EX-GISAID-PII-CLEAN" not in detail
+
+
+@pytest.mark.asyncio
+async def test_an_unscanned_sample_still_exports(client, cleanup_sample):
+    """PENDING is not a refusal — see the pipeline-gate reasoning.
+
+    Rows sit in PENDING for the length of a Cloud DLP outage; blocking on
+    it would make export availability track a Google API's.
+    """
+    sample = _insert_sars_cov2_sample("EX-GISAID-PII-PENDING", pii_scan_status="PENDING")
+    cleanup_sample.append(sample["id"])
+
+    resp = await client.post(
+        f"/api/v1/gisaid/export/{SEED_LAB_ID}",
+        params={"pathogen": "SARS-CoV-2"},
+        json=[sample["id"]],
+    )
+    assert resp.status_code == 200, resp.text

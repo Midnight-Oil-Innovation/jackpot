@@ -629,3 +629,83 @@ def test_create_submission_writes_audit_log():
     assert "SUBMISSION_CREATED" in actions
     _cleanup_submissions()
     _cleanup_samples()
+
+
+def test_a_flagged_sample_cannot_be_added_to_a_submission():
+    """Critical Rule 43 blocks flagged samples from export.
+
+    The gate sits on sample selection rather than on package generation
+    so the refusal names the offending samples while the submitter is
+    still choosing them -- a package that silently came out short teaches
+    nobody which sample was the problem.
+    """
+    from fastapi import HTTPException
+
+    _cleanup_submissions()
+    _cleanup_samples()
+    clean = _insert_sample("I2-SAMPLE-PII-CLEAN")
+    flagged = _insert_sample("I2-SAMPLE-PII-BAD", pii_scan_status="PII_DETECTED")
+    with get_db() as db:
+        sub = create_submission(
+            user_id=SEED_USER_ID,
+            lab_id=SEED_LAB_ID,
+            target_repository="NCBI",
+            title="I2-PII",
+            sample_ids=[clean],
+            conn=db,
+        )
+        with pytest.raises(HTTPException) as exc:
+            add_samples_to_submission(
+                submission_id=sub["id"],
+                sample_ids=[flagged],
+                actor_id=SEED_USER_ID,
+                conn=db,
+            )
+    assert exc.value.status_code == 422
+    assert "I2-SAMPLE-PII-BAD" in str(exc.value.detail)
+    _cleanup_submissions()
+    _cleanup_samples()
+
+
+def test_creating_a_submission_around_a_flagged_sample_is_refused():
+    """create_submission attaches its samples through the same helper.
+
+    Worth its own test: if the two paths ever diverge, the gate on the
+    add path alone leaves creation as a way straight past it.
+    """
+    from fastapi import HTTPException
+
+    _cleanup_submissions()
+    _cleanup_samples()
+    flagged = _insert_sample("I2-SAMPLE-PII-CREATE", pii_scan_status="PII_DETECTED")
+    with get_db() as db, pytest.raises(HTTPException) as exc:
+        create_submission(
+            user_id=SEED_USER_ID,
+            lab_id=SEED_LAB_ID,
+            target_repository="NCBI",
+            title="I2-PII-CREATE",
+            sample_ids=[flagged],
+            conn=db,
+        )
+    assert exc.value.status_code == 422
+    _cleanup_submissions()
+    _cleanup_samples()
+
+
+def test_an_unscanned_sample_can_still_be_submitted():
+    """PENDING must not block: rows sit there through a Cloud DLP outage."""
+    _cleanup_submissions()
+    _cleanup_samples()
+    pending = _insert_sample("I2-SAMPLE-PII-PENDING", pii_scan_status="PENDING")
+    with get_db() as db:
+        sub = create_submission(
+            user_id=SEED_USER_ID,
+            lab_id=SEED_LAB_ID,
+            target_repository="NCBI",
+            title="I2-PII-PENDING",
+            sample_ids=[pending],
+            conn=db,
+        )
+        assert len(get_submission(sub["id"], db)["samples"]) == 1
+    _cleanup_submissions()
+    _cleanup_samples()
