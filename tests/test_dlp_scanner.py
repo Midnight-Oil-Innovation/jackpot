@@ -6,6 +6,8 @@ local-dev bypass path, field discovery, content building,
 offset mapping, and redaction logic.
 """
 
+import pytest
+
 from backend.dlp_scanner import (
     DLPFinding,
     DLPScanResult,
@@ -310,3 +312,189 @@ class TestSchemaAbsentFallback:
 
         result = dlp_scanner._get_free_text_fields()
         assert result == set()
+
+
+# ── Permanent vs transient scan failures (issue #263) ───────────────────
+
+
+class TestPermanentErrorClassification:
+    """`run_pii_scan_job` leaves an errored row PENDING so it retries.
+
+    That is right for an outage and wrong for a failure that belongs to
+    the row itself: a payload Cloud DLP refuses produces the same
+    `INVALID_ARGUMENT` on every tick, and 500 such rows sit at the head
+    of the `ingest_timestamp ASC` queue forever. The job cannot tell the
+    two apart from `error=str(e)` -- the exception *type* is where
+    permanent-vs-transient lives, and it was being discarded here.
+    """
+
+    def _enable_dlp(self, monkeypatch):
+        from backend.config import get_settings
+
+        monkeypatch.setenv("DLP_ENABLED", "true")
+        monkeypatch.setenv("GCP_PROJECT_ID", "test-project")
+        get_settings.cache_clear()
+
+    def _scan_raising(self, monkeypatch, exc):
+        """Drive `scan_sample_metadata` to its except block with `exc`.
+
+        The fake stands in for the whole `google.cloud.dlp_v2` module, so
+        constructing the client raises before ADC is ever consulted --
+        which is what makes the enabled path testable at all here.
+        """
+        import sys
+        from types import SimpleNamespace
+
+        self._enable_dlp(monkeypatch)
+
+        def _boom(*_args, **_kwargs):
+            raise exc
+
+        monkeypatch.setitem(
+            sys.modules,
+            "google.cloud.dlp_v2",
+            SimpleNamespace(DlpServiceClient=_boom),
+        )
+        return scan_sample_metadata({"sample_id": "EX-001", "strain": "free text"})
+
+    def test_an_invalid_argument_is_permanent(self, monkeypatch):
+        """The row, not the service, is what is wrong. Retrying cannot help."""
+        from google.api_core.exceptions import InvalidArgument
+
+        result = self._scan_raising(monkeypatch, InvalidArgument("payload too large"))
+
+        assert result.clean is False
+        assert result.error is not None
+        assert result.permanent is True
+
+    def test_an_outage_is_not_permanent(self, monkeypatch):
+        """Marking these permanent writes FAILED on samples nobody scanned."""
+        from google.api_core.exceptions import ServiceUnavailable
+
+        result = self._scan_raising(monkeypatch, ServiceUnavailable("503"))
+
+        assert result.error is not None
+        assert result.permanent is False
+
+    def test_rate_limiting_is_not_permanent(self, monkeypatch):
+        """RESOURCE_EXHAUSTED is the service saying "later", not "never"."""
+        from google.api_core.exceptions import ResourceExhausted
+
+        result = self._scan_raising(monkeypatch, ResourceExhausted("429"))
+
+        assert result.permanent is False
+
+    def test_a_missing_client_library_is_not_permanent(self, monkeypatch):
+        """An operator who has not installed the dep fixes it; rows wait."""
+        import sys
+
+        self._enable_dlp(monkeypatch)
+        monkeypatch.setitem(sys.modules, "google.cloud.dlp_v2", None)
+
+        result = scan_sample_metadata({"sample_id": "EX-001", "strain": "free text"})
+
+        assert result.error is not None
+        assert result.permanent is False
+
+    def test_a_400_from_the_rest_transport_is_permanent_too(self, monkeypatch):
+        """The gRPC client raises InvalidArgument; HTTP raises BadRequest.
+
+        `from_http_status(400)` gives plain `BadRequest`, which an
+        `isinstance(exc, InvalidArgument)` test misses -- so a transport
+        change would silently restore the head-block with nothing going
+        red.
+        """
+        from google.api_core.exceptions import from_http_status
+
+        result = self._scan_raising(monkeypatch, from_http_status(400, "too large"))
+
+        assert result.permanent is True
+
+    def test_a_failed_precondition_is_not_permanent(self, monkeypatch):
+        """Also a 400, and also a BadRequest subclass, but it is about the
+        deployment ("DLP API not enabled"), not about one row."""
+        from google.api_core.exceptions import FailedPrecondition
+
+        result = self._scan_raising(monkeypatch, FailedPrecondition("API not enabled"))
+
+        assert result.permanent is False
+
+    @pytest.mark.parametrize(
+        "project_id",
+        [
+            "",
+            "PROD-Project",  # uppercase
+            "my project",  # space
+            "ab",  # under 6 characters
+            "9-starts-with-digit",
+            "trailing-hyphen-",
+        ],
+    )
+    def test_a_malformed_project_never_reaches_the_classifier(self, monkeypatch, project_id):
+        """The row is not what is wrong, so it must not be marked FAILED.
+
+        `parent` is built from `gcp_project_id`, which defaults to "" and
+        is only required when env == "gcp" -- and config checks presence,
+        not shape. An operator who sets DLP_ENABLED with it missing or
+        mistyped sends a parent Cloud DLP rejects and gets
+        INVALID_ARGUMENT back for every row, which the classifier would
+        read as each sample's own fault, marking the entire backlog
+        FAILED. FAILED only comes back out of an edit to the sample, so
+        that is not recoverable in bulk.
+        """
+        import sys
+        from types import SimpleNamespace
+
+        from backend.config import get_settings
+
+        monkeypatch.setenv("DLP_ENABLED", "true")
+        monkeypatch.setenv("GCP_PROJECT_ID", project_id)
+        get_settings.cache_clear()
+
+        def _never(*_args, **_kwargs):
+            raise AssertionError("no request may be built without a project id")
+
+        monkeypatch.setitem(
+            sys.modules, "google.cloud.dlp_v2", SimpleNamespace(DlpServiceClient=_never)
+        )
+
+        result = scan_sample_metadata({"sample_id": "EX-001", "strain": "free text"})
+
+        assert result.clean is False
+        assert result.permanent is False
+        assert "gcp_project_id" in (result.error or "")
+
+    def test_a_well_formed_project_id_is_not_refused(self, monkeypatch):
+        """The guard fails every scan when it fires, so it must not fire on
+        a real deployment. `_scan_raising` runs with GCP_PROJECT_ID set to
+        a valid id and reaches the client, which is what proves it."""
+        from google.api_core.exceptions import InvalidArgument
+
+        result = self._scan_raising(monkeypatch, InvalidArgument("payload"))
+
+        assert "gcp_project_id" not in (result.error or "")
+
+    def test_the_classifier_can_still_resolve_the_classes_it_looks_for(self):
+        """Rule 74 canary, and the only thing that can catch this failure.
+
+        `_is_permanent_error` is two isinstance checks against
+        google-api-core classes and a `type(exc) is` against a third.
+        Every way it can break is silent: the hierarchy shifts, one of
+        the names moves, `BadRequest` gains a subclass -- no exception,
+        no log line, and a permanent failure quietly goes back to sitting
+        at the head of the queue, which is the bug this issue is about.
+        The tests above assert the effect; this one asserts the lookup.
+        """
+        from google.api_core.exceptions import (
+            FailedPrecondition,
+            InvalidArgument,
+            from_http_status,
+        )
+
+        from backend.dlp_scanner import _is_permanent_error
+
+        assert _is_permanent_error(InvalidArgument("x")) is True
+        assert _is_permanent_error(from_http_status(400, "x")) is True
+        # Both 400s, both BadRequest subclasses, neither about one row.
+        assert _is_permanent_error(FailedPrecondition("x")) is False
+        assert _is_permanent_error(RuntimeError("x")) is False

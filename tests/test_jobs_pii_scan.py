@@ -30,7 +30,7 @@ def _settings(dlp_enabled: bool = True, budget_seconds: int = 600):
 
 
 def _counters(**overrides):
-    base = {"scanned": 0, "flagged": 0, "errors": 0, "skipped": 0, "raced": 0}
+    base = {"scanned": 0, "flagged": 0, "errors": 0, "failed": 0, "skipped": 0, "raced": 0}
     base.update(overrides)
     return base
 
@@ -195,3 +195,44 @@ def test_the_scan_call_is_bounded_by_what_is_left_of_the_tick_budget() -> None:
 
     (_row, timeout), _kwargs = mocks["scan_sample_metadata"].call_args
     assert 0 < timeout <= 30
+
+
+# ── Permanent failures do not head-block the queue (issue #263) ─────────
+
+
+def test_a_permanent_failure_is_written_as_failed() -> None:
+    """A payload Cloud DLP refuses fails identically on every tick.
+
+    The queue is ``ingest_timestamp ASC`` capped at
+    PII_SCAN_ROWS_PER_TICK, so 500 rows left PENDING by a repeatable
+    INVALID_ARGUMENT sit at its head forever and nothing newer is ever
+    scanned. FAILED is what gets them out of the way.
+    """
+    refused = DLPScanResult(clean=False, error="400 request too large", permanent=True)
+    with _patches(scan_result=refused) as mocks:
+        counters = asyncio.run(run_pii_scan_job())
+
+    assert counters == _counters(failed=1)
+    params = mocks["execute_write"].call_args.args[1]
+    assert params == {"status": "FAILED", "id": 7}
+    # FAILED is "we could not look", not a finding. PII_SCAN_FLAGGED is
+    # the audit action for a finding and this is not one.
+    mocks["log_audit"].assert_not_called()
+
+
+def test_a_failed_row_is_not_scanned_again() -> None:
+    """Replaying a refused payload gets the same refusal.
+
+    Keeping FAILED rows in the queue trades one starvation for another:
+    the job would spend its per-tick budget and the Cloud DLP quota
+    re-asking a question whose answer cannot move until the payload
+    does. The route back is the edit-triggered requeue in
+    routers/samples.py, which sets the row to PENDING -- and an edit is
+    exactly the event that changes the payload.
+    """
+    with _patches(scan_result=DLPScanResult(clean=True)) as mocks:
+        asyncio.run(run_pii_scan_job())
+
+    sql = mocks["execute_query"].call_args.args[0]
+    assert "pii_scan_status = 'PENDING'" in sql
+    assert "FAILED" not in sql

@@ -2228,25 +2228,36 @@ async def run_pii_scan_job() -> dict[str, int]:
     moved a row off it — ``backend/dlp_scanner.py`` had no production
     call site at all (issue #261). This is the half that calls it.
 
-    Three outcomes per row, and the distinction between the last two is
-    the whole point: ``scan_sample_metadata`` reports an API outage as
+    Four outcomes per row, and the distinctions between them are the
+    whole point. ``scan_sample_metadata`` reports an API outage as
     ``DLPScanResult(clean=False, error=...)``, so branching on ``clean``
-    alone would mark every sample PII_DETECTED while Cloud DLP is down.
+    alone would mark every sample PII_DETECTED while Cloud DLP is down;
+    and an error that belongs to the row rather than to the service
+    (``permanent=True``, issue #263) has to leave the queue rather than
+    retry forever at the head of it. Hence COMPLETE, PII_DETECTED,
+    FAILED, and left-where-it-was.
 
-    What PII_DETECTED then *does* is, as of this commit, nothing: Rule 43
-    says such samples are blocked from queries, pipelines and export until
-    a Lab Director overrides, and no code enforces that yet — grep the
-    column, the only readers are this job and ``validator.py``'s
-    ``VALID_PII_STATUSES``. The enforcement half is a visibility filter,
-    which is authorization-path work and lands separately. Setting the
-    flag correctly is still the prerequisite for it.
+    What PII_DETECTED then *does* is Rule 43's other half, and every one
+    of its readers gates on equality with that one value: the ladder's
+    open rungs (``authz/policy.py``), pipeline launch, export, GISAID.
+    FAILED therefore leaves a sample exactly as visible as the PENDING it
+    came from. That is deliberate — it is the same "nothing has looked at
+    this" state, differing only in whether looking again is worth it —
+    but it does mean a permanently unscannable sample is not withheld.
+    Withholding the unscanned is a policy decision about the ladder, not
+    about this job.
 
     Returns a counts dict for monitoring. Idempotent: the UPDATE is
     conditional on the row still being PENDING, and a row that has left
-    PENDING is never re-selected.
+    PENDING is never re-selected -- FAILED included. Re-scanning it every
+    tick would send Cloud DLP the same payload it has already refused,
+    burning the tick budget and the quota to reach the same answer. The
+    way back is an edit to a scanned field, which returns the row to
+    PENDING (``routers/samples.py``), because the thing that has to
+    change for the answer to change is the payload.
     """
     settings = get_settings()
-    counters = {"scanned": 0, "flagged": 0, "errors": 0, "skipped": 0, "raced": 0}
+    counters = {"scanned": 0, "flagged": 0, "errors": 0, "failed": 0, "skipped": 0, "raced": 0}
 
     if not settings.dlp_enabled:
         # Deliberately a no-op rather than writing COMPLETE. The scanner
@@ -2282,7 +2293,7 @@ async def run_pii_scan_job() -> dict[str, int]:
         # ticks rather than a slow one.
         result = await asyncio.to_thread(scan_sample_metadata, row, remaining)
 
-        if result.error is not None:
+        if result.error is not None and not result.permanent:
             # The exception string is deliberately not repeated here.
             # dlp_scanner already logs it once, and it is str(e) off a
             # Cloud DLP client error -- an INVALID_ARGUMENT body can echo
@@ -2297,7 +2308,26 @@ async def run_pii_scan_job() -> dict[str, int]:
             counters["errors"] += 1
             continue
 
-        status = "COMPLETE" if result.clean else "PII_DETECTED"
+        if result.error is not None:
+            # Permanent: Cloud DLP refused this row's payload and will
+            # refuse it again. Leaving it PENDING is what puts 500 of
+            # them at the head of the queue forever (issue #263), and
+            # re-selecting it later would only replay the same refusal --
+            # an edit to a scanned field is what makes it answerable, and
+            # that requeues it. FAILED
+            # means "could not look", not "found nothing" and not "found
+            # something" -- the Rule 43 readers all gate on equality with
+            # PII_DETECTED, so a FAILED sample stays exactly as visible
+            # as the PENDING one it was a moment ago, which is the honest
+            # state for a sample nothing has scanned.
+            logger.warning(
+                "run_pii_scan_job: sample %s permanently unscannable, marked FAILED "
+                "(dlp_scanner logged the cause)",
+                row["sample_id"],
+            )
+            status = "FAILED"
+        else:
+            status = "COMPLETE" if result.clean else "PII_DETECTED"
         with get_db() as db:
             # RETURNING per Critical Rule 40, and load-bearing: the WHERE
             # clause is what makes a racing tick or a manual trigger
@@ -2315,7 +2345,10 @@ async def run_pii_scan_job() -> dict[str, int]:
             if not updated:
                 counters["raced"] += 1
                 continue
-            if not result.clean:
+            if status == "FAILED":
+                counters["failed"] += 1
+                continue
+            if status == "PII_DETECTED":
                 log_audit(
                     action=AuditActions.PII_SCAN_FLAGGED,
                     actor_id=None,

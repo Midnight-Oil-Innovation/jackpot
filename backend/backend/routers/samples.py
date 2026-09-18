@@ -471,7 +471,13 @@ async def update_sample(
     # PENDING so run_pii_scan_job re-decides it. Without this a flagged sample
     # is stuck behind a Lab Director even after the offending text is gone,
     # because nothing else moves a row back into the job's queue.
-    rescan = sample.get("pii_scan_status") == "PII_DETECTED" and bool(
+    #
+    # FAILED for the same reason and it is the only route off it: the job
+    # marks a sample FAILED when Cloud DLP refuses its payload outright
+    # (issue #263) and never re-selects it, since replaying an unchanged
+    # payload gets the same refusal. Editing the payload is the one event
+    # that can change the answer.
+    rescan = sample.get("pii_scan_status") in ("PII_DETECTED", "FAILED") and bool(
         updates.keys() & get_scannable_fields()
     )
 

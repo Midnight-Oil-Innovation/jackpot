@@ -797,6 +797,30 @@ async def test_patching_a_scanned_field_requeues_a_flagged_sample(client, as_pla
 
 
 @pytest.mark.asyncio
+async def test_patching_a_scanned_field_requeues_an_unscannable_sample(client, as_platform_admin):
+    """FAILED means Cloud DLP refused the payload, and this is the way out.
+
+    ``run_pii_scan_job`` marks a sample FAILED when the error belongs to
+    the row rather than to the service (issue #263) and never selects it
+    again, because replaying an unchanged payload earns the same refusal.
+    Editing a scanned field is the one event that changes the payload, so
+    if it did not requeue, nothing would and the sample would sit
+    unscanned for good.
+    """
+    sid = "H-PATCH-PII-FAILED"
+    _cleanup_samples(sid)
+    s = _insert_sample(sid, comments="call Jane Roe", pii_scan_status="FAILED")
+
+    resp = await client.patch(
+        f"/api/v1/samples/{s['id']}",
+        json={"comments": "redacted"},
+    )
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["data"]["pii_scan_status"] == "PENDING"
+    _cleanup_samples(sid)
+
+
+@pytest.mark.asyncio
 async def test_patching_a_field_the_dlp_never_reads_leaves_the_flag(client, as_platform_admin):
     """``host_sex`` is enum-backed, so the scan never looked at it.
 

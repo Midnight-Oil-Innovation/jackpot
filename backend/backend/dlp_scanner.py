@@ -14,10 +14,12 @@ Production: calls GCP Cloud DLP API.
 
 import json
 import logging
+import re
 import time
 from dataclasses import dataclass, field
 from typing import Any
 
+from google.api_core.exceptions import BadRequest, InvalidArgument
 from jackpot_schema import SCHEMA_JSON_PATH as SCHEMA_PATH
 
 logger = logging.getLogger(__name__)
@@ -43,6 +45,12 @@ MIN_LIKELIHOOD = "LIKELY"
 FIELD_EXCEPTIONS: dict[str, list[str]] = {
     "pi_name": ["PERSON_NAME"],
 }
+
+# GCP project IDs: 6-30 characters, lowercase letter first, letters, digits
+# and hyphens after, no trailing hyphen. Checked rather than trusted because
+# the failure mode of a malformed one is indistinguishable at the client from
+# a sample Cloud DLP refuses -- see the guard in scan_sample_metadata.
+_PROJECT_ID_RE = re.compile(r"^[a-z][a-z0-9-]{4,28}[a-z0-9]$")
 
 LIKELIHOOD_ORDER = [
     "VERY_UNLIKELY",
@@ -72,6 +80,12 @@ class DLPScanResult:
     findings: list[DLPFinding] = field(default_factory=list)
     error: str | None = None
     scan_time_ms: float = 0.0
+    #: Set only when ``error`` is set: True when retrying this row cannot
+    #: help, because what Cloud DLP refused is the row itself. Callers
+    #: that queue on the error (``run_pii_scan_job``) need the exception
+    #: *type* to tell an outage from a bad payload, and ``error`` is
+    #: ``str(e)`` with the type already thrown away. See issue #263.
+    permanent: bool = False
 
 
 def _get_free_text_fields() -> set[str]:
@@ -167,6 +181,32 @@ def _redact_matched_text(text: str) -> str:
     return text[0] + "*" * (len(text) - 2) + text[-1]
 
 
+def _is_permanent_error(exc: Exception) -> bool:
+    """True when re-running this scan unchanged would fail the same way.
+
+    Deliberately one status code. ``INVALID_ARGUMENT`` is Cloud DLP
+    rejecting the request it was given -- an oversized or otherwise
+    unacceptable payload -- and once ``scan_sample_metadata`` has
+    established that its own half of the request is well formed, what is
+    left of it is this one sample's fields. Everything else is the
+    service or the deployment: ``UNAVAILABLE`` and ``RESOURCE_EXHAUSTED``
+    clear on their own, ``PERMISSION_DENIED`` and a missing client
+    library clear when an operator fixes them, and all of them affect
+    every row equally. Calling one of those permanent writes FAILED on
+    samples nothing ever looked at, and FAILED only comes back out of an
+    edit to the sample.
+
+    Both spellings of a 400 are named. The DLP client is gRPC, which
+    raises ``InvalidArgument``; ``from_http_status(400)`` raises plain
+    ``BadRequest``, so a future REST transport would otherwise silently
+    restore the head-block with no test going red. ``BadRequest``'s
+    other subclasses are matched by name rather than by isinstance:
+    ``FailedPrecondition`` is a 400 about system state ("DLP API not
+    enabled"), which is the whole deployment, not one row.
+    """
+    return isinstance(exc, InvalidArgument) or type(exc) is BadRequest
+
+
 def _is_exception(field_name: str, info_type: str) -> bool:
     """Check if this infoType is expected for this field."""
     exceptions = FIELD_EXCEPTIONS.get(field_name, [])
@@ -199,6 +239,26 @@ def scan_sample_metadata(sample: dict[str, Any], timeout: float | None = None) -
 
     if not settings.dlp_enabled:
         return DLPScanResult(clean=True, scan_time_ms=0.0)
+
+    if not _PROJECT_ID_RE.match(settings.gcp_project_id):
+        # An empty or malformed id builds a parent Cloud DLP rejects with
+        # INVALID_ARGUMENT -- for every row, on a misconfiguration that has
+        # nothing to do with any of them. The classifier below reads that
+        # as the sample's own fault and the job writes FAILED across the
+        # whole backlog, which is terminal. Config does not catch it:
+        # gcp_project_id defaults to "" and is only required at all when
+        # env == "gcp" (config.validate_for_production), which checks
+        # presence and not shape. Refusing here leaves every row PENDING
+        # with a message naming the setting, which is what a deployment
+        # error should look like.
+        return DLPScanResult(
+            clean=False,
+            error=(
+                "DLP_ENABLED is set but gcp_project_id is missing or malformed: "
+                f"{settings.gcp_project_id!r}"
+            ),
+            scan_time_ms=(time.monotonic() - start) * 1000,
+        )
 
     scannable = get_scannable_fields()
     content, field_offsets = _build_content_item(sample, scannable)
@@ -274,6 +334,7 @@ def scan_sample_metadata(sample: dict[str, Any], timeout: float | None = None) -
         return DLPScanResult(
             clean=False,
             error=str(e),
+            permanent=_is_permanent_error(e),
             scan_time_ms=elapsed,
         )
 
