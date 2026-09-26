@@ -4577,9 +4577,9 @@ sessions:
       srt's proxy env and direct DNS is blocked. Every batch run is
       therefore blocked, or must drop isolation with --no-sandbox.
     phase: p0_series
-    status: open
+    status: shipped
     depends_on: []
-    blocked_by_external: "Upstream fix in srt or Claude Code; neither is in this repo."
+    blocked_by_external:
     parallel_safe: true
     parallel_safe_reason: "Tooling outside the repo tree. Touches no backend module."
     effort_sessions: 0.5
@@ -4626,6 +4626,42 @@ sessions:
       working srt/claude pair, wait for an upstream fix, or replace srt
       with another isolation mechanism. Re-test with the canary after any
       version bump before assuming it is resolved.
+
+      Fixed 2026-09-24, and it was neither upstream nor node. One missing
+      key: network.allowLocalBinding: true in build_srt_settings(). The
+      denied operation is a LOCAL socket bind, which Seatbelt refuses
+      unless that key is set; claude binds one and reports the refusal as
+      "Can't reach the API server - check your internet or DNS
+      (FailedToOpenSocket)" after ~180s. Every word of that message points
+      away from the cause.
+
+      Two things in this entry were wrong and are worth recording as the
+      failure mode rather than quietly corrected:
+
+      - "node's fetch ignores srt's proxy env" - claude 2.1.275 is a
+        native Mach-O arm64 binary, not node, so no node flag could ever
+        have been the fix. NODE_USE_ENV_PROXY=1 was written into
+        wrap_with_srt on the strength of a node -e probe that did behave
+        that way, the canary still failed, and the patch sat in the tree
+        with a comment claiming a measurement it had not made. Reverted.
+      - "a regression in one of the two tools" - srt 0.0.23 (the install
+        on PATH), 0.0.52 and 0.0.77 all fail without the key and all three
+        pass with it, so it is not an srt version regression. Whether
+        claude started binding a socket it did not bind on 2026-08-28 is
+        unknown and was not worth establishing once the fix held.
+
+      What actually located it: srt -d. Its proxy logs "Allowed by config
+      rule: api.anthropic.com:443" seventeen times during a failing run,
+      which rules out the egress allowlist in one line - and nslookup in
+      the same sandbox fails with "bind: Operation not permitted", naming
+      the real denied operation out loud. Reach for the debug flag before
+      the hypotheses.
+
+      The fix does not widen egress: allowedDomains still gates every
+      outbound connection, and this only permits listening sockets inside
+      the sandbox. preflight_sandbox_canary passes, so batch runs are
+      sandboxed again and --no-sandbox goes back to being the debugging
+      escape hatch it was meant to be.
 
   - id: B-EUK-COINFECT-SENTINEL
     title: '"Screened, none found" sentinel for coinfection_organisms'
