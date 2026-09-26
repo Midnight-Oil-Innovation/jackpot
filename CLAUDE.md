@@ -1807,7 +1807,6 @@ The path is:
   the federation peer authenticator
 - `backend/backend/authz/**` — the `permit()` engine, `visibility_sql_clause`,
   scope construction, principal loading, the reseed
-- `backend/backend/permissions.py` — the legacy ladder, until M2 deletes it
 - migrations that create or populate `authz_capability_grants` /
   `authz_policies`
 - any route change that adds, removes, or moves a permission check
@@ -1826,7 +1825,14 @@ whoever merges second, in the file that would otherwise have caught the error.
 
 **In practice:** `parallel_safe: false` on the backlog entry, one open PR at a
 time across these files, and a full `uv run pytest tests/authz/` before each
-merge — not just the tests the change touched.
+merge — not just the tests the change touched. `jackpot-batch prepare` also refuses
+any batch of more than one whose members declare these paths, so the rule no
+longer rests on someone remembering to set the flag. That list is
+`SERIALIZED_PATHS` in `scripts_jackpot/jackpot_batch.py` and its test asserts
+every path in it still exists here — which is what caught
+`backend/backend/permissions.py`, listed above until 2026-09-26 and deleted
+from the codebase by M2 in #174. A path that cannot exist is a rule that
+cannot fire, and one dead entry makes the whole list read as enforced.
 
 **Provenance:** the phrase "auth-adjacent, do not parallel-batch" appeared in
 backlog `parallel_safe_reason` fields from May 2026, citing
