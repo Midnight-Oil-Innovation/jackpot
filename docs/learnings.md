@@ -3909,3 +3909,85 @@ backlog's only open item, which made it read as the frontier, but it is the
 the plaintext mass-balance, the policy checker and the mapping doc all shipped,
 the compute path was never scheduled, and the remaining wastewater schema entries
 carry "re-scope deliberately if cryptWWDB work resumes".
+
+## B-SOVEREIGNTY-POLICY-PRESET — design proposal, awaiting Go — 2026-09-29
+
+**Status: blocked on maintainer decision.** This is a plan, not a shipped
+change. Per CLAUDE.md Decision Rules ("For non-trivial architectural changes:
+write the plan to `docs/learnings.md` and wait for explicit 'Go' before
+proceeding"), landing here instead of in code.
+
+**Why this needed a plan instead of a PR:** `B-SOVEREIGNTY-POLICY-PRESET` was
+the only backlog item with `status: open` and satisfied `depends_on`
+(`B-CARE-CLAIMS-RECONCILE`, shipped). Its own notes pose three explicit open
+questions and say "Do NOT resolve by keeping Scenario T" — a request for a
+design decision, not a mechanical fix.
+
+**What's actually there, verified by reading code, not the backlog prose:**
+
+- `schema/jackpot_scenarios/scenarios.py`'s `ScenarioDefaults` already declares
+  all four CARE fields (`deletion_on_request`, `auto_publish_to_insdc`,
+  `care_principles_enforced`, `consent_workflow_enabled`) at the base-class
+  level — they are not Scenario-T-specific fields. The gap is narrower than
+  the title suggests: nothing *sets* them non-default except `SCENARIO_T`'s
+  literal, and nothing lets an operator apply them on top of a different
+  scenario (A–D) without going through T.
+  - Structurally this partly contradicts `B-SCENARIO-TAXONOMY-SPLIT`'s own
+    "target mapping" table, which lists these same fields as "3 [of 9] are
+    CARE" deltas unique to registry T — they are not; only their *values* are
+    T-specific, the fields themselves are universal already.
+- `docs/architecture.md` §22.3 already specifies a mechanism:
+  `jackpot policy enable <primitive> --org <org_id>` — post-install,
+  individual primitives, Org/Platform Admin authority. §22.4 explicitly defers
+  bundled `--profile care-indigenous` presets as "post-v1... for now,
+  individual policy enablement covers the same ground at finer granularity."
+  This reads as an answer to the backlog item's Q2 and Q3.
+- But `grep` across `cli/` and `backend/` finds **zero** implementation of
+  `jackpot policy enable` — no CLI verb, no route, nothing. §22.3 describes a
+  target, not a built mechanism. Rule 70's exact shape: a doc section that
+  reads identically whether written from the plan or from the code, and only
+  grep tells them apart.
+- `governance/care-principles-and-tribal-data-sovereignty.md`'s behavior table
+  confirms the same gap independently: of the four `ScenarioDefaults` CARE
+  fields, only `deletion_on_request` has a real reader
+  (`backend/backend/deletion.py`). `auto_publish_to_insdc` has "no reader" —
+  it's dead config. `care_principles_enforced` and `consent_workflow_enabled`
+  have no backend reader anywhere in `backend/`.
+
+**The actual decision, not yet made:** two independent, currently-overlapping
+sovereignty-config surfaces exist in the docs — (a) `ScenarioDefaults`
+install-time booleans (what this backlog item's `primary_files` point at:
+`scenarios.py`, `init.py`) and (b) §22.3's unbuilt post-install
+`jackpot policy enable` per-org CLI. Extracting a preset into (a) is the
+2-session-scoped fix the backlog entry asks for; it does *not* build (b), and
+building (a) risks calcifying a second config surface right where
+`architecture.md` §3.6 says the line should be install-time-infra vs.
+everything-else-runtime-policy — sovereignty is explicitly "everything else."
+
+**Proposed answer, pending Go:**
+
+1. **Where it lives:** a standalone `CARE_SOVEREIGNTY_PRESET` (a plain dict or
+   a small frozen Pydantic model of just the 4 CARE fields) in `scenarios.py`,
+   applied via `ScenarioDefaults.model_copy(update=...)` — decoupled from any
+   scenario code, so `jackpot init --scenario A --sovereignty-preset care`
+   works identically for A, B, or C. This directly unblocks
+   `B-SCENARIO-TAXONOMY-SPLIT`'s stated goal (retire Scenario T without losing
+   the CARE defaults).
+2. **How it's applied:** init-time only, via a new `jackpot init` flag — not
+   §22.3's post-install CLI. Building `jackpot policy enable` is out of this
+   item's declared 2-session scope and belongs to `B-CARE-3`/`B-CARE-4`/
+   `B-CARE-5` (the primitives that CLI would actually toggle don't exist yet
+   either). This is the one point that most needs a maintainer call: it means
+   §22.4's "future direction" language in `architecture.md` describes a
+   different mechanism than what this PR would ship, and that seam should be
+   noted in the doc rather than silently diverge again.
+3. **One preset or several:** one (`care`), not per-primitive toggles or
+   EHDS/HIPAA variants — three of the four fields have no reader yet, so
+   finer granularity has nothing to attach to. Multiple regime profiles stay
+   explicitly post-v1 per §22.4.
+
+**What I did NOT do:** touch `scenarios.py`, `init.py`, or any test file.
+Registered as a blocked LoopX todo (`todo_dd1711f8c51b`) rather than picking
+an answer unilaterally and shipping it, since `B-SCENARIO-TAXONOMY-SPLIT`
+(and by extension `B-STORAGE-CI-LOCAL`) is gated on whichever shape this
+takes, and getting the seam wrong here compounds downstream per Rule 70.
